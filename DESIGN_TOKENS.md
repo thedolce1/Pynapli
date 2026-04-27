@@ -1,0 +1,260 @@
+# Pynapli Design Tokens
+
+Last updated: 2026-04-24
+
+## Purpose
+
+This document defines the initial design tokens for Pynapli's Compose Multiplatform UI.
+
+Core rule:
+
+> Components consume tokens. Feature screens should not hardcode visual values.
+
+Use these tokens to implement the visual direction defined in [FRONTEND_DESIGN_DIRECTION_SPEC.md](FRONTEND_DESIGN_DIRECTION_SPEC.md).
+
+## Tone
+
+Pynapli should feel:
+
+- Dark-first
+- Social
+- Polished
+- Dense
+- Private
+- Warm without being nightclub-like
+
+Avoid:
+
+- One-note purple/blue gradients
+- Beige/brown lifestyle cliché palettes
+- Decorative gradient blobs
+- Cheesy pineapple visual overload
+
+## Color Tokens
+
+Initial dark palette:
+
+```kotlin
+object PynapliColors {
+    val Black = Color(0xFF050505)
+    val Surface = Color(0xFF101010)
+    val SurfaceRaised = Color(0xFF1A1A1A)
+    val SurfacePressed = Color(0xFF242424)
+
+    val TextPrimary = Color(0xFFF5F5F5)
+    val TextSecondary = Color(0xFFB8B8B8)
+    val TextTertiary = Color(0xFF7A7A7A)
+    val TextInverse = Color(0xFF080808)
+
+    val Accent = Color(0xFFFFC928)      // restrained pineapple gold
+    val AccentDark = Color(0xFFB88700)
+    val Success = Color(0xFF18D77A)     // online dot
+    val Danger = Color(0xFFFF4D5E)
+    val Warning = Color(0xFFFFA23A)
+    val Info = Color(0xFF4DA3FF)
+
+    val Border = Color(0xFF2A2A2A)
+    val OverlayScrim = Color(0x99000000)
+    val PhotoGradientBottom = Color(0xCC000000)
+}
+```
+
+Light mode can exist, but dark mode should be the default product feel.
+
+## Semantic Tokens
+
+```kotlin
+object PynapliSemantic {
+    val Online = PynapliColors.Success
+    val Verified = PynapliColors.Info
+    val Premium = PynapliColors.Accent
+    val Risk = PynapliColors.Warning
+    val Error = PynapliColors.Danger
+}
+```
+
+## Typography
+
+Recommended font:
+
+- Inter, or platform-native fallback if bundled font is delayed.
+
+Rules:
+
+- No negative letter spacing.
+- No viewport-scaled type.
+- Use `sp`.
+- Keep grid text compact and high-contrast.
+
+Initial scale:
+
+```kotlin
+object PynapliType {
+    val Display = 32.sp
+    val Title = 22.sp
+    val Section = 18.sp
+    val Body = 16.sp
+    val BodySmall = 14.sp
+    val Label = 13.sp
+    val Caption = 12.sp
+    val Micro = 11.sp
+}
+```
+
+## Spacing
+
+8dp base:
+
+```kotlin
+object PynapliSpacing {
+    val xxs = 2.dp
+    val xs = 4.dp
+    val sm = 8.dp
+    val md = 16.dp
+    val lg = 24.dp
+    val xl = 32.dp
+    val xxl = 48.dp
+}
+```
+
+Layout:
+
+```kotlin
+object PynapliLayout {
+    val ScreenPadding = 16.dp
+    val GridGap = 2.dp
+    val HeaderHeight = 64.dp
+    val BottomNavHeight = 64.dp
+    val MinTouchTarget = 48.dp
+}
+```
+
+## Shape
+
+```kotlin
+object PynapliShape {
+    val None = 0.dp
+    val Small = 4.dp
+    val Card = 8.dp
+    val Sheet = 16.dp
+    val Pill = 100.dp
+}
+```
+
+Rules:
+
+- Repeated cards max 8dp.
+- Grid tiles should feel tight and photo-first.
+- Sheets can have larger top corners.
+- Icon buttons should be square/circular with stable size.
+
+## Grid Tile Tokens
+
+```kotlin
+object GridTileTokens {
+    val AspectRatio = 1f
+    val Gap = 2.dp
+    val NameTextSize = 15.sp
+    val MetaTextSize = 12.sp
+    val OnlineDotSize = 10.dp
+    val PartnerIconSize = 22.dp
+    val BottomGradientHeight = 44.dp
+}
+```
+
+Grid tile visible data:
+
+- Photo
+- Name
+- Online dot
+- Distance
+- Linked partner mini icon
+
+No chips/tags.
+
+## Swipe Card Tokens
+
+```kotlin
+object SwipeCardTokens {
+    val Radius = 8.dp
+    val PhotoAspectRatio = 0.78f
+    val StackScaleStep = 0.035f
+    val DragThresholdFraction = 0.28f
+    val RotationMaxDegrees = 12f
+    val ActionButtonSize = 56.dp
+}
+```
+
+## Motion Tokens
+
+```kotlin
+object PynapliMotion {
+    val Fast = 120
+    val Standard = 220
+    val Slow = 360
+    val GridPlacement = 220
+    val SwipeFlyOut = 240
+    val SwipeSpringBack = 260
+}
+```
+
+Rules:
+
+- No tab-switch animation.
+- Avoid continuous decorative motion.
+- Playing Tonight pulse must be subtle.
+- Respect reduce-motion settings if available.
+
+## Icons
+
+Use lucide-style icons where available.
+
+Recommended icons:
+
+- Grid: layout-grid
+- Swipe: cards / flame-like only if tasteful
+- Activity: bell or activity
+- Messages: message-square
+- Store: badge / gem / crown, but avoid gaudy VIP feel
+- Settings: sliders
+- Partner link: link
+- Album: image-lock
+- Incognito: eye-off
+- Boost: zap
+
+## Component Sizing
+
+Buttons:
+
+- Primary height: 48dp
+- Secondary height: 44dp
+- Icon button: 44-48dp
+
+Filter pills:
+
+- Height: 40dp
+- Horizontal padding: 14dp
+
+Bottom nav:
+
+- Stable 5 items
+- Badge max text: `99+`
+
+## Accessibility Tokens
+
+Requirements:
+
+- Touch target: 48dp minimum.
+- Contrast: WCAG AA minimum.
+- Text wraps or truncates intentionally.
+- Dynamic font sizes tested.
+- Content descriptions for meaningful icons.
+
+## Do Not Implement
+
+- Do not hardcode hex values in feature screens.
+- Do not use negative letter spacing.
+- Do not use giant rounded cards everywhere.
+- Do not decorate with gradient orbs/blobs.
+- Do not make pineapple gold dominate the whole UI.
+- Do not put text into tiny controls that cannot scale.

@@ -1,0 +1,18 @@
+CREATE TABLE app_meta (
+  key TEXT NOT NULL PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at_epoch_ms INTEGER NOT NULL
+);
+
+selectByKey:
+SELECT *
+FROM app_meta
+WHERE key = ?;
+
+upsert:
+INSERT OR REPLACE INTO app_meta(key, value, updated_at_epoch_ms)
+VALUES (?, ?, ?);
+
+deleteByKey:
+DELETE FROM app_meta
+WHERE key = ?;

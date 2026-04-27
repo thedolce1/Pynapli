@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: pynapli-postgres
+    environment:
+      POSTGRES_DB: pynapli_dev
+      POSTGRES_USER: pynapli
+      POSTGRES_PASSWORD: pynapli_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pynapli-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pynapli -d pynapli_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: pynapli-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - pynapli-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pynapli-postgres-data:
+  pynapli-redis-data:
+

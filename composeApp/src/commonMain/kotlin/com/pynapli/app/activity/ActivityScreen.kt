@@ -1,0 +1,422 @@
+package com.pynapli.app.activity
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import com.pynapli.shared.network.dto.ActivityEventDto
+import kotlinx.coroutines.launch
+
+@Composable
+fun ActivityScreen(
+    modifier: Modifier = Modifier,
+    stateHolder: ActivityStateHolder = rememberActivityStateHolder()
+) {
+    val state by stateHolder.state.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(stateHolder) {
+        stateHolder.load()
+    }
+
+    ActivityScreenContent(
+        state = state,
+        onFilterSelected = stateHolder::selectFilter,
+        onAlbumRequestDecision = { eventId, approve ->
+            scope.launch { stateHolder.respondToAlbumRequest(eventId, approve) }
+        },
+        onRefresh = { scope.launch { stateHolder.load() } },
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun rememberActivityStateHolder(): ActivityStateHolder {
+    return remember {
+        ActivityStateHolder(
+            repository = SampleActivityFeedRepository()
+        )
+    }
+}
+
+@Composable
+private fun ActivityScreenContent(
+    state: ActivityUiState,
+    onFilterSelected: (ActivityFilterUi) -> Unit,
+    onAlbumRequestDecision: (String, Boolean) -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        ActivityHeader(
+            loading = state.isLoading,
+            onRefresh = onRefresh
+        )
+        ActivityFilterRow(
+            selectedFilter = state.selectedFilter,
+            onFilterSelected = onFilterSelected
+        )
+
+        when {
+            state.isLoading && state.items.isEmpty() -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            state.errorMessage != null && state.items.isEmpty() -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 28.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = state.errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
+            state.items.isEmpty() -> EmptyActivityState(
+                label = "No activity yet.",
+                modifier = Modifier.fillMaxSize()
+            )
+
+            state.visibleItems.isEmpty() -> EmptyActivityState(
+                label = state.selectedFilter.emptyLabel(),
+                modifier = Modifier.fillMaxSize()
+            )
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(
+                        items = state.visibleItems,
+                        key = { item -> item.eventId }
+                    ) { item ->
+                        ActivityRow(
+                            item = item,
+                            pendingAction = state.pendingAlbumActionEventId == item.eventId,
+                            onAlbumRequestDecision = onAlbumRequestDecision
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityFilterRow(
+    selectedFilter: ActivityFilterUi,
+    onFilterSelected: (ActivityFilterUi) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ActivityFilterUi.entries.forEach { filter ->
+            item(key = filter.name) {
+                AssistChip(
+                    onClick = { onFilterSelected(filter) },
+                    label = {
+                        Text(
+                            text = filter.label,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = if (filter == selectedFilter) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        labelColor = if (filter == selectedFilter) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    ),
+                    border = AssistChipDefaults.assistChipBorder(
+                        enabled = true,
+                        borderColor = MaterialTheme.colorScheme.outline
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityHeader(
+    loading: Boolean,
+    onRefresh: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "Activity",
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(
+            onClick = onRefresh,
+            enabled = !loading,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = "Refresh activity",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActivityRow(
+    item: ActivityEventDto,
+    pendingAction: Boolean,
+    onAlbumRequestDecision: (String, Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        ActivityAvatar(photoUrl = item.actorPhotoUrl)
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = item.actorDisplayName,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = item.occurredAt.compactTimeLabel(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = item.activityText(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                item.distanceLabel?.let { distance ->
+                    Text(
+                        text = distance,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1
+                    )
+                }
+            }
+            AlbumRequestActions(
+                item = item,
+                pendingAction = pendingAction,
+                onAlbumRequestDecision = onAlbumRequestDecision
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumRequestActions(
+    item: ActivityEventDto,
+    pendingAction: Boolean,
+    onAlbumRequestDecision: (String, Boolean) -> Unit
+) {
+    if (item.type != "album_request") return
+
+    when (item.albumRequestStatus) {
+        "pending" -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onAlbumRequestDecision(item.eventId, false) },
+                    enabled = !pendingAction,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(text = if (pendingAction) "..." else "Deny", maxLines = 1)
+                }
+                Button(
+                    onClick = { onAlbumRequestDecision(item.eventId, true) },
+                    enabled = !pendingAction,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(text = if (pendingAction) "..." else "Grant", maxLines = 1)
+                }
+            }
+        }
+
+        "approved",
+        "denied" -> {
+            Text(
+                text = if (item.albumRequestStatus == "approved") "Access granted" else "Request denied",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 6.dp),
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActivityAvatar(photoUrl: String?) {
+    Box(
+        modifier = Modifier
+            .size(52.dp)
+            .clip(CircleShape)
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF2B2622), Color(0xFF6D5D4F))
+                )
+            )
+            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        if (photoUrl != null) {
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Filled.Person,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyActivityState(
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.padding(horizontal = 28.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+private fun ActivityEventDto.activityText(): String = when (type) {
+    "profile_view" -> if (count > 1) "viewed you ${count}x" else "viewed you"
+    "flirt" -> if (count > 1) "sent Sparks ${count}x" else "sent a Spark"
+    "album_request" -> if (count > 1) "requested album access ${count}x" else "requested album access"
+    "swipe_like" -> "liked you"
+    "pineapple_like" -> "sent a Pineapple"
+    "match" -> "matched with you"
+    "partner_chat_invite" -> "sent a chat invite"
+    else -> "interacted with you"
+}
+
+private fun String.compactTimeLabel(): String =
+    if (length >= 16 && this[10] == 'T') substring(11, 16) else ""
+
+private fun ActivityFilterUi.emptyLabel(): String = when (this) {
+    ActivityFilterUi.All -> "No activity yet."
+    ActivityFilterUi.Views -> "No views yet."
+    ActivityFilterUi.Sparks -> "No Sparks yet."
+    ActivityFilterUi.Albums -> "No album requests yet."
+}

@@ -1,0 +1,81 @@
+package com.pynapli.server.auth
+
+import com.pynapli.shared.network.dto.AuthUserDto
+import com.pynapli.shared.network.dto.EmailLoginRequestDto
+import com.pynapli.shared.network.dto.EmailSignupRequestDto
+import com.pynapli.shared.network.dto.LogoutResponseDto
+import com.pynapli.shared.network.dto.RefreshSessionRequestDto
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.Application
+import io.ktor.server.application.call
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
+import io.ktor.server.routing.post
+import io.ktor.server.routing.route
+import io.ktor.server.routing.routing
+
+fun Application.configureAuthRoutes(authService: AuthService?) {
+    if (authService == null) return
+
+    routing {
+        route("/v1/auth") {
+            post("/email/signup") {
+                call.respond(
+                    authService.signupEmail(
+                        request = call.receive()
+                    )
+                )
+            }
+
+            post("/email/login") {
+                call.respond(
+                    authService.loginEmail(
+                        request = call.receive()
+                    )
+                )
+            }
+
+            post("/refresh") {
+                val request = call.receive<RefreshSessionRequestDto>()
+                call.respond(authService.refresh(request.refreshToken))
+            }
+
+            post("/logout") {
+                val token = call.bearerToken() ?: throw AuthException("UNAUTHENTICATED")
+                call.respond(LogoutResponseDto(loggedOut = authService.logout(token)))
+            }
+        }
+
+    }
+}
+
+private suspend fun AuthService.signupEmail(request: EmailSignupRequestDto) = signupEmail(
+    email = request.email,
+    password = request.password,
+    deviceId = request.deviceId,
+    platform = request.platform,
+    appVersion = request.appVersion
+)
+
+private suspend fun AuthService.loginEmail(request: EmailLoginRequestDto) = loginEmail(
+    email = request.email,
+    password = request.password,
+    deviceId = request.deviceId,
+    platform = request.platform,
+    appVersion = request.appVersion
+)
+
+private fun io.ktor.server.application.ApplicationCall.bearerToken(): String? {
+    val value = request.headers[HttpHeaders.Authorization] ?: return null
+    if (!value.startsWith("Bearer ", ignoreCase = true)) return null
+    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() }
+}
+
+fun authStatusFor(code: String): HttpStatusCode = when (code) {
+    "EMAIL_ALREADY_EXISTS" -> HttpStatusCode.Conflict
+    "INVALID_CREDENTIALS", "INVALID_REFRESH_TOKEN", "UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
+    "ACCOUNT_NOT_ACTIVE" -> HttpStatusCode.Forbidden
+    "INVALID_EMAIL", "PASSWORD_TOO_SHORT" -> HttpStatusCode.BadRequest
+    else -> HttpStatusCode.BadRequest
+}

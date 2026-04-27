@@ -1,0 +1,43 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Kotlin / IDE
+.idea/
+*.iml
+out/
+.kotlin/
+
+# Claude Code (local per-machine overrides only)
+.claude/settings.local.json
+
+# Android
+local.properties
+captures/
+*.apk
+*.aab
+
+# iOS / Xcode
+iosApp/DerivedData/
+iosApp/*.xcworkspace/xcuserdata/
+iosApp/*.xcodeproj/xcuserdata/
+iosApp/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+
+# Local media upload sink
+.pynapli-local-media/
+
+# Local server logs
+.pynapli-local-logs/
+
+# OS
+.DS_Store
+Thumbs.db

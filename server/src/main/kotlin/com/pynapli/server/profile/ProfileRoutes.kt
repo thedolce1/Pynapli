@@ -1,0 +1,51 @@
+package com.pynapli.server.profile
+
+import com.pynapli.server.auth.AuthException
+import com.pynapli.server.auth.AuthService
+import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import io.ktor.http.HttpHeaders
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.call
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
+import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
+import io.ktor.server.routing.routing
+import java.util.UUID
+
+fun Application.configureProfileRoutes(
+    authService: AuthService?,
+    profileService: ProfileService?
+) {
+    if (authService == null || profileService == null) return
+
+    routing {
+        get("/v1/me") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(profileService.getMe(user.id))
+        }
+
+        patch("/v1/me/profile") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val request = call.receive<UpdateProfileRequestDto>()
+            call.respond(profileService.updateProfile(user.id, request))
+        }
+
+        get("/v1/profiles/{userId}") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val targetUserId = call.parameters["userId"]?.toUuidOrNull()
+                ?: throw ProfileException("PROFILE_NOT_FOUND")
+            call.respond(profileService.getPublicProfile(user.id, targetUserId))
+        }
+    }
+}
+
+private fun ApplicationCall.requiredBearerToken(): String {
+    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
+    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
+    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
+}
+
+private fun String.toUuidOrNull(): UUID? =
+    runCatching { UUID.fromString(this) }.getOrNull()

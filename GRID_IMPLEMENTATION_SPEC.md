@@ -1,0 +1,605 @@
+# Pynapli Grid Implementation Spec
+
+Last updated: 2026-04-24
+
+## Purpose
+
+This document captures how Pynapli should implement its Grindr-inspired grid so it stays fast, minimal, location-aware, battery-conscious, and technically correct.
+
+The grid is not a social feed and not a swipe deck. It is a live ranked card index.
+
+Core rule:
+
+> Grid is for now. Swipe is for intent.
+
+For grid load-test targets, dense-city scale requirements, and production performance gates, use [PRODUCTION_READINESS_AND_QUALITY_SPEC.md](PRODUCTION_READINESS_AND_QUALITY_SPEC.md) alongside this document.
+
+## Product Contract
+
+The grid answers:
+
+> Who is relevant near me right now?
+
+The grid should feel:
+
+- Instant
+- Dense
+- Minimal
+- Alive
+- Stable
+- Filterable
+- Low-clutter
+
+Users can message from the grid without matching, subject to the recipient's messaging settings.
+
+## Public Research Signals
+
+Grindr publicly documents the following grid behaviors:
+
+- The Grid is the home page.
+- By default, the Grid shows nearby users and Boosted users.
+- Grid controls can combine tags, filters, Fresh, and Explore.
+- Free users can view dozens of nearby profiles.
+- XTRA users can view up to a subset of 500 profiles.
+- Unlimited users can view all profiles.
+- Popular highlights active, responsive, highly tapped, and highly chatted profiles.
+- Location is collected to roughly 100m accuracy.
+- Even when distance display is off, proximity can still sort the grid.
+
+Sources:
+
+- Grindr Grid: https://help.grindr.com/hc/en-us/articles/12155355365011-The-Grid
+- Grindr Filters: https://help.grindr.com/hc/en-us/articles/12155443240851-Filters
+- Grindr location/safety: https://help.grindr.com/hc/en-us/articles/1500009290262-Safety-tips/
+- Grindr location troubleshooting: https://help.grindr.com/hc/en-us/articles/1500008383842-Location-troubleshooting
+
+Grindr does not publicly document its exact backend, client state management, TTLs, or ranking algorithms. Any implementation details below are Pynapli architecture decisions, not claims about Grindr internals.
+
+## Non-Negotiable UX Rules
+
+1. Every grid card represents exactly one autonomous user.
+2. No primary couple cards.
+3. Linked partners appear only as a small linked-partner icon/avatar.
+4. Grid cards stay extremely minimal.
+5. Filters carry complexity, not cards.
+6. Opening and closing a profile must return the user to the exact same grid position.
+7. Filter changes must not visually nuke the whole grid.
+8. Distance and presence updates must not constantly reshuffle the grid.
+9. Grid messaging is allowed without matching.
+10. Battery usage must be conservative.
+
+## Grid Card Design
+
+Show only:
+
+- Main thumbnail
+- Display name
+- Online indicator
+- Distance, if visible
+- Tiny linked-partner avatar/icon, if linked
+
+Do not show:
+
+- Bio
+- Intent chips
+- Lifestyle tags
+- Full verification stacks
+- Album labels, unless later proven necessary and kept extremely subtle
+- Compatibility scores
+- Preference lists
+
+The card should answer:
+
+1. Who is this?
+2. Are they active?
+3. How close are they?
+4. Are they linked?
+
+Everything else belongs in filters, profile view, Activity, or chat.
+
+## Linked Partner Display
+
+Every linked partner remains an autonomous account.
+
+Example:
+
+- Alex is 1 km away.
+- Jamie is 9 km away.
+- Alex and Jamie are linked.
+
+Grid behavior:
+
+- Alex appears as Alex at 1 km.
+- Jamie appears as Jamie at 9 km.
+- Alex's card can show a tiny Jamie avatar/link icon.
+- Jamie's card can show a tiny Alex avatar/link icon.
+- The grid must not merge them into a single couple card.
+
+Linked icon tap/long press can show:
+
+- Linked with Jamie
+- Partner online/recent state, if allowed
+- Partner distance, if allowed
+- View profile
+
+If the linked partner hides distance, omit distance or show "distance hidden."
+
+## Backend Architecture
+
+Recommended stack:
+
+- Ktor server
+- PostgreSQL + PostGIS
+- Redis
+- CDN-backed object storage for thumbnails
+- Ktor WebSockets for presence/activity deltas
+
+### Data Shape
+
+The grid endpoint must return lightweight card DTOs, not full profiles.
+
+Example:
+
+```kotlin
+data class GridCardDto(
+    val userId: String,
+    val displayName: String,
+    val thumbnailUrl: String?,
+    val online: Boolean,
+    val distanceMetersRounded: Int?,
+    val linkedPartnerUserId: String?,
+    val linkedPartnerThumbUrl: String?,
+    val rankToken: String
+)
+```
+
+Do not include:
+
+- Full bio
+- Full photo lists
+- Private album metadata beyond maybe "has private album" if later needed
+- Full preferences
+- Chat history
+- Sensitive profile fields
+
+Full profile data loads only when the user opens a profile.
+
+### Grid Query Pipeline
+
+Recommended backend flow:
+
+```text
+authenticated user
+-> privacy and safety exclusions
+-> block/hide exclusions
+-> location radius
+-> active filters
+-> subscription visibility limits
+-> ranking
+-> stable cursor pagination
+-> lightweight card DTOs
+```
+
+### Geospatial Search
+
+Use PostGIS for location-aware queries.
+
+Recommended primitives:
+
+- `ST_DWithin` for radius filtering.
+- `<->` nearest-neighbor ordering for fast distance sorting.
+- GiST/SP-GiST indexes on location columns.
+
+References:
+
+- ST_DWithin: https://access.crunchydata.com/documentation/postgis/latest/ST_DWithin.html
+- Nearest-neighbor search: https://postgis.net/workshops/postgis-intro/knn.html
+
+### Redis Usage
+
+Use Redis for:
+
+- Presence TTLs
+- Candidate ID caches
+- Filter bucket caches
+- Rate limits
+- Boost state
+- Recent activity counters
+
+Do not store authoritative profile state only in Redis.
+
+### Candidate Cache
+
+Cache nearby candidate IDs by coarse location bucket and broad filter class.
+
+Example cache keys:
+
+```text
+grid:candidates:v1:cell:{h3Cell}:radius:{radius}:profileType:{type}
+presence:user:{userId}
+boost:active:{region}
+```
+
+Cache only IDs and lightweight ranking hints. Hydrate cards from database/cache layer after exclusions.
+
+### Pagination
+
+Use stable cursor pagination. Avoid offset pagination for live grids because inserts/removals make offset pages unstable.
+
+Cursor should include:
+
+- rank score
+- distance bucket
+- user ID tie-breaker
+- grid version/filter hash
+
+Example:
+
+```kotlin
+data class GridCursor(
+    val filterHash: String,
+    val rankScore: Double,
+    val distanceBucket: Int,
+    val userId: String
+)
+```
+
+## Ranking
+
+Base ranking:
+
+```text
+eligible profiles
+-> privacy/block/safety filters
+-> location radius
+-> active filter rules
+-> subscription visibility rules
+-> rank by distance + recency + trust + engagement
+-> stable sort buckets
+```
+
+Suggested rank inputs:
+
+- Distance
+- Online/recent activity
+- Boost
+- Verification
+- Profile completeness
+- Response rate
+- Low report/block rate
+- Mutual intent match
+- Linked partner clarity
+- Event overlap
+- Freshness
+
+Avoid rewarding spam:
+
+- High message volume alone should not boost rank.
+- Low reply rate and high report/block rate should suppress rank.
+- Repeated private album spam should suppress rank.
+
+### Stable Sort Buckets
+
+Do not reorder constantly on tiny changes.
+
+Use coarse buckets:
+
+- distance bucket
+- recency bucket
+- boost bucket
+- trust bucket
+
+Within buckets, use deterministic tie-breakers.
+
+This keeps the grid feeling alive without feeling chaotic.
+
+## Presence States
+
+Recommended states:
+
+- Online: active foreground session or socket; expires quickly.
+- Recently active: active in last 60 minutes.
+- Active today: active in last 24 hours.
+- Visible in grid: eligible to appear based on privacy and filters.
+- Stale: deprioritized after 7-14 days.
+- Dormant: hidden or heavily deprioritized after 30+ days.
+
+Recommended TTLs:
+
+- Online: 2-5 minutes after last foreground heartbeat/socket event.
+- Recently active: 60 minutes.
+- Active today: 24 hours.
+- Stale: 7-14 days.
+- Dormant: 30+ days.
+
+These are Pynapli decisions. Grindr does not publicly document exact online/grid TTL behavior.
+
+## Location Strategy
+
+Location should be useful but battery-conscious and privacy-aware.
+
+### Location Rules
+
+- Use last known location for instant first render.
+- Request fresh location after initial render.
+- Use while-in-use location by default.
+- Avoid continuous exact GPS streaming.
+- Round or fuzz distance.
+- Respect hide-distance settings.
+- Stop active location updates when app backgrounds.
+- Use movement thresholds before sending location updates to backend.
+
+### Movement Thresholds
+
+Recommended behavior:
+
+- Less than 100-250m movement: no grid reorder; optionally update visible distance text.
+- 250m-1km movement: refresh ranking quietly, preferably offscreen first.
+- City/neighborhood change: fetch new grid.
+- Filter change: fetch filtered IDs, diff, animate.
+
+### Battery References
+
+Android recommends removing location updates when not needed, setting timeouts, batching requests, and throttling background location.
+
+Source:
+
+- Android location battery optimization: https://developer.android.com/develop/sensors-and-location/location/battery/optimize
+
+## Client Architecture
+
+Recommended Kotlin client stack:
+
+- Compose Multiplatform
+- `LazyVerticalGrid`
+- `rememberLazyGridState`
+- `StateFlow` for grid UI state
+- `SharedFlow` for one-off events and realtime deltas
+- Ktor Client
+- Ktor WebSocket client
+- Coil 3 or Kamel for image loading/caching
+
+References:
+
+- Compose lazy lists/grids: https://developer.android.com/develop/ui/compose/lists
+- StateFlow/SharedFlow: https://developer.android.com/kotlin/flow/stateflow-and-sharedflow
+- Ktor WebSockets: https://ktor.io/docs/server-websockets.html
+- Kamel: https://github.com/Kamel-Media/Kamel
+
+## Compose Grid Implementation
+
+Use stable item keys.
+
+```kotlin
+@Composable
+fun PynapliGrid(
+    cards: List<GridCardUiModel>,
+    gridState: LazyGridState,
+    onCardClick: (String) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        state = gridState
+    ) {
+        items(
+            items = cards,
+            key = { it.userId },
+            contentType = { "grid-card" }
+        ) { card ->
+            GridCard(
+                card = card,
+                modifier = Modifier.animateItem(),
+                onClick = { onCardClick(card.userId) }
+            )
+        }
+    }
+}
+```
+
+Why:
+
+- Stable keys preserve item identity.
+- `contentType` helps lazy layout reuse.
+- `animateItem()` lets inserts/removals/reorders feel smooth.
+- `LazyVerticalGrid` only composes visible items.
+
+## Grid State Retention
+
+Opening a profile must not destroy the grid.
+
+Persist:
+
+- Current cards
+- Active filters
+- Pagination cursor
+- `LazyGridState`
+- First visible item index
+- First visible item offset
+- Last grid version
+- Last location bucket
+
+The profile should open as:
+
+- a modal/bottom sheet, or
+- a navigation destination over retained state.
+
+Do not refetch/rebuild the grid when closing a profile unless the user explicitly refreshes or the grid state is expired.
+
+## Filter Application
+
+On filter change:
+
+1. Compute filter hash.
+2. Request filtered card IDs/DTOs.
+3. Keep old list visible while loading.
+4. Apply returned list as one state update.
+5. Let stable keys animate changed cards.
+6. Preserve scroll where reasonable.
+
+Do not:
+
+- Clear the whole grid first.
+- Show a full-screen spinner if old data exists.
+- Reset scroll to top unless the user chooses a radically different context or location.
+
+## Realtime Updates
+
+Use WebSocket deltas for:
+
+- Online/offline state
+- Recently active changes
+- Boost starts/ends
+- Viewed/flirted activity
+- Incoming message badges
+- Typing status
+
+Do not use WebSockets to stream full grid reorders constantly.
+
+Presence delta example:
+
+```kotlin
+@Serializable
+data class PresenceDelta(
+    val userId: String,
+    val online: Boolean,
+    val lastActiveAt: Instant
+)
+```
+
+Client behavior:
+
+- Update visible online dots immediately.
+- Update offscreen card models.
+- Do not reorder unless threshold rules say to.
+
+## Image Loading
+
+The grid lives or dies by thumbnail performance.
+
+Rules:
+
+- CDN thumbnails.
+- Fixed thumbnail sizes.
+- Preload upcoming visible range.
+- Use memory + disk cache.
+- Avoid original images in grid.
+- Decode to displayed size.
+- Use placeholders for missing photos.
+- Avoid layout shifts when thumbnails load.
+
+Recommended card image ratio:
+
+- Square, 1:1.
+
+This keeps the grid stable and dense.
+
+## Subscription Gating
+
+Grid volume can be gated similarly to Grindr's public model.
+
+Possible Pynapli tiers:
+
+- Free: dozens of nearby profiles.
+- Plus: expanded nearby grid.
+- Premium: largest/all eligible grid, advanced filters.
+
+Do not gate:
+
+- Basic safety filters.
+- Basic singles/linked/intent clarity.
+- Block/report.
+- Basic location privacy.
+
+## Boost
+
+Boosted users should appear higher in the grid, but not destroy relevance.
+
+Boost rank should still respect:
+
+- Blocks
+- Safety exclusions
+- Privacy exclusions
+- Recipient visibility settings
+- Location context
+
+Boost should not put a user into feeds where they are wholly irrelevant or disallowed.
+
+## Anti-Abuse
+
+The open grid messaging model needs protections:
+
+- Message rate limits
+- First-message cooldowns
+- Duplicate intro detection
+- Report/block suppression
+- Private album request throttles
+- New-account trust limits
+- Suspicious automation detection
+
+Do not reward raw outbound message volume in ranking.
+
+Reward:
+
+- Replies received
+- Positive engagement
+- Good standing
+- Verification
+- Profile completeness
+- Low block/report rates
+
+## Performance Targets
+
+Initial grid:
+
+- First cached render: under 500ms after app shell is ready.
+- First network grid render: target under 1.5s on normal mobile network.
+- First page: 30-60 cards.
+- Thumbnail size: CDN optimized, no originals.
+
+Interaction:
+
+- Profile open: no grid state loss.
+- Profile close: same scroll position.
+- Filter apply: no blank grid if old cards exist.
+- Presence update: no full refetch.
+
+Battery:
+
+- No continuous exact GPS in background.
+- No tight polling loops.
+- Stop foreground location updates when screen/app pauses.
+- Prefer event deltas over polling.
+
+## Implementation Checklist
+
+- [ ] Lightweight grid card DTO exists.
+- [ ] Full profile endpoint is separate.
+- [ ] PostGIS radius query implemented.
+- [ ] PostGIS nearest-neighbor ordering implemented.
+- [ ] Redis presence TTLs implemented.
+- [ ] Redis candidate cache implemented.
+- [ ] Stable cursor pagination implemented.
+- [ ] Compose grid uses stable keys.
+- [ ] Compose grid uses retained `LazyGridState`.
+- [ ] Grid cards use fixed square dimensions.
+- [ ] Filter updates use diffed list updates, not full clears.
+- [ ] Profile open/close preserves scroll.
+- [ ] WebSocket presence deltas update dots without full refresh.
+- [ ] Location updates use thresholds.
+- [ ] Background location is avoided by default.
+- [ ] Thumbnail caching/preloading exists.
+- [ ] Message rate limiting exists.
+- [ ] Ranking does not reward spam volume.
+
+## Do Not Implement
+
+- Do not use offset pagination for live grid pages.
+- Do not fetch full profile data for every visible card.
+- Do not rebuild the whole grid on every presence update.
+- Do not reset scroll after viewing a profile.
+- Do not continuously reorder for tiny location movements.
+- Do not make linked users into couple cards.
+- Do not put intent/tag clutter on grid cards.
+- Do not make background GPS a default requirement.
+- Do not reward users for blasting messages.
+- Do not paywall safety-critical filtering or block/report.

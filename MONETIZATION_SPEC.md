@@ -1,0 +1,595 @@
+# Pynapli Monetization Spec
+
+Last updated: 2026-04-24
+
+## Purpose
+
+This document defines Pynapli's launch monetization model: subscriptions, microtransactions, feature gates, linked-partner benefits, and anti-abuse rules.
+
+Pynapli should borrow the best monetization mechanics from Grindr, Tinder, Bumble, and Feeld while staying simpler, cheaper, and more trustworthy as a new app.
+
+Core rule:
+
+> Free users create the network. Paid users buy convenience, reach, privacy, and insight.
+
+## Launch Tiers
+
+Locked launch structure:
+
+- Pynapli Free
+- Pynapli Social
+- Pynapli Select
+
+Launch monthly pricing:
+
+- Free: $0 with ads
+- Social: $4.99/month
+- Select: $9.99/month
+
+These prices are intentionally lower than major dating apps to reduce friction and help a new network grow.
+
+## Naming Rationale
+
+### Pynapli Free
+
+Simple, clear, and expected.
+
+### Pynapli Social
+
+Accessible, app-store-safe, and aligned with Pynapli's positioning as an adult social lifestyle app.
+
+### Pynapli Select
+
+Premium without sounding cheesy, explicit, or nightclub-like.
+
+Avoid:
+
+- Gold
+- Platinum
+- XTRA
+- Unlimited
+- Majestic
+- VIP
+- Juicy
+- Ripe
+- Naughty
+- Any pineapple-pun-heavy tier name
+
+## Market Reference
+
+Public monetization patterns:
+
+- Tinder uses Free, Plus, Gold, Platinum. Paid features include unlimited Likes, Rewind, Passport, no ads, Incognito, See Who Likes You, Super Likes, Boost, Message before Matching, and Prioritized Likes.
+- Grindr uses XTRA and Unlimited. Paid features include expanded grid volume, more filters, Incognito, Viewed Me access, chat translation, unsend, read receipts, expiring photos, and Boosts.
+- Bumble uses Boost, Premium, and Premium+. Paid features include unlimited likes, SuperSwipes, Spotlight, Backtrack, Extend, Rematch, and See Who Likes You.
+- Feeld uses Majestic, including premium discovery/privacy features and seeing likes.
+
+Sources:
+
+- Tinder subscription tiers: https://tinder.com/feature/subscription-tiers/
+- Grindr Unlimited: https://help.grindr.com/hc/en-us/articles/1500008656741-Grindr-Unlimited
+- Bumble paid plans: https://support.bumble.com/hc/en-us/articles/32668790872733-Understanding-Bumble-s-paid-features-and-subscription-plans
+- Feeld Majestic: https://support.feeld.co/hc/en-gb/articles/9406793654556-Majestic-Membership-explained
+
+## Monetization Principles
+
+1. Safety is free.
+2. Basic intent clarity is free.
+3. Free users must be useful to the network.
+4. Paid tiers should feel additive, not punitive.
+5. Select should contain the strongest FOMO and privacy features.
+6. Microtransactions should enhance reach or intent, not replace subscriptions.
+7. Linked partner benefit is a core differentiator.
+8. All entitlements are server-authoritative.
+9. Ads should not damage sensitive/privacy-heavy experiences.
+10. Pricing should be simple at launch.
+
+## What Must Stay Free
+
+Never paywall:
+
+- Block
+- Report
+- Safety center
+- Basic profile
+- Age gate
+- Basic grid access
+- Basic swipe access
+- Basic partner linking
+- Basic private album request/grant
+- Basic distance/privacy controls
+- Basic singles/linked/everyone filter
+- Basic solo/together/social intent settings
+- Account deletion
+- Data export where required
+- Basic notification privacy
+
+## Pynapli Free
+
+Price:
+
+- $0/month
+- Ad-supported
+
+Purpose:
+
+- Build network liquidity.
+- Let users experience the core product.
+- Create upgrade motivation through limits, not frustration.
+
+Included:
+
+- Create profile
+- Public photos
+- Basic private album
+- Basic partner linking
+- Grid access with limited volume
+- Grid messaging, subject to recipient controls and rate limits
+- Basic Grid filters
+- Swipe access with daily Like limit
+- Match chat
+- Flirts with daily limits
+- Activity counts
+- Latest visible Activity item in some categories
+- Basic album requests/grants
+- Limited Playing Tonight sessions
+- Block/report
+- Safety center
+- Basic privacy settings
+- Ads
+
+Free limits:
+
+- Limited grid volume
+- Limited daily swipes/likes
+- Limited flirts
+- Limited private album requests
+- Limited Activity reveal
+- No full Viewed You list
+- No full Likes You list
+- No advanced filters
+- No incognito
+- No travel mode
+- No Intro Notes except possibly promo inventory
+
+## Pynapli Social
+
+Price:
+
+- $4.99/month
+
+Positioning:
+
+> More room to connect, with fewer limits.
+
+Purpose:
+
+- The affordable mainstream paid tier.
+- Remove friction and ads.
+- Give enough extra control to feel worth it.
+
+Included:
+
+- Everything in Free
+- No ads
+- Expanded grid volume
+- More swipe likes, or unlimited likes if launch economics allow
+- Rewind
+- More Grid filter combinations
+- More Swipe filter control
+- Saved filters
+- More Activity reveal
+- Open more flirts/views from Activity
+- More private album requests/grants
+- Basic timed album access
+- Limited read receipts, if desired
+- Basic travel preview
+- More/larger Playing Tonight sessions
+- Linked partner included
+
+Suggested monthly inventory:
+
+- 1 Pineapple Like per week
+- Discounted Boosts
+- Optional 1 limited Intro Note per month as experiment
+
+Do not overload Social. It should be clearly better than Free but leave premium FOMO for Select.
+
+## Pynapli Select
+
+Price:
+
+- $9.99/month
+
+Positioning:
+
+> More privacy, more insight, more visibility.
+
+Purpose:
+
+- The power-user tier.
+- Combines Grindr Unlimited-style privacy/visibility with Tinder Gold/Platinum-style FOMO.
+
+Included:
+
+- Everything in Social
+- Full Activity reveal
+- See who viewed you
+- See who liked you
+- Repeat viewers
+- Advanced filters
+- Incognito
+- Travel mode
+- Priority Likes
+- Weekly Pineapple Likes
+- Monthly Boost
+- Intro Notes
+- Full read receipts
+- Typing status
+- Message unsend
+- Expiring photos
+- Advanced private album controls
+- Longer Activity history
+- Boost result analytics
+- Priority Playing Tonight placement
+- Linked partner included
+
+Suggested monthly inventory:
+
+- 5 Pineapple Likes per week
+- 1 Boost per month
+- 3 Intro Notes per month
+- Daily curated Picks
+
+Inventory should expire if unused at renewal or refresh windows, depending feature. Expiring inventory creates urgency but must be clearly disclosed.
+
+## Linked Partner Benefit
+
+This is a major Pynapli differentiator.
+
+Rule:
+
+> One paid subscription can grant the same tier to one active linked partner.
+
+Behavior:
+
+- Social subscriber can grant Social benefits to one active linked partner.
+- Select subscriber can grant Select benefits to one active linked partner.
+- Benefit ends when the partner link ends.
+- Benefit does not merge accounts.
+- Benefit does not share messages, Activity, albums, or settings.
+- Benefit is server-authoritative.
+
+Anti-abuse:
+
+- One active beneficiary at a time.
+- Cooldown after changing linked beneficiary.
+- Verification requirement for benefit sharing, if abuse appears.
+- Fraud monitoring for frequent link/unlink cycles.
+- Subscription benefit should not apply retroactively to old linked partners.
+
+Product copy:
+
+> Linked partner included while your link is active.
+
+Avoid:
+
+- Couple subscription
+- Shared account
+- Two-for-one account
+- Partner gets your account
+
+## Microtransactions
+
+Microtransactions should be optional accelerators.
+
+### Boost
+
+Purpose:
+
+- Increase visibility in Grid and/or Swipe.
+
+Recommended:
+
+- 30-minute duration.
+- Available to all eligible users.
+- Included monthly in Select.
+- Discounted for Social.
+
+Rules:
+
+- Does not bypass blocks, safety, privacy, age gates, or hard filters.
+- Increases impressions, not guaranteed matches.
+- Results should be reported honestly.
+
+### Super Boost
+
+Purpose:
+
+- Stronger peak-time visibility.
+
+Recommended:
+
+- Select-only or high-trust-user eligible.
+- A la carte.
+- Used sparingly.
+
+Rules:
+
+- Higher price than Boost.
+- Must still respect relevance and safety.
+- Should not flood incompatible users.
+
+### Pineapple Like
+
+Purpose:
+
+- High-intent swipe signal.
+
+Recommended:
+
+- Included weekly in Social/Select.
+- Sold in packs.
+- Scarce by design.
+
+Rules:
+
+- Prioritizes sender in recipient's Activity/Swipe.
+- Can be dismissed.
+- Does not guarantee match.
+- Should not be unlimited.
+
+### Intro Note
+
+Purpose:
+
+- Message before match from Swipe.
+
+Recommended:
+
+- Mostly Select.
+- A la carte packs possible.
+- 140 character limit.
+
+Rules:
+
+- Does not become chat until accepted/matched.
+- Recipient can disable or restrict.
+- Delivery not guaranteed.
+- Must be rate-limited.
+
+### Extra Picks
+
+Purpose:
+
+- More curated daily swipe recommendations.
+
+Recommended:
+
+- Sell as small packs.
+- Expire at daily refresh.
+- Included daily in Select.
+
+### Event Spotlight
+
+Purpose:
+
+- Boost visibility around a specific event, club night, or travel weekend.
+
+Recommended:
+
+- Later feature, not MVP-critical.
+- Useful for lifestyle events.
+
+Rules:
+
+- Must respect event privacy and blocks.
+- Should not expose event attendance against user settings.
+
+### Private Album Add-Ons
+
+Be careful.
+
+Possible:
+
+- More timed access presets
+- Expiring photo inventory
+- Extra album slots
+
+Avoid:
+
+- Making private album access feel transactional.
+- Selling access to other users' albums.
+- Paywalling revocation.
+- Paywalling basic album privacy.
+
+## Ads
+
+Free tier can include ads, but ads must be tasteful and privacy-conscious.
+
+Rules:
+
+- No ads inside private albums.
+- No ads inside safety/reporting flows.
+- No ads that imply explicit sexual services.
+- No ads that expose user lifestyle context.
+- Avoid hyper-personalized sensitive targeting.
+- Avoid jarring full-screen ads during message/profile safety flows.
+
+Best placements:
+
+- Between grid pages
+- Between swipe deck batches
+- Store tab
+- Non-sensitive empty states
+
+Avoid placements:
+
+- Private album viewer
+- Chat thread
+- Partner invite flow
+- Report/block flow
+- Verification flow
+
+## Paywall Placement
+
+Good paywall moments:
+
+- Tapping blurred Activity item
+- Trying to see full Viewed You list
+- Trying to see full Likes You list
+- Applying advanced filters
+- Running out of free likes
+- Using Rewind after limit
+- Trying Incognito
+- Starting Travel mode
+- Viewing Boost results details
+
+Bad paywall moments:
+
+- Block/report
+- Deleting account
+- Revoking album access
+- Responding to partner invite
+- Hiding distance
+- Basic intent filters
+- Viewing safety center
+
+## Feature Matrix
+
+| Feature | Free | Social | Select |
+|---|---:|---:|---:|
+| Ads | Yes | No | No |
+| Basic profile | Yes | Yes | Yes |
+| Basic grid | Yes | Yes | Yes |
+| Expanded grid | Limited | Yes | Larger |
+| Grid messaging | Yes | Yes | Yes |
+| Basic filters | Yes | Yes | Yes |
+| Advanced filters | No | Some | Yes |
+| Swipe likes | Limited | More/Unlimited | Unlimited |
+| Rewind | No | Yes | Yes |
+| Activity counts | Yes | Yes | Yes |
+| Full Viewed You | No | Limited | Yes |
+| Full Likes You | No | Limited | Yes |
+| Incognito | No | No/Maybe | Yes |
+| Travel mode | No | Preview | Yes |
+| Pineapple Likes | Limited/promo | Weekly | More weekly |
+| Intro Notes | No/promo | Limited/experiment | Yes |
+| Monthly Boost | No | Discounted | Included |
+| Private album basics | Yes | Yes | Yes |
+| Timed album access | Basic | Yes | Advanced |
+| Expiring photos | No | Limited | Yes |
+| Linked partner included | No | Yes | Yes |
+| Safety controls | Yes | Yes | Yes |
+
+## Pricing Strategy
+
+Launch pricing:
+
+- Social: $4.99/month
+- Select: $9.99/month
+
+Possible annual plans:
+
+- Social annual: $39.99/year
+- Select annual: $79.99/year
+
+Possible intro offer:
+
+- First month Social: $2.99
+- First month Select: $6.99
+
+Do not launch with confusing dynamic pricing. Simple pricing builds trust.
+
+## Billing Architecture
+
+Server-authoritative entitlements:
+
+- Client purchases through App Store / Google Play.
+- Ktor validates receipt/subscription state.
+- Ktor stores normalized entitlement.
+- Client reads entitlement from Ktor.
+- Firebase/Remote Config may show paywall variants but cannot grant premium.
+
+Requirements:
+
+- Restore purchases
+- Handle renewals
+- Handle cancellations
+- Handle grace periods
+- Handle refunds/chargebacks
+- Handle linked-partner beneficiary changes
+- Idempotency keys for purchase processing
+
+## Metrics
+
+Track:
+
+- Free to Social conversion
+- Free to Select conversion
+- Social to Select upgrade
+- Subscription churn
+- Partner benefit usage
+- Boost purchase conversion
+- Pineapple Like usage
+- Intro Note acceptance rate
+- Activity paywall conversion
+- Advanced filter paywall conversion
+- Ad revenue per free user
+- ARPU / ARPPU
+- Report/block rates by tier
+
+Avoid tracking sensitive lifestyle terms in analytics unless privacy-reviewed and aggregated.
+
+## Launch Experiments
+
+Safe experiments:
+
+- Social includes unlimited likes vs high daily cap.
+- Select includes 3 vs 5 Intro Notes/month.
+- Select includes 1 monthly Boost vs discounted Boost.
+- Activity reveal count for Free users.
+- Social Activity reveal depth.
+- First-month promo pricing.
+- Annual plan discount.
+
+Do not experiment with:
+
+- Safety access.
+- Block/report access.
+- Basic privacy controls.
+- Age verification requirements.
+- Deceptive fake activity.
+
+## Implementation Checklist
+
+- [ ] Free, Social, Select tiers exist.
+- [ ] Launch pricing is set at $4.99 and $9.99 monthly.
+- [ ] Entitlements are server-authoritative.
+- [ ] Linked partner benefit is implemented server-side.
+- [ ] One active linked partner beneficiary rule exists.
+- [ ] Subscription cooldown/abuse detection exists.
+- [ ] StoreKit and Google Play validation exist.
+- [ ] Restore purchases exists.
+- [ ] Activity gating is implemented.
+- [ ] Advanced filters are gated.
+- [ ] Boost inventory exists.
+- [ ] Pineapple Like inventory exists.
+- [ ] Intro Note inventory exists.
+- [ ] Ads are excluded from sensitive surfaces.
+- [ ] Safety features remain free.
+- [ ] Paywall copy uses Social/Select naming.
+
+## Do Not Implement
+
+- Do not copy Tinder/Grindr tier names.
+- Do not launch with high major-app pricing.
+- Do not paywall safety.
+- Do not cripple Free so badly the network cannot grow.
+- Do not make Pineapple Likes unlimited.
+- Do not let Boost bypass safety or filters.
+- Do not sell access to other users' private albums.
+- Do not make linked-partner benefit a shared account.
+- Do not trust client-side premium flags.
+- Do not use deceptive fake Activity to sell upgrades.
+- Do not put ads in private albums, safety, partner invites, or reports.
