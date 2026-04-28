@@ -161,6 +161,83 @@ class MediaServiceTest {
     }
 
     @Test
+    fun listOwnPrivateAlbumGrantsReturnsActiveGranteesNewestFirst() = runBlocking {
+        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000010")
+        val granteeA = UUID.fromString("00000000-0000-0000-0000-0000000000a1")
+        val granteeB = UUID.fromString("00000000-0000-0000-0000-0000000000a2")
+        val repository = InMemoryMediaRepository()
+        val service = MediaService(repository, FixedMediaUploadSigner())
+        repository.setDisplayName(granteeA, "Alex")
+        repository.setDisplayName(granteeB, "Maya")
+        service.requestPrivateAlbumAccess(granteeA, ownerId)
+        service.requestPrivateAlbumAccess(granteeB, ownerId)
+        service.decidePrivateAlbumAccessRequest(ownerId, granteeA, approved = true)
+        service.decidePrivateAlbumAccessRequest(ownerId, granteeB, approved = true)
+
+        val response = service.listOwnPrivateAlbumGrants(ownerId)
+
+        assertEquals(2, response.grants.size)
+        val displayNames = response.grants.map { grant -> grant.granteeDisplayName }.toSet()
+        assertEquals(setOf("Alex", "Maya"), displayNames)
+        response.grants.forEach { grant -> assertEquals(null, grant.revokedAt) }
+    }
+
+    @Test
+    fun listOwnPrivateAlbumGrantsExcludesRevokedGrants() = runBlocking {
+        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000020")
+        val granteeId = UUID.fromString("00000000-0000-0000-0000-0000000000b1")
+        val repository = InMemoryMediaRepository()
+        val service = MediaService(repository, FixedMediaUploadSigner())
+        service.requestPrivateAlbumAccess(granteeId, ownerId)
+        service.decidePrivateAlbumAccessRequest(ownerId, granteeId, approved = true)
+        service.revokePrivateAlbumAccess(ownerId, granteeId.toString())
+
+        val response = service.listOwnPrivateAlbumGrants(ownerId)
+
+        assertEquals(0, response.grants.size)
+    }
+
+    @Test
+    fun revokePrivateAlbumAccessMarksGrantRevoked() = runBlocking {
+        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000030")
+        val granteeId = UUID.fromString("00000000-0000-0000-0000-0000000000c1")
+        val repository = InMemoryMediaRepository()
+        val service = MediaService(repository, FixedMediaUploadSigner())
+        service.requestPrivateAlbumAccess(granteeId, ownerId)
+        service.decidePrivateAlbumAccessRequest(ownerId, granteeId, approved = true)
+
+        val revoked = service.revokePrivateAlbumAccess(ownerId, granteeId.toString())
+
+        assertEquals(granteeId.toString(), revoked.granteeUserId)
+        assertEquals(false, revoked.revokedAt.isNullOrEmpty())
+    }
+
+    @Test
+    fun revokePrivateAlbumAccessFailsWhenNoActiveGrant() = runBlocking {
+        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000040")
+        val granteeId = UUID.fromString("00000000-0000-0000-0000-0000000000d1")
+        val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+
+        val error = assertFailsWith<MediaException> {
+            service.revokePrivateAlbumAccess(ownerId, granteeId.toString())
+        }
+
+        assertEquals("MEDIA_GRANT_NOT_FOUND", error.code)
+    }
+
+    @Test
+    fun revokePrivateAlbumAccessRejectsSelfTarget() = runBlocking {
+        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000050")
+        val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+
+        val error = assertFailsWith<MediaException> {
+            service.revokePrivateAlbumAccess(ownerId, ownerId.toString())
+        }
+
+        assertEquals("MEDIA_GRANT_NOT_FOUND", error.code)
+    }
+
+    @Test
     fun completeUploadRejectsAlbumsOwnedBySomeoneElse() = runBlocking {
         val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000003")
         val otherUserId = UUID.fromString("00000000-0000-0000-0000-000000000004")
@@ -398,4 +475,38 @@ private class InMemoryMediaRepository : MediaRepository {
             album.kind == "profile" ||
             grants[albumId to viewerUserId]?.let { grant -> grant.revokedAt == null } == true
     }
+
+    override suspend fun listPrivateAlbumGrantsForOwner(
+        ownerUserId: UUID
+    ): List<MediaAlbumGrantSummaryRecord> {
+        val album = albums.values.firstOrNull { album ->
+            album.ownerUserId == ownerUserId && album.kind == "private" && album.deletedAt == null
+        } ?: return emptyList()
+        return grants.values
+            .filter { grant ->
+                grant.albumId == album.albumId &&
+                    grant.ownerUserId == ownerUserId &&
+                    grant.revokedAt == null
+            }
+            .sortedWith(compareByDescending<MediaAlbumAccessGrantRecord> { it.grantedAt }.thenBy { it.granteeUserId })
+            .map { grant ->
+                MediaAlbumGrantSummaryRecord(
+                    albumId = grant.albumId,
+                    ownerUserId = grant.ownerUserId,
+                    granteeUserId = grant.granteeUserId,
+                    granteeDisplayName = displayNamesByUserId[grant.granteeUserId],
+                    grantedAt = grant.grantedAt
+                )
+            }
+    }
+
+    fun setDisplayName(userId: UUID, displayName: String?) {
+        if (displayName == null) {
+            displayNamesByUserId.remove(userId)
+        } else {
+            displayNamesByUserId[userId] = displayName
+        }
+    }
+
+    private val displayNamesByUserId = mutableMapOf<UUID, String>()
 }

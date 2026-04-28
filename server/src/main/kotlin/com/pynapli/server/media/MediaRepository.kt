@@ -72,6 +72,10 @@ interface MediaRepository {
         revokedByUserId: UUID = ownerUserId
     ): MediaAlbumAccessGrantRecord?
 
+    suspend fun listPrivateAlbumGrantsForOwner(
+        ownerUserId: UUID
+    ): List<MediaAlbumGrantSummaryRecord>
+
     suspend fun hasAlbumAccess(
         viewerUserId: UUID,
         albumId: UUID
@@ -145,4 +149,12 @@ data class MediaAlbumAccessGrantRecord(
     val grantedAt: Instant,
     val revokedAt: Instant?,
     val revokedByUserId: UUID?
+)
+
+data class MediaAlbumGrantSummaryRecord(
+    val albumId: UUID,
+    val ownerUserId: UUID,
+    val granteeUserId: UUID,
+    val granteeDisplayName: String?,
+    val grantedAt: Instant
 )

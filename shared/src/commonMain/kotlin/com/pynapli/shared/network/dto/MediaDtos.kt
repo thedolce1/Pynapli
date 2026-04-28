@@ -60,6 +60,20 @@ data class MediaAlbumDto(
 )
 
 @Serializable
+data class MediaAlbumGrantDto(
+    val albumId: String,
+    val granteeUserId: String,
+    val granteeDisplayName: String? = null,
+    val grantedAt: String,
+    val revokedAt: String? = null
+)
+
+@Serializable
+data class MediaAlbumGrantsResponseDto(
+    val grants: List<MediaAlbumGrantDto>
+)
+
+@Serializable
 data class MediaAssetDto(
     val mediaAssetId: String,
     val ownerUserId: String,

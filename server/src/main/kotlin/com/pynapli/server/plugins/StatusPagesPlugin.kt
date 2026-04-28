@@ -147,6 +147,7 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_MEDIA_SORT_ORDER" -> "Media order is not valid."
     "MEDIA_ASSET_NOT_FOUND" -> "Media item was not found."
     "MEDIA_ALBUM_NOT_FOUND" -> "Album was not found."
+    "MEDIA_GRANT_NOT_FOUND" -> "Album access was not found."
     else -> "Request could not be completed."
 }
 
@@ -190,6 +191,7 @@ private fun messagingStatusFor(code: String): HttpStatusCode = when (code) {
 private fun mediaStatusFor(code: String): HttpStatusCode = when (code) {
     "MEDIA_ASSET_NOT_FOUND",
     "MEDIA_ALBUM_NOT_FOUND",
+    "MEDIA_GRANT_NOT_FOUND",
     "ALBUM_REQUEST_NOT_FOUND" -> HttpStatusCode.NotFound
     "INVALID_ID",
     "INVALID_ALBUM_REQUEST_TARGET",

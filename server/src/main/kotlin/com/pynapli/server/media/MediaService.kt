@@ -5,6 +5,8 @@ import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MEDIA_IMAGE_MAX_BYTES
 import com.pynapli.shared.network.dto.MEDIA_VIDEO_MAX_BYTES
 import com.pynapli.shared.network.dto.MediaAlbumDto
+import com.pynapli.shared.network.dto.MediaAlbumGrantDto
+import com.pynapli.shared.network.dto.MediaAlbumGrantsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaAssetDto
@@ -165,6 +167,51 @@ class MediaService(
             decidedByUserId = ownerUserId
         ) ?: throw MediaException("ALBUM_REQUEST_NOT_FOUND")
         return request.status
+    }
+
+    suspend fun listOwnPrivateAlbumGrants(
+        ownerUserId: UUID
+    ): MediaAlbumGrantsResponseDto {
+        val grants = repository.listPrivateAlbumGrantsForOwner(ownerUserId)
+        return MediaAlbumGrantsResponseDto(
+            grants = grants.map { record ->
+                MediaAlbumGrantDto(
+                    albumId = record.albumId.toString(),
+                    granteeUserId = record.granteeUserId.toString(),
+                    granteeDisplayName = record.granteeDisplayName,
+                    grantedAt = record.grantedAt.toString(),
+                    revokedAt = null
+                )
+            }
+        )
+    }
+
+    suspend fun revokePrivateAlbumAccess(
+        ownerUserId: UUID,
+        granteeUserIdText: String
+    ): MediaAlbumGrantDto {
+        val granteeUserId = granteeUserIdText.toUuidOrThrow()
+        if (granteeUserId == ownerUserId) throw MediaException("MEDIA_GRANT_NOT_FOUND")
+
+        val album = repository.ensureAlbum(
+            ownerUserId = ownerUserId,
+            kind = "private",
+            title = "Private album"
+        )
+        val revoked = repository.revokeAlbumAccess(
+            ownerUserId = ownerUserId,
+            albumId = album.albumId,
+            granteeUserId = granteeUserId,
+            revokedByUserId = ownerUserId
+        ) ?: throw MediaException("MEDIA_GRANT_NOT_FOUND")
+
+        return MediaAlbumGrantDto(
+            albumId = revoked.albumId.toString(),
+            granteeUserId = revoked.granteeUserId.toString(),
+            granteeDisplayName = null,
+            grantedAt = revoked.grantedAt.toString(),
+            revokedAt = revoked.revokedAt?.toString()
+        )
     }
 
     private fun MediaAlbumItemRecord.toDto(): MediaAlbumItemDto =

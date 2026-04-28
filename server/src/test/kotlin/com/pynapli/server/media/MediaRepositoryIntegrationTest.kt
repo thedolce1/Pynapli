@@ -121,6 +121,40 @@ class MediaRepositoryIntegrationTest {
     }
 
     @Test
+    fun listPrivateAlbumGrantsForOwnerReturnsActiveGranteesWithDisplayName() = runBlocking {
+        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000301")
+        val granteeWithName = UUID.fromString("00000000-0000-0000-0000-000000000302")
+        val granteeWithoutName = UUID.fromString("00000000-0000-0000-0000-000000000303")
+        val revokedGrantee = UUID.fromString("00000000-0000-0000-0000-000000000304")
+        val repository = JdbcMediaRepository(dataSource)
+        dataSource.insertUser(ownerId)
+        dataSource.insertUser(granteeWithName)
+        dataSource.insertUser(granteeWithoutName)
+        dataSource.insertUser(revokedGrantee)
+        dataSource.setProfileDisplayName(granteeWithName, "Maya")
+
+        val album = repository.ensureAlbum(
+            ownerUserId = ownerId,
+            kind = "private",
+            title = "Private album",
+            albumIdFactory = { UUID.fromString("10000000-0000-0000-0000-000000000003") }
+        )
+        repository.grantAlbumAccess(ownerId, album.albumId, granteeWithName)
+        repository.grantAlbumAccess(ownerId, album.albumId, granteeWithoutName)
+        repository.grantAlbumAccess(ownerId, album.albumId, revokedGrantee)
+        repository.revokeAlbumAccess(ownerId, album.albumId, revokedGrantee)
+
+        val summaries = repository.listPrivateAlbumGrantsForOwner(ownerId)
+
+        val granteeIds = summaries.map { it.granteeUserId }
+        assertEquals(listOf(granteeWithName, granteeWithoutName).toSet(), granteeIds.toSet())
+        val withName = summaries.single { it.granteeUserId == granteeWithName }
+        val withoutName = summaries.single { it.granteeUserId == granteeWithoutName }
+        assertEquals("Maya", withName.granteeDisplayName)
+        assertNull(withoutName.granteeDisplayName)
+    }
+
+    @Test
     fun profileAlbumIsVisibleWithoutGrant() = runBlocking {
         val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000201")
         val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000202")
@@ -147,6 +181,22 @@ class MediaRepositoryIntegrationTest {
                 """.trimIndent()
             ).use { statement ->
                 statement.setObject(1, userId)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    private fun DataSource.setProfileDisplayName(userId: UUID, displayName: String) {
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                INSERT INTO profiles (user_id, display_name)
+                VALUES (?, ?)
+                ON CONFLICT (user_id) DO UPDATE SET display_name = EXCLUDED.display_name
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.setString(2, displayName)
                 statement.executeUpdate()
             }
         }

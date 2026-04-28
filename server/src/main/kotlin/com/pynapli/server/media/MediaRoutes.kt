@@ -76,6 +76,17 @@ fun Application.configureMediaRoutes(
                 val kind = call.parameters["kind"] ?: throw MediaException("INVALID_MEDIA_ALBUM_KIND")
                 call.respond(mediaService.listOwnAlbum(user.id, kind))
             }
+
+            get("/private/grants") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                call.respond(mediaService.listOwnPrivateAlbumGrants(user.id))
+            }
+
+            post("/private/grants/{granteeUserId}/revoke") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                val granteeUserId = call.parameters["granteeUserId"] ?: throw MediaException("INVALID_ID")
+                call.respond(mediaService.revokePrivateAlbumAccess(user.id, granteeUserId))
+            }
         }
 
         get("/v1/media/users/{ownerUserId}/albums/private") {

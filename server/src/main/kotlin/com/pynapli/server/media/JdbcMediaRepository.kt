@@ -483,6 +483,50 @@ class JdbcMediaRepository(
         }
     }
 
+    override suspend fun listPrivateAlbumGrantsForOwner(
+        ownerUserId: UUID
+    ): List<MediaAlbumGrantSummaryRecord> = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT g.album_id,
+                       g.owner_user_id,
+                       g.grantee_user_id,
+                       p.display_name,
+                       g.granted_at
+                FROM media_album_access_grants g
+                JOIN media_albums a
+                  ON a.id = g.album_id
+                 AND a.owner_user_id = g.owner_user_id
+                 AND a.kind = 'private'
+                 AND a.deleted_at IS NULL
+                LEFT JOIN profiles p
+                  ON p.user_id = g.grantee_user_id
+                WHERE g.owner_user_id = ?
+                  AND g.revoked_at IS NULL
+                ORDER BY g.granted_at DESC, g.grantee_user_id ASC
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, ownerUserId)
+                statement.executeQuery().use { rs ->
+                    buildList {
+                        while (rs.next()) {
+                            add(
+                                MediaAlbumGrantSummaryRecord(
+                                    albumId = rs.getObject("album_id", UUID::class.java),
+                                    ownerUserId = rs.getObject("owner_user_id", UUID::class.java),
+                                    granteeUserId = rs.getObject("grantee_user_id", UUID::class.java),
+                                    granteeDisplayName = rs.getString("display_name"),
+                                    grantedAt = rs.getTimestamp("granted_at").toInstant()
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     override suspend fun hasAlbumAccess(
         viewerUserId: UUID,
         albumId: UUID

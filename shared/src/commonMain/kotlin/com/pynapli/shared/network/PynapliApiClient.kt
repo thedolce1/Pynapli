@@ -17,6 +17,8 @@ import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
+import com.pynapli.shared.network.dto.MediaAlbumGrantDto
+import com.pynapli.shared.network.dto.MediaAlbumGrantsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
@@ -99,6 +101,10 @@ interface PynapliApiClient {
     suspend fun listMediaAlbum(albumKind: String): AppResult<MediaAlbumItemsResponseDto>
 
     suspend fun listUserPrivateAlbum(ownerUserId: String): AppResult<MediaAlbumItemsResponseDto>
+
+    suspend fun listOwnPrivateAlbumGrants(): AppResult<MediaAlbumGrantsResponseDto>
+
+    suspend fun revokePrivateAlbumAccess(granteeUserId: String): AppResult<MediaAlbumGrantDto>
 
     fun mediaAssetContentUrl(mediaAssetId: String): String
 
@@ -273,6 +279,20 @@ class KtorPynapliApiClient(
     override suspend fun listUserPrivateAlbum(ownerUserId: String): AppResult<MediaAlbumItemsResponseDto> =
         authenticatedPost { token ->
             httpClient.get(config.endpoint("/v1/media/users/$ownerUserId/albums/private")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun listOwnPrivateAlbumGrants(): AppResult<MediaAlbumGrantsResponseDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/media/albums/private/grants")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun revokePrivateAlbumAccess(granteeUserId: String): AppResult<MediaAlbumGrantDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/media/albums/private/grants/$granteeUserId/revoke")) {
                 bearerAuth(token)
             }.toAppResult(json)
         }

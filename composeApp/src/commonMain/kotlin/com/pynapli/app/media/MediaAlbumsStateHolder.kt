@@ -6,6 +6,7 @@ import com.pynapli.shared.network.MediaByteUploader
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
+import com.pynapli.shared.network.dto.MediaAlbumGrantDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,11 +17,23 @@ import kotlinx.coroutines.flow.update
 data class MediaAlbumsUiState(
     val profileItems: List<MediaAlbumItemUi> = emptyList(),
     val privateItems: List<MediaAlbumItemUi> = emptyList(),
+    val privateGrants: List<MediaPrivateGrantUi> = emptyList(),
+    val revokingGranteeIds: Set<String> = emptySet(),
     val isLoading: Boolean = false,
     val isUploadingProfile: Boolean = false,
     val isUploadingPrivate: Boolean = false,
     val errorMessage: String? = null
 )
+
+@Immutable
+data class MediaPrivateGrantUi(
+    val granteeUserId: String,
+    val displayName: String?,
+    val grantedAt: String
+) {
+    val displayLabel: String
+        get() = displayName?.takeIf { it.isNotBlank() } ?: "User ${granteeUserId.take(8)}"
+}
 
 @Immutable
 data class MediaAlbumItemUi(
@@ -93,13 +106,17 @@ class MediaAlbumsStateHolder(
 
         val profileResult = repository.loadAlbum(MediaAlbumKindUi.Profile)
         val privateResult = repository.loadAlbum(MediaAlbumKindUi.Private)
+        val grantsResult = repository.loadPrivateGrants()
 
         _state.update { existing ->
             when {
-                profileResult is AppResult.Success && privateResult is AppResult.Success ->
+                profileResult is AppResult.Success &&
+                    privateResult is AppResult.Success &&
+                    grantsResult is AppResult.Success ->
                     existing.copy(
                         profileItems = profileResult.value,
                         privateItems = privateResult.value,
+                        privateGrants = grantsResult.value,
                         isLoading = false,
                         errorMessage = null
                     )
@@ -116,7 +133,47 @@ class MediaAlbumsStateHolder(
                         errorMessage = privateResult.error.message
                     )
 
+                grantsResult is AppResult.Failure ->
+                    existing.copy(
+                        profileItems = (profileResult as? AppResult.Success)?.value ?: existing.profileItems,
+                        privateItems = (privateResult as? AppResult.Success)?.value ?: existing.privateItems,
+                        isLoading = false,
+                        errorMessage = grantsResult.error.message
+                    )
+
                 else -> existing.copy(isLoading = false)
+            }
+        }
+    }
+
+    suspend fun revokeGrant(granteeUserId: String) {
+        val current = state.value
+        if (granteeUserId in current.revokingGranteeIds) return
+
+        _state.update { existing ->
+            existing.copy(
+                revokingGranteeIds = existing.revokingGranteeIds + granteeUserId,
+                errorMessage = null
+            )
+        }
+
+        when (val result = repository.revokePrivateGrant(granteeUserId)) {
+            is AppResult.Success -> {
+                _state.update { existing ->
+                    existing.copy(
+                        privateGrants = existing.privateGrants.filterNot { it.granteeUserId == granteeUserId },
+                        revokingGranteeIds = existing.revokingGranteeIds - granteeUserId
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update { existing ->
+                    existing.copy(
+                        revokingGranteeIds = existing.revokingGranteeIds - granteeUserId,
+                        errorMessage = result.error.message
+                    )
+                }
             }
         }
     }
@@ -195,6 +252,10 @@ interface MediaAlbumsRepository {
         kind: MediaAlbumKindUi,
         media: PickedMediaForUpload
     ): AppResult<MediaAlbumItemUi>
+
+    suspend fun loadPrivateGrants(): AppResult<List<MediaPrivateGrantUi>>
+
+    suspend fun revokePrivateGrant(granteeUserId: String): AppResult<Unit>
 }
 
 class ApiMediaAlbumsRepository(
@@ -255,14 +316,37 @@ class ApiMediaAlbumsRepository(
             }
         }
     }
+
+    override suspend fun loadPrivateGrants(): AppResult<List<MediaPrivateGrantUi>> =
+        when (val result = apiClient.listOwnPrivateAlbumGrants()) {
+            is AppResult.Success -> AppResult.Success(
+                result.value.grants.map { it.toUi() }
+            )
+            is AppResult.Failure -> result
+        }
+
+    override suspend fun revokePrivateGrant(granteeUserId: String): AppResult<Unit> =
+        when (val result = apiClient.revokePrivateAlbumAccess(granteeUserId)) {
+            is AppResult.Success -> AppResult.Success(Unit)
+            is AppResult.Failure -> result
+        }
 }
 
 class SampleMediaAlbumsRepository : MediaAlbumsRepository {
     private var nextAssetIndex = 1
     private val itemsByKind = mutableMapOf<MediaAlbumKindUi, List<MediaAlbumItemUi>>()
+    private val grants = mutableListOf<MediaPrivateGrantUi>()
 
     override suspend fun loadAlbum(kind: MediaAlbumKindUi): AppResult<List<MediaAlbumItemUi>> =
         AppResult.Success(itemsByKind[kind].orEmpty())
+
+    override suspend fun loadPrivateGrants(): AppResult<List<MediaPrivateGrantUi>> =
+        AppResult.Success(grants.toList())
+
+    override suspend fun revokePrivateGrant(granteeUserId: String): AppResult<Unit> {
+        grants.removeAll { it.granteeUserId == granteeUserId }
+        return AppResult.Success(Unit)
+    }
 
     override suspend fun uploadMedia(
         kind: MediaAlbumKindUi,
@@ -315,6 +399,13 @@ private fun MediaAlbumItemDto.toUi(
         sortOrder = sortOrder,
         createdAt = addedAt,
         mediaUrl = mediaUrl
+    )
+
+private fun MediaAlbumGrantDto.toUi(): MediaPrivateGrantUi =
+    MediaPrivateGrantUi(
+        granteeUserId = granteeUserId,
+        displayName = granteeDisplayName,
+        grantedAt = grantedAt
     )
 
 fun MediaAlbumsUiState.primaryOwnerProfilePhotoUrl(): String? =
