@@ -3,6 +3,7 @@ package com.pynapli.server.activity
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.media.MediaException
 import com.pynapli.server.media.MediaService
+import com.pynapli.server.safety.BlockRepository
 import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.network.dto.ActivityFeedResponseDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessResponseDto
@@ -14,7 +15,8 @@ import kotlin.math.roundToInt
 class ActivityService(
     private val repository: ActivityRepository,
     private val mediaService: MediaService? = null,
-    private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null
+    private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
+    private val blockRepository: BlockRepository? = null
 ) {
     suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID) {
         repository.recordProfileView(viewerUserId, targetUserId)
@@ -66,8 +68,15 @@ class ActivityService(
 
     suspend fun listActivity(recipientUserId: UUID, limit: Int = DEFAULT_LIMIT): ActivityFeedResponseDto {
         val normalizedLimit = limit.coerceIn(1, MAX_LIMIT)
+        val events = repository.listActivity(recipientUserId, normalizedLimit)
+        val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(recipientUserId).orEmpty()
+        val visible = if (blockedRelatedIds.isEmpty()) {
+            events
+        } else {
+            events.filterNot { it.actorUserId in blockedRelatedIds }
+        }
         return ActivityFeedResponseDto(
-            items = repository.listActivity(recipientUserId, normalizedLimit).map { it.toDto() },
+            items = visible.map { it.toDto() },
             nextCursor = null
         )
     }

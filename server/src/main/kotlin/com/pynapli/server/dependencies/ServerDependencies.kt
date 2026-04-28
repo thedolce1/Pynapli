@@ -102,7 +102,8 @@ class ServerDependencies(
             val activityService = ActivityService(
                 repository = JdbcActivityRepository(database.dataSource),
                 mediaService = mediaService,
-                mediaAssetUrlResolver = mediaAssetUrlResolver
+                mediaAssetUrlResolver = mediaAssetUrlResolver,
+                blockRepository = blockRepository
             )
             val profileService = ProfileService(
                 repository = JdbcProfileRepository(database.dataSource),
