@@ -8,6 +8,7 @@ import com.pynapli.server.location.LocationException
 import com.pynapli.server.media.MediaException
 import com.pynapli.server.messaging.MessagingException
 import com.pynapli.server.profile.ProfileException
+import com.pynapli.server.safety.SafetyException
 import com.pynapli.shared.network.dto.ApiErrorDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -95,6 +96,17 @@ fun Application.configureStatusPages() {
             )
         }
 
+        exception<SafetyException> { call, cause ->
+            call.respond(
+                status = safetyStatusFor(cause.code),
+                message = ApiErrorDto(
+                    code = cause.code,
+                    message = userSafeMessage(cause.code),
+                    requestId = call.request.headers["X-Request-Id"] ?: "unknown"
+                )
+            )
+        }
+
         exception<Throwable> { call, _ ->
             call.respond(
                 status = HttpStatusCode.InternalServerError,
@@ -148,6 +160,13 @@ private fun userSafeMessage(code: String): String = when (code) {
     "MEDIA_ASSET_NOT_FOUND" -> "Media item was not found."
     "MEDIA_ALBUM_NOT_FOUND" -> "Album was not found."
     "MEDIA_GRANT_NOT_FOUND" -> "Album access was not found."
+    "INVALID_BLOCK_TARGET" -> "That user could not be blocked."
+    "BLOCK_SELF_FORBIDDEN" -> "You cannot block yourself."
+    "BLOCK_REASON_TOO_LONG" -> "Block reason is too long."
+    "INVALID_REPORT_TARGET" -> "That target could not be reported."
+    "INVALID_REPORT_CATEGORY" -> "Choose a valid report reason."
+    "REPORT_SELF_FORBIDDEN" -> "You cannot report yourself."
+    "REPORT_NOTE_TOO_LONG" -> "Report note is too long."
     else -> "Request could not be completed."
 }
 
@@ -185,6 +204,12 @@ private fun messagingStatusFor(code: String): HttpStatusCode = when (code) {
     "INVALID_MESSAGE_PAGE_LIMIT",
     "MESSAGE_BODY_EMPTY",
     "MESSAGE_BODY_TOO_LONG" -> HttpStatusCode.BadRequest
+    else -> HttpStatusCode.BadRequest
+}
+
+private fun safetyStatusFor(code: String): HttpStatusCode = when (code) {
+    "BLOCK_SELF_FORBIDDEN",
+    "REPORT_SELF_FORBIDDEN" -> HttpStatusCode.Forbidden
     else -> HttpStatusCode.BadRequest
 }
 

@@ -2,6 +2,7 @@ package com.pynapli.server.profile
 
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.safety.BlockRepository
 import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.DiscoverySettingsDto
 import com.pynapli.shared.network.dto.MeDto
@@ -18,12 +19,16 @@ class ProfileService(
     private val repository: ProfileRepository,
     private val clock: Clock = Clock.systemUTC(),
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
-    private val activityService: ActivityService? = null
+    private val activityService: ActivityService? = null,
+    private val blockRepository: BlockRepository? = null
 ) {
     suspend fun getMe(userId: UUID): MeDto =
         repository.getMe(userId)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
 
     suspend fun getPublicProfile(viewerUserId: UUID, targetUserId: UUID): PublicProfileDto {
+        if (blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) == true) {
+            throw ProfileException("PROFILE_NOT_FOUND")
+        }
         val profile = repository.getPublicProfile(viewerUserId, targetUserId)?.toDto()
             ?: throw ProfileException("PROFILE_NOT_FOUND")
         runCatching { activityService?.recordProfileView(viewerUserId, targetUserId) }

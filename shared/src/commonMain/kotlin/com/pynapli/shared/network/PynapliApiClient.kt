@@ -17,11 +17,16 @@ import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
+import com.pynapli.shared.network.dto.BlockSummaryDto
+import com.pynapli.shared.network.dto.BlockUserRequestDto
+import com.pynapli.shared.network.dto.BlocksListDto
+import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.MediaAlbumGrantDto
 import com.pynapli.shared.network.dto.MediaAlbumGrantsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
+import com.pynapli.shared.network.dto.ReportDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PresenceHeartbeatResponseDto
 import com.pynapli.shared.network.dto.PublicProfileDto
@@ -39,6 +44,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -105,6 +111,14 @@ interface PynapliApiClient {
     suspend fun listOwnPrivateAlbumGrants(): AppResult<MediaAlbumGrantsResponseDto>
 
     suspend fun revokePrivateAlbumAccess(granteeUserId: String): AppResult<MediaAlbumGrantDto>
+
+    suspend fun blockUser(targetUserId: String, request: BlockUserRequestDto = BlockUserRequestDto()): AppResult<BlockSummaryDto>
+
+    suspend fun unblockUser(targetUserId: String): AppResult<Unit>
+
+    suspend fun listBlocks(): AppResult<BlocksListDto>
+
+    suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto>
 
     fun mediaAssetContentUrl(mediaAssetId: String): String
 
@@ -294,6 +308,46 @@ class KtorPynapliApiClient(
         authenticatedPost { token ->
             httpClient.post(config.endpoint("/v1/media/albums/private/grants/$granteeUserId/revoke")) {
                 bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun blockUser(
+        targetUserId: String,
+        request: BlockUserRequestDto
+    ): AppResult<BlockSummaryDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/blocks/$targetUserId")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun unblockUser(targetUserId: String): AppResult<Unit> =
+        authenticatedPost { token ->
+            val response = httpClient.delete(config.endpoint("/v1/blocks/$targetUserId")) {
+                bearerAuth(token)
+            }
+            if (response.status.value in 200..299) {
+                AppResult.Success(Unit)
+            } else {
+                response.toAppResult<Unit>(json)
+            }
+        }
+
+    override suspend fun listBlocks(): AppResult<BlocksListDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/blocks")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/reports")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
             }.toAppResult(json)
         }
 

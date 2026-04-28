@@ -18,15 +18,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,8 +41,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.pynapli.shared.network.dto.ReportCategory
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +70,8 @@ fun ProfileDetailSheet(
     onSpark: () -> Unit,
     onRequestAlbum: () -> Unit,
     onViewPrivateAlbum: () -> Unit,
+    onBlock: (reason: String?) -> Unit,
+    onReport: (category: String, note: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val card = state.selectedCard ?: return
@@ -65,6 +80,8 @@ fun ProfileDetailSheet(
     val distanceLabel = profile?.distanceLabel ?: card.distanceLabel
     val profilePhotoUrl = profile?.profilePhotoUrl ?: card.thumbnailUrl
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showBlockConfirm by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -85,7 +102,9 @@ fun ProfileDetailSheet(
                 online = card.online,
                 distanceLabel = distanceLabel,
                 profilePhotoUrl = profilePhotoUrl,
-                onDismiss = onDismiss
+                onDismiss = onDismiss,
+                onBlockClick = { showBlockConfirm = true },
+                onReportClick = { showReportDialog = true }
             )
 
             when {
@@ -125,6 +144,24 @@ fun ProfileDetailSheet(
                         onRequestAlbum = onRequestAlbum,
                         onViewPrivateAlbum = onViewPrivateAlbum
                     )
+                    state.reportFeedback?.let { feedback ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = feedback,
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
                     PrivateAlbumPreview(
                         items = state.privateAlbumItems,
                         isLoading = state.isLoadingPrivateAlbum
@@ -133,6 +170,159 @@ fun ProfileDetailSheet(
             }
         }
     }
+
+    if (showBlockConfirm) {
+        BlockConfirmDialog(
+            displayName = displayName,
+            isBlocking = state.isBlocking,
+            onConfirm = { reason ->
+                showBlockConfirm = false
+                onBlock(reason)
+            },
+            onDismiss = { showBlockConfirm = false }
+        )
+    }
+
+    if (showReportDialog) {
+        ReportCategoryDialog(
+            isSubmitting = state.isReporting,
+            onSubmit = { category, note ->
+                showReportDialog = false
+                onReport(category, note)
+            },
+            onDismiss = { showReportDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun BlockConfirmDialog(
+    displayName: String,
+    isBlocking: Boolean,
+    onConfirm: (reason: String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Block $displayName?") },
+        text = {
+            Text(
+                "They will not see you in the grid or messages, " +
+                    "and any open conversation will be hidden."
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(null) },
+                enabled = !isBlocking,
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                )
+            ) {
+                if (isBlocking) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.onError,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp)
+                    )
+                } else {
+                    Text("Block")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isBlocking) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun ReportCategoryDialog(
+    isSubmitting: Boolean,
+    onSubmit: (category: String, note: String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Report this profile") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Pick the closest reason. Moderators review reports.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                ReportCategory.ALL.forEach { category ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        TextButton(
+                            onClick = { selectedCategory = category },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = category.toReportLabel(),
+                                color = if (selectedCategory == category) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        if (selectedCategory == category) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val category = selectedCategory ?: return@Button
+                    onSubmit(category, null)
+                },
+                enabled = !isSubmitting && selectedCategory != null
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp)
+                    )
+                } else {
+                    Text("Submit")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isSubmitting) { Text("Cancel") }
+        }
+    )
+}
+
+private fun String.toReportLabel(): String = when (this) {
+    ReportCategory.UNDERAGE_USER -> "Underage user"
+    ReportCategory.HARASSMENT_OR_THREATS -> "Harassment or threats"
+    ReportCategory.EXPLICIT_PUBLIC_CONTENT -> "Explicit public content"
+    ReportCategory.SPAM_OR_FAKE_PROFILE -> "Spam or fake profile"
+    ReportCategory.IMPERSONATION -> "Impersonation"
+    ReportCategory.SOLICITATION -> "Solicitation"
+    ReportCategory.NON_CONSENSUAL_CONTENT -> "Non-consensual content"
+    ReportCategory.PRIVATE_INFO_DOXXING -> "Private info or doxxing"
+    ReportCategory.OTHER -> "Other"
+    else -> this
 }
 
 @Composable
@@ -141,7 +331,9 @@ private fun ProfileHero(
     online: Boolean,
     distanceLabel: String?,
     profilePhotoUrl: String?,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onBlockClick: () -> Unit,
+    onReportClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -163,20 +355,30 @@ private fun ProfileHero(
             )
         }
 
-        IconButton(
-            onClick = onDismiss,
+        Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(8.dp)
-                .size(42.dp)
-                .clip(CircleShape)
-                .background(Color(0x99000000))
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = "Close profile",
-                tint = Color.White
+            ProfileOverflowMenu(
+                onBlockClick = onBlockClick,
+                onReportClick = onReportClick
             )
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x99000000))
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Close profile",
+                    tint = Color.White
+                )
+            }
         }
 
         Row(
@@ -220,6 +422,62 @@ private fun ProfileHero(
                     maxLines = 1
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ProfileOverflowMenu(
+    onBlockClick: () -> Unit,
+    onReportClick: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(Color(0x99000000))
+        ) {
+            Icon(
+                imageVector = Icons.Filled.MoreVert,
+                contentDescription = "More options",
+                tint = Color.White
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Block") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Block,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onBlockClick()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Report") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Flag,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onReportClick()
+                }
+            )
         }
     }
 }

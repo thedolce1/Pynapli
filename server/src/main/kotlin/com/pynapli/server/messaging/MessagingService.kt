@@ -1,5 +1,6 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.safety.BlockRepository
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
@@ -14,13 +15,26 @@ import java.util.Base64
 import java.util.UUID
 
 class MessagingService(
-    private val repository: MessagingRepository
+    private val repository: MessagingRepository,
+    private val blockRepository: BlockRepository? = null
 ) {
-    suspend fun listConversations(userId: UUID): ConversationListResponseDto =
-        ConversationListResponseDto(
-            items = repository.listConversations(userId, THREAD_LIMIT).map { it.toDto() },
+    suspend fun listConversations(userId: UUID): ConversationListResponseDto {
+        val conversations = repository.listConversations(userId, THREAD_LIMIT)
+        val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(userId).orEmpty()
+        val visible = if (blockedRelatedIds.isEmpty()) {
+            conversations
+        } else {
+            conversations.filterNot { conversation ->
+                conversation.participants.any { participant ->
+                    participant.userId != userId && participant.userId in blockedRelatedIds
+                }
+            }
+        }
+        return ConversationListResponseDto(
+            items = visible.map { it.toDto() },
             nextCursor = null
         )
+    }
 
     suspend fun createDirectConversation(
         viewerUserId: UUID,
@@ -28,6 +42,10 @@ class MessagingService(
     ): ConversationDetailDto {
         val targetUserId = request.targetUserId.toUuidOrThrow()
         if (targetUserId == viewerUserId) throw MessagingException("INVALID_CONVERSATION_TARGET")
+
+        if (blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) == true) {
+            throw MessagingException("MESSAGING_NOT_ALLOWED")
+        }
 
         val origin = request.origin.trim().lowercase()
         if (origin !in ORIGINS) throw MessagingException("INVALID_CONVERSATION_ORIGIN")
@@ -51,8 +69,12 @@ class MessagingService(
         val conversationId = conversationIdText.toUuidOrThrow()
         val before = beforeCursorText?.takeIf { it.isNotBlank() }?.toMessageCursorOrThrow()
         val limit = limitText.toMessageLimitOrThrow()
-        return repository.getConversationDetail(userId, conversationId, limit, before)?.toDto()
+        val detail = repository.getConversationDetail(userId, conversationId, limit, before)
             ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+        if (detail.conversation.hasBlockedOtherParticipant(userId)) {
+            throw MessagingException("CONVERSATION_NOT_FOUND")
+        }
+        return detail.toDto()
     }
 
     suspend fun markConversationRead(userId: UUID, conversationIdText: String): ConversationDto {
@@ -67,11 +89,27 @@ class MessagingService(
         if (body.isEmpty()) throw MessagingException("MESSAGE_BODY_EMPTY")
         if (body.length > MESSAGE_BODY_MAX_LENGTH) throw MessagingException("MESSAGE_BODY_TOO_LONG")
 
+        if (blockRepository != null) {
+            val detail = repository.getConversationDetail(userId, conversationId, limit = 1)
+                ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+            if (detail.conversation.hasBlockedOtherParticipant(userId)) {
+                throw MessagingException("MESSAGING_NOT_ALLOWED")
+            }
+        }
+
         return repository.sendMessage(
             userId = userId,
             conversationId = conversationId,
             body = body
         )?.toDto() ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+    }
+
+    private suspend fun ConversationRecord.hasBlockedOtherParticipant(viewerUserId: UUID): Boolean {
+        val repository = blockRepository ?: return false
+        return participants.any { participant ->
+            participant.userId != viewerUserId &&
+                repository.isBlockedEitherWay(viewerUserId, participant.userId)
+        }
     }
 
     private fun ConversationDetailRecord.toDto(): ConversationDetailDto = ConversationDetailDto(

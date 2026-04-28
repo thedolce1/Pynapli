@@ -5,13 +5,15 @@ import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
+import com.pynapli.server.safety.BlockRepository
 import java.util.UUID
 import kotlin.math.roundToInt
 
 class GridService(
     private val repository: GridRepository,
     private val presenceService: PresenceService? = null,
-    private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null
+    private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
+    private val blockRepository: BlockRepository? = null
 ) {
     suspend fun queryGrid(
         viewerUserId: UUID,
@@ -22,11 +24,18 @@ class GridService(
         val result = repository.queryNearby(viewerUserId, radiusMeters, limit)
         if (!result.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
 
+        val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
+        val visibleCards = if (blockedRelatedIds.isEmpty()) {
+            result.cards
+        } else {
+            result.cards.filterNot { it.userId in blockedRelatedIds }
+        }
+
         refreshViewerPresence(viewerUserId)
-        val onlineUserIds = onlineUserIdsFor(result.cards)
+        val onlineUserIds = onlineUserIdsFor(visibleCards)
 
         return GridQueryResponseDto(
-            items = result.cards.map { it.toDto(onlineUserIds) },
+            items = visibleCards.map { it.toDto(onlineUserIds) },
             nextCursor = null
         )
     }

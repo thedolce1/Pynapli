@@ -17,11 +17,16 @@ import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
+import com.pynapli.shared.network.dto.BlockSummaryDto
+import com.pynapli.shared.network.dto.BlockUserRequestDto
+import com.pynapli.shared.network.dto.BlocksListDto
+import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.MediaAlbumGrantDto
 import com.pynapli.shared.network.dto.MediaAlbumGrantsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
+import com.pynapli.shared.network.dto.ReportDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PresenceHeartbeatResponseDto
 import com.pynapli.shared.network.dto.PublicProfileDto
@@ -193,6 +198,21 @@ private class FakeApiClient(
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun revokePrivateAlbumAccess(granteeUserId: String): AppResult<MediaAlbumGrantDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun blockUser(
+        targetUserId: String,
+        request: BlockUserRequestDto
+    ): AppResult<BlockSummaryDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun unblockUser(targetUserId: String): AppResult<Unit> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun listBlocks(): AppResult<BlocksListDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override fun mediaAssetContentUrl(mediaAssetId: String): String =

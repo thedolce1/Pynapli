@@ -22,6 +22,10 @@ import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.presence.RedisPresenceRepository
 import com.pynapli.server.profile.JdbcProfileRepository
 import com.pynapli.server.profile.ProfileService
+import com.pynapli.server.safety.BlockService
+import com.pynapli.server.safety.JdbcBlockRepository
+import com.pynapli.server.safety.JdbcReportRepository
+import com.pynapli.server.safety.ReportService
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
 import java.nio.file.Path
@@ -38,6 +42,8 @@ class ServerDependencies(
     val messagingService: MessagingService?,
     val mediaService: MediaService?,
     val activityService: ActivityService?,
+    val blockService: BlockService?,
+    val reportService: ReportService?,
     val localMediaUploadStorage: LocalMediaUploadStorage?,
     private val probes: List<DependencyProbe>
 ) : AutoCloseable {
@@ -83,11 +89,15 @@ class ServerDependencies(
                     uploadBaseUrl = config.mediaUploadBaseUrl
                 )
             }
+            val blockRepository = JdbcBlockRepository(database.dataSource)
+            val blockService = BlockService(blockRepository)
+            val reportService = ReportService(JdbcReportRepository(database.dataSource))
             val mediaRepository = JdbcMediaRepository(database.dataSource)
             val mediaService = MediaService(
                 repository = mediaRepository,
                 uploadSigner = uploadSigner,
-                devAutoApproveUploads = config.mediaDevAutoApproveUploads
+                devAutoApproveUploads = config.mediaDevAutoApproveUploads,
+                blockRepository = blockRepository
             )
             val activityService = ActivityService(
                 repository = JdbcActivityRepository(database.dataSource),
@@ -97,14 +107,19 @@ class ServerDependencies(
             val profileService = ProfileService(
                 repository = JdbcProfileRepository(database.dataSource),
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
-                activityService = activityService
+                activityService = activityService,
+                blockRepository = blockRepository
             )
             val gridService = GridService(
                 repository = JdbcGridRepository(database.dataSource),
                 presenceService = presenceService,
-                mediaAssetUrlResolver = mediaAssetUrlResolver
+                mediaAssetUrlResolver = mediaAssetUrlResolver,
+                blockRepository = blockRepository
             )
-            val messagingService = MessagingService(JdbcMessagingRepository(database.dataSource))
+            val messagingService = MessagingService(
+                repository = JdbcMessagingRepository(database.dataSource),
+                blockRepository = blockRepository
+            )
             return ServerDependencies(
                 config = config,
                 database = database,
@@ -117,13 +132,31 @@ class ServerDependencies(
                 messagingService = messagingService,
                 mediaService = mediaService,
                 activityService = activityService,
+                blockService = blockService,
+                reportService = reportService,
                 localMediaUploadStorage = localMediaUploadStorage,
                 probes = listOf(postgres, redis)
             )
         }
 
         fun test(config: ServerConfig = ServerConfig.fromEnvironment()): ServerDependencies =
-            ServerDependencies(config, null, null, null, null, null, null, null, null, null, null, null, emptyList())
+            ServerDependencies(
+                config = config,
+                database = null,
+                redisCache = null,
+                authService = null,
+                profileService = null,
+                locationService = null,
+                presenceService = null,
+                gridService = null,
+                messagingService = null,
+                mediaService = null,
+                activityService = null,
+                blockService = null,
+                reportService = null,
+                localMediaUploadStorage = null,
+                probes = emptyList()
+            )
     }
 }
 

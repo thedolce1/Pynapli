@@ -43,6 +43,12 @@ class GridStateHolder(
             current.copy(filters = current.filters.withActiveFilter(type))
         }
     }
+
+    fun removeCardById(userId: String) {
+        _state.update { current ->
+            current.copy(cards = current.cards.filterNot { it.id == userId })
+        }
+    }
 }
 
 interface GridFeedRepository {

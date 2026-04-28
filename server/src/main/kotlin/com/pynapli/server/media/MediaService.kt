@@ -1,5 +1,6 @@
 package com.pynapli.server.media
 
+import com.pynapli.server.safety.BlockRepository
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MEDIA_IMAGE_MAX_BYTES
@@ -16,7 +17,8 @@ import java.util.UUID
 class MediaService(
     private val repository: MediaRepository,
     private val uploadSigner: MediaUploadSigner,
-    private val devAutoApproveUploads: Boolean = false
+    private val devAutoApproveUploads: Boolean = false,
+    private val blockRepository: BlockRepository? = null
 ) {
     suspend fun createUploadSlot(
         ownerUserId: UUID,
@@ -131,6 +133,9 @@ class MediaService(
         ownerUserIdText: String
     ): MediaAlbumItemsResponseDto {
         val ownerUserId = ownerUserIdText.toUuidOrThrow()
+        if (blockRepository?.isBlockedEitherWay(viewerUserId, ownerUserId) == true) {
+            throw MediaException("MEDIA_ALBUM_NOT_FOUND")
+        }
         val result = repository.listAlbumItemsForViewer(
             viewerUserId = viewerUserId,
             ownerUserId = ownerUserId,
@@ -149,6 +154,9 @@ class MediaService(
         ownerUserId: UUID
     ): Boolean {
         if (requesterUserId == ownerUserId) throw MediaException("INVALID_ALBUM_REQUEST_TARGET")
+        if (blockRepository?.isBlockedEitherWay(requesterUserId, ownerUserId) == true) {
+            throw MediaException("INVALID_ALBUM_REQUEST_TARGET")
+        }
         return repository.requestAlbumAccess(
             ownerUserId = ownerUserId,
             requesterUserId = requesterUserId

@@ -16,6 +16,7 @@ import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.presence.configurePresenceRoutes
 import com.pynapli.server.profile.configureProfileRoutes
 import com.pynapli.server.routing.configureHealthRoutes
+import com.pynapli.server.safety.configureSafetyRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
@@ -51,5 +52,10 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         authService = dependencies.authService,
         mediaService = dependencies.mediaService,
         localUploadStorage = dependencies.localMediaUploadStorage
+    )
+    configureSafetyRoutes(
+        authService = dependencies.authService,
+        blockService = dependencies.blockService,
+        reportService = dependencies.reportService
     )
 }

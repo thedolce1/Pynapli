@@ -94,6 +94,12 @@ fun GridScreen(
         modifier = modifier
     )
 
+    LaunchedEffect(profileState.blockedTargetUserId) {
+        val blockedId = profileDetailStateHolder.consumeBlockedTargetUserId() ?: return@LaunchedEffect
+        stateHolder.removeCardById(blockedId)
+        profileDetailStateHolder.dismiss()
+    }
+
     if (profileState.visible) {
         ProfileDetailSheet(
             state = profileState,
@@ -118,6 +124,12 @@ fun GridScreen(
                         )
                     }
                 }
+            },
+            onBlock = { reason ->
+                scope.launch { profileDetailStateHolder.blockUser(reason) }
+            },
+            onReport = { category, note ->
+                scope.launch { profileDetailStateHolder.submitReport(category, note) }
             }
         )
     }
