@@ -154,7 +154,7 @@ Do not paywall:
 - [ ] Block archives/disables thread.
 - [ ] Report is separate from block.
 - [ ] Message expiry exists only with clear system messaging.
-- [ ] Server owns message permissions.
+- [x] Server owns message permissions.
 
 ## Do Not Implement
 
@@ -163,4 +163,3 @@ Do not paywall:
 - Do not let Swipe bypass match gating except capped Intro Notes.
 - Do not paywall safety controls.
 - Do not make deleted messages misleading for safety/moderation.
-

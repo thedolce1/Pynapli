@@ -1,6 +1,6 @@
 # Pynapli Notifications Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-06
 
 ## Purpose
 
@@ -85,6 +85,14 @@ During quiet hours:
 - Safety/moderation/account-critical notifications can still be queued or delivered according to severity.
 - Social notifications should be queued and grouped.
 
+MVP behavior:
+
+- Users can enable quiet hours from app settings and choose a preset overnight window.
+- Android saves the user's local timezone with the preference.
+- Ktor validates the saved window and timezone.
+- The dispatch worker defers non-safety notifications until quiet hours end by returning the outbox row to `pending` with a future `available_at`.
+- `system_safety` notifications bypass quiet hours.
+
 ## Grouping
 
 Group noisy social signals:
@@ -92,6 +100,14 @@ Group noisy social signals:
 - Views.
 - Flirts.
 - Likes.
+
+MVP server grouping:
+
+- Message notifications are throttled per recipient/conversation thread for 90 seconds.
+- Profile view notifications are throttled per recipient for 6 hours.
+- Flirt notifications are throttled per recipient/actor pair for 6 hours.
+- Private album request notifications are throttled per recipient/actor pair for 6 hours.
+- Action-required notifications are not grouped in this pass because they should remain individually visible.
 
 Keep action-required notifications individual:
 
@@ -118,6 +134,16 @@ Do not include:
 - Exact location.
 - Private album URLs.
 - Sensitive verification data.
+
+## Server Delivery Path
+
+Ktor owns notification eligibility, copy, and queueing. Product actions enqueue rows in `notification_outbox`; the dispatch worker claims pending rows, sends to active push devices, and marks each row `sent`, `skipped`, `pending` for retry, or `failed`.
+
+Before each claim cycle, the dispatch worker recovers stale `processing` rows that have not been updated for 10 minutes. Recovered rows return to `pending` with `last_error = STALE_PROCESSING_RECOVERED`, which prevents a crash or forced stop from permanently stranding notifications.
+
+Local development uses `PYNAPLI_NOTIFICATION_PUSH_PROVIDER=local`, which exercises the full dispatcher without contacting Firebase. Production/staging can switch to `PYNAPLI_NOTIFICATION_PUSH_PROVIDER=firebase` when `PYNAPLI_FIREBASE_SERVICE_ACCOUNT_PATH` or `PYNAPLI_FIREBASE_SERVICE_ACCOUNT_JSON` is configured.
+
+The Firebase sender uses privacy-safe title/body plus a data payload containing IDs and routing metadata only. Message bodies, private media URLs, exact location, and explicit lifestyle language stay out of push payloads. The default notification detail level is discreet copy.
 
 ## Android Channels
 
@@ -154,24 +180,37 @@ Messages includes:
 
 - Chat threads.
 
+MVP implementation:
+
+- Profile hub shows a bell/action center badge for pending action items.
+- Profile link invites use the profile-link accept/decline Ktor endpoints.
+- Partner chat invites use the conversation partner-invite accept/decline Ktor endpoints.
+- The bell composes pending action state from source-of-truth APIs; Activity remains the social-history feed.
+
 ## Rate Limits
 
 Server-side notification limits:
 
-- Message notifications grouped per thread.
-- Flirt notifications capped per sender/recipient window.
-- View notifications aggregated.
-- Boost/result notifications capped.
+- [x] Message notifications grouped per thread.
+- [x] Flirt notifications capped per sender/recipient window.
+- [x] View notifications aggregated.
+- [ ] Boost/result notifications capped.
+- [x] Private album request notifications capped per requester/recipient window.
 
 ## Implementation Checklist
 
-- [ ] FCM token management exists.
-- [ ] Ktor notification service exists.
-- [ ] Notification detail settings exist.
-- [ ] Quiet hours exist.
-- [ ] Actionable notifications validate through Ktor.
-- [ ] Bell is not a duplicate Activity feed.
-- [ ] Push copy avoids explicit terms by default.
+- [x] FCM token management exists.
+- [x] Ktor notification service exists.
+- [x] Notification detail settings exist.
+- [x] Server notification outbox exists.
+- [x] Local-dev dispatch worker exists.
+- [x] Firebase Admin sender is provider-gated by server config.
+- [x] Quiet hours exist.
+- [x] Actionable notifications validate through Ktor.
+- [x] Bell is not a duplicate Activity feed.
+- [x] Push copy avoids explicit terms by default.
+- [x] Noisy social notifications have server-side throttle keys.
+- [x] Stale processing notification rows are recovered.
 
 ## Do Not Implement
 
@@ -180,4 +219,3 @@ Server-side notification limits:
 - Do not bypass OS Do Not Disturb.
 - Do not send fake notifications.
 - Do not let Firebase decide product eligibility.
-

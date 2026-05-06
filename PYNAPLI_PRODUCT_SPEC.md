@@ -14,6 +14,10 @@ The guiding product line:
 
 > Grid for now. Swipe for intent. Links for trust.
 
+Autonomy positioning line:
+
+> Pynapli works the way real LS clubs and events work — every adult has their own voice.
+
 ## Positioning
 
 Pynapli should be positioned as a social lifestyle app for adults. It should not market itself as an explicit hookup marketplace, escorting app, or sex-services platform.

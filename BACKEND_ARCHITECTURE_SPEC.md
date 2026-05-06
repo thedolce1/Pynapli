@@ -777,10 +777,10 @@ Keep sensitive payloads out of logs.
 - [ ] FCM notification pipeline goes through Ktor.
 - [ ] Analytics avoids sensitive lifestyle payloads.
 - [ ] Subscription validation is server-side.
-- [ ] Linked partner entitlement is server-side.
+- [x] Linked partner entitlement is server-side.
 - [ ] Private albums use signed URLs.
 - [ ] WebSocket reconnect refetches canonical state.
-- [ ] Rate limits exist for messaging/flirts/album requests.
+- [x] Rate limits exist for messaging/flirts/album requests.
 - [ ] Blocks are enforced across grid/swipe/activity/messages.
 - [ ] Location is not trusted from client for ranking without server validation.
 - [ ] Sensitive logs are redacted.

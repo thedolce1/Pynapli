@@ -1,6 +1,6 @@
 # Pynapli Data Model Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-06
 
 ## Purpose
 
@@ -668,6 +668,10 @@ Fields:
 - `source`
 - `expires_at`
 
+Implemented table:
+
+- `premium_inventory`
+
 ### boosts
 
 Fields:
@@ -896,7 +900,7 @@ Do not store unless legally reviewed and required:
 - [ ] Chat participant model supports partner invite.
 - [ ] Album grants are explicit and revocable.
 - [ ] Activity events are separate from messages.
-- [ ] Entitlements are server-authoritative.
+- [x] Entitlements are server-authoritative.
 - [ ] Risk state and moderation tables exist.
 - [ ] Blocks and hides are separate.
 - [ ] Notification events are Ktor-owned.
@@ -910,4 +914,3 @@ Do not store unless legally reviewed and required:
 - Do not trust client subscription state.
 - Do not expose raw exact location.
 - Do not make Activity a message table.
-

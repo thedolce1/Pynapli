@@ -507,6 +507,18 @@ Rules:
 - Admin API requires admin auth, MFA, role check, and audit middleware.
 - Admin API must never be bundled into the consumer mobile app.
 
+Current bootstrap implementation:
+
+- `/v1/admin/messages/review-queue` is server-only and disabled unless `PYNAPLI_ADMIN_API_TOKEN` is set.
+- `/v1/admin/reports` uses the same server-only admin gate for report triage.
+- `/v1/admin/risk` uses the same server-only admin gate for account risk review.
+- Admin calls require `X-Admin-Token`, `X-Admin-Id`, and a reason header/body depending on the action.
+- Listing held messages writes an `admin_audit_log` row because message body review is sensitive.
+- Held message actions support release and remove, and both write audit rows.
+- Report actions support mark under review, resolve, and dismiss, and all write audit rows.
+- Risk actions support list states, list events, clear, set tier, and mark reviewed, and all write audit rows.
+- This bootstrap route is not a replacement for full admin accounts, MFA, role checks, and step-up auth.
+
 ## Metrics
 
 Track:
@@ -529,13 +541,19 @@ Track:
 - [ ] Audit middleware exists.
 - [ ] User lookup exists.
 - [ ] Moderation queue exists.
-- [ ] Reports queue exists.
-- [ ] Risk review exists.
-- [ ] Message review queue exists.
+- [x] Reports queue exists.
+- [x] Reports triage actions exist.
+- [x] Reports triage actions are audit logged.
+- [x] Risk review exists.
+- [x] Risk review actions are audit logged.
+- [x] Message review queue exists.
+- [x] Held message release/remove actions exist.
+- [x] Held message review actions are audit logged.
 - [ ] Appeals workflow exists.
 - [ ] Subscription support view exists.
 - [ ] Partner link review exists.
 - [ ] Sensitive reveal reason flow exists.
+- [x] Held-message sensitive queue view requires reason.
 - [ ] Admin API separated from consumer API.
 
 ## Do Not Implement
@@ -547,4 +565,3 @@ Track:
 - Do not allow moderators to change user relationship links casually.
 - Do not bundle admin routes/UI in the consumer app.
 - Do not send fake notifications from admin tools.
-

@@ -1,6 +1,6 @@
 # Pynapli Monetization Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-06
 
 ## Purpose
 
@@ -563,19 +563,19 @@ Do not experiment with:
 
 ## Implementation Checklist
 
-- [ ] Free, Social, Select tiers exist.
-- [ ] Launch pricing is set at $4.99 and $9.99 monthly.
-- [ ] Entitlements are server-authoritative.
-- [ ] Linked partner benefit is implemented server-side.
-- [ ] One active linked partner beneficiary rule exists.
-- [ ] Subscription cooldown/abuse detection exists.
+- [x] Free, Social, Select tiers exist.
+- [x] Launch pricing is set at $4.99 and $9.99 monthly.
+- [x] Entitlements are server-authoritative.
+- [x] Linked partner benefit is implemented server-side.
+- [x] One active linked partner beneficiary rule exists.
+- [x] Subscription cooldown/abuse detection exists.
 - [ ] StoreKit and Google Play validation exist.
 - [ ] Restore purchases exists.
-- [ ] Activity gating is implemented.
-- [ ] Advanced filters are gated.
+- [x] Activity gating is implemented.
+- [x] Advanced filters are gated.
 - [ ] Boost inventory exists.
 - [ ] Pineapple Like inventory exists.
-- [ ] Intro Note inventory exists.
+- [x] Intro Note inventory exists.
 - [ ] Ads are excluded from sensitive surfaces.
 - [ ] Safety features remain free.
 - [ ] Paywall copy uses Social/Select naming.

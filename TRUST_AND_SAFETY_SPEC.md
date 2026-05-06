@@ -365,6 +365,7 @@ Risk controls:
 - One active subscription beneficiary.
 - Fraud detection for cycling partners.
 - Verification requirement if abuse detected.
+- Server-side partner-link activation cooldown after recent unlink; unlink itself remains available.
 
 Suspicious pattern:
 
@@ -652,24 +653,29 @@ Reject:
 
 ## Implementation Checklist
 
-- [ ] Risk score model exists.
-- [ ] Risk event table exists.
-- [ ] Redis-backed rate limits exist.
+- [x] Risk score model exists.
+- [x] Risk event table exists.
+- [x] Redis-backed rate limits exist.
 - [ ] Ktor risk middleware exists.
-- [ ] Tier policies exist.
-- [ ] Message duplicate detection exists.
-- [ ] Message review queue exists.
-- [ ] Album request throttles exist.
-- [ ] Swipe velocity detection exists.
-- [ ] Profile view velocity detection exists.
+- [x] Tier policies exist.
+- [x] Domain risk gates restrict quarantined/terminated social actions.
+- [x] Quarantined/terminated accounts are suppressed from discovery-facing surfaces.
+- [x] Message duplicate detection exists.
+- [x] Message review queue exists.
+- [x] Held first-message review supports audited release/remove actions.
+- [x] Reports queue supports audited triage actions.
+- [x] Risk review queue supports audited clear/set-tier/review actions.
+- [x] Album request throttles exist.
+- [x] Swipe velocity detection exists.
+- [x] Profile view velocity detection exists.
 - [ ] Device/account-farm hash signals exist.
 - [ ] Location spoofing signals exist.
-- [ ] Partner subscription abuse cooldown exists.
+- [x] Partner subscription abuse cooldown exists.
 - [ ] Verification lowers risk where appropriate.
 - [ ] Appeal/support review flow exists.
 - [ ] Moderator dashboard requirements are tracked.
 - [ ] False-positive metrics exist.
-- [ ] Severe hard-ban triggers exist.
+- [x] Severe hard-ban triggers exist.
 - [ ] Fake/deceptive degradation is not implemented.
 
 ## Do Not Implement
@@ -686,4 +692,3 @@ Reject:
 - Do not store raw device identifiers unnecessarily.
 - Do not trust client-side risk decisions.
 - Do not block safety actions due to risk tier.
-

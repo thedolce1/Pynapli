@@ -1,6 +1,6 @@
 # Pynapli API Contract Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-06
 
 ## Purpose
 
@@ -484,7 +484,7 @@ Rules:
 - [ ] Shared DTO conventions.
 - [ ] Cursor pagination.
 - [ ] Idempotency keys for actions/purchases.
-- [ ] Server-side entitlement checks.
+- [x] Server-side entitlement checks.
 - [ ] Server-side block/privacy/risk checks.
 - [ ] WebSocket reconnect canonical refetch.
 - [ ] Error codes standardized.
@@ -498,4 +498,3 @@ Rules:
 - Do not use offset pagination for live surfaces.
 - Do not trust client premium/subscription state.
 - Do not make partner-link APIs mutate another user's account settings.
-
