@@ -10,6 +10,8 @@ $viewerEmail = "dev@pynapli.local"
 $viewerLatitude = 37.4220
 $viewerLongitude = -122.0841
 
+Add-Type -AssemblyName System.Drawing
+
 function Invoke-PynapliJson {
     param(
         [ValidateSet("GET", "POST", "PATCH")]
@@ -91,6 +93,131 @@ function Assert-Success {
             $details = $Response.Body | ConvertTo-Json -Depth 10
         }
         throw "$Action failed with HTTP $($Response.StatusCode): $details"
+    }
+}
+
+function Convert-HexColor {
+    param(
+        [string]$Hex
+    )
+
+    return [System.Drawing.ColorTranslator]::FromHtml($Hex)
+}
+
+function New-DevProfileImageBytes {
+    param(
+        [string]$DisplayName,
+        [int]$Index
+    )
+
+    $width = 900
+    $height = 1200
+    $palettes = @(
+        @{ Start = "#4E3A31"; End = "#111111"; Glow = "#D1A64F"; Ink = "#F8EFE2" },
+        @{ Start = "#263A40"; End = "#111314"; Glow = "#78A2B0"; Ink = "#F0F7F8" },
+        @{ Start = "#543126"; End = "#130F0D"; Glow = "#D96D52"; Ink = "#FFF0E8" },
+        @{ Start = "#2F3D2E"; End = "#101310"; Glow = "#7FA56A"; Ink = "#EEF6E9" },
+        @{ Start = "#4A3522"; End = "#15100B"; Glow = "#B78349"; Ink = "#FFF1DD" },
+        @{ Start = "#31363D"; End = "#101113"; Glow = "#9BA6B7"; Ink = "#F4F6FA" },
+        @{ Start = "#243C3B"; End = "#0C1212"; Glow = "#6FB8AD"; Ink = "#EAF9F7" },
+        @{ Start = "#4E2F3A"; End = "#120D10"; Glow = "#C07890"; Ink = "#FFF0F5" },
+        @{ Start = "#4B4037"; End = "#12100E"; Glow = "#BFA084"; Ink = "#FFF3E8" }
+    )
+
+    $palette = $palettes[$Index % $palettes.Count]
+    $bitmap = [System.Drawing.Bitmap]::new($width, $height)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $stream = [System.IO.MemoryStream]::new()
+
+    try {
+        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+
+        $rect = [System.Drawing.Rectangle]::new(0, 0, $width, $height)
+        $background = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
+            $rect,
+            (Convert-HexColor $palette.Start),
+            (Convert-HexColor $palette.End),
+            55.0
+        )
+        $graphics.FillRectangle($background, $rect)
+        $background.Dispose()
+
+        $glowColor = Convert-HexColor $palette.Glow
+        $softGlow = [System.Drawing.SolidBrush]::new(
+            [System.Drawing.Color]::FromArgb(56, $glowColor.R, $glowColor.G, $glowColor.B)
+        )
+        $graphics.FillEllipse($softGlow, -140, 120, 760, 760)
+        $graphics.FillEllipse($softGlow, 520, -160, 520, 520)
+        $graphics.FillEllipse($softGlow, 260, 740, 780, 620)
+        $softGlow.Dispose()
+
+        $portraitShadow = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(120, 8, 8, 8))
+        $graphics.FillEllipse($portraitShadow, 170, 248, 560, 560)
+        $graphics.FillEllipse($portraitShadow, 70, 682, 760, 420)
+        $portraitShadow.Dispose()
+
+        $portraitFill = [System.Drawing.SolidBrush]::new(
+            [System.Drawing.Color]::FromArgb(92, $glowColor.R, $glowColor.G, $glowColor.B)
+        )
+        $graphics.FillEllipse($portraitFill, 220, 298, 460, 460)
+        $graphics.FillEllipse($portraitFill, 120, 720, 660, 340)
+        $portraitFill.Dispose()
+
+        $initial = if ([string]::IsNullOrWhiteSpace($DisplayName)) { "P" } else { $DisplayName.Trim().Substring(0, 1).ToUpperInvariant() }
+        $font = [System.Drawing.Font]::new(
+            [System.Drawing.FontFamily]::GenericSansSerif,
+            176,
+            [System.Drawing.FontStyle]::Bold,
+            [System.Drawing.GraphicsUnit]::Pixel
+        )
+        $textBrush = [System.Drawing.SolidBrush]::new((Convert-HexColor $palette.Ink))
+        $format = [System.Drawing.StringFormat]::new()
+        $format.Alignment = [System.Drawing.StringAlignment]::Center
+        $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+        $graphics.DrawString($initial, $font, $textBrush, [System.Drawing.RectangleF]::new(0, 410, $width, 220), $format)
+
+        $format.Dispose()
+        $textBrush.Dispose()
+        $font.Dispose()
+
+        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        return $stream.ToArray()
+    } finally {
+        $stream.Dispose()
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+}
+
+function Invoke-PynapliUploadBytes {
+    param(
+        [string]$Uri,
+        [byte[]]$Bytes,
+        [string]$ContentType
+    )
+
+    try {
+        Invoke-WebRequest `
+            -Method PUT `
+            -Uri $Uri `
+            -ContentType $ContentType `
+            -Body $Bytes `
+            -ErrorAction Stop | Out-Null
+        return @{
+            StatusCode = 200
+        }
+    } catch {
+        $statusCode = 0
+        $content = $_.ErrorDetails.Message
+        if ($_.Exception.Response) {
+            $statusCode = [int]$_.Exception.Response.StatusCode
+        }
+        return @{
+            StatusCode = $statusCode
+            RawError = $content
+        }
     }
 }
 
@@ -201,6 +328,220 @@ function Seed-Account {
         Refresh-DevPresence -Session $session -Email $Account.email
     }
     return $session
+}
+
+function Test-DevProfilePhotoReady {
+    param(
+        [object]$Session
+    )
+
+    $album = Invoke-PynapliJson `
+        -Method GET `
+        -Path "/v1/media/albums/profile" `
+        -AccessToken $Session.accessToken
+
+    if ($album.StatusCode -lt 200 -or $album.StatusCode -ge 300) {
+        return $false
+    }
+
+    foreach ($item in @($album.Body.items)) {
+        $asset = $item.mediaAsset
+        if ($null -eq $asset) {
+            continue
+        }
+        if ($asset.processingStatus -ne "ready" -or $asset.moderationStatus -ne "approved") {
+            continue
+        }
+
+        try {
+            Invoke-WebRequest `
+                -Method GET `
+                -Uri "$BaseUrl/v1/media/uploads/local/$($asset.mediaAssetId)" `
+                -ErrorAction Stop | Out-Null
+            return $true
+        } catch {
+            continue
+        }
+    }
+
+    return $false
+}
+
+function Set-DevProfilePhoto {
+    param(
+        [object]$Session,
+        [hashtable]$Account,
+        [int]$Index
+    )
+
+    if (Test-DevProfilePhotoReady -Session $Session) {
+        Write-Host "  [media] Existing profile photo for $($Account.displayName)"
+        return
+    }
+
+    $contentType = "image/png"
+    $bytes = New-DevProfileImageBytes -DisplayName $Account.displayName -Index $Index
+    $uploadSlot = Invoke-PynapliJson `
+        -Method POST `
+        -Path "/v1/media/uploads" `
+        -AccessToken $Session.accessToken `
+        -Body @{
+            albumKind = "profile"
+            mediaType = "image"
+            contentType = $contentType
+            byteSize = $bytes.LongLength
+            pixelWidth = 900
+            pixelHeight = 1200
+        }
+    Assert-Success -Response $uploadSlot -Action "Create profile photo upload $($Account.email)"
+
+    $uploadUrl = $uploadSlot.Body.uploadUrl
+    try {
+        $uploadUri = [System.Uri]$uploadUrl
+        $uploadUrl = "$BaseUrl$($uploadUri.PathAndQuery)"
+    } catch {
+        $uploadUrl = $uploadSlot.Body.uploadUrl
+    }
+
+    $upload = Invoke-PynapliUploadBytes `
+        -Uri $uploadUrl `
+        -Bytes $bytes `
+        -ContentType $contentType
+    Assert-Success -Response $upload -Action "Upload profile photo $($Account.email)"
+
+    $assetId = $uploadSlot.Body.mediaAsset.mediaAssetId
+    $complete = Invoke-PynapliJson `
+        -Method POST `
+        -Path "/v1/media/uploads/$assetId/complete" `
+        -AccessToken $Session.accessToken `
+        -Body @{
+            albumId = $uploadSlot.Body.album.albumId
+            sortOrder = 0
+        }
+    Assert-Success -Response $complete -Action "Complete profile photo upload $($Account.email)"
+    Write-Host "  [media] Profile photo for $($Account.displayName)"
+}
+
+function Set-LinkedDevAccounts {
+    param(
+        [hashtable]$SessionsByEmail
+    )
+
+    $docker = Get-Command docker -ErrorAction SilentlyContinue
+    if ($null -eq $docker) {
+        Write-Host "  [skip] Docker not found; linked dev accounts were not seeded."
+        return
+    }
+
+    $links = @(
+        @{
+            id = "00000000-0000-0000-0000-000000000201"
+            userId = $SessionsByEmail["maya@pynapli.local"].user.userId
+            linkedUserId = $SessionsByEmail["alex@pynapli.local"].user.userId
+        },
+        @{
+            id = "00000000-0000-0000-0000-000000000202"
+            userId = $SessionsByEmail["alex@pynapli.local"].user.userId
+            linkedUserId = $SessionsByEmail["maya@pynapli.local"].user.userId
+        },
+        @{
+            id = "00000000-0000-0000-0000-000000000203"
+            userId = $SessionsByEmail["jules@pynapli.local"].user.userId
+            linkedUserId = $SessionsByEmail["rae@pynapli.local"].user.userId
+        },
+        @{
+            id = "00000000-0000-0000-0000-000000000204"
+            userId = $SessionsByEmail["rae@pynapli.local"].user.userId
+            linkedUserId = $SessionsByEmail["jules@pynapli.local"].user.userId
+        }
+    )
+
+    $values = ($links | ForEach-Object {
+        "('$($_.id)'::uuid, '$($_.userId)'::uuid, '$($_.linkedUserId)'::uuid, 'active', now(), NULL)"
+    }) -join ",`n"
+
+    $sql = @"
+INSERT INTO user_profile_links (id, user_id, linked_user_id, status, accepted_at, unlinked_at)
+VALUES
+$values
+ON CONFLICT (user_id, linked_user_id) DO UPDATE
+SET status = EXCLUDED.status,
+    accepted_at = COALESCE(user_profile_links.accepted_at, EXCLUDED.accepted_at),
+    unlinked_at = NULL,
+    updated_at = now();
+"@
+
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 -c $sql 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Linked account seed failed: $output"
+    }
+
+    Write-Host "  [ok] Linked dev couples: Maya + Alex, Jules + Rae"
+}
+
+function Set-DevMonetization {
+    param(
+        [hashtable]$SessionsByEmail
+    )
+
+    $docker = Get-Command docker -ErrorAction SilentlyContinue
+    if ($null -eq $docker) {
+        Write-Host "  [skip] Docker not found; dev subscription inventory was not seeded."
+        return
+    }
+
+    $viewerUserId = $SessionsByEmail[$viewerEmail].user.userId
+    $mayaUserId = $SessionsByEmail["maya@pynapli.local"].user.userId
+    $alexUserId = $SessionsByEmail["alex@pynapli.local"].user.userId
+
+    $sql = @"
+INSERT INTO subscriptions (
+    id,
+    user_id,
+    platform,
+    external_subscription_id,
+    tier,
+    status,
+    current_period_start,
+    current_period_end
+)
+VALUES
+    ('00000000-0000-0000-0000-000000000301'::uuid, '$viewerUserId'::uuid, 'dev', 'dev-select-viewer', 'select', 'active', now() - interval '1 day', now() + interval '30 days'),
+    ('00000000-0000-0000-0000-000000000302'::uuid, '$mayaUserId'::uuid, 'dev', 'dev-social-maya', 'social', 'active', now() - interval '1 day', now() + interval '30 days')
+ON CONFLICT (platform, external_subscription_id) DO UPDATE
+SET user_id = EXCLUDED.user_id,
+    tier = EXCLUDED.tier,
+    status = EXCLUDED.status,
+    current_period_start = EXCLUDED.current_period_start,
+    current_period_end = EXCLUDED.current_period_end,
+    updated_at = now();
+
+INSERT INTO premium_inventory (
+    id,
+    user_id,
+    inventory_type,
+    quantity,
+    source,
+    expires_at
+)
+VALUES
+    ('00000000-0000-0000-0000-000000000311'::uuid, '$viewerUserId'::uuid, 'intro_note', 5, 'dev', now() + interval '30 days'),
+    ('00000000-0000-0000-0000-000000000312'::uuid, '$mayaUserId'::uuid, 'intro_note', 2, 'dev', now() + interval '30 days'),
+    ('00000000-0000-0000-0000-000000000313'::uuid, '$alexUserId'::uuid, 'intro_note', 2, 'dev', now() + interval '30 days')
+ON CONFLICT (id) DO UPDATE
+SET user_id = EXCLUDED.user_id,
+    quantity = EXCLUDED.quantity,
+    source = EXCLUDED.source,
+    expires_at = EXCLUDED.expires_at,
+    updated_at = now();
+"@
+
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 -c $sql 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dev monetization seed failed: $output"
+    }
+
+    Write-Host "  [ok] Dev subscriptions: Seb Dev Select, Maya Social, Alex linked benefit via Maya"
 }
 
 $accounts = @(
@@ -337,14 +678,20 @@ Assert-Success -Response $health -Action "Health check"
 
 Write-Host "Seeding Pynapli dev accounts at $BaseUrl..."
 $viewerSession = $null
+$sessionsByEmail = @{}
 for ($index = 0; $index -lt $accounts.Count; $index++) {
     $account = $accounts[$index]
     $session = Seed-Account -Account $account -Online ($index -lt 5)
+    Set-DevProfilePhoto -Session $session -Account $account -Index $index
+    $sessionsByEmail[$account.email] = $session
     if ($account.email -eq $viewerEmail) {
         $viewerSession = $session
     }
     Write-Host "  [ok] $($account.displayName) <$($account.email)>"
 }
+
+Set-LinkedDevAccounts -SessionsByEmail $sessionsByEmail
+Set-DevMonetization -SessionsByEmail $sessionsByEmail
 
 $grid = Invoke-PynapliJson `
     -Method POST `

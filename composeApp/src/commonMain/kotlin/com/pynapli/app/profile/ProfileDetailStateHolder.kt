@@ -1,6 +1,8 @@
 package com.pynapli.app.profile
 
 import androidx.compose.runtime.Immutable
+import com.pynapli.app.grid.GridCardTone
+import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.app.media.MediaAlbumItemUi
 import com.pynapli.app.media.MediaAlbumKindUi
@@ -9,6 +11,7 @@ import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlockUserRequestDto
 import com.pynapli.shared.network.dto.CreateReportRequestDto
+import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.ReportDto
@@ -77,6 +80,19 @@ class ProfileDetailStateHolder(
                 }
             }
         }
+    }
+
+    suspend fun openLinkedPartner(partner: GridLinkedPartnerUi) {
+        open(
+            GridProfileCardUi(
+                id = partner.userId,
+                displayName = partner.displayName ?: "Profile ${partner.userId.take(8)}",
+                thumbnailUrl = partner.thumbnailUrl,
+                online = false,
+                distanceLabel = null,
+                tone = GridCardTone.entries[partner.userId.stableIndex(GridCardTone.entries.size)]
+            )
+        )
     }
 
     suspend fun sendSpark() {
@@ -256,6 +272,9 @@ class ProfileDetailStateHolder(
     fun dismiss() {
         _state.value = ProfileDetailUiState()
     }
+
+    private fun String.stableIndex(size: Int): Int =
+        fold(0) { total, char -> total + char.code }.mod(size)
 }
 
 interface PublicProfileRepository {
@@ -333,6 +352,11 @@ class SamplePublicProfileRepository : PublicProfileRepository {
                 relationshipContext = "linked",
                 discoveryStyle = "both",
                 distanceLabel = "1.2 km",
+                distanceMeters = 1_200,
+                linkedPartner = LinkedPartnerMiniDto(
+                    userId = "sample-linked-1",
+                    displayName = "Noa"
+                ),
                 allowGridMessages = true,
                 allowFlirts = true,
                 allowAlbumRequests = true

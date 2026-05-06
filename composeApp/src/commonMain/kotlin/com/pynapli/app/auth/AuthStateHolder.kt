@@ -10,13 +10,14 @@ import kotlinx.coroutines.flow.update
 class AuthStateHolder(
     private val authRepository: AuthRepository,
     private val platform: String,
-    private val appVersion: String
+    private val appVersion: String,
+    private val beforeLogout: suspend () -> Unit = {}
 ) {
     private val _state = MutableStateFlow(AuthUiState())
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
 
     suspend fun restoreSession() {
-        val session = authRepository.currentSession()
+        val session = authRepository.currentSessionValidated()
         _state.update { current ->
             current.copy(
                 isCheckingSession = false,
@@ -116,6 +117,7 @@ class AuthStateHolder(
     }
 
     suspend fun logout() {
+        runCatching { beforeLogout() }
         authRepository.logout()
         _state.update { current ->
             current.copy(

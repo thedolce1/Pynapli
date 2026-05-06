@@ -18,14 +18,38 @@ import com.pynapli.server.media.MediaService
 import com.pynapli.server.media.StaticMediaUploadSigner
 import com.pynapli.server.messaging.JdbcMessagingRepository
 import com.pynapli.server.messaging.MessagingService
+import com.pynapli.server.moderation.AdminReportService
+import com.pynapli.server.moderation.AdminRiskService
+import com.pynapli.server.moderation.JdbcAdminReportRepository
+import com.pynapli.server.moderation.JdbcAdminRiskRepository
+import com.pynapli.server.moderation.JdbcMessageModerationRepository
+import com.pynapli.server.moderation.MessageModerationService
+import com.pynapli.server.notifications.JdbcNotificationRepository
+import com.pynapli.server.notifications.FirebaseAdminPushNotificationSender
+import com.pynapli.server.notifications.LocalLoggingPushNotificationSender
+import com.pynapli.server.notifications.NotificationDispatchService
+import com.pynapli.server.notifications.NotificationDispatchWorker
+import com.pynapli.server.notifications.NotificationService
+import com.pynapli.server.notifications.PushNotificationSender
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.presence.RedisPresenceRepository
 import com.pynapli.server.profile.JdbcProfileRepository
 import com.pynapli.server.profile.ProfileService
+import com.pynapli.server.profilelink.JdbcProfileLinkRepository
+import com.pynapli.server.profilelink.ProfileLinkService
 import com.pynapli.server.safety.BlockService
 import com.pynapli.server.safety.JdbcBlockRepository
 import com.pynapli.server.safety.JdbcReportRepository
+import com.pynapli.server.safety.JdbcRiskRepository
+import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.RedisRateLimitRepository
 import com.pynapli.server.safety.ReportService
+import com.pynapli.server.safety.RiskPolicyService
+import com.pynapli.server.safety.RiskService
+import com.pynapli.server.subscriptions.JdbcSubscriptionRepository
+import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.server.swipe.JdbcSwipeRepository
+import com.pynapli.server.swipe.SwipeService
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
 import java.nio.file.Path
@@ -36,20 +60,29 @@ class ServerDependencies(
     private val redisCache: RedisCache?,
     val authService: AuthService?,
     val profileService: ProfileService?,
+    val profileLinkService: ProfileLinkService?,
     val locationService: LocationService?,
     val presenceService: PresenceService?,
     val gridService: GridService?,
     val messagingService: MessagingService?,
     val mediaService: MediaService?,
+    val messageModerationService: MessageModerationService?,
+    val adminReportService: AdminReportService?,
+    val adminRiskService: AdminRiskService?,
     val activityService: ActivityService?,
+    val notificationService: NotificationService?,
+    val notificationDispatchWorker: NotificationDispatchWorker?,
     val blockService: BlockService?,
     val reportService: ReportService?,
+    val swipeService: SwipeService?,
+    val subscriptionService: SubscriptionService?,
     val localMediaUploadStorage: LocalMediaUploadStorage?,
     private val probes: List<DependencyProbe>
 ) : AutoCloseable {
     suspend fun checkAll() = probes.map { it.check() }
 
     override fun close() {
+        runCatching { notificationDispatchWorker?.close() }
         probes.asReversed().forEach { probe ->
             runCatching { probe.close() }
         }
@@ -91,7 +124,33 @@ class ServerDependencies(
             }
             val blockRepository = JdbcBlockRepository(database.dataSource)
             val blockService = BlockService(blockRepository)
-            val reportService = ReportService(JdbcReportRepository(database.dataSource))
+            val riskService = RiskService(JdbcRiskRepository(database.dataSource))
+            val riskPolicyService = RiskPolicyService(riskService)
+            val rateLimitService = RateLimitService(
+                repository = RedisRateLimitRepository(redisCache),
+                riskSignalPublisher = riskService
+            )
+            val reportService = ReportService(
+                repository = JdbcReportRepository(database.dataSource),
+                riskSignalPublisher = riskService,
+                rateLimitService = rateLimitService
+            )
+            val notificationRepository = JdbcNotificationRepository(database.dataSource)
+            val notificationService = NotificationService(notificationRepository)
+            val notificationDispatchWorker = if (config.notificationDispatchEnabled) {
+                val pushNotificationSender = createPushNotificationSender(config)
+                NotificationDispatchWorker(
+                    service = NotificationDispatchService(
+                        repository = notificationRepository,
+                        sender = pushNotificationSender,
+                        maxAttempts = config.notificationMaxAttempts
+                    ),
+                    intervalMillis = config.notificationDispatchIntervalMillis,
+                    batchSize = config.notificationDispatchBatchSize
+                )
+            } else {
+                null
+            }
             val mediaRepository = JdbcMediaRepository(database.dataSource)
             val mediaService = MediaService(
                 repository = mediaRepository,
@@ -99,27 +158,65 @@ class ServerDependencies(
                 devAutoApproveUploads = config.mediaDevAutoApproveUploads,
                 blockRepository = blockRepository
             )
+            val subscriptionService = SubscriptionService(
+                repository = JdbcSubscriptionRepository(database.dataSource)
+            )
             val activityService = ActivityService(
                 repository = JdbcActivityRepository(database.dataSource),
                 mediaService = mediaService,
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
-                blockRepository = blockRepository
+                blockRepository = blockRepository,
+                notificationPublisher = notificationService,
+                rateLimitService = rateLimitService,
+                riskPolicyService = riskPolicyService,
+                subscriptionService = subscriptionService
             )
             val profileService = ProfileService(
                 repository = JdbcProfileRepository(database.dataSource),
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
                 activityService = activityService,
-                blockRepository = blockRepository
+                blockRepository = blockRepository,
+                riskPolicyService = riskPolicyService
+            )
+            val profileLinkService = ProfileLinkService(
+                repository = JdbcProfileLinkRepository(database.dataSource),
+                mediaAssetUrlResolver = mediaAssetUrlResolver,
+                blockRepository = blockRepository,
+                notificationPublisher = notificationService
             )
             val gridService = GridService(
                 repository = JdbcGridRepository(database.dataSource),
                 presenceService = presenceService,
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
-                blockRepository = blockRepository
+                blockRepository = blockRepository,
+                subscriptionService = subscriptionService
             )
+            val messagingRepository = JdbcMessagingRepository(database.dataSource)
             val messagingService = MessagingService(
-                repository = JdbcMessagingRepository(database.dataSource),
-                blockRepository = blockRepository
+                repository = messagingRepository,
+                blockRepository = blockRepository,
+                notificationPublisher = notificationService,
+                rateLimitService = rateLimitService,
+                messageReviewRiskSignalPublisher = riskService,
+                riskPolicyService = riskPolicyService
+            )
+            val messageModerationService = MessageModerationService(
+                JdbcMessageModerationRepository(database.dataSource)
+            )
+            val adminReportService = AdminReportService(
+                JdbcAdminReportRepository(database.dataSource)
+            )
+            val adminRiskService = AdminRiskService(
+                JdbcAdminRiskRepository(database.dataSource)
+            )
+            val swipeService = SwipeService(
+                repository = JdbcSwipeRepository(database.dataSource),
+                mediaAssetUrlResolver = mediaAssetUrlResolver,
+                blockRepository = blockRepository,
+                notificationPublisher = notificationService,
+                rateLimitService = rateLimitService,
+                riskPolicyService = riskPolicyService,
+                subscriptionService = subscriptionService
             )
             return ServerDependencies(
                 config = config,
@@ -127,18 +224,35 @@ class ServerDependencies(
                 redisCache = redisCache,
                 authService = authService,
                 profileService = profileService,
+                profileLinkService = profileLinkService,
                 locationService = locationService,
                 presenceService = presenceService,
                 gridService = gridService,
                 messagingService = messagingService,
                 mediaService = mediaService,
+                messageModerationService = messageModerationService,
+                adminReportService = adminReportService,
+                adminRiskService = adminRiskService,
                 activityService = activityService,
+                notificationService = notificationService,
+                notificationDispatchWorker = notificationDispatchWorker,
                 blockService = blockService,
                 reportService = reportService,
+                swipeService = swipeService,
+                subscriptionService = subscriptionService,
                 localMediaUploadStorage = localMediaUploadStorage,
                 probes = listOf(postgres, redis)
             )
         }
+
+        private fun createPushNotificationSender(config: ServerConfig): PushNotificationSender =
+            when (config.notificationPushProvider.lowercase()) {
+                "local" -> LocalLoggingPushNotificationSender()
+                "firebase", "fcm" -> FirebaseAdminPushNotificationSender.fromConfig(config)
+                else -> throw IllegalArgumentException(
+                    "Unsupported notification push provider: ${config.notificationPushProvider}"
+                )
+            }
 
         fun test(config: ServerConfig = ServerConfig.fromEnvironment()): ServerDependencies =
             ServerDependencies(
@@ -147,14 +261,22 @@ class ServerDependencies(
                 redisCache = null,
                 authService = null,
                 profileService = null,
+                profileLinkService = null,
                 locationService = null,
                 presenceService = null,
                 gridService = null,
                 messagingService = null,
                 mediaService = null,
+                messageModerationService = null,
+                adminReportService = null,
+                adminRiskService = null,
                 activityService = null,
+                notificationService = null,
+                notificationDispatchWorker = null,
                 blockService = null,
                 reportService = null,
+                swipeService = null,
+                subscriptionService = null,
                 localMediaUploadStorage = null,
                 probes = emptyList()
             )

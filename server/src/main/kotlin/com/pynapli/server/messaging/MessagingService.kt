@@ -1,22 +1,39 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.notifications.NotificationEventDraft
+import com.pynapli.server.notifications.NotificationKind
+import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.safety.MessageReviewRiskSignalPublisher
+import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.RateLimitedAction
+import com.pynapli.server.safety.RiskPolicyService
+import org.slf4j.LoggerFactory
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
+import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
+import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import java.nio.charset.StandardCharsets
+import java.time.Clock
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
 
 class MessagingService(
     private val repository: MessagingRepository,
-    private val blockRepository: BlockRepository? = null
+    private val blockRepository: BlockRepository? = null,
+    private val notificationPublisher: NotificationPublisher? = null,
+    private val rateLimitService: RateLimitService? = null,
+    private val messageSafetyPolicy: MessageSafetyPolicy = MessageSafetyPolicy(),
+    private val messageReviewRiskSignalPublisher: MessageReviewRiskSignalPublisher? = null,
+    private val riskPolicyService: RiskPolicyService? = null,
+    private val clock: Clock = Clock.systemUTC()
 ) {
     suspend fun listConversations(userId: UUID): ConversationListResponseDto {
         val conversations = repository.listConversations(userId, THREAD_LIMIT)
@@ -49,6 +66,9 @@ class MessagingService(
 
         val origin = request.origin.trim().lowercase()
         if (origin !in ORIGINS) throw MessagingException("INVALID_CONVERSATION_ORIGIN")
+        if (riskPolicyService?.isSocialActionRestricted(viewerUserId) == true) {
+            throw MessagingException("RISK_RESTRICTED")
+        }
 
         val conversation = repository.getOrCreateDirectConversation(
             viewerUserId = viewerUserId,
@@ -88,6 +108,9 @@ class MessagingService(
         val body = request.body.trim()
         if (body.isEmpty()) throw MessagingException("MESSAGE_BODY_EMPTY")
         if (body.length > MESSAGE_BODY_MAX_LENGTH) throw MessagingException("MESSAGE_BODY_TOO_LONG")
+        if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
+            throw MessagingException("RISK_RESTRICTED")
+        }
 
         if (blockRepository != null) {
             val detail = repository.getConversationDetail(userId, conversationId, limit = 1)
@@ -96,19 +119,161 @@ class MessagingService(
                 throw MessagingException("MESSAGING_NOT_ALLOWED")
             }
         }
+        val isFirstMessage = !repository.hasSentMessageInConversation(userId, conversationId)
+        if (isFirstMessage) {
+            if (rateLimitService?.check(userId, RateLimitedAction.FIRST_MESSAGE)?.allowed == false) {
+                throw MessagingException("RATE_LIMITED")
+            }
+        }
+        val bodyFingerprint = messageSafetyPolicy.fingerprint(body)
+        val safetyDecision = if (isFirstMessage) {
+            val recentDuplicateCount = repository.countRecentMessagesByFingerprint(
+                userId = userId,
+                bodyFingerprint = bodyFingerprint,
+                since = clock.instant().minusSeconds(MessageSafetyPolicy.DUPLICATE_LOOKBACK_SECONDS)
+            )
+            messageSafetyPolicy.evaluateFirstMessage(
+                body = body,
+                recentDuplicateCount = recentDuplicateCount,
+                bodyFingerprint = bodyFingerprint
+            )
+        } else {
+            MessageSafetyDecision.visible(bodyFingerprint)
+        }
 
-        return repository.sendMessage(
+        val message = repository.sendMessage(
             userId = userId,
             conversationId = conversationId,
-            body = body
+            body = body,
+            moderationStatus = safetyDecision.moderationStatus,
+            bodyFingerprint = safetyDecision.bodyFingerprint,
+            safetyReason = safetyDecision.safetyReason
         )?.toDto() ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+
+        if (message.status == MessageModerationStatus.HELD) {
+            safetyDecision.safetyReason?.let { reason ->
+                runCatching {
+                    messageReviewRiskSignalPublisher?.recordMessageHeld(
+                        userId = userId,
+                        messageId = UUID.fromString(message.messageId),
+                        reason = reason
+                    )
+                }.onFailure { error ->
+                    logger.warn("Failed to record held-message risk signal for message {}", message.messageId, error)
+                }
+            }
+            return message
+        }
+
+        repository.getConversationDetail(userId, conversationId, limit = 1)
+            ?.conversation
+            ?.participants
+            ?.filter { participant ->
+                participant.userId != userId && participant.status == ConversationParticipantStatus.ACTIVE
+            }
+            ?.forEach { participant ->
+                notificationPublisher?.enqueue(
+                    NotificationEventDraft(
+                        recipientUserId = participant.userId,
+                        actorUserId = userId,
+                        kind = NotificationKind.MESSAGE,
+                        subjectId = conversationId,
+                        idempotencyKey = "message:${message.messageId}:${participant.userId}",
+                        payload = mapOf(
+                            "conversationId" to conversationId.toString(),
+                            "messageId" to message.messageId
+                        )
+                    )
+                )
+            }
+
+        return message
+    }
+
+    suspend fun inviteLinkedPartnerToConversation(userId: UUID, conversationIdText: String): ConversationDto {
+        val conversationId = conversationIdText.toUuidOrThrow()
+        if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
+            throw MessagingException("RISK_RESTRICTED")
+        }
+        val partnerUserId = repository.getActiveLinkedPartnerUserId(userId)
+            ?: throw MessagingException("LINKED_PARTNER_NOT_FOUND")
+
+        val detail = repository.getConversationDetail(userId, conversationId, limit = 1)
+            ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+        if (detail.conversation.hasBlockedOtherParticipant(userId)) {
+            throw MessagingException("CONVERSATION_NOT_FOUND")
+        }
+        if (detail.conversation.hasBlockedParticipantFor(partnerUserId)) {
+            throw MessagingException("MESSAGING_NOT_ALLOWED")
+        }
+
+        return when (
+            val result = repository.inviteLinkedPartner(
+                inviterUserId = userId,
+                conversationId = conversationId,
+                partnerUserId = partnerUserId
+            )
+        ) {
+            is PartnerInviteResult.Invited -> {
+                notificationPublisher?.enqueue(
+                    NotificationEventDraft(
+                        recipientUserId = partnerUserId,
+                        actorUserId = userId,
+                        kind = NotificationKind.PARTNER_CHAT_INVITE,
+                        subjectId = conversationId,
+                        idempotencyKey = "partner_chat_invite:$conversationId:$partnerUserId",
+                        payload = mapOf("conversationId" to conversationId.toString())
+                    )
+                )
+                result.conversation.toDto()
+            }
+            PartnerInviteResult.ConversationNotFound -> throw MessagingException("CONVERSATION_NOT_FOUND")
+            PartnerInviteResult.AlreadyInConversation -> throw MessagingException("PARTNER_ALREADY_IN_CONVERSATION")
+            PartnerInviteResult.AlreadyInvited -> throw MessagingException("PARTNER_INVITE_ALREADY_SENT")
+        }
+    }
+
+    suspend fun acceptPartnerInvite(userId: UUID, conversationIdText: String): ConversationDetailDto {
+        val conversationId = conversationIdText.toUuidOrThrow()
+        val detail = repository.getConversationDetail(userId, conversationId, limit = 1)
+            ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
+        val viewerParticipant = detail.conversation.participants.firstOrNull { it.userId == userId }
+        if (viewerParticipant?.status != ConversationParticipantStatus.INVITED) {
+            throw MessagingException("PARTNER_INVITE_NOT_FOUND")
+        }
+        if (detail.conversation.hasBlockedOtherParticipant(userId)) {
+            throw MessagingException("MESSAGING_NOT_ALLOWED")
+        }
+
+        return repository.acceptPartnerInvite(userId, conversationId)?.toDto()
+            ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
+    }
+
+    suspend fun declinePartnerInvite(userId: UUID, conversationIdText: String): ConversationPartnerInviteResponseDto {
+        val conversationId = conversationIdText.toUuidOrThrow()
+        if (!repository.declinePartnerInvite(userId, conversationId)) {
+            throw MessagingException("PARTNER_INVITE_NOT_FOUND")
+        }
+        return ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED)
+    }
+
+    suspend fun leaveConversation(userId: UUID, conversationIdText: String): ConversationPartnerInviteResponseDto {
+        val conversationId = conversationIdText.toUuidOrThrow()
+        if (!repository.leaveConversation(userId, conversationId)) {
+            throw MessagingException("CONVERSATION_NOT_FOUND")
+        }
+        return ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.LEFT)
     }
 
     private suspend fun ConversationRecord.hasBlockedOtherParticipant(viewerUserId: UUID): Boolean {
+        return hasBlockedParticipantFor(viewerUserId)
+    }
+
+    private suspend fun ConversationRecord.hasBlockedParticipantFor(userId: UUID): Boolean {
         val repository = blockRepository ?: return false
         return participants.any { participant ->
-            participant.userId != viewerUserId &&
-                repository.isBlockedEitherWay(viewerUserId, participant.userId)
+            participant.userId != userId &&
+                repository.isBlockedEitherWay(userId, participant.userId)
         }
     }
 
@@ -131,7 +296,9 @@ class MessagingService(
     private fun ConversationParticipantRecord.toDto(): ConversationParticipantDto = ConversationParticipantDto(
         userId = userId.toString(),
         displayName = displayName,
-        online = online
+        online = online,
+        status = status,
+        invitedByUserId = invitedByUserId?.toString()
     )
 
     private fun MessageRecord.toDto(): MessageDto = MessageDto(
@@ -172,6 +339,7 @@ class MessagingService(
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(MessagingService::class.java)
         private const val MESSAGE_PAGE_LIMIT = 50
         private const val MAX_MESSAGE_PAGE_LIMIT = 100
         private const val THREAD_LIMIT = 50

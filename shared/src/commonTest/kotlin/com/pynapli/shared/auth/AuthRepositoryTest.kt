@@ -10,8 +10,10 @@ import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
+import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
+import com.pynapli.shared.network.dto.CreateProfileLinkInvitationRequestDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
@@ -27,10 +29,15 @@ import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
 import com.pynapli.shared.network.dto.ReportDto
+import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.MessageDto
+import com.pynapli.shared.network.dto.NotificationPreferencesDto
 import com.pynapli.shared.network.dto.PresenceHeartbeatResponseDto
+import com.pynapli.shared.network.dto.PushDeviceRegistrationResponseDto
+import com.pynapli.shared.network.dto.ProfileLinksSummaryDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
+import com.pynapli.shared.network.dto.RegisterPushDeviceRequestDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessRequestDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessRequestDto
@@ -38,8 +45,19 @@ import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
+import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
+import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
+import com.pynapli.shared.network.dto.UnregisterPushDeviceRequestDto
+import com.pynapli.shared.network.dto.SwipeActionRequestDto
+import com.pynapli.shared.network.dto.SwipeActionResponseDto
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
+import com.pynapli.shared.network.dto.SwipeDeckResponseDto
+import com.pynapli.shared.network.dto.MatchesListResponseDto
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
+import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
+import com.pynapli.shared.network.dto.UpdateNotificationPreferencesRequestDto
+import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -92,6 +110,36 @@ class AuthRepositoryTest {
         assertNull(sessionStore.currentSession())
     }
 
+    @Test
+    fun currentSessionValidatedClearsTerminalAuthFailure() = runBlocking {
+        val sessionStore = InMemorySessionStore()
+        sessionStore.save(testSession("stale-access", "stale-refresh"))
+        val apiClient = FakeApiClient(
+            meResult = AppResult.Failure(AppError("UNAUTHENTICATED", "Please sign in again."))
+        )
+        val repository = AuthRepository(apiClient, sessionStore)
+
+        val restored = repository.currentSessionValidated()
+
+        assertNull(restored)
+        assertNull(sessionStore.currentSession())
+    }
+
+    @Test
+    fun currentSessionValidatedKeepsSessionOnRecoverableFailure() = runBlocking {
+        val sessionStore = InMemorySessionStore()
+        sessionStore.save(testSession("access-4", "refresh-4"))
+        val apiClient = FakeApiClient(
+            meResult = AppResult.Failure(AppError("NETWORK_ERROR", "Network request failed."))
+        )
+        val repository = AuthRepository(apiClient, sessionStore)
+
+        val restored = repository.currentSessionValidated()
+
+        assertEquals("access-4", restored?.accessToken)
+        assertEquals("access-4", sessionStore.currentSession()?.accessToken)
+    }
+
     private fun testSession(accessToken: String, refreshToken: String): AuthSessionDto = AuthSessionDto(
         accessToken = accessToken,
         refreshToken = refreshToken,
@@ -121,7 +169,8 @@ private class InMemorySessionStore : SessionStore {
 private class FakeApiClient(
     private val signupResult: AppResult<AuthSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented.")),
     private val loginResult: AppResult<AuthSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented.")),
-    private val logoutResult: AppResult<LogoutResponseDto> = AppResult.Success(LogoutResponseDto(loggedOut = true))
+    private val logoutResult: AppResult<LogoutResponseDto> = AppResult.Success(LogoutResponseDto(loggedOut = true)),
+    private val meResult: AppResult<MeDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 ) : PynapliApiClient {
     override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> = signupResult
 
@@ -138,7 +187,54 @@ private class FakeApiClient(
     override suspend fun queryGrid(request: GridQueryRequestDto): AppResult<GridQueryResponseDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun getMe(): AppResult<MeDto> = meResult
+
+    override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun getNotificationPreferences(): AppResult<NotificationPreferencesDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun updateNotificationPreferences(
+        request: UpdateNotificationPreferencesRequestDto
+    ): AppResult<NotificationPreferencesDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun registerPushDevice(
+        request: RegisterPushDeviceRequestDto
+    ): AppResult<PushDeviceRegistrationResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun unregisterPushDevice(request: UnregisterPushDeviceRequestDto): AppResult<Unit> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun getPublicProfile(userId: String): AppResult<PublicProfileDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun listProfileLinks(): AppResult<ProfileLinksSummaryDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun createProfileLinkInvitation(
+        request: CreateProfileLinkInvitationRequestDto
+    ): AppResult<ProfileLinksSummaryDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun acceptProfileLinkInvitation(linkId: String): AppResult<ProfileLinksSummaryDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun declineProfileLinkInvitation(linkId: String): AppResult<ProfileLinksSummaryDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun unlinkCurrentProfileLink(): AppResult<ProfileLinksSummaryDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun getSubscriptionEntitlement(): AppResult<SubscriptionEntitlementDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun getSubscriptionInventory(): AppResult<SubscriptionInventoryResponseDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun listActivity(limit: Int?): AppResult<ActivityFeedResponseDto> =
@@ -179,6 +275,20 @@ private class FakeApiClient(
     override suspend fun sendMessage(conversationId: String, request: SendMessageRequestDto): AppResult<MessageDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun acceptConversationPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun declineConversationPartnerInvite(
+        conversationId: String
+    ): AppResult<ConversationPartnerInviteResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun createMediaUpload(request: CreateMediaUploadRequestDto): AppResult<MediaUploadSlotDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
@@ -213,6 +323,15 @@ private class FakeApiClient(
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun querySwipeDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun submitSwipeAction(request: SwipeActionRequestDto): AppResult<SwipeActionResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun listMatches(): AppResult<MatchesListResponseDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override fun mediaAssetContentUrl(mediaAssetId: String): String =

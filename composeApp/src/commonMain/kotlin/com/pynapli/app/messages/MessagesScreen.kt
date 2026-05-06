@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.conversation.titleFor
 import com.pynapli.shared.network.dto.ConversationDto
+import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import kotlinx.coroutines.launch
 
 @Composable
@@ -190,7 +191,16 @@ private fun ConversationRow(
     val otherParticipant = conversation.participants.firstOrNull {
         viewerUserId == null || it.userId != viewerUserId
     }
-    val preview = conversation.lastMessage?.body ?: "No messages yet"
+    val viewerParticipant = conversation.participants.firstOrNull { participant ->
+        viewerUserId != null && participant.userId == viewerUserId
+    }
+    val isInvite = viewerParticipant?.status == ConversationParticipantStatus.INVITED
+    val lastMessage = conversation.lastMessage
+    val preview = when {
+        isInvite -> "Chat invite"
+        lastMessage != null -> lastMessage.body
+        else -> "No messages yet"
+    }
     val unread = conversation.unreadCount > 0
 
     Row(

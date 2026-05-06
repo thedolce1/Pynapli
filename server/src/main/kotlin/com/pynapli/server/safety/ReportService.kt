@@ -2,10 +2,13 @@ package com.pynapli.server.safety
 
 import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.ReportDto
+import org.slf4j.LoggerFactory
 import java.util.UUID
 
 class ReportService(
-    private val repository: ReportRepository
+    private val repository: ReportRepository,
+    private val riskSignalPublisher: ReportRiskSignalPublisher? = null,
+    private val rateLimitService: RateLimitService? = null
 ) {
     suspend fun submitReport(reporterUserId: UUID, request: CreateReportRequestDto): ReportDto {
         val reportedUserId = request.reportedUserId.toUuidOrThrow()
@@ -20,6 +23,9 @@ class ReportService(
         val targetId = request.targetId?.trim()?.takeIf { it.isNotEmpty() }
         val note = request.note?.trim()?.takeIf { it.isNotEmpty() }
         if (note != null && note.length > MAX_NOTE_LENGTH) throw SafetyException("REPORT_NOTE_TOO_LONG")
+        if (rateLimitService?.check(reporterUserId, RateLimitedAction.REPORT)?.allowed == false) {
+            throw SafetyException("RATE_LIMITED")
+        }
 
         val record = repository.createReport(
             reporterUserId = reporterUserId,
@@ -29,6 +35,20 @@ class ReportService(
             category = category,
             note = note
         )
+
+        riskSignalPublisher?.let { publisher ->
+            runCatching {
+                publisher.recordReportCreated(
+                    reportId = record.id,
+                    reporterUserId = reporterUserId,
+                    reportedUserId = reportedUserId,
+                    targetType = targetType,
+                    category = category
+                )
+            }.onFailure { error ->
+                logger.warn("Failed to record report risk signal for report {}", record.id, error)
+            }
+        }
 
         return ReportDto(
             reportId = record.id.toString(),
@@ -45,6 +65,7 @@ class ReportService(
         runCatching { UUID.fromString(this) }.getOrElse { throw SafetyException("INVALID_REPORT_TARGET") }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(ReportService::class.java)
         private const val MAX_NOTE_LENGTH = 2_000
         private val TARGET_TYPES = setOf("profile", "message", "media", "album", "session")
         private val CATEGORIES = setOf(

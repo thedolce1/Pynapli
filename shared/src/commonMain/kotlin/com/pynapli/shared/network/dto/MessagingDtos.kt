@@ -4,6 +4,13 @@ import kotlinx.serialization.Serializable
 
 const val MESSAGE_BODY_MAX_LENGTH = 2_000
 
+object ConversationParticipantStatus {
+    const val ACTIVE = "active"
+    const val INVITED = "invited"
+    const val DECLINED = "declined"
+    const val LEFT = "left"
+}
+
 @Serializable
 data class CreateDirectConversationRequestDto(
     val targetUserId: String,
@@ -25,7 +32,9 @@ data class ConversationDto(
 data class ConversationParticipantDto(
     val userId: String,
     val displayName: String,
-    val online: Boolean = false
+    val online: Boolean = false,
+    val status: String = ConversationParticipantStatus.ACTIVE,
+    val invitedByUserId: String? = null
 )
 
 @Serializable
@@ -55,4 +64,10 @@ data class MessageDto(
 @Serializable
 data class SendMessageRequestDto(
     val body: String
+)
+
+@Serializable
+data class ConversationPartnerInviteResponseDto(
+    val status: String,
+    val conversation: ConversationDto? = null
 )

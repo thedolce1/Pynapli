@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -51,30 +52,50 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.profilelink.ProfileLinkUi
+import com.pynapli.app.profilelink.ProfileLinksStateHolder
+import com.pynapli.app.profilelink.ProfileLinksUiState
 
 @Composable
 fun MediaAlbumsScreen(
     stateHolder: MediaAlbumsStateHolder,
+    profileLinksStateHolder: ProfileLinksStateHolder,
     onBack: () -> Unit,
     onPickMedia: (MediaAlbumKindUi) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val state by stateHolder.state.collectAsState()
+    val profileLinksState by profileLinksStateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(stateHolder) {
         stateHolder.load()
     }
 
+    LaunchedEffect(profileLinksStateHolder) {
+        profileLinksStateHolder.load()
+    }
+
     MediaAlbumsContent(
         state = state,
+        profileLinksState = profileLinksState,
         onBack = onBack,
         onAddProfile = { onPickMedia(MediaAlbumKindUi.Profile) },
         onAddPrivate = { onPickMedia(MediaAlbumKindUi.Private) },
         onRevokeGrant = { granteeUserId ->
             scope.launch { stateHolder.revokeGrant(granteeUserId) }
         },
+        onAcceptProfileLink = { linkId ->
+            scope.launch { profileLinksStateHolder.acceptInvitation(linkId) }
+        },
+        onDeclineProfileLink = { linkId ->
+            scope.launch { profileLinksStateHolder.declineInvitation(linkId) }
+        },
+        onUnlinkProfile = {
+            scope.launch { profileLinksStateHolder.unlinkCurrent() }
+        },
         onClearError = stateHolder::clearError,
+        onClearProfileLinkMessage = profileLinksStateHolder::clearMessages,
         modifier = modifier
     )
 }
@@ -82,11 +103,16 @@ fun MediaAlbumsScreen(
 @Composable
 private fun MediaAlbumsContent(
     state: MediaAlbumsUiState,
+    profileLinksState: ProfileLinksUiState,
     onBack: () -> Unit,
     onAddProfile: () -> Unit,
     onAddPrivate: () -> Unit,
     onRevokeGrant: (String) -> Unit,
+    onAcceptProfileLink: (String) -> Unit,
+    onDeclineProfileLink: (String) -> Unit,
+    onUnlinkProfile: () -> Unit,
     onClearError: () -> Unit,
+    onClearProfileLinkMessage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyVerticalGrid(
@@ -110,6 +136,14 @@ private fun MediaAlbumsContent(
                 )
             }
         }
+
+        profileLinksSection(
+            state = profileLinksState,
+            onAccept = onAcceptProfileLink,
+            onDecline = onDeclineProfileLink,
+            onUnlink = onUnlinkProfile,
+            onClearMessage = onClearProfileLinkMessage
+        )
 
         if (state.isLoading && state.profileItems.isEmpty() && state.privateItems.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -135,6 +169,317 @@ private fun MediaAlbumsContent(
             grants = state.privateGrants,
             revokingGranteeIds = state.revokingGranteeIds,
             onRevokeGrant = onRevokeGrant
+        )
+    }
+}
+
+private fun androidx.compose.foundation.lazy.grid.LazyGridScope.profileLinksSection(
+    state: ProfileLinksUiState,
+    onAccept: (String) -> Unit,
+    onDecline: (String) -> Unit,
+    onUnlink: () -> Unit,
+    onClearMessage: () -> Unit
+) {
+    item(span = { GridItemSpan(maxLineSpan) }) {
+        ProfileLinksSection(
+            state = state,
+            onAccept = onAccept,
+            onDecline = onDecline,
+            onUnlink = onUnlink,
+            onClearMessage = onClearMessage
+        )
+    }
+}
+
+@Composable
+private fun ProfileLinksSection(
+    state: ProfileLinksUiState,
+    onAccept: (String) -> Unit,
+    onDecline: (String) -> Unit,
+    onUnlink: () -> Unit,
+    onClearMessage: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ProfileLinksHeader()
+
+        state.errorMessage?.let { message ->
+            LinkMessageBand(
+                message = message,
+                isError = true,
+                onDismiss = onClearMessage
+            )
+        }
+        state.feedbackMessage?.let { message ->
+            LinkMessageBand(
+                message = message,
+                isError = false,
+                onDismiss = onClearMessage
+            )
+        }
+
+        when {
+            state.isLoading && state.current == null &&
+                state.incomingInvites.isEmpty() &&
+                state.outgoingInvites.isEmpty() -> LoadingLinkedProfileRow()
+
+            state.current != null -> ProfileLinkRow(
+                link = state.current,
+                statusLabel = "Active",
+                isBusy = state.current.linkId in state.mutatingLinkIds,
+                primaryActionLabel = "Unlink",
+                onPrimaryAction = onUnlink
+            )
+
+            else -> EmptyLinkedProfileRow()
+        }
+
+        if (state.incomingInvites.isNotEmpty()) {
+            Text(
+                text = "Invites to review",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            state.incomingInvites.forEach { invite ->
+                IncomingProfileLinkRow(
+                    link = invite,
+                    isBusy = invite.linkId in state.mutatingLinkIds,
+                    onAccept = { onAccept(invite.linkId) },
+                    onDecline = { onDecline(invite.linkId) }
+                )
+            }
+        }
+
+        if (state.outgoingInvites.isNotEmpty()) {
+            Text(
+                text = "Sent invites",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            state.outgoingInvites.forEach { invite ->
+                ProfileLinkRow(
+                    link = invite,
+                    statusLabel = "Pending",
+                    isBusy = false,
+                    primaryActionLabel = null,
+                    onPrimaryAction = {}
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileLinksHeader() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.People,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = "Linked profile",
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun ProfileLinkRow(
+    link: ProfileLinkUi,
+    statusLabel: String,
+    isBusy: Boolean,
+    primaryActionLabel: String?,
+    onPrimaryAction: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        ProfileLinkAvatar(link = link)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = link.displayLabel,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = statusLabel,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1
+            )
+        }
+        when {
+            isBusy -> CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(18.dp)
+            )
+
+            primaryActionLabel != null -> TextButton(onClick = onPrimaryAction) {
+                Text(primaryActionLabel)
+            }
+        }
+    }
+}
+
+@Composable
+private fun IncomingProfileLinkRow(
+    link: ProfileLinkUi,
+    isBusy: Boolean,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        ProfileLinkAvatar(link = link)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = link.displayLabel,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "Incoming invite",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1
+            )
+        }
+        if (isBusy) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(18.dp)
+            )
+        } else {
+            TextButton(onClick = onDecline) {
+                Text("Decline")
+            }
+            TextButton(onClick = onAccept) {
+                Text("Accept")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileLinkAvatar(link: ProfileLinkUi) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (link.otherPhotoUrl != null) {
+            AsyncImage(
+                model = link.otherPhotoUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Filled.Person,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyLinkedProfileRow() {
+    Text(
+        text = "No linked profile.",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+    )
+}
+
+@Composable
+private fun LoadingLinkedProfileRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        CircularProgressIndicator(
+            color = MaterialTheme.colorScheme.primary,
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = "Loading linked profile",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
+private fun LinkMessageBand(
+    message: String,
+    isError: Boolean,
+    onDismiss: () -> Unit
+) {
+    val color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(color.copy(alpha = 0.14f))
+            .border(1.dp, color.copy(alpha = 0.38f), RoundedCornerShape(8.dp))
+            .clickable(onClick = onDismiss)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = message,
+            color = color,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f)
         )
     }
 }
@@ -324,7 +669,7 @@ private fun MediaAlbumsHeader(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                text = "Albums",
+                text = "Profile",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
@@ -332,7 +677,7 @@ private fun MediaAlbumsHeader(onBack: () -> Unit) {
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "Profile and private media",
+                text = "Linked profile and media",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,

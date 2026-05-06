@@ -10,6 +10,8 @@ sqldelight = "2.3.2"
 coil = "3.4.0"
 koin = "4.2.1"
 firebaseBom = "34.12.0"
+firebaseAdmin = "9.7.0"
+googleServices = "4.4.4"
 playBilling = "8.3.0"
 postgres = "42.7.10"
 hikari = "7.0.2"
@@ -33,6 +35,7 @@ android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 ktor = { id = "io.ktor.plugin", version.ref = "ktor" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -66,11 +69,14 @@ sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", ver
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
 
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
 
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+firebase-admin = { module = "com.google.firebase:firebase-admin", version.ref = "firebaseAdmin" }
 play-billing = { module = "com.android.billingclient:billing-ktx", version.ref = "playBilling" }
 
 postgres = { module = "org.postgresql:postgresql", version.ref = "postgres" }

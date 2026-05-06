@@ -4,6 +4,10 @@ import com.pynapli.server.activity.AlbumRequestEventRecord
 import com.pynapli.server.activity.ActivityEventRecord
 import com.pynapli.server.activity.ActivityRepository
 import com.pynapli.server.activity.ActivityService
+import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.safety.AccountRiskStateRecord
+import com.pynapli.server.safety.RiskPolicyService
+import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
@@ -69,6 +73,65 @@ class ProfileServiceTest {
     }
 
     @Test
+    fun updateDiscoverySettingsStoresVisibilityAndDistanceToggles() = runBlocking {
+        val userId = UUID.randomUUID()
+        val service = ProfileService(InMemoryProfileRepository(userId), clock)
+
+        val me = service.updateDiscoverySettings(
+            userId,
+            UpdateDiscoverySettingsRequestDto(
+                gridVisible = false,
+                swipeVisible = true,
+                showDistance = false
+            )
+        )
+
+        assertEquals(false, me.discoverySettings.gridVisible)
+        assertEquals(true, me.discoverySettings.swipeVisible)
+        assertEquals(false, me.discoverySettings.showDistance)
+    }
+
+    @Test
+    fun updateDiscoverySettingsStoresActivityControls() = runBlocking {
+        val userId = UUID.randomUUID()
+        val service = ProfileService(InMemoryProfileRepository(userId), clock)
+
+        val me = service.updateDiscoverySettings(
+            userId,
+            UpdateDiscoverySettingsRequestDto(
+                showInViewedLists = false,
+                allowGridMessages = true,
+                gridMessagePolicy = "matches_only",
+                allowFlirts = false,
+                allowIntroNotes = false,
+                allowAlbumRequests = false
+            )
+        )
+
+        assertEquals(false, me.discoverySettings.showInViewedLists)
+        assertEquals(true, me.discoverySettings.allowGridMessages)
+        assertEquals("matches_only", me.discoverySettings.gridMessagePolicy)
+        assertEquals(false, me.discoverySettings.allowFlirts)
+        assertEquals(false, me.discoverySettings.allowIntroNotes)
+        assertEquals(false, me.discoverySettings.allowAlbumRequests)
+    }
+
+    @Test
+    fun updateDiscoverySettingsRejectsUnsupportedGridMessagePolicy() = runBlocking {
+        val userId = UUID.randomUUID()
+        val service = ProfileService(InMemoryProfileRepository(userId), clock)
+
+        val error = assertFailsWith<ProfileException> {
+            service.updateDiscoverySettings(
+                userId,
+                UpdateDiscoverySettingsRequestDto(gridMessagePolicy = "verified_only")
+            )
+        }
+
+        assertEquals("INVALID_GRID_MESSAGE_POLICY", error.code)
+    }
+
+    @Test
     fun getPublicProfileReturnsOnlyPublicFields() = runBlocking {
         val userId = UUID.randomUUID()
         val service = ProfileService(InMemoryProfileRepository(userId), clock)
@@ -93,8 +156,31 @@ class ProfileServiceTest {
         assertEquals("linked", profile.relationshipContext)
         assertEquals("both", profile.discoveryStyle)
         assertEquals("1.2 km", profile.distanceLabel)
+        assertEquals(1_200, profile.distanceMeters)
         assertEquals(true, profile.allowGridMessages)
         assertEquals(true, profile.allowFlirts)
+    }
+
+    @Test
+    fun getPublicProfileIncludesLinkedPartnerMiniWhenProjected() = runBlocking {
+        val userId = UUID.randomUUID()
+        val partnerId = UUID.randomUUID()
+        val partnerMediaAssetId = UUID.randomUUID()
+        val service = ProfileService(
+            repository = InMemoryProfileRepository(
+                userId = userId,
+                linkedPartnerUserId = partnerId,
+                linkedPartnerThumbnailMediaAssetId = partnerMediaAssetId
+            ),
+            clock = clock,
+            mediaAssetUrlResolver = StaticMediaAssetUrlResolver()
+        )
+
+        val profile = service.getPublicProfile(UUID.randomUUID(), userId)
+
+        assertEquals(partnerId.toString(), profile.linkedPartner?.userId)
+        assertEquals("Noa", profile.linkedPartner?.displayName)
+        assertEquals("https://media.example/$partnerMediaAssetId", profile.linkedPartner?.thumbnailUrl)
     }
 
     @Test
@@ -123,13 +209,34 @@ class ProfileServiceTest {
 
         assertEquals("PROFILE_NOT_FOUND", error.code)
     }
+
+    @Test
+    fun getPublicProfileHidesRiskRestrictedTargetBeforeRecordingView() = runBlocking {
+        val targetUserId = UUID.randomUUID()
+        val viewerUserId = UUID.randomUUID()
+        val activityRepository = InMemoryActivityRepository()
+        val service = ProfileService(
+            repository = InMemoryProfileRepository(targetUserId),
+            clock = clock,
+            activityService = ActivityService(activityRepository),
+            riskPolicyService = restrictedRiskPolicy()
+        )
+
+        val error = assertFailsWith<ProfileException> {
+            service.getPublicProfile(viewerUserId, targetUserId)
+        }
+
+        assertEquals("PROFILE_NOT_FOUND", error.code)
+        assertEquals(emptyList(), activityRepository.profileViews)
+    }
 }
 
 private class InMemoryActivityRepository : ActivityRepository {
     val profileViews = mutableListOf<Pair<UUID, UUID>>()
 
-    override suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID) {
+    override suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID): Boolean {
         profileViews += viewerUserId to targetUserId
+        return true
     }
 
     override suspend fun recordFlirt(senderUserId: UUID, targetUserId: UUID): Boolean = true
@@ -141,7 +248,12 @@ private class InMemoryActivityRepository : ActivityRepository {
     override suspend fun listActivity(recipientUserId: UUID, limit: Int): List<ActivityEventRecord> = emptyList()
 }
 
-private class InMemoryProfileRepository(userId: UUID) : ProfileRepository {
+private class InMemoryProfileRepository(
+    userId: UUID,
+    private val linkedPartnerUserId: UUID? = null,
+    private val linkedPartnerDisplayName: String? = "Noa",
+    private val linkedPartnerThumbnailMediaAssetId: UUID? = null
+) : ProfileRepository {
     private var record = MeRecord(
         userId = userId,
         userStatus = "active",
@@ -191,6 +303,9 @@ private class InMemoryProfileRepository(userId: UUID) : ProfileRepository {
                 userId = it.userId,
                 displayName = it.profile.displayName ?: "Pynapli User",
                 profilePhotoMediaAssetId = null,
+                linkedPartnerUserId = linkedPartnerUserId,
+                linkedPartnerDisplayName = linkedPartnerDisplayName,
+                linkedPartnerThumbnailMediaAssetId = linkedPartnerThumbnailMediaAssetId,
                 displayAge = it.profile.displayAge,
                 gender = it.profile.gender,
                 orientation = it.profile.orientation,
@@ -220,4 +335,38 @@ private class InMemoryProfileRepository(userId: UUID) : ProfileRepository {
         )
         return record
     }
+
+    override suspend fun updateDiscoverySettings(userId: UUID, update: DiscoverySettingsUpdate): MeRecord? {
+        if (record.userId != userId) return null
+        record = record.copy(
+            discoverySettings = record.discoverySettings.copy(
+                gridVisible = update.gridVisible ?: record.discoverySettings.gridVisible,
+                swipeVisible = update.swipeVisible ?: record.discoverySettings.swipeVisible,
+                showDistance = update.showDistance ?: record.discoverySettings.showDistance,
+                showInViewedLists = update.showInViewedLists ?: record.discoverySettings.showInViewedLists,
+                allowGridMessages = update.allowGridMessages ?: record.discoverySettings.allowGridMessages,
+                gridMessagePolicy = update.gridMessagePolicy ?: record.discoverySettings.gridMessagePolicy,
+                allowFlirts = update.allowFlirts ?: record.discoverySettings.allowFlirts,
+                allowIntroNotes = update.allowIntroNotes ?: record.discoverySettings.allowIntroNotes,
+                allowAlbumRequests = update.allowAlbumRequests ?: record.discoverySettings.allowAlbumRequests
+            )
+        )
+        return record
+    }
 }
+
+private class StaticMediaAssetUrlResolver : MediaAssetUrlResolver {
+    override fun publicContentUrl(mediaAssetId: UUID): String = "https://media.example/$mediaAssetId"
+}
+
+private fun restrictedRiskPolicy(tier: String = "quarantine"): RiskPolicyService =
+    RiskPolicyService { userId ->
+        AccountRiskStateRecord(
+            userId = userId,
+            score = 70,
+            tier = tier,
+            lastEventAt = Instant.parse("2026-04-24T18:00:00Z"),
+            lastReviewedAt = null,
+            updatedAt = Instant.parse("2026-04-24T18:00:00Z")
+        )
+    }

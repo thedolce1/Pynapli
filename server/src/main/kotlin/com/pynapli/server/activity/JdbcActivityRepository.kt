@@ -13,8 +13,8 @@ class JdbcActivityRepository(
     private val flirtCooldown: Duration = Duration.ofMinutes(15),
     private val albumRequestCooldown: Duration = Duration.ofHours(24)
 ) : ActivityRepository {
-    override suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID): Unit = withContext(Dispatchers.IO) {
-        if (viewerUserId == targetUserId) return@withContext
+    override suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID): Boolean = withContext(Dispatchers.IO) {
+        if (viewerUserId == targetUserId) return@withContext false
 
         dataSource.connection.use { connection ->
             val eligible = connection.prepareStatement(PROFILE_VIEW_ELIGIBILITY_QUERY).use { statement ->
@@ -25,7 +25,7 @@ class JdbcActivityRepository(
                     rs.getBoolean(1)
                 }
             }
-            if (!eligible) return@withContext
+            if (!eligible) return@withContext false
 
             connection.prepareStatement(UPSERT_PROFILE_VIEW_QUERY).use { statement ->
                 statement.setObject(1, UUID.randomUUID())
@@ -34,7 +34,7 @@ class JdbcActivityRepository(
                 statement.setObject(4, targetUserId)
                 statement.setString(5, "${profileViewCooldown.toMinutes()} minutes")
                 statement.setString(6, "${profileViewCooldown.toMinutes()} minutes")
-                statement.executeUpdate()
+                statement.executeUpdate() > 0
             }
         }
     }
@@ -166,11 +166,13 @@ class JdbcActivityRepository(
                 SELECT 1
                 FROM users viewer
                 JOIN discovery_settings viewer_settings ON viewer_settings.user_id = viewer.id
+                LEFT JOIN account_risk_states viewer_risk ON viewer_risk.user_id = viewer.id
                 WHERE viewer.id = ?
                   AND viewer.status = 'active'
                   AND viewer.deleted_at IS NULL
                   AND viewer_settings.incognito = false
                   AND viewer_settings.show_in_viewed_lists = true
+                  AND COALESCE(viewer_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
             )
             AND EXISTS (
                 SELECT 1
@@ -217,9 +219,11 @@ class JdbcActivityRepository(
             SELECT EXISTS (
                 SELECT 1
                 FROM users sender
+                LEFT JOIN account_risk_states sender_risk ON sender_risk.user_id = sender.id
                 WHERE sender.id = ?
                   AND sender.status = 'active'
                   AND sender.deleted_at IS NULL
+                  AND COALESCE(sender_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
             )
             AND EXISTS (
                 SELECT 1
@@ -272,9 +276,11 @@ class JdbcActivityRepository(
             SELECT EXISTS (
                 SELECT 1
                 FROM users requester
+                LEFT JOIN account_risk_states requester_risk ON requester_risk.user_id = requester.id
                 WHERE requester.id = ?
                   AND requester.status = 'active'
                   AND requester.deleted_at IS NULL
+                  AND COALESCE(requester_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
             )
             AND EXISTS (
                 SELECT 1
@@ -355,6 +361,8 @@ class JdbcActivityRepository(
              AND actor_profile.visibility_status = 'visible'
             JOIN discovery_settings actor_settings
               ON actor_settings.user_id = actor.id
+            LEFT JOIN account_risk_states actor_risk
+              ON actor_risk.user_id = actor.id
             LEFT JOIN recipient_location ON true
             LEFT JOIN user_locations actor_location ON actor_location.user_id = actor.id
             LEFT JOIN LATERAL (
@@ -394,6 +402,7 @@ class JdbcActivityRepository(
             WHERE ae.recipient_user_id = ?
               AND ae.visibility_status = 'visible'
               AND ae.deleted_at IS NULL
+              AND COALESCE(actor_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
               AND (
                   ae.event_type <> 'profile_view'
                   OR (

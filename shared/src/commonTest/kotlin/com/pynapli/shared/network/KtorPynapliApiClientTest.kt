@@ -14,10 +14,15 @@ import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
+import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
+import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
+import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
 import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
+import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
+import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -107,6 +112,125 @@ class KtorPynapliApiClientTest {
     }
 
     @Test
+    fun getMeSendsBearerTokenAndMapsProfile() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = meJson(displayName = "Seb Dev"),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.getMe()
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/me", requestPath)
+        assertEquals(HttpMethod.Get, requestMethod)
+        assertEquals("Seb Dev", (success.value as MeDto).profile.displayName)
+    }
+
+    @Test
+    fun updateProfileSendsPatchAndMapsProfile() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = meJson(displayName = "Sebastian"),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.updateProfile(
+            UpdateProfileRequestDto(
+                displayName = "Sebastian",
+                birthdate = "1990-01-15",
+                gender = "man",
+                orientation = "bisexual",
+                relationshipContext = "single",
+                discoveryStyle = "both"
+            )
+        )
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/me/profile", requestPath)
+        assertEquals(HttpMethod.Patch, requestMethod)
+        assertEquals("Sebastian", (success.value as MeDto).profile.displayName)
+    }
+
+    @Test
+    fun updateDiscoverySettingsSendsPatchAndMapsSettings() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = meJson(
+                    displayName = "Seb Dev",
+                    gridVisible = false,
+                    swipeVisible = true,
+                    showDistance = false,
+                    showInViewedLists = false,
+                    allowGridMessages = true,
+                    gridMessagePolicy = "matches_only",
+                    allowFlirts = false,
+                    allowIntroNotes = false,
+                    allowAlbumRequests = false
+                ),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.updateDiscoverySettings(
+            UpdateDiscoverySettingsRequestDto(
+                gridVisible = false,
+                swipeVisible = true,
+                showDistance = false,
+                showInViewedLists = false,
+                allowGridMessages = true,
+                gridMessagePolicy = "matches_only",
+                allowFlirts = false,
+                allowIntroNotes = false,
+                allowAlbumRequests = false
+            )
+        )
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        val me = success.value as MeDto
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/me/discovery-settings", requestPath)
+        assertEquals(HttpMethod.Patch, requestMethod)
+        assertEquals(false, me.discoverySettings.gridVisible)
+        assertEquals(true, me.discoverySettings.swipeVisible)
+        assertEquals(false, me.discoverySettings.showDistance)
+        assertEquals(false, me.discoverySettings.showInViewedLists)
+        assertEquals(true, me.discoverySettings.allowGridMessages)
+        assertEquals("matches_only", me.discoverySettings.gridMessagePolicy)
+        assertEquals(false, me.discoverySettings.allowFlirts)
+        assertEquals(false, me.discoverySettings.allowIntroNotes)
+        assertEquals(false, me.discoverySettings.allowAlbumRequests)
+    }
+
+    @Test
     fun updateCurrentLocationSendsBearerToken() = runBlocking {
         var authorizationHeader: String? = null
         var requestPath: String? = null
@@ -185,6 +309,104 @@ class KtorPynapliApiClientTest {
         assertEquals("/v1/profiles/target-1", requestPath)
         assertEquals(HttpMethod.Get, requestMethod)
         assertEquals("Maya", (success.value as PublicProfileDto).displayName)
+    }
+
+    @Test
+    fun getSubscriptionEntitlementSendsBearerTokenAndMapsTier() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = """
+                    {
+                      "tier": "select",
+                      "source": "linked_partner_benefit",
+                      "displayName": "Pynapli Select",
+                      "adSupported": false,
+                      "linkedPartnerIncluded": true,
+                      "sourceSubscriptionId": "sub-1",
+                      "sourceUserId": "partner-1",
+                      "linkedPartnerUserId": "partner-1",
+                      "startsAt": "2026-05-01T00:00:00Z",
+                      "endsAt": "2026-06-01T00:00:00Z"
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.getSubscriptionEntitlement()
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/subscriptions/entitlement", requestPath)
+        assertEquals(HttpMethod.Get, requestMethod)
+        val entitlement = success.value as SubscriptionEntitlementDto
+        assertEquals("select", entitlement.tier)
+        assertEquals("linked_partner_benefit", entitlement.source)
+        assertEquals(true, entitlement.linkedPartnerIncluded)
+    }
+
+    @Test
+    fun getSubscriptionInventorySendsBearerTokenAndMapsPricing() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = """
+                    {
+                      "tiers": [
+                        {
+                          "tier": "free",
+                          "displayName": "Pynapli Free",
+                          "monthlyPriceUsdCents": 0,
+                          "adSupported": true,
+                          "linkedPartnerIncluded": false,
+                          "features": ["Basic grid"]
+                        },
+                        {
+                          "tier": "social",
+                          "displayName": "Pynapli Social",
+                          "monthlyPriceUsdCents": 499,
+                          "adSupported": false,
+                          "linkedPartnerIncluded": true,
+                          "features": ["No ads"]
+                        },
+                        {
+                          "tier": "select",
+                          "displayName": "Pynapli Select",
+                          "monthlyPriceUsdCents": 999,
+                          "adSupported": false,
+                          "linkedPartnerIncluded": true,
+                          "features": ["Advanced filters"]
+                        }
+                      ]
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.getSubscriptionInventory()
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/subscriptions/inventory", requestPath)
+        assertEquals(HttpMethod.Get, requestMethod)
+        val inventory = success.value as SubscriptionInventoryResponseDto
+        assertEquals(listOf(0, 499, 999), inventory.tiers.map { it.monthlyPriceUsdCents })
     }
 
     @Test
@@ -509,6 +731,55 @@ class KtorPynapliApiClientTest {
           },
           "sortOrder": 2,
           "addedAt": "2026-04-24T18:01:00Z"
+        }
+    """.trimIndent()
+
+    private fun meJson(
+        displayName: String,
+        gridVisible: Boolean = true,
+        swipeVisible: Boolean = true,
+        showDistance: Boolean = true,
+        showInViewedLists: Boolean = true,
+        allowGridMessages: Boolean = true,
+        gridMessagePolicy: String = "everyone",
+        allowFlirts: Boolean = true,
+        allowIntroNotes: Boolean = true,
+        allowAlbumRequests: Boolean = true
+    ): String = """
+        {
+          "user": {
+            "userId": "user-1",
+            "status": "active"
+          },
+          "profile": {
+            "userId": "user-1",
+            "displayName": "$displayName",
+            "birthdate": "1990-01-15",
+            "displayAge": 36,
+            "gender": "man",
+            "orientation": "bisexual",
+            "relationshipContext": "single",
+            "discoveryStyle": "both",
+            "profileCompletenessScore": 100,
+            "moderationStatus": "approved",
+            "visibilityStatus": "visible"
+          },
+          "discoverySettings": {
+            "gridVisible": $gridVisible,
+            "swipeVisible": $swipeVisible,
+            "eventsVisible": true,
+            "showDistance": $showDistance,
+            "showInViewedLists": $showInViewedLists,
+            "incognito": false,
+            "allowGridMessages": $allowGridMessages,
+            "gridMessagePolicy": "$gridMessagePolicy",
+            "allowFlirts": $allowFlirts,
+            "allowIntroNotes": $allowIntroNotes,
+            "allowAlbumRequests": $allowAlbumRequests,
+            "soloEnabled": true,
+            "togetherEnabled": true,
+            "socialEnabled": true
+          }
         }
     """.trimIndent()
 

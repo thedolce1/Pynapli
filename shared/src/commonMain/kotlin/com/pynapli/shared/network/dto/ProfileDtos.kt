@@ -34,6 +34,7 @@ data class PublicProfileDto(
     val relationshipContext: String?,
     val discoveryStyle: String,
     val distanceLabel: String?,
+    val distanceMeters: Int? = null,
     val profilePhotoUrl: String? = null,
     val privateAlbumAccessStatus: String = "none",
     val linkedPartner: LinkedPartnerMiniDto? = null,
@@ -68,4 +69,17 @@ data class UpdateProfileRequestDto(
     val orientation: String? = null,
     val relationshipContext: String? = null,
     val discoveryStyle: String? = null
+)
+
+@Serializable
+data class UpdateDiscoverySettingsRequestDto(
+    val gridVisible: Boolean? = null,
+    val swipeVisible: Boolean? = null,
+    val showDistance: Boolean? = null,
+    val showInViewedLists: Boolean? = null,
+    val allowGridMessages: Boolean? = null,
+    val gridMessagePolicy: String? = null,
+    val allowFlirts: Boolean? = null,
+    val allowIntroNotes: Boolean? = null,
+    val allowAlbumRequests: Boolean? = null
 )

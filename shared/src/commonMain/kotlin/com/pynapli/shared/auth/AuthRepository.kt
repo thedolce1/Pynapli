@@ -12,6 +12,21 @@ class AuthRepository(
 ) {
     suspend fun currentSession(): StoredSession? = sessionStore.currentSession()
 
+    suspend fun currentSessionValidated(): StoredSession? {
+        val session = sessionStore.currentSession() ?: return null
+        return when (val result = apiClient.getMe()) {
+            is AppResult.Success -> session
+            is AppResult.Failure -> {
+                if (result.error.code in terminalAuthErrorCodes) {
+                    sessionStore.clear()
+                    null
+                } else {
+                    session
+                }
+            }
+        }
+    }
+
     suspend fun loginEmail(
         email: String,
         password: String,
@@ -67,4 +82,13 @@ class AuthRepository(
         userId = user.userId,
         userStatus = user.status
     )
+
+    private companion object {
+        private val terminalAuthErrorCodes = setOf(
+            "UNAUTHENTICATED",
+            "INVALID_REFRESH_TOKEN",
+            "ACCOUNT_NOT_ACTIVE",
+            "HTTP_401"
+        )
+    }
 }

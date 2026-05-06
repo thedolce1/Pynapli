@@ -21,7 +21,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Docker Compose failed. Start Docker Desktop and retry."
 }
 
-.\gradlew.bat :shared:jvmTest :server:test :androidApp:assembleDebug --no-configuration-cache
+.\gradlew.bat :shared:jvmTest :server:test :composeApp:testAndroidHostTest :androidApp:assembleDebug --no-configuration-cache
 if ($LASTEXITCODE -ne 0) {
     throw "Gradle verification failed."
 }

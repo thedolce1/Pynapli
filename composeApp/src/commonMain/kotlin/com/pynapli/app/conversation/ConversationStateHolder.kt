@@ -6,8 +6,11 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
+import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
+import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
+import com.pynapli.shared.network.dto.MatchDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +27,11 @@ data class ConversationUiState(
     val draft: String = "",
     val isOpening: Boolean = false,
     val isSending: Boolean = false,
+    val isInvitingPartner: Boolean = false,
+    val isRespondingToInvite: Boolean = false,
+    val isLeaving: Boolean = false,
     val isLoadingOlder: Boolean = false,
+    val partnerInviteFeedback: String? = null,
     val errorMessage: String? = null
 ) {
     val visible: Boolean
@@ -39,12 +46,23 @@ data class ConversationUiState(
     val draftOverLimit: Boolean
         get() = draftLength > MESSAGE_BODY_MAX_LENGTH
 
+    val viewerParticipantStatus: String?
+        get() = viewerUserId?.let { userId ->
+            detail?.conversation?.participants?.firstOrNull { participant -> participant.userId == userId }?.status
+        }
+
+    val isViewerInvited: Boolean
+        get() = viewerParticipantStatus == ConversationParticipantStatus.INVITED
+
     val canSend: Boolean
         get() = detail != null &&
+            !isViewerInvited &&
             draft.trim().isNotEmpty() &&
             !draftOverLimit &&
             !isOpening &&
-            !isSending
+            !isSending &&
+            !isRespondingToInvite &&
+            !isLeaving
 }
 
 class ConversationStateHolder(
@@ -69,6 +87,41 @@ class ConversationStateHolder(
                     current.copy(
                         detail = detail,
                         isOpening = false,
+                        partnerInviteFeedback = null,
+                        errorMessage = null
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update { current ->
+                    current.copy(
+                        isOpening = false,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun openSwipeMatch(match: MatchDto, viewerUserId: String?) {
+        _state.update {
+            ConversationUiState(
+                titleOverride = match.matchedDisplayName ?: "Match",
+                viewerUserId = viewerUserId,
+                isOpening = true
+            )
+        }
+
+        when (val result = repository.createDirectConversation(match.matchedUserId, origin = "swipe")) {
+            is AppResult.Success -> {
+                val detail = result.value.withReadConversation()
+                _state.update { current ->
+                    current.copy(
+                        detail = detail,
+                        titleOverride = detail.conversation.titleFor(viewerUserId),
+                        isOpening = false,
+                        partnerInviteFeedback = null,
                         errorMessage = null
                     )
                 }
@@ -106,6 +159,7 @@ class ConversationStateHolder(
                         detail = detail,
                         titleOverride = detail.conversation.titleFor(viewerUserId),
                         isOpening = false,
+                        partnerInviteFeedback = null,
                         errorMessage = null
                     )
                 }
@@ -138,6 +192,7 @@ class ConversationStateHolder(
                         existing.copy(
                             detail = detail.withMergedMessagesFrom(existingDetail),
                             titleOverride = detail.conversation.titleFor(existing.viewerUserId),
+                            partnerInviteFeedback = null,
                             errorMessage = null
                         )
                     }
@@ -198,9 +253,141 @@ class ConversationStateHolder(
         }
     }
 
+    suspend fun inviteLinkedPartner() {
+        val current = state.value
+        if (current.isInvitingPartner || current.isOpening || current.isViewerInvited) return
+        val conversationId = current.detail?.conversation?.conversationId ?: return
+
+        _state.update {
+            it.copy(
+                isInvitingPartner = true,
+                partnerInviteFeedback = null,
+                errorMessage = null
+            )
+        }
+
+        when (val result = repository.inviteLinkedPartner(conversationId)) {
+            is AppResult.Success -> {
+                _state.update { existing ->
+                    val existingDetail = existing.detail
+                    existing.copy(
+                        detail = existingDetail?.copy(conversation = result.value),
+                        titleOverride = result.value.titleFor(existing.viewerUserId),
+                        isInvitingPartner = false,
+                        partnerInviteFeedback = "Partner invited",
+                        errorMessage = null
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update { existing ->
+                    existing.copy(
+                        isInvitingPartner = false,
+                        partnerInviteFeedback = null,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun acceptPartnerInvite() {
+        val current = state.value
+        if (current.isRespondingToInvite || !current.isViewerInvited) return
+        val conversationId = current.detail?.conversation?.conversationId ?: return
+
+        _state.update {
+            it.copy(
+                isRespondingToInvite = true,
+                partnerInviteFeedback = null,
+                errorMessage = null
+            )
+        }
+
+        when (val result = repository.acceptPartnerInvite(conversationId)) {
+            is AppResult.Success -> {
+                val detail = result.value.withReadConversation()
+                _state.update { existing ->
+                    existing.copy(
+                        detail = detail,
+                        titleOverride = detail.conversation.titleFor(existing.viewerUserId),
+                        isRespondingToInvite = false,
+                        partnerInviteFeedback = "Joined chat",
+                        errorMessage = null
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update { existing ->
+                    existing.copy(
+                        isRespondingToInvite = false,
+                        partnerInviteFeedback = null,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun declinePartnerInvite() {
+        val current = state.value
+        if (current.isRespondingToInvite || !current.isViewerInvited) return
+        val conversationId = current.detail?.conversation?.conversationId ?: return
+
+        _state.update {
+            it.copy(
+                isRespondingToInvite = true,
+                partnerInviteFeedback = null,
+                errorMessage = null
+            )
+        }
+
+        when (val result = repository.declinePartnerInvite(conversationId)) {
+            is AppResult.Success -> dismiss()
+            is AppResult.Failure -> {
+                _state.update { existing ->
+                    existing.copy(
+                        isRespondingToInvite = false,
+                        partnerInviteFeedback = null,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun leaveConversation() {
+        val current = state.value
+        if (current.isLeaving || current.isOpening) return
+        val conversationId = current.detail?.conversation?.conversationId ?: return
+
+        _state.update {
+            it.copy(
+                isLeaving = true,
+                partnerInviteFeedback = null,
+                errorMessage = null
+            )
+        }
+
+        when (val result = repository.leaveConversation(conversationId)) {
+            is AppResult.Success -> dismiss()
+            is AppResult.Failure -> {
+                _state.update { existing ->
+                    existing.copy(
+                        isLeaving = false,
+                        partnerInviteFeedback = null,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
     suspend fun sendDraft() {
         val current = state.value
-        if (current.isSending) return
+        if (current.isSending || current.isViewerInvited) return
         val conversationId = current.detail?.conversation?.conversationId ?: return
         val body = current.draft.trim()
         when {
@@ -219,7 +406,7 @@ class ConversationStateHolder(
             }
         }
 
-        _state.update { it.copy(isSending = true, errorMessage = null) }
+        _state.update { it.copy(isSending = true, partnerInviteFeedback = null, errorMessage = null) }
         when (val result = repository.sendMessage(conversationId, body)) {
             is AppResult.Success -> {
                 _state.update { existing ->
@@ -285,7 +472,10 @@ class ConversationStateHolder(
 }
 
 interface ConversationRepository {
-    suspend fun createDirectConversation(targetUserId: String): AppResult<ConversationDetailDto>
+    suspend fun createDirectConversation(
+        targetUserId: String,
+        origin: String = "grid"
+    ): AppResult<ConversationDetailDto>
 
     suspend fun getConversationDetail(
         conversationId: String,
@@ -295,16 +485,27 @@ interface ConversationRepository {
     suspend fun markConversationRead(conversationId: String): AppResult<ConversationDto>
 
     suspend fun sendMessage(conversationId: String, body: String): AppResult<MessageDto>
+
+    suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto>
+
+    suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto>
+
+    suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
+
+    suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
 }
 
 class ApiConversationRepository(
     private val apiClient: PynapliApiClient
 ) : ConversationRepository {
-    override suspend fun createDirectConversation(targetUserId: String): AppResult<ConversationDetailDto> =
+    override suspend fun createDirectConversation(
+        targetUserId: String,
+        origin: String
+    ): AppResult<ConversationDetailDto> =
         apiClient.createDirectConversation(
             CreateDirectConversationRequestDto(
                 targetUserId = targetUserId,
-                origin = "grid"
+                origin = origin
             )
         )
 
@@ -319,16 +520,31 @@ class ApiConversationRepository(
 
     override suspend fun sendMessage(conversationId: String, body: String): AppResult<MessageDto> =
         apiClient.sendMessage(conversationId, SendMessageRequestDto(body = body))
+
+    override suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto> =
+        apiClient.inviteLinkedPartnerToConversation(conversationId)
+
+    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> =
+        apiClient.acceptConversationPartnerInvite(conversationId)
+
+    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
+        apiClient.declineConversationPartnerInvite(conversationId)
+
+    override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
+        apiClient.leaveConversation(conversationId)
 }
 
 class SampleConversationRepository : ConversationRepository {
-    override suspend fun createDirectConversation(targetUserId: String): AppResult<ConversationDetailDto> =
+    override suspend fun createDirectConversation(
+        targetUserId: String,
+        origin: String
+    ): AppResult<ConversationDetailDto> =
         AppResult.Success(
             ConversationDetailDto(
                 conversation = com.pynapli.shared.network.dto.ConversationDto(
                     conversationId = "sample-conversation",
                     kind = "direct",
-                    origin = "grid",
+                    origin = origin,
                     participants = listOf(
                         com.pynapli.shared.network.dto.ConversationParticipantDto("viewer", "You"),
                         com.pynapli.shared.network.dto.ConversationParticipantDto(targetUserId, "Maya")
@@ -408,10 +624,46 @@ class SampleConversationRepository : ConversationRepository {
                 deliveryStatus = "sent"
             )
         )
+
+    override suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto> =
+        AppResult.Success(
+            com.pynapli.shared.network.dto.ConversationDto(
+                conversationId = conversationId,
+                kind = "group",
+                origin = "grid",
+                participants = listOf(
+                    com.pynapli.shared.network.dto.ConversationParticipantDto("viewer", "You"),
+                    com.pynapli.shared.network.dto.ConversationParticipantDto("target", "Maya"),
+                    com.pynapli.shared.network.dto.ConversationParticipantDto(
+                        userId = "partner",
+                        displayName = "Partner",
+                        status = ConversationParticipantStatus.INVITED,
+                        invitedByUserId = "viewer"
+                    )
+                ),
+                unreadCount = 0,
+                updatedAt = "2026-04-24T18:00:00Z"
+            )
+        )
+
+    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> =
+        getConversationDetail(conversationId, before = null)
+
+    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
+        AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
+
+    override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
+        AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.LEFT))
 }
 
 internal fun ConversationDto.titleFor(viewerUserId: String?): String =
     participants
+        .filter { participant -> participant.status in visibleConversationParticipantStatuses }
         .filterNot { participant -> viewerUserId != null && participant.userId == viewerUserId }
         .joinToString(", ") { participant -> participant.displayName }
         .ifBlank { participants.firstOrNull()?.displayName ?: "Conversation" }
+
+internal val visibleConversationParticipantStatuses = setOf(
+    ConversationParticipantStatus.ACTIVE,
+    ConversationParticipantStatus.INVITED
+)

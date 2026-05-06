@@ -12,6 +12,18 @@ import javax.sql.DataSource
 class JdbcMessagingRepository(
     private val dataSource: DataSource
 ) : MessagingRepository {
+    private enum class ParticipantStatus {
+        None,
+        Active,
+        Invited,
+        Inactive
+    }
+
+    private data class GridMessagePolicy(
+        val allowGridMessages: Boolean,
+        val gridMessagePolicy: String
+    )
+
     override suspend fun listConversations(userId: UUID, limit: Int): List<ConversationRecord> =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
@@ -30,7 +42,7 @@ class JdbcMessagingRepository(
         dataSource.connection.use { connection ->
             connection.autoCommit = false
             try {
-                if (!connection.targetAllowsConversation(targetUserId, origin)) {
+                if (!connection.targetAllowsConversation(viewerUserId, targetUserId, origin)) {
                     connection.rollback()
                     return@withContext null
                 }
@@ -89,6 +101,9 @@ class JdbcMessagingRepository(
         userId: UUID,
         conversationId: UUID,
         body: String,
+        moderationStatus: String,
+        bodyFingerprint: String?,
+        safetyReason: String?,
         messageIdFactory: () -> UUID
     ): MessageRecord? = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
@@ -102,8 +117,16 @@ class JdbcMessagingRepository(
                 val messageId = messageIdFactory()
                 val message = connection.prepareStatement(
                     """
-                    INSERT INTO messages (id, conversation_id, sender_user_id, body, moderation_status)
-                    VALUES (?, ?, ?, ?, 'visible')
+                    INSERT INTO messages (
+                        id,
+                        conversation_id,
+                        sender_user_id,
+                        body,
+                        moderation_status,
+                        body_fingerprint,
+                        safety_reason
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status
                     """.trimIndent()
                 ).use { statement ->
@@ -111,10 +134,28 @@ class JdbcMessagingRepository(
                     statement.setObject(2, conversationId)
                     statement.setObject(3, userId)
                     statement.setString(4, body)
+                    statement.setString(5, moderationStatus)
+                    statement.setString(6, bodyFingerprint)
+                    statement.setString(7, safetyReason)
                     statement.executeQuery().use { rs ->
                         rs.next()
-                        rs.toMessageRecord(deliveryStatus = "sent")
+                        rs.toMessageRecord(
+                            deliveryStatus = if (moderationStatus == MessageModerationStatus.HELD) {
+                                DELIVERY_HELD_FOR_REVIEW
+                            } else {
+                                DELIVERY_SENT
+                            }
+                        )
                     }
+                }
+
+                if (moderationStatus == MessageModerationStatus.HELD && safetyReason != null) {
+                    connection.insertMessageReviewQueue(
+                        messageId = message.messageId,
+                        senderUserId = userId,
+                        conversationId = conversationId,
+                        reason = safetyReason
+                    )
                 }
 
                 connection.prepareStatement(
@@ -131,12 +172,13 @@ class JdbcMessagingRepository(
 
                 connection.prepareStatement(
                     """
-                    UPDATE conversation_participants
-                    SET last_read_at = ?
-                    WHERE conversation_id = ?
-                      AND user_id = ?
-                      AND left_at IS NULL
-                    """.trimIndent()
+            UPDATE conversation_participants
+            SET last_read_at = ?
+            WHERE conversation_id = ?
+              AND user_id = ?
+              AND left_at IS NULL
+              AND invitation_status = 'active'
+            """.trimIndent()
                 ).use { statement ->
                     statement.setTimestamp(1, Timestamp.from(message.createdAt))
                     statement.setObject(2, conversationId)
@@ -155,10 +197,245 @@ class JdbcMessagingRepository(
         }
     }
 
-    private fun Connection.targetAllowsConversation(targetUserId: UUID, origin: String): Boolean {
-        val allowGridMessages = prepareStatement(
+    override suspend fun countRecentMessagesByFingerprint(
+        userId: UUID,
+        bodyFingerprint: String,
+        since: Instant
+    ): Int = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT COUNT(*) AS duplicate_count
+                FROM messages
+                WHERE sender_user_id = ?
+                  AND body_fingerprint = ?
+                  AND created_at >= ?
+                  AND deleted_at IS NULL
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.setString(2, bodyFingerprint)
+                statement.setTimestamp(3, Timestamp.from(since))
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt("duplicate_count")
+                }
+            }
+        }
+    }
+
+    override suspend fun hasSentMessageInConversation(userId: UUID, conversationId: UUID): Boolean =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM messages m
+                        JOIN conversation_participants cp
+                          ON cp.conversation_id = m.conversation_id
+                         AND cp.user_id = ?
+                         AND cp.left_at IS NULL
+                         AND cp.invitation_status = 'active'
+                        WHERE m.conversation_id = ?
+                          AND m.sender_user_id = ?
+                          AND m.deleted_at IS NULL
+                    )
+                    """.trimIndent()
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.setObject(2, conversationId)
+                    statement.setObject(3, userId)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getBoolean(1)
+                    }
+                }
+            }
+        }
+
+    override suspend fun getActiveLinkedPartnerUserId(userId: UUID): UUID? = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT upl.linked_user_id
+                FROM user_profile_links upl
+                JOIN users linked_user
+                  ON linked_user.id = upl.linked_user_id
+                 AND linked_user.status = 'active'
+                 AND linked_user.deleted_at IS NULL
+                WHERE upl.user_id = ?
+                  AND upl.status = 'active'
+                  AND upl.unlinked_at IS NULL
+                LIMIT 1
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeQuery().use { rs ->
+                    if (rs.next()) rs.getObject("linked_user_id", UUID::class.java) else null
+                }
+            }
+        }
+    }
+
+    override suspend fun inviteLinkedPartner(
+        inviterUserId: UUID,
+        conversationId: UUID,
+        partnerUserId: UUID
+    ): PartnerInviteResult = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            val previousAutoCommit = connection.autoCommit
+            connection.autoCommit = false
+            try {
+                if (!connection.isActiveParticipant(inviterUserId, conversationId)) {
+                    connection.rollback()
+                    return@withContext PartnerInviteResult.ConversationNotFound
+                }
+
+                when (connection.participantStatus(conversationId, partnerUserId)) {
+                    ParticipantStatus.Active -> {
+                        connection.rollback()
+                        return@withContext PartnerInviteResult.AlreadyInConversation
+                    }
+                    ParticipantStatus.Invited -> {
+                        connection.rollback()
+                        return@withContext PartnerInviteResult.AlreadyInvited
+                    }
+                    ParticipantStatus.None,
+                    ParticipantStatus.Inactive -> Unit
+                }
+
+                connection.upsertInvitedParticipant(
+                    conversationId = conversationId,
+                    partnerUserId = partnerUserId,
+                    inviterUserId = inviterUserId
+                )
+                connection.markConversationGroup(conversationId)
+                val conversation = connection.loadConversation(inviterUserId, conversationId)
+                    ?: run {
+                        connection.rollback()
+                        return@withContext PartnerInviteResult.ConversationNotFound
+                    }
+                connection.commit()
+                PartnerInviteResult.Invited(conversation)
+            } catch (error: Throwable) {
+                connection.rollback()
+                throw error
+            } finally {
+                connection.autoCommit = previousAutoCommit
+            }
+        }
+    }
+
+    override suspend fun acceptPartnerInvite(
+        userId: UUID,
+        conversationId: UUID
+    ): ConversationDetailRecord? = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            val previousAutoCommit = connection.autoCommit
+            connection.autoCommit = false
+            try {
+                val updated = connection.prepareStatement(
+                    """
+                    UPDATE conversation_participants
+                    SET invitation_status = 'active',
+                        joined_at = now(),
+                        last_read_at = now(),
+                        invitation_responded_at = now(),
+                        left_at = NULL
+                    WHERE conversation_id = ?
+                      AND user_id = ?
+                      AND invitation_status = 'invited'
+                      AND left_at IS NULL
+                    """.trimIndent()
+                ).use { statement ->
+                    statement.setObject(1, conversationId)
+                    statement.setObject(2, userId)
+                    statement.executeUpdate()
+                }
+
+                if (updated == 0) {
+                    connection.rollback()
+                    return@withContext null
+                }
+
+                connection.markConversationGroup(conversationId)
+                val detail = connection.loadConversation(userId, conversationId)?.let { conversation ->
+                    val page = connection.loadMessages(userId, conversationId, DEFAULT_MESSAGE_PAGE_LIMIT, before = null)
+                    ConversationDetailRecord(
+                        conversation = conversation,
+                        messages = page.messages,
+                        nextCursor = page.nextCursor
+                    )
+                }
+                connection.commit()
+                detail
+            } catch (error: Throwable) {
+                connection.rollback()
+                throw error
+            } finally {
+                connection.autoCommit = previousAutoCommit
+            }
+        }
+    }
+
+    override suspend fun declinePartnerInvite(userId: UUID, conversationId: UUID): Boolean = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            val updated = connection.prepareStatement(
+                """
+                UPDATE conversation_participants
+                SET invitation_status = 'declined',
+                    invitation_responded_at = now(),
+                    left_at = now()
+                WHERE conversation_id = ?
+                  AND user_id = ?
+                  AND invitation_status = 'invited'
+                  AND left_at IS NULL
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, conversationId)
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+            if (updated > 0) connection.touchConversation(conversationId)
+            updated > 0
+        }
+    }
+
+    override suspend fun leaveConversation(userId: UUID, conversationId: UUID): Boolean = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            val updated = connection.prepareStatement(
+                """
+                UPDATE conversation_participants
+                SET invitation_status = 'left',
+                    invitation_responded_at = COALESCE(invitation_responded_at, now()),
+                    left_at = now()
+                WHERE conversation_id = ?
+                  AND user_id = ?
+                  AND left_at IS NULL
+                  AND invitation_status IN ('active', 'invited')
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, conversationId)
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+            if (updated > 0) connection.touchConversation(conversationId)
+            updated > 0
+        }
+    }
+
+    private fun Connection.targetAllowsConversation(viewerUserId: UUID, targetUserId: UUID, origin: String): Boolean =
+        when (origin) {
+            "grid" -> targetAllowsGridConversation(viewerUserId, targetUserId)
+            "swipe" -> targetAllowsSwipeConversation(viewerUserId, targetUserId)
+            else -> false
+        }
+
+    private fun Connection.targetAllowsGridConversation(viewerUserId: UUID, targetUserId: UUID): Boolean {
+        val policy = prepareStatement(
             """
-            SELECT ds.allow_grid_messages
+            SELECT ds.allow_grid_messages, ds.grid_message_policy
             FROM users u
             JOIN profiles p ON p.user_id = u.id
             JOIN discovery_settings ds ON ds.user_id = u.id
@@ -173,12 +450,49 @@ class JdbcMessagingRepository(
             statement.setObject(1, targetUserId)
             statement.executeQuery().use { rs ->
                 if (!rs.next()) return false
-                rs.getBoolean("allow_grid_messages")
+                GridMessagePolicy(
+                    allowGridMessages = rs.getBoolean("allow_grid_messages"),
+                    gridMessagePolicy = rs.getString("grid_message_policy")
+                )
             }
         }
 
-        return origin != "grid" || allowGridMessages
+        return when {
+            !policy.allowGridMessages -> false
+            policy.gridMessagePolicy == "everyone" -> true
+            policy.gridMessagePolicy == "matches_only" -> targetAllowsSwipeConversation(viewerUserId, targetUserId)
+            else -> false
+        }
     }
+
+    private fun Connection.targetAllowsSwipeConversation(viewerUserId: UUID, targetUserId: UUID): Boolean =
+        prepareStatement(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM matches m
+                JOIN users target
+                  ON target.id = ?
+                 AND target.status = 'active'
+                 AND target.deleted_at IS NULL
+                JOIN profiles target_profile
+                  ON target_profile.user_id = target.id
+                 AND target_profile.visibility_status = 'visible'
+                WHERE LEAST(m.user_a, m.user_b) = LEAST(?::uuid, ?::uuid)
+                  AND GREATEST(m.user_a, m.user_b) = GREATEST(?::uuid, ?::uuid)
+            )
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, targetUserId)
+            statement.setObject(2, viewerUserId)
+            statement.setObject(3, targetUserId)
+            statement.setObject(4, viewerUserId)
+            statement.setObject(5, targetUserId)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getBoolean(1)
+            }
+        }
 
     private fun Connection.listConversationIds(userId: UUID, limit: Int): List<UUID> =
         prepareStatement(
@@ -189,12 +503,27 @@ class JdbcMessagingRepository(
               ON viewer_cp.conversation_id = c.id
              AND viewer_cp.user_id = ?
              AND viewer_cp.left_at IS NULL
+             AND viewer_cp.invitation_status IN ('active', 'invited')
+            WHERE c.created_by_user_id = ?
+               OR viewer_cp.invitation_status = 'invited'
+               OR EXISTS (
+                   SELECT 1
+                   FROM messages m
+                   WHERE m.conversation_id = c.id
+                     AND m.deleted_at IS NULL
+                     AND (
+                         m.moderation_status = 'visible'
+                         OR (m.moderation_status = 'held' AND m.sender_user_id = ?)
+                     )
+               )
             ORDER BY c.updated_at DESC, c.id DESC
             LIMIT ?
             """.trimIndent()
         ).use { statement ->
             statement.setObject(1, userId)
-            statement.setInt(2, limit.coerceIn(1, 100))
+            statement.setObject(2, userId)
+            statement.setObject(3, userId)
+            statement.setInt(4, limit.coerceIn(1, 100))
             statement.executeQuery().use { rs ->
                 buildList {
                     while (rs.next()) add(rs.getObject("id", UUID::class.java))
@@ -283,7 +612,9 @@ class JdbcMessagingRepository(
                     participants.add(
                         ConversationParticipantRecord(
                             userId = rs.getObject("participant_user_id", UUID::class.java),
-                            displayName = rs.getString("display_name")
+                            displayName = rs.getString("display_name"),
+                            status = rs.getString("invitation_status"),
+                            invitedByUserId = rs.getObject("invited_by_user_id", UUID::class.java)
                         )
                     )
                 }
@@ -311,6 +642,7 @@ class JdbcMessagingRepository(
                    created_at,
                    moderation_status,
                    CASE
+                       WHEN moderation_status = 'held' THEN 'held_for_review'
                        WHEN sender_user_id <> ? THEN 'received'
                        WHEN NOT EXISTS (
                            SELECT 1
@@ -318,6 +650,7 @@ class JdbcMessagingRepository(
                            WHERE cp.conversation_id = messages.conversation_id
                              AND cp.user_id <> messages.sender_user_id
                              AND cp.left_at IS NULL
+                             AND cp.invitation_status = 'active'
                              AND cp.last_read_at < messages.created_at
                        ) THEN 'read'
                        ELSE 'sent'
@@ -325,12 +658,14 @@ class JdbcMessagingRepository(
             FROM messages
             WHERE conversation_id = ?
               AND deleted_at IS NULL
+              AND (moderation_status = 'visible' OR (moderation_status = 'held' AND sender_user_id = ?))
             ORDER BY created_at DESC, id DESC
             LIMIT 1
             """.trimIndent()
         ).use { statement ->
             statement.setObject(1, userId)
             statement.setObject(2, conversationId)
+            statement.setObject(3, userId)
             statement.executeQuery().use { rs ->
                 if (rs.next()) rs.toMessageRecord(deliveryStatus = rs.getString("delivery_status")) else null
             }
@@ -353,6 +688,7 @@ class JdbcMessagingRepository(
                        created_at,
                        moderation_status,
                        CASE
+                           WHEN moderation_status = 'held' THEN 'held_for_review'
                            WHEN sender_user_id <> ? THEN 'received'
                            WHEN NOT EXISTS (
                                SELECT 1
@@ -360,6 +696,7 @@ class JdbcMessagingRepository(
                                WHERE cp.conversation_id = messages.conversation_id
                                  AND cp.user_id <> messages.sender_user_id
                                  AND cp.left_at IS NULL
+                                 AND cp.invitation_status = 'active'
                                  AND cp.last_read_at < messages.created_at
                            ) THEN 'read'
                            ELSE 'sent'
@@ -367,6 +704,7 @@ class JdbcMessagingRepository(
                 FROM messages
                 WHERE conversation_id = ?
                   AND deleted_at IS NULL
+                  AND (moderation_status = 'visible' OR (moderation_status = 'held' AND sender_user_id = ?))
                 """.trimIndent()
             )
             append('\n')
@@ -393,6 +731,7 @@ class JdbcMessagingRepository(
             var index = 1
             statement.setObject(index++, userId)
             statement.setObject(index++, conversationId)
+            statement.setObject(index++, userId)
             if (before != null) {
                 val beforeTimestamp = Timestamp.from(before.createdAt)
                 statement.setTimestamp(index++, beforeTimestamp)
@@ -427,6 +766,7 @@ class JdbcMessagingRepository(
                 WHERE conversation_id = ?
                   AND user_id = ?
                   AND left_at IS NULL
+                  AND invitation_status = 'active'
             )
             """.trimIndent()
         ).use { statement ->
@@ -455,6 +795,7 @@ class JdbcMessagingRepository(
             WHERE conversation_id = ?
               AND user_id = ?
               AND left_at IS NULL
+              AND invitation_status IN ('active', 'invited')
             """.trimIndent()
         ).use { statement ->
             statement.setObject(1, conversationId)
@@ -472,6 +813,7 @@ class JdbcMessagingRepository(
               ON cp.conversation_id = m.conversation_id
              AND cp.user_id = ?
              AND cp.left_at IS NULL
+             AND cp.invitation_status IN ('active', 'invited')
             WHERE m.conversation_id = ?
               AND m.sender_user_id <> ?
               AND m.deleted_at IS NULL
@@ -498,26 +840,154 @@ class JdbcMessagingRepository(
         deliveryStatus = deliveryStatus
     )
 
+    private fun Connection.insertMessageReviewQueue(
+        messageId: UUID,
+        senderUserId: UUID,
+        conversationId: UUID,
+        reason: String
+    ) {
+        prepareStatement(
+            """
+            INSERT INTO message_review_queue (
+                id,
+                message_id,
+                sender_user_id,
+                conversation_id,
+                reason
+            )
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (message_id) DO NOTHING
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, messageId)
+            statement.setObject(3, senderUserId)
+            statement.setObject(4, conversationId)
+            statement.setString(5, reason)
+            statement.executeUpdate()
+        }
+    }
+
     private fun MessageRecord.toCursor(): MessagePageCursor = MessagePageCursor(
         createdAt = createdAt,
         messageId = messageId
     )
 
+    private fun Connection.participantStatus(conversationId: UUID, userId: UUID): ParticipantStatus =
+        prepareStatement(
+            """
+            SELECT invitation_status, left_at
+            FROM conversation_participants
+            WHERE conversation_id = ?
+              AND user_id = ?
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, conversationId)
+            statement.setObject(2, userId)
+            statement.executeQuery().use { rs ->
+                if (!rs.next()) {
+                    ParticipantStatus.None
+                } else {
+                    val status = rs.getString("invitation_status")
+                    val leftAt = rs.getTimestamp("left_at")
+                    when {
+                        leftAt != null -> ParticipantStatus.Inactive
+                        status == "active" -> ParticipantStatus.Active
+                        status == "invited" -> ParticipantStatus.Invited
+                        else -> ParticipantStatus.Inactive
+                    }
+                }
+            }
+        }
+
+    private fun Connection.upsertInvitedParticipant(
+        conversationId: UUID,
+        partnerUserId: UUID,
+        inviterUserId: UUID
+    ) {
+        prepareStatement(
+            """
+            INSERT INTO conversation_participants (
+                conversation_id,
+                user_id,
+                role,
+                joined_at,
+                left_at,
+                last_read_at,
+                invitation_status,
+                invited_by_user_id,
+                invited_at,
+                invitation_responded_at
+            )
+            VALUES (?, ?, 'member', now(), NULL, now(), 'invited', ?, now(), NULL)
+            ON CONFLICT (conversation_id, user_id) DO UPDATE
+            SET invitation_status = 'invited',
+                invited_by_user_id = EXCLUDED.invited_by_user_id,
+                invited_at = now(),
+                invitation_responded_at = NULL,
+                left_at = NULL,
+                last_read_at = now()
+            WHERE conversation_participants.invitation_status IN ('declined', 'left')
+               OR conversation_participants.left_at IS NOT NULL
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, conversationId)
+            statement.setObject(2, partnerUserId)
+            statement.setObject(3, inviterUserId)
+            statement.executeUpdate()
+        }
+    }
+
+    private fun Connection.markConversationGroup(conversationId: UUID) {
+        prepareStatement(
+            """
+            UPDATE conversations
+            SET kind = 'group',
+                updated_at = now()
+            WHERE id = ?
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, conversationId)
+            statement.executeUpdate()
+        }
+    }
+
+    private fun Connection.touchConversation(conversationId: UUID) {
+        prepareStatement(
+            """
+            UPDATE conversations
+            SET updated_at = now()
+            WHERE id = ?
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, conversationId)
+            statement.executeUpdate()
+        }
+    }
+
     companion object {
+        private const val DEFAULT_MESSAGE_PAGE_LIMIT = 50
+        private const val DELIVERY_SENT = "sent"
+        private const val DELIVERY_HELD_FOR_REVIEW = "held_for_review"
+
         private val CONVERSATION_QUERY = """
             SELECT c.kind,
                    c.origin,
                    c.updated_at,
                    cp.user_id AS participant_user_id,
+                   cp.invitation_status,
+                   cp.invited_by_user_id,
                    COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name
             FROM conversations c
             JOIN conversation_participants viewer_cp
               ON viewer_cp.conversation_id = c.id
              AND viewer_cp.user_id = ?
              AND viewer_cp.left_at IS NULL
+             AND viewer_cp.invitation_status IN ('active', 'invited')
             JOIN conversation_participants cp
               ON cp.conversation_id = c.id
              AND cp.left_at IS NULL
+             AND cp.invitation_status IN ('active', 'invited')
             JOIN users u ON u.id = cp.user_id
             JOIN profiles p ON p.user_id = u.id
             WHERE c.id = ?

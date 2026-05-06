@@ -4,6 +4,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.pynapli.app"
     compileSdk = 36
@@ -28,5 +32,7 @@ kotlin {
         implementation(projects.composeApp)
         implementation(projects.shared)
         implementation(libs.androidx.activity.compose)
+        implementation(platform(libs.firebase.bom))
+        implementation(libs.firebase.messaging)
     }
 }

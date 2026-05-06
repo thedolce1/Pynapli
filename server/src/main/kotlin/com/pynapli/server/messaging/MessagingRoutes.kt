@@ -59,6 +59,30 @@ fun Application.configureMessagingRoutes(
                 val request = call.receive<SendMessageRequestDto>()
                 call.respond(messagingService.sendMessage(user.id, threadId, request))
             }
+
+            post("/{threadId}/partner-invite") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+                call.respond(messagingService.inviteLinkedPartnerToConversation(user.id, threadId))
+            }
+
+            post("/{threadId}/partner-invite/accept") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                val threadId = call.parameters["threadId"] ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
+                call.respond(messagingService.acceptPartnerInvite(user.id, threadId))
+            }
+
+            post("/{threadId}/partner-invite/decline") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                val threadId = call.parameters["threadId"] ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
+                call.respond(messagingService.declinePartnerInvite(user.id, threadId))
+            }
+
+            post("/{threadId}/leave") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+                call.respond(messagingService.leaveConversation(user.id, threadId))
+            }
         }
     }
 }

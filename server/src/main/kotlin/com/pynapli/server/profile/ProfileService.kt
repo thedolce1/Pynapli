@@ -1,32 +1,40 @@
 package com.pynapli.server.profile
 
 import com.pynapli.server.activity.ActivityService
+import com.pynapli.server.distance.toPublicDistanceLabel
+import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.DiscoverySettingsDto
+import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.ProfileDto
 import com.pynapli.shared.network.dto.PublicProfileDto
+import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import java.time.Clock
 import java.time.LocalDate
 import java.time.Period
 import java.util.UUID
-import kotlin.math.roundToInt
 
 class ProfileService(
     private val repository: ProfileRepository,
     private val clock: Clock = Clock.systemUTC(),
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val activityService: ActivityService? = null,
-    private val blockRepository: BlockRepository? = null
+    private val blockRepository: BlockRepository? = null,
+    private val riskPolicyService: RiskPolicyService? = null
 ) {
     suspend fun getMe(userId: UUID): MeDto =
         repository.getMe(userId)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
 
     suspend fun getPublicProfile(viewerUserId: UUID, targetUserId: UUID): PublicProfileDto {
         if (blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) == true) {
+            throw ProfileException("PROFILE_NOT_FOUND")
+        }
+        if (riskPolicyService?.shouldHideFromDiscovery(targetUserId) == true) {
             throw ProfileException("PROFILE_NOT_FOUND")
         }
         val profile = repository.getPublicProfile(viewerUserId, targetUserId)?.toDto()
@@ -38,6 +46,30 @@ class ProfileService(
     suspend fun updateProfile(userId: UUID, request: UpdateProfileRequestDto): MeDto {
         val update = request.toProfileUpdate()
         return repository.updateProfile(userId, update)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
+    }
+
+    suspend fun updateDiscoverySettings(userId: UUID, request: UpdateDiscoverySettingsRequestDto): MeDto {
+        val update = request.toDiscoverySettingsUpdate()
+        return repository.updateDiscoverySettings(userId, update)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
+    }
+
+    private fun UpdateDiscoverySettingsRequestDto.toDiscoverySettingsUpdate(): DiscoverySettingsUpdate {
+        val normalizedGridMessagePolicy = gridMessagePolicy?.trim()?.lowercase()
+        if (normalizedGridMessagePolicy != null && normalizedGridMessagePolicy !in GRID_MESSAGE_POLICIES) {
+            throw ProfileException("INVALID_GRID_MESSAGE_POLICY")
+        }
+
+        return DiscoverySettingsUpdate(
+            gridVisible = gridVisible,
+            swipeVisible = swipeVisible,
+            showDistance = showDistance,
+            showInViewedLists = showInViewedLists,
+            allowGridMessages = allowGridMessages,
+            gridMessagePolicy = normalizedGridMessagePolicy,
+            allowFlirts = allowFlirts,
+            allowIntroNotes = allowIntroNotes,
+            allowAlbumRequests = allowAlbumRequests
+        )
     }
 
     private fun UpdateProfileRequestDto.toProfileUpdate(): ProfileUpdate {
@@ -108,10 +140,18 @@ class ProfileService(
         orientation = orientation,
         relationshipContext = relationshipContext,
         discoveryStyle = discoveryStyle,
-        distanceLabel = distanceMeters?.toDistanceLabel(),
+        distanceLabel = distanceMeters?.toPublicDistanceLabel(),
+        distanceMeters = distanceMeters?.toPublicDistanceMeters(),
         profilePhotoUrl = profilePhotoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
         privateAlbumAccessStatus = privateAlbumAccessStatus,
-        linkedPartner = null,
+        linkedPartner = linkedPartnerUserId?.let { partnerUserId ->
+            LinkedPartnerMiniDto(
+                userId = partnerUserId.toString(),
+                displayName = linkedPartnerDisplayName,
+                thumbnailUrl = linkedPartnerThumbnailMediaAssetId
+                    ?.let { mediaAssetUrlResolver?.publicContentUrl(it) }
+            )
+        },
         allowGridMessages = allowGridMessages,
         allowFlirts = allowFlirts,
         allowAlbumRequests = allowAlbumRequests
@@ -140,20 +180,6 @@ class ProfileService(
         return value.lowercase()
     }
 
-    private fun Double.toDistanceLabel(): String {
-        if (this < 1_000.0) {
-            val roundedMeters = ((this / 100.0).roundToInt() * 100).coerceAtLeast(100)
-            return "$roundedMeters m"
-        }
-
-        val km = this / 1_000.0
-        return if (km < 10) {
-            "%.1f km".format(km)
-        } else {
-            "${km.roundToInt()} km"
-        }
-    }
-
     private fun completeness(
         displayName: String?,
         birthdate: LocalDate?,
@@ -174,6 +200,7 @@ class ProfileService(
 
     companion object {
         private val DISCOVERY_STYLES = setOf("solo", "together", "both", "social", "ask_in_chat")
+        private val GRID_MESSAGE_POLICIES = setOf("everyone", "matches_only", "no_one")
     }
 }
 

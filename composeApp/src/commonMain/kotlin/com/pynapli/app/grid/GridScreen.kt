@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.StarBorder
@@ -35,10 +36,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -56,8 +59,13 @@ import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.conversation.SampleConversationRepository
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.profile.ProfileDetailSheet
+import com.pynapli.app.profile.ProfileLinkActionState
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profile.SamplePublicProfileRepository
+import com.pynapli.app.profilelink.ProfileLinksStateHolder
+import com.pynapli.app.profilelink.ProfileLinksUiState
+import com.pynapli.shared.distance.formatDistanceForUnit
+import com.pynapli.shared.settings.AppSettings
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 
@@ -70,11 +78,16 @@ fun GridScreen(
     viewerUserId: String? = null,
     locationState: LocationUiState = LocationUiState(),
     profileImageUrl: String? = null,
+    profileLinksStateHolder: ProfileLinksStateHolder? = null,
+    distanceUnit: String = AppSettings.UNIT_METRIC,
     onUseCurrentLocation: () -> Unit = {},
-    onProfileIconClick: () -> Unit = {}
+    onProfileIconClick: () -> Unit = {},
+    onOpenStore: () -> Unit = {}
 ) {
     val state by stateHolder.state.collectAsState()
     val profileState by profileDetailStateHolder.state.collectAsState()
+    val profileLinksState by profileLinksStateHolder?.state?.collectAsState()
+        ?: remember { mutableStateOf(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(stateHolder) {
@@ -85,12 +98,14 @@ fun GridScreen(
         state = state,
         locationState = locationState,
         profileImageUrl = profileImageUrl,
-        onFilterSelected = stateHolder::selectFilter,
+        distanceUnit = distanceUnit,
+        onFilterSelected = { type -> scope.launch { stateHolder.selectFilter(type) } },
         onProfileSelected = { card ->
             scope.launch { profileDetailStateHolder.open(card) }
         },
         onUseCurrentLocation = onUseCurrentLocation,
         onProfileIconClick = onProfileIconClick,
+        onOpenStore = onOpenStore,
         modifier = modifier
     )
 
@@ -130,10 +145,72 @@ fun GridScreen(
             },
             onReport = { category, note ->
                 scope.launch { profileDetailStateHolder.submitReport(category, note) }
-            }
+            },
+            profileLinkAction = profileLinksState?.profileLinkActionFor(
+                targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id,
+                viewerUserId = viewerUserId
+            ),
+            onInviteProfileLink = {
+                val targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id
+                if (targetUserId != null) {
+                    scope.launch { profileLinksStateHolder?.createInvitation(targetUserId) }
+                }
+            },
+            onOpenLinkedPartner = { partner ->
+                scope.launch { profileDetailStateHolder.openLinkedPartner(partner) }
+            },
+            distanceUnit = distanceUnit
         )
     }
 
+}
+
+private fun ProfileLinksUiState.profileLinkActionFor(
+    targetUserId: String?,
+    viewerUserId: String?
+): ProfileLinkActionState? {
+    if (targetUserId == null || targetUserId == viewerUserId) return null
+    val currentLink = current
+    val pendingInvite = pendingInviteWith(targetUserId)
+    val isSubmitting = targetUserId in submittingTargetUserIds
+    val targetFeedback = feedbackMessage.takeIf { feedbackTargetUserId == targetUserId }
+    val targetError = errorMessage.takeIf { errorTargetUserId == targetUserId }
+
+    return when {
+        currentLink?.otherUserId == targetUserId -> ProfileLinkActionState(
+            label = "Linked",
+            enabled = false,
+            isSubmitting = false,
+            feedbackMessage = targetFeedback,
+            errorMessage = targetError
+        )
+
+        currentLink != null -> null
+
+        pendingInvite != null && pendingInvite.direction == "outgoing" -> ProfileLinkActionState(
+            label = "Invite sent",
+            enabled = false,
+            isSubmitting = false,
+            feedbackMessage = targetFeedback,
+            errorMessage = targetError
+        )
+
+        pendingInvite != null && pendingInvite.direction == "incoming" -> ProfileLinkActionState(
+            label = "Review invite",
+            enabled = false,
+            isSubmitting = false,
+            feedbackMessage = targetFeedback,
+            errorMessage = targetError
+        )
+
+        else -> ProfileLinkActionState(
+            label = if (isSubmitting) "Sending" else "Link",
+            enabled = true,
+            isSubmitting = isSubmitting,
+            feedbackMessage = targetFeedback,
+            errorMessage = targetError
+        )
+    }
 }
 
 @Composable
@@ -168,10 +245,12 @@ private fun GridScreenContent(
     state: GridUiState,
     locationState: LocationUiState,
     profileImageUrl: String?,
+    distanceUnit: String,
     onFilterSelected: (GridFilterType) -> Unit,
     onProfileSelected: (GridProfileCardUi) -> Unit,
     onUseCurrentLocation: () -> Unit,
     onProfileIconClick: () -> Unit,
+    onOpenStore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -188,9 +267,19 @@ private fun GridScreenContent(
             filters = state.filters,
             onFilterSelected = onFilterSelected
         )
+        state.paywallMessage?.let { message ->
+            GridPaywallRow(
+                message = message,
+                onOpenStore = onOpenStore
+            )
+        }
+        if (state.adSupported) {
+            GridAdSlot()
+        }
         GridBody(
             state = state,
             locationState = locationState,
+            distanceUnit = distanceUnit,
             onProfileSelected = onProfileSelected,
             onUseCurrentLocation = onUseCurrentLocation,
             modifier = Modifier.weight(1f)
@@ -302,7 +391,12 @@ private fun FilterRow(
                 FilterChip(
                     label = filter.label,
                     active = filter.active,
-                    icon = if (filter.type == GridFilterType.Tonight) Icons.Filled.StarBorder else null,
+                    locked = filter.locked,
+                    icon = when {
+                        filter.locked -> Icons.Filled.Lock
+                        filter.type == GridFilterType.Tonight -> Icons.Filled.StarBorder
+                        else -> null
+                    },
                     onClick = { onFilterSelected(filter.type) }
                 )
             }
@@ -314,6 +408,7 @@ private fun FilterRow(
 private fun FilterChip(
     label: String,
     active: Boolean,
+    locked: Boolean,
     icon: ImageVector? = null,
     onClick: () -> Unit
 ) {
@@ -337,8 +432,16 @@ private fun FilterChip(
         },
         colors = AssistChipDefaults.assistChipColors(
             containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            labelColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-            leadingIconContentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+            labelColor = when {
+                active -> MaterialTheme.colorScheme.onPrimary
+                locked -> MaterialTheme.colorScheme.onSurfaceVariant
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+            leadingIconContentColor = when {
+                active -> MaterialTheme.colorScheme.onPrimary
+                locked -> MaterialTheme.colorScheme.onSurfaceVariant
+                else -> MaterialTheme.colorScheme.primary
+            }
         ),
         border = AssistChipDefaults.assistChipBorder(
             enabled = true,
@@ -348,8 +451,61 @@ private fun FilterChip(
 }
 
 @Composable
+private fun GridPaywallRow(
+    message: String,
+    onOpenStore: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Lock,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = message,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onOpenStore) {
+            Text(text = "Social", maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun GridAdSlot() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Sponsored",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall
+        )
+    }
+}
+
+@Composable
 private fun ProfileGrid(
     cards: List<GridProfileCardUi>,
+    distanceUnit: String,
     onProfileSelected: (GridProfileCardUi) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -369,6 +525,7 @@ private fun ProfileGrid(
         ) { card ->
             GridProfileTile(
                 card = card,
+                distanceUnit = distanceUnit,
                 onClick = { onProfileSelected(card) }
             )
         }
@@ -378,8 +535,15 @@ private fun ProfileGrid(
 @Composable
 private fun GridProfileTile(
     card: GridProfileCardUi,
+    distanceUnit: String,
     onClick: () -> Unit
 ) {
+    val distanceLabel = formatDistanceForUnit(
+        distanceMeters = card.distanceMeters,
+        fallbackLabel = card.distanceLabel,
+        distanceUnit = distanceUnit
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -410,8 +574,9 @@ private fun GridProfileTile(
                 )
         )
 
-        if (card.linkedPartnerTone != null) {
+        if (card.linkedPartner != null) {
             LinkedPartnerBadge(
+                thumbnailUrl = card.linkedPartner.thumbnailUrl,
                 color = card.linkedPartnerTone.badgeColor(),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -441,7 +606,7 @@ private fun GridProfileTile(
                 modifier = Modifier.weight(1f, fill = false)
             )
 
-            card.distanceLabel?.let { distance ->
+            distanceLabel?.let { distance ->
                 Text(
                     text = distance,
                     color = Color(0xFFD7D7D7),
@@ -472,6 +637,7 @@ private fun OnlineDot(
 private fun GridBody(
     state: GridUiState,
     locationState: LocationUiState,
+    distanceUnit: String,
     onProfileSelected: (GridProfileCardUi) -> Unit,
     onUseCurrentLocation: () -> Unit,
     modifier: Modifier = Modifier
@@ -539,6 +705,7 @@ private fun GridBody(
         else -> {
             ProfileGrid(
                 cards = state.cards,
+                distanceUnit = distanceUnit,
                 onProfileSelected = onProfileSelected,
                 modifier = modifier
             )
@@ -548,23 +715,33 @@ private fun GridBody(
 
 @Composable
 private fun LinkedPartnerBadge(
+    thumbnailUrl: String?,
     color: Color,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
-            .size(24.dp)
+            .size(26.dp)
             .clip(CircleShape)
-            .background(color)
-            .border(1.dp, Color(0xB3000000), CircleShape),
+            .background(if (thumbnailUrl == null) color else Color(0xCC111111))
+            .border(1.dp, Color(0xD9FFFFFF), CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = Icons.Filled.Person,
-            contentDescription = "Linked partner",
-            tint = Color.White,
-            modifier = Modifier.size(15.dp)
-        )
+        if (thumbnailUrl != null) {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = "Linked partner",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Filled.Person,
+                contentDescription = "Linked partner",
+                tint = Color.White,
+                modifier = Modifier.size(15.dp)
+            )
+        }
     }
 }
 
@@ -583,10 +760,11 @@ private fun GridCardTone.backgroundBrush(): Brush = when (this) {
     GridCardTone.Midnight -> Brush.linearGradient(listOf(Color(0xFF1A202C), Color(0xFF57606A)))
 }
 
-private fun LinkedPartnerTone.badgeColor(): Color = when (this) {
+private fun LinkedPartnerTone?.badgeColor(): Color = when (this) {
     LinkedPartnerTone.Violet -> Color(0xFF8B5CF6)
     LinkedPartnerTone.Gold -> Color(0xFFC39A49)
     LinkedPartnerTone.Pink -> Color(0xFFE85D75)
     LinkedPartnerTone.Teal -> Color(0xFF4DB6AC)
     LinkedPartnerTone.Sun -> Color(0xFFFFC928)
+    null -> Color(0xFFC39A49)
 }

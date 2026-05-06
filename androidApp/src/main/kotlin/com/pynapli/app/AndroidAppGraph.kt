@@ -1,7 +1,14 @@
 package com.pynapli.app
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import com.pynapli.app.activity.ActivityStateHolder
+import com.pynapli.app.appsettings.AppSettingsStateHolder
+import com.pynapli.app.appsettings.ApiNotificationPreferencesGateway
+import com.pynapli.app.appsettings.LocalAppSettingsRepository
+import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.activity.ApiActivityFeedRepository
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
@@ -15,16 +22,30 @@ import com.pynapli.app.media.ApiMediaAlbumsRepository
 import com.pynapli.app.media.MediaAlbumsStateHolder
 import com.pynapli.app.messages.ApiMessagesRepository
 import com.pynapli.app.messages.MessagesStateHolder
+import com.pynapli.app.notifications.AndroidFirebasePushTokenProvider
+import com.pynapli.app.notifications.AndroidPushRegistrationStore
+import com.pynapli.app.notifications.ApiPushDeviceRegistrationRepository
+import com.pynapli.app.notifications.PushRegistrationCoordinator
 import com.pynapli.app.profile.ApiPublicProfileRepository
 import com.pynapli.app.profile.ProfileDetailStateHolder
+import com.pynapli.app.profilehub.ApiProfileHubRepository
+import com.pynapli.app.profilehub.ProfileHubStateHolder
+import com.pynapli.app.profilelink.ApiProfileLinksRepository
+import com.pynapli.app.profilelink.ProfileLinksStateHolder
+import com.pynapli.app.swipe.ApiSwipeRepository
+import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.core.config.PynapliConfigs
 import com.pynapli.shared.network.KtorMediaByteUploader
 import com.pynapli.shared.network.KtorPynapliApiClient
+import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
+import java.util.Locale
+import java.util.TimeZone
 
 class AndroidAppGraph(context: Context) {
+    private val appContext = context.applicationContext
     private val database = AndroidPynapliDatabaseFactory(context.applicationContext).createDatabase()
     private val sessionStore = SqlDelightSessionStore(database)
     private val apiClient = KtorPynapliApiClient(
@@ -36,10 +57,36 @@ class AndroidAppGraph(context: Context) {
         sessionStore = sessionStore
     )
 
+    val pushRegistrationCoordinator = PushRegistrationCoordinator(
+        tokenProvider = AndroidFirebasePushTokenProvider(appContext),
+        repository = ApiPushDeviceRegistrationRepository(apiClient),
+        registrationStore = AndroidPushRegistrationStore(appContext),
+        platform = "android",
+        appVersion = "0.1.0",
+        localeProvider = { Locale.getDefault().toLanguageTag() },
+        timezoneProvider = { TimeZone.getDefault().id },
+        notificationsAllowed = {
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        }
+    )
+
     val authStateHolder = AuthStateHolder(
         authRepository = authRepository,
         platform = "android",
-        appVersion = "0.1.0"
+        appVersion = "0.1.0",
+        beforeLogout = { pushRegistrationCoordinator.unregisterCurrentDevice() }
+    )
+
+    val appSettingsStateHolder = AppSettingsStateHolder(
+        repository = ServerBackedAppSettingsRepository(
+            localRepository = LocalAppSettingsRepository(
+                store = SqlDelightAppSettingsStore(database)
+            ),
+            notificationPreferencesGateway = ApiNotificationPreferencesGateway(apiClient),
+            timezoneProvider = { TimeZone.getDefault().id },
+            remoteSyncEnabled = { authStateHolder.state.value.authenticated }
+        )
     )
 
     val gridStateHolder = GridStateHolder(
@@ -71,6 +118,18 @@ class AndroidAppGraph(context: Context) {
             apiClient = apiClient,
             mediaByteUploader = KtorMediaByteUploader()
         )
+    )
+
+    val profileHubStateHolder = ProfileHubStateHolder(
+        repository = ApiProfileHubRepository(apiClient)
+    )
+
+    val profileLinksStateHolder = ProfileLinksStateHolder(
+        repository = ApiProfileLinksRepository(apiClient)
+    )
+
+    val swipeStateHolder = SwipeStateHolder(
+        repository = ApiSwipeRepository(apiClient)
     )
 
     val devLoginCredentials = DevLoginCredentials(

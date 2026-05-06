@@ -3,9 +3,12 @@ package com.pynapli.app.messages
 import androidx.compose.runtime.Immutable
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
+import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.ConversationParticipantDto
+import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.MessageDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,11 +18,17 @@ import kotlinx.coroutines.flow.update
 @Immutable
 data class MessagesUiState(
     val conversations: List<ConversationDto> = emptyList(),
+    val mutatingPartnerInviteConversationIds: Set<String> = emptySet(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 ) {
     val unreadCount: Int
         get() = conversations.sumOf { conversation -> conversation.unreadCount }
+
+    fun partnerChatInvites(viewerUserId: String?): List<ConversationDto> =
+        conversations.filter { conversation ->
+            conversation.viewerParticipantStatus(viewerUserId) == ConversationParticipantStatus.INVITED
+        }
 }
 
 class MessagesStateHolder(
@@ -83,10 +92,82 @@ class MessagesStateHolder(
             )
         }
     }
+
+    suspend fun acceptPartnerInvite(conversationId: String) {
+        mutatePartnerInvite(conversationId) {
+            when (val result = repository.acceptPartnerInvite(conversationId)) {
+                is AppResult.Success -> {
+                    _state.update { current ->
+                        current.copy(
+                            conversations = current.conversations.upsert(result.value.conversation),
+                            mutatingPartnerInviteConversationIds = current.mutatingPartnerInviteConversationIds - conversationId,
+                            errorMessage = null
+                        )
+                    }
+                }
+
+                is AppResult.Failure -> {
+                    _state.update { current ->
+                        current.copy(
+                            mutatingPartnerInviteConversationIds = current.mutatingPartnerInviteConversationIds - conversationId,
+                            errorMessage = result.error.message
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun declinePartnerInvite(conversationId: String) {
+        mutatePartnerInvite(conversationId) {
+            when (val result = repository.declinePartnerInvite(conversationId)) {
+                is AppResult.Success -> {
+                    _state.update { current ->
+                        current.copy(
+                            conversations = current.conversations.filterNot { it.conversationId == conversationId },
+                            mutatingPartnerInviteConversationIds = current.mutatingPartnerInviteConversationIds - conversationId,
+                            errorMessage = null
+                        )
+                    }
+                }
+
+                is AppResult.Failure -> {
+                    _state.update { current ->
+                        current.copy(
+                            mutatingPartnerInviteConversationIds = current.mutatingPartnerInviteConversationIds - conversationId,
+                            errorMessage = result.error.message
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun clearError() {
+        _state.update { it.copy(errorMessage = null) }
+    }
+
+    private suspend fun mutatePartnerInvite(
+        conversationId: String,
+        call: suspend () -> Unit
+    ) {
+        if (conversationId in state.value.mutatingPartnerInviteConversationIds) return
+        _state.update { current ->
+            current.copy(
+                mutatingPartnerInviteConversationIds = current.mutatingPartnerInviteConversationIds + conversationId,
+                errorMessage = null
+            )
+        }
+        call()
+    }
 }
 
 interface MessagesRepository {
     suspend fun listConversations(): AppResult<ConversationListResponseDto>
+
+    suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto>
+
+    suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
 }
 
 class ApiMessagesRepository(
@@ -94,6 +175,12 @@ class ApiMessagesRepository(
 ) : MessagesRepository {
     override suspend fun listConversations(): AppResult<ConversationListResponseDto> =
         apiClient.listConversations()
+
+    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> =
+        apiClient.acceptConversationPartnerInvite(conversationId)
+
+    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
+        apiClient.declineConversationPartnerInvite(conversationId)
 }
 
 class SampleMessagesRepository : MessagesRepository {
@@ -124,4 +211,39 @@ class SampleMessagesRepository : MessagesRepository {
                 )
             )
         )
+
+    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> =
+        AppResult.Success(
+            ConversationDetailDto(
+                conversation = ConversationDto(
+                    conversationId = conversationId,
+                    kind = "group",
+                    origin = "grid",
+                    participants = listOf(
+                        ConversationParticipantDto("viewer", "You"),
+                        ConversationParticipantDto("maya", "Maya", online = true)
+                    ),
+                    unreadCount = 0,
+                    updatedAt = "2026-04-24T18:00:00Z"
+                ),
+                messages = emptyList()
+            )
+        )
+
+    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
+        AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
 }
+
+private fun ConversationDto.viewerParticipantStatus(viewerUserId: String?): String? =
+    viewerUserId?.let { userId ->
+        participants.firstOrNull { participant -> participant.userId == userId }?.status
+    }
+
+private fun List<ConversationDto>.upsert(conversation: ConversationDto): List<ConversationDto> =
+    if (any { it.conversationId == conversation.conversationId }) {
+        map { existing ->
+            if (existing.conversationId == conversation.conversationId) conversation else existing
+        }
+    } else {
+        listOf(conversation) + this
+    }

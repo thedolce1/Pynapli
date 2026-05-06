@@ -2,6 +2,7 @@ package com.pynapli.app.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -18,14 +19,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -58,8 +62,26 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.media.MediaAlbumItemUi
+import com.pynapli.shared.distance.formatDistanceForUnit
+import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 import coil3.compose.AsyncImage
+import com.pynapli.shared.settings.AppSettings
+
+enum class ProfileDetailActionMode {
+    Grid,
+    SwipeUnmatched,
+    SwipeMatched
+}
+
+data class ProfileLinkActionState(
+    val label: String,
+    val enabled: Boolean,
+    val isSubmitting: Boolean,
+    val feedbackMessage: String? = null,
+    val errorMessage: String? = null
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,12 +94,24 @@ fun ProfileDetailSheet(
     onViewPrivateAlbum: () -> Unit,
     onBlock: (reason: String?) -> Unit,
     onReport: (category: String, note: String?) -> Unit,
+    actionMode: ProfileDetailActionMode = ProfileDetailActionMode.Grid,
+    isSwipeSubmitting: Boolean = false,
+    onSwipePass: () -> Unit = {},
+    onSwipeLike: () -> Unit = {},
+    profileLinkAction: ProfileLinkActionState? = null,
+    onInviteProfileLink: () -> Unit = {},
+    onOpenLinkedPartner: (GridLinkedPartnerUi) -> Unit = {},
+    distanceUnit: String = AppSettings.UNIT_METRIC,
     modifier: Modifier = Modifier
 ) {
     val card = state.selectedCard ?: return
     val profile = state.profile
     val displayName = profile?.displayName ?: card.displayName
-    val distanceLabel = profile?.distanceLabel ?: card.distanceLabel
+    val distanceLabel = formatDistanceForUnit(
+        distanceMeters = profile?.distanceMeters ?: card.distanceMeters,
+        fallbackLabel = profile?.distanceLabel ?: card.distanceLabel,
+        distanceUnit = distanceUnit
+    )
     val profilePhotoUrl = profile?.profilePhotoUrl ?: card.thumbnailUrl
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBlockConfirm by remember { mutableStateOf(false) }
@@ -129,21 +163,44 @@ fun ProfileDetailSheet(
 
                 profile != null -> {
                     ProfileFacts(profileState = state)
-                    ProfileActions(
-                        allowGridMessages = profile.allowGridMessages,
-                        allowFlirts = profile.allowFlirts,
-                        allowAlbumRequests = profile.allowAlbumRequests,
-                        privateAlbumAccessStatus = profile.privateAlbumAccessStatus,
-                        isSendingFlirt = state.isSendingFlirt,
-                        isRequestingAlbum = state.isRequestingAlbum,
-                        isLoadingPrivateAlbum = state.isLoadingPrivateAlbum,
-                        flirtFeedback = state.flirtFeedback,
-                        albumFeedback = state.albumFeedback,
-                        onMessage = onMessage,
-                        onSpark = onSpark,
-                        onRequestAlbum = onRequestAlbum,
-                        onViewPrivateAlbum = onViewPrivateAlbum
+                    LinkedPartnerSection(
+                        linkedPartner = profile.linkedPartner,
+                        cardLinkedPartner = card.linkedPartner,
+                        onOpenLinkedPartner = onOpenLinkedPartner
                     )
+                    when (actionMode) {
+                        ProfileDetailActionMode.Grid -> {
+                            ProfileActions(
+                                allowGridMessages = profile.allowGridMessages,
+                                allowFlirts = profile.allowFlirts,
+                                allowAlbumRequests = profile.allowAlbumRequests,
+                                privateAlbumAccessStatus = profile.privateAlbumAccessStatus,
+                                isSendingFlirt = state.isSendingFlirt,
+                                isRequestingAlbum = state.isRequestingAlbum,
+                                isLoadingPrivateAlbum = state.isLoadingPrivateAlbum,
+                                flirtFeedback = state.flirtFeedback,
+                                albumFeedback = state.albumFeedback,
+                                profileLinkAction = profileLinkAction,
+                                onMessage = onMessage,
+                                onSpark = onSpark,
+                                onRequestAlbum = onRequestAlbum,
+                                onViewPrivateAlbum = onViewPrivateAlbum,
+                                onInviteProfileLink = onInviteProfileLink
+                            )
+                        }
+
+                        ProfileDetailActionMode.SwipeUnmatched -> {
+                            SwipeProfileActions(
+                                isSubmitting = isSwipeSubmitting,
+                                onPass = onSwipePass,
+                                onLike = onSwipeLike
+                            )
+                        }
+
+                        ProfileDetailActionMode.SwipeMatched -> {
+                            MatchedSwipeProfileActions(onMessage = onMessage)
+                        }
+                    }
                     state.reportFeedback?.let { feedback ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -492,7 +549,7 @@ private fun ProfileFacts(profileState: ProfileDetailUiState) {
         profile.relationshipContext?.let { add(it.toDisplayLabel()) }
         profile.gender?.let { add(it.toDisplayLabel()) }
         profile.orientation?.let { add(it.toDisplayLabel()) }
-        if (card.linkedPartnerTone != null) add("Linked")
+        if (profile.linkedPartner != null || card.linkedPartner != null) add("Linked")
     }
 
     FlowRow(
@@ -536,6 +593,86 @@ private fun ProfileFacts(profileState: ProfileDetailUiState) {
 }
 
 @Composable
+private fun LinkedPartnerSection(
+    linkedPartner: LinkedPartnerMiniDto?,
+    cardLinkedPartner: GridLinkedPartnerUi?,
+    onOpenLinkedPartner: (GridLinkedPartnerUi) -> Unit
+) {
+    val partnerUserId = linkedPartner?.userId ?: cardLinkedPartner?.userId ?: return
+    val displayName = linkedPartner?.displayName
+        ?: cardLinkedPartner?.displayName
+        ?: "Profile ${partnerUserId.take(8)}"
+    val thumbnailUrl = linkedPartner?.thumbnailUrl ?: cardLinkedPartner?.thumbnailUrl
+    val partner = GridLinkedPartnerUi(
+        userId = partnerUserId,
+        displayName = displayName,
+        thumbnailUrl = thumbnailUrl
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onOpenLinkedPartner(partner) }
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.background)
+                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            if (thumbnailUrl != null) {
+                AsyncImage(
+                    model = thumbnailUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Person,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = "Linked with",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1
+            )
+            Text(
+                text = displayName,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = "Open linked partner profile",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
 private fun ProfileActions(
     allowGridMessages: Boolean,
     allowFlirts: Boolean,
@@ -546,10 +683,12 @@ private fun ProfileActions(
     isLoadingPrivateAlbum: Boolean,
     flirtFeedback: String?,
     albumFeedback: String?,
+    profileLinkAction: ProfileLinkActionState?,
     onMessage: () -> Unit,
     onSpark: () -> Unit,
     onRequestAlbum: () -> Unit,
-    onViewPrivateAlbum: () -> Unit
+    onViewPrivateAlbum: () -> Unit,
+    onInviteProfileLink: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -620,6 +759,32 @@ private fun ProfileActions(
                 )
             }
         }
+        profileLinkAction?.let { action ->
+            OutlinedButton(
+                onClick = onInviteProfileLink,
+                enabled = action.enabled && !action.isSubmitting,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (action.isSubmitting) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.PersonAdd,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Text(
+                    text = action.label,
+                    modifier = Modifier.padding(start = 6.dp),
+                    maxLines = 1
+                )
+            }
+        }
         (albumFeedback ?: flirtFeedback)?.let { message ->
             Text(
                 text = message,
@@ -628,6 +793,92 @@ private fun ProfileActions(
                 maxLines = 1
             )
         }
+        profileLinkAction?.feedbackMessage?.let { message ->
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1
+            )
+        }
+        profileLinkAction?.errorMessage?.let { message ->
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun SwipeProfileActions(
+    isSubmitting: Boolean,
+    onPass: () -> Unit,
+    onLike: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        OutlinedButton(
+            onClick = onPass,
+            enabled = !isSubmitting,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = if (isSubmitting) "Saving" else "Pass",
+                modifier = Modifier.padding(start = 6.dp),
+                maxLines = 1
+            )
+        }
+        Button(
+            onClick = onLike,
+            enabled = !isSubmitting,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Favorite,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = if (isSubmitting) "Saving" else "Like",
+                modifier = Modifier.padding(start = 6.dp),
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun MatchedSwipeProfileActions(
+    onMessage: () -> Unit
+) {
+    Button(
+        onClick = onMessage,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 18.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.ChatBubble,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = "Message",
+            modifier = Modifier.padding(start = 6.dp),
+            maxLines = 1
+        )
     }
 }
 

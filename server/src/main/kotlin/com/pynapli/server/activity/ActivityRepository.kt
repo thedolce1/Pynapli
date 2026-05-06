@@ -4,7 +4,7 @@ import java.time.Instant
 import java.util.UUID
 
 interface ActivityRepository {
-    suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID)
+    suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID): Boolean
 
     suspend fun recordFlirt(senderUserId: UUID, targetUserId: UUID): Boolean
 

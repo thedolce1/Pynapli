@@ -27,6 +27,7 @@ dependencies {
     implementation(libs.flyway.core)
     implementation(libs.flyway.postgresql)
     implementation(libs.lettuce.core)
+    implementation(libs.firebase.admin)
     implementation(libs.logback.classic)
 
     testImplementation(libs.kotlin.test)

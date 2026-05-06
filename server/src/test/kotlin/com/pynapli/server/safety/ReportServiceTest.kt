@@ -16,7 +16,8 @@ class ReportServiceTest {
         val reporterId = UUID.fromString("00000000-0000-0000-0000-000000000001")
         val reportedId = UUID.fromString("00000000-0000-0000-0000-000000000002")
         val repository = InMemoryReportRepository()
-        val service = ReportService(repository)
+        val riskPublisher = CapturingReportRiskSignalPublisher()
+        val service = ReportService(repository, riskPublisher)
 
         val response = service.submitReport(
             reporterUserId = reporterId,
@@ -34,6 +35,10 @@ class ReportServiceTest {
         assertEquals("open", response.status)
         assertEquals(1, repository.captured.size)
         assertEquals("Repeated harassment", repository.captured.single().note)
+        assertEquals(1, riskPublisher.captured.size)
+        assertEquals(repository.captured.single().id, riskPublisher.captured.single().reportId)
+        assertEquals(reportedId, riskPublisher.captured.single().reportedUserId)
+        assertEquals(ReportCategory.HARASSMENT_OR_THREATS, riskPublisher.captured.single().category)
     }
 
     @Test
@@ -115,7 +120,68 @@ class ReportServiceTest {
 
         assertEquals("REPORT_NOTE_TOO_LONG", error.code)
     }
+
+    @Test
+    fun submitReportRejectsRateLimitedReporterBeforePersisting() = runBlocking {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000050")
+        val targetId = UUID.fromString("00000000-0000-0000-0000-000000000051")
+        val repository = InMemoryReportRepository()
+        val service = ReportService(
+            repository = repository,
+            rateLimitService = denyingRateLimitService()
+        )
+
+        val error = assertFailsWith<SafetyException> {
+            service.submitReport(
+                viewerId,
+                CreateReportRequestDto(
+                    reportedUserId = targetId.toString(),
+                    targetType = ReportTargetType.PROFILE,
+                    category = ReportCategory.OTHER
+                )
+            )
+        }
+
+        assertEquals("RATE_LIMITED", error.code)
+        assertEquals(emptyList(), repository.captured)
+    }
 }
+
+private fun denyingRateLimitService(): RateLimitService =
+    RateLimitService(
+        object : RateLimitRepository {
+            override suspend fun increment(key: String, windowSeconds: Long): RateLimitCounter =
+                RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
+        }
+    )
+
+private class CapturingReportRiskSignalPublisher : ReportRiskSignalPublisher {
+    val captured = mutableListOf<CapturedReportRiskSignal>()
+
+    override suspend fun recordReportCreated(
+        reportId: UUID,
+        reporterUserId: UUID,
+        reportedUserId: UUID,
+        targetType: String,
+        category: String
+    ) {
+        captured += CapturedReportRiskSignal(
+            reportId = reportId,
+            reporterUserId = reporterUserId,
+            reportedUserId = reportedUserId,
+            targetType = targetType,
+            category = category
+        )
+    }
+}
+
+private data class CapturedReportRiskSignal(
+    val reportId: UUID,
+    val reporterUserId: UUID,
+    val reportedUserId: UUID,
+    val targetType: String,
+    val category: String
+)
 
 private class InMemoryReportRepository : ReportRepository {
     val captured = mutableListOf<ReportRecord>()

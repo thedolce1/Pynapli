@@ -1,5 +1,7 @@
 package com.pynapli.server.safety
 
+import com.pynapli.server.moderation.JdbcAdminReportRepository
+import com.pynapli.server.moderation.JdbcAdminRiskRepository
 import com.pynapli.shared.network.dto.ReportCategory
 import com.pynapli.shared.network.dto.ReportTargetType
 import com.zaxxer.hikari.HikariConfig
@@ -112,6 +114,236 @@ class SafetyRepositoryIntegrationTest {
         assertEquals("Repeated harassment", record.note)
     }
 
+    @Test
+    fun adminReportReviewFlowUpdatesStatusAndWritesAuditRows() = runBlocking {
+        val reporter = UUID.fromString("00000000-0000-0000-0000-000000000441")
+        val reported = UUID.fromString("00000000-0000-0000-0000-000000000442")
+        val reportRepository = JdbcReportRepository(dataSource)
+        val adminRepository = JdbcAdminReportRepository(dataSource)
+        dataSource.insertUser(reporter)
+        dataSource.insertUser(reported)
+        val report = reportRepository.createReport(
+            reporterUserId = reporter,
+            reportedUserId = reported,
+            targetType = ReportTargetType.PROFILE,
+            targetId = null,
+            category = ReportCategory.SPAM_OR_FAKE_PROFILE,
+            note = "Looks fake"
+        )
+
+        val queue = adminRepository.listReports(
+            status = "open",
+            limit = 10,
+            actorId = "moderator-1",
+            reason = "daily report queue"
+        )
+        assertEquals(listOf(report.id), queue.map { it.reportId })
+
+        val underReview = adminRepository.updateReportStatus(
+            reportId = report.id,
+            status = "under_review",
+            actorId = "moderator-1",
+            reason = "triaged"
+        )
+        assertEquals("under_review", underReview?.status)
+        assertEquals("under_review", dataSource.reportStatus(report.id))
+
+        val resolved = adminRepository.updateReportStatus(
+            reportId = report.id,
+            status = "resolved",
+            actorId = "moderator-1",
+            reason = "removed offending content"
+        )
+
+        assertEquals("resolved", resolved?.status)
+        assertEquals("resolved", dataSource.reportStatus(report.id))
+        assertEquals(1, dataSource.countAdminAuditRows("reports.list"))
+        assertEquals(1, dataSource.countAdminAuditRows("report.under_review"))
+        assertEquals(1, dataSource.countAdminAuditRows("report.resolved"))
+        assertTrue(dataSource.reportReviewedAtExists(report.id))
+    }
+
+    @Test
+    fun adminReportReviewDoesNotReopenResolvedReports() = runBlocking {
+        val reporter = UUID.fromString("00000000-0000-0000-0000-000000000451")
+        val reported = UUID.fromString("00000000-0000-0000-0000-000000000452")
+        val reportRepository = JdbcReportRepository(dataSource)
+        val adminRepository = JdbcAdminReportRepository(dataSource)
+        dataSource.insertUser(reporter)
+        dataSource.insertUser(reported)
+        val report = reportRepository.createReport(
+            reporterUserId = reporter,
+            reportedUserId = reported,
+            targetType = ReportTargetType.PROFILE,
+            targetId = null,
+            category = ReportCategory.OTHER,
+            note = null
+        )
+
+        assertEquals(
+            "dismissed",
+            adminRepository.updateReportStatus(
+                reportId = report.id,
+                status = "dismissed",
+                actorId = "moderator-1",
+                reason = "not actionable"
+            )?.status
+        )
+
+        val secondAction = adminRepository.updateReportStatus(
+            reportId = report.id,
+            status = "under_review",
+            actorId = "moderator-1",
+            reason = "late triage"
+        )
+
+        assertEquals(null, secondAction)
+        assertEquals("dismissed", dataSource.reportStatus(report.id))
+    }
+
+    @Test
+    fun riskRepositoryRecordsEventAndUpdatesState() = runBlocking {
+        val actor = UUID.fromString("00000000-0000-0000-0000-000000000431")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000432")
+        val repository = JdbcRiskRepository(dataSource)
+        dataSource.insertUser(actor)
+        dataSource.insertUser(target)
+
+        val first = repository.recordEvent(
+            userId = target,
+            actorUserId = actor,
+            source = RiskService.SOURCE_REPORT,
+            reason = "report.${ReportCategory.HARASSMENT_OR_THREATS}",
+            delta = 20,
+            metadataJson = """{"reportId":"00000000-0000-0000-0000-000000000433"}"""
+        )
+        val second = repository.recordEvent(
+            userId = target,
+            actorUserId = actor,
+            source = RiskService.SOURCE_REPORT,
+            reason = "report.${ReportCategory.UNDERAGE_USER}",
+            delta = 35,
+            metadataJson = """{"reportId":"00000000-0000-0000-0000-000000000434"}"""
+        )
+
+        assertEquals("clean", first.state.tier)
+        assertEquals(55, second.state.score)
+        assertEquals("friction", second.state.tier)
+        assertEquals("friction", second.event.tierAfter)
+        assertEquals(55, repository.getState(target)?.score)
+    }
+
+    @Test
+    fun adminRiskReviewCanListSetClearAndAuditRiskStates() = runBlocking {
+        val reporter = UUID.fromString("00000000-0000-0000-0000-000000000461")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000462")
+        val riskRepository = JdbcRiskRepository(dataSource)
+        val adminRepository = JdbcAdminRiskRepository(dataSource)
+        dataSource.insertUser(reporter)
+        dataSource.insertUser(target)
+        dataSource.setProfileDisplayName(target, "Risky")
+        riskRepository.recordEvent(
+            userId = target,
+            actorUserId = reporter,
+            source = RiskService.SOURCE_REPORT,
+            reason = "report.${ReportCategory.UNDERAGE_USER}",
+            delta = 55,
+            metadataJson = """{"reportId":"00000000-0000-0000-0000-000000000463"}"""
+        )
+
+        val queue = adminRepository.listRiskStates(
+            tierFilter = "needs_review",
+            limit = 10,
+            actorId = "moderator-1",
+            reason = "daily risk queue"
+        )
+        assertEquals(listOf(target), queue.map { it.userId })
+        assertEquals("Risky", queue.single().displayName)
+        val events = adminRepository.listRiskEvents(
+            userId = target,
+            limit = 10,
+            actorId = "moderator-1",
+            reason = "risk investigation"
+        )
+        assertEquals(listOf("report.${ReportCategory.UNDERAGE_USER}"), events.map { it.reason })
+
+        val quarantined = adminRepository.setRiskTier(
+            userId = target,
+            tier = "quarantine",
+            actorId = "moderator-1",
+            reason = "confirmed account farm"
+        )
+
+        assertEquals("quarantine", quarantined?.tier)
+        assertEquals(70, quarantined?.score)
+        assertEquals("quarantine", riskRepository.getState(target)?.tier)
+
+        val cleared = adminRepository.setRiskTier(
+            userId = target,
+            tier = "clean",
+            actorId = "moderator-1",
+            reason = "appeal accepted"
+        )
+
+        assertEquals("clean", cleared?.tier)
+        assertEquals(0, cleared?.score)
+        assertEquals(emptyList(), adminRepository.listRiskStates("needs_review", 10, "moderator-1", "confirm clear"))
+        assertEquals(2, dataSource.countAdminAuditRows("risk_states.list"))
+        assertEquals(1, dataSource.countAdminAuditRows("risk_events.list"))
+        assertEquals(1, dataSource.countAdminAuditRows("risk.set_quarantine"))
+        assertEquals(1, dataSource.countAdminAuditRows("risk.set_clean"))
+        assertEquals(2, dataSource.countRiskEvents(target, source = "admin_review"))
+    }
+
+    @Test
+    fun adminRiskReviewCanMarkExistingStateReviewed() = runBlocking {
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000472")
+        val adminRepository = JdbcAdminRiskRepository(dataSource)
+        dataSource.insertUser(target)
+
+        val created = adminRepository.setRiskTier(
+            userId = target,
+            tier = "watch",
+            actorId = "moderator-1",
+            reason = "manual watch"
+        )
+        val reviewed = adminRepository.markRiskReviewed(
+            userId = target,
+            actorId = "moderator-1",
+            reason = "no immediate escalation"
+        )
+
+        assertEquals("watch", created?.tier)
+        assertEquals("watch", reviewed?.tier)
+        assertTrue(reviewed?.lastReviewedAt != null)
+        assertEquals(1, dataSource.countAdminAuditRows("risk.reviewed"))
+    }
+
+    @Test
+    fun adminRiskEnforcementLocksAccountRevokesSessionsAndAudits() = runBlocking {
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000482")
+        val adminRepository = JdbcAdminRiskRepository(dataSource)
+        dataSource.insertUser(target)
+        dataSource.insertSession(
+            sessionId = UUID.fromString("00000000-0000-0000-0000-000000000483"),
+            userId = target
+        )
+
+        val locked = adminRepository.lockAccount(
+            userId = target,
+            actorId = "moderator-1",
+            reason = "confirmed severe spam"
+        )
+
+        assertEquals("suspended", locked?.accountStatus)
+        assertEquals("terminate", locked?.tier)
+        assertEquals(90, locked?.score)
+        assertEquals("suspended", dataSource.userStatus(target))
+        assertEquals(1, dataSource.countRevokedSessions(target))
+        assertEquals(1, dataSource.countAdminAuditRows("account.lock"))
+        assertEquals(1, dataSource.countRiskEvents(target, source = "admin_enforcement"))
+    }
+
     private fun DataSource.insertUser(userId: UUID) {
         connection.use { connection ->
             connection.prepareStatement(
@@ -121,6 +353,30 @@ class SafetyRepositoryIntegrationTest {
                 """.trimIndent()
             ).use { statement ->
                 statement.setObject(1, userId)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    private fun DataSource.insertSession(sessionId: UUID, userId: UUID) {
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                INSERT INTO user_sessions (
+                    id,
+                    user_id,
+                    access_token_hash,
+                    refresh_token_hash,
+                    access_expires_at,
+                    refresh_expires_at
+                )
+                VALUES (?, ?, ?, ?, now() + interval '15 minutes', now() + interval '30 days')
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, sessionId)
+                statement.setObject(2, userId)
+                statement.setString(3, "access-$sessionId")
+                statement.setString(4, "refresh-$sessionId")
                 statement.executeUpdate()
             }
         }
@@ -141,6 +397,109 @@ class SafetyRepositoryIntegrationTest {
             }
         }
     }
+
+    private fun DataSource.reportStatus(reportId: UUID): String? =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT status
+                FROM safety_reports
+                WHERE id = ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, reportId)
+                statement.executeQuery().use { rs ->
+                    if (rs.next()) rs.getString("status") else null
+                }
+            }
+        }
+
+    private fun DataSource.reportReviewedAtExists(reportId: UUID): Boolean =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT reviewed_at IS NOT NULL AS reviewed
+                FROM safety_reports
+                WHERE id = ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, reportId)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getBoolean("reviewed")
+                }
+            }
+        }
+
+    private fun DataSource.countAdminAuditRows(action: String): Int =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT COUNT(*) AS row_count
+                FROM admin_audit_log
+                WHERE action = ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, action)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt("row_count")
+                }
+            }
+        }
+
+    private fun DataSource.countRiskEvents(userId: UUID, source: String): Int =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT COUNT(*) AS row_count
+                FROM account_risk_events
+                WHERE user_id = ?
+                  AND source = ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.setString(2, source)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt("row_count")
+                }
+            }
+        }
+
+    private fun DataSource.userStatus(userId: UUID): String? =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT status
+                FROM users
+                WHERE id = ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeQuery().use { rs ->
+                    if (rs.next()) rs.getString("status") else null
+                }
+            }
+        }
+
+    private fun DataSource.countRevokedSessions(userId: UUID): Int =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT COUNT(*) AS row_count
+                FROM user_sessions
+                WHERE user_id = ?
+                  AND revoked_at IS NOT NULL
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt("row_count")
+                }
+            }
+        }
 
     companion object {
         private val postgisImage = DockerImageName

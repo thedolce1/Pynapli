@@ -53,6 +53,20 @@ class AuthServiceTest {
     }
 
     @Test
+    fun suspendedCurrentUserCannotAuthenticateExistingSession() = runBlocking {
+        val repository = InMemoryAuthRepository()
+        val service = AuthService(repository)
+        val session = service.signupEmail("alex@example.com", "correct horse battery", null, null, null)
+        repository.setUserStatus(UUID.fromString(session.user.userId), "suspended")
+
+        val error = assertFailsWith<AuthException> {
+            service.authenticate(session.accessToken)
+        }
+
+        assertEquals("ACCOUNT_NOT_ACTIVE", error.code)
+    }
+
+    @Test
     fun shortPasswordIsRejected() = runBlocking {
         val service = AuthService(InMemoryAuthRepository())
 
@@ -113,10 +127,10 @@ private class InMemoryAuthRepository : AuthRepository {
     }
 
     override suspend fun findSessionByAccessTokenHash(tokenHash: String): SessionRecord? =
-        sessions.values.firstOrNull { it.accessTokenHash == tokenHash }
+        sessions.values.firstOrNull { it.accessTokenHash == tokenHash }?.withCurrentUserStatus()
 
     override suspend fun findSessionByRefreshTokenHash(tokenHash: String): SessionRecord? =
-        sessions.values.firstOrNull { it.refreshTokenHash == tokenHash }
+        sessions.values.firstOrNull { it.refreshTokenHash == tokenHash }?.withCurrentUserStatus()
 
     override suspend fun rotateSession(
         sessionId: UUID,
@@ -133,7 +147,7 @@ private class InMemoryAuthRepository : AuthRepository {
             refreshExpiresAt = refreshExpiresAt
         )
         sessions[sessionId] = rotated
-        return rotated
+        return rotated.withCurrentUserStatus()
     }
 
     override suspend fun revokeSession(sessionId: UUID): Boolean {
@@ -141,5 +155,14 @@ private class InMemoryAuthRepository : AuthRepository {
         sessions[sessionId] = current.copy(revokedAt = Instant.now())
         return true
     }
-}
 
+    fun setUserStatus(userId: UUID, status: String) {
+        users[userId] = users.getValue(userId).copy(status = status)
+        identitiesByEmailHash.replaceAll { _, identity ->
+            if (identity.userId == userId) identity.copy(userStatus = status) else identity
+        }
+    }
+
+    private fun SessionRecord.withCurrentUserStatus(): SessionRecord =
+        copy(userStatus = users[userId]?.status ?: userStatus)
+}

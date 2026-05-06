@@ -2,6 +2,7 @@ package com.pynapli.app.grid
 
 import androidx.compose.runtime.Immutable
 import com.pynapli.shared.network.dto.GridCardDto
+import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 
 @Immutable
 data class GridUiState(
@@ -9,6 +10,8 @@ data class GridUiState(
     val filters: List<GridFilterUi> = defaultGridFilters,
     val cards: List<GridProfileCardUi> = emptyList(),
     val isRefreshing: Boolean = false,
+    val adSupported: Boolean = false,
+    val paywallMessage: String? = null,
     val errorCode: String? = null,
     val errorMessage: String? = null
 )
@@ -17,7 +20,8 @@ data class GridUiState(
 data class GridFilterUi(
     val type: GridFilterType,
     val label: String,
-    val active: Boolean
+    val active: Boolean,
+    val locked: Boolean = false
 )
 
 enum class GridFilterType {
@@ -36,7 +40,16 @@ data class GridProfileCardUi(
     val online: Boolean,
     val distanceLabel: String?,
     val tone: GridCardTone,
-    val linkedPartnerTone: LinkedPartnerTone? = null
+    val linkedPartner: GridLinkedPartnerUi? = null,
+    val linkedPartnerTone: LinkedPartnerTone? = null,
+    val distanceMeters: Int? = null
+)
+
+@Immutable
+data class GridLinkedPartnerUi(
+    val userId: String,
+    val displayName: String? = null,
+    val thumbnailUrl: String? = null
 )
 
 enum class GridCardTone {
@@ -63,15 +76,28 @@ enum class LinkedPartnerTone {
 }
 
 internal val defaultGridFilters = listOf(
-    GridFilterUi(GridFilterType.Online, "Online", active = true),
-    GridFilterUi(GridFilterType.Nearby, "Nearby", active = false),
+    GridFilterUi(GridFilterType.Nearby, "Nearby", active = true),
+    GridFilterUi(GridFilterType.Online, "Online", active = false),
     GridFilterUi(GridFilterType.Linked, "Linked", active = false),
-    GridFilterUi(GridFilterType.Tonight, "Tonight", active = false),
-    GridFilterUi(GridFilterType.Age, "Age", active = false)
+    GridFilterUi(GridFilterType.Age, "Age", active = false),
+    GridFilterUi(GridFilterType.Tonight, "Tonight", active = false, locked = true)
 )
 
 internal fun List<GridFilterUi>.withActiveFilter(type: GridFilterType): List<GridFilterUi> =
     map { filter -> filter.copy(active = filter.type == type) }
+
+internal fun List<GridFilterUi>.withPaidLocks(adSupported: Boolean): List<GridFilterUi> =
+    map { filter ->
+        filter.copy(
+            locked = when (filter.type) {
+                GridFilterType.Nearby -> false
+                GridFilterType.Tonight -> true
+                GridFilterType.Online,
+                GridFilterType.Linked,
+                GridFilterType.Age -> adSupported
+            }
+        )
+    }
 
 internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi = GridProfileCardUi(
     id = userId,
@@ -80,5 +106,13 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi = Gr
     online = online,
     distanceLabel = distanceLabel,
     tone = GridCardTone.entries[index % GridCardTone.entries.size],
-    linkedPartnerTone = linkedPartner?.let { LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size] }
+    linkedPartner = linkedPartner?.toUi(),
+    linkedPartnerTone = linkedPartner?.let { LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size] },
+    distanceMeters = distanceMeters
+)
+
+internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi = GridLinkedPartnerUi(
+    userId = userId,
+    displayName = displayName,
+    thumbnailUrl = thumbnailUrl
 )

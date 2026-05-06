@@ -26,8 +26,45 @@ interface MessagingRepository {
         userId: UUID,
         conversationId: UUID,
         body: String,
+        moderationStatus: String = "visible",
+        bodyFingerprint: String? = null,
+        safetyReason: String? = null,
         messageIdFactory: () -> UUID = UUID::randomUUID
     ): MessageRecord?
+
+    suspend fun hasSentMessageInConversation(
+        userId: UUID,
+        conversationId: UUID
+    ): Boolean
+
+    suspend fun countRecentMessagesByFingerprint(
+        userId: UUID,
+        bodyFingerprint: String,
+        since: Instant
+    ): Int
+
+    suspend fun getActiveLinkedPartnerUserId(userId: UUID): UUID?
+
+    suspend fun inviteLinkedPartner(
+        inviterUserId: UUID,
+        conversationId: UUID,
+        partnerUserId: UUID
+    ): PartnerInviteResult
+
+    suspend fun acceptPartnerInvite(
+        userId: UUID,
+        conversationId: UUID
+    ): ConversationDetailRecord?
+
+    suspend fun declinePartnerInvite(
+        userId: UUID,
+        conversationId: UUID
+    ): Boolean
+
+    suspend fun leaveConversation(
+        userId: UUID,
+        conversationId: UUID
+    ): Boolean
 }
 
 data class ConversationRecord(
@@ -43,7 +80,9 @@ data class ConversationRecord(
 data class ConversationParticipantRecord(
     val userId: UUID,
     val displayName: String,
-    val online: Boolean = false
+    val online: Boolean = false,
+    val status: String = "active",
+    val invitedByUserId: UUID? = null
 )
 
 data class ConversationDetailRecord(
@@ -71,3 +110,10 @@ data class MessageRecord(
     val status: String,
     val deliveryStatus: String
 )
+
+sealed class PartnerInviteResult {
+    data class Invited(val conversation: ConversationRecord) : PartnerInviteResult()
+    data object ConversationNotFound : PartnerInviteResult()
+    data object AlreadyInConversation : PartnerInviteResult()
+    data object AlreadyInvited : PartnerInviteResult()
+}

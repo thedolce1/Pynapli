@@ -16,7 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AssistChip
@@ -29,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,13 +48,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.network.dto.ActivityEventDto
+import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.launch
 
 @Composable
 fun ActivityScreen(
     modifier: Modifier = Modifier,
-    stateHolder: ActivityStateHolder = rememberActivityStateHolder()
+    stateHolder: ActivityStateHolder = rememberActivityStateHolder(),
+    distanceUnit: String = AppSettings.UNIT_METRIC,
+    onOpenStore: () -> Unit = {}
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -67,6 +74,8 @@ fun ActivityScreen(
             scope.launch { stateHolder.respondToAlbumRequest(eventId, approve) }
         },
         onRefresh = { scope.launch { stateHolder.load() } },
+        onOpenStore = onOpenStore,
+        distanceUnit = distanceUnit,
         modifier = modifier
     )
 }
@@ -86,6 +95,8 @@ private fun ActivityScreenContent(
     onFilterSelected: (ActivityFilterUi) -> Unit,
     onAlbumRequestDecision: (String, Boolean) -> Unit,
     onRefresh: () -> Unit,
+    onOpenStore: () -> Unit,
+    distanceUnit: String,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -141,6 +152,14 @@ private fun ActivityScreenContent(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize()
                 ) {
+                    if (state.gatedCount > 0) {
+                        item(key = "activity-gate") {
+                            ActivityGateRow(
+                                gatedCount = state.gatedCount,
+                                onOpenStore = onOpenStore
+                            )
+                        }
+                    }
                     items(
                         items = state.visibleItems,
                         key = { item -> item.eventId }
@@ -148,13 +167,70 @@ private fun ActivityScreenContent(
                         ActivityRow(
                             item = item,
                             pendingAction = state.pendingAlbumActionEventId == item.eventId,
+                            distanceUnit = distanceUnit,
                             onAlbumRequestDecision = onAlbumRequestDecision
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                     }
+                    if (state.adSupported) {
+                        item(key = "activity-ad-slot") {
+                            ActivityAdSlot()
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ActivityGateRow(
+    gatedCount: Int,
+    onOpenStore: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Lock,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            text = "$gatedCount more hidden",
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onOpenStore) {
+            Text(text = "Select", maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun ActivityAdSlot() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+            .padding(vertical = 14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Sponsored",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium
+        )
     }
 }
 
@@ -242,8 +318,15 @@ private fun ActivityHeader(
 private fun ActivityRow(
     item: ActivityEventDto,
     pendingAction: Boolean,
+    distanceUnit: String,
     onAlbumRequestDecision: (String, Boolean) -> Unit
 ) {
+    val distanceLabel = formatDistanceForUnit(
+        distanceMeters = item.distanceMeters,
+        fallbackLabel = item.distanceLabel,
+        distanceUnit = distanceUnit
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -287,7 +370,7 @@ private fun ActivityRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                item.distanceLabel?.let { distance ->
+                distanceLabel?.let { distance ->
                     Text(
                         text = distance,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

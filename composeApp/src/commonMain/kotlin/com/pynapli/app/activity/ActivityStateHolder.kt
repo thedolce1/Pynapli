@@ -16,6 +16,10 @@ data class ActivityUiState(
     val items: List<ActivityEventDto> = emptyList(),
     val selectedFilter: ActivityFilterUi = ActivityFilterUi.All,
     val isLoading: Boolean = false,
+    val adSupported: Boolean = false,
+    val entitlementTier: String? = null,
+    val revealLimit: Int? = null,
+    val gatedCount: Int = 0,
     val pendingAlbumActionEventId: String? = null,
     val actionFeedback: String? = null,
     val errorMessage: String? = null
@@ -43,28 +47,50 @@ class ActivityStateHolder(
 ) {
     private val _state = MutableStateFlow(ActivityUiState(isLoading = true))
     val state: StateFlow<ActivityUiState> = _state.asStateFlow()
+    private var refreshInFlight = false
 
-    suspend fun load() {
-        _state.update { current -> current.copy(isLoading = true, errorMessage = null) }
-        when (val result = repository.loadActivity()) {
-            is AppResult.Success -> {
-                _state.update {
-                    it.copy(
-                        items = result.value,
-                        isLoading = false,
-                        errorMessage = null
-                    )
+    suspend fun load() = refresh(showLoading = true, surfaceErrors = true)
+
+    suspend fun refreshSilently() = refresh(showLoading = false, surfaceErrors = false)
+
+    private suspend fun refresh(showLoading: Boolean, surfaceErrors: Boolean) {
+        if (refreshInFlight) return
+        refreshInFlight = true
+        if (showLoading) {
+            _state.update { current -> current.copy(isLoading = true, errorMessage = null) }
+        }
+
+        try {
+            when (val result = repository.loadActivity()) {
+                is AppResult.Success -> {
+                    _state.update {
+                        it.copy(
+                            items = result.value.items,
+                            adSupported = result.value.adSupported,
+                            entitlementTier = result.value.entitlementTier,
+                            revealLimit = result.value.revealLimit,
+                            gatedCount = result.value.gatedCount,
+                            isLoading = false,
+                            errorMessage = null
+                        )
+                    }
+                }
+
+                is AppResult.Failure -> {
+                    _state.update { current ->
+                        current.copy(
+                            isLoading = false,
+                            errorMessage = if (surfaceErrors || current.items.isEmpty()) {
+                                result.error.message
+                            } else {
+                                current.errorMessage
+                            }
+                        )
+                    }
                 }
             }
-
-            is AppResult.Failure -> {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = result.error.message
-                    )
-                }
-            }
+        } finally {
+            refreshInFlight = false
         }
     }
 
@@ -115,7 +141,7 @@ class ActivityStateHolder(
 }
 
 interface ActivityFeedRepository {
-    suspend fun loadActivity(): AppResult<List<ActivityEventDto>>
+    suspend fun loadActivity(): AppResult<ActivityFeedUi>
 
     suspend fun respondToAlbumRequest(
         eventId: String,
@@ -126,9 +152,17 @@ interface ActivityFeedRepository {
 class ApiActivityFeedRepository(
     private val apiClient: PynapliApiClient
 ) : ActivityFeedRepository {
-    override suspend fun loadActivity(): AppResult<List<ActivityEventDto>> =
+    override suspend fun loadActivity(): AppResult<ActivityFeedUi> =
         when (val result = apiClient.listActivity()) {
-            is AppResult.Success -> AppResult.Success(result.value.items)
+            is AppResult.Success -> AppResult.Success(
+                ActivityFeedUi(
+                    items = result.value.items,
+                    adSupported = result.value.adSupported,
+                    entitlementTier = result.value.entitlementTier,
+                    revealLimit = result.value.revealLimit,
+                    gatedCount = result.value.gatedCount
+                )
+            )
             is AppResult.Failure -> result
         }
 
@@ -143,32 +177,35 @@ class ApiActivityFeedRepository(
 }
 
 class SampleActivityFeedRepository : ActivityFeedRepository {
-    override suspend fun loadActivity(): AppResult<List<ActivityEventDto>> =
+    override suspend fun loadActivity(): AppResult<ActivityFeedUi> =
         AppResult.Success(
-            listOf(
-                ActivityEventDto(
-                    eventId = "sample-1",
-                    type = "profile_view",
-                    actorUserId = "1",
-                    actorDisplayName = "Maya",
-                    count = 3,
-                    occurredAt = "2026-04-25T18:00:00Z",
-                    distanceLabel = "1.2 km"
-                ),
-                ActivityEventDto(
-                    eventId = "sample-2",
-                    type = "flirt",
-                    actorUserId = "2",
-                    actorDisplayName = "Alex",
-                    occurredAt = "2026-04-25T17:45:00Z"
-                ),
-                ActivityEventDto(
-                    eventId = "sample-3",
-                    type = "album_request",
-                    actorUserId = "3",
-                    actorDisplayName = "Sam",
-                    occurredAt = "2026-04-25T17:10:00Z",
-                    albumRequestStatus = "pending"
+            ActivityFeedUi(
+                items = listOf(
+                    ActivityEventDto(
+                        eventId = "sample-1",
+                        type = "profile_view",
+                        actorUserId = "1",
+                        actorDisplayName = "Maya",
+                        count = 3,
+                        occurredAt = "2026-04-25T18:00:00Z",
+                        distanceLabel = "1.2 km",
+                        distanceMeters = 1_200
+                    ),
+                    ActivityEventDto(
+                        eventId = "sample-2",
+                        type = "flirt",
+                        actorUserId = "2",
+                        actorDisplayName = "Alex",
+                        occurredAt = "2026-04-25T17:45:00Z"
+                    ),
+                    ActivityEventDto(
+                        eventId = "sample-3",
+                        type = "album_request",
+                        actorUserId = "3",
+                        actorDisplayName = "Sam",
+                        occurredAt = "2026-04-25T17:10:00Z",
+                        albumRequestStatus = "pending"
+                    )
                 )
             )
         )
@@ -184,3 +221,12 @@ class SampleActivityFeedRepository : ActivityFeedRepository {
             )
         )
 }
+
+@Immutable
+data class ActivityFeedUi(
+    val items: List<ActivityEventDto>,
+    val adSupported: Boolean = false,
+    val entitlementTier: String? = null,
+    val revealLimit: Int? = null,
+    val gatedCount: Int = 0
+)

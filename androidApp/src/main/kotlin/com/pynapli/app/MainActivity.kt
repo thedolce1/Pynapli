@@ -19,8 +19,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.pynapli.app.location.DeviceLocation
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.PickedMediaForUpload
+import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -44,12 +48,22 @@ class MainActivity : ComponentActivity() {
     ) { uri ->
         handlePickedMedia(uri)
     }
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        activityScope.launch {
+            syncPushRegistrationNow()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        startPushRegistrationSync()
+        startNotificationPermissionPromptSync()
         setContent {
             PynapliApp(
                 authStateHolder = appGraph.authStateHolder,
+                appSettingsStateHolder = appGraph.appSettingsStateHolder,
                 gridStateHolder = appGraph.gridStateHolder,
                 profileDetailStateHolder = appGraph.profileDetailStateHolder,
                 conversationStateHolder = appGraph.conversationStateHolder,
@@ -57,6 +71,9 @@ class MainActivity : ComponentActivity() {
                 activityStateHolder = appGraph.activityStateHolder,
                 locationStateHolder = appGraph.locationStateHolder,
                 mediaAlbumsStateHolder = appGraph.mediaAlbumsStateHolder,
+                profileHubStateHolder = appGraph.profileHubStateHolder,
+                profileLinksStateHolder = appGraph.profileLinksStateHolder,
+                swipeStateHolder = appGraph.swipeStateHolder,
                 onUseCurrentLocation = ::requestCurrentLocation,
                 onPickMediaForAlbum = ::pickMediaForAlbum,
                 devLoginCredentials = appGraph.devLoginCredentials.takeIf { isDebuggable() }
@@ -69,6 +86,63 @@ class MainActivity : ComponentActivity() {
         pendingLocationSignal = null
         activityScope.cancel()
         super.onDestroy()
+    }
+
+    private fun startPushRegistrationSync() {
+        activityScope.launch {
+            combine(
+                appGraph.authStateHolder.state,
+                appGraph.appSettingsStateHolder.state
+            ) { authState, appSettingsState ->
+                PushRegistrationSyncInput(
+                    userId = authState.session?.userId,
+                    settings = appSettingsState.settings
+                )
+            }
+                .distinctUntilChanged()
+                .collectLatest { input ->
+                    appGraph.pushRegistrationCoordinator.syncAuthenticatedDevice(
+                        userId = input.userId,
+                        settings = input.settings
+                    )
+                }
+        }
+    }
+
+    private fun startNotificationPermissionPromptSync() {
+        activityScope.launch {
+            combine(
+                appGraph.authStateHolder.state,
+                appGraph.appSettingsStateHolder.state
+            ) { authState, appSettingsState ->
+                authState.authenticated && appSettingsState.settings.pushNotificationsEnabled()
+            }
+                .distinctUntilChanged()
+                .collectLatest { shouldPrompt ->
+                    if (shouldPrompt) {
+                        requestNotificationPermissionIfUseful()
+                    }
+                }
+        }
+    }
+
+    private fun requestNotificationPermissionIfUseful() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        val preferences = getSharedPreferences(NOTIFICATION_PERMISSION_PREFERENCES, Context.MODE_PRIVATE)
+        if (preferences.getBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, false)) return
+
+        preferences.edit().putBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, true).apply()
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    private suspend fun syncPushRegistrationNow() {
+        val authState = appGraph.authStateHolder.state.value
+        val settings = appGraph.appSettingsStateHolder.state.value.settings
+        appGraph.pushRegistrationCoordinator.syncAuthenticatedDevice(
+            userId = authState.session?.userId,
+            settings = settings
+        )
     }
 
     private fun pickMediaForAlbum(kind: MediaAlbumKindUi) {
@@ -206,3 +280,14 @@ class MainActivity : ComponentActivity() {
             )
         }.getOrNull()
 }
+
+private data class PushRegistrationSyncInput(
+    val userId: String?,
+    val settings: AppSettings
+)
+
+private fun AppSettings.pushNotificationsEnabled(): Boolean =
+    messageNotifications || matchNotifications || activityNotifications
+
+private const val NOTIFICATION_PERMISSION_PREFERENCES = "pynapli_notification_permission"
+private const val KEY_NOTIFICATION_PERMISSION_REQUESTED = "requested"

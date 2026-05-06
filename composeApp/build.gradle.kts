@@ -11,6 +11,7 @@ kotlin {
         namespace = "com.pynapli.compose"
         compileSdk = 36
         minSdk = 23
+        withHostTest {}
         androidResources {
             enable = true
         }
@@ -33,6 +34,7 @@ kotlin {
             implementation(compose.components.resources)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor3)
             implementation(libs.koin.compose)
         }
 

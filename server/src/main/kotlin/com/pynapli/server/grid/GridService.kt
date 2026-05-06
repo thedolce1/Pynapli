@@ -1,19 +1,25 @@
 package com.pynapli.server.grid
 
+import com.pynapli.server.discovery.discoveryFiltersFrom
+import com.pynapli.server.distance.toPublicDistanceLabel
+import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.shared.network.dto.GridCardDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.subscriptions.EntitlementPolicy
+import com.pynapli.server.subscriptions.SubscriptionService
 import java.util.UUID
-import kotlin.math.roundToInt
+import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 
 class GridService(
     private val repository: GridRepository,
     private val presenceService: PresenceService? = null,
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
-    private val blockRepository: BlockRepository? = null
+    private val blockRepository: BlockRepository? = null,
+    private val subscriptionService: SubscriptionService? = null
 ) {
     suspend fun queryGrid(
         viewerUserId: UUID,
@@ -21,7 +27,19 @@ class GridService(
     ): GridQueryResponseDto {
         val radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
         val limit = request.limit.coerceIn(1, MAX_LIMIT)
-        val result = repository.queryNearby(viewerUserId, radiusMeters, limit)
+        val filters = discoveryFiltersFrom(
+            minimumAge = request.minimumAge,
+            maximumAge = request.maximumAge,
+            relationshipContexts = request.relationshipContexts,
+            linkedOnly = request.linkedOnly
+        ) { _ -> GridException("INVALID_GRID_FILTER") }
+        val advancedFiltersApplied = filters.hasAdvancedFilters || request.onlineOnly
+        val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
+        if (advancedFiltersApplied && !policy.advancedFiltersAllowed) {
+            throw GridException("ENTITLEMENT_REQUIRED")
+        }
+
+        val result = repository.queryNearby(viewerUserId, radiusMeters, limit, filters)
         if (!result.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
 
         val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
@@ -33,10 +51,17 @@ class GridService(
 
         refreshViewerPresence(viewerUserId)
         val onlineUserIds = onlineUserIdsFor(visibleCards)
+        val filteredCards = if (request.onlineOnly) {
+            visibleCards.filter { it.userId in onlineUserIds }
+        } else {
+            visibleCards
+        }
 
         return GridQueryResponseDto(
-            items = visibleCards.map { it.toDto(onlineUserIds) },
-            nextCursor = null
+            items = filteredCards.map { it.toDto(onlineUserIds) },
+            nextCursor = null,
+            adSupported = policy.adSupported,
+            advancedFiltersApplied = advancedFiltersApplied
         )
     }
 
@@ -54,23 +79,18 @@ class GridService(
         displayName = displayName,
         thumbnailUrl = thumbnailMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
         online = userId in onlineUserIds,
-        distanceLabel = if (showDistance) distanceMeters.toDistanceLabel() else null,
+        distanceLabel = if (showDistance) distanceMeters.toPublicDistanceLabel() else null,
+        distanceMeters = if (showDistance) distanceMeters.toPublicDistanceMeters() else null,
+        linkedPartner = linkedPartnerUserId?.let { partnerUserId ->
+            LinkedPartnerMiniDto(
+                userId = partnerUserId.toString(),
+                displayName = linkedPartnerDisplayName,
+                thumbnailUrl = linkedPartnerThumbnailMediaAssetId
+                    ?.let { mediaAssetUrlResolver?.publicContentUrl(it) }
+            )
+        },
         rankToken = "grid:v1:$userId"
     )
-
-    private fun Double.toDistanceLabel(): String {
-        if (this < 1_000.0) {
-            val roundedMeters = ((this / 100.0).roundToInt() * 100).coerceAtLeast(100)
-            return "$roundedMeters m"
-        }
-
-        val km = this / 1_000.0
-        return if (km < 10) {
-            "%.1f km".format(km)
-        } else {
-            "${km.roundToInt()} km"
-        }
-    }
 
     companion object {
         private const val MIN_RADIUS_METERS = 1_000

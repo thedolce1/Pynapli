@@ -14,8 +14,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -23,6 +27,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -44,6 +50,11 @@ fun ConversationSheet(
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit,
     onLoadOlder: () -> Unit,
+    linkedPartnerUserId: String? = null,
+    onInvitePartner: () -> Unit = {},
+    onAcceptInvite: () -> Unit = {},
+    onDeclineInvite: () -> Unit = {},
+    onLeaveConversation: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (!state.visible) return
@@ -90,6 +101,14 @@ fun ConversationSheet(
                 }
 
                 else -> {
+                    ConversationPartnerActions(
+                        state = state,
+                        linkedPartnerUserId = linkedPartnerUserId,
+                        onInvitePartner = onInvitePartner,
+                        onAcceptInvite = onAcceptInvite,
+                        onDeclineInvite = onDeclineInvite,
+                        onLeaveConversation = onLeaveConversation
+                    )
                     MessageList(
                         messages = state.detail?.messages.orEmpty(),
                         viewerUserId = state.viewerUserId,
@@ -100,17 +119,201 @@ fun ConversationSheet(
                             .fillMaxWidth()
                             .heightIn(min = 220.dp, max = 430.dp)
                     )
-                    Composer(
-                        draft = state.draft,
-                        canSend = state.canSend,
-                        isSending = state.isSending,
-                        isOverLimit = state.draftOverLimit,
-                        remainingCharacters = state.draftRemaining,
-                        errorMessage = state.errorMessage,
-                        onDraftChanged = onDraftChanged,
-                        onSend = onSend
+                    if (!state.isViewerInvited) {
+                        Composer(
+                            draft = state.draft,
+                            canSend = state.canSend,
+                            isSending = state.isSending,
+                            isOverLimit = state.draftOverLimit,
+                            remainingCharacters = state.draftRemaining,
+                            errorMessage = state.errorMessage,
+                            onDraftChanged = onDraftChanged,
+                            onSend = onSend
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversationPartnerActions(
+    state: ConversationUiState,
+    linkedPartnerUserId: String?,
+    onInvitePartner: () -> Unit,
+    onAcceptInvite: () -> Unit,
+    onDeclineInvite: () -> Unit,
+    onLeaveConversation: () -> Unit
+) {
+    val conversation = state.detail?.conversation ?: return
+    val partnerAlreadyInThread = linkedPartnerUserId != null &&
+        conversation.participants.any { participant ->
+            participant.userId == linkedPartnerUserId &&
+                participant.status in visibleConversationParticipantStatuses
+        }
+    val showInvitePartner = linkedPartnerUserId != null &&
+        !partnerAlreadyInThread &&
+        !state.isViewerInvited &&
+        !state.isLeaving
+    val showLeave = conversation.kind == "group" &&
+        !state.isViewerInvited &&
+        !state.isInvitingPartner
+
+    when {
+        state.isViewerInvited -> {
+            PartnerInvitePrompt(
+                isResponding = state.isRespondingToInvite,
+                errorMessage = state.errorMessage,
+                onAcceptInvite = onAcceptInvite,
+                onDeclineInvite = onDeclineInvite
+            )
+        }
+
+        showInvitePartner || showLeave || state.partnerInviteFeedback != null || state.isInvitingPartner || state.isLeaving -> {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    state.partnerInviteFeedback?.let { message ->
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } ?: Box(modifier = Modifier.weight(1f))
+
+                    if (showInvitePartner) {
+                        TextButton(
+                            onClick = onInvitePartner,
+                            enabled = !state.isInvitingPartner
+                        ) {
+                            if (state.isInvitingPartner) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Filled.PersonAdd,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = "Invite partner",
+                                modifier = Modifier.padding(start = 6.dp)
+                            )
+                        }
+                    }
+
+                    if (showLeave) {
+                        TextButton(
+                            onClick = onLeaveConversation,
+                            enabled = !state.isLeaving
+                        ) {
+                            if (state.isLeaving) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Logout,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = "Leave",
+                                modifier = Modifier.padding(start = 6.dp)
+                            )
+                        }
+                    }
+                }
+                if (state.errorMessage != null && state.draft.isBlank()) {
+                    Text(
+                        text = state.errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PartnerInvitePrompt(
+    isResponding: Boolean,
+    errorMessage: String?,
+    onAcceptInvite: () -> Unit,
+    onDeclineInvite: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "You were invited to join this chat.",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = onAcceptInvite,
+                    enabled = !isResponding
+                ) {
+                    if (isResponding) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Text(
+                        text = "Accept",
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
+                OutlinedButton(
+                    onClick = onDeclineInvite,
+                    enabled = !isResponding
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Decline",
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
+            }
+            errorMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }

@@ -2,6 +2,7 @@ package com.pynapli.server.profile
 
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
@@ -30,6 +31,12 @@ fun Application.configureProfileRoutes(
             val user = authService.authenticate(call.requiredBearerToken())
             val request = call.receive<UpdateProfileRequestDto>()
             call.respond(profileService.updateProfile(user.id, request))
+        }
+
+        patch("/v1/me/discovery-settings") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val request = call.receive<UpdateDiscoverySettingsRequestDto>()
+            call.respond(profileService.updateDiscoverySettings(user.id, request))
         }
 
         get("/v1/profiles/{userId}") {

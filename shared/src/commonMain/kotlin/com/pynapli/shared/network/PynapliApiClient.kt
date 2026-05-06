@@ -10,8 +10,10 @@ import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
+import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
+import com.pynapli.shared.network.dto.CreateProfileLinkInvitationRequestDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
@@ -26,11 +28,16 @@ import com.pynapli.shared.network.dto.MediaAlbumGrantsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
+import com.pynapli.shared.network.dto.NotificationPreferencesDto
 import com.pynapli.shared.network.dto.ReportDto
+import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PresenceHeartbeatResponseDto
+import com.pynapli.shared.network.dto.PushDeviceRegistrationResponseDto
+import com.pynapli.shared.network.dto.ProfileLinksSummaryDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
+import com.pynapli.shared.network.dto.RegisterPushDeviceRequestDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessRequestDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessRequestDto
@@ -38,8 +45,19 @@ import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
+import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
+import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
+import com.pynapli.shared.network.dto.UnregisterPushDeviceRequestDto
+import com.pynapli.shared.network.dto.SwipeActionRequestDto
+import com.pynapli.shared.network.dto.SwipeActionResponseDto
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
+import com.pynapli.shared.network.dto.SwipeDeckResponseDto
+import com.pynapli.shared.network.dto.MatchesListResponseDto
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
+import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
+import com.pynapli.shared.network.dto.UpdateNotificationPreferencesRequestDto
+import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -47,6 +65,7 @@ import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -70,7 +89,41 @@ interface PynapliApiClient {
 
     suspend fun queryGrid(request: GridQueryRequestDto = GridQueryRequestDto()): AppResult<GridQueryResponseDto>
 
+    suspend fun getMe(): AppResult<MeDto>
+
+    suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto>
+
+    suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto>
+
+    suspend fun getNotificationPreferences(): AppResult<NotificationPreferencesDto>
+
+    suspend fun updateNotificationPreferences(
+        request: UpdateNotificationPreferencesRequestDto
+    ): AppResult<NotificationPreferencesDto>
+
+    suspend fun registerPushDevice(
+        request: RegisterPushDeviceRequestDto
+    ): AppResult<PushDeviceRegistrationResponseDto>
+
+    suspend fun unregisterPushDevice(request: UnregisterPushDeviceRequestDto): AppResult<Unit>
+
     suspend fun getPublicProfile(userId: String): AppResult<PublicProfileDto>
+
+    suspend fun listProfileLinks(): AppResult<ProfileLinksSummaryDto>
+
+    suspend fun createProfileLinkInvitation(
+        request: CreateProfileLinkInvitationRequestDto
+    ): AppResult<ProfileLinksSummaryDto>
+
+    suspend fun acceptProfileLinkInvitation(linkId: String): AppResult<ProfileLinksSummaryDto>
+
+    suspend fun declineProfileLinkInvitation(linkId: String): AppResult<ProfileLinksSummaryDto>
+
+    suspend fun unlinkCurrentProfileLink(): AppResult<ProfileLinksSummaryDto>
+
+    suspend fun getSubscriptionEntitlement(): AppResult<SubscriptionEntitlementDto>
+
+    suspend fun getSubscriptionInventory(): AppResult<SubscriptionInventoryResponseDto>
 
     suspend fun listActivity(limit: Int? = null): AppResult<ActivityFeedResponseDto>
 
@@ -97,6 +150,14 @@ interface PynapliApiClient {
 
     suspend fun sendMessage(conversationId: String, request: SendMessageRequestDto): AppResult<MessageDto>
 
+    suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto>
+
+    suspend fun acceptConversationPartnerInvite(conversationId: String): AppResult<ConversationDetailDto>
+
+    suspend fun declineConversationPartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
+
+    suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
+
     suspend fun createMediaUpload(request: CreateMediaUploadRequestDto): AppResult<MediaUploadSlotDto>
 
     suspend fun completeMediaUpload(
@@ -119,6 +180,12 @@ interface PynapliApiClient {
     suspend fun listBlocks(): AppResult<BlocksListDto>
 
     suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto>
+
+    suspend fun querySwipeDeck(request: SwipeDeckRequestDto = SwipeDeckRequestDto()): AppResult<SwipeDeckResponseDto>
+
+    suspend fun submitSwipeAction(request: SwipeActionRequestDto): AppResult<SwipeActionResponseDto>
+
+    suspend fun listMatches(): AppResult<MatchesListResponseDto>
 
     fun mediaAssetContentUrl(mediaAssetId: String): String
 
@@ -165,9 +232,130 @@ class KtorPynapliApiClient(
             }.toAppResult(json)
         }
 
+    override suspend fun getMe(): AppResult<MeDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/me")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> =
+        authenticatedPost { token ->
+            httpClient.patch(config.endpoint("/v1/me/profile")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto> =
+        authenticatedPost { token ->
+            httpClient.patch(config.endpoint("/v1/me/discovery-settings")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun getNotificationPreferences(): AppResult<NotificationPreferencesDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/notifications/preferences")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun updateNotificationPreferences(
+        request: UpdateNotificationPreferencesRequestDto
+    ): AppResult<NotificationPreferencesDto> =
+        authenticatedPost { token ->
+            httpClient.patch(config.endpoint("/v1/notifications/preferences")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun registerPushDevice(
+        request: RegisterPushDeviceRequestDto
+    ): AppResult<PushDeviceRegistrationResponseDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/notifications/devices")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun unregisterPushDevice(request: UnregisterPushDeviceRequestDto): AppResult<Unit> =
+        authenticatedPost { token ->
+            val response = httpClient.post(config.endpoint("/v1/notifications/devices/unregister")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }
+            if (response.status.value in 200..299) {
+                AppResult.Success(Unit)
+            } else {
+                response.toAppResult<Unit>(json)
+            }
+        }
+
     override suspend fun getPublicProfile(userId: String): AppResult<PublicProfileDto> =
         authenticatedPost { token ->
             httpClient.get(config.endpoint("/v1/profiles/$userId")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun listProfileLinks(): AppResult<ProfileLinksSummaryDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/profile-links")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun createProfileLinkInvitation(
+        request: CreateProfileLinkInvitationRequestDto
+    ): AppResult<ProfileLinksSummaryDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/profile-links/invitations")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun acceptProfileLinkInvitation(linkId: String): AppResult<ProfileLinksSummaryDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/profile-links/invitations/$linkId/accept")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun declineProfileLinkInvitation(linkId: String): AppResult<ProfileLinksSummaryDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/profile-links/invitations/$linkId/decline")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun unlinkCurrentProfileLink(): AppResult<ProfileLinksSummaryDto> =
+        authenticatedPost { token ->
+            httpClient.delete(config.endpoint("/v1/profile-links/current")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun getSubscriptionEntitlement(): AppResult<SubscriptionEntitlementDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/subscriptions/entitlement")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun getSubscriptionInventory(): AppResult<SubscriptionInventoryResponseDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/subscriptions/inventory")) {
                 bearerAuth(token)
             }.toAppResult(json)
         }
@@ -262,6 +450,36 @@ class KtorPynapliApiClient(
             }.toAppResult(json)
         }
 
+    override suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/messages/threads/$conversationId/partner-invite")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun acceptConversationPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/messages/threads/$conversationId/partner-invite/accept")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun declineConversationPartnerInvite(
+        conversationId: String
+    ): AppResult<ConversationPartnerInviteResponseDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/messages/threads/$conversationId/partner-invite/decline")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/messages/threads/$conversationId/leave")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
     override suspend fun createMediaUpload(request: CreateMediaUploadRequestDto): AppResult<MediaUploadSlotDto> =
         authenticatedPost { token ->
             httpClient.post(config.endpoint("/v1/media/uploads")) {
@@ -348,6 +566,31 @@ class KtorPynapliApiClient(
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun querySwipeDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckResponseDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/swipe/deck/query")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun submitSwipeAction(request: SwipeActionRequestDto): AppResult<SwipeActionResponseDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/swipe/actions")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun listMatches(): AppResult<MatchesListResponseDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/matches")) {
+                bearerAuth(token)
             }.toAppResult(json)
         }
 

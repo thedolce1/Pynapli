@@ -9,6 +9,8 @@ interface ProfileRepository {
     suspend fun getPublicProfile(viewerUserId: UUID, targetUserId: UUID): PublicProfileRecord?
 
     suspend fun updateProfile(userId: UUID, update: ProfileUpdate): MeRecord?
+
+    suspend fun updateDiscoverySettings(userId: UUID, update: DiscoverySettingsUpdate): MeRecord?
 }
 
 data class MeRecord(
@@ -53,6 +55,9 @@ data class PublicProfileRecord(
     val userId: UUID,
     val displayName: String,
     val profilePhotoMediaAssetId: UUID?,
+    val linkedPartnerUserId: UUID? = null,
+    val linkedPartnerDisplayName: String? = null,
+    val linkedPartnerThumbnailMediaAssetId: UUID? = null,
     val displayAge: Int?,
     val gender: String?,
     val orientation: String?,
@@ -74,4 +79,16 @@ data class ProfileUpdate(
     val discoveryStyle: String?,
     val displayAge: Int?,
     val profileCompletenessScore: Int
+)
+
+data class DiscoverySettingsUpdate(
+    val gridVisible: Boolean?,
+    val swipeVisible: Boolean?,
+    val showDistance: Boolean?,
+    val showInViewedLists: Boolean?,
+    val allowGridMessages: Boolean?,
+    val gridMessagePolicy: String?,
+    val allowFlirts: Boolean?,
+    val allowIntroNotes: Boolean?,
+    val allowAlbumRequests: Boolean?
 )
