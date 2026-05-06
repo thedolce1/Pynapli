@@ -1,0 +1,215 @@
+package com.pynapli.server.swipe
+
+import com.pynapli.server.discovery.discoveryFiltersFrom
+import com.pynapli.server.distance.toPublicDistanceLabel
+import com.pynapli.server.distance.toPublicDistanceMeters
+import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.notifications.NotificationEventDraft
+import com.pynapli.server.notifications.NotificationKind
+import com.pynapli.server.notifications.NotificationPublisher
+import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.RateLimitedAction
+import com.pynapli.server.safety.RiskPolicyService
+import com.pynapli.server.subscriptions.EntitlementPolicy
+import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
+import com.pynapli.shared.network.dto.MatchDto
+import com.pynapli.shared.network.dto.MatchesListResponseDto
+import com.pynapli.shared.network.dto.SwipeAction
+import com.pynapli.shared.network.dto.SwipeActionRequestDto
+import com.pynapli.shared.network.dto.SwipeActionResponseDto
+import com.pynapli.shared.network.dto.SwipeCardDto
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
+import com.pynapli.shared.network.dto.SwipeDeckResponseDto
+import com.pynapli.shared.network.dto.SubscriptionTier
+import java.util.UUID
+
+class SwipeService(
+    private val repository: SwipeRepository,
+    private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
+    private val blockRepository: BlockRepository? = null,
+    private val notificationPublisher: NotificationPublisher? = null,
+    private val rateLimitService: RateLimitService? = null,
+    private val riskPolicyService: RiskPolicyService? = null,
+    private val subscriptionService: SubscriptionService? = null
+) {
+    suspend fun queryDeck(viewerUserId: UUID, request: SwipeDeckRequestDto): SwipeDeckResponseDto {
+        val radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
+        val limit = request.limit.coerceIn(1, MAX_LIMIT)
+        val filters = discoveryFiltersFrom(
+            minimumAge = request.minimumAge,
+            maximumAge = request.maximumAge,
+            relationshipContexts = request.relationshipContexts,
+            linkedOnly = request.linkedOnly
+        ) { _ -> SwipeException("INVALID_SWIPE_FILTER") }
+        val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
+        if (filters.hasAdvancedFilters && !policy.advancedFiltersAllowed) {
+            throw SwipeException("ENTITLEMENT_REQUIRED")
+        }
+
+        val result = repository.queryDeck(viewerUserId, radiusMeters, limit, filters)
+        if (!result.viewerHadLocation) throw SwipeException("LOCATION_REQUIRED")
+
+        val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
+        val visible = if (blockedRelatedIds.isEmpty()) {
+            result.cards
+        } else {
+            result.cards.filterNot { it.userId in blockedRelatedIds }
+        }
+
+        return SwipeDeckResponseDto(
+            items = visible.map { it.toDto() },
+            nextCursor = null,
+            adSupported = policy.adSupported,
+            advancedFiltersApplied = filters.hasAdvancedFilters
+        )
+    }
+
+    suspend fun submitAction(viewerUserId: UUID, request: SwipeActionRequestDto): SwipeActionResponseDto {
+        val targetUserId = request.targetUserId.toUuidOrThrow()
+        if (targetUserId == viewerUserId) throw SwipeException("INVALID_SWIPE_TARGET")
+
+        val action = request.action.trim().lowercase()
+        if (action !in ACTIONS) throw SwipeException("INVALID_SWIPE_ACTION")
+        val noteText = request.noteText?.trim()
+        if (action == SwipeAction.INTRO_NOTE) {
+            if (noteText.isNullOrEmpty()) throw SwipeException("INTRO_NOTE_EMPTY")
+            if (noteText.length > INTRO_NOTE_MAX_LENGTH) throw SwipeException("INTRO_NOTE_TOO_LONG")
+        } else if (!noteText.isNullOrEmpty()) {
+            throw SwipeException("INVALID_SWIPE_ACTION")
+        }
+        if (riskPolicyService?.isSocialActionRestricted(viewerUserId) == true) {
+            throw SwipeException("RISK_RESTRICTED")
+        }
+        val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
+        if (action == SwipeAction.INTRO_NOTE) {
+            if (policy.tier == SubscriptionTier.FREE) {
+                throw SwipeException("ENTITLEMENT_REQUIRED")
+            }
+        }
+
+        if (blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) == true) {
+            throw SwipeException("INVALID_SWIPE_TARGET")
+        }
+        if (rateLimitService?.check(viewerUserId, RateLimitedAction.SWIPE_ACTION)?.allowed == false) {
+            throw SwipeException("RATE_LIMITED")
+        }
+
+        if (!repository.isActionTargetEligible(
+                viewerUserId = viewerUserId,
+                targetUserId = targetUserId,
+                radiusMeters = MAX_RADIUS_METERS,
+                requireIntroNotesAllowed = action == SwipeAction.INTRO_NOTE
+            )
+        ) {
+            throw SwipeException("INVALID_SWIPE_TARGET")
+        }
+
+        if (action == SwipeAction.INTRO_NOTE) {
+            val consumed = subscriptionService?.consumeIntroNoteInventory(viewerUserId) ?: true
+            if (!consumed) throw SwipeException("INTRO_NOTE_INVENTORY_REQUIRED")
+        }
+
+        val result = repository.recordSwipeAction(
+            actorUserId = viewerUserId,
+            targetUserId = targetUserId,
+            action = action,
+            noteText = noteText
+        )
+        val match = result.match
+        if (match != null) {
+            notificationPublisher?.enqueue(
+                NotificationEventDraft(
+                    recipientUserId = targetUserId,
+                    actorUserId = viewerUserId,
+                    kind = NotificationKind.MATCH,
+                    subjectId = match.matchId,
+                    idempotencyKey = "match:${match.matchId}:$targetUserId",
+                    payload = mapOf(
+                        "matchId" to match.matchId.toString(),
+                        "matchedUserId" to viewerUserId.toString()
+                    )
+                )
+            )
+        }
+
+        return SwipeActionResponseDto(
+            recorded = result.recorded,
+            match = match?.let { record ->
+                MatchDto(
+                    matchId = record.matchId.toString(),
+                    matchedUserId = if (record.userA == viewerUserId) record.userB.toString() else record.userA.toString(),
+                    matchedDisplayName = null,
+                    matchedPhotoUrl = null,
+                    createdAt = record.createdAt.toString()
+                )
+            }
+        )
+    }
+
+    suspend fun listMatches(viewerUserId: UUID): MatchesListResponseDto {
+        val rows = repository.listMatches(viewerUserId, MATCHES_LIMIT)
+        val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
+        val blockVisible = if (blockedRelatedIds.isEmpty()) {
+            rows
+        } else {
+            rows.filterNot { it.matchedUserId in blockedRelatedIds }
+        }
+        val visible = if (riskPolicyService == null) {
+            blockVisible
+        } else {
+            buildList {
+                for (record in blockVisible) {
+                    if (!riskPolicyService.shouldHideFromDiscovery(record.matchedUserId)) {
+                        add(record)
+                    }
+                }
+            }
+        }
+        return MatchesListResponseDto(
+            matches = visible.map { record ->
+                MatchDto(
+                    matchId = record.matchId.toString(),
+                    matchedUserId = record.matchedUserId.toString(),
+                    matchedDisplayName = record.matchedDisplayName,
+                    matchedPhotoUrl = record.matchedThumbnailMediaAssetId
+                        ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                    createdAt = record.createdAt.toString()
+                )
+            }
+        )
+    }
+
+    private fun SwipeCardRecord.toDto(): SwipeCardDto = SwipeCardDto(
+        userId = userId.toString(),
+        displayName = displayName,
+        displayAge = displayAge,
+        distanceLabel = if (showDistance) distanceMeters.toPublicDistanceLabel() else null,
+        distanceMeters = if (showDistance) distanceMeters.toPublicDistanceMeters() else null,
+        photoUrl = thumbnailMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+        linkedPartner = linkedPartnerUserId?.let { partnerUserId ->
+            LinkedPartnerMiniDto(
+                userId = partnerUserId.toString(),
+                displayName = linkedPartnerDisplayName,
+                thumbnailUrl = linkedPartnerThumbnailMediaAssetId
+                    ?.let { mediaAssetUrlResolver?.publicContentUrl(it) }
+            )
+        },
+        rankToken = "swipe:v1:$userId"
+    )
+
+    private fun String.toUuidOrThrow(): UUID =
+        runCatching { UUID.fromString(this) }.getOrElse { throw SwipeException("INVALID_SWIPE_TARGET") }
+
+    companion object {
+        private const val MIN_RADIUS_METERS = 1_000
+        private const val MAX_RADIUS_METERS = 100_000
+        private const val MAX_LIMIT = 60
+        private const val MATCHES_LIMIT = 50
+        private const val INTRO_NOTE_MAX_LENGTH = 140
+        private val ACTIONS = setOf(SwipeAction.LIKE, SwipeAction.PASS, SwipeAction.INTRO_NOTE)
+    }
+}
+
+class SwipeException(val code: String) : RuntimeException(code)
