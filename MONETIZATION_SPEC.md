@@ -577,7 +577,7 @@ Do not experiment with:
 - [x] Pineapple Like inventory exists.
 - [x] Intro Note inventory exists.
 - [x] Ads are excluded from sensitive surfaces.
-- [ ] Safety features remain free.
+- [x] Safety features remain free.
 - [ ] Paywall copy uses Social/Select naming.
 
 ## Do Not Implement

@@ -2,12 +2,15 @@ package com.pynapli.server.safety
 
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlocksListDto
+import com.pynapli.shared.monetization.FeatureAccessPolicy
+import com.pynapli.shared.monetization.PynapliFeature
 import java.util.UUID
 
 class BlockService(
     private val repository: BlockRepository
 ) {
     suspend fun blockUser(blockerUserId: UUID, targetUserIdText: String, reason: String?): BlockSummaryDto {
+        FeatureAccessPolicy.requireAlwaysFreeSafetyFeature(PynapliFeature.BlockUser)
         val targetUserId = targetUserIdText.toUuidOrThrow()
         if (targetUserId == blockerUserId) throw SafetyException("BLOCK_SELF_FORBIDDEN")
 
@@ -25,13 +28,15 @@ class BlockService(
     }
 
     suspend fun unblockUser(blockerUserId: UUID, targetUserIdText: String): Boolean {
+        FeatureAccessPolicy.requireAlwaysFreeSafetyFeature(PynapliFeature.UnblockUser)
         val targetUserId = targetUserIdText.toUuidOrThrow()
         if (targetUserId == blockerUserId) throw SafetyException("BLOCK_SELF_FORBIDDEN")
         return repository.unblock(blockerUserId, targetUserId)
     }
 
-    suspend fun listBlocks(blockerUserId: UUID): BlocksListDto =
-        BlocksListDto(
+    suspend fun listBlocks(blockerUserId: UUID): BlocksListDto {
+        FeatureAccessPolicy.requireAlwaysFreeSafetyFeature(PynapliFeature.ListBlocks)
+        return BlocksListDto(
             blocks = repository.listBlocks(blockerUserId).map { record ->
                 BlockSummaryDto(
                     blockedUserId = record.blockedUserId.toString(),
@@ -41,6 +46,7 @@ class BlockService(
                 )
             }
         )
+    }
 
     private fun String.toUuidOrThrow(): UUID =
         runCatching { UUID.fromString(this) }.getOrElse { throw SafetyException("INVALID_BLOCK_TARGET") }

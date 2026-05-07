@@ -2,6 +2,8 @@ package com.pynapli.server.safety
 
 import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.ReportDto
+import com.pynapli.shared.monetization.FeatureAccessPolicy
+import com.pynapli.shared.monetization.PynapliFeature
 import org.slf4j.LoggerFactory
 import java.util.UUID
 
@@ -11,6 +13,7 @@ class ReportService(
     private val rateLimitService: RateLimitService? = null
 ) {
     suspend fun submitReport(reporterUserId: UUID, request: CreateReportRequestDto): ReportDto {
+        FeatureAccessPolicy.requireAlwaysFreeSafetyFeature(PynapliFeature.SubmitReport)
         val reportedUserId = request.reportedUserId.toUuidOrThrow()
         if (reportedUserId == reporterUserId) throw SafetyException("REPORT_SELF_FORBIDDEN")
 
