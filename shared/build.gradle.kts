@@ -12,6 +12,7 @@ kotlin {
         namespace = "com.pynapli.shared"
         compileSdk = 36
         minSdk = 23
+        withHostTest {}
     }
 
     iosX64()

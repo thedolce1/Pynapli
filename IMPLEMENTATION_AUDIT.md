@@ -1,0 +1,186 @@
+# Pynapli Implementation Audit
+
+Date: 2026-05-07
+
+## Purpose
+
+This audit compares the current Pynapli MVP implementation against the root specification documents. The goal is to slow down where quality matters: correctness, safety, security, performance, tests, and product alignment.
+
+The specs remain the source of truth. The implementation should move only when the code, tests, and specs agree.
+
+## Ground Rules Going Forward
+
+- Fix correctness and test issues as soon as they are found.
+- Treat a missing, skipped, misnamed, or non-matching test as a real problem until explained or fixed.
+- Do not assume dependency compatibility, cloud behavior, billing behavior, Docker behavior, or platform policy. Use official documentation before changing those areas.
+- Keep product rules server-authoritative when they affect safety, privacy, monetization, blocks, matches, albums, or partner links.
+- Keep safety, report, block, consent, and support flows free.
+- Keep Pynapli's core model intact: every adult has their own account, their own voice, and optional linked-partner context.
+
+## Evidence Used
+
+Primary local specs:
+
+- `PYNAPLI_PRODUCT_SPEC.md`
+- `GRID_IMPLEMENTATION_SPEC.md`
+- `SWIPE_IMPLEMENTATION_SPEC.md`
+- `MESSAGING_SPEC.md`
+- `ACTIVITY_SPEC.md`
+- `PROFILE_SETTINGS_SPEC.md`
+- `MONETIZATION_SPEC.md`
+- `TRUST_AND_SAFETY_SPEC.md`
+- `BACKEND_ARCHITECTURE_SPEC.md`
+- `API_CONTRACT_SPEC.md`
+- `MOBILE_APP_ARCHITECTURE_SPEC.md`
+- `PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md`
+- `PRODUCTION_READINESS_AND_QUALITY_SPEC.md`
+- `TESTING_STRATEGY_SPEC.md`
+- `DEVOPS_INFRA_SETUP_SPEC.md`
+- `OFFICIAL_TECH_REFERENCE_GUIDE.md`
+
+Current code evidence:
+
+- Kotlin Multiplatform shared module, Compose app module, Android app module, Ktor server module.
+- PostgreSQL/PostGIS migrations through `server/src/main/resources/db/migration/V34__boost_activations.sql`.
+- Redis-backed presence/rate-limit paths.
+- Firebase Cloud Messaging integration path.
+- Google Play Billing client and server purchase verification path.
+- Ktor domain modules for auth, profile, location, grid, swipe, messaging, activity, media, safety, subscriptions, notifications, profile links, moderation, and health.
+
+## Current Verification Baseline
+
+Latest known green baseline after restoring server JUnit 4 coverage:
+
+- `:server:test` runs the restored JUnit 4 and JUnit 5 server tests.
+- Server suite count observed: 248 tests.
+- Targeted server test filters now work after adding the JUnit Vintage engine.
+- `scripts/verify.ps1` passed.
+- Full local gate used by `scripts/verify.ps1`:
+  - `:shared:jvmTest`
+  - `:shared:testAndroidHostTest`
+  - `:server:test`
+  - `:composeApp:testAndroidHostTest`
+  - `:androidApp:assembleDebug`
+- Ktor `/health` was confirmed healthy after the last restart.
+
+Current CI state:
+
+- `.github/workflows/ci.yml` now runs the same Gradle verification gate as `scripts/verify.ps1`.
+- Docker service startup remains local-script behavior. If server integration tests begin requiring live containers in CI, the workflow should add explicit Postgres/Redis services.
+
+## Alignment Matrix
+
+| Area | Status | What Is In Place | Gaps / Notes |
+| --- | --- | --- | --- |
+| Product model | Aligned | Individual autonomous accounts, optional linked partner, linked partner preview, partner chat invite flow, linked subscription benefit. | Keep avoiding couple-owned accounts or couple cards. |
+| Language and positioning | Mostly aligned | Specs define LS-aware, classy, non-cheesy language. | Needs continuous UI copy review as screens mature. |
+| Frontend design direction | Partially implemented | Subdued Compose surfaces, bottom nav, header profile entry, grid/swipe/messages/activity/store/settings surfaces. | Needs screenshot review on real emulator across all implemented flows before visual polish can be called complete. |
+| Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling. | 18+ DOB confirmation and enhanced age verification are not complete. |
+| Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display. | Profile verification, data export/delete, blocked/hidden management, and full safety center need completion. |
+| Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs. | Server-side location trust/spoofing checks and movement thresholds need hardening. |
+| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, stable Compose keys, retained lazy grid state while screen is alive, block/risk filtering, partner preview. | Stable cursor pagination, Redis candidate cache, WebSocket presence deltas, explicit thumbnail preloading, 5,000-candidate load test, and stronger scroll-preservation tests are still needed. |
+| Swipe | Partially implemented | Swipe deck endpoint, action endpoint, server-authoritative match creation, immutable normal actions, block/report path, intro notes, pineapple-like inventory, boost influence, partner preview. | Robust deck-session/rank-token validation, cursor pagination, rewind, offline action cap, image preloading, top picks, passport/travel mode, and dealbreaker settings remain incomplete. |
+| Messaging | Mostly implemented for MVP | Direct conversations, grid-open messaging, swipe match gating, intro-note handling, partner chat invite/accept/decline/leave, block-aware conversations, message review path. | WebSocket realtime, typing/read realtime, and deeper consent tests should be added before beta. |
+| Activity | Partially implemented | Activity event model, newest-first activity, flirts, album requests, gating by entitlement, block checks, risk checks. | Tabs, opt-outs/incognito behavior, partner-context activity separation, and complete reveal-depth UX need review. |
+| Partner links | Strong MVP path | Invite, accept, decline, unlink, one active beneficiary, cooldown/abuse controls, linked partner subscription benefit. | Support/admin review and forced unlink workflow need moderation tooling. |
+| Private albums/media | Partially implemented | Upload contract, local-dev upload endpoint, albums, private grants, album request activity. | Production object storage signed URLs, CDN strategy, moderation/scanning policy, and secure media cleanup jobs remain. |
+| Notifications | Partially implemented | Preferences, device registration, FCM gateway, grouping/rate-limit logic. | Real device token lifecycle, APNs/iOS path, notification analytics without sensitive payloads, and denied-permission QA remain. |
+| Monetization | Partially implemented | Free/Social/Select tiers, server entitlements, linked partner benefit, activity/filters gates, intro notes, pineapple likes, boosts, ads policy, safety-free rule. | StoreKit 2 path is missing. Google Play path exists but needs real console credentials/config validation. Paywall copy needs final Social/Select review in app. |
+| Trust and safety | Partially implemented | Risk model/events, Redis rate limits, duplicate message checks, held-message review, reports queue, risk queue, social action restrictions, severe action triggers, partner subscription abuse cooldown. | Risk middleware, device/account-farm signals, location spoofing signals, verification risk adjustments, appeals/support flow, false-positive metrics, and account notice workflow remain. |
+| Admin moderation | Partially implemented | Reports queue/actions/audit, risk review/actions/audit, held message review/release/remove/audit. | Roles/permissions, MFA, user lookup, appeals, subscription support, partner-link review, sensitive reveal reason flow outside held messages, and separated admin API need work. |
+| API contract | Partially implemented | `/v1` routes, shared DTOs, Ktor error handling, many server-side entitlement/block/risk checks. | Cursor pagination is incomplete on live surfaces, idempotency keys are not consistently implemented, and realtime WebSocket is not implemented. |
+| Backend architecture | Partially implemented | Ktor authoritative services, PostgreSQL/PostGIS, Flyway, Redis, Docker local services, FCM path, server-side subscription model. | WebSockets, Redis candidate cache, signed object storage, sensitive log redaction, analytics redaction, and formal cloud environment setup remain. |
+| Mobile architecture | Partially implemented | KMP shared network/client/domain types, Compose feature state holders, Android platform integrations for billing/FCM/location. | iOS platform integrations, secure token storage review, WebSocket client, offline queue rules, and emulator/device visual QA coverage need work. |
+| Testing | Good start, not enough | Server test suite restored, shared tests, Compose Android host tests, local verification script. | Android instrumented/E2E tests, iOS tests, real DB container integration coverage expansion, abuse tests, load tests, and visual screenshot regression need work. |
+| CI/CD | Partial | GitHub Actions runs the same Gradle verification gate as `scripts/verify.ps1`. | Add Docker service tests when needed, Android artifact checks, lint/static analysis, branch protection, and required status checks. |
+| DevOps/infra | Early | Docker Compose local stack, repo initialized and pushed, scripts for local verification. | Firebase/GCP/Play/App Store production setup, secrets, cost alerts, App Check, environment separation, deploy plan, and branch protections remain. |
+| Analytics | Not started | Specs exist. | Needs privacy-safe event taxonomy and implementation. No lifestyle-sensitive payloads. |
+| Psync | Not started | Spec exists. | Still a differentiator, but should come after stronger partner-link, messaging, safety, and swipe foundations. |
+| Playing Tonight | Not started | Spec exists. | Product feature can wait until core grid/swipe/messages/activity safety is stronger. |
+| iOS | Mostly scaffold only | `iosApp` exists. | StoreKit 2, APNs, iOS UI validation, and iOS test path are not ready. |
+
+## Important Drift Found
+
+Several spec checklists are stale. Some items remain unchecked in the docs even though the code now has partial or full implementation. That creates a real risk: future work could redo existing code, miss an important gap, or assume a feature is not started.
+
+Examples:
+
+- Grid docs still show all checklist items unchecked, but the implementation has lightweight DTOs, PostGIS radius/distance queries, Redis presence TTLs, stable Compose keys, and message rate limiting.
+- Swipe docs still show all checklist items unchecked, but the implementation has deck/action endpoints, server-authoritative match creation, intro-note inventory, pineapple-like inventory, boosts, card block/report actions, and linked partner preview.
+- API and backend docs understate current block/risk/entitlement enforcement.
+- Monetization docs mark StoreKit and Google Play validation as one unchecked item, but the current state is split: Google Play work exists and StoreKit does not.
+
+The docs need a reconciliation pass, but the reconciliation should mark partial items carefully. A checked box should mean the implementation, tests, and product behavior are all good enough for the current milestone.
+
+## Highest-Risk Gaps
+
+1. Grid scalability is not yet proven.
+   - Stable cursor pagination is not complete.
+   - Redis candidate caching is not complete.
+   - The required 5,000+ nearby-candidate scenario has not been load tested.
+   - WebSocket presence deltas are not implemented.
+
+2. Swipe server authority needs another hardening pass.
+   - Deck-session/rank-token validation is still too lightweight.
+   - Cursor pagination is incomplete.
+   - Offline action caps and rewind entitlement flow are not implemented.
+
+3. Production-grade CI controls are not complete.
+   - The Gradle verification gate is wired into CI.
+   - Branch protection, required status checks, Docker service tests, lint/static analysis, and artifact checks still need to be added.
+
+4. Production safety is not complete.
+   - 18+ verification, appeals/support, false-positive metrics, device/account-farm signals, and location spoofing signals are not done.
+   - App Check is not wired into the production security posture.
+
+5. Settings and account management are incomplete.
+   - Safety center, blocked/hidden users, data export/delete, verification, notification controls, and privacy settings need a complete user-facing path.
+
+6. Media is still local-dev oriented.
+   - Production signed object-storage URLs, moderation/scanning policy, cleanup jobs, and secure delivery need implementation.
+
+7. Realtime is not implemented.
+   - Current HTTP flows are useful and authoritative, but WebSocket convenience updates are still missing for presence, messages, activity, and notifications.
+
+8. StoreKit/iOS is not ready.
+   - Android billing has started.
+   - iOS purchase validation and StoreKit 2 integration remain future work.
+
+9. Analytics are not implemented.
+   - Before adding analytics, the event taxonomy must avoid lifestyle-sensitive payloads.
+
+10. Admin tooling needs production controls.
+   - Roles, MFA, separated admin API, subscription support, partner-link review, and sensitive reveal workflows are not complete.
+
+## Recommended Next Sequence
+
+1. Reconcile spec checklists with implementation evidence.
+   - Mark implemented, partial, and missing items accurately.
+   - Do not over-check items that are coded but not tested.
+
+2. Strengthen CI from "runs the gate" to "protects the branch."
+   - Add branch protection and required status checks in GitHub.
+   - Add Docker-backed integration tests, lint/static analysis, and Android artifact checks when those suites are ready.
+
+3. Harden grid and swipe server contracts.
+   - Grid: stable cursor pagination, candidate cache, movement threshold policy, 5,000-candidate load test.
+   - Swipe: deck session validation, rank-token validation, cursor pagination, action idempotency, rewind path.
+
+4. Finish the profile/settings safety surface.
+   - Safety center, block list, hidden users if retained, report history/support contact, data export/delete, notification settings.
+
+5. Move media from local-dev to production-safe storage.
+   - Signed upload/download URLs, private album grant enforcement, cleanup jobs, and scanning hooks.
+
+6. Add realtime only after HTTP state is correct.
+   - WebSocket events should be convenience updates.
+   - HTTP refetch remains canonical after reconnect.
+
+7. Add differentiators after core safety is stronger.
+   - Psync and Playing Tonight should wait until grid, swipe, messaging, activity, profile links, and safety are more complete.
+
+## Decision
+
+The project is on the right track, but we should deliberately slow down before adding more large product features. The next work should be quality and architecture work: spec reconciliation, stronger CI, grid/swipe hardening, and account/safety completion.
+
+That is how Pynapli avoids becoming a fragile prototype. The current MVP is real enough now that quality debt matters.
