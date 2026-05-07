@@ -573,7 +573,7 @@ Do not experiment with:
 - [x] Restore purchases exists.
 - [x] Activity gating is implemented.
 - [x] Advanced filters are gated.
-- [ ] Boost inventory exists.
+- [x] Boost inventory exists.
 - [x] Pineapple Like inventory exists.
 - [x] Intro Note inventory exists.
 - [ ] Ads are excluded from sensitive surfaces.

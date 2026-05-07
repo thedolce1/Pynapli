@@ -123,6 +123,15 @@ class JdbcSwipeRepository(
                     ORDER BY upl.accepted_at DESC NULLS LAST, upl.created_at DESC, upl.id ASC
                     LIMIT 1
                 ) linked_partner ON true
+                LEFT JOIN LATERAL (
+                    SELECT ba.ends_at
+                    FROM boost_activations ba
+                    WHERE ba.user_id = u.id
+                      AND ba.status = 'active'
+                      AND ba.ends_at > now()
+                    ORDER BY ba.ends_at DESC, ba.id ASC
+                    LIMIT 1
+                ) active_boost ON true
                 WHERE u.id <> ?
                   AND u.status = 'active'
                   AND u.deleted_at IS NULL
@@ -144,7 +153,9 @@ class JdbcSwipeRepository(
                       WHERE sa.actor_user_id = ?
                         AND sa.target_user_id = u.id
                   )
-                ORDER BY ST_Distance(v.geom, ul.geom) ASC, u.id ASC
+                ORDER BY CASE WHEN active_boost.ends_at IS NULL THEN 1 ELSE 0 END ASC,
+                         ST_Distance(v.geom, ul.geom) ASC,
+                         u.id ASC
                 LIMIT ?
                 """.trimIndent()
             ).use { statement ->

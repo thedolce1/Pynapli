@@ -3,6 +3,7 @@ package com.pynapli.shared.network
 import com.pynapli.shared.core.config.PynapliConfig
 import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.BoostActivationDto
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
@@ -454,6 +455,42 @@ class KtorPynapliApiClientTest {
         val response = success.value as SubscriptionPurchaseSyncResponseDto
         assertEquals("pending_verification", response.status)
         assertEquals("free", response.entitlement.tier)
+    }
+
+    @Test
+    fun activateBoostSendsBearerTokenAndMapsActivation() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = """
+                    {
+                      "activationId": "boost-1",
+                      "boostType": "boost",
+                      "startsAt": "2026-05-07T12:00:00Z",
+                      "endsAt": "2026-05-07T12:30:00Z",
+                      "alreadyActive": false
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.activateBoost()
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/boosts", requestPath)
+        assertEquals(HttpMethod.Post, requestMethod)
+        val activation = success.value as BoostActivationDto
+        assertEquals("boost", activation.boostType)
+        assertEquals(false, activation.alreadyActive)
     }
 
     @Test

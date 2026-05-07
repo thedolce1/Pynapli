@@ -1,6 +1,7 @@
 package com.pynapli.server.subscriptions
 
 import java.time.Instant
+import java.time.Duration
 import java.util.UUID
 
 interface SubscriptionRepository {
@@ -31,6 +32,12 @@ interface SubscriptionRepository {
     suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean
 
     suspend fun consumePineappleLikeInventory(userId: UUID, now: Instant): Boolean = false
+
+    suspend fun activateBoost(
+        userId: UUID,
+        now: Instant,
+        duration: Duration
+    ): BoostActivationResult? = null
 
     suspend fun listPlayStoreSubscriptionsDueForVerification(
         staleBefore: Instant,
@@ -119,4 +126,19 @@ data class StoredEntitlementRecord(
     val startsAt: Instant,
     val endsAt: Instant?,
     val status: String = "active"
+)
+
+data class BoostActivationRecord(
+    val activationId: UUID,
+    val userId: UUID,
+    val boostType: String,
+    val source: String,
+    val startsAt: Instant,
+    val endsAt: Instant,
+    val status: String
+)
+
+data class BoostActivationResult(
+    val activation: BoostActivationRecord,
+    val consumedInventory: Boolean
 )

@@ -43,6 +43,11 @@ fun Application.configureSubscriptionRoutes(
             val request = call.receive<SubmitPlayStoreSubscriptionPurchaseRequestDto>()
             call.respond(subscriptionService.recordPlayStoreSubscriptionPurchase(user.id, request))
         }
+
+        post("/v1/boosts") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(subscriptionService.activateBoost(user.id))
+        }
     }
 }
 

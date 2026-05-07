@@ -60,6 +60,7 @@ class SubscriptionRepositoryIntegrationTest {
         assertTrue(dataSource.tableExists("entitlements"))
         assertTrue(dataSource.tableExists("linked_partner_benefits"))
         assertTrue(dataSource.tableExists("premium_inventory"))
+        assertTrue(dataSource.tableExists("boost_activations"))
         assertTrue(dataSource.tableExists("play_store_rtdn_events"))
         assertTrue(dataSource.columnExists("subscriptions", "external_product_id"))
         assertTrue(dataSource.columnExists("subscriptions", "last_verified_at"))
@@ -68,6 +69,7 @@ class SubscriptionRepositoryIntegrationTest {
         assertTrue(dataSource.indexExists("idx_play_store_rtdn_events_purchase_token"))
         assertTrue(dataSource.indexExists("idx_linked_partner_benefits_beneficiary_active"))
         assertTrue(dataSource.indexExists("idx_premium_inventory_user_available"))
+        assertTrue(dataSource.indexExists("idx_boost_activations_active_discovery"))
     }
 
     @Test
@@ -200,6 +202,32 @@ class SubscriptionRepositoryIntegrationTest {
         assertEquals(true, repository.consumePineappleLikeInventory(user, now))
         assertEquals(false, repository.consumePineappleLikeInventory(user, now))
         assertEquals(0, dataSource.inventoryQuantity(user, "pineapple_like"))
+    }
+
+    @Test
+    fun activateBoostConsumesInventoryAndKeepsExistingActiveBoost() = runBlocking {
+        val user = uuid(403)
+        val now = Instant.parse("2026-05-06T12:00:00Z")
+        dataSource.insertUser(user)
+        dataSource.insertPremiumInventory(
+            userId = user,
+            inventoryType = "boost",
+            quantity = 1,
+            expiresAt = Instant.parse("2026-06-01T00:00:00Z")
+        )
+        val repository = JdbcSubscriptionRepository(dataSource)
+
+        val first = repository.activateBoost(user, now, java.time.Duration.ofMinutes(30))
+        val second = repository.activateBoost(user, now.plusSeconds(60), java.time.Duration.ofMinutes(30))
+
+        assertNotNull(first)
+        assertEquals(true, first.consumedInventory)
+        assertEquals("boost", first.activation.boostType)
+        assertEquals(now.plusSeconds(1_800), first.activation.endsAt)
+        assertNotNull(second)
+        assertEquals(false, second.consumedInventory)
+        assertEquals(first.activation.activationId, second.activation.activationId)
+        assertEquals(0, dataSource.inventoryQuantity(user, "boost"))
     }
 
     @Test

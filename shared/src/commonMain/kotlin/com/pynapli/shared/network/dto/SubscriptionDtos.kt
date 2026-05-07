@@ -70,3 +70,12 @@ data class SubscriptionPurchaseSyncResponseDto(
     val status: String,
     val entitlement: SubscriptionEntitlementDto
 )
+
+@Serializable
+data class BoostActivationDto(
+    val activationId: String,
+    val boostType: String,
+    val startsAt: String,
+    val endsAt: String,
+    val alreadyActive: Boolean
+)

@@ -1,6 +1,7 @@
 package com.pynapli.server.subscriptions
 
 import com.pynapli.shared.network.dto.EntitlementSource
+import com.pynapli.shared.network.dto.BoostActivationDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
@@ -348,6 +349,22 @@ class SubscriptionService(
     suspend fun consumePineappleLikeInventory(userId: UUID): Boolean =
         repository.consumePineappleLikeInventory(userId, clock.instant())
 
+    suspend fun activateBoost(userId: UUID): BoostActivationDto {
+        val result = repository.activateBoost(
+            userId = userId,
+            now = clock.instant(),
+            duration = BOOST_DURATION
+        ) ?: throw SubscriptionException("BOOST_INVENTORY_REQUIRED")
+        val activation = result.activation
+        return BoostActivationDto(
+            activationId = activation.activationId.toString(),
+            boostType = activation.boostType,
+            startsAt = activation.startsAt.toString(),
+            endsAt = activation.endsAt.toString(),
+            alreadyActive = !result.consumedInventory
+        )
+    }
+
     private fun SubscriptionRecord.toEntitlement(): SubscriptionEntitlementDto =
         paidEntitlement(
             tier = tier,
@@ -675,6 +692,7 @@ class SubscriptionService(
         private val ACTIVE_SUBSCRIPTION_STATUSES = setOf("active", "grace")
         private val ADMIN_GRANTABLE_TIERS = setOf(SubscriptionTier.SOCIAL, SubscriptionTier.SELECT)
         private val ADMIN_GRANTABLE_SOURCES = setOf(EntitlementSource.ADMIN, EntitlementSource.PROMO)
+        private val BOOST_DURATION: Duration = Duration.ofMinutes(30)
         private const val PLAY_STORE_SYNC_DEFAULT_LIMIT = 100
         private const val PLAY_STORE_SYNC_MAX_LIMIT = 500
         private const val PLAY_STORE_PRODUCT_TYPE_SUBSCRIPTION = 1

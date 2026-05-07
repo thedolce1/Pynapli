@@ -6,6 +6,7 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ActivityFeedResponseDto
 import com.pynapli.shared.network.dto.ApiErrorDto
 import com.pynapli.shared.network.dto.AuthSessionDto
+import com.pynapli.shared.network.dto.BoostActivationDto
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
@@ -130,6 +131,8 @@ interface PynapliApiClient {
     suspend fun submitPlayStoreSubscriptionPurchase(
         request: SubmitPlayStoreSubscriptionPurchaseRequestDto
     ): AppResult<SubscriptionPurchaseSyncResponseDto>
+
+    suspend fun activateBoost(): AppResult<BoostActivationDto>
 
     suspend fun listActivity(limit: Int? = null): AppResult<ActivityFeedResponseDto>
 
@@ -374,6 +377,13 @@ class KtorPynapliApiClient(
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun activateBoost(): AppResult<BoostActivationDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/boosts")) {
+                bearerAuth(token)
             }.toAppResult(json)
         }
 

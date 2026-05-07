@@ -181,6 +181,32 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
             assertEquals(listOf(linkedTarget), swipeCards.map { it.userId })
         }
     }
+
+    "active boosts rank ahead of distance after discovery filters" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000941")
+            val nearTarget = UUID.fromString("00000000-0000-0000-0000-000000000942")
+            val boostedTarget = UUID.fromString("00000000-0000-0000-0000-000000000943")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(nearTarget, "Near", age = 35, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(boostedTarget, "Boosted", age = 36, longitude = -122.0900, latitude = 37.4280)
+            dataSource.insertBoostActivation(boostedTarget)
+
+            val gridCards = JdbcGridRepository(dataSource).queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10
+            ).cards
+            val swipeCards = JdbcSwipeRepository(dataSource).queryDeck(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10
+            ).cards
+
+            assertEquals(listOf(boostedTarget, nearTarget), gridCards.map { it.userId })
+            assertEquals(listOf(boostedTarget, nearTarget), swipeCards.map { it.userId })
+        }
+    }
 })
 
 private fun DataSource.insertDiscoverableUser(
@@ -315,6 +341,29 @@ private fun DataSource.setRiskState(userId: UUID, score: Int, tier: String) {
             statement.setObject(1, userId)
             statement.setInt(2, score)
             statement.setString(3, tier)
+            statement.executeUpdate()
+        }
+    }
+}
+
+private fun DataSource.insertBoostActivation(userId: UUID) {
+    connection.use { connection ->
+        connection.prepareStatement(
+            """
+            INSERT INTO boost_activations (
+                id,
+                user_id,
+                boost_type,
+                source,
+                starts_at,
+                ends_at,
+                status
+            )
+            VALUES (?, ?, 'boost', 'inventory', now() - interval '1 minute', now() + interval '29 minutes', 'active')
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, userId)
             statement.executeUpdate()
         }
     }

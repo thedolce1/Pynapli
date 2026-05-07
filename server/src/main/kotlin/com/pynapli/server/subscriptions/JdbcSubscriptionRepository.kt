@@ -9,6 +9,7 @@ import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Timestamp
 import java.sql.Types
+import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -154,14 +155,33 @@ class JdbcSubscriptionRepository(
     private suspend fun consumePremiumInventory(userId: UUID, inventoryType: String, now: Instant): Boolean =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
-                connection.prepareStatement(CONSUME_PREMIUM_INVENTORY_QUERY).use { statement ->
-                    statement.setObject(1, userId)
-                    statement.setString(2, inventoryType)
-                    statement.setTimestamp(3, Timestamp.from(now))
-                    statement.executeQuery().use { rs -> rs.next() }
-                }
+                connection.consumePremiumInventoryRecord(userId, inventoryType, now)
             }
         }
+
+    override suspend fun activateBoost(
+        userId: UUID,
+        now: Instant,
+        duration: Duration
+    ): BoostActivationResult? = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.runInTransaction {
+                findActiveBoostActivation(userId, now)?.let { active ->
+                    return@runInTransaction BoostActivationResult(
+                        activation = active,
+                        consumedInventory = false
+                    )
+                }
+                if (!consumePremiumInventoryRecord(userId, "boost", now)) {
+                    return@runInTransaction null
+                }
+                BoostActivationResult(
+                    activation = insertBoostActivation(userId, now, duration),
+                    consumedInventory = true
+                )
+            }
+        }
+    }
 
     override suspend fun listPlayStoreSubscriptionsDueForVerification(
         staleBefore: Instant,
@@ -344,6 +364,50 @@ class JdbcSubscriptionRepository(
             endsAt = getTimestamp("ends_at")?.toInstant(),
             status = getString("status")
         )
+
+    private fun ResultSet.toBoostActivationRecord(): BoostActivationRecord =
+        BoostActivationRecord(
+            activationId = getObject("boost_activation_id", UUID::class.java),
+            userId = getObject("boost_user_id", UUID::class.java),
+            boostType = getString("boost_type"),
+            source = getString("source"),
+            startsAt = getTimestamp("starts_at").toInstant(),
+            endsAt = getTimestamp("ends_at").toInstant(),
+            status = getString("status")
+        )
+
+    private fun Connection.consumePremiumInventoryRecord(userId: UUID, inventoryType: String, now: Instant): Boolean =
+        prepareStatement(CONSUME_PREMIUM_INVENTORY_QUERY).use { statement ->
+            statement.setObject(1, userId)
+            statement.setString(2, inventoryType)
+            statement.setTimestamp(3, Timestamp.from(now))
+            statement.executeQuery().use { rs -> rs.next() }
+        }
+
+    private fun Connection.findActiveBoostActivation(userId: UUID, now: Instant): BoostActivationRecord? =
+        prepareStatement(FIND_ACTIVE_BOOST_ACTIVATION_QUERY).use { statement ->
+            statement.setObject(1, userId)
+            statement.setTimestamp(2, Timestamp.from(now))
+            statement.executeQuery().use { rs ->
+                if (rs.next()) rs.toBoostActivationRecord() else null
+            }
+        }
+
+    private fun Connection.insertBoostActivation(
+        userId: UUID,
+        startsAt: Instant,
+        duration: Duration
+    ): BoostActivationRecord =
+        prepareStatement(INSERT_BOOST_ACTIVATION_QUERY).use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, userId)
+            statement.setTimestamp(3, Timestamp.from(startsAt))
+            statement.setTimestamp(4, Timestamp.from(startsAt.plus(duration)))
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.toBoostActivationRecord()
+            }
+        }
 
     private fun Connection.grantStoredEntitlementRecord(
         userId: UUID,
@@ -577,6 +641,45 @@ class JdbcSubscriptionRepository(
             FROM candidate
             WHERE inventory.id = candidate.id
             RETURNING inventory.id
+        """.trimIndent()
+
+        private val FIND_ACTIVE_BOOST_ACTIVATION_QUERY = """
+            SELECT id AS boost_activation_id,
+                   user_id AS boost_user_id,
+                   boost_type,
+                   source,
+                   starts_at,
+                   ends_at,
+                   status
+            FROM boost_activations
+            WHERE user_id = ?
+              AND status = 'active'
+              AND ends_at > ?
+            ORDER BY ends_at DESC,
+                     starts_at DESC,
+                     id ASC
+            LIMIT 1
+            FOR UPDATE
+        """.trimIndent()
+
+        private val INSERT_BOOST_ACTIVATION_QUERY = """
+            INSERT INTO boost_activations (
+                id,
+                user_id,
+                boost_type,
+                source,
+                starts_at,
+                ends_at,
+                status
+            )
+            VALUES (?, ?, 'boost', 'inventory', ?, ?, 'active')
+            RETURNING id AS boost_activation_id,
+                      user_id AS boost_user_id,
+                      boost_type,
+                      source,
+                      starts_at,
+                      ends_at,
+                      status
         """.trimIndent()
 
         private val LIST_PLAY_STORE_SUBSCRIPTIONS_DUE_FOR_VERIFICATION_QUERY = """

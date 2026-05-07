@@ -251,6 +251,7 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INTRO_NOTE_TOO_LONG" -> "Intro Note is too long."
     "INTRO_NOTE_INVENTORY_REQUIRED" -> "You do not have an Intro Note available."
     "PINEAPPLE_LIKE_INVENTORY_REQUIRED" -> "You do not have a Pineapple Like available."
+    "BOOST_INVENTORY_REQUIRED" -> "You do not have a Boost available."
     "INVALID_NOTIFICATION_DETAIL_LEVEL" -> "Choose a valid notification detail level."
     "INVALID_PUSH_PLATFORM", "INVALID_PUSH_TOKEN" -> "Push device could not be registered."
     "NOTIFICATION_PREFERENCES_NOT_FOUND" -> "Notification settings were not found."
@@ -388,6 +389,7 @@ private fun subscriptionStatusFor(code: String): HttpStatusCode = when (code) {
     "ADMIN_UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
     "ADMIN_FORBIDDEN" -> HttpStatusCode.Forbidden
     "ENTITLEMENT_NOT_FOUND" -> HttpStatusCode.NotFound
+    "BOOST_INVENTORY_REQUIRED" -> HttpStatusCode.Forbidden
     "PURCHASE_ALREADY_LINKED" -> HttpStatusCode.Conflict
     "INVALID_SUBSCRIPTION_PRODUCT",
     "INVALID_PURCHASE_TOKEN",
