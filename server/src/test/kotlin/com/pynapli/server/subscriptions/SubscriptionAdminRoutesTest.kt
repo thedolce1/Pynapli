@@ -3,15 +3,17 @@ package com.pynapli.server.subscriptions
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
-import io.ktor.client.call.body
 import io.ktor.client.request.header
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
+import kotlinx.serialization.json.Json
 import org.junit.Test
 import java.time.Instant
 import java.util.Base64
@@ -48,7 +50,7 @@ class SubscriptionAdminRoutesTest {
         }
 
         assertEquals(HttpStatusCode.OK, response.status)
-        assertEquals(0, response.body<PlayStoreSubscriptionSyncSummaryDto>().scanned)
+        assertEquals(0, response.decodeBody<PlayStoreSubscriptionSyncSummaryDto>().scanned)
     }
 
     @Test
@@ -99,7 +101,7 @@ class SubscriptionAdminRoutesTest {
         }
 
         assertEquals(HttpStatusCode.OK, grant.status)
-        val granted = grant.body<AdminEntitlementDto>()
+        val granted = grant.decodeBody<AdminEntitlementDto>()
         assertEquals("select", granted.tier)
         assertEquals("active", granted.status)
 
@@ -108,7 +110,7 @@ class SubscriptionAdminRoutesTest {
             header("X-Admin-Id", "billing-ops")
         }
         assertEquals(HttpStatusCode.OK, list.status)
-        assertEquals(1, list.body<AdminEntitlementListDto>().entitlements.size)
+        assertEquals(1, list.decodeBody<AdminEntitlementListDto>().entitlements.size)
 
         val revoke = client.post("/v1/admin/subscriptions/entitlements/${granted.entitlementId}/revoke") {
             header("X-Admin-Token", "test-admin-token")
@@ -116,7 +118,7 @@ class SubscriptionAdminRoutesTest {
             header("X-Admin-Reason", "support correction")
         }
         assertEquals(HttpStatusCode.OK, revoke.status)
-        assertEquals("revoked", revoke.body<AdminEntitlementDto>().status)
+        assertEquals("revoked", revoke.decodeBody<AdminEntitlementDto>().status)
     }
 
     @Test
@@ -149,7 +151,7 @@ class SubscriptionAdminRoutesTest {
         }
 
         assertEquals(HttpStatusCode.OK, response.status)
-        assertEquals("processed", response.body<PlayStoreRtdnProcessingResultDto>().status)
+        assertEquals("processed", response.decodeBody<PlayStoreRtdnProcessingResultDto>().status)
     }
 
     private fun testConfig(rtdnEnabled: Boolean = false): ServerConfig = ServerConfig(
@@ -172,6 +174,9 @@ class SubscriptionAdminRoutesTest {
     private fun testRtdnPayload(): String =
         """{"version":"1.0","packageName":"com.pynapli.app","eventTimeMillis":"1770000000000","testNotification":{}}"""
 }
+
+private suspend inline fun <reified T> HttpResponse.decodeBody(): T =
+    Json.decodeFromString(bodyAsText())
 
 private class RouteSubscriptionRepository(
     private val validUsers: Set<UUID> = emptySet()

@@ -11,28 +11,30 @@ import kotlin.test.assertNotNull
 
 class LocationServiceTest {
     @Test
-    fun updateCurrentLocationStoresCoarseResponseWithoutExactCoordinates() = runBlocking {
-        val userId = UUID.randomUUID()
-        val service = LocationService(InMemoryLocationRepository())
+    fun updateCurrentLocationStoresCoarseResponseWithoutExactCoordinates() {
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = LocationService(InMemoryLocationRepository())
 
-        val response = service.updateCurrentLocation(
-            userId,
-            UpdateCurrentLocationRequestDto(
-                latitude = 45.5017,
-                longitude = -73.5673,
-                accuracyMeters = 30,
-                source = "gps",
-                city = "Montreal",
-                region = "QC",
-                country = "CA"
+            val response = service.updateCurrentLocation(
+                userId,
+                UpdateCurrentLocationRequestDto(
+                    latitude = 45.5017,
+                    longitude = -73.5673,
+                    accuracyMeters = 30,
+                    source = "gps",
+                    city = "Montreal",
+                    region = "QC",
+                    country = "CA"
+                )
             )
-        )
 
-        assertEquals(30, response.accuracyMeters)
-        assertEquals("gps", response.source)
-        assertEquals("45.50:-73.57", response.geohash)
-        assertEquals("Montreal", response.city)
-        assertNotNull(response.updatedAt)
+            assertEquals(30, response.accuracyMeters)
+            assertEquals("gps", response.source)
+            assertEquals("45.50:-73.57", response.geohash)
+            assertEquals("Montreal", response.city)
+            assertNotNull(response.updatedAt)
+        }
     }
 
     @Test
@@ -84,4 +86,3 @@ private class InMemoryLocationRepository : LocationRepository {
             country = update.country
         )
 }
-

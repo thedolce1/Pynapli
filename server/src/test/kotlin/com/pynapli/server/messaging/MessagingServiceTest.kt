@@ -15,7 +15,9 @@ import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -405,7 +407,7 @@ class MessagingServiceTest {
         val secondTarget = UUID.fromString("00000000-0000-0000-0000-000000000033")
         val thirdTarget = UUID.fromString("00000000-0000-0000-0000-000000000034")
         val repository = InMemoryMessagingRepository(setOf(firstTarget, secondTarget, thirdTarget))
-        val service = MessagingService(repository)
+        val service = MessagingService(repository, clock = fixedMessageClock())
         val first = service.createDirectConversation(
             senderId,
             CreateDirectConversationRequestDto(targetUserId = firstTarget.toString())
@@ -451,6 +453,9 @@ private fun restrictedRiskPolicy(tier: String = "quarantine"): RiskPolicyService
             updatedAt = Instant.parse("2026-04-24T18:00:00Z")
         )
     }
+
+private fun fixedMessageClock(): Clock =
+    Clock.fixed(Instant.parse("2026-04-24T18:00:10Z"), ZoneOffset.UTC)
 
 private class InMemoryMessagingRepository(
     private val allowedTargets: Set<UUID>,

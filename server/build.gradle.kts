@@ -31,12 +31,14 @@ dependencies {
     implementation(libs.logback.classic)
 
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.junit)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotest.runner.junit5)
     testImplementation(libs.kotest.assertions.core)
     testImplementation(libs.mockk)
     testImplementation(libs.testcontainers)
     testImplementation(libs.testcontainers.postgresql)
+    testRuntimeOnly(libs.junit.vintage.engine)
 }
 
 tasks.withType<Test>().configureEach {

@@ -344,6 +344,7 @@ private class InMemoryMediaRepository : MediaRepository {
         val asset = assets[mediaAssetId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null } ?: return null
         val uploaded = asset.copy(processingStatus = "uploaded")
         assets[mediaAssetId] = uploaded
+        updateAlbumItems(uploaded)
         return uploaded
     }
 
@@ -354,6 +355,7 @@ private class InMemoryMediaRepository : MediaRepository {
             processingStatus = "ready"
         )
         assets[mediaAssetId] = ready
+        updateAlbumItems(ready)
         return ready
     }
 
@@ -509,4 +511,12 @@ private class InMemoryMediaRepository : MediaRepository {
     }
 
     private val displayNamesByUserId = mutableMapOf<UUID, String>()
+
+    private fun updateAlbumItems(asset: MediaAssetRecord) {
+        items.keys
+            .filter { (_, mediaAssetId) -> mediaAssetId == asset.mediaAssetId }
+            .forEach { key ->
+                items[key] = items.getValue(key).copy(mediaAsset = asset)
+            }
+    }
 }
