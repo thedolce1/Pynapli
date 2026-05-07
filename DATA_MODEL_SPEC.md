@@ -891,20 +891,20 @@ Do not store unless legally reviewed and required:
 
 ## Implementation Checklist
 
-- [ ] Autonomous user model exists.
-- [ ] Partner links are relationships, not accounts.
-- [ ] PostGIS location table exists.
-- [ ] Swipe deck session tables exist.
+- [x] Autonomous user model exists.
+- [x] Partner links are relationships, not accounts.
+- [x] PostGIS location table exists.
+- [ ] Partial: swipe action/match tables exist, but persisted swipe deck session tables do not.
 - [ ] Psync session tables exist.
 - [ ] Playing Tonight session table exists.
-- [ ] Chat participant model supports partner invite.
-- [ ] Album grants are explicit and revocable.
-- [ ] Activity events are separate from messages.
+- [x] Chat participant model supports partner invite.
+- [x] Album grants are explicit and revocable.
+- [x] Activity events are separate from messages.
 - [x] Entitlements are server-authoritative.
-- [ ] Risk state and moderation tables exist.
+- [x] Risk state and moderation tables exist.
 - [ ] Blocks and hides are separate.
-- [ ] Notification events are Ktor-owned.
-- [ ] Redis only stores ephemeral/cache data.
+- [x] Notification events are Ktor-owned.
+- [x] Redis only stores ephemeral/cache data.
 
 ## Do Not Implement
 

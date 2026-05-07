@@ -623,23 +623,23 @@ Client-local:
 
 ## Implementation Checklist
 
-- [ ] Header avatar opens profile/settings hub.
-- [ ] Bottom nav does not include Profile.
-- [ ] Profile editing exists.
-- [ ] Partner management exists.
-- [ ] Private album management exists.
-- [ ] Subscription and linked-partner benefit management exists.
-- [ ] Privacy controls exist.
-- [ ] Grid defaults and message permissions exist.
-- [ ] Swipe discovery settings exist.
-- [ ] Activity settings exist.
-- [ ] Notification detail levels exist.
+- [x] Header avatar opens profile/settings hub.
+- [x] Bottom nav does not include Profile.
+- [x] Profile editing exists.
+- [x] Partner management exists.
+- [x] Private album management exists.
+- [x] Subscription and linked-partner benefit management exists.
+- [x] Privacy controls exist.
+- [x] Grid defaults and message permissions exist.
+- [x] Swipe discovery settings exist.
+- [x] Activity settings exist.
+- [x] Notification detail levels exist.
 - [ ] Verification flow entry exists.
 - [ ] Safety center exists.
 - [ ] Blocked and hidden users are separate.
 - [ ] Discreet app icon exists or is planned.
-- [ ] Data export/delete/logout exist.
-- [ ] Server-authoritative settings are not only local.
+- [ ] Partial: logout exists; data export and account deletion are not implemented.
+- [x] Server-authoritative settings are not only local.
 
 ## Do Not Implement
 
@@ -653,4 +653,3 @@ Client-local:
 - Do not make notification copy explicit by default.
 - Do not make safety controls premium.
 - Do not store server-authoritative privacy settings only on device.
-

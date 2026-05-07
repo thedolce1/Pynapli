@@ -144,7 +144,6 @@ Legal contact placeholder:
 - [ ] Community guidelines linked.
 - [ ] Privacy policy linked.
 - [ ] Subscription terms linked.
-- [ ] Report/block available.
+- [x] Report/block available.
 - [ ] Account deletion available.
-- [ ] Enforcement actions supported.
-
+- [x] Enforcement actions supported.

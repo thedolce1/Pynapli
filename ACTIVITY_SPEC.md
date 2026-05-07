@@ -722,25 +722,25 @@ Avoid:
 
 ## Implementation Checklist
 
-- [ ] Activity event model exists.
-- [ ] Activity tabs exist.
-- [ ] Newest-to-oldest ordering exists.
-- [ ] Views require full profile opening.
-- [ ] Grid impressions do not count as views.
-- [ ] Swipe card appearances do not count as views.
-- [ ] Repeat views aggregate with cooldown.
-- [ ] Flirts appear in Activity, not Messages.
-- [ ] Likes You appears in Activity.
-- [ ] Partner chat invites require explicit action.
-- [ ] Album requests can be granted/denied/ignored.
-- [ ] Free/Plus/Premium gating is implemented.
+- [x] Activity event model exists.
+- [x] Activity tabs exist.
+- [x] Newest-to-oldest ordering exists.
+- [x] Views require full profile opening.
+- [x] Grid impressions do not count as views.
+- [x] Swipe card appearances do not count as views.
+- [x] Repeat views aggregate with cooldown.
+- [x] Flirts appear in Activity, not Messages.
+- [x] Likes You appears in Activity.
+- [x] Partner chat invites require explicit action.
+- [x] Album requests can be granted/denied/ignored.
+- [x] Free/Social/Select gating is implemented.
 - [ ] Viewed opt-out disables own Viewed list.
 - [ ] Incognito suppresses view events.
-- [ ] Blocks remove Activity visibility.
-- [ ] Linked partner Activity remains separate.
-- [ ] Notification detail settings exist.
-- [ ] Activity badge avoids noisy view spam.
-- [ ] Activity is not a message inbox.
+- [x] Blocks remove Activity visibility.
+- [x] Linked partner Activity remains separate.
+- [x] Notification detail settings exist.
+- [x] Activity badge avoids noisy view spam.
+- [x] Activity is not a message inbox.
 
 ## Do Not Implement
 

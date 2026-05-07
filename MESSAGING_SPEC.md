@@ -145,14 +145,14 @@ Do not paywall:
 
 ## Implementation Checklist
 
-- [ ] Open grid messaging respects recipient settings.
-- [ ] Swipe messaging requires mutual match.
-- [ ] Intro Notes remain outside chat until accepted/matched.
-- [ ] Partner invite requires linked partner and third-party consent.
-- [ ] Album access is separate from chat membership.
+- [x] Open grid messaging respects recipient settings.
+- [x] Swipe messaging requires mutual match.
+- [x] Intro Notes remain outside chat until accepted/matched.
+- [x] Partner invite requires linked partner and third-party consent.
+- [x] Album access is separate from chat membership.
 - [ ] Media reveal is per-recipient.
-- [ ] Block archives/disables thread.
-- [ ] Report is separate from block.
+- [x] Block archives/disables thread.
+- [x] Report is separate from block.
 - [ ] Message expiry exists only with clear system messaging.
 - [x] Server owns message permissions.
 

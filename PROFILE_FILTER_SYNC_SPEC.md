@@ -114,14 +114,14 @@ Ktor owns filter correctness.
 
 ## QA Checklist
 
-- [ ] Empty optional fields soft-include correctly.
+- [ ] Partial: empty optional fields soft-include for implemented filters; full taxonomy coverage is incomplete.
 - [ ] Has-photo excludes profiles with no public photo.
 - [ ] Verified-only excludes unverified profiles.
-- [ ] Blocks exclude bidirectionally.
+- [x] Blocks exclude bidirectionally.
 - [ ] Dealbreakers are respected.
-- [ ] Linked does not imply together.
-- [ ] Partner unlink removes linked visibility.
-- [ ] Suspension removes profile from all discovery quickly.
+- [x] Linked does not imply together.
+- [ ] Partial: partner unlink removes active linked visibility in implemented profile-link flows; regression coverage still needed.
+- [x] Suspension removes profile from all discovery quickly.
 - [ ] Profile update propagates within target.
 
 ## Do Not Implement
@@ -130,4 +130,3 @@ Ktor owns filter correctness.
 - Do not hard-exclude blank optional lifestyle fields by default.
 - Do not expose exact location through index fields.
 - Do not use one universal filter behavior for Grid and Swipe.
-

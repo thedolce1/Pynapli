@@ -440,7 +440,7 @@ Free:
 - Verified basics
 - Block/report/privacy controls
 
-Plus/Premium:
+Social/Select:
 
 - More filter combinations
 - Advanced lifestyle filters
@@ -512,20 +512,20 @@ Do not rely on bios for filtering.
 
 ## Implementation Checklist
 
-- [ ] Grid and Swipe have separate filter models.
-- [ ] Grid filters are mostly hard.
+- [x] Grid and Swipe have separate filter models.
+- [ ] Partial: Grid filters are mostly hard for implemented fields; the full filter model is not complete.
 - [ ] Swipe filters support flexible vs dealbreaker behavior.
-- [ ] Linked does not automatically imply together.
-- [ ] No couple cards are generated from filters.
-- [ ] Basic intent filters are available to free users.
-- [ ] Safety filters are not paywalled.
-- [ ] Lifestyle terms have glossary definitions.
+- [x] Linked does not automatically imply together.
+- [x] No couple cards are generated from filters.
+- [ ] Partial: basic intent/discovery controls exist for free users; the full filter surface is not complete.
+- [x] Safety filters are not paywalled.
+- [ ] Partial: lifestyle terms are documented, but glossary UX is not implemented.
 - [ ] High-sensitivity terms are age-gated.
-- [ ] Filters are stored as structured fields.
-- [ ] Profile text is not used as the primary filter source.
-- [ ] Empty states are neutral and useful.
+- [ ] Partial: implemented filters are stored as structured fields; the full lifestyle taxonomy is not modeled yet.
+- [x] Profile text is not used as the primary filter source.
+- [x] Empty states are neutral and useful.
 - [ ] Filter changes on Grid animate diffs, not full refresh.
-- [ ] Swipe filter changes generate a new deck session.
+- [ ] Partial: Swipe filter changes request a new deck, but true deck sessions are not complete.
 
 ## Do Not Implement
 
@@ -538,4 +538,3 @@ Do not rely on bios for filtering.
 - Do not paywall safety-critical controls.
 - Do not make grid cards carry filter complexity.
 - Do not make swipe feel like a database query.
-

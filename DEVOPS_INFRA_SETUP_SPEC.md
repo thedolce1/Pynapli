@@ -393,7 +393,7 @@ Do not create with a personal throwaway email. Use a founder/business-controlled
 
 Sebastien should set up:
 
-- [ ] Confirm `pynapli.com` DNS access.
+- [x] Confirm `pynapli.com` DNS access.
 - [ ] Create `support@pynapli.com`.
 - [ ] Create `privacy@pynapli.com`.
 - [ ] Create `security@pynapli.com`.
@@ -402,9 +402,9 @@ Sebastien should set up:
 - [ ] Create `admin@pynapli.com`.
 - [ ] Create `no-reply@pynapli.com`.
 - [ ] Create GitHub organization `pynapli`, if available.
-- [ ] Create private GitHub repository `pynapli`, if desired now.
-- [ ] Create or confirm Google Cloud billing account under Sebastien Mayeras.
-- [ ] Reserve/create GCP projects `pynapli-dev`, `pynapli-staging`, `pynapli-prod` when ready.
+- [ ] Partial: GitHub repository exists at `thedolce1/Pynapli`; GitHub org/private repo decision remains.
+- [ ] Partial: Google Cloud/Firebase workspace exists; billing/project naming still needs final confirmation.
+- [ ] Partial: Firebase/GCP project creation has started; `pynapli-dev`, `pynapli-staging`, and `pynapli-prod` are not confirmed.
 - [ ] Create Apple Developer account.
 - [ ] Create Google Play Console account.
 
@@ -416,17 +416,17 @@ If `pynapli` is unavailable as a GitHub org, fallback options:
 
 ## Implementation Checklist
 
-- [ ] GitHub repo created.
+- [x] GitHub repo created.
 - [ ] Branch protections configured.
-- [ ] Domain purchased.
+- [x] Domain purchased.
 - [ ] Email aliases reserved.
-- [ ] GCP billing account exists.
-- [ ] Firebase project names reserved.
+- [ ] Partial: GCP billing/project setup started; final production naming/cost controls are not confirmed.
+- [ ] Partial: Firebase project setup started; final dev/staging/prod names are not confirmed.
 - [ ] Apple Developer account exists.
 - [ ] Google Play Console exists.
-- [ ] Docker Desktop installed.
-- [ ] GitHub CLI installed.
-- [ ] No secrets committed.
+- [x] Docker Desktop installed.
+- [x] GitHub CLI installed.
+- [x] No secrets committed.
 - [ ] Cost alerts planned before cloud deploy.
 
 ## Do Not Implement

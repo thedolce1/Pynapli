@@ -175,9 +175,9 @@ Avoid:
 - [ ] Market-driven enhanced verification flags.
 - [ ] Verification data minimization.
 - [ ] Public content moderation before visibility.
-- [ ] Private album/report flow.
-- [ ] Report categories implemented.
-- [ ] Moderator queue and actions.
+- [ ] Partial: private album grants and report flow exist; media moderation/scanning policy is not complete.
+- [x] Report categories implemented.
+- [ ] Partial: reports/risk/message review queues and actions exist; full moderator console is not complete.
 - [ ] CSAM/severe escalation policy.
 - [ ] Appeals flow.
 - [ ] Public community guidelines URL.
@@ -190,4 +190,3 @@ Avoid:
 - Do not use verification data for ads.
 - Do not hide report/block.
 - Do not position Pynapli as a sex-services marketplace.
-

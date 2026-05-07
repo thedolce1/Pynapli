@@ -79,12 +79,12 @@ Use PostgreSQL `EXPLAIN ANALYZE` for slow query regression.
 
 - [ ] Critical E2E tests passing on Android.
 - [ ] Critical E2E tests passing on iOS.
-- [ ] Ktor integration tests passing with real DB containers.
+- [ ] Partial: Ktor/server integration tests with Testcontainers exist and pass locally; full release-grade DB container coverage is not complete.
 - [ ] Performance benchmarks under thresholds.
-- [ ] Abuse tests passing.
+- [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [ ] Location denied path tested.
-- [ ] Notification denied path tested.
+- [ ] Partial: notification denied logic has unit coverage; manual device QA is not complete.
 - [ ] Low-network path tested.
 
 ## Do Not Implement

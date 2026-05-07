@@ -209,12 +209,11 @@ Security contact placeholder:
 
 ## Implementation Checklist
 
-- [ ] Privacy controls exist in settings.
+- [x] Privacy controls exist in settings.
 - [ ] Account deletion exists.
 - [ ] Data export process defined.
 - [ ] Analytics redaction rules implemented.
 - [ ] Crash reporting redaction rules implemented.
-- [ ] Location retention minimized.
-- [ ] Private album grants revocable.
-- [ ] Linked partners do not share data automatically.
-
+- [x] Location retention minimized.
+- [x] Private album grants revocable.
+- [x] Linked partners do not share data automatically.

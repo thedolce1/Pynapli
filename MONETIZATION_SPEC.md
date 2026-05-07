@@ -569,7 +569,8 @@ Do not experiment with:
 - [x] Linked partner benefit is implemented server-side.
 - [x] One active linked partner beneficiary rule exists.
 - [x] Subscription cooldown/abuse detection exists.
-- [ ] StoreKit and Google Play validation exist.
+- [ ] StoreKit validation exists.
+- [ ] Partial: Google Play validation path exists, but real Play Console credentials/config and end-to-end receipt validation remain.
 - [x] Restore purchases exists.
 - [x] Activity gating is implemented.
 - [x] Advanced filters are gated.
@@ -578,7 +579,7 @@ Do not experiment with:
 - [x] Intro Note inventory exists.
 - [x] Ads are excluded from sensitive surfaces.
 - [x] Safety features remain free.
-- [ ] Paywall copy uses Social/Select naming.
+- [x] Paywall copy uses Social/Select naming.
 
 ## Do Not Implement
 

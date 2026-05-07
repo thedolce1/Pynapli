@@ -672,23 +672,23 @@ Network:
 
 ## Implementation Checklist
 
-- [ ] Swipe card DTO exists.
-- [ ] Deck session endpoint exists.
-- [ ] Like/pass/super-like action endpoint exists.
-- [ ] Match creation is server-authoritative.
+- [x] Swipe card DTO exists.
+- [ ] Partial: deck query endpoint exists; true persisted deck sessions and hardened rank-token validation are not complete.
+- [x] Like/pass/Pineapple Like/Intro Note action endpoint exists.
+- [x] Match creation is server-authoritative.
 - [ ] Rewind is server-aware.
-- [ ] Intro Note inventory and delivery rules exist.
-- [ ] Likes You is represented in Activity.
+- [x] Intro Note inventory and delivery rules exist.
+- [x] Likes You is represented in Activity.
 - [ ] Top Picks/Picks daily refresh exists.
-- [ ] Boost affects swipe ranking without violating filters.
+- [x] Boost affects swipe ranking without violating filters.
 - [ ] Passport/travel mode has one active location.
 - [ ] Dealbreaker settings exist.
-- [ ] Compose card stack renders only 2-3 cards.
-- [ ] Swipe gestures use physics/thresholds.
+- [x] Compose card stack renders only 2-3 cards.
+- [x] Swipe gestures use physics/thresholds.
 - [ ] Card image preloading exists.
 - [ ] Offline action cap exists.
-- [ ] Block/report available from card.
-- [ ] Linked partner preview does not turn into couple card.
+- [x] Block/report available from card.
+- [x] Linked partner preview does not turn into couple card.
 
 ## Do Not Implement
 

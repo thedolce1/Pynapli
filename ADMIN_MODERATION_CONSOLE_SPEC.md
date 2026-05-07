@@ -538,9 +538,9 @@ Track:
 
 - [ ] Admin roles and permissions exist.
 - [ ] MFA required.
-- [ ] Audit middleware exists.
+- [ ] Partial: implemented admin queue actions are audit logged, but general audit middleware is missing.
 - [ ] User lookup exists.
-- [ ] Moderation queue exists.
+- [ ] Partial: reports, risk, and held-message queues exist; unified moderation console is not complete.
 - [x] Reports queue exists.
 - [x] Reports triage actions exist.
 - [x] Reports triage actions are audit logged.
@@ -552,9 +552,9 @@ Track:
 - [ ] Appeals workflow exists.
 - [ ] Subscription support view exists.
 - [ ] Partner link review exists.
-- [ ] Sensitive reveal reason flow exists.
+- [ ] Partial: held-message sensitive queue requires a reason; broader sensitive reveal reason flow is not complete.
 - [x] Held-message sensitive queue view requires reason.
-- [ ] Admin API separated from consumer API.
+- [ ] Partial: admin routes are under `/v1/admin`; production API separation, roles, and MFA remain.
 
 ## Do Not Implement
 

@@ -99,18 +99,17 @@ Current CI state:
 | Playing Tonight | Not started | Spec exists. | Product feature can wait until core grid/swipe/messages/activity safety is stronger. |
 | iOS | Mostly scaffold only | `iosApp` exists. | StoreKit 2, APNs, iOS UI validation, and iOS test path are not ready. |
 
-## Important Drift Found
+## Spec Reconciliation Status
 
-Several spec checklists are stale. Some items remain unchecked in the docs even though the code now has partial or full implementation. That creates a real risk: future work could redo existing code, miss an important gap, or assume a feature is not started.
+Reconciled on 2026-05-07.
 
-Examples:
+The root spec checklists now use this practical convention:
 
-- Grid docs still show all checklist items unchecked, but the implementation has lightweight DTOs, PostGIS radius/distance queries, Redis presence TTLs, stable Compose keys, and message rate limiting.
-- Swipe docs still show all checklist items unchecked, but the implementation has deck/action endpoints, server-authoritative match creation, intro-note inventory, pineapple-like inventory, boosts, card block/report actions, and linked partner preview.
-- API and backend docs understate current block/risk/entitlement enforcement.
-- Monetization docs mark StoreKit and Google Play validation as one unchecked item, but the current state is split: Google Play work exists and StoreKit does not.
+- `[x]` means implemented enough for the current MVP milestone and backed by code evidence.
+- `[ ] Partial:` means a real implementation slice exists, but the item is not complete enough to check off.
+- `[ ]` means missing or not started.
 
-The docs need a reconciliation pass, but the reconciliation should mark partial items carefully. A checked box should mean the implementation, tests, and product behavior are all good enough for the current milestone.
+A checked box should not mean "final production-ready" unless the surrounding spec explicitly says so. It means the current implementation satisfies the current milestone expectation for that item.
 
 ## Highest-Risk Gaps
 
@@ -154,33 +153,29 @@ The docs need a reconciliation pass, but the reconciliation should mark partial 
 
 ## Recommended Next Sequence
 
-1. Reconcile spec checklists with implementation evidence.
-   - Mark implemented, partial, and missing items accurately.
-   - Do not over-check items that are coded but not tested.
-
-2. Strengthen CI from "runs the gate" to "protects the branch."
+1. Strengthen CI from "runs the gate" to "protects the branch."
    - Add branch protection and required status checks in GitHub.
    - Add Docker-backed integration tests, lint/static analysis, and Android artifact checks when those suites are ready.
 
-3. Harden grid and swipe server contracts.
+2. Harden grid and swipe server contracts.
    - Grid: stable cursor pagination, candidate cache, movement threshold policy, 5,000-candidate load test.
    - Swipe: deck session validation, rank-token validation, cursor pagination, action idempotency, rewind path.
 
-4. Finish the profile/settings safety surface.
+3. Finish the profile/settings safety surface.
    - Safety center, block list, hidden users if retained, report history/support contact, data export/delete, notification settings.
 
-5. Move media from local-dev to production-safe storage.
+4. Move media from local-dev to production-safe storage.
    - Signed upload/download URLs, private album grant enforcement, cleanup jobs, and scanning hooks.
 
-6. Add realtime only after HTTP state is correct.
+5. Add realtime only after HTTP state is correct.
    - WebSocket events should be convenience updates.
    - HTTP refetch remains canonical after reconnect.
 
-7. Add differentiators after core safety is stronger.
+6. Add differentiators after core safety is stronger.
    - Psync and Playing Tonight should wait until grid, swipe, messaging, activity, profile links, and safety are more complete.
 
 ## Decision
 
-The project is on the right track, but we should deliberately slow down before adding more large product features. The next work should be quality and architecture work: spec reconciliation, stronger CI, grid/swipe hardening, and account/safety completion.
+The project is on the right track, but we should deliberately slow down before adding more large product features. The next work should be quality and architecture work: branch protection, grid/swipe hardening, account/safety completion, and production-safe media.
 
 That is how Pynapli avoids becoming a fragile prototype. The current MVP is real enough now that quality debt matters.

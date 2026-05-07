@@ -113,12 +113,12 @@ Do not:
 
 ## Implementation Checklist
 
-- [ ] Auth methods implemented.
-- [ ] Secure token storage.
+- [ ] Partial: email auth is implemented; social auth and full onboarding auth set are not complete.
+- [ ] Partial: token storage exists, but secure platform storage is not complete.
 - [ ] Signup progress saved.
 - [ ] Skippable photo/tags/looking-for.
 - [ ] Age gate before access.
-- [ ] Permission-denied states.
+- [ ] Partial: some permission-denied states exist; full onboarding QA coverage is not complete.
 - [ ] First grid uses signup data.
 - [ ] Post-signup nudges are bounded.
 
@@ -128,4 +128,3 @@ Do not:
 - Do not require partner linking during onboarding.
 - Do not block first grid for optional photo.
 - Do not nag indefinitely.
-

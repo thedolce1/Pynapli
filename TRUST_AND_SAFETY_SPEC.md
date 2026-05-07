@@ -673,10 +673,10 @@ Reject:
 - [x] Partner subscription abuse cooldown exists.
 - [ ] Verification lowers risk where appropriate.
 - [ ] Appeal/support review flow exists.
-- [ ] Moderator dashboard requirements are tracked.
+- [x] Moderator dashboard requirements are tracked.
 - [ ] False-positive metrics exist.
 - [x] Severe hard-ban triggers exist.
-- [ ] Fake/deceptive degradation is not implemented.
+- [x] Fake/deceptive degradation is not implemented.
 
 ## Do Not Implement
 

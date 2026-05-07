@@ -572,24 +572,24 @@ Battery:
 
 ## Implementation Checklist
 
-- [ ] Lightweight grid card DTO exists.
-- [ ] Full profile endpoint is separate.
-- [ ] PostGIS radius query implemented.
-- [ ] PostGIS nearest-neighbor ordering implemented.
-- [ ] Redis presence TTLs implemented.
-- [ ] Redis candidate cache implemented.
-- [ ] Stable cursor pagination implemented.
-- [ ] Compose grid uses stable keys.
-- [ ] Compose grid uses retained `LazyGridState`.
-- [ ] Grid cards use fixed square dimensions.
-- [ ] Filter updates use diffed list updates, not full clears.
-- [ ] Profile open/close preserves scroll.
+- [x] Lightweight grid card DTO exists.
+- [x] Full profile endpoint is separate.
+- [x] PostGIS radius query implemented.
+- [x] PostGIS nearest-neighbor ordering implemented.
+- [x] Redis presence TTLs implemented.
+- [ ] Partial: Redis candidate cache is not implemented; Redis is currently used for presence/rate limits.
+- [ ] Partial: stable cursor pagination is represented in DTOs, but live grid responses do not yet return hardened cursors.
+- [x] Compose grid uses stable keys.
+- [ ] Partial: Compose grid uses retained `LazyGridState` while the screen instance is alive; lifecycle/navigation regression tests still need to prove it.
+- [ ] Partial: grid cards use stable responsive dimensions, but not fixed square dimensions.
+- [ ] Partial: filter updates keep existing state, but diffed list animation behavior is not yet verified.
+- [ ] Partial: profile open/close preserves current screen state in the MVP flow; emulator regression coverage is still needed.
 - [ ] WebSocket presence deltas update dots without full refresh.
 - [ ] Location updates use thresholds.
-- [ ] Background location is avoided by default.
-- [ ] Thumbnail caching/preloading exists.
-- [ ] Message rate limiting exists.
-- [ ] Ranking does not reward spam volume.
+- [ ] Partial: background location is avoided in current app code, but platform QA and policy review are still needed.
+- [ ] Partial: thumbnail caching relies on the image loader; explicit preloading is not implemented.
+- [x] Message rate limiting exists.
+- [x] Ranking does not reward spam volume.
 
 ## Do Not Implement
 

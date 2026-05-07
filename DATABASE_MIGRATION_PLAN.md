@@ -304,15 +304,15 @@ Production seed:
 
 ## Implementation Checklist
 
-- [ ] Migration tool selected.
-- [ ] PostGIS extension migration.
-- [ ] Core users/auth migration.
-- [ ] Profile/location migrations.
-- [ ] Blocks before discovery.
-- [ ] Partner links before Psync/Tonight.
-- [ ] Subscriptions before paid gates.
-- [ ] Risk/moderation before beta.
-- [ ] Admin audit before admin console.
+- [x] Migration tool selected.
+- [x] PostGIS extension migration.
+- [x] Core users/auth migration.
+- [x] Profile/location migrations.
+- [x] Blocks before discovery-facing feature hardening.
+- [x] Partner links before Psync/Tonight.
+- [x] Subscriptions before paid gates.
+- [x] Risk/moderation before beta.
+- [x] Admin audit before admin console.
 - [ ] Cleanup jobs defined.
 
 ## Do Not Implement
@@ -322,4 +322,3 @@ Production seed:
 - Do not store raw verification media.
 - Do not store private media as public URLs.
 - Do not make destructive migrations without a staged plan.
-

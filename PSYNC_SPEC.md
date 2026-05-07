@@ -561,7 +561,7 @@ Avoid:
 - [ ] Together match requires target consent.
 - [ ] Solo passthrough is private by default.
 - [ ] Session recap exists.
-- [ ] Psync Score does not exist.
+- [x] Psync Score does not exist.
 - [ ] Either partner can pause/leave.
 - [ ] Partner link ending cancels active session.
 - [ ] Blocks/reports invalidate targets.
@@ -582,4 +582,3 @@ Avoid:
 - Do not assume target consent for together matching.
 - Do not silently add linked partner to chats.
 - Do not paywall leaving/rejecting/blocking/reporting.
-

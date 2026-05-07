@@ -187,14 +187,14 @@ Deep links:
 
 ## Implementation Checklist
 
-- [ ] Design tokens exist.
-- [ ] Grid tile component follows minimal card rules.
-- [ ] Swipe card component follows richer card rules.
-- [ ] Activity row component supports gating.
+- [x] Design tokens exist.
+- [x] Grid tile component follows minimal card rules.
+- [x] Swipe card component follows richer card rules.
+- [x] Activity row component supports gating.
 - [ ] Message bubble supports media reveal.
-- [ ] Bottom nav uses five locked tabs.
-- [ ] Avatar opens settings hub.
-- [ ] Per-tab state preserved.
+- [x] Bottom nav uses five locked tabs.
+- [x] Avatar opens settings hub.
+- [ ] Partial: per-tab state is retained in current Compose state holders, but full navigation regression coverage is missing.
 - [ ] Deep links respect auth/stale state.
 - [ ] Accessibility pass for touch targets and text overflow.
 

@@ -769,19 +769,19 @@ Keep sensitive payloads out of logs.
 
 ## Implementation Checklist
 
-- [ ] Ktor is authoritative for product rules.
-- [ ] Firebase role is limited and explicit.
-- [ ] PostgreSQL/PostGIS selected for location.
-- [ ] Redis selected for presence/cache/rate limits.
-- [ ] Object storage selected for media.
-- [ ] FCM notification pipeline goes through Ktor.
+- [ ] Partial: Ktor is authoritative for implemented product rules; grid/swipe cursor/session hardening and production safety gaps remain.
+- [ ] Partial: Firebase role is limited to FCM in the current code path, but production App Check/Analytics/Crashlytics boundaries are not complete.
+- [x] PostgreSQL/PostGIS selected for location.
+- [x] Redis selected for presence/cache/rate limits.
+- [ ] Partial: object-storage-style upload contracts exist, but production signed storage is not complete.
+- [x] FCM notification pipeline goes through Ktor.
 - [ ] Analytics avoids sensitive lifestyle payloads.
-- [ ] Subscription validation is server-side.
+- [ ] Partial: Google Play subscription validation is server-side; StoreKit and real production credential validation remain.
 - [x] Linked partner entitlement is server-side.
-- [ ] Private albums use signed URLs.
+- [ ] Partial: private album upload destinations are signed/contracted for local-dev; production signed upload/download URLs remain.
 - [ ] WebSocket reconnect refetches canonical state.
 - [x] Rate limits exist for messaging/flirts/album requests.
-- [ ] Blocks are enforced across grid/swipe/activity/messages.
+- [x] Blocks are enforced across grid/swipe/activity/messages.
 - [ ] Location is not trusted from client for ranking without server validation.
 - [ ] Sensitive logs are redacted.
 

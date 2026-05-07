@@ -480,15 +480,15 @@ Rules:
 
 ## Implementation Checklist
 
-- [ ] `/v1` versioning.
-- [ ] Shared DTO conventions.
-- [ ] Cursor pagination.
-- [ ] Idempotency keys for actions/purchases.
+- [x] `/v1` versioning.
+- [x] Shared DTO conventions.
+- [ ] Partial: cursor pagination exists for some surfaces, but grid/swipe/activity live cursor behavior is incomplete.
+- [ ] Partial: idempotency keys exist for notification/outbox and some workflows, but actions/purchases are not consistently idempotent.
 - [x] Server-side entitlement checks.
-- [ ] Server-side block/privacy/risk checks.
+- [x] Server-side block/privacy/risk checks.
 - [ ] WebSocket reconnect canonical refetch.
-- [ ] Error codes standardized.
-- [ ] Admin API separated.
+- [ ] Partial: error codes are mapped centrally, but the full API error catalog is not complete.
+- [ ] Partial: admin routes are under `/v1/admin`, but production admin separation, roles, and MFA are not complete.
 
 ## Do Not Implement
 

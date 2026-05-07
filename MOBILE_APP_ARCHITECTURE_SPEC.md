@@ -504,18 +504,18 @@ Manual/device:
 
 ## Implementation Checklist
 
-- [ ] Shared module has feature packages.
-- [ ] Ktor Client configured in shared code.
+- [ ] Partial: shared module has domain/network packages, but not every feature is factored into shared packages.
+- [x] Ktor Client configured in shared code.
 - [ ] WebSocket client reconnects and refetches.
-- [ ] Secure token store expect/actual.
-- [ ] Location provider expect/actual.
-- [ ] Billing bridge expect/actual.
-- [ ] Grid preserves scroll state.
+- [ ] Partial: session storage exists, but secure platform token storage expect/actual is not complete.
+- [ ] Partial: location update flow exists, but platform expect/actual location provider abstraction is not complete.
+- [ ] Partial: Android Play Billing bridge exists; iOS StoreKit bridge is missing.
+- [ ] Partial: Grid preserves scroll state while the screen instance is alive; navigation/lifecycle regression coverage is still needed.
 - [ ] Swipe action queue capped.
-- [ ] Activity and Messages are separate.
-- [ ] Partner invite consent flow implemented.
+- [x] Activity and Messages are separate.
+- [x] Partner invite consent flow implemented.
 - [ ] Firebase analytics excludes sensitive data.
-- [ ] Entitlements come from Ktor.
+- [x] Entitlements come from Ktor.
 
 ## Do Not Implement
 
