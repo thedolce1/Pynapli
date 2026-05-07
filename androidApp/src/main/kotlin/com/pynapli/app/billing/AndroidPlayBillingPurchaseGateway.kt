@@ -17,6 +17,7 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
+import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncStatus
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
 import kotlinx.coroutines.CompletableDeferred
@@ -173,7 +174,11 @@ class AndroidPlayBillingPurchaseGateway(
         ) {
             is AppResult.Success -> AppResult.Success(
                 StorePurchaseResult(
-                    message = "Purchase received. Verification is pending.",
+                    message = when (result.value.status) {
+                        SubscriptionPurchaseSyncStatus.ACTIVE,
+                        SubscriptionPurchaseSyncStatus.ALREADY_ACTIVE -> "Subscription active."
+                        else -> "Purchase received. Verification is pending."
+                    },
                     refreshEntitlement = true
                 )
             )

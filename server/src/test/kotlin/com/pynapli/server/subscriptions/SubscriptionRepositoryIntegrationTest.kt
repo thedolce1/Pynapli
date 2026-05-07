@@ -60,7 +60,10 @@ class SubscriptionRepositoryIntegrationTest {
         assertTrue(dataSource.tableExists("entitlements"))
         assertTrue(dataSource.tableExists("linked_partner_benefits"))
         assertTrue(dataSource.tableExists("premium_inventory"))
+        assertTrue(dataSource.columnExists("subscriptions", "external_product_id"))
+        assertTrue(dataSource.columnExists("subscriptions", "last_verified_at"))
         assertTrue(dataSource.indexExists("idx_subscriptions_user_active"))
+        assertTrue(dataSource.indexExists("idx_subscriptions_play_store_product"))
         assertTrue(dataSource.indexExists("idx_linked_partner_benefits_beneficiary_active"))
         assertTrue(dataSource.indexExists("idx_premium_inventory_user_available"))
     }
@@ -177,6 +180,40 @@ class SubscriptionRepositoryIntegrationTest {
         assertEquals(true, repository.consumeIntroNoteInventory(user, now))
         assertEquals(false, repository.consumeIntroNoteInventory(user, now))
         assertEquals(0, dataSource.inventoryQuantity(user, "intro_note"))
+    }
+
+    @Test
+    fun verifiedPlayStorePurchasePersistsMetadataAndActivatesSubscription() = runBlocking {
+        val user = uuid(501)
+        val now = Instant.parse("2026-05-06T12:00:00Z")
+        val purchaseToken = "play-store-token-501"
+        dataSource.insertUser(user)
+        val repository = JdbcSubscriptionRepository(dataSource)
+
+        val record = repository.upsertVerifiedPlayStoreSubscriptionPurchase(
+            userId = user,
+            productId = "pynapli_select_monthly",
+            purchaseToken = purchaseToken,
+            orderId = "GPA.501",
+            tier = SubscriptionTier.SELECT,
+            status = "active",
+            externalStatus = "SUBSCRIPTION_STATE_ACTIVE",
+            acknowledgementState = "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+            acknowledgedAt = now,
+            currentPeriodStart = now,
+            currentPeriodEnd = Instant.parse("2026-06-06T12:00:00Z"),
+            verifiedAt = now
+        )
+        val active = repository.findBestActiveOwnSubscription(user, now.plusSeconds(1))
+
+        assertEquals("active", record.status)
+        assertNotNull(active)
+        assertEquals(SubscriptionTier.SELECT, active.tier)
+        val metadata = dataSource.subscriptionMetadata(purchaseToken)
+        assertEquals("pynapli_select_monthly", metadata["external_product_id"])
+        assertEquals("GPA.501", metadata["external_order_id"])
+        assertEquals("SUBSCRIPTION_STATE_ACTIVE", metadata["external_status"])
+        assertEquals("ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED", metadata["acknowledgement_state"])
     }
 
     private fun DataSource.insertUser(userId: UUID) {
@@ -368,6 +405,53 @@ class SubscriptionRepositoryIntegrationTest {
                 statement.executeQuery().use { rs ->
                     rs.next()
                     rs.getBoolean(1)
+                }
+            }
+        }
+
+    private fun DataSource.columnExists(tableName: String, columnName: String): Boolean =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_name = ?
+                      AND column_name = ?
+                )
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, tableName)
+                statement.setString(2, columnName)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getBoolean(1)
+                }
+            }
+        }
+
+    private fun DataSource.subscriptionMetadata(purchaseToken: String): Map<String, String?> =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT external_product_id,
+                       external_order_id,
+                       external_status,
+                       acknowledgement_state
+                FROM subscriptions
+                WHERE platform = 'play_store'
+                  AND external_subscription_id = ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, purchaseToken)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    mapOf(
+                        "external_product_id" to rs.getString("external_product_id"),
+                        "external_order_id" to rs.getString("external_order_id"),
+                        "external_status" to rs.getString("external_status"),
+                        "acknowledgement_state" to rs.getString("acknowledgement_state")
+                    )
                 }
             }
         }

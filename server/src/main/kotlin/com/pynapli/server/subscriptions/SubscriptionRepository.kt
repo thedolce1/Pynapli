@@ -19,6 +19,21 @@ interface SubscriptionRepository {
         tier: String,
         now: Instant
     ): SubscriptionRecord = throw SubscriptionException("SUBSCRIPTION_PURCHASE_SYNC_UNAVAILABLE")
+
+    suspend fun upsertVerifiedPlayStoreSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        purchaseToken: String,
+        orderId: String?,
+        tier: String,
+        status: String,
+        externalStatus: String,
+        acknowledgementState: String?,
+        acknowledgedAt: Instant?,
+        currentPeriodStart: Instant,
+        currentPeriodEnd: Instant,
+        verifiedAt: Instant
+    ): SubscriptionRecord = throw SubscriptionException("SUBSCRIPTION_PURCHASE_SYNC_UNAVAILABLE")
 }
 
 data class SubscriptionRecord(

@@ -47,6 +47,8 @@ import com.pynapli.server.safety.ReportService
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.safety.RiskService
 import com.pynapli.server.subscriptions.JdbcSubscriptionRepository
+import com.pynapli.server.subscriptions.DisabledPlayStorePurchaseVerifier
+import com.pynapli.server.subscriptions.GooglePlayStorePurchaseVerifier
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.swipe.JdbcSwipeRepository
 import com.pynapli.server.swipe.SwipeService
@@ -159,7 +161,13 @@ class ServerDependencies(
                 blockRepository = blockRepository
             )
             val subscriptionService = SubscriptionService(
-                repository = JdbcSubscriptionRepository(database.dataSource)
+                repository = JdbcSubscriptionRepository(database.dataSource),
+                playStorePackageName = config.playStorePackageName,
+                playStorePurchaseVerifier = if (config.playStoreVerificationEnabled) {
+                    GooglePlayStorePurchaseVerifier.fromConfig(config)
+                } else {
+                    DisabledPlayStorePurchaseVerifier
+                }
             )
             val activityService = ActivityService(
                 repository = JdbcActivityRepository(database.dataSource),

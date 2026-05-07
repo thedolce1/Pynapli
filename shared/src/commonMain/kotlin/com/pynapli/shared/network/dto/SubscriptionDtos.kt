@@ -53,6 +53,7 @@ data class SubscriptionTierDto(
 )
 
 object SubscriptionPurchaseSyncStatus {
+    const val ACTIVE = "active"
     const val PENDING_VERIFICATION = "pending_verification"
     const val ALREADY_ACTIVE = "already_active"
 }

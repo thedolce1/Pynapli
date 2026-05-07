@@ -126,6 +126,43 @@ class SubscriptionServiceTest {
         assertEquals("pending", repository.pendingPurchases.single().status)
     }
 
+    @Test
+    fun verifiedPlayStorePurchaseGrantsEntitlement() = runBlocking {
+        val user = uuid(41)
+        val repository = InMemorySubscriptionRepository()
+        val service = SubscriptionService(
+            repository = repository,
+            clock = clock,
+            playStorePurchaseVerifier = FakePlayStorePurchaseVerifier(
+                PlayStorePurchaseVerificationResult.Verified(
+                    VerifiedPlayStoreSubscriptionPurchase(
+                        productId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
+                        purchaseToken = "purchase-token-00000000000000000002",
+                        latestOrderId = "GPA.0000-0000-0000-00000",
+                        subscriptionState = "SUBSCRIPTION_STATE_ACTIVE",
+                        acknowledgementState = "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+                        currentPeriodStart = Instant.parse("2026-05-06T12:00:00Z"),
+                        currentPeriodEnd = Instant.parse("2026-06-06T12:00:00Z")
+                    )
+                )
+            )
+        )
+
+        val response = service.recordPlayStoreSubscriptionPurchase(
+            userId = user,
+            request = SubmitPlayStoreSubscriptionPurchaseRequestDto(
+                productId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
+                purchaseToken = "purchase-token-00000000000000000002",
+                packageName = "com.pynapli.app"
+            )
+        )
+
+        assertEquals(SubscriptionPurchaseSyncStatus.ACTIVE, response.status)
+        assertEquals(SubscriptionTier.SELECT, response.entitlement.tier)
+        assertEquals(EntitlementSource.OWN_SUBSCRIPTION, response.entitlement.source)
+        assertEquals("active", repository.verifiedPurchases.single().status)
+    }
+
     private fun subscription(userId: UUID, tier: String): SubscriptionRecord =
         SubscriptionRecord(
             subscriptionId = UUID.randomUUID(),
@@ -150,8 +187,18 @@ private class InMemorySubscriptionRepository(
     private val stored: Map<UUID, StoredEntitlementRecord> = emptyMap()
 ) : SubscriptionRepository {
     val pendingPurchases = mutableListOf<SubscriptionRecord>()
+    val verifiedPurchases = mutableListOf<SubscriptionRecord>()
 
-    override suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? = own[userId]
+    override suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? =
+        (listOfNotNull(own[userId]) + verifiedPurchases.filter {
+            it.userId == userId &&
+                it.status in setOf("active", "grace") &&
+                it.currentPeriodStart <= now &&
+                it.currentPeriodEnd > now
+        }).maxWithOrNull(
+                compareBy<SubscriptionRecord> { if (it.tier == SubscriptionTier.SELECT) 2 else 1 }
+                    .thenBy { it.currentPeriodEnd }
+            )
 
     override suspend fun findBestActiveLinkedPartnerSubscription(
         userId: UUID,
@@ -181,6 +228,42 @@ private class InMemorySubscriptionRepository(
         pendingPurchases += record
         return record
     }
+
+    override suspend fun upsertVerifiedPlayStoreSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        purchaseToken: String,
+        orderId: String?,
+        tier: String,
+        status: String,
+        externalStatus: String,
+        acknowledgementState: String?,
+        acknowledgedAt: Instant?,
+        currentPeriodStart: Instant,
+        currentPeriodEnd: Instant,
+        verifiedAt: Instant
+    ): SubscriptionRecord {
+        val record = SubscriptionRecord(
+            subscriptionId = UUID.randomUUID(),
+            userId = userId,
+            tier = tier,
+            status = status,
+            currentPeriodStart = currentPeriodStart,
+            currentPeriodEnd = currentPeriodEnd
+        )
+        verifiedPurchases += record
+        return record
+    }
+}
+
+private class FakePlayStorePurchaseVerifier(
+    private val result: PlayStorePurchaseVerificationResult
+) : PlayStorePurchaseVerifier {
+    override suspend fun verifySubscriptionPurchase(
+        packageName: String,
+        productId: String,
+        purchaseToken: String
+    ): PlayStorePurchaseVerificationResult = result
 }
 
 private fun uuid(value: Int): UUID =

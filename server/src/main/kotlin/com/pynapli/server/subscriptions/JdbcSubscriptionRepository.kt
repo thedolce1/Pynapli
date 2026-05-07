@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.ResultSet
 import java.sql.Timestamp
+import java.sql.Types
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -84,9 +85,54 @@ class JdbcSubscriptionRepository(
                 statement.setObject(1, UUID.randomUUID())
                 statement.setObject(2, userId)
                 statement.setString(3, purchaseToken)
-                statement.setString(4, tier)
-                statement.setTimestamp(5, Timestamp.from(now))
-                statement.setTimestamp(6, Timestamp.from(now.plus(3, ChronoUnit.DAYS)))
+                statement.setString(4, productId)
+                statement.setString(5, tier)
+                statement.setTimestamp(6, Timestamp.from(now))
+                statement.setTimestamp(7, Timestamp.from(now.plus(3, ChronoUnit.DAYS)))
+                statement.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        rs.toSubscriptionRecord()
+                    } else {
+                        throw SubscriptionException("PURCHASE_ALREADY_LINKED")
+                    }
+                }
+            }
+        }
+    }
+
+    override suspend fun upsertVerifiedPlayStoreSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        purchaseToken: String,
+        orderId: String?,
+        tier: String,
+        status: String,
+        externalStatus: String,
+        acknowledgementState: String?,
+        acknowledgedAt: Instant?,
+        currentPeriodStart: Instant,
+        currentPeriodEnd: Instant,
+        verifiedAt: Instant
+    ): SubscriptionRecord = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(UPSERT_VERIFIED_PLAY_STORE_PURCHASE_QUERY).use { statement ->
+                statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, userId)
+                statement.setString(3, purchaseToken)
+                statement.setString(4, productId)
+                statement.setString(5, orderId)
+                statement.setString(6, externalStatus)
+                statement.setString(7, acknowledgementState)
+                if (acknowledgedAt == null) {
+                    statement.setNull(8, Types.TIMESTAMP_WITH_TIMEZONE)
+                } else {
+                    statement.setTimestamp(8, Timestamp.from(acknowledgedAt))
+                }
+                statement.setTimestamp(9, Timestamp.from(verifiedAt))
+                statement.setString(10, tier)
+                statement.setString(11, status)
+                statement.setTimestamp(12, Timestamp.from(currentPeriodStart))
+                statement.setTimestamp(13, Timestamp.from(currentPeriodEnd))
                 statement.executeQuery().use { rs ->
                     if (rs.next()) {
                         rs.toSubscriptionRecord()
@@ -242,6 +288,7 @@ class JdbcSubscriptionRepository(
                 user_id,
                 platform,
                 external_subscription_id,
+                external_product_id,
                 tier,
                 status,
                 current_period_start,
@@ -252,17 +299,73 @@ class JdbcSubscriptionRepository(
                 'play_store',
                 ?,
                 ?,
+                ?,
                 'pending',
                 ?,
                 ?
             )
             ON CONFLICT (platform, external_subscription_id)
             DO UPDATE SET
+                external_product_id = EXCLUDED.external_product_id,
                 tier = EXCLUDED.tier,
                 status = CASE
                     WHEN subscriptions.status IN ('active', 'grace') THEN subscriptions.status
                     ELSE 'pending'
                 END,
+                updated_at = now()
+            WHERE subscriptions.user_id = EXCLUDED.user_id
+            RETURNING id AS subscription_id,
+                      user_id AS subscription_user_id,
+                      tier,
+                      status,
+                      current_period_start,
+                      current_period_end
+        """.trimIndent()
+
+        private val UPSERT_VERIFIED_PLAY_STORE_PURCHASE_QUERY = """
+            INSERT INTO subscriptions (
+                id,
+                user_id,
+                platform,
+                external_subscription_id,
+                external_product_id,
+                external_order_id,
+                external_status,
+                acknowledgement_state,
+                acknowledged_at,
+                last_verified_at,
+                tier,
+                status,
+                current_period_start,
+                current_period_end
+            ) VALUES (
+                ?,
+                ?,
+                'play_store',
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            ON CONFLICT (platform, external_subscription_id)
+            DO UPDATE SET
+                external_product_id = EXCLUDED.external_product_id,
+                external_order_id = COALESCE(EXCLUDED.external_order_id, subscriptions.external_order_id),
+                external_status = EXCLUDED.external_status,
+                acknowledgement_state = EXCLUDED.acknowledgement_state,
+                acknowledged_at = COALESCE(EXCLUDED.acknowledged_at, subscriptions.acknowledged_at),
+                last_verified_at = EXCLUDED.last_verified_at,
+                tier = EXCLUDED.tier,
+                status = EXCLUDED.status,
+                current_period_start = EXCLUDED.current_period_start,
+                current_period_end = EXCLUDED.current_period_end,
                 updated_at = now()
             WHERE subscriptions.user_id = EXCLUDED.user_id
             RETURNING id AS subscription_id,

@@ -19,6 +19,11 @@ data class ServerConfig(
     val notificationPushProvider: String = "local",
     val firebaseServiceAccountPath: String? = null,
     val firebaseServiceAccountJson: String? = null,
+    val playStorePackageName: String = "com.pynapli.app",
+    val playStoreVerificationEnabled: Boolean = false,
+    val playStoreServiceAccountPath: String? = null,
+    val playStoreServiceAccountJson: String? = null,
+    val playStoreDeveloperApiBaseUrl: String = "https://androidpublisher.googleapis.com",
     val adminApiToken: String? = null
 ) {
     companion object {
@@ -70,6 +75,24 @@ data class ServerConfig(
                 firebaseServiceAccountJson = System.getenv("PYNAPLI_FIREBASE_SERVICE_ACCOUNT_JSON")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() },
+                playStorePackageName = System.getenv("PYNAPLI_PLAY_STORE_PACKAGE_NAME")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: "com.pynapli.app",
+                playStoreVerificationEnabled = System.getenv("PYNAPLI_PLAY_STORE_VERIFICATION_ENABLED")
+                    ?.toBooleanStrictOrNull()
+                    ?: false,
+                playStoreServiceAccountPath = System.getenv("PYNAPLI_PLAY_STORE_SERVICE_ACCOUNT_PATH")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() },
+                playStoreServiceAccountJson = System.getenv("PYNAPLI_PLAY_STORE_SERVICE_ACCOUNT_JSON")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() },
+                playStoreDeveloperApiBaseUrl = System.getenv("PYNAPLI_PLAY_STORE_DEVELOPER_API_BASE_URL")
+                    ?.trim()
+                    ?.trimEnd('/')
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: "https://androidpublisher.googleapis.com",
                 adminApiToken = System.getenv("PYNAPLI_ADMIN_API_TOKEN")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }
