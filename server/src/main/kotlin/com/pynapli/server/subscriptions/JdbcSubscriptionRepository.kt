@@ -86,20 +86,67 @@ class JdbcSubscriptionRepository(
                 statement.executeQuery().use { rs ->
                     buildList {
                         while (rs.next()) {
-                            add(
-                                PlayStoreSubscriptionVerificationCandidate(
-                                    userId = rs.getObject("subscription_user_id", UUID::class.java),
-                                    productId = rs.getString("external_product_id"),
-                                    purchaseToken = rs.getString("external_subscription_id"),
-                                    tier = rs.getString("tier"),
-                                    status = rs.getString("status"),
-                                    currentPeriodStart = rs.getTimestamp("current_period_start").toInstant(),
-                                    currentPeriodEnd = rs.getTimestamp("current_period_end").toInstant()
-                                )
-                            )
+                            add(rs.toPlayStoreSubscriptionVerificationCandidate())
                         }
                     }
                 }
+            }
+        }
+    }
+
+    override suspend fun findPlayStoreSubscriptionByPurchaseToken(
+        purchaseToken: String
+    ): PlayStoreSubscriptionVerificationCandidate? = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(FIND_PLAY_STORE_SUBSCRIPTION_BY_PURCHASE_TOKEN_QUERY).use { statement ->
+                statement.setString(1, purchaseToken)
+                statement.executeQuery().use { rs ->
+                    if (rs.next()) rs.toPlayStoreSubscriptionVerificationCandidate() else null
+                }
+            }
+        }
+    }
+
+    override suspend fun insertPlayStoreRtdnEvent(event: PlayStoreRtdnEventInsert): Boolean =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(INSERT_PLAY_STORE_RTDN_EVENT_QUERY).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setString(2, event.messageId)
+                    statement.setString(3, event.packageName)
+                    statement.setString(4, event.eventType)
+                    if (event.notificationType == null) {
+                        statement.setNull(5, Types.INTEGER)
+                    } else {
+                        statement.setInt(5, event.notificationType)
+                    }
+                    statement.setString(6, event.purchaseToken)
+                    statement.setString(7, event.productId)
+                    if (event.eventTime == null) {
+                        statement.setNull(8, Types.TIMESTAMP_WITH_TIMEZONE)
+                    } else {
+                        statement.setTimestamp(8, Timestamp.from(event.eventTime))
+                    }
+                    statement.setString(9, event.rawPayload)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getBoolean(1)
+                    }
+                }
+            }
+        }
+
+    override suspend fun updatePlayStoreRtdnEventStatus(
+        messageId: String,
+        processingStatus: String,
+        errorCode: String?
+    ): Unit = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(UPDATE_PLAY_STORE_RTDN_EVENT_STATUS_QUERY).use { statement ->
+                statement.setString(1, processingStatus)
+                statement.setString(2, errorCode)
+                statement.setString(3, messageId)
+                statement.executeUpdate()
             }
         }
     }
@@ -179,6 +226,17 @@ class JdbcSubscriptionRepository(
         SubscriptionRecord(
             subscriptionId = getObject("subscription_id", UUID::class.java),
             userId = getObject("subscription_user_id", UUID::class.java),
+            tier = getString("tier"),
+            status = getString("status"),
+            currentPeriodStart = getTimestamp("current_period_start").toInstant(),
+            currentPeriodEnd = getTimestamp("current_period_end").toInstant()
+        )
+
+    private fun ResultSet.toPlayStoreSubscriptionVerificationCandidate(): PlayStoreSubscriptionVerificationCandidate =
+        PlayStoreSubscriptionVerificationCandidate(
+            userId = getObject("subscription_user_id", UUID::class.java),
+            productId = getString("external_product_id"),
+            purchaseToken = getString("external_subscription_id"),
             tier = getString("tier"),
             status = getString("status"),
             currentPeriodStart = getTimestamp("current_period_start").toInstant(),
@@ -343,6 +401,60 @@ class JdbcSubscriptionRepository(
                 current_period_end ASC,
                 id ASC
             LIMIT ?
+        """.trimIndent()
+
+        private val FIND_PLAY_STORE_SUBSCRIPTION_BY_PURCHASE_TOKEN_QUERY = """
+            SELECT user_id AS subscription_user_id,
+                   external_product_id,
+                   external_subscription_id,
+                   tier,
+                   status,
+                   current_period_start,
+                   current_period_end
+            FROM subscriptions
+            WHERE platform = 'play_store'
+              AND external_subscription_id = ?
+            LIMIT 1
+        """.trimIndent()
+
+        private val INSERT_PLAY_STORE_RTDN_EVENT_QUERY = """
+            WITH inserted AS (
+                INSERT INTO play_store_rtdn_events (
+                    id,
+                    message_id,
+                    package_name,
+                    event_type,
+                    notification_type,
+                    purchase_token,
+                    product_id,
+                    event_time,
+                    raw_payload,
+                    processing_status
+                ) VALUES (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    'received'
+                )
+                ON CONFLICT (message_id) DO NOTHING
+                RETURNING 1
+            )
+            SELECT EXISTS(SELECT 1 FROM inserted)
+        """.trimIndent()
+
+        private val UPDATE_PLAY_STORE_RTDN_EVENT_STATUS_QUERY = """
+            UPDATE play_store_rtdn_events
+            SET processing_status = ?,
+                error_code = ?,
+                processed_at = now(),
+                updated_at = now()
+            WHERE message_id = ?
         """.trimIndent()
 
         private val UPSERT_PENDING_PLAY_STORE_PURCHASE_QUERY = """

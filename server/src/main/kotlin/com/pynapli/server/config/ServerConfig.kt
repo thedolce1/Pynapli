@@ -29,6 +29,10 @@ data class ServerConfig(
     val playStoreSubscriptionSyncBatchSize: Int = 100,
     val playStoreSubscriptionSyncStaleAfterHours: Long = 6,
     val playStoreSubscriptionSyncRenewalLookaheadHours: Long = 24,
+    val playStoreRtdnEnabled: Boolean = false,
+    val playStoreRtdnWebhookToken: String? = null,
+    val playStoreRtdnOidcAudience: String? = null,
+    val playStoreRtdnOidcServiceAccountEmail: String? = null,
     val adminApiToken: String? = null
 ) {
     companion object {
@@ -117,6 +121,18 @@ data class ServerConfig(
                     ?.toLongOrNull()
                     ?.coerceIn(1, 168)
                     ?: 24,
+                playStoreRtdnEnabled = System.getenv("PYNAPLI_PLAY_STORE_RTDN_ENABLED")
+                    ?.toBooleanStrictOrNull()
+                    ?: false,
+                playStoreRtdnWebhookToken = System.getenv("PYNAPLI_PLAY_STORE_RTDN_WEBHOOK_TOKEN")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() },
+                playStoreRtdnOidcAudience = System.getenv("PYNAPLI_PLAY_STORE_RTDN_OIDC_AUDIENCE")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() },
+                playStoreRtdnOidcServiceAccountEmail = System.getenv("PYNAPLI_PLAY_STORE_RTDN_OIDC_SERVICE_ACCOUNT_EMAIL")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() },
                 adminApiToken = System.getenv("PYNAPLI_ADMIN_API_TOKEN")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }

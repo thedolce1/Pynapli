@@ -238,6 +238,70 @@ class SubscriptionServiceTest {
         assertEquals("revoked", repository.verifiedPurchases.single().status)
     }
 
+    @Test
+    fun rtdnSubscriptionNotificationRefreshesLinkedPurchaseToken() = runBlocking {
+        val user = uuid(44)
+        val repository = InMemorySubscriptionRepository(
+            linkedPurchase = PlayStoreSubscriptionVerificationCandidate(
+                userId = user,
+                productId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
+                purchaseToken = "purchase-token-00000000000000000005",
+                tier = SubscriptionTier.SELECT,
+                status = "active",
+                currentPeriodStart = Instant.parse("2026-05-01T00:00:00Z"),
+                currentPeriodEnd = Instant.parse("2026-05-07T00:00:00Z")
+            )
+        )
+        val service = SubscriptionService(
+            repository = repository,
+            clock = clock,
+            playStorePurchaseVerifier = FakePlayStorePurchaseVerifier(
+                PlayStorePurchaseVerificationResult.Verified(
+                    VerifiedPlayStoreSubscriptionPurchase(
+                        productId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
+                        purchaseToken = "purchase-token-00000000000000000005",
+                        latestOrderId = "GPA.0000-0000-0000-00005",
+                        subscriptionState = "SUBSCRIPTION_STATE_ACTIVE",
+                        acknowledgementState = "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+                        currentPeriodStart = Instant.parse("2026-05-06T12:00:00Z"),
+                        currentPeriodEnd = Instant.parse("2026-06-06T12:00:00Z")
+                    )
+                )
+            )
+        )
+
+        val result = service.handlePlayStoreRealTimeDeveloperNotification(
+            subscriptionRtdnEnvelope(
+                messageId = "rtdn-message-1",
+                purchaseToken = "purchase-token-00000000000000000005"
+            )
+        )
+
+        assertEquals("processed", result.status)
+        assertEquals("active", result.subscriptionStatus)
+        assertEquals(1, repository.events.size)
+        assertEquals("processed", repository.eventStatuses["rtdn-message-1"])
+        assertEquals("active", repository.verifiedPurchases.single().status)
+    }
+
+    @Test
+    fun rtdnDuplicateMessageDoesNotReprocessPurchase() = runBlocking {
+        val repository = InMemorySubscriptionRepository(
+            duplicateMessageIds = setOf("rtdn-message-duplicate")
+        )
+        val service = SubscriptionService(repository = repository, clock = clock)
+
+        val result = service.handlePlayStoreRealTimeDeveloperNotification(
+            subscriptionRtdnEnvelope(
+                messageId = "rtdn-message-duplicate",
+                purchaseToken = "purchase-token-00000000000000000006"
+            )
+        )
+
+        assertEquals("duplicate", result.status)
+        assertEquals(0, repository.verifiedPurchases.size)
+    }
+
     private fun subscription(userId: UUID, tier: String): SubscriptionRecord =
         SubscriptionRecord(
             subscriptionId = UUID.randomUUID(),
@@ -260,10 +324,14 @@ private class InMemorySubscriptionRepository(
     private val own: Map<UUID, SubscriptionRecord> = emptyMap(),
     private val linked: Map<UUID, LinkedPartnerSubscriptionRecord> = emptyMap(),
     private val stored: Map<UUID, StoredEntitlementRecord> = emptyMap(),
-    private val dueCandidates: List<PlayStoreSubscriptionVerificationCandidate> = emptyList()
+    private val dueCandidates: List<PlayStoreSubscriptionVerificationCandidate> = emptyList(),
+    private val linkedPurchase: PlayStoreSubscriptionVerificationCandidate? = null,
+    private val duplicateMessageIds: Set<String> = emptySet()
 ) : SubscriptionRepository {
     val pendingPurchases = mutableListOf<SubscriptionRecord>()
     val verifiedPurchases = mutableListOf<SubscriptionRecord>()
+    val events = mutableListOf<PlayStoreRtdnEventInsert>()
+    val eventStatuses = mutableMapOf<String, String>()
 
     override suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? =
         (listOfNotNull(own[userId]) + verifiedPurchases.filter {
@@ -291,6 +359,25 @@ private class InMemorySubscriptionRepository(
         renewalWindowEnd: Instant,
         limit: Int
     ): List<PlayStoreSubscriptionVerificationCandidate> = dueCandidates.take(limit)
+
+    override suspend fun findPlayStoreSubscriptionByPurchaseToken(
+        purchaseToken: String
+    ): PlayStoreSubscriptionVerificationCandidate? =
+        linkedPurchase?.takeIf { it.purchaseToken == purchaseToken }
+
+    override suspend fun insertPlayStoreRtdnEvent(event: PlayStoreRtdnEventInsert): Boolean {
+        if (event.messageId in duplicateMessageIds) return false
+        events += event
+        return true
+    }
+
+    override suspend fun updatePlayStoreRtdnEventStatus(
+        messageId: String,
+        processingStatus: String,
+        errorCode: String?
+    ) {
+        eventStatuses[messageId] = processingStatus
+    }
 
     override suspend fun upsertPendingPlayStoreSubscriptionPurchase(
         userId: UUID,
@@ -346,7 +433,31 @@ private class FakePlayStorePurchaseVerifier(
         productId: String,
         purchaseToken: String
     ): PlayStorePurchaseVerificationResult = result
+
+    override suspend fun verifySubscriptionPurchaseByToken(
+        packageName: String,
+        purchaseToken: String
+    ): PlayStorePurchaseVerificationResult = result
 }
+
+private fun subscriptionRtdnEnvelope(
+    messageId: String,
+    purchaseToken: String,
+    productId: String = SubscriptionProductId.PLAY_SELECT_MONTHLY
+): PlayStoreRtdnEnvelope =
+    PlayStoreRtdnEnvelope(
+        messageId = messageId,
+        rawPayload = "{}",
+        notification = PlayStoreDeveloperNotificationDto(
+            packageName = "com.pynapli.app",
+            subscriptionNotification = PlayStoreSubscriptionNotificationDto(
+                version = "1.0",
+                notificationType = 2,
+                purchaseToken = purchaseToken,
+                subscriptionId = productId
+            )
+        )
+    )
 
 private fun uuid(value: Int): UUID =
     UUID.fromString("00000000-0000-0000-0000-${value.toString().padStart(12, '0')}")

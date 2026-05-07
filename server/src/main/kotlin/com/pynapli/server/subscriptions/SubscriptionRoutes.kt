@@ -1,5 +1,6 @@
 package com.pynapli.server.subscriptions
 
+import com.google.auth.oauth2.TokenVerifier
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.config.ServerConfig
@@ -13,9 +14,12 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.Serializable
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+
+private val rtdnJson = Json { ignoreUnknownKeys = true }
 
 fun Application.configureSubscriptionRoutes(
     authService: AuthService?,
@@ -61,6 +65,30 @@ fun Application.configureSubscriptionAdminRoutes(
     }
 }
 
+fun Application.configurePlayStoreRtdnRoutes(
+    config: ServerConfig,
+    subscriptionService: SubscriptionService?
+) {
+    if (!config.playStoreRtdnEnabled || subscriptionService == null) return
+    if (config.playStoreRtdnWebhookToken == null && config.playStoreRtdnOidcAudience == null) {
+        throw IllegalStateException(
+            "Play Store RTDN requires PYNAPLI_PLAY_STORE_RTDN_WEBHOOK_TOKEN or PYNAPLI_PLAY_STORE_RTDN_OIDC_AUDIENCE."
+        )
+    }
+
+    routing {
+        post("/v1/webhooks/play-store/rtdn") {
+            call.requirePlayStoreRtdnAuth(config)
+            val request = call.receive<PubSubPushRequestDto>()
+            call.respond(
+                subscriptionService
+                    .handlePlayStoreRealTimeDeveloperNotification(request.toPlayStoreRtdnEnvelope(rtdnJson))
+                    .toDto()
+            )
+        }
+    }
+}
+
 private fun ApplicationCall.requiredBearerToken(): String {
     val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
     if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
@@ -88,6 +116,48 @@ private fun ApplicationCall.requireSubscriptionAdminActor(expectedToken: String)
         ?: throw SubscriptionException("INVALID_ADMIN_ACTOR")
 }
 
+private fun ApplicationCall.requirePlayStoreRtdnAuth(config: ServerConfig) {
+    val configuredToken = config.playStoreRtdnWebhookToken
+    val suppliedStaticToken = request.headers["X-Pynapli-Webhook-Token"]
+        ?: request.queryParameters["token"]
+    if (
+        configuredToken != null &&
+        suppliedStaticToken != null &&
+        MessageDigest.isEqual(
+            configuredToken.toByteArray(StandardCharsets.UTF_8),
+            suppliedStaticToken.toByteArray(StandardCharsets.UTF_8)
+        )
+    ) {
+        return
+    }
+
+    val audience = config.playStoreRtdnOidcAudience ?: throw SubscriptionException("RTDN_UNAUTHENTICATED")
+    val bearerToken = request.headers[HttpHeaders.Authorization]
+        ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+        ?.substringAfter("Bearer ")
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: throw SubscriptionException("RTDN_UNAUTHENTICATED")
+
+    val payload = runCatching {
+        TokenVerifier.newBuilder()
+            .setIssuer("https://accounts.google.com")
+            .setAudience(audience)
+            .build()
+            .verify(bearerToken)
+            .payload
+    }.getOrElse {
+        throw SubscriptionException("RTDN_FORBIDDEN")
+    }
+
+    val expectedEmail = config.playStoreRtdnOidcServiceAccountEmail ?: return
+    val actualEmail = payload["email"]?.toString()
+    val emailVerified = payload["email_verified"] as? Boolean ?: false
+    if (actualEmail != expectedEmail || !emailVerified) {
+        throw SubscriptionException("RTDN_FORBIDDEN")
+    }
+}
+
 @Serializable
 data class PlayStoreSubscriptionSyncSummaryDto(
     val scanned: Int,
@@ -101,6 +171,17 @@ data class PlayStoreSubscriptionSyncSummaryDto(
     val unavailable: Int
 )
 
+@Serializable
+data class PlayStoreRtdnProcessingResultDto(
+    val status: String,
+    val eventType: String,
+    val messageId: String,
+    val purchaseToken: String? = null,
+    val productId: String? = null,
+    val subscriptionStatus: String? = null,
+    val errorCode: String? = null
+)
+
 private fun PlayStoreSubscriptionSyncSummary.toDto(): PlayStoreSubscriptionSyncSummaryDto =
     PlayStoreSubscriptionSyncSummaryDto(
         scanned = scanned,
@@ -112,4 +193,15 @@ private fun PlayStoreSubscriptionSyncSummary.toDto(): PlayStoreSubscriptionSyncS
         revoked = revoked,
         invalid = invalid,
         unavailable = unavailable
+    )
+
+private fun PlayStoreRtdnProcessingResult.toDto(): PlayStoreRtdnProcessingResultDto =
+    PlayStoreRtdnProcessingResultDto(
+        status = status,
+        eventType = eventType,
+        messageId = messageId,
+        purchaseToken = purchaseToken,
+        productId = productId,
+        subscriptionStatus = subscriptionStatus,
+        errorCode = errorCode
     )

@@ -256,6 +256,10 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_SUBSCRIPTION_PRODUCT" -> "Choose a valid subscription."
     "INVALID_PURCHASE_TOKEN", "INVALID_PURCHASE_PACKAGE" -> "Purchase could not be verified."
     "PURCHASE_ALREADY_LINKED" -> "This purchase is already linked to another account."
+    "INVALID_RTDN_MESSAGE" -> "Notification payload is not valid."
+    "RTDN_UNAUTHENTICATED" -> "Webhook authentication is required."
+    "RTDN_FORBIDDEN" -> "Webhook access was denied."
+    "RTDN_VERIFICATION_UNAVAILABLE" -> "Purchase verification is temporarily unavailable."
     "INVALID_BLOCK_TARGET" -> "That user could not be blocked."
     "BLOCK_SELF_FORBIDDEN" -> "You cannot block yourself."
     "BLOCK_REASON_TOO_LONG" -> "Block reason is too long."
@@ -370,12 +374,16 @@ private fun notificationStatusFor(code: String): HttpStatusCode = when (code) {
 }
 
 private fun subscriptionStatusFor(code: String): HttpStatusCode = when (code) {
+    "RTDN_UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
+    "RTDN_FORBIDDEN" -> HttpStatusCode.Forbidden
+    "RTDN_VERIFICATION_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
     "ADMIN_UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
     "ADMIN_FORBIDDEN" -> HttpStatusCode.Forbidden
     "PURCHASE_ALREADY_LINKED" -> HttpStatusCode.Conflict
     "INVALID_SUBSCRIPTION_PRODUCT",
     "INVALID_PURCHASE_TOKEN",
     "INVALID_PURCHASE_PACKAGE",
+    "INVALID_RTDN_MESSAGE",
     "INVALID_ADMIN_ACTOR" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest
 }

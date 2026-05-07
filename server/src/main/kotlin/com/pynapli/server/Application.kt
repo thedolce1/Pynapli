@@ -22,6 +22,7 @@ import com.pynapli.server.profile.configureProfileRoutes
 import com.pynapli.server.profilelink.configureProfileLinkRoutes
 import com.pynapli.server.routing.configureHealthRoutes
 import com.pynapli.server.safety.configureSafetyRoutes
+import com.pynapli.server.subscriptions.configurePlayStoreRtdnRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionAdminRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionRoutes
 import com.pynapli.server.swipe.configureSwipeRoutes
@@ -55,6 +56,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAdminReportRoutes(dependencies.config, dependencies.adminReportService)
     configureAdminRiskRoutes(dependencies.config, dependencies.adminRiskService)
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
+    configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)
     configureAuthRoutes(dependencies.authService)
     configureProfileRoutes(dependencies.authService, dependencies.profileService)
     configureProfileLinkRoutes(dependencies.authService, dependencies.profileLinkService)

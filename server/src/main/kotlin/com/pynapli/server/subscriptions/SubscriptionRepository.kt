@@ -18,6 +18,18 @@ interface SubscriptionRepository {
         limit: Int
     ): List<PlayStoreSubscriptionVerificationCandidate> = emptyList()
 
+    suspend fun findPlayStoreSubscriptionByPurchaseToken(
+        purchaseToken: String
+    ): PlayStoreSubscriptionVerificationCandidate? = null
+
+    suspend fun insertPlayStoreRtdnEvent(event: PlayStoreRtdnEventInsert): Boolean = true
+
+    suspend fun updatePlayStoreRtdnEventStatus(
+        messageId: String,
+        processingStatus: String,
+        errorCode: String? = null
+    ) = Unit
+
     suspend fun upsertPendingPlayStoreSubscriptionPurchase(
         userId: UUID,
         productId: String,
@@ -59,6 +71,17 @@ data class PlayStoreSubscriptionVerificationCandidate(
     val status: String,
     val currentPeriodStart: Instant,
     val currentPeriodEnd: Instant
+)
+
+data class PlayStoreRtdnEventInsert(
+    val messageId: String,
+    val packageName: String?,
+    val eventType: String,
+    val notificationType: Int?,
+    val purchaseToken: String?,
+    val productId: String?,
+    val eventTime: Instant?,
+    val rawPayload: String
 )
 
 data class LinkedPartnerSubscriptionRecord(

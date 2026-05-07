@@ -28,12 +28,22 @@ interface PlayStorePurchaseVerifier {
         productId: String,
         purchaseToken: String
     ): PlayStorePurchaseVerificationResult
+
+    suspend fun verifySubscriptionPurchaseByToken(
+        packageName: String,
+        purchaseToken: String
+    ): PlayStorePurchaseVerificationResult = PlayStorePurchaseVerificationResult.VerificationUnavailable
 }
 
 data object DisabledPlayStorePurchaseVerifier : PlayStorePurchaseVerifier {
     override suspend fun verifySubscriptionPurchase(
         packageName: String,
         productId: String,
+        purchaseToken: String
+    ): PlayStorePurchaseVerificationResult = PlayStorePurchaseVerificationResult.VerificationUnavailable
+
+    override suspend fun verifySubscriptionPurchaseByToken(
+        packageName: String,
         purchaseToken: String
     ): PlayStorePurchaseVerificationResult = PlayStorePurchaseVerificationResult.VerificationUnavailable
 }
@@ -69,7 +79,30 @@ class GooglePlayStorePurchaseVerifier private constructor(
         productId: String,
         purchaseToken: String
     ): PlayStorePurchaseVerificationResult = withContext(Dispatchers.IO) {
-        runCatching {
+        verifySubscriptionPurchaseInternal(
+            packageName = packageName,
+            expectedProductId = productId,
+            purchaseToken = purchaseToken
+        )
+    }
+
+    override suspend fun verifySubscriptionPurchaseByToken(
+        packageName: String,
+        purchaseToken: String
+    ): PlayStorePurchaseVerificationResult = withContext(Dispatchers.IO) {
+        verifySubscriptionPurchaseInternal(
+            packageName = packageName,
+            expectedProductId = null,
+            purchaseToken = purchaseToken
+        )
+    }
+
+    private fun verifySubscriptionPurchaseInternal(
+        packageName: String,
+        expectedProductId: String?,
+        purchaseToken: String
+    ): PlayStorePurchaseVerificationResult {
+        return runCatching {
             val response = sendAuthorized(
                 HttpRequest.newBuilder()
                     .uri(subscriptionV2Uri(packageName, purchaseToken))
@@ -77,7 +110,7 @@ class GooglePlayStorePurchaseVerifier private constructor(
             )
 
             when (response.statusCode()) {
-                in 200..299 -> verifySuccessfulResponse(packageName, productId, purchaseToken, response.body())
+                in 200..299 -> verifySuccessfulResponse(packageName, expectedProductId, purchaseToken, response.body())
                 400, 404 -> PlayStorePurchaseVerificationResult.Invalid("INVALID_PURCHASE_TOKEN")
                 401, 403 -> {
                     logger.error("Google Play verification is unauthorized: status={}", response.statusCode())
@@ -100,7 +133,7 @@ class GooglePlayStorePurchaseVerifier private constructor(
 
     private fun verifySuccessfulResponse(
         packageName: String,
-        productId: String,
+        expectedProductId: String?,
         purchaseToken: String,
         responseBody: String
     ): PlayStorePurchaseVerificationResult {
@@ -112,7 +145,15 @@ class GooglePlayStorePurchaseVerifier private constructor(
         val lineItem = root["lineItems"]
             ?.jsonArray
             ?.mapNotNull { element -> element as? JsonObject }
-            ?.firstOrNull { it.stringOrNull("productId") == productId }
+            ?.let { items ->
+                if (expectedProductId == null) {
+                    items.firstOrNull { it.stringOrNull("productId") != null }
+                } else {
+                    items.firstOrNull { it.stringOrNull("productId") == expectedProductId }
+                }
+            }
+            ?: return PlayStorePurchaseVerificationResult.Invalid("INVALID_SUBSCRIPTION_PRODUCT")
+        val productId = lineItem.stringOrNull("productId")
             ?: return PlayStorePurchaseVerificationResult.Invalid("INVALID_SUBSCRIPTION_PRODUCT")
         val expiryTime = lineItem.stringOrNull("expiryTime")?.let(Instant::parse)
             ?: return PlayStorePurchaseVerificationResult.Invalid("INVALID_PURCHASE_TOKEN")

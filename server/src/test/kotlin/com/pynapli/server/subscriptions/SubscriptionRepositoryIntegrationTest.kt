@@ -60,10 +60,12 @@ class SubscriptionRepositoryIntegrationTest {
         assertTrue(dataSource.tableExists("entitlements"))
         assertTrue(dataSource.tableExists("linked_partner_benefits"))
         assertTrue(dataSource.tableExists("premium_inventory"))
+        assertTrue(dataSource.tableExists("play_store_rtdn_events"))
         assertTrue(dataSource.columnExists("subscriptions", "external_product_id"))
         assertTrue(dataSource.columnExists("subscriptions", "last_verified_at"))
         assertTrue(dataSource.indexExists("idx_subscriptions_user_active"))
         assertTrue(dataSource.indexExists("idx_subscriptions_play_store_product"))
+        assertTrue(dataSource.indexExists("idx_play_store_rtdn_events_purchase_token"))
         assertTrue(dataSource.indexExists("idx_linked_partner_benefits_beneficiary_active"))
         assertTrue(dataSource.indexExists("idx_premium_inventory_user_available"))
     }
@@ -225,6 +227,28 @@ class SubscriptionRepositoryIntegrationTest {
         assertEquals("pynapli_select_monthly", due.single().productId)
         assertEquals(SubscriptionTier.SELECT, due.single().tier)
         assertEquals(purchaseToken, due.single().purchaseToken)
+    }
+
+    @Test
+    fun playStoreRtdnEventsAreDeduplicatedAndStatusTracked() = runBlocking {
+        val repository = JdbcSubscriptionRepository(dataSource)
+        val event = PlayStoreRtdnEventInsert(
+            messageId = "rtdn-message-501",
+            packageName = "com.pynapli.app",
+            eventType = "subscription",
+            notificationType = 2,
+            purchaseToken = "play-store-token-rtdn",
+            productId = "pynapli_select_monthly",
+            eventTime = Instant.parse("2026-05-06T12:00:00Z"),
+            rawPayload = """{"packageName":"com.pynapli.app"}"""
+        )
+
+        assertEquals(true, repository.insertPlayStoreRtdnEvent(event))
+        assertEquals(false, repository.insertPlayStoreRtdnEvent(event))
+        repository.updatePlayStoreRtdnEventStatus("rtdn-message-501", "processed", null)
+
+        val status = dataSource.rtdnEventStatus("rtdn-message-501")
+        assertEquals("processed", status)
     }
 
     private fun DataSource.insertUser(userId: UUID) {
@@ -463,6 +487,22 @@ class SubscriptionRepositoryIntegrationTest {
                         "external_status" to rs.getString("external_status"),
                         "acknowledgement_state" to rs.getString("acknowledgement_state")
                     )
+                }
+            }
+        }
+
+    private fun DataSource.rtdnEventStatus(messageId: String): String? =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT processing_status
+                FROM play_store_rtdn_events
+                WHERE message_id = ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, messageId)
+                statement.executeQuery().use { rs ->
+                    if (rs.next()) rs.getString("processing_status") else null
                 }
             }
         }
