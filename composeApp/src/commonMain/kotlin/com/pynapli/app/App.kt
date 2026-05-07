@@ -65,6 +65,8 @@ import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilehub.ProfileHubScreen
 import com.pynapli.app.profilehub.ProfileHubStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
+import com.pynapli.app.store.StoreScreen
+import com.pynapli.app.store.StoreStateHolder
 import com.pynapli.app.swipe.SwipeScreen
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.network.dto.ActivityEventDto
@@ -87,6 +89,7 @@ fun PynapliApp(
     profileHubStateHolder: ProfileHubStateHolder,
     profileLinksStateHolder: ProfileLinksStateHolder,
     swipeStateHolder: SwipeStateHolder,
+    storeStateHolder: StoreStateHolder,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
     devLoginCredentials: DevLoginCredentials? = null
@@ -356,7 +359,8 @@ fun PynapliApp(
                         profileLinksStateHolder = profileLinksStateHolder,
                         distanceUnit = distanceUnit,
                         onUseCurrentLocation = onUseCurrentLocation,
-                        onProfileIconClick = { profileSurface = ProfileSurface.Hub }
+                        onProfileIconClick = { profileSurface = ProfileSurface.Hub },
+                        onOpenStore = { selectedTab = PynapliTab.Store }
                     )
 
                     PynapliTab.Messages -> MessagesScreen(
@@ -389,21 +393,13 @@ fun PynapliApp(
                         viewerUserId = authState.session?.userId,
                         distanceUnit = distanceUnit,
                         matchNotificationsEnabled = appSettingsState.settings.matchNotifications,
-                        notificationDetail = appSettingsState.settings.notificationDetail
+                        notificationDetail = appSettingsState.settings.notificationDetail,
+                        onOpenStore = { selectedTab = PynapliTab.Store }
                     )
 
-                    PynapliTab.Store -> GridScreen(
+                    PynapliTab.Store -> StoreScreen(
                         modifier = Modifier.weight(1f),
-                        stateHolder = gridStateHolder,
-                        profileDetailStateHolder = profileDetailStateHolder,
-                        conversationStateHolder = conversationStateHolder,
-                        viewerUserId = authState.session?.userId,
-                        locationState = locationState,
-                        profileImageUrl = profileImageUrl,
-                        profileLinksStateHolder = profileLinksStateHolder,
-                        distanceUnit = distanceUnit,
-                        onUseCurrentLocation = onUseCurrentLocation,
-                        onProfileIconClick = { profileSurface = ProfileSurface.Hub }
+                        stateHolder = storeStateHolder
                     )
                 }
 
@@ -599,7 +595,8 @@ private fun PynapliBottomNavigation(
             val enabled = tab == PynapliTab.Grid ||
                 tab == PynapliTab.Swipe ||
                 tab == PynapliTab.Activity ||
-                tab == PynapliTab.Messages
+                tab == PynapliTab.Messages ||
+                tab == PynapliTab.Store
             NavigationBarItem(
                 enabled = enabled,
                 selected = selectedTab == tab,

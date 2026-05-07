@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
                 profileHubStateHolder = appGraph.profileHubStateHolder,
                 profileLinksStateHolder = appGraph.profileLinksStateHolder,
                 swipeStateHolder = appGraph.swipeStateHolder,
+                storeStateHolder = appGraph.storeStateHolder,
                 onUseCurrentLocation = ::requestCurrentLocation,
                 onPickMediaForAlbum = ::pickMediaForAlbum,
                 devLoginCredentials = appGraph.devLoginCredentials.takeIf { isDebuggable() }

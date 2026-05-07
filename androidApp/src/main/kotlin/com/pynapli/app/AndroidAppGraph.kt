@@ -32,6 +32,8 @@ import com.pynapli.app.profilehub.ApiProfileHubRepository
 import com.pynapli.app.profilehub.ProfileHubStateHolder
 import com.pynapli.app.profilelink.ApiProfileLinksRepository
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
+import com.pynapli.app.store.ApiStoreRepository
+import com.pynapli.app.store.StoreStateHolder
 import com.pynapli.app.swipe.ApiSwipeRepository
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.auth.AuthRepository
@@ -130,6 +132,10 @@ class AndroidAppGraph(context: Context) {
 
     val swipeStateHolder = SwipeStateHolder(
         repository = ApiSwipeRepository(apiClient)
+    )
+
+    val storeStateHolder = StoreStateHolder(
+        repository = ApiStoreRepository(apiClient)
     )
 
     val devLoginCredentials = DevLoginCredentials(
