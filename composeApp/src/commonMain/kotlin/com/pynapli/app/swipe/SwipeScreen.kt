@@ -67,6 +67,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.ads.AdPlacement
+import com.pynapli.app.ads.AdPlacementPolicy
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridProfileCardUi
@@ -141,7 +143,7 @@ fun SwipeScreen(
                 onOpenStore = onOpenStore
             )
         }
-        if (state.adSupported) {
+        if (AdPlacementPolicy.canShowAds(state.adSupported, AdPlacement.SwipeBetweenBatches)) {
             SwipeAdSlot()
         }
         Spacer(Modifier.height(10.dp))

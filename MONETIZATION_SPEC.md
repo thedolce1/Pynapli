@@ -576,7 +576,7 @@ Do not experiment with:
 - [x] Boost inventory exists.
 - [x] Pineapple Like inventory exists.
 - [x] Intro Note inventory exists.
-- [ ] Ads are excluded from sensitive surfaces.
+- [x] Ads are excluded from sensitive surfaces.
 - [ ] Safety features remain free.
 - [ ] Paywall copy uses Social/Select naming.
 
