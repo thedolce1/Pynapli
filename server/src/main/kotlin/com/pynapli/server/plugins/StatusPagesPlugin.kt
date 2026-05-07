@@ -250,6 +250,7 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INTRO_NOTE_EMPTY" -> "Enter an Intro Note."
     "INTRO_NOTE_TOO_LONG" -> "Intro Note is too long."
     "INTRO_NOTE_INVENTORY_REQUIRED" -> "You do not have an Intro Note available."
+    "PINEAPPLE_LIKE_INVENTORY_REQUIRED" -> "You do not have a Pineapple Like available."
     "INVALID_NOTIFICATION_DETAIL_LEVEL" -> "Choose a valid notification detail level."
     "INVALID_PUSH_PLATFORM", "INVALID_PUSH_TOKEN" -> "Push device could not be registered."
     "NOTIFICATION_PREFERENCES_NOT_FOUND" -> "Notification settings were not found."
@@ -361,7 +362,8 @@ private fun swipeStatusFor(code: String): HttpStatusCode = when (code) {
     "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
     "RISK_RESTRICTED",
     "ENTITLEMENT_REQUIRED",
-    "INTRO_NOTE_INVENTORY_REQUIRED" -> HttpStatusCode.Forbidden
+    "INTRO_NOTE_INVENTORY_REQUIRED",
+    "PINEAPPLE_LIKE_INVENTORY_REQUIRED" -> HttpStatusCode.Forbidden
     "LOCATION_REQUIRED" -> HttpStatusCode.BadRequest
     "INVALID_SWIPE_TARGET",
     "INVALID_SWIPE_ACTION",

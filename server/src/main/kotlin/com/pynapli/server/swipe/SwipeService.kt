@@ -110,6 +110,10 @@ class SwipeService(
             val consumed = subscriptionService?.consumeIntroNoteInventory(viewerUserId) ?: true
             if (!consumed) throw SwipeException("INTRO_NOTE_INVENTORY_REQUIRED")
         }
+        if (action == SwipeAction.PINEAPPLE_LIKE) {
+            val consumed = subscriptionService?.consumePineappleLikeInventory(viewerUserId) ?: true
+            if (!consumed) throw SwipeException("PINEAPPLE_LIKE_INVENTORY_REQUIRED")
+        }
 
         val result = repository.recordSwipeAction(
             actorUserId = viewerUserId,
@@ -208,7 +212,12 @@ class SwipeService(
         private const val MAX_LIMIT = 60
         private const val MATCHES_LIMIT = 50
         private const val INTRO_NOTE_MAX_LENGTH = 140
-        private val ACTIONS = setOf(SwipeAction.LIKE, SwipeAction.PASS, SwipeAction.INTRO_NOTE)
+        private val ACTIONS = setOf(
+            SwipeAction.LIKE,
+            SwipeAction.PASS,
+            SwipeAction.PINEAPPLE_LIKE,
+            SwipeAction.INTRO_NOTE
+        )
     }
 }
 

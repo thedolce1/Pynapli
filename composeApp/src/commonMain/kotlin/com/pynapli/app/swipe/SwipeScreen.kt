@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -202,6 +203,7 @@ fun SwipeScreen(
                     introNoteText = ""
                 }
             },
+            onPineappleLike = { requestedAction = SwipeAction.PINEAPPLE_LIKE },
             onLike = { requestedAction = SwipeAction.LIKE }
         )
     }
@@ -525,7 +527,7 @@ private fun SwipeCard(
     }
 
     suspend fun flyOut(action: String) {
-        val direction = if (action == SwipeAction.LIKE) 1f else -1f
+        val direction = if (action == SwipeAction.PASS) -1f else 1f
         offset.animateTo(
             targetValue = Offset(
                 x = direction * widthPx * 1.25f,
@@ -721,6 +723,7 @@ private fun SwipeActions(
     isSubmitting: Boolean,
     onPass: () -> Unit,
     onIntroNote: () -> Unit,
+    onPineappleLike: () -> Unit,
     onLike: () -> Unit
 ) {
     Row(
@@ -745,6 +748,15 @@ private fun SwipeActions(
             background = MaterialTheme.colorScheme.surfaceVariant,
             iconTint = MaterialTheme.colorScheme.primary,
             onClick = onIntroNote
+        )
+        SwipeActionButton(
+            enabled = enabled,
+            isSubmitting = isSubmitting,
+            icon = Icons.Filled.Star,
+            contentDescription = "Pineapple Like",
+            background = Color(0x33F2B84B),
+            iconTint = Color(0xFFF2B84B),
+            onClick = onPineappleLike
         )
         SwipeActionButton(
             enabled = enabled,
@@ -833,7 +845,7 @@ private fun SwipeActionButton(
 ) {
     Box(
         modifier = Modifier
-            .size(72.dp)
+            .size(64.dp)
             .clip(CircleShape)
             .background(background)
             .border(1.dp, iconTint.copy(alpha = 0.45f), CircleShape),
@@ -842,7 +854,7 @@ private fun SwipeActionButton(
         IconButton(
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.size(72.dp)
+            modifier = Modifier.size(64.dp)
         ) {
             if (isSubmitting) {
                 CircularProgressIndicator(
@@ -855,7 +867,7 @@ private fun SwipeActionButton(
                     imageVector = icon,
                     contentDescription = contentDescription,
                     tint = iconTint,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }

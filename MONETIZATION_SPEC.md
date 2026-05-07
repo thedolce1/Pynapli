@@ -574,7 +574,7 @@ Do not experiment with:
 - [x] Activity gating is implemented.
 - [x] Advanced filters are gated.
 - [ ] Boost inventory exists.
-- [ ] Pineapple Like inventory exists.
+- [x] Pineapple Like inventory exists.
 - [x] Intro Note inventory exists.
 - [ ] Ads are excluded from sensitive surfaces.
 - [ ] Safety features remain free.

@@ -185,6 +185,24 @@ class SubscriptionRepositoryIntegrationTest {
     }
 
     @Test
+    fun consumePineappleLikeInventoryDecrementsOneAvailableUnit() = runBlocking {
+        val user = uuid(402)
+        val now = Instant.parse("2026-05-06T12:00:00Z")
+        dataSource.insertUser(user)
+        dataSource.insertPremiumInventory(
+            userId = user,
+            inventoryType = "pineapple_like",
+            quantity = 1,
+            expiresAt = Instant.parse("2026-06-01T00:00:00Z")
+        )
+        val repository = JdbcSubscriptionRepository(dataSource)
+
+        assertEquals(true, repository.consumePineappleLikeInventory(user, now))
+        assertEquals(false, repository.consumePineappleLikeInventory(user, now))
+        assertEquals(0, dataSource.inventoryQuantity(user, "pineapple_like"))
+    }
+
+    @Test
     fun verifiedPlayStorePurchasePersistsMetadataAndActivatesSubscription() = runBlocking {
         val user = uuid(501)
         val now = Instant.parse("2026-05-06T12:00:00Z")

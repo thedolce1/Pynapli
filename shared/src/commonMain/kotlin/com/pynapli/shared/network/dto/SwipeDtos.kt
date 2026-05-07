@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 object SwipeAction {
     const val LIKE = "like"
     const val PASS = "pass"
+    const val PINEAPPLE_LIKE = "pineapple_like"
     const val INTRO_NOTE = "intro_note"
 }
 

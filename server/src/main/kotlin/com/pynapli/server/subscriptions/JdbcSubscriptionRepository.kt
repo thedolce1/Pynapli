@@ -146,11 +146,18 @@ class JdbcSubscriptionRepository(
     }
 
     override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean =
+        consumePremiumInventory(userId = userId, inventoryType = "intro_note", now = now)
+
+    override suspend fun consumePineappleLikeInventory(userId: UUID, now: Instant): Boolean =
+        consumePremiumInventory(userId = userId, inventoryType = "pineapple_like", now = now)
+
+    private suspend fun consumePremiumInventory(userId: UUID, inventoryType: String, now: Instant): Boolean =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
-                connection.prepareStatement(CONSUME_INTRO_NOTE_INVENTORY_QUERY).use { statement ->
+                connection.prepareStatement(CONSUME_PREMIUM_INVENTORY_QUERY).use { statement ->
                     statement.setObject(1, userId)
-                    statement.setTimestamp(2, Timestamp.from(now))
+                    statement.setString(2, inventoryType)
+                    statement.setTimestamp(3, Timestamp.from(now))
                     statement.executeQuery().use { rs -> rs.next() }
                 }
             }
@@ -552,12 +559,12 @@ class JdbcSubscriptionRepository(
                       status
         """.trimIndent()
 
-        private val CONSUME_INTRO_NOTE_INVENTORY_QUERY = """
+        private val CONSUME_PREMIUM_INVENTORY_QUERY = """
             WITH candidate AS (
                 SELECT id
                 FROM premium_inventory
                 WHERE user_id = ?
-                  AND inventory_type = 'intro_note'
+                  AND inventory_type = ?
                   AND quantity > 0
                   AND (expires_at IS NULL OR expires_at > ?)
                 ORDER BY expires_at ASC NULLS LAST, created_at ASC, id ASC

@@ -30,6 +30,8 @@ interface SubscriptionRepository {
 
     suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean
 
+    suspend fun consumePineappleLikeInventory(userId: UUID, now: Instant): Boolean = false
+
     suspend fun listPlayStoreSubscriptionsDueForVerification(
         staleBefore: Instant,
         renewalWindowEnd: Instant,

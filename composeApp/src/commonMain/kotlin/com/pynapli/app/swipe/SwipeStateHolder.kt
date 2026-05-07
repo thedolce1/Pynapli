@@ -174,6 +174,8 @@ class SwipeStateHolder(
                         } else {
                             "Social or Select is required."
                         }
+                    } else if (result.error.code == "PINEAPPLE_LIKE_INVENTORY_REQUIRED") {
+                        "Pineapple Likes are scarce high-intent signals."
                     } else {
                         it.paywallMessage
                     },

@@ -345,6 +345,9 @@ class SubscriptionService(
     suspend fun consumeIntroNoteInventory(userId: UUID): Boolean =
         repository.consumeIntroNoteInventory(userId, clock.instant())
 
+    suspend fun consumePineappleLikeInventory(userId: UUID): Boolean =
+        repository.consumePineappleLikeInventory(userId, clock.instant())
+
     private fun SubscriptionRecord.toEntitlement(): SubscriptionEntitlementDto =
         paidEntitlement(
             tier = tier,

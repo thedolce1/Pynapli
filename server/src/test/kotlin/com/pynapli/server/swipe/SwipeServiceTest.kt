@@ -261,8 +261,65 @@ class SwipeServiceTest {
     }
 
     @Test
-    fun deckQueryRejectsAdvancedFiltersForFreeUsers() = runBlocking {
+    fun pineappleLikeConsumesInventoryAndCanCreateMatch() = runBlocking {
         val viewer = UUID.fromString("00000000-0000-0000-0000-000000000156")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000157")
+        val repository = InMemorySwipeRepository()
+        val subscriptionRepository = StaticSubscriptionRepository.paid(
+            userId = viewer,
+            tier = SubscriptionTier.SOCIAL,
+            introNotes = 0,
+            pineappleLikes = 1
+        )
+        val service = SwipeService(
+            repository = repository,
+            subscriptionService = SubscriptionService(subscriptionRepository)
+        )
+
+        service.submitAction(
+            target,
+            SwipeActionRequestDto(targetUserId = viewer.toString(), action = SwipeAction.LIKE)
+        )
+        val response = service.submitAction(
+            viewer,
+            SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.PINEAPPLE_LIKE)
+        )
+
+        assertTrue(response.recorded)
+        assertNotNull(response.match)
+        assertEquals(SwipeAction.PINEAPPLE_LIKE, repository.actionsSnapshot().getValue(viewer to target))
+        assertEquals(0, subscriptionRepository.pineappleLikesRemaining(viewer))
+    }
+
+    @Test
+    fun pineappleLikeRequiresAvailableInventory() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000158")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000159")
+        val repository = InMemorySwipeRepository()
+        val service = SwipeService(
+            repository = repository,
+            subscriptionService = paidSubscriptionService(
+                userId = viewer,
+                tier = SubscriptionTier.SELECT,
+                introNotes = 0,
+                pineappleLikes = 0
+            )
+        )
+
+        val error = assertFailsWith<SwipeException> {
+            service.submitAction(
+                viewer,
+                SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.PINEAPPLE_LIKE)
+            )
+        }
+
+        assertEquals("PINEAPPLE_LIKE_INVENTORY_REQUIRED", error.code)
+        assertEquals(emptyMap(), repository.actionsSnapshot())
+    }
+
+    @Test
+    fun deckQueryRejectsAdvancedFiltersForFreeUsers() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000160")
         val service = SwipeService(
             repository = InMemorySwipeRepository(),
             subscriptionService = freeSubscriptionService()
@@ -277,8 +334,8 @@ class SwipeServiceTest {
 
     @Test
     fun deckQueryAllowsAdvancedFiltersForPaidUsers() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000157")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000158")
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000161")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000162")
         val service = SwipeService(
             repository = InMemorySwipeRepository(
                 seededCards = listOf(
@@ -493,8 +550,8 @@ private class InMemorySwipeRepository(
             return SwipeActionResult(recorded = false, match = null)
         }
         actions[actorUserId to targetUserId] = action
-        if (action != "like") return SwipeActionResult(recorded = true, match = null)
-        val theyLikedMe = actions[targetUserId to actorUserId] == "like"
+        if (action !in POSITIVE_ACTIONS) return SwipeActionResult(recorded = true, match = null)
+        val theyLikedMe = actions[targetUserId to actorUserId] in POSITIVE_ACTIONS
         if (!theyLikedMe) return SwipeActionResult(recorded = true, match = null)
 
         val (a, b) = canonicalPair(actorUserId, targetUserId)
@@ -520,6 +577,10 @@ private class InMemorySwipeRepository(
         }
 
     fun actionsSnapshot(): Map<Pair<UUID, UUID>, String> = actions.toMap()
+
+    companion object {
+        private val POSITIVE_ACTIONS = setOf(SwipeAction.LIKE, SwipeAction.PINEAPPLE_LIKE)
+    }
 }
 
 private class StaticBlockRepository(
@@ -580,14 +641,21 @@ private class RecordingNotificationPublisher : NotificationPublisher {
 private fun freeSubscriptionService(): SubscriptionService =
     SubscriptionService(StaticSubscriptionRepository())
 
-private fun paidSubscriptionService(userId: UUID, tier: String, introNotes: Int): SubscriptionService =
-    SubscriptionService(StaticSubscriptionRepository.paid(userId, tier, introNotes))
+private fun paidSubscriptionService(
+    userId: UUID,
+    tier: String,
+    introNotes: Int,
+    pineappleLikes: Int = 0
+): SubscriptionService =
+    SubscriptionService(StaticSubscriptionRepository.paid(userId, tier, introNotes, pineappleLikes))
 
 private class StaticSubscriptionRepository(
     private val own: Map<UUID, SubscriptionRecord> = emptyMap(),
-    introNotes: Map<UUID, Int> = emptyMap()
+    introNotes: Map<UUID, Int> = emptyMap(),
+    pineappleLikes: Map<UUID, Int> = emptyMap()
 ) : SubscriptionRepository {
     private val introNoteInventory = introNotes.toMutableMap()
+    private val pineappleLikeInventory = pineappleLikes.toMutableMap()
 
     override suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? = own[userId]
 
@@ -605,10 +673,24 @@ private class StaticSubscriptionRepository(
         return true
     }
 
+    override suspend fun consumePineappleLikeInventory(userId: UUID, now: Instant): Boolean {
+        val available = pineappleLikeInventory[userId] ?: 0
+        if (available <= 0) return false
+        pineappleLikeInventory[userId] = available - 1
+        return true
+    }
+
     fun introNotesRemaining(userId: UUID): Int = introNoteInventory[userId] ?: 0
 
+    fun pineappleLikesRemaining(userId: UUID): Int = pineappleLikeInventory[userId] ?: 0
+
     companion object {
-        fun paid(userId: UUID, tier: String, introNotes: Int): StaticSubscriptionRepository =
+        fun paid(
+            userId: UUID,
+            tier: String,
+            introNotes: Int,
+            pineappleLikes: Int = 0
+        ): StaticSubscriptionRepository =
             StaticSubscriptionRepository(
                 own = mapOf(
                     userId to SubscriptionRecord(
@@ -620,7 +702,8 @@ private class StaticSubscriptionRepository(
                         currentPeriodEnd = Instant.parse("2026-06-01T00:00:00Z")
                     )
                 ),
-                introNotes = mapOf(userId to introNotes)
+                introNotes = mapOf(userId to introNotes),
+                pineappleLikes = mapOf(userId to pineappleLikes)
             )
     }
 }
