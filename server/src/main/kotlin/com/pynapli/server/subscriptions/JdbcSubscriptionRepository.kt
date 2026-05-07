@@ -73,6 +73,37 @@ class JdbcSubscriptionRepository(
             }
         }
 
+    override suspend fun listPlayStoreSubscriptionsDueForVerification(
+        staleBefore: Instant,
+        renewalWindowEnd: Instant,
+        limit: Int
+    ): List<PlayStoreSubscriptionVerificationCandidate> = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(LIST_PLAY_STORE_SUBSCRIPTIONS_DUE_FOR_VERIFICATION_QUERY).use { statement ->
+                statement.setTimestamp(1, Timestamp.from(staleBefore))
+                statement.setTimestamp(2, Timestamp.from(renewalWindowEnd))
+                statement.setInt(3, limit.coerceIn(1, 500))
+                statement.executeQuery().use { rs ->
+                    buildList {
+                        while (rs.next()) {
+                            add(
+                                PlayStoreSubscriptionVerificationCandidate(
+                                    userId = rs.getObject("subscription_user_id", UUID::class.java),
+                                    productId = rs.getString("external_product_id"),
+                                    purchaseToken = rs.getString("external_subscription_id"),
+                                    tier = rs.getString("tier"),
+                                    status = rs.getString("status"),
+                                    currentPeriodStart = rs.getTimestamp("current_period_start").toInstant(),
+                                    currentPeriodEnd = rs.getTimestamp("current_period_end").toInstant()
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     override suspend fun upsertPendingPlayStoreSubscriptionPurchase(
         userId: UUID,
         productId: String,
@@ -280,6 +311,38 @@ class JdbcSubscriptionRepository(
             FROM candidate
             WHERE inventory.id = candidate.id
             RETURNING inventory.id
+        """.trimIndent()
+
+        private val LIST_PLAY_STORE_SUBSCRIPTIONS_DUE_FOR_VERIFICATION_QUERY = """
+            SELECT user_id AS subscription_user_id,
+                   external_product_id,
+                   external_subscription_id,
+                   tier,
+                   status,
+                   current_period_start,
+                   current_period_end,
+                   last_verified_at
+            FROM subscriptions
+            WHERE platform = 'play_store'
+              AND external_product_id IS NOT NULL
+              AND status IN ('pending', 'active', 'grace', 'canceled')
+              AND (
+                  last_verified_at IS NULL
+                  OR last_verified_at <= ?
+                  OR status = 'pending'
+                  OR current_period_end <= ?
+              )
+            ORDER BY
+                CASE status
+                    WHEN 'pending' THEN 0
+                    WHEN 'grace' THEN 1
+                    WHEN 'active' THEN 2
+                    ELSE 3
+                END ASC,
+                last_verified_at ASC NULLS FIRST,
+                current_period_end ASC,
+                id ASC
+            LIMIT ?
         """.trimIndent()
 
         private val UPSERT_PENDING_PLAY_STORE_PURCHASE_QUERY = """

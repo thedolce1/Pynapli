@@ -370,10 +370,13 @@ private fun notificationStatusFor(code: String): HttpStatusCode = when (code) {
 }
 
 private fun subscriptionStatusFor(code: String): HttpStatusCode = when (code) {
+    "ADMIN_UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
+    "ADMIN_FORBIDDEN" -> HttpStatusCode.Forbidden
     "PURCHASE_ALREADY_LINKED" -> HttpStatusCode.Conflict
     "INVALID_SUBSCRIPTION_PRODUCT",
     "INVALID_PURCHASE_TOKEN",
-    "INVALID_PURCHASE_PACKAGE" -> HttpStatusCode.BadRequest
+    "INVALID_PURCHASE_PACKAGE",
+    "INVALID_ADMIN_ACTOR" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest
 }
 

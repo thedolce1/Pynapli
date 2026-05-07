@@ -163,6 +163,81 @@ class SubscriptionServiceTest {
         assertEquals("active", repository.verifiedPurchases.single().status)
     }
 
+    @Test
+    fun playStoreSyncRefreshesDueSubscriptionTokens() = runBlocking {
+        val user = uuid(42)
+        val repository = InMemorySubscriptionRepository(
+            dueCandidates = listOf(
+                PlayStoreSubscriptionVerificationCandidate(
+                    userId = user,
+                    productId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
+                    purchaseToken = "purchase-token-00000000000000000003",
+                    tier = SubscriptionTier.SELECT,
+                    status = "active",
+                    currentPeriodStart = Instant.parse("2026-05-01T00:00:00Z"),
+                    currentPeriodEnd = Instant.parse("2026-05-07T00:00:00Z")
+                )
+            )
+        )
+        val service = SubscriptionService(
+            repository = repository,
+            clock = clock,
+            playStorePurchaseVerifier = FakePlayStorePurchaseVerifier(
+                PlayStorePurchaseVerificationResult.Verified(
+                    VerifiedPlayStoreSubscriptionPurchase(
+                        productId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
+                        purchaseToken = "purchase-token-00000000000000000003",
+                        latestOrderId = "GPA.0000-0000-0000-00003",
+                        subscriptionState = "SUBSCRIPTION_STATE_ACTIVE",
+                        acknowledgementState = "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+                        currentPeriodStart = Instant.parse("2026-05-06T12:00:00Z"),
+                        currentPeriodEnd = Instant.parse("2026-06-06T12:00:00Z")
+                    )
+                )
+            )
+        )
+
+        val summary = service.syncDuePlayStoreSubscriptions()
+
+        assertEquals(1, summary.scanned)
+        assertEquals(1, summary.verified)
+        assertEquals(1, summary.active)
+        assertEquals("active", repository.verifiedPurchases.single().status)
+        assertEquals(SubscriptionTier.SELECT, repository.verifiedPurchases.single().tier)
+    }
+
+    @Test
+    fun playStoreSyncRevokesInvalidStoredTokens() = runBlocking {
+        val user = uuid(43)
+        val repository = InMemorySubscriptionRepository(
+            dueCandidates = listOf(
+                PlayStoreSubscriptionVerificationCandidate(
+                    userId = user,
+                    productId = SubscriptionProductId.PLAY_SOCIAL_MONTHLY,
+                    purchaseToken = "purchase-token-00000000000000000004",
+                    tier = SubscriptionTier.SOCIAL,
+                    status = "active",
+                    currentPeriodStart = Instant.parse("2026-05-01T00:00:00Z"),
+                    currentPeriodEnd = Instant.parse("2026-06-01T00:00:00Z")
+                )
+            )
+        )
+        val service = SubscriptionService(
+            repository = repository,
+            clock = clock,
+            playStorePurchaseVerifier = FakePlayStorePurchaseVerifier(
+                PlayStorePurchaseVerificationResult.Invalid("INVALID_PURCHASE_TOKEN")
+            )
+        )
+
+        val summary = service.syncDuePlayStoreSubscriptions()
+
+        assertEquals(1, summary.scanned)
+        assertEquals(1, summary.invalid)
+        assertEquals(1, summary.revoked)
+        assertEquals("revoked", repository.verifiedPurchases.single().status)
+    }
+
     private fun subscription(userId: UUID, tier: String): SubscriptionRecord =
         SubscriptionRecord(
             subscriptionId = UUID.randomUUID(),
@@ -184,7 +259,8 @@ class SubscriptionServiceTest {
 private class InMemorySubscriptionRepository(
     private val own: Map<UUID, SubscriptionRecord> = emptyMap(),
     private val linked: Map<UUID, LinkedPartnerSubscriptionRecord> = emptyMap(),
-    private val stored: Map<UUID, StoredEntitlementRecord> = emptyMap()
+    private val stored: Map<UUID, StoredEntitlementRecord> = emptyMap(),
+    private val dueCandidates: List<PlayStoreSubscriptionVerificationCandidate> = emptyList()
 ) : SubscriptionRepository {
     val pendingPurchases = mutableListOf<SubscriptionRecord>()
     val verifiedPurchases = mutableListOf<SubscriptionRecord>()
@@ -209,6 +285,12 @@ private class InMemorySubscriptionRepository(
         stored[userId]
 
     override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean = false
+
+    override suspend fun listPlayStoreSubscriptionsDueForVerification(
+        staleBefore: Instant,
+        renewalWindowEnd: Instant,
+        limit: Int
+    ): List<PlayStoreSubscriptionVerificationCandidate> = dueCandidates.take(limit)
 
     override suspend fun upsertPendingPlayStoreSubscriptionPurchase(
         userId: UUID,

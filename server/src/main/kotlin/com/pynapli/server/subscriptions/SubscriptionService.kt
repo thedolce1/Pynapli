@@ -10,6 +10,7 @@ import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncStatus
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
@@ -17,7 +18,9 @@ class SubscriptionService(
     private val repository: SubscriptionRepository,
     private val clock: Clock = Clock.systemUTC(),
     private val playStorePackageName: String = "com.pynapli.app",
-    private val playStorePurchaseVerifier: PlayStorePurchaseVerifier = DisabledPlayStorePurchaseVerifier
+    private val playStorePurchaseVerifier: PlayStorePurchaseVerifier = DisabledPlayStorePurchaseVerifier,
+    private val playStoreSyncStaleAfter: Duration = Duration.ofHours(6),
+    private val playStoreSyncRenewalLookahead: Duration = Duration.ofHours(24)
 ) {
     suspend fun getEntitlement(userId: UUID): SubscriptionEntitlementDto {
         val now = clock.instant()
@@ -114,24 +117,14 @@ class SubscriptionService(
                 pendingVerificationResponse(userId)
             }
             is PlayStorePurchaseVerificationResult.Verified -> {
-                val purchase = verification.purchase
-                val subscriptionStatus = purchase.toSubscriptionStatus(now)
-                repository.upsertVerifiedPlayStoreSubscriptionPurchase(
+                val subscription = applyVerifiedPlayStoreSubscription(
                     userId = userId,
-                    productId = productId,
-                    purchaseToken = purchaseToken,
-                    orderId = purchase.latestOrderId,
                     tier = tier,
-                    status = subscriptionStatus,
-                    externalStatus = purchase.subscriptionState,
-                    acknowledgementState = purchase.acknowledgementState,
-                    acknowledgedAt = if (purchase.isAcknowledged()) now else null,
-                    currentPeriodStart = purchase.currentPeriodStart,
-                    currentPeriodEnd = purchase.currentPeriodEnd,
+                    purchase = verification.purchase,
                     verifiedAt = now
                 )
 
-                if (subscriptionStatus in ACTIVE_SUBSCRIPTION_STATUSES) {
+                if (subscription.status in ACTIVE_SUBSCRIPTION_STATUSES) {
                     SubscriptionPurchaseSyncResponseDto(
                         status = SubscriptionPurchaseSyncStatus.ACTIVE,
                         entitlement = getEntitlement(userId)
@@ -141,6 +134,82 @@ class SubscriptionService(
                 }
             }
         }
+    }
+
+    suspend fun syncDuePlayStoreSubscriptions(limit: Int = PLAY_STORE_SYNC_DEFAULT_LIMIT): PlayStoreSubscriptionSyncSummary {
+        val now = clock.instant()
+        val normalizedLimit = limit.coerceIn(1, PLAY_STORE_SYNC_MAX_LIMIT)
+        val candidates = repository.listPlayStoreSubscriptionsDueForVerification(
+            staleBefore = now.minus(playStoreSyncStaleAfter),
+            renewalWindowEnd = now.plus(playStoreSyncRenewalLookahead),
+            limit = normalizedLimit
+        )
+        var verified = 0
+        var active = 0
+        var grace = 0
+        var pending = 0
+        var expired = 0
+        var revoked = 0
+        var invalid = 0
+        var unavailable = 0
+
+        candidates.forEach { candidate ->
+            when (
+                val verification = playStorePurchaseVerifier.verifySubscriptionPurchase(
+                    packageName = playStorePackageName,
+                    productId = candidate.productId,
+                    purchaseToken = candidate.purchaseToken
+                )
+            ) {
+                is PlayStorePurchaseVerificationResult.Invalid -> {
+                    invalid++
+                    revoked++
+                    repository.upsertVerifiedPlayStoreSubscriptionPurchase(
+                        userId = candidate.userId,
+                        productId = candidate.productId,
+                        purchaseToken = candidate.purchaseToken,
+                        orderId = null,
+                        tier = candidate.tier,
+                        status = "revoked",
+                        externalStatus = verification.code,
+                        acknowledgementState = null,
+                        acknowledgedAt = null,
+                        currentPeriodStart = candidate.currentPeriodStart,
+                        currentPeriodEnd = candidate.currentPeriodEnd,
+                        verifiedAt = now
+                    )
+                }
+                PlayStorePurchaseVerificationResult.VerificationUnavailable -> unavailable++
+                is PlayStorePurchaseVerificationResult.Verified -> {
+                    verified++
+                    val subscription = applyVerifiedPlayStoreSubscription(
+                        userId = candidate.userId,
+                        tier = candidate.tier,
+                        purchase = verification.purchase,
+                        verifiedAt = now
+                    )
+                    when (subscription.status) {
+                        "active" -> active++
+                        "grace" -> grace++
+                        "expired" -> expired++
+                        "revoked" -> revoked++
+                        else -> pending++
+                    }
+                }
+            }
+        }
+
+        return PlayStoreSubscriptionSyncSummary(
+            scanned = candidates.size,
+            verified = verified,
+            active = active,
+            grace = grace,
+            pending = pending,
+            expired = expired,
+            revoked = revoked,
+            invalid = invalid,
+            unavailable = unavailable
+        )
     }
 
     suspend fun getPolicy(userId: UUID): EntitlementPolicy =
@@ -254,6 +323,29 @@ class SubscriptionService(
             entitlement = getEntitlement(userId)
         )
 
+    private suspend fun applyVerifiedPlayStoreSubscription(
+        userId: UUID,
+        tier: String,
+        purchase: VerifiedPlayStoreSubscriptionPurchase,
+        verifiedAt: Instant
+    ): SubscriptionRecord {
+        val subscriptionStatus = purchase.toSubscriptionStatus(verifiedAt)
+        return repository.upsertVerifiedPlayStoreSubscriptionPurchase(
+            userId = userId,
+            productId = purchase.productId,
+            purchaseToken = purchase.purchaseToken,
+            orderId = purchase.latestOrderId,
+            tier = tier,
+            status = subscriptionStatus,
+            externalStatus = purchase.subscriptionState,
+            acknowledgementState = purchase.acknowledgementState,
+            acknowledgedAt = if (purchase.isAcknowledged()) verifiedAt else null,
+            currentPeriodStart = purchase.currentPeriodStart,
+            currentPeriodEnd = purchase.currentPeriodEnd,
+            verifiedAt = verifiedAt
+        )
+    }
+
     private fun VerifiedPlayStoreSubscriptionPurchase.toSubscriptionStatus(now: Instant): String {
         if (currentPeriodEnd <= now) return "expired"
         return when (subscriptionState) {
@@ -271,10 +363,24 @@ class SubscriptionService(
 
     companion object {
         private val ACTIVE_SUBSCRIPTION_STATUSES = setOf("active", "grace")
+        private const val PLAY_STORE_SYNC_DEFAULT_LIMIT = 100
+        private const val PLAY_STORE_SYNC_MAX_LIMIT = 500
     }
 }
 
 class SubscriptionException(val code: String) : RuntimeException(code)
+
+data class PlayStoreSubscriptionSyncSummary(
+    val scanned: Int,
+    val verified: Int,
+    val active: Int,
+    val grace: Int,
+    val pending: Int,
+    val expired: Int,
+    val revoked: Int,
+    val invalid: Int,
+    val unavailable: Int
+)
 
 data class EntitlementPolicy(
     val tier: String,

@@ -49,12 +49,14 @@ import com.pynapli.server.safety.RiskService
 import com.pynapli.server.subscriptions.JdbcSubscriptionRepository
 import com.pynapli.server.subscriptions.DisabledPlayStorePurchaseVerifier
 import com.pynapli.server.subscriptions.GooglePlayStorePurchaseVerifier
+import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.swipe.JdbcSwipeRepository
 import com.pynapli.server.swipe.SwipeService
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
 import java.nio.file.Path
+import java.time.Duration
 
 class ServerDependencies(
     val config: ServerConfig,
@@ -78,12 +80,14 @@ class ServerDependencies(
     val reportService: ReportService?,
     val swipeService: SwipeService?,
     val subscriptionService: SubscriptionService?,
+    val playStoreSubscriptionSyncWorker: PlayStoreSubscriptionSyncWorker?,
     val localMediaUploadStorage: LocalMediaUploadStorage?,
     private val probes: List<DependencyProbe>
 ) : AutoCloseable {
     suspend fun checkAll() = probes.map { it.check() }
 
     override fun close() {
+        runCatching { playStoreSubscriptionSyncWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
         probes.asReversed().forEach { probe ->
             runCatching { probe.close() }
@@ -167,8 +171,20 @@ class ServerDependencies(
                     GooglePlayStorePurchaseVerifier.fromConfig(config)
                 } else {
                     DisabledPlayStorePurchaseVerifier
-                }
+                },
+                playStoreSyncStaleAfter = Duration.ofHours(config.playStoreSubscriptionSyncStaleAfterHours),
+                playStoreSyncRenewalLookahead = Duration.ofHours(config.playStoreSubscriptionSyncRenewalLookaheadHours)
             )
+            val playStoreSubscriptionSyncWorker =
+                if (config.playStoreVerificationEnabled && config.playStoreSubscriptionSyncEnabled) {
+                    PlayStoreSubscriptionSyncWorker(
+                        service = subscriptionService,
+                        intervalMillis = config.playStoreSubscriptionSyncIntervalMillis,
+                        batchSize = config.playStoreSubscriptionSyncBatchSize
+                    )
+                } else {
+                    null
+                }
             val activityService = ActivityService(
                 repository = JdbcActivityRepository(database.dataSource),
                 mediaService = mediaService,
@@ -248,6 +264,7 @@ class ServerDependencies(
                 reportService = reportService,
                 swipeService = swipeService,
                 subscriptionService = subscriptionService,
+                playStoreSubscriptionSyncWorker = playStoreSubscriptionSyncWorker,
                 localMediaUploadStorage = localMediaUploadStorage,
                 probes = listOf(postgres, redis)
             )
@@ -285,6 +302,7 @@ class ServerDependencies(
                 reportService = null,
                 swipeService = null,
                 subscriptionService = null,
+                playStoreSubscriptionSyncWorker = null,
                 localMediaUploadStorage = null,
                 probes = emptyList()
             )

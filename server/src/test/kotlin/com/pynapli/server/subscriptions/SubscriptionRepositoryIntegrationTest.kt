@@ -214,6 +214,17 @@ class SubscriptionRepositoryIntegrationTest {
         assertEquals("GPA.501", metadata["external_order_id"])
         assertEquals("SUBSCRIPTION_STATE_ACTIVE", metadata["external_status"])
         assertEquals("ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED", metadata["acknowledgement_state"])
+
+        val due = repository.listPlayStoreSubscriptionsDueForVerification(
+            staleBefore = now.minusSeconds(60),
+            renewalWindowEnd = Instant.parse("2026-06-07T00:00:00Z"),
+            limit = 10
+        )
+        assertEquals(1, due.size)
+        assertEquals(user, due.single().userId)
+        assertEquals("pynapli_select_monthly", due.single().productId)
+        assertEquals(SubscriptionTier.SELECT, due.single().tier)
+        assertEquals(purchaseToken, due.single().purchaseToken)
     }
 
     private fun DataSource.insertUser(userId: UUID) {

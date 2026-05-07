@@ -22,6 +22,7 @@ import com.pynapli.server.profile.configureProfileRoutes
 import com.pynapli.server.profilelink.configureProfileLinkRoutes
 import com.pynapli.server.routing.configureHealthRoutes
 import com.pynapli.server.safety.configureSafetyRoutes
+import com.pynapli.server.subscriptions.configureSubscriptionAdminRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionRoutes
 import com.pynapli.server.swipe.configureSwipeRoutes
 import io.ktor.server.application.Application
@@ -44,6 +45,7 @@ fun main() {
 fun Application.module(dependencies: ServerDependencies = ServerDependencies.fromEnvironment()) {
     closeDependenciesOnStop(dependencies)
     dependencies.notificationDispatchWorker?.start()
+    dependencies.playStoreSubscriptionSyncWorker?.start()
     configureSerialization()
     configureStatusPages()
     configureMonitoring()
@@ -52,6 +54,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAdminModerationRoutes(dependencies.config, dependencies.messageModerationService)
     configureAdminReportRoutes(dependencies.config, dependencies.adminReportService)
     configureAdminRiskRoutes(dependencies.config, dependencies.adminRiskService)
+    configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configureAuthRoutes(dependencies.authService)
     configureProfileRoutes(dependencies.authService, dependencies.profileService)
     configureProfileLinkRoutes(dependencies.authService, dependencies.profileLinkService)

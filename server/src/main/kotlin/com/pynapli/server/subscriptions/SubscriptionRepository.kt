@@ -12,6 +12,12 @@ interface SubscriptionRepository {
 
     suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean
 
+    suspend fun listPlayStoreSubscriptionsDueForVerification(
+        staleBefore: Instant,
+        renewalWindowEnd: Instant,
+        limit: Int
+    ): List<PlayStoreSubscriptionVerificationCandidate> = emptyList()
+
     suspend fun upsertPendingPlayStoreSubscriptionPurchase(
         userId: UUID,
         productId: String,
@@ -39,6 +45,16 @@ interface SubscriptionRepository {
 data class SubscriptionRecord(
     val subscriptionId: UUID,
     val userId: UUID,
+    val tier: String,
+    val status: String,
+    val currentPeriodStart: Instant,
+    val currentPeriodEnd: Instant
+)
+
+data class PlayStoreSubscriptionVerificationCandidate(
+    val userId: UUID,
+    val productId: String,
+    val purchaseToken: String,
     val tier: String,
     val status: String,
     val currentPeriodStart: Instant,

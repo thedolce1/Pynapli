@@ -24,6 +24,11 @@ data class ServerConfig(
     val playStoreServiceAccountPath: String? = null,
     val playStoreServiceAccountJson: String? = null,
     val playStoreDeveloperApiBaseUrl: String = "https://androidpublisher.googleapis.com",
+    val playStoreSubscriptionSyncEnabled: Boolean = false,
+    val playStoreSubscriptionSyncIntervalMillis: Long = 5 * 60 * 1_000L,
+    val playStoreSubscriptionSyncBatchSize: Int = 100,
+    val playStoreSubscriptionSyncStaleAfterHours: Long = 6,
+    val playStoreSubscriptionSyncRenewalLookaheadHours: Long = 24,
     val adminApiToken: String? = null
 ) {
     companion object {
@@ -93,6 +98,25 @@ data class ServerConfig(
                     ?.trimEnd('/')
                     ?.takeIf { it.isNotEmpty() }
                     ?: "https://androidpublisher.googleapis.com",
+                playStoreSubscriptionSyncEnabled = System.getenv("PYNAPLI_PLAY_STORE_SUBSCRIPTION_SYNC_ENABLED")
+                    ?.toBooleanStrictOrNull()
+                    ?: (System.getenv("PYNAPLI_PLAY_STORE_VERIFICATION_ENABLED")?.toBooleanStrictOrNull() ?: false),
+                playStoreSubscriptionSyncIntervalMillis = System.getenv("PYNAPLI_PLAY_STORE_SUBSCRIPTION_SYNC_INTERVAL_MS")
+                    ?.toLongOrNull()
+                    ?.coerceAtLeast(60_000L)
+                    ?: 5 * 60 * 1_000L,
+                playStoreSubscriptionSyncBatchSize = System.getenv("PYNAPLI_PLAY_STORE_SUBSCRIPTION_SYNC_BATCH_SIZE")
+                    ?.toIntOrNull()
+                    ?.coerceIn(1, 500)
+                    ?: 100,
+                playStoreSubscriptionSyncStaleAfterHours = System.getenv("PYNAPLI_PLAY_STORE_SUBSCRIPTION_SYNC_STALE_AFTER_HOURS")
+                    ?.toLongOrNull()
+                    ?.coerceIn(1, 168)
+                    ?: 6,
+                playStoreSubscriptionSyncRenewalLookaheadHours = System.getenv("PYNAPLI_PLAY_STORE_SUBSCRIPTION_SYNC_RENEWAL_LOOKAHEAD_HOURS")
+                    ?.toLongOrNull()
+                    ?.coerceIn(1, 168)
+                    ?: 24,
                 adminApiToken = System.getenv("PYNAPLI_ADMIN_API_TOKEN")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }
