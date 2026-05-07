@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +42,7 @@ import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
+import kotlinx.coroutines.launch
 
 @Composable
 fun StoreScreen(
@@ -48,6 +50,7 @@ fun StoreScreen(
     modifier: Modifier = Modifier
 ) {
     val state by stateHolder.state.collectAsState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(stateHolder) {
         stateHolder.load()
@@ -55,6 +58,7 @@ fun StoreScreen(
 
     StoreScreenContent(
         state = state,
+        onPurchaseTier = { tier -> scope.launch { stateHolder.purchase(tier) } },
         modifier = modifier
     )
 }
@@ -66,6 +70,7 @@ private fun rememberStoreStateHolder(): StoreStateHolder =
 @Composable
 private fun StoreScreenContent(
     state: StoreUiState,
+    onPurchaseTier: (SubscriptionTierDto) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -74,6 +79,10 @@ private fun StoreScreenContent(
             .background(MaterialTheme.colorScheme.background)
     ) {
         StoreHeader(entitlement = state.entitlement)
+        StoreMessageRow(
+            message = state.purchaseMessage,
+            error = state.errorMessage.takeIf { state.tiers.isNotEmpty() }
+        )
 
         when {
             state.isLoading && state.tiers.isEmpty() -> {
@@ -112,7 +121,9 @@ private fun StoreScreenContent(
                     ) { tier ->
                         StoreTierRow(
                             tier = tier,
-                            currentTier = state.currentTier
+                            currentTier = state.currentTier,
+                            pendingPurchaseTier = state.pendingPurchaseTier,
+                            onPurchaseTier = onPurchaseTier
                         )
                     }
                 }
@@ -166,9 +177,14 @@ private fun StoreHeader(entitlement: SubscriptionEntitlementDto?) {
 @Composable
 private fun StoreTierRow(
     tier: SubscriptionTierDto,
-    currentTier: String
+    currentTier: String,
+    pendingPurchaseTier: String?,
+    onPurchaseTier: (SubscriptionTierDto) -> Unit
 ) {
     val isCurrent = tier.tier == currentTier
+    val isFree = tier.tier == SubscriptionTier.FREE
+    val purchaseInFlight = pendingPurchaseTier != null
+    val isPurchasing = pendingPurchaseTier == tier.tier
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -216,16 +232,20 @@ private fun StoreTierRow(
                 OutlinedButton(onClick = {}, enabled = false) {
                     Text("Current")
                 }
+            } else if (isFree) {
+                OutlinedButton(onClick = {}, enabled = false) {
+                    Text("Included")
+                }
             } else {
                 Button(
-                    onClick = {},
-                    enabled = false,
+                    onClick = { onPurchaseTier(tier) },
+                    enabled = !purchaseInFlight && tier.playStoreProductId != null,
                     colors = ButtonDefaults.buttonColors(
-                        disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                        disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f)
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
-                    Text("Soon")
+                    Text(if (isPurchasing) "Opening" else "Choose")
                 }
             }
         }
@@ -243,6 +263,32 @@ private fun StoreTierRow(
         )
         StoreFeatureRow(
             label = if (tier.adSupported) "Ad-supported" else "No ads"
+        )
+    }
+}
+
+@Composable
+private fun StoreMessageRow(
+    message: String?,
+    error: String?
+) {
+    val text = error ?: message ?: return
+    val color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(
+            text = text,
+            color = color,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

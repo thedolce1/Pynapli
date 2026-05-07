@@ -18,8 +18,10 @@ import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
+import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
+import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncResponseDto
 import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
@@ -407,6 +409,51 @@ class KtorPynapliApiClientTest {
         assertEquals(HttpMethod.Get, requestMethod)
         val inventory = success.value as SubscriptionInventoryResponseDto
         assertEquals(listOf(0, 499, 999), inventory.tiers.map { it.monthlyPriceUsdCents })
+    }
+
+    @Test
+    fun submitPlayStorePurchaseSendsBearerTokenAndMapsStatus() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = """
+                    {
+                      "status": "pending_verification",
+                      "entitlement": {
+                        "tier": "free",
+                        "source": "free",
+                        "displayName": "Pynapli Free",
+                        "adSupported": true,
+                        "linkedPartnerIncluded": false
+                      }
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.submitPlayStoreSubscriptionPurchase(
+            SubmitPlayStoreSubscriptionPurchaseRequestDto(
+                productId = "pynapli_select_monthly",
+                purchaseToken = "purchase-token-1",
+                packageName = "com.pynapli.app"
+            )
+        )
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/subscriptions/play-store/purchases", requestPath)
+        assertEquals(HttpMethod.Post, requestMethod)
+        val response = success.value as SubscriptionPurchaseSyncResponseDto
+        assertEquals("pending_verification", response.status)
+        assertEquals("free", response.entitlement.tier)
     }
 
     @Test

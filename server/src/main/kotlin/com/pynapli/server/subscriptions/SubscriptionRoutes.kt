@@ -2,12 +2,15 @@ package com.pynapli.server.subscriptions
 
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
+import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 fun Application.configureSubscriptionRoutes(
@@ -25,6 +28,12 @@ fun Application.configureSubscriptionRoutes(
         get("/v1/subscriptions/inventory") {
             authService.authenticate(call.requiredBearerToken())
             call.respond(subscriptionService.getInventory())
+        }
+
+        post("/v1/subscriptions/play-store/purchases") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val request = call.receive<SubmitPlayStoreSubscriptionPurchaseRequestDto>()
+            call.respond(subscriptionService.recordPlayStoreSubscriptionPurchase(user.id, request))
         }
     }
 }

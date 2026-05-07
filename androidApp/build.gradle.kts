@@ -34,5 +34,6 @@ kotlin {
         implementation(libs.androidx.activity.compose)
         implementation(platform(libs.firebase.bom))
         implementation(libs.firebase.messaging)
+        implementation(libs.play.billing)
     }
 }

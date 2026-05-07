@@ -1,6 +1,9 @@
 package com.pynapli.server.subscriptions
 
 import com.pynapli.shared.network.dto.EntitlementSource
+import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
+import com.pynapli.shared.network.dto.SubscriptionProductId
+import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncStatus
 import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
@@ -98,6 +101,29 @@ class SubscriptionServiceTest {
         assertFalse(tiers[0].linkedPartnerIncluded)
         assertTrue(tiers[1].linkedPartnerIncluded)
         assertTrue(tiers[2].linkedPartnerIncluded)
+        assertEquals(SubscriptionProductId.PLAY_SOCIAL_MONTHLY, tiers[1].playStoreProductId)
+        assertEquals(SubscriptionProductId.PLAY_SELECT_MONTHLY, tiers[2].playStoreProductId)
+    }
+
+    @Test
+    fun playStorePurchaseSyncRecordsPendingPurchaseWithoutGrantingEntitlement() = runBlocking {
+        val user = uuid(40)
+        val repository = InMemorySubscriptionRepository()
+        val service = SubscriptionService(repository, clock)
+
+        val response = service.recordPlayStoreSubscriptionPurchase(
+            userId = user,
+            request = SubmitPlayStoreSubscriptionPurchaseRequestDto(
+                productId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
+                purchaseToken = "purchase-token-00000000000000000001",
+                packageName = "com.pynapli.app"
+            )
+        )
+
+        assertEquals(SubscriptionPurchaseSyncStatus.PENDING_VERIFICATION, response.status)
+        assertEquals(SubscriptionTier.FREE, response.entitlement.tier)
+        assertEquals(SubscriptionTier.SELECT, repository.pendingPurchases.single().tier)
+        assertEquals("pending", repository.pendingPurchases.single().status)
     }
 
     private fun subscription(userId: UUID, tier: String): SubscriptionRecord =
@@ -123,6 +149,8 @@ private class InMemorySubscriptionRepository(
     private val linked: Map<UUID, LinkedPartnerSubscriptionRecord> = emptyMap(),
     private val stored: Map<UUID, StoredEntitlementRecord> = emptyMap()
 ) : SubscriptionRepository {
+    val pendingPurchases = mutableListOf<SubscriptionRecord>()
+
     override suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? = own[userId]
 
     override suspend fun findBestActiveLinkedPartnerSubscription(
@@ -134,6 +162,25 @@ private class InMemorySubscriptionRepository(
         stored[userId]
 
     override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean = false
+
+    override suspend fun upsertPendingPlayStoreSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        purchaseToken: String,
+        tier: String,
+        now: Instant
+    ): SubscriptionRecord {
+        val record = SubscriptionRecord(
+            subscriptionId = UUID.randomUUID(),
+            userId = userId,
+            tier = tier,
+            status = "pending",
+            currentPeriodStart = now,
+            currentPeriodEnd = Instant.parse("2026-05-09T12:00:00Z")
+        )
+        pendingPurchases += record
+        return record
+    }
 }
 
 private fun uuid(value: Int): UUID =

@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        appGraph.attachBillingActivity(this)
         startPushRegistrationSync()
         startNotificationPermissionPromptSync()
         setContent {
@@ -85,6 +86,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         pendingLocationSignal?.cancel()
         pendingLocationSignal = null
+        appGraph.detachBillingActivity(this)
         activityScope.cancel()
         super.onDestroy()
     }

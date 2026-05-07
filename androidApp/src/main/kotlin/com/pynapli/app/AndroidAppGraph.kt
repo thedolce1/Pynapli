@@ -1,6 +1,7 @@
 package com.pynapli.app
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -12,6 +13,7 @@ import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.activity.ApiActivityFeedRepository
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
+import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
 import com.pynapli.app.conversation.ApiConversationRepository
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.ApiGridFeedRepository
@@ -57,6 +59,11 @@ class AndroidAppGraph(context: Context) {
     private val authRepository = AuthRepository(
         apiClient = apiClient,
         sessionStore = sessionStore
+    )
+    private val playBillingPurchaseGateway = AndroidPlayBillingPurchaseGateway(
+        context = appContext,
+        apiClient = apiClient,
+        packageNameProvider = { appContext.packageName }
     )
 
     val pushRegistrationCoordinator = PushRegistrationCoordinator(
@@ -135,8 +142,17 @@ class AndroidAppGraph(context: Context) {
     )
 
     val storeStateHolder = StoreStateHolder(
-        repository = ApiStoreRepository(apiClient)
+        repository = ApiStoreRepository(apiClient),
+        purchaseGateway = playBillingPurchaseGateway
     )
+
+    fun attachBillingActivity(activity: Activity) {
+        playBillingPurchaseGateway.attachActivity(activity)
+    }
+
+    fun detachBillingActivity(activity: Activity) {
+        playBillingPurchaseGateway.detachActivity(activity)
+    }
 
     val devLoginCredentials = DevLoginCredentials(
         email = "dev@pynapli.local",

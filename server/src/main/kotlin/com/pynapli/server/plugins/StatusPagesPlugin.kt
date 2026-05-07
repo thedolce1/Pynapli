@@ -13,6 +13,7 @@ import com.pynapli.server.profile.ProfileException
 import com.pynapli.server.profilelink.ProfileLinkException
 import com.pynapli.server.safety.SafetyException
 import com.pynapli.server.swipe.SwipeException
+import com.pynapli.server.subscriptions.SubscriptionException
 import com.pynapli.shared.network.dto.ApiErrorDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -149,6 +150,17 @@ fun Application.configureStatusPages() {
             )
         }
 
+        exception<SubscriptionException> { call, cause ->
+            call.respond(
+                status = subscriptionStatusFor(cause.code),
+                message = ApiErrorDto(
+                    code = cause.code,
+                    message = userSafeMessage(cause.code),
+                    requestId = call.request.headers["X-Request-Id"] ?: "unknown"
+                )
+            )
+        }
+
         exception<ModerationException> { call, cause ->
             call.respond(
                 status = moderationStatusFor(cause.code),
@@ -241,6 +253,9 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_NOTIFICATION_DETAIL_LEVEL" -> "Choose a valid notification detail level."
     "INVALID_PUSH_PLATFORM", "INVALID_PUSH_TOKEN" -> "Push device could not be registered."
     "NOTIFICATION_PREFERENCES_NOT_FOUND" -> "Notification settings were not found."
+    "INVALID_SUBSCRIPTION_PRODUCT" -> "Choose a valid subscription."
+    "INVALID_PURCHASE_TOKEN", "INVALID_PURCHASE_PACKAGE" -> "Purchase could not be verified."
+    "PURCHASE_ALREADY_LINKED" -> "This purchase is already linked to another account."
     "INVALID_BLOCK_TARGET" -> "That user could not be blocked."
     "BLOCK_SELF_FORBIDDEN" -> "You cannot block yourself."
     "BLOCK_REASON_TOO_LONG" -> "Block reason is too long."
@@ -351,6 +366,14 @@ private fun notificationStatusFor(code: String): HttpStatusCode = when (code) {
     "INVALID_NOTIFICATION_DETAIL_LEVEL",
     "INVALID_PUSH_PLATFORM",
     "INVALID_PUSH_TOKEN" -> HttpStatusCode.BadRequest
+    else -> HttpStatusCode.BadRequest
+}
+
+private fun subscriptionStatusFor(code: String): HttpStatusCode = when (code) {
+    "PURCHASE_ALREADY_LINKED" -> HttpStatusCode.Conflict
+    "INVALID_SUBSCRIPTION_PRODUCT",
+    "INVALID_PURCHASE_TOKEN",
+    "INVALID_PURCHASE_PACKAGE" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest
 }
 

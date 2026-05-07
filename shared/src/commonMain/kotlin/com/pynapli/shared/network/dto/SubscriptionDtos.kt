@@ -8,6 +8,11 @@ object SubscriptionTier {
     const val SELECT = "select"
 }
 
+object SubscriptionProductId {
+    const val PLAY_SOCIAL_MONTHLY = "pynapli_social_monthly"
+    const val PLAY_SELECT_MONTHLY = "pynapli_select_monthly"
+}
+
 object EntitlementSource {
     const val FREE = "free"
     const val OWN_SUBSCRIPTION = "own_subscription"
@@ -42,5 +47,25 @@ data class SubscriptionTierDto(
     val monthlyPriceUsdCents: Int,
     val adSupported: Boolean,
     val linkedPartnerIncluded: Boolean,
-    val features: List<String>
+    val features: List<String>,
+    val playStoreProductId: String? = null,
+    val appStoreProductId: String? = null
+)
+
+object SubscriptionPurchaseSyncStatus {
+    const val PENDING_VERIFICATION = "pending_verification"
+    const val ALREADY_ACTIVE = "already_active"
+}
+
+@Serializable
+data class SubmitPlayStoreSubscriptionPurchaseRequestDto(
+    val productId: String,
+    val purchaseToken: String,
+    val packageName: String
+)
+
+@Serializable
+data class SubscriptionPurchaseSyncResponseDto(
+    val status: String,
+    val entitlement: SubscriptionEntitlementDto
 )

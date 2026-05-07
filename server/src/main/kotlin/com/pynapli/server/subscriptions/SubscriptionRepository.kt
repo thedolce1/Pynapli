@@ -11,6 +11,14 @@ interface SubscriptionRepository {
     suspend fun findBestActiveStoredEntitlement(userId: UUID, now: Instant): StoredEntitlementRecord?
 
     suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean
+
+    suspend fun upsertPendingPlayStoreSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        purchaseToken: String,
+        tier: String,
+        now: Instant
+    ): SubscriptionRecord = throw SubscriptionException("SUBSCRIPTION_PURCHASE_SYNC_UNAVAILABLE")
 }
 
 data class SubscriptionRecord(

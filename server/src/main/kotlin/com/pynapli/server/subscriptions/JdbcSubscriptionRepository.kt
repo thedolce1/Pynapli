@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import java.sql.ResultSet
 import java.sql.Timestamp
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 import javax.sql.DataSource
 
@@ -70,6 +71,32 @@ class JdbcSubscriptionRepository(
                 }
             }
         }
+
+    override suspend fun upsertPendingPlayStoreSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        purchaseToken: String,
+        tier: String,
+        now: Instant
+    ): SubscriptionRecord = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(UPSERT_PENDING_PLAY_STORE_PURCHASE_QUERY).use { statement ->
+                statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, userId)
+                statement.setString(3, purchaseToken)
+                statement.setString(4, tier)
+                statement.setTimestamp(5, Timestamp.from(now))
+                statement.setTimestamp(6, Timestamp.from(now.plus(3, ChronoUnit.DAYS)))
+                statement.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        rs.toSubscriptionRecord()
+                    } else {
+                        throw SubscriptionException("PURCHASE_ALREADY_LINKED")
+                    }
+                }
+            }
+        }
+    }
 
     private fun ResultSet.toSubscriptionRecord(): SubscriptionRecord =
         SubscriptionRecord(
@@ -207,6 +234,43 @@ class JdbcSubscriptionRepository(
             FROM candidate
             WHERE inventory.id = candidate.id
             RETURNING inventory.id
+        """.trimIndent()
+
+        private val UPSERT_PENDING_PLAY_STORE_PURCHASE_QUERY = """
+            INSERT INTO subscriptions (
+                id,
+                user_id,
+                platform,
+                external_subscription_id,
+                tier,
+                status,
+                current_period_start,
+                current_period_end
+            ) VALUES (
+                ?,
+                ?,
+                'play_store',
+                ?,
+                ?,
+                'pending',
+                ?,
+                ?
+            )
+            ON CONFLICT (platform, external_subscription_id)
+            DO UPDATE SET
+                tier = EXCLUDED.tier,
+                status = CASE
+                    WHEN subscriptions.status IN ('active', 'grace') THEN subscriptions.status
+                    ELSE 'pending'
+                END,
+                updated_at = now()
+            WHERE subscriptions.user_id = EXCLUDED.user_id
+            RETURNING id AS subscription_id,
+                      user_id AS subscription_user_id,
+                      tier,
+                      status,
+                      current_period_start,
+                      current_period_end
         """.trimIndent()
     }
 }

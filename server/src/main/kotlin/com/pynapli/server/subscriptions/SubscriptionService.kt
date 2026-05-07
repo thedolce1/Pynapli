@@ -1,8 +1,12 @@
 package com.pynapli.server.subscriptions
 
 import com.pynapli.shared.network.dto.EntitlementSource
+import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
+import com.pynapli.shared.network.dto.SubscriptionProductId
+import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncResponseDto
+import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncStatus
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
 import java.time.Clock
@@ -46,6 +50,7 @@ class SubscriptionService(
                     monthlyPriceUsdCents = 499,
                     adSupported = false,
                     linkedPartnerIncluded = true,
+                    playStoreProductId = SubscriptionProductId.PLAY_SOCIAL_MONTHLY,
                     features = listOf(
                         "No ads",
                         "Expanded grid",
@@ -61,6 +66,7 @@ class SubscriptionService(
                     monthlyPriceUsdCents = 999,
                     adSupported = false,
                     linkedPartnerIncluded = true,
+                    playStoreProductId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
                     features = listOf(
                         "Full activity reveal",
                         "Advanced filters",
@@ -73,6 +79,32 @@ class SubscriptionService(
                 )
             )
         )
+
+    suspend fun recordPlayStoreSubscriptionPurchase(
+        userId: UUID,
+        request: SubmitPlayStoreSubscriptionPurchaseRequestDto
+    ): SubscriptionPurchaseSyncResponseDto {
+        val productId = request.productId.trim()
+        val purchaseToken = request.purchaseToken.trim()
+        val packageName = request.packageName.trim()
+        if (productId.isEmpty()) throw SubscriptionException("INVALID_SUBSCRIPTION_PRODUCT")
+        if (purchaseToken.length !in 16..4096) throw SubscriptionException("INVALID_PURCHASE_TOKEN")
+        if (packageName != "com.pynapli.app") throw SubscriptionException("INVALID_PURCHASE_PACKAGE")
+
+        val tier = tierForPlayStoreProduct(productId) ?: throw SubscriptionException("INVALID_SUBSCRIPTION_PRODUCT")
+        repository.upsertPendingPlayStoreSubscriptionPurchase(
+            userId = userId,
+            productId = productId,
+            purchaseToken = purchaseToken,
+            tier = tier,
+            now = clock.instant()
+        )
+
+        return SubscriptionPurchaseSyncResponseDto(
+            status = SubscriptionPurchaseSyncStatus.PENDING_VERIFICATION,
+            entitlement = getEntitlement(userId)
+        )
+    }
 
     suspend fun getPolicy(userId: UUID): EntitlementPolicy =
         getEntitlement(userId).toPolicy()
@@ -171,7 +203,16 @@ class SubscriptionService(
             SubscriptionTier.SOCIAL -> "Pynapli Social"
             else -> "Pynapli Free"
         }
+
+    private fun tierForPlayStoreProduct(productId: String): String? =
+        when (productId) {
+            SubscriptionProductId.PLAY_SOCIAL_MONTHLY -> SubscriptionTier.SOCIAL
+            SubscriptionProductId.PLAY_SELECT_MONTHLY -> SubscriptionTier.SELECT
+            else -> null
+        }
 }
+
+class SubscriptionException(val code: String) : RuntimeException(code)
 
 data class EntitlementPolicy(
     val tier: String,
