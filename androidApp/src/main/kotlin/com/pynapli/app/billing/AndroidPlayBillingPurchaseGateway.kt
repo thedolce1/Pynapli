@@ -11,6 +11,7 @@ import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
+import com.android.billingclient.api.QueryPurchasesParams
 import com.pynapli.app.store.StorePurchaseGateway
 import com.pynapli.app.store.StorePurchaseResult
 import com.pynapli.shared.core.result.AppError
@@ -115,6 +116,58 @@ class AndroidPlayBillingPurchaseGateway(
         }
 
         return deferred.await()
+    }
+
+    override suspend fun restorePurchases(): AppResult<StorePurchaseResult> {
+        if (pendingPurchase != null) {
+            return billingFailure("BILLING_PURCHASE_IN_PROGRESS", "A purchase is already in progress.")
+        }
+
+        val connection = ensureConnected()
+        if (connection.responseCode != BillingClient.BillingResponseCode.OK) {
+            return billingFailure(
+                code = "BILLING_UNAVAILABLE",
+                message = connection.debugMessage.ifBlank { "Google Play Billing is unavailable." }
+            )
+        }
+
+        val purchasesResult = querySubscriptionPurchases()
+        if (purchasesResult is AppResult.Failure) return purchasesResult
+
+        val purchases = (purchasesResult as AppResult.Success).value
+        val purchasedSubscriptions = purchases.filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
+        if (purchasedSubscriptions.isEmpty()) {
+            val hasPending = purchases.any { it.purchaseState == Purchase.PurchaseState.PENDING }
+            return AppResult.Success(
+                StorePurchaseResult(
+                    message = if (hasPending) {
+                        "Purchase is pending in Google Play."
+                    } else {
+                        "No active Google Play subscriptions found."
+                    },
+                    refreshEntitlement = !hasPending
+                )
+            )
+        }
+
+        var restoredCount = 0
+        for (purchase in purchasedSubscriptions) {
+            when (val result = handlePurchase(purchase)) {
+                is AppResult.Success -> restoredCount += 1
+                is AppResult.Failure -> return result
+            }
+        }
+
+        return AppResult.Success(
+            StorePurchaseResult(
+                message = if (restoredCount == 1) {
+                    "Subscription restored."
+                } else {
+                    "Subscriptions restored."
+                },
+                refreshEntitlement = true
+            )
+        )
     }
 
     override fun onPurchasesUpdated(
@@ -247,6 +300,29 @@ class AndroidPlayBillingPurchaseGateway(
                         AppResult.Success(productDetails)
                     }
                 )
+            }
+        }
+
+    private suspend fun querySubscriptionPurchases(): AppResult<List<Purchase>> =
+        suspendCancellableCoroutine { continuation ->
+            val query = QueryPurchasesParams.newBuilder()
+                .setProductType(BillingClient.ProductType.SUBS)
+                .build()
+
+            billingClient.queryPurchasesAsync(query) { billingResult, purchases ->
+                if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
+                    continuation.resume(
+                        billingFailure(
+                            code = "BILLING_RESTORE_FAILED",
+                            message = billingResult.debugMessage.ifBlank {
+                                "Google Play subscriptions could not be restored."
+                            }
+                        )
+                    )
+                    return@queryPurchasesAsync
+                }
+
+                continuation.resume(AppResult.Success(purchases))
             }
         }
 

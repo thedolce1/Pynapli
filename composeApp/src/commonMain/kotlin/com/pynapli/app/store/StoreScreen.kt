@@ -7,17 +7,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -59,6 +62,7 @@ fun StoreScreen(
     StoreScreenContent(
         state = state,
         onPurchaseTier = { tier -> scope.launch { stateHolder.purchase(tier) } },
+        onRestorePurchases = { scope.launch { stateHolder.restorePurchases() } },
         modifier = modifier
     )
 }
@@ -71,6 +75,7 @@ private fun rememberStoreStateHolder(): StoreStateHolder =
 private fun StoreScreenContent(
     state: StoreUiState,
     onPurchaseTier: (SubscriptionTierDto) -> Unit,
+    onRestorePurchases: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -78,7 +83,15 @@ private fun StoreScreenContent(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        StoreHeader(entitlement = state.entitlement)
+        StoreHeader(
+            entitlement = state.entitlement,
+            isRestoringPurchases = state.isRestoringPurchases,
+            restoreEnabled = state.tiers.any { it.playStoreProductId != null } &&
+                !state.isLoading &&
+                !state.isRestoringPurchases &&
+                state.pendingPurchaseTier == null,
+            onRestorePurchases = onRestorePurchases
+        )
         StoreMessageRow(
             message = state.purchaseMessage,
             error = state.errorMessage.takeIf { state.tiers.isNotEmpty() }
@@ -123,6 +136,7 @@ private fun StoreScreenContent(
                             tier = tier,
                             currentTier = state.currentTier,
                             pendingPurchaseTier = state.pendingPurchaseTier,
+                            isRestoringPurchases = state.isRestoringPurchases,
                             onPurchaseTier = onPurchaseTier
                         )
                     }
@@ -133,7 +147,12 @@ private fun StoreScreenContent(
 }
 
 @Composable
-private fun StoreHeader(entitlement: SubscriptionEntitlementDto?) {
+private fun StoreHeader(
+    entitlement: SubscriptionEntitlementDto?,
+    isRestoringPurchases: Boolean,
+    restoreEnabled: Boolean,
+    onRestorePurchases: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -171,6 +190,18 @@ private fun StoreHeader(entitlement: SubscriptionEntitlementDto?) {
                 overflow = TextOverflow.Ellipsis
             )
         }
+        OutlinedButton(
+            onClick = onRestorePurchases,
+            enabled = restoreEnabled
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = null,
+                modifier = Modifier.size(17.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(if (isRestoringPurchases) "Restoring" else "Restore")
+        }
     }
 }
 
@@ -179,11 +210,12 @@ private fun StoreTierRow(
     tier: SubscriptionTierDto,
     currentTier: String,
     pendingPurchaseTier: String?,
+    isRestoringPurchases: Boolean,
     onPurchaseTier: (SubscriptionTierDto) -> Unit
 ) {
     val isCurrent = tier.tier == currentTier
     val isFree = tier.tier == SubscriptionTier.FREE
-    val purchaseInFlight = pendingPurchaseTier != null
+    val purchaseInFlight = pendingPurchaseTier != null || isRestoringPurchases
     val isPurchasing = pendingPurchaseTier == tier.tier
     Column(
         modifier = Modifier

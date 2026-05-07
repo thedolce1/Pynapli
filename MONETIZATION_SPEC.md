@@ -570,7 +570,7 @@ Do not experiment with:
 - [x] One active linked partner beneficiary rule exists.
 - [x] Subscription cooldown/abuse detection exists.
 - [ ] StoreKit and Google Play validation exist.
-- [ ] Restore purchases exists.
+- [x] Restore purchases exists.
 - [x] Activity gating is implemented.
 - [x] Advanced filters are gated.
 - [ ] Boost inventory exists.

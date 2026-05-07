@@ -19,6 +19,7 @@ data class StoreUiState(
     val entitlement: SubscriptionEntitlementDto? = null,
     val isLoading: Boolean = false,
     val pendingPurchaseTier: String? = null,
+    val isRestoringPurchases: Boolean = false,
     val purchaseMessage: String? = null,
     val errorMessage: String? = null
 ) {
@@ -56,6 +57,7 @@ class StoreStateHolder(
     suspend fun purchase(tier: SubscriptionTierDto) {
         if (tier.tier == SubscriptionTier.FREE) return
         if (_state.value.pendingPurchaseTier != null) return
+        if (_state.value.isRestoringPurchases) return
 
         _state.update {
             it.copy(
@@ -88,6 +90,42 @@ class StoreStateHolder(
             }
         }
     }
+
+    suspend fun restorePurchases() {
+        if (_state.value.pendingPurchaseTier != null) return
+        if (_state.value.isRestoringPurchases) return
+
+        _state.update {
+            it.copy(
+                isRestoringPurchases = true,
+                purchaseMessage = null,
+                errorMessage = null
+            )
+        }
+
+        when (val result = purchaseGateway.restorePurchases()) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        isRestoringPurchases = false,
+                        purchaseMessage = result.value.message,
+                        errorMessage = null
+                    )
+                }
+                if (result.value.refreshEntitlement) {
+                    load()
+                }
+            }
+
+            is AppResult.Failure -> _state.update {
+                it.copy(
+                    isRestoringPurchases = false,
+                    errorMessage = result.error.message,
+                    purchaseMessage = null
+                )
+            }
+        }
+    }
 }
 
 interface StoreRepository {
@@ -96,6 +134,8 @@ interface StoreRepository {
 
 interface StorePurchaseGateway {
     suspend fun purchase(tier: SubscriptionTierDto): AppResult<StorePurchaseResult>
+
+    suspend fun restorePurchases(): AppResult<StorePurchaseResult>
 }
 
 @Immutable
@@ -110,6 +150,14 @@ class UnavailableStorePurchaseGateway : StorePurchaseGateway {
             AppError(
                 code = "BILLING_UNAVAILABLE",
                 message = "Purchases are not available in this build."
+            )
+        )
+
+    override suspend fun restorePurchases(): AppResult<StorePurchaseResult> =
+        AppResult.Failure(
+            AppError(
+                code = "BILLING_UNAVAILABLE",
+                message = "Restore is not available in this build."
             )
         )
 }

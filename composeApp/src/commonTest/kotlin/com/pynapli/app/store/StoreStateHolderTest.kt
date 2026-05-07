@@ -30,6 +30,26 @@ class StoreStateHolderTest {
         assertEquals("Purchase sent for verification.", state.purchaseMessage)
         assertEquals(SubscriptionTier.SELECT, state.currentTier)
     }
+
+    @Test
+    fun restoreClearsPendingAndRefreshesEntitlement() = runBlocking {
+        val repository = FakeStoreRepository(
+            firstEntitlementTier = SubscriptionTier.FREE,
+            refreshedEntitlementTier = SubscriptionTier.SOCIAL
+        )
+        val gateway = FakeStorePurchaseGateway()
+        val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
+
+        stateHolder.load()
+        stateHolder.restorePurchases()
+
+        val state = stateHolder.state.value
+        assertEquals(2, repository.loadCount)
+        assertEquals(1, gateway.restoreCount)
+        assertEquals(false, state.isRestoringPurchases)
+        assertEquals("Subscription restored.", state.purchaseMessage)
+        assertEquals(SubscriptionTier.SOCIAL, state.currentTier)
+    }
 }
 
 private class FakeStoreRepository(
@@ -54,10 +74,17 @@ private class FakeStoreRepository(
 private class FakeStorePurchaseGateway : StorePurchaseGateway {
     var purchaseCount = 0
         private set
+    var restoreCount = 0
+        private set
 
     override suspend fun purchase(tier: SubscriptionTierDto): AppResult<StorePurchaseResult> {
         purchaseCount += 1
         return AppResult.Success(StorePurchaseResult(message = "Purchase sent for verification."))
+    }
+
+    override suspend fun restorePurchases(): AppResult<StorePurchaseResult> {
+        restoreCount += 1
+        return AppResult.Success(StorePurchaseResult(message = "Subscription restored."))
     }
 }
 
