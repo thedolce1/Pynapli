@@ -31,6 +31,60 @@ class SubscriptionService(
         return listOfNotNull(own, stored, linked).maxWithOrNull(entitlementComparator()) ?: freeEntitlement()
     }
 
+    suspend fun listStoredEntitlementsForUser(
+        userIdText: String,
+        limitText: String?
+    ): List<StoredEntitlementRecord> {
+        val userId = userIdText.toUuidOrThrow("INVALID_ENTITLEMENT_USER")
+        val limit = limitText?.toIntOrNull()?.coerceIn(1, 100) ?: 50
+        return repository.listStoredEntitlementsForUser(userId, limit)
+    }
+
+    suspend fun grantStoredEntitlement(
+        userIdText: String,
+        tierText: String?,
+        sourceText: String?,
+        startsAtText: String?,
+        endsAtText: String?,
+        actorId: String,
+        reason: String
+    ): StoredEntitlementRecord {
+        val userId = userIdText.toUuidOrThrow("INVALID_ENTITLEMENT_USER")
+        val tier = tierText?.trim()?.lowercase()
+            ?.takeIf { it in ADMIN_GRANTABLE_TIERS }
+            ?: throw SubscriptionException("INVALID_ENTITLEMENT_TIER")
+        val source = sourceText?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: EntitlementSource.ADMIN
+        if (source !in ADMIN_GRANTABLE_SOURCES) throw SubscriptionException("INVALID_ENTITLEMENT_SOURCE")
+        val startsAt = startsAtText?.toInstantOrThrow("INVALID_ENTITLEMENT_PERIOD") ?: clock.instant()
+        val endsAt = endsAtText?.toInstantOrThrow("INVALID_ENTITLEMENT_PERIOD")
+        if (endsAt != null && endsAt <= startsAt) throw SubscriptionException("INVALID_ENTITLEMENT_PERIOD")
+        val normalizedActorId = actorId.validatedAdminActor()
+        val normalizedReason = reason.validatedAdminReason()
+
+        return repository.grantStoredEntitlement(
+            userId = userId,
+            tier = tier,
+            source = source,
+            startsAt = startsAt,
+            endsAt = endsAt,
+            actorId = normalizedActorId,
+            reason = normalizedReason
+        ) ?: throw SubscriptionException("INVALID_ENTITLEMENT_USER")
+    }
+
+    suspend fun revokeStoredEntitlement(
+        entitlementIdText: String,
+        actorId: String,
+        reason: String
+    ): StoredEntitlementRecord {
+        val entitlementId = entitlementIdText.toUuidOrThrow("ENTITLEMENT_NOT_FOUND")
+        return repository.revokeStoredEntitlement(
+            entitlementId = entitlementId,
+            actorId = actorId.validatedAdminActor(),
+            reason = reason.validatedAdminReason()
+        ) ?: throw SubscriptionException("ENTITLEMENT_NOT_FOUND")
+    }
+
     fun getInventory(): SubscriptionInventoryResponseDto =
         SubscriptionInventoryResponseDto(
             tiers = listOf(
@@ -616,6 +670,8 @@ class SubscriptionService(
 
     companion object {
         private val ACTIVE_SUBSCRIPTION_STATUSES = setOf("active", "grace")
+        private val ADMIN_GRANTABLE_TIERS = setOf(SubscriptionTier.SOCIAL, SubscriptionTier.SELECT)
+        private val ADMIN_GRANTABLE_SOURCES = setOf(EntitlementSource.ADMIN, EntitlementSource.PROMO)
         private const val PLAY_STORE_SYNC_DEFAULT_LIMIT = 100
         private const val PLAY_STORE_SYNC_MAX_LIMIT = 500
         private const val PLAY_STORE_PRODUCT_TYPE_SUBSCRIPTION = 1
@@ -682,3 +738,19 @@ fun SubscriptionEntitlementDto.toPolicy(): EntitlementPolicy =
             introNoteInventoryRequired = true
         )
     }
+
+private fun String.toUuidOrThrow(code: String): UUID =
+    runCatching { UUID.fromString(trim()) }
+        .getOrElse { throw SubscriptionException(code) }
+
+private fun String.toInstantOrThrow(code: String): Instant =
+    runCatching { Instant.parse(trim()) }
+        .getOrElse { throw SubscriptionException(code) }
+
+private fun String.validatedAdminActor(): String =
+    trim().takeIf { it.length in 2..120 }
+        ?: throw SubscriptionException("INVALID_ADMIN_ACTOR")
+
+private fun String.validatedAdminReason(): String =
+    trim().takeIf { it.length in 2..500 }
+        ?: throw SubscriptionException("ADMIN_REASON_REQUIRED")

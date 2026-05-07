@@ -10,6 +10,24 @@ interface SubscriptionRepository {
 
     suspend fun findBestActiveStoredEntitlement(userId: UUID, now: Instant): StoredEntitlementRecord?
 
+    suspend fun listStoredEntitlementsForUser(userId: UUID, limit: Int): List<StoredEntitlementRecord> = emptyList()
+
+    suspend fun grantStoredEntitlement(
+        userId: UUID,
+        tier: String,
+        source: String,
+        startsAt: Instant,
+        endsAt: Instant?,
+        actorId: String,
+        reason: String
+    ): StoredEntitlementRecord? = null
+
+    suspend fun revokeStoredEntitlement(
+        entitlementId: UUID,
+        actorId: String,
+        reason: String
+    ): StoredEntitlementRecord? = null
+
     suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean
 
     suspend fun listPlayStoreSubscriptionsDueForVerification(
@@ -97,5 +115,6 @@ data class StoredEntitlementRecord(
     val source: String,
     val sourceId: UUID?,
     val startsAt: Instant,
-    val endsAt: Instant?
+    val endsAt: Instant?,
+    val status: String = "active"
 )

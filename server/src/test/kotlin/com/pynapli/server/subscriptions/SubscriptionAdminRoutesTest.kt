@@ -5,6 +5,7 @@ import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
 import io.ktor.client.call.body
 import io.ktor.client.request.header
+import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -48,6 +49,74 @@ class SubscriptionAdminRoutesTest {
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals(0, response.body<PlayStoreSubscriptionSyncSummaryDto>().scanned)
+    }
+
+    @Test
+    fun grantEntitlementRequiresAdminReason() = testApplication {
+        val user = uuid(101)
+        application {
+            configureSerialization()
+            configureStatusPages()
+            configureSubscriptionAdminRoutes(testConfig(), SubscriptionService(RouteSubscriptionRepository(validUsers = setOf(user))))
+        }
+
+        val response = client.post("/v1/admin/subscriptions/entitlements") {
+            header("X-Admin-Token", "test-admin-token")
+            header("X-Admin-Id", "billing-ops")
+            contentType(ContentType.Application.Json)
+            setBody("""{"userId":"$user","tier":"select","source":"admin"}""")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun grantListAndRevokeEntitlementUseProtectedAdminRoutes() = testApplication {
+        val user = uuid(102)
+        val repository = RouteSubscriptionRepository(validUsers = setOf(user))
+        application {
+            configureSerialization()
+            configureStatusPages()
+            configureSubscriptionAdminRoutes(testConfig(), SubscriptionService(repository))
+        }
+
+        val grant = client.post("/v1/admin/subscriptions/entitlements") {
+            header("X-Admin-Token", "test-admin-token")
+            header("X-Admin-Id", "billing-ops")
+            header("X-Admin-Reason", "launch comp")
+            contentType(ContentType.Application.Json)
+            setBody(
+                """
+                {
+                  "userId":"$user",
+                  "tier":"select",
+                  "source":"admin",
+                  "startsAt":"2026-05-07T00:00:00Z",
+                  "endsAt":"2026-06-07T00:00:00Z"
+                }
+                """.trimIndent()
+            )
+        }
+
+        assertEquals(HttpStatusCode.OK, grant.status)
+        val granted = grant.body<AdminEntitlementDto>()
+        assertEquals("select", granted.tier)
+        assertEquals("active", granted.status)
+
+        val list = client.get("/v1/admin/subscriptions/users/$user/entitlements") {
+            header("X-Admin-Token", "test-admin-token")
+            header("X-Admin-Id", "billing-ops")
+        }
+        assertEquals(HttpStatusCode.OK, list.status)
+        assertEquals(1, list.body<AdminEntitlementListDto>().entitlements.size)
+
+        val revoke = client.post("/v1/admin/subscriptions/entitlements/${granted.entitlementId}/revoke") {
+            header("X-Admin-Token", "test-admin-token")
+            header("X-Admin-Id", "billing-ops")
+            header("X-Admin-Reason", "support correction")
+        }
+        assertEquals(HttpStatusCode.OK, revoke.status)
+        assertEquals("revoked", revoke.body<AdminEntitlementDto>().status)
     }
 
     @Test
@@ -104,7 +173,11 @@ class SubscriptionAdminRoutesTest {
         """{"version":"1.0","packageName":"com.pynapli.app","eventTimeMillis":"1770000000000","testNotification":{}}"""
 }
 
-private class RouteSubscriptionRepository : SubscriptionRepository {
+private class RouteSubscriptionRepository(
+    private val validUsers: Set<UUID> = emptySet()
+) : SubscriptionRepository {
+    private val entitlements = mutableMapOf<UUID, StoredEntitlementRecord>()
+
     override suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? = null
 
     override suspend fun findBestActiveLinkedPartnerSubscription(
@@ -114,5 +187,46 @@ private class RouteSubscriptionRepository : SubscriptionRepository {
 
     override suspend fun findBestActiveStoredEntitlement(userId: UUID, now: Instant): StoredEntitlementRecord? = null
 
+    override suspend fun listStoredEntitlementsForUser(userId: UUID, limit: Int): List<StoredEntitlementRecord> =
+        entitlements.values.filter { it.userId == userId }.take(limit)
+
+    override suspend fun grantStoredEntitlement(
+        userId: UUID,
+        tier: String,
+        source: String,
+        startsAt: Instant,
+        endsAt: Instant?,
+        actorId: String,
+        reason: String
+    ): StoredEntitlementRecord? {
+        if (userId !in validUsers) return null
+        val record = StoredEntitlementRecord(
+            entitlementId = UUID.randomUUID(),
+            userId = userId,
+            tier = tier,
+            source = source,
+            sourceId = null,
+            startsAt = startsAt,
+            endsAt = endsAt,
+            status = "active"
+        )
+        entitlements[record.entitlementId] = record
+        return record
+    }
+
+    override suspend fun revokeStoredEntitlement(
+        entitlementId: UUID,
+        actorId: String,
+        reason: String
+    ): StoredEntitlementRecord? {
+        val current = entitlements[entitlementId]?.takeIf { it.status == "active" } ?: return null
+        val revoked = current.copy(status = "revoked")
+        entitlements[entitlementId] = revoked
+        return revoked
+    }
+
     override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean = false
 }
+
+private fun uuid(value: Int): UUID =
+    UUID.fromString("00000000-0000-0000-0000-${value.toString().padStart(12, '0')}")

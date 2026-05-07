@@ -251,6 +251,40 @@ class SubscriptionRepositoryIntegrationTest {
         assertEquals("processed", status)
     }
 
+    @Test
+    fun adminStoredEntitlementGrantAndRevokeAreAudited() = runBlocking {
+        val user = uuid(601)
+        val now = Instant.parse("2026-05-07T12:00:00Z")
+        dataSource.insertUser(user)
+        val repository = JdbcSubscriptionRepository(dataSource)
+
+        val granted = repository.grantStoredEntitlement(
+            userId = user,
+            tier = SubscriptionTier.SELECT,
+            source = EntitlementSource.ADMIN,
+            startsAt = now,
+            endsAt = Instant.parse("2026-06-07T12:00:00Z"),
+            actorId = "billing-ops",
+            reason = "launch support"
+        )
+
+        assertNotNull(granted)
+        assertEquals("active", granted.status)
+        assertEquals(SubscriptionTier.SELECT, repository.findBestActiveStoredEntitlement(user, now.plusSeconds(1))?.tier)
+        assertEquals(1, dataSource.adminAuditCount("subscription_entitlement.grant", granted.entitlementId))
+
+        val revoked = repository.revokeStoredEntitlement(
+            entitlementId = granted.entitlementId,
+            actorId = "billing-ops",
+            reason = "support correction"
+        )
+
+        assertNotNull(revoked)
+        assertEquals("revoked", revoked.status)
+        assertNull(repository.findBestActiveStoredEntitlement(user, now.plusSeconds(1)))
+        assertEquals(1, dataSource.adminAuditCount("subscription_entitlement.revoke", granted.entitlementId))
+    }
+
     private fun DataSource.insertUser(userId: UUID) {
         connection.use { connection ->
             connection.prepareStatement(
@@ -503,6 +537,26 @@ class SubscriptionRepositoryIntegrationTest {
                 statement.setString(1, messageId)
                 statement.executeQuery().use { rs ->
                     if (rs.next()) rs.getString("processing_status") else null
+                }
+            }
+        }
+
+    private fun DataSource.adminAuditCount(action: String, targetId: UUID): Int =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT count(*)::integer
+                FROM admin_audit_log
+                WHERE action = ?
+                  AND target_type = 'entitlement'
+                  AND target_id = ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, action)
+                statement.setObject(2, targetId)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt(1)
                 }
             }
         }

@@ -54,6 +54,49 @@ fun Application.configureSubscriptionAdminRoutes(
     if (subscriptionService == null) return
 
     routing {
+        get("/v1/admin/subscriptions/users/{userId}/entitlements") {
+            call.requireSubscriptionAdminActor(adminApiToken)
+            val userId = call.parameters["userId"] ?: throw SubscriptionException("INVALID_ENTITLEMENT_USER")
+            val limit = call.request.queryParameters["limit"]
+            call.respond(
+                AdminEntitlementListDto(
+                    entitlements = subscriptionService
+                        .listStoredEntitlementsForUser(userIdText = userId, limitText = limit)
+                        .map { it.toDto() }
+                )
+            )
+        }
+
+        post("/v1/admin/subscriptions/entitlements") {
+            val actorId = call.requireSubscriptionAdminActor(adminApiToken)
+            val reason = call.requiredSubscriptionAdminReason()
+            val request = call.receive<AdminEntitlementGrantRequestDto>()
+            call.respond(
+                subscriptionService.grantStoredEntitlement(
+                    userIdText = request.userId,
+                    tierText = request.tier,
+                    sourceText = request.source,
+                    startsAtText = request.startsAt,
+                    endsAtText = request.endsAt,
+                    actorId = actorId,
+                    reason = reason
+                ).toDto()
+            )
+        }
+
+        post("/v1/admin/subscriptions/entitlements/{entitlementId}/revoke") {
+            val actorId = call.requireSubscriptionAdminActor(adminApiToken)
+            val reason = call.requiredSubscriptionAdminReason()
+            val entitlementId = call.parameters["entitlementId"] ?: throw SubscriptionException("ENTITLEMENT_NOT_FOUND")
+            call.respond(
+                subscriptionService.revokeStoredEntitlement(
+                    entitlementIdText = entitlementId,
+                    actorId = actorId,
+                    reason = reason
+                ).toDto()
+            )
+        }
+
         post("/v1/admin/subscriptions/play-store/sync") {
             call.requireSubscriptionAdminActor(adminApiToken)
             val limit = call.request.queryParameters["limit"]
@@ -115,6 +158,11 @@ private fun ApplicationCall.requireSubscriptionAdminActor(expectedToken: String)
         ?.takeIf { it.isNotEmpty() }
         ?: throw SubscriptionException("INVALID_ADMIN_ACTOR")
 }
+
+private fun ApplicationCall.requiredSubscriptionAdminReason(): String =
+    request.headers["X-Admin-Reason"]?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: throw SubscriptionException("ADMIN_REASON_REQUIRED")
 
 private fun ApplicationCall.requirePlayStoreRtdnAuth(config: ServerConfig) {
     val configuredToken = config.playStoreRtdnWebhookToken
@@ -182,6 +230,32 @@ data class PlayStoreRtdnProcessingResultDto(
     val errorCode: String? = null
 )
 
+@Serializable
+data class AdminEntitlementGrantRequestDto(
+    val userId: String,
+    val tier: String? = null,
+    val source: String? = null,
+    val startsAt: String? = null,
+    val endsAt: String? = null
+)
+
+@Serializable
+data class AdminEntitlementListDto(
+    val entitlements: List<AdminEntitlementDto>
+)
+
+@Serializable
+data class AdminEntitlementDto(
+    val entitlementId: String,
+    val userId: String,
+    val tier: String,
+    val source: String,
+    val sourceId: String? = null,
+    val startsAt: String,
+    val endsAt: String? = null,
+    val status: String
+)
+
 private fun PlayStoreSubscriptionSyncSummary.toDto(): PlayStoreSubscriptionSyncSummaryDto =
     PlayStoreSubscriptionSyncSummaryDto(
         scanned = scanned,
@@ -204,4 +278,16 @@ private fun PlayStoreRtdnProcessingResult.toDto(): PlayStoreRtdnProcessingResult
         productId = productId,
         subscriptionStatus = subscriptionStatus,
         errorCode = errorCode
+    )
+
+private fun StoredEntitlementRecord.toDto(): AdminEntitlementDto =
+    AdminEntitlementDto(
+        entitlementId = entitlementId.toString(),
+        userId = userId.toString(),
+        tier = tier,
+        source = source,
+        sourceId = sourceId?.toString(),
+        startsAt = startsAt.toString(),
+        endsAt = endsAt?.toString(),
+        status = status
     )

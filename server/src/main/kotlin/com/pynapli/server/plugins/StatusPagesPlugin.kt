@@ -256,6 +256,12 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_SUBSCRIPTION_PRODUCT" -> "Choose a valid subscription."
     "INVALID_PURCHASE_TOKEN", "INVALID_PURCHASE_PACKAGE" -> "Purchase could not be verified."
     "PURCHASE_ALREADY_LINKED" -> "This purchase is already linked to another account."
+    "INVALID_ENTITLEMENT_USER" -> "User entitlement could not be updated."
+    "INVALID_ENTITLEMENT_TIER" -> "Choose a valid entitlement tier."
+    "INVALID_ENTITLEMENT_SOURCE" -> "Choose a valid entitlement source."
+    "INVALID_ENTITLEMENT_PERIOD" -> "Choose a valid entitlement period."
+    "ENTITLEMENT_NOT_FOUND" -> "Entitlement was not found."
+    "ADMIN_REASON_REQUIRED" -> "Admin reason is required."
     "INVALID_RTDN_MESSAGE" -> "Notification payload is not valid."
     "RTDN_UNAUTHENTICATED" -> "Webhook authentication is required."
     "RTDN_FORBIDDEN" -> "Webhook access was denied."
@@ -379,10 +385,16 @@ private fun subscriptionStatusFor(code: String): HttpStatusCode = when (code) {
     "RTDN_VERIFICATION_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
     "ADMIN_UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
     "ADMIN_FORBIDDEN" -> HttpStatusCode.Forbidden
+    "ENTITLEMENT_NOT_FOUND" -> HttpStatusCode.NotFound
     "PURCHASE_ALREADY_LINKED" -> HttpStatusCode.Conflict
     "INVALID_SUBSCRIPTION_PRODUCT",
     "INVALID_PURCHASE_TOKEN",
     "INVALID_PURCHASE_PACKAGE",
+    "INVALID_ENTITLEMENT_USER",
+    "INVALID_ENTITLEMENT_TIER",
+    "INVALID_ENTITLEMENT_SOURCE",
+    "INVALID_ENTITLEMENT_PERIOD",
+    "ADMIN_REASON_REQUIRED",
     "INVALID_RTDN_MESSAGE",
     "INVALID_ADMIN_ACTOR" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest

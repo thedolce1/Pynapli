@@ -89,6 +89,55 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    fun adminGrantCreatesStoredEntitlementAndUpdatesPolicy() = runBlocking {
+        val user = uuid(31)
+        val repository = InMemorySubscriptionRepository(validUsers = setOf(user))
+        val service = SubscriptionService(repository, clock)
+
+        val record = service.grantStoredEntitlement(
+            userIdText = user.toString(),
+            tierText = SubscriptionTier.SELECT,
+            sourceText = EntitlementSource.ADMIN,
+            startsAtText = "2026-05-06T12:00:00Z",
+            endsAtText = "2026-06-06T12:00:00Z",
+            actorId = "billing-ops",
+            reason = "launch support"
+        )
+        val entitlement = service.getEntitlement(user)
+
+        assertEquals(SubscriptionTier.SELECT, record.tier)
+        assertEquals(EntitlementSource.ADMIN, record.source)
+        assertEquals(SubscriptionTier.SELECT, entitlement.tier)
+        assertEquals(EntitlementSource.ADMIN, entitlement.source)
+    }
+
+    @Test
+    fun adminRevokeRemovesStoredEntitlementFromPolicy() = runBlocking {
+        val user = uuid(32)
+        val repository = InMemorySubscriptionRepository(validUsers = setOf(user))
+        val service = SubscriptionService(repository, clock)
+        val record = service.grantStoredEntitlement(
+            userIdText = user.toString(),
+            tierText = SubscriptionTier.SOCIAL,
+            sourceText = EntitlementSource.PROMO,
+            startsAtText = null,
+            endsAtText = "2026-06-06T12:00:00Z",
+            actorId = "billing-ops",
+            reason = "promo grant"
+        )
+
+        val revoked = service.revokeStoredEntitlement(
+            entitlementIdText = record.entitlementId.toString(),
+            actorId = "billing-ops",
+            reason = "promo ended"
+        )
+        val entitlement = service.getEntitlement(user)
+
+        assertEquals("revoked", revoked.status)
+        assertEquals(SubscriptionTier.FREE, entitlement.tier)
+    }
+
+    @Test
     fun inventoryKeepsLaunchPricingAndLinkedPartnerBenefit() {
         val service = SubscriptionService(InMemorySubscriptionRepository(), clock)
 
@@ -326,10 +375,12 @@ private class InMemorySubscriptionRepository(
     private val stored: Map<UUID, StoredEntitlementRecord> = emptyMap(),
     private val dueCandidates: List<PlayStoreSubscriptionVerificationCandidate> = emptyList(),
     private val linkedPurchase: PlayStoreSubscriptionVerificationCandidate? = null,
-    private val duplicateMessageIds: Set<String> = emptySet()
+    private val duplicateMessageIds: Set<String> = emptySet(),
+    private val validUsers: Set<UUID> = emptySet()
 ) : SubscriptionRepository {
     val pendingPurchases = mutableListOf<SubscriptionRecord>()
     val verifiedPurchases = mutableListOf<SubscriptionRecord>()
+    private val storedEntitlements = stored.toMutableMap()
     val events = mutableListOf<PlayStoreRtdnEventInsert>()
     val eventStatuses = mutableMapOf<String, String>()
 
@@ -350,7 +401,58 @@ private class InMemorySubscriptionRepository(
     ): LinkedPartnerSubscriptionRecord? = linked[userId]
 
     override suspend fun findBestActiveStoredEntitlement(userId: UUID, now: Instant): StoredEntitlementRecord? =
-        stored[userId]
+        storedEntitlements.values
+            .filter {
+                it.userId == userId &&
+                    it.status == "active" &&
+                    it.startsAt <= now &&
+                    (it.endsAt == null || it.endsAt > now)
+            }
+            .maxWithOrNull(
+                compareBy<StoredEntitlementRecord> { if (it.tier == SubscriptionTier.SELECT) 2 else 1 }
+                    .thenBy { it.endsAt ?: Instant.MAX }
+            )
+
+    override suspend fun listStoredEntitlementsForUser(userId: UUID, limit: Int): List<StoredEntitlementRecord> =
+        storedEntitlements.values
+            .filter { it.userId == userId }
+            .sortedByDescending { it.startsAt }
+            .take(limit)
+
+    override suspend fun grantStoredEntitlement(
+        userId: UUID,
+        tier: String,
+        source: String,
+        startsAt: Instant,
+        endsAt: Instant?,
+        actorId: String,
+        reason: String
+    ): StoredEntitlementRecord? {
+        if (userId !in validUsers) return null
+        val record = StoredEntitlementRecord(
+            entitlementId = UUID.randomUUID(),
+            userId = userId,
+            tier = tier,
+            source = source,
+            sourceId = null,
+            startsAt = startsAt,
+            endsAt = endsAt,
+            status = "active"
+        )
+        storedEntitlements[record.entitlementId] = record
+        return record
+    }
+
+    override suspend fun revokeStoredEntitlement(
+        entitlementId: UUID,
+        actorId: String,
+        reason: String
+    ): StoredEntitlementRecord? {
+        val current = storedEntitlements[entitlementId]?.takeIf { it.status == "active" } ?: return null
+        val revoked = current.copy(status = "revoked")
+        storedEntitlements[entitlementId] = revoked
+        return revoked
+    }
 
     override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean = false
 

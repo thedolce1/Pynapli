@@ -1,7 +1,11 @@
 package com.pynapli.server.subscriptions
 
+import com.pynapli.server.moderation.insertAdminAuditLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Timestamp
 import java.sql.Types
@@ -61,6 +65,85 @@ class JdbcSubscriptionRepository(
                 }
             }
         }
+
+    override suspend fun listStoredEntitlementsForUser(userId: UUID, limit: Int): List<StoredEntitlementRecord> =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(LIST_STORED_ENTITLEMENTS_FOR_USER_QUERY).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.setInt(2, limit.coerceIn(1, 100))
+                    statement.executeQuery().use { rs ->
+                        buildList {
+                            while (rs.next()) {
+                                add(rs.toStoredEntitlementRecord())
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+    override suspend fun grantStoredEntitlement(
+        userId: UUID,
+        tier: String,
+        source: String,
+        startsAt: Instant,
+        endsAt: Instant?,
+        actorId: String,
+        reason: String
+    ): StoredEntitlementRecord? = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.runInTransaction {
+                val record = grantStoredEntitlementRecord(
+                    userId = userId,
+                    tier = tier,
+                    source = source,
+                    startsAt = startsAt,
+                    endsAt = endsAt
+                ) ?: return@runInTransaction null
+                insertAdminAuditLog(
+                    actorId = actorId,
+                    action = "subscription_entitlement.grant",
+                    targetType = "entitlement",
+                    targetId = record.entitlementId,
+                    reason = reason,
+                    metadataJson = buildJsonObject {
+                        put("userId", userId.toString())
+                        put("tier", tier)
+                        put("source", source)
+                        put("startsAt", startsAt.toString())
+                        put("endsAt", endsAt?.toString())
+                    }.toString()
+                )
+                record
+            }
+        }
+    }
+
+    override suspend fun revokeStoredEntitlement(
+        entitlementId: UUID,
+        actorId: String,
+        reason: String
+    ): StoredEntitlementRecord? = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.runInTransaction {
+                val record = revokeStoredEntitlementRecord(entitlementId) ?: return@runInTransaction null
+                insertAdminAuditLog(
+                    actorId = actorId,
+                    action = "subscription_entitlement.revoke",
+                    targetType = "entitlement",
+                    targetId = record.entitlementId,
+                    reason = reason,
+                    metadataJson = buildJsonObject {
+                        put("userId", record.userId.toString())
+                        put("tier", record.tier)
+                        put("source", record.source)
+                    }.toString()
+                )
+                record
+            }
+        }
+    }
 
     override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean =
         withContext(Dispatchers.IO) {
@@ -251,8 +334,55 @@ class JdbcSubscriptionRepository(
             source = getString("source"),
             sourceId = getObject("source_id", UUID::class.java),
             startsAt = getTimestamp("starts_at").toInstant(),
-            endsAt = getTimestamp("ends_at")?.toInstant()
+            endsAt = getTimestamp("ends_at")?.toInstant(),
+            status = getString("status")
         )
+
+    private fun Connection.grantStoredEntitlementRecord(
+        userId: UUID,
+        tier: String,
+        source: String,
+        startsAt: Instant,
+        endsAt: Instant?
+    ): StoredEntitlementRecord? =
+        prepareStatement(GRANT_STORED_ENTITLEMENT_QUERY).use { statement ->
+            statement.setObject(1, userId)
+            statement.setObject(2, UUID.randomUUID())
+            statement.setString(3, tier)
+            statement.setString(4, source)
+            statement.setTimestamp(5, Timestamp.from(startsAt))
+            if (endsAt == null) {
+                statement.setNull(6, Types.TIMESTAMP_WITH_TIMEZONE)
+            } else {
+                statement.setTimestamp(6, Timestamp.from(endsAt))
+            }
+            statement.executeQuery().use { rs ->
+                if (rs.next()) rs.toStoredEntitlementRecord() else null
+            }
+        }
+
+    private fun Connection.revokeStoredEntitlementRecord(entitlementId: UUID): StoredEntitlementRecord? =
+        prepareStatement(REVOKE_STORED_ENTITLEMENT_QUERY).use { statement ->
+            statement.setObject(1, entitlementId)
+            statement.executeQuery().use { rs ->
+                if (rs.next()) rs.toStoredEntitlementRecord() else null
+            }
+        }
+
+    private fun <T> Connection.runInTransaction(block: Connection.() -> T): T {
+        val previousAutoCommit = autoCommit
+        autoCommit = false
+        return try {
+            val result = block()
+            commit()
+            result
+        } catch (error: Throwable) {
+            rollback()
+            throw error
+        } finally {
+            autoCommit = previousAutoCommit
+        }
+    }
 
     companion object {
         private val ACTIVE_STATUSES = "('active', 'grace')"
@@ -324,7 +454,8 @@ class JdbcSubscriptionRepository(
                    e.source,
                    e.source_id,
                    e.starts_at,
-                   e.ends_at
+                   e.ends_at,
+                   e.status
             FROM entitlements e
             JOIN users u
               ON u.id = e.user_id
@@ -349,6 +480,76 @@ class JdbcSubscriptionRepository(
                 e.ends_at DESC NULLS FIRST,
                 e.id ASC
             LIMIT 1
+        """.trimIndent()
+
+        private val LIST_STORED_ENTITLEMENTS_FOR_USER_QUERY = """
+            SELECT e.id AS entitlement_id,
+                   e.user_id AS entitlement_user_id,
+                   e.tier,
+                   e.source,
+                   e.source_id,
+                   e.starts_at,
+                   e.ends_at,
+                   e.status
+            FROM entitlements e
+            WHERE e.user_id = ?
+            ORDER BY e.starts_at DESC,
+                     e.created_at DESC,
+                     e.id ASC
+            LIMIT ?
+        """.trimIndent()
+
+        private val GRANT_STORED_ENTITLEMENT_QUERY = """
+            WITH target_user AS (
+                SELECT id
+                FROM users
+                WHERE id = ?
+                  AND status = 'active'
+                  AND deleted_at IS NULL
+            )
+            INSERT INTO entitlements (
+                id,
+                user_id,
+                tier,
+                source,
+                source_id,
+                starts_at,
+                ends_at,
+                status
+            )
+            SELECT ?,
+                   target_user.id,
+                   ?,
+                   ?,
+                   NULL,
+                   ?,
+                   ?,
+                   'active'
+            FROM target_user
+            RETURNING id AS entitlement_id,
+                      user_id AS entitlement_user_id,
+                      tier,
+                      source,
+                      source_id,
+                      starts_at,
+                      ends_at,
+                      status
+        """.trimIndent()
+
+        private val REVOKE_STORED_ENTITLEMENT_QUERY = """
+            UPDATE entitlements
+            SET status = 'revoked',
+                updated_at = now()
+            WHERE id = ?
+              AND status = 'active'
+            RETURNING id AS entitlement_id,
+                      user_id AS entitlement_user_id,
+                      tier,
+                      source,
+                      source_id,
+                      starts_at,
+                      ends_at,
+                      status
         """.trimIndent()
 
         private val CONSUME_INTRO_NOTE_INVENTORY_QUERY = """
