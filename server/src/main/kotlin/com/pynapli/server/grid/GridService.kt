@@ -1,5 +1,7 @@
 package com.pynapli.server.grid
 
+import com.pynapli.server.discovery.DiscoveryCursorCodec
+import com.pynapli.server.discovery.DiscoveryCursorException
 import com.pynapli.server.discovery.discoveryFiltersFrom
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
@@ -16,6 +18,7 @@ import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 
 class GridService(
     private val repository: GridRepository,
+    private val cursorCodec: DiscoveryCursorCodec = DiscoveryCursorCodec("pynapli-local-dev-discovery-cursor-secret"),
     private val presenceService: PresenceService? = null,
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val blockRepository: BlockRepository? = null,
@@ -39,7 +42,22 @@ class GridService(
             throw GridException("ENTITLEMENT_REQUIRED")
         }
 
-        val result = repository.queryNearby(viewerUserId, radiusMeters, limit, filters)
+        val cursorScopeHash = DiscoveryCursorCodec.gridScopeHash(
+            viewerUserId = viewerUserId,
+            radiusMeters = radiusMeters,
+            limit = limit,
+            filters = filters,
+            onlineOnly = request.onlineOnly
+        )
+        val cursor = request.cursor?.let { token ->
+            try {
+                cursorCodec.decodeGridCursor(token, cursorScopeHash)
+            } catch (_: DiscoveryCursorException) {
+                throw GridException("INVALID_GRID_CURSOR")
+            }
+        }
+
+        val result = repository.queryNearby(viewerUserId, radiusMeters, limit, filters, cursor)
         if (!result.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
 
         val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
@@ -59,7 +77,7 @@ class GridService(
 
         return GridQueryResponseDto(
             items = filteredCards.map { it.toDto(onlineUserIds) },
-            nextCursor = null,
+            nextCursor = result.nextCursorAnchor?.let { cursorCodec.encodeGridCursor(cursorScopeHash, it) },
             adSupported = policy.adSupported,
             advancedFiltersApplied = advancedFiltersApplied
         )

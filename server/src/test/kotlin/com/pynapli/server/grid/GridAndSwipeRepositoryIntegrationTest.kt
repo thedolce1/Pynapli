@@ -207,6 +207,57 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
             assertEquals(listOf(boostedTarget, nearTarget), swipeCards.map { it.userId })
         }
     }
+
+    "grid cursor pagination returns stable pages without overlap" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000951")
+            val firstTarget = UUID.fromString("00000000-0000-0000-0000-000000000952")
+            val secondTarget = UUID.fromString("00000000-0000-0000-0000-000000000953")
+            val thirdTarget = UUID.fromString("00000000-0000-0000-0000-000000000954")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(firstTarget, "First", age = 35, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(secondTarget, "Second", age = 36, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(thirdTarget, "Third", age = 37, longitude = -122.0840, latitude = 37.4230)
+
+            val repository = JdbcGridRepository(dataSource)
+            val firstPage = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 2
+            )
+            val secondPage = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 2,
+                cursor = firstPage.nextCursorAnchor
+            )
+
+            assertEquals(listOf(firstTarget, secondTarget), firstPage.cards.map { it.userId })
+            assertEquals(GridCursorAnchor(1, firstPage.cards.last().distanceBucketMeters, secondTarget), firstPage.nextCursorAnchor)
+            assertEquals(listOf(thirdTarget), secondPage.cards.map { it.userId })
+            assertEquals(null, secondPage.nextCursorAnchor)
+        }
+    }
+
+    "grid excludes blocked users before applying page limit" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000961")
+            val blockedTarget = UUID.fromString("00000000-0000-0000-0000-000000000962")
+            val visibleTarget = UUID.fromString("00000000-0000-0000-0000-000000000963")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(blockedTarget, "Blocked", age = 35, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(visibleTarget, "Visible", age = 36, longitude = -122.0840, latitude = 37.4230)
+            dataSource.insertBlock(viewer, blockedTarget)
+
+            val cards = JdbcGridRepository(dataSource).queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 1
+            ).cards
+
+            assertEquals(listOf(visibleTarget), cards.map { it.userId })
+        }
+    }
 })
 
 private fun DataSource.insertDiscoverableUser(
@@ -364,6 +415,26 @@ private fun DataSource.insertBoostActivation(userId: UUID) {
         ).use { statement ->
             statement.setObject(1, UUID.randomUUID())
             statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+    }
+}
+
+private fun DataSource.insertBlock(blockerUserId: UUID, blockedUserId: UUID) {
+    connection.use { connection ->
+        connection.prepareStatement(
+            """
+            INSERT INTO user_blocks (
+                id,
+                blocker_user_id,
+                blocked_user_id
+            )
+            VALUES (?, ?, ?)
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, blockerUserId)
+            statement.setObject(3, blockedUserId)
             statement.executeUpdate()
         }
     }

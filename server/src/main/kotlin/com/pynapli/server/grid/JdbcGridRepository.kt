@@ -13,7 +13,8 @@ class JdbcGridRepository(
         viewerUserId: UUID,
         radiusMeters: Int,
         limit: Int,
-        filters: DiscoveryFilters
+        filters: DiscoveryFilters,
+        cursor: GridCursorAnchor?
     ): GridQueryResult = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
             val viewerHasLocation = connection.prepareStatement(
@@ -30,13 +31,14 @@ class JdbcGridRepository(
                 return@withContext GridQueryResult(viewerHadLocation = false, cards = emptyList())
             }
 
-            val cards = connection.prepareStatement(
+            val fetchedCards = connection.prepareStatement(
                 """
                 WITH viewer_location AS (
                     SELECT geom
                     FROM user_locations
                     WHERE user_id = ?
-                )
+                ),
+                ranked_candidates AS (
                 SELECT u.id AS user_id,
                        COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
                        profile_photo.media_asset_id AS thumbnail_media_asset_id,
@@ -44,6 +46,8 @@ class JdbcGridRepository(
                        linked_partner.linked_partner_display_name,
                        linked_partner.linked_partner_thumbnail_media_asset_id,
                        ds.show_distance,
+                       CASE WHEN active_boost.ends_at IS NULL THEN 1 ELSE 0 END AS boost_bucket,
+                       GREATEST(0, FLOOR(ST_Distance(v.geom, ul.geom))::integer) AS distance_bucket_meters,
                        ST_Distance(v.geom, ul.geom) AS distance_meters
                 FROM viewer_location v
                 JOIN user_locations ul ON true
@@ -146,9 +150,28 @@ class JdbcGridRepository(
                       OR (?::boolean = true AND linked_partner.linked_partner_user_id IS NOT NULL)
                       OR (?::boolean = false AND linked_partner.linked_partner_user_id IS NULL)
                   )
-                ORDER BY CASE WHEN active_boost.ends_at IS NULL THEN 1 ELSE 0 END ASC,
-                         ST_Distance(v.geom, ul.geom) ASC,
-                         u.id ASC
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM user_blocks ub
+                      WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = u.id)
+                         OR (ub.blocker_user_id = u.id AND ub.blocked_user_id = ?)
+                  )
+                )
+                SELECT *
+                FROM ranked_candidates
+                WHERE (
+                    ?::boolean = false
+                    OR boost_bucket > ?::integer
+                    OR (boost_bucket = ?::integer AND distance_bucket_meters > ?::integer)
+                    OR (
+                        boost_bucket = ?::integer
+                        AND distance_bucket_meters = ?::integer
+                        AND user_id > ?::uuid
+                    )
+                )
+                ORDER BY boost_bucket ASC,
+                         distance_bucket_meters ASC,
+                         user_id ASC
                 LIMIT ?
                 """.trimIndent()
             ).use { statement ->
@@ -167,7 +190,16 @@ class JdbcGridRepository(
                 statement.setObject(12, filters.linkedOnly)
                 statement.setObject(13, filters.linkedOnly)
                 statement.setObject(14, filters.linkedOnly)
-                statement.setInt(15, limit)
+                statement.setObject(15, viewerUserId)
+                statement.setObject(16, viewerUserId)
+                statement.setBoolean(17, cursor != null)
+                statement.setObject(18, cursor?.boostBucket)
+                statement.setObject(19, cursor?.boostBucket)
+                statement.setObject(20, cursor?.distanceBucketMeters)
+                statement.setObject(21, cursor?.boostBucket)
+                statement.setObject(22, cursor?.distanceBucketMeters)
+                statement.setObject(23, cursor?.userId)
+                statement.setInt(24, limit + 1)
                 statement.executeQuery().use { rs ->
                     buildList {
                         while (rs.next()) {
@@ -178,6 +210,8 @@ class JdbcGridRepository(
                                     thumbnailMediaAssetId = rs.getObject("thumbnail_media_asset_id", UUID::class.java),
                                     showDistance = rs.getBoolean("show_distance"),
                                     distanceMeters = rs.getDouble("distance_meters"),
+                                    boostBucket = rs.getInt("boost_bucket"),
+                                    distanceBucketMeters = rs.getInt("distance_bucket_meters"),
                                     linkedPartnerUserId = rs.getObject("linked_partner_user_id", UUID::class.java),
                                     linkedPartnerDisplayName = rs.getString("linked_partner_display_name"),
                                     linkedPartnerThumbnailMediaAssetId = rs.getObject(
@@ -191,7 +225,16 @@ class JdbcGridRepository(
                 }
             }
 
-            GridQueryResult(viewerHadLocation = true, cards = cards)
+            val cards = fetchedCards.take(limit)
+            GridQueryResult(
+                viewerHadLocation = true,
+                cards = cards,
+                nextCursorAnchor = if (fetchedCards.size > limit && cards.isNotEmpty()) {
+                    cards.last().toCursorAnchor()
+                } else {
+                    null
+                }
+            )
         }
     }
 }

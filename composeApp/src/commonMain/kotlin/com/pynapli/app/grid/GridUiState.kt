@@ -10,6 +10,8 @@ data class GridUiState(
     val filters: List<GridFilterUi> = defaultGridFilters,
     val cards: List<GridProfileCardUi> = emptyList(),
     val isRefreshing: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val nextCursor: String? = null,
     val adSupported: Boolean = false,
     val paywallMessage: String? = null,
     val errorCode: String? = null,

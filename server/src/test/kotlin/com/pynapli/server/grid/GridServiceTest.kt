@@ -18,6 +18,7 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class GridServiceTest {
@@ -214,6 +215,109 @@ class GridServiceTest {
         assertEquals(false, response.adSupported)
         assertEquals(true, response.advancedFiltersApplied)
     }
+
+    @Test
+    fun queryGridReturnsSignedCursorAndPassesDecodedAnchorToRepository() = runBlocking {
+        val viewerId = UUID.randomUUID()
+        val targetId = UUID.randomUUID()
+        val anchor = GridCursorAnchor(
+            boostBucket = 1,
+            distanceBucketMeters = 1_240,
+            userId = targetId
+        )
+        val repository = CapturingGridRepository(
+            GridQueryResult(
+                viewerHadLocation = true,
+                cards = listOf(
+                    GridCardRecord(
+                        userId = targetId,
+                        displayName = "Alex",
+                        showDistance = true,
+                        distanceMeters = 1_240.0,
+                        distanceBucketMeters = 1_240
+                    )
+                ),
+                nextCursorAnchor = anchor
+            )
+        )
+        val service = GridService(repository)
+
+        val firstPage = service.queryGrid(viewerId, GridQueryRequestDto(limit = 1))
+        val nextCursor = assertNotNull(firstPage.nextCursor)
+        service.queryGrid(viewerId, GridQueryRequestDto(limit = 1, cursor = nextCursor))
+
+        assertEquals(listOf(null, anchor), repository.receivedCursors)
+    }
+
+    @Test
+    fun queryGridRejectsCursorFromDifferentFilterScope() = runBlocking {
+        val viewerId = UUID.randomUUID()
+        val targetId = UUID.randomUUID()
+        val service = GridService(
+            StaticGridRepository(
+                GridQueryResult(
+                    viewerHadLocation = true,
+                    cards = listOf(
+                        GridCardRecord(
+                            userId = targetId,
+                            displayName = "Alex",
+                            showDistance = true,
+                            distanceMeters = 1_240.0,
+                            distanceBucketMeters = 1_240
+                        )
+                    ),
+                    nextCursorAnchor = GridCursorAnchor(
+                        boostBucket = 1,
+                        distanceBucketMeters = 1_240,
+                        userId = targetId
+                    )
+                )
+            )
+        )
+
+        val firstPage = service.queryGrid(viewerId, GridQueryRequestDto(limit = 1))
+        val nextCursor = assertNotNull(firstPage.nextCursor)
+        val error = assertFailsWith<GridException> {
+            service.queryGrid(viewerId, GridQueryRequestDto(limit = 2, cursor = nextCursor))
+        }
+
+        assertEquals("INVALID_GRID_CURSOR", error.code)
+    }
+
+    @Test
+    fun queryGridRejectsTamperedCursor() = runBlocking {
+        val viewerId = UUID.randomUUID()
+        val targetId = UUID.randomUUID()
+        val service = GridService(
+            StaticGridRepository(
+                GridQueryResult(
+                    viewerHadLocation = true,
+                    cards = listOf(
+                        GridCardRecord(
+                            userId = targetId,
+                            displayName = "Alex",
+                            showDistance = true,
+                            distanceMeters = 1_240.0,
+                            distanceBucketMeters = 1_240
+                        )
+                    ),
+                    nextCursorAnchor = GridCursorAnchor(
+                        boostBucket = 1,
+                        distanceBucketMeters = 1_240,
+                        userId = targetId
+                    )
+                )
+            )
+        )
+
+        val firstPage = service.queryGrid(viewerId, GridQueryRequestDto(limit = 1))
+        val tamperedCursor = assertNotNull(firstPage.nextCursor).dropLast(1) + "x"
+        val error = assertFailsWith<GridException> {
+            service.queryGrid(viewerId, GridQueryRequestDto(limit = 1, cursor = tamperedCursor))
+        }
+
+        assertEquals("INVALID_GRID_CURSOR", error.code)
+    }
 }
 
 private class StaticGridRepository(
@@ -223,8 +327,26 @@ private class StaticGridRepository(
         viewerUserId: UUID,
         radiusMeters: Int,
         limit: Int,
-        filters: DiscoveryFilters
+        filters: DiscoveryFilters,
+        cursor: GridCursorAnchor?
     ): GridQueryResult = result
+}
+
+private class CapturingGridRepository(
+    private val result: GridQueryResult
+) : GridRepository {
+    val receivedCursors = mutableListOf<GridCursorAnchor?>()
+
+    override suspend fun queryNearby(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        cursor: GridCursorAnchor?
+    ): GridQueryResult {
+        receivedCursors += cursor
+        return result
+    }
 }
 
 private class StaticPresenceRepository(

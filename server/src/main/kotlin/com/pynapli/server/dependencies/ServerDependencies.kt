@@ -5,6 +5,7 @@ import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.grid.GridService
 import com.pynapli.server.grid.JdbcGridRepository
 import com.pynapli.server.location.JdbcLocationRepository
@@ -210,6 +211,7 @@ class ServerDependencies(
             )
             val gridService = GridService(
                 repository = JdbcGridRepository(database.dataSource),
+                cursorCodec = DiscoveryCursorCodec(config.discoveryCursorSecret),
                 presenceService = presenceService,
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
                 blockRepository = blockRepository,

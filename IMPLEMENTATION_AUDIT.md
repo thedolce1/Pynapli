@@ -78,7 +78,7 @@ Current CI state:
 | Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling. | 18+ DOB confirmation and enhanced age verification are not complete. |
 | Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display. | Profile verification, data export/delete, blocked/hidden management, and full safety center need completion. |
 | Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs. | Server-side location trust/spoofing checks and movement thresholds need hardening. |
-| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, stable Compose keys, retained lazy grid state while screen is alive, block/risk filtering, partner preview. | Stable cursor pagination, Redis candidate cache, WebSocket presence deltas, explicit thumbnail preloading, 5,000-candidate load test, and stronger scroll-preservation tests are still needed. |
+| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, fixed square cards, stable Compose keys, retained lazy grid state while screen is alive, block/risk filtering, partner preview. | Redis candidate cache, WebSocket presence deltas, explicit thumbnail preloading, 5,000-candidate load test, movement-threshold policy, and stronger scroll-preservation tests are still needed. |
 | Swipe | Partially implemented | Swipe deck endpoint, action endpoint, server-authoritative match creation, immutable normal actions, block/report path, intro notes, pineapple-like inventory, boost influence, partner preview. | Robust deck-session/rank-token validation, cursor pagination, rewind, offline action cap, image preloading, top picks, passport/travel mode, and dealbreaker settings remain incomplete. |
 | Messaging | Mostly implemented for MVP | Direct conversations, grid-open messaging, swipe match gating, intro-note handling, partner chat invite/accept/decline/leave, block-aware conversations, message review path. | WebSocket realtime, typing/read realtime, and deeper consent tests should be added before beta. |
 | Activity | Partially implemented | Activity event model, newest-first activity, flirts, album requests, gating by entitlement, block checks, risk checks. | Tabs, opt-outs/incognito behavior, partner-context activity separation, and complete reveal-depth UX need review. |
@@ -88,7 +88,7 @@ Current CI state:
 | Monetization | Partially implemented | Free/Social/Select tiers, server entitlements, linked partner benefit, activity/filters gates, intro notes, pineapple likes, boosts, ads policy, safety-free rule. | StoreKit 2 path is missing. Google Play path exists but needs real console credentials/config validation. Paywall copy needs final Social/Select review in app. |
 | Trust and safety | Partially implemented | Risk model/events, Redis rate limits, duplicate message checks, held-message review, reports queue, risk queue, social action restrictions, severe action triggers, partner subscription abuse cooldown. | Risk middleware, device/account-farm signals, location spoofing signals, verification risk adjustments, appeals/support flow, false-positive metrics, and account notice workflow remain. |
 | Admin moderation | Partially implemented | Reports queue/actions/audit, risk review/actions/audit, held message review/release/remove/audit. | Roles/permissions, MFA, user lookup, appeals, subscription support, partner-link review, sensitive reveal reason flow outside held messages, and separated admin API need work. |
-| API contract | Partially implemented | `/v1` routes, shared DTOs, Ktor error handling, many server-side entitlement/block/risk checks. | Cursor pagination is incomplete on live surfaces, idempotency keys are not consistently implemented, and realtime WebSocket is not implemented. |
+| API contract | Partially implemented | `/v1` routes, shared DTOs, Ktor error handling, many server-side entitlement/block/risk checks, signed Grid cursor pagination. | Cursor pagination remains incomplete on other live surfaces, idempotency keys are not consistently implemented, and realtime WebSocket is not implemented. |
 | Backend architecture | Partially implemented | Ktor authoritative services, PostgreSQL/PostGIS, Flyway, Redis, Docker local services, FCM path, server-side subscription model. | WebSockets, Redis candidate cache, signed object storage, sensitive log redaction, analytics redaction, and formal cloud environment setup remain. |
 | Mobile architecture | Partially implemented | KMP shared network/client/domain types, Compose feature state holders, Android platform integrations for billing/FCM/location. | iOS platform integrations, secure token storage review, WebSocket client, offline queue rules, and emulator/device visual QA coverage need work. |
 | Testing | Good start, not enough | Server test suite restored, shared tests, Compose Android host tests, local verification script. | Android instrumented/E2E tests, iOS tests, real DB container integration coverage expansion, abuse tests, load tests, and visual screenshot regression need work. |
@@ -101,7 +101,7 @@ Current CI state:
 
 ## Spec Reconciliation Status
 
-Reconciled on 2026-05-07.
+Reconciled on 2026-05-08.
 
 The root spec checklists now use this practical convention:
 
@@ -114,9 +114,9 @@ A checked box should not mean "final production-ready" unless the surrounding sp
 ## Highest-Risk Gaps
 
 1. Grid scalability is not yet proven.
-   - Stable cursor pagination is not complete.
    - Redis candidate caching is not complete.
    - The required 5,000+ nearby-candidate scenario has not been load tested.
+   - Movement-threshold refresh policy is not implemented.
    - WebSocket presence deltas are not implemented.
 
 2. Swipe server authority needs another hardening pass.
@@ -157,9 +157,9 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Add branch protection and required status checks in GitHub.
    - Add Docker-backed integration tests, lint/static analysis, and Android artifact checks when those suites are ready.
 
-2. Harden grid and swipe server contracts.
-   - Grid: stable cursor pagination, candidate cache, movement threshold policy, 5,000-candidate load test.
-   - Swipe: deck session validation, rank-token validation, cursor pagination, action idempotency, rewind path.
+2. Finish Grid hardening before starting more Swipe behavior.
+   - Grid: candidate cache, movement threshold policy, 5,000-candidate load test, scroll-preservation regression coverage.
+   - Swipe later: deck session validation, rank-token validation, cursor pagination, action idempotency, rewind path.
 
 3. Finish the profile/settings safety surface.
    - Safety center, block list, hidden users if retained, report history/support contact, data export/delete, notification settings.

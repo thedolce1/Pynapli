@@ -22,6 +22,7 @@ class GridStateHolder(
                 _state.update { current ->
                     current.copy(
                         cards = feed.cards,
+                        nextCursor = feed.nextCursor,
                         adSupported = feed.adSupported,
                         filters = current.filters.withPaidLocks(feed.adSupported),
                         paywallMessage = null,
@@ -85,6 +86,40 @@ class GridStateHolder(
         load()
     }
 
+    suspend fun loadMore() {
+        val current = _state.value
+        val cursor = current.nextCursor ?: return
+        if (current.isRefreshing || current.isLoadingMore || current.cards.isEmpty()) return
+
+        val selectedFilter = current.filters.firstOrNull { it.active }?.type ?: GridFilterType.Nearby
+        _state.update { it.copy(isLoadingMore = true, errorCode = null, errorMessage = null) }
+        runCatching { repository.loadGrid(selectedFilter, cursor) }
+            .onSuccess { feed ->
+                _state.update { existing ->
+                    val existingIds = existing.cards.mapTo(mutableSetOf()) { it.id }
+                    val appended = feed.cards.filterNot { it.id in existingIds }
+                    existing.copy(
+                        cards = existing.cards + appended,
+                        nextCursor = feed.nextCursor,
+                        adSupported = feed.adSupported,
+                        filters = existing.filters.withPaidLocks(feed.adSupported),
+                        isLoadingMore = false,
+                        errorCode = null,
+                        errorMessage = null
+                    )
+                }
+            }
+            .onFailure { error ->
+                _state.update { existing ->
+                    existing.copy(
+                        isLoadingMore = false,
+                        errorCode = (error as? GridFeedException)?.code,
+                        errorMessage = error.message ?: "More profiles could not be loaded."
+                    )
+                }
+            }
+    }
+
     fun removeCardById(userId: String) {
         _state.update { current ->
             current.copy(cards = current.cards.filterNot { it.id == userId })
@@ -93,18 +128,19 @@ class GridStateHolder(
 }
 
 interface GridFeedRepository {
-    suspend fun loadGrid(filter: GridFilterType): GridFeedUi
+    suspend fun loadGrid(filter: GridFilterType, cursor: String? = null): GridFeedUi
 }
 
 class ApiGridFeedRepository(
     private val apiClient: PynapliApiClient
 ) : GridFeedRepository {
-    override suspend fun loadGrid(filter: GridFilterType): GridFeedUi =
-        when (val result = apiClient.queryGrid(filter.toRequest())) {
+    override suspend fun loadGrid(filter: GridFilterType, cursor: String?): GridFeedUi =
+        when (val result = apiClient.queryGrid(filter.toRequest(cursor))) {
             is AppResult.Success -> GridFeedUi(
                 cards = result.value.items.mapIndexed { index, card ->
                     card.toGridProfileCardUi(index)
                 },
+                nextCursor = result.value.nextCursor,
                 adSupported = result.value.adSupported,
                 advancedFiltersApplied = result.value.advancedFiltersApplied
             )
@@ -117,7 +153,7 @@ class ApiGridFeedRepository(
 }
 
 class SampleGridFeedRepository : GridFeedRepository {
-    override suspend fun loadGrid(filter: GridFilterType): GridFeedUi =
+    override suspend fun loadGrid(filter: GridFilterType, cursor: String?): GridFeedUi =
         GridFeedUi(
             cards = sampleGridCards,
             adSupported = true,
@@ -127,6 +163,7 @@ class SampleGridFeedRepository : GridFeedRepository {
 
 data class GridFeedUi(
     val cards: List<GridProfileCardUi>,
+    val nextCursor: String? = null,
     val adSupported: Boolean = false,
     val advancedFiltersApplied: Boolean = false
 )
@@ -136,12 +173,12 @@ private class GridFeedException(
     override val message: String
 ) : RuntimeException(message)
 
-private fun GridFilterType.toRequest(): GridQueryRequestDto = when (this) {
-    GridFilterType.Nearby -> GridQueryRequestDto(radiusMeters = 50_000, limit = 60)
-    GridFilterType.Online -> GridQueryRequestDto(limit = 60, onlineOnly = true)
-    GridFilterType.Linked -> GridQueryRequestDto(limit = 60, linkedOnly = true)
-    GridFilterType.Age -> GridQueryRequestDto(limit = 60, minimumAge = 30, maximumAge = 55)
-    GridFilterType.Tonight -> GridQueryRequestDto(limit = 60)
+private fun GridFilterType.toRequest(cursor: String?): GridQueryRequestDto = when (this) {
+    GridFilterType.Nearby -> GridQueryRequestDto(radiusMeters = 50_000, limit = 60, cursor = cursor)
+    GridFilterType.Online -> GridQueryRequestDto(limit = 60, cursor = cursor, onlineOnly = true)
+    GridFilterType.Linked -> GridQueryRequestDto(limit = 60, cursor = cursor, linkedOnly = true)
+    GridFilterType.Age -> GridQueryRequestDto(limit = 60, cursor = cursor, minimumAge = 30, maximumAge = 55)
+    GridFilterType.Tonight -> GridQueryRequestDto(limit = 60, cursor = cursor)
 }
 
 private val sampleGridCards = listOf(

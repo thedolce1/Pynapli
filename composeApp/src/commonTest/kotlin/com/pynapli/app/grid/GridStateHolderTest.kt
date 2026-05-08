@@ -39,16 +39,54 @@ class GridStateHolderTest {
         assertEquals("Online is included with Social or Select.", state.paywallMessage)
         assertTrue(state.filters.first { it.type == GridFilterType.Nearby }.active)
     }
+
+    @Test
+    fun loadMoreAppendsUniqueCardsAndAdvancesCursor() = runBlocking {
+        val first = GridProfileCardUi(
+            id = "first",
+            displayName = "First",
+            online = true,
+            distanceLabel = "1 km",
+            tone = GridCardTone.Warm
+        )
+        val duplicateFirst = first.copy(displayName = "First duplicate")
+        val second = GridProfileCardUi(
+            id = "second",
+            displayName = "Second",
+            online = false,
+            distanceLabel = "2 km",
+            tone = GridCardTone.Slate
+        )
+        val repository = FakeGridFeedRepository(
+            feeds = listOf(
+                GridFeedUi(cards = listOf(first), nextCursor = "cursor-1"),
+                GridFeedUi(cards = listOf(duplicateFirst, second), nextCursor = "cursor-2")
+            )
+        )
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.loadMore()
+
+        val state = stateHolder.state.value
+        assertEquals(listOf("first", "second"), state.cards.map { it.id })
+        assertEquals("cursor-2", state.nextCursor)
+        assertEquals(listOf(null, "cursor-1"), repository.receivedCursors)
+    }
 }
 
 private class FakeGridFeedRepository(
-    private val feed: GridFeedUi
+    private val feeds: List<GridFeedUi>
 ) : GridFeedRepository {
+    constructor(feed: GridFeedUi) : this(listOf(feed))
+
     var loadCount = 0
         private set
+    val receivedCursors = mutableListOf<String?>()
 
-    override suspend fun loadGrid(filter: GridFilterType): GridFeedUi {
+    override suspend fun loadGrid(filter: GridFilterType, cursor: String?): GridFeedUi {
+        receivedCursors += cursor
         loadCount += 1
-        return feed
+        return feeds.getOrElse(loadCount - 1) { feeds.last() }
     }
 }

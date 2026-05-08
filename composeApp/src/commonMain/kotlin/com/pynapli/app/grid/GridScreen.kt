@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -40,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -100,6 +102,7 @@ fun GridScreen(
         profileImageUrl = profileImageUrl,
         distanceUnit = distanceUnit,
         onFilterSelected = { type -> scope.launch { stateHolder.selectFilter(type) } },
+        onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onProfileSelected = { card ->
             scope.launch { profileDetailStateHolder.open(card) }
         },
@@ -247,6 +250,7 @@ private fun GridScreenContent(
     profileImageUrl: String?,
     distanceUnit: String,
     onFilterSelected: (GridFilterType) -> Unit,
+    onLoadMore: () -> Unit,
     onProfileSelected: (GridProfileCardUi) -> Unit,
     onUseCurrentLocation: () -> Unit,
     onProfileIconClick: () -> Unit,
@@ -281,6 +285,7 @@ private fun GridScreenContent(
             locationState = locationState,
             distanceUnit = distanceUnit,
             onProfileSelected = onProfileSelected,
+            onLoadMore = onLoadMore,
             onUseCurrentLocation = onUseCurrentLocation,
             modifier = Modifier.weight(1f)
         )
@@ -507,9 +512,22 @@ private fun ProfileGrid(
     cards: List<GridProfileCardUi>,
     distanceUnit: String,
     onProfileSelected: (GridProfileCardUi) -> Unit,
+    onLoadMore: () -> Unit,
+    canLoadMore: Boolean,
+    isLoadingMore: Boolean,
     modifier: Modifier = Modifier
 ) {
     val gridState = rememberLazyGridState()
+    val shouldLoadMore by remember(cards.size, gridState, isLoadingMore, canLoadMore) {
+        derivedStateOf {
+            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+            canLoadMore && !isLoadingMore && cards.isNotEmpty() && lastVisibleIndex >= cards.lastIndex - 9
+        }
+    }
+
+    LaunchedEffect(shouldLoadMore, cards.size, canLoadMore, isLoadingMore) {
+        if (shouldLoadMore) onLoadMore()
+    }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
@@ -521,13 +539,34 @@ private fun ProfileGrid(
     ) {
         items(
             items = cards,
-            key = { card -> card.id }
+            key = { card -> card.id },
+            contentType = { "grid-card" }
         ) { card ->
             GridProfileTile(
                 card = card,
                 distanceUnit = distanceUnit,
                 onClick = { onProfileSelected(card) }
             )
+        }
+
+        if (isLoadingMore) {
+            item(
+                key = "grid-loading-more",
+                span = { GridItemSpan(maxLineSpan) },
+                contentType = "grid-loading"
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 18.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -547,7 +586,7 @@ private fun GridProfileTile(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(0.78f)
+            .aspectRatio(1f)
             .clickable(onClick = onClick)
             .background(card.tone.backgroundBrush())
     ) {
@@ -639,6 +678,7 @@ private fun GridBody(
     locationState: LocationUiState,
     distanceUnit: String,
     onProfileSelected: (GridProfileCardUi) -> Unit,
+    onLoadMore: () -> Unit,
     onUseCurrentLocation: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -707,6 +747,9 @@ private fun GridBody(
                 cards = state.cards,
                 distanceUnit = distanceUnit,
                 onProfileSelected = onProfileSelected,
+                onLoadMore = onLoadMore,
+                canLoadMore = state.nextCursor != null,
+                isLoadingMore = state.isLoadingMore,
                 modifier = modifier
             )
         }

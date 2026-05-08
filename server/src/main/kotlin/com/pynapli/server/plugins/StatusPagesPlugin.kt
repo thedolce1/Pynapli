@@ -219,6 +219,7 @@ private fun userSafeMessage(code: String): String = when (code) {
     "LOCATION_REQUIRED" -> "Location is required before loading the grid."
     "ENTITLEMENT_REQUIRED" -> "Upgrade is required for this feature."
     "INVALID_GRID_FILTER" -> "Grid filters are not valid."
+    "INVALID_GRID_CURSOR" -> "Grid position is no longer valid."
     "INVALID_FLIRT_TARGET" -> "Spark could not be sent."
     "FLIRT_NOT_ALLOWED" -> "This profile is not accepting Sparks."
     "INVALID_ALBUM_REQUEST_TARGET" -> "Album request could not be sent."
@@ -319,6 +320,7 @@ private fun gridStatusFor(code: String): HttpStatusCode = when (code) {
     "LOCATION_REQUIRED" -> HttpStatusCode.BadRequest
     "ENTITLEMENT_REQUIRED" -> HttpStatusCode.Forbidden
     "INVALID_GRID_FILTER" -> HttpStatusCode.BadRequest
+    "INVALID_GRID_CURSOR" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest
 }
 

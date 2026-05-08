@@ -1,6 +1,6 @@
 # Pynapli Grid Implementation Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-08
 
 ## Purpose
 
@@ -578,10 +578,10 @@ Battery:
 - [x] PostGIS nearest-neighbor ordering implemented.
 - [x] Redis presence TTLs implemented.
 - [ ] Partial: Redis candidate cache is not implemented; Redis is currently used for presence/rate limits.
-- [ ] Partial: stable cursor pagination is represented in DTOs, but live grid responses do not yet return hardened cursors.
+- [x] Signed stable cursor pagination is implemented for live grid responses.
 - [x] Compose grid uses stable keys.
 - [ ] Partial: Compose grid uses retained `LazyGridState` while the screen instance is alive; lifecycle/navigation regression tests still need to prove it.
-- [ ] Partial: grid cards use stable responsive dimensions, but not fixed square dimensions.
+- [x] Grid cards use fixed square dimensions.
 - [ ] Partial: filter updates keep existing state, but diffed list animation behavior is not yet verified.
 - [ ] Partial: profile open/close preserves current screen state in the MVP flow; emulator regression coverage is still needed.
 - [ ] WebSocket presence deltas update dots without full refresh.

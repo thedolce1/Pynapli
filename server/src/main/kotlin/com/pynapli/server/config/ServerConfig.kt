@@ -33,7 +33,8 @@ data class ServerConfig(
     val playStoreRtdnWebhookToken: String? = null,
     val playStoreRtdnOidcAudience: String? = null,
     val playStoreRtdnOidcServiceAccountEmail: String? = null,
-    val adminApiToken: String? = null
+    val adminApiToken: String? = null,
+    val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret"
 ) {
     companion object {
         fun fromEnvironment(): ServerConfig {
@@ -135,7 +136,11 @@ data class ServerConfig(
                     ?.takeIf { it.isNotEmpty() },
                 adminApiToken = System.getenv("PYNAPLI_ADMIN_API_TOKEN")
                     ?.trim()
+                    ?.takeIf { it.isNotEmpty() },
+                discoveryCursorSecret = System.getenv("PYNAPLI_DISCOVERY_CURSOR_SECRET")
+                    ?.trim()
                     ?.takeIf { it.isNotEmpty() }
+                    ?: "pynapli-local-dev-discovery-cursor-secret"
             )
         }
     }

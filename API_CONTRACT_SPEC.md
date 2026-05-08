@@ -482,7 +482,7 @@ Rules:
 
 - [x] `/v1` versioning.
 - [x] Shared DTO conventions.
-- [ ] Partial: cursor pagination exists for some surfaces, but grid/swipe/activity live cursor behavior is incomplete.
+- [ ] Partial: signed cursor pagination is implemented for Grid, but swipe/activity and other live cursor behavior is incomplete.
 - [ ] Partial: idempotency keys exist for notification/outbox and some workflows, but actions/purchases are not consistently idempotent.
 - [x] Server-side entitlement checks.
 - [x] Server-side block/privacy/risk checks.
