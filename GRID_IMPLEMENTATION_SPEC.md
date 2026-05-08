@@ -579,6 +579,7 @@ Battery:
 - [x] Redis presence TTLs implemented.
 - [ ] Partial: Redis candidate cache is not implemented; Redis is currently used for presence/rate limits.
 - [x] Signed stable cursor pagination is implemented for live grid responses.
+- [x] 5,000-candidate dense grid integration proof exists for stable cursor pages.
 - [x] Compose grid uses stable keys.
 - [ ] Partial: Compose grid uses retained `LazyGridState` while the screen instance is alive; lifecycle/navigation regression tests still need to prove it.
 - [x] Grid cards use fixed square dimensions.

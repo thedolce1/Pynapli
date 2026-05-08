@@ -13,6 +13,8 @@ import org.testcontainers.utility.DockerImageName
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class GridAndSwipeRepositoryIntegrationTest : StringSpec({
     val postgisImage = DockerImageName
@@ -258,6 +260,42 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
             assertEquals(listOf(visibleTarget), cards.map { it.userId })
         }
     }
+
+    "grid query handles 5000 nearby candidates with stable cursor pages" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000971")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDenseDiscoverableUsers(
+                count = 5_000,
+                baseLongitude = -122.0841,
+                baseLatitude = 37.4220
+            )
+
+            val repository = JdbcGridRepository(dataSource)
+            val startedAt = System.nanoTime()
+            val firstPage = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 120
+            )
+            val secondPage = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 120,
+                cursor = assertNotNull(firstPage.nextCursorAnchor)
+            )
+            val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000
+            println("Grid dense 5000 candidate two-page query completed in ${elapsedMillis}ms")
+
+            assertEquals(120, firstPage.cards.size)
+            assertEquals(120, secondPage.cards.size)
+            assertTrue(firstPage.cards.map { it.userId }.intersect(secondPage.cards.map { it.userId }.toSet()).isEmpty())
+            assertTrue(
+                elapsedMillis < 10_000,
+                "Dense grid query should remain comfortably under 10s in local Testcontainers; actual=${elapsedMillis}ms"
+            )
+        }
+    }
 })
 
 private fun DataSource.insertDiscoverableUser(
@@ -419,6 +457,106 @@ private fun DataSource.insertBoostActivation(userId: UUID) {
         }
     }
 }
+
+private fun DataSource.insertDenseDiscoverableUsers(
+    count: Int,
+    baseLongitude: Double,
+    baseLatitude: Double
+) {
+    val users = List(count) { index ->
+        DenseDiscoverableUser(
+            id = UUID.nameUUIDFromBytes("dense-grid-user-$index".toByteArray()),
+            displayName = "Dense ${index + 1}",
+            age = 30 + (index % 25),
+            longitude = baseLongitude + ((index % 100) - 50) * 0.00008,
+            latitude = baseLatitude + ((index / 100) - 25) * 0.00008,
+            relationshipContext = if (index % 3 == 0) "linked" else "single"
+        )
+    }
+
+    connection.use { connection ->
+        connection.prepareStatement(
+            """
+            INSERT INTO users (id, status)
+            VALUES (?, 'active')
+            """.trimIndent()
+        ).use { statement ->
+            users.forEach { user ->
+                statement.setObject(1, user.id)
+                statement.addBatch()
+            }
+            statement.executeBatch()
+        }
+        connection.prepareStatement(
+            """
+            INSERT INTO profiles (
+                user_id,
+                display_name,
+                display_age,
+                relationship_context,
+                moderation_status,
+                visibility_status
+            )
+            VALUES (?, ?, ?, ?, 'approved', 'visible')
+            """.trimIndent()
+        ).use { statement ->
+            users.forEach { user ->
+                statement.setObject(1, user.id)
+                statement.setString(2, user.displayName)
+                statement.setInt(3, user.age)
+                statement.setString(4, user.relationshipContext)
+                statement.addBatch()
+            }
+            statement.executeBatch()
+        }
+        connection.prepareStatement(
+            """
+            INSERT INTO discovery_settings (
+                user_id,
+                grid_visible,
+                swipe_visible,
+                incognito,
+                show_distance
+            )
+            VALUES (?, true, true, false, true)
+            """.trimIndent()
+        ).use { statement ->
+            users.forEach { user ->
+                statement.setObject(1, user.id)
+                statement.addBatch()
+            }
+            statement.executeBatch()
+        }
+        connection.prepareStatement(
+            """
+            INSERT INTO user_locations (
+                user_id,
+                geom,
+                location_source,
+                accuracy_meters
+            )
+            VALUES (?, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, 'gps', 12)
+            """.trimIndent()
+        ).use { statement ->
+            users.forEach { user ->
+                statement.setObject(1, user.id)
+                statement.setDouble(2, user.longitude)
+                statement.setDouble(3, user.latitude)
+                statement.addBatch()
+            }
+            statement.executeBatch()
+        }
+    }
+}
+
+private data class DenseDiscoverableUser(
+    val id: UUID,
+    val displayName: String,
+    val age: Int,
+    val longitude: Double,
+    val latitude: Double,
+    val relationshipContext: String
+)
 
 private fun DataSource.insertBlock(blockerUserId: UUID, blockedUserId: UUID) {
     connection.use { connection ->

@@ -130,6 +130,8 @@ Before public beta, load test a metro-cell scenario with:
 
 The app must not request or render all 5,000 profiles.
 
+Current status: a Docker-backed repository integration test proves stable two-page Grid cursor paging over 5,000 nearby candidates. The full beta load test with concurrent users, online presence distribution, mixed filters, and tier visibility remains open.
+
 Expected behavior:
 
 - Backend narrows candidates with PostGIS and indexed filters.
