@@ -78,7 +78,7 @@ Current CI state:
 | Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling. | 18+ DOB confirmation and enhanced age verification are not complete. |
 | Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display. | Profile verification, data export/delete, blocked/hidden management, and full safety center need completion. |
 | Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs. | Server-side location trust/spoofing checks and movement thresholds need hardening. |
-| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, fixed square cards, stable Compose keys, 5,000-candidate dense integration proof, retained lazy grid state while screen is alive, block/risk filtering, partner preview. | Redis candidate cache, WebSocket presence deltas, explicit thumbnail preloading, full concurrent load test, movement-threshold policy, and stronger scroll-preservation tests are still needed. |
+| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, fixed square cards, stable Compose keys, 5,000-candidate dense integration proof, client movement-threshold policy, retained lazy grid state while screen is alive, block/risk filtering, partner preview. | Redis candidate cache, WebSocket presence deltas, explicit thumbnail preloading, full concurrent load test, and stronger scroll-preservation tests are still needed. |
 | Swipe | Partially implemented | Swipe deck endpoint, action endpoint, server-authoritative match creation, immutable normal actions, block/report path, intro notes, pineapple-like inventory, boost influence, partner preview. | Robust deck-session/rank-token validation, cursor pagination, rewind, offline action cap, image preloading, top picks, passport/travel mode, and dealbreaker settings remain incomplete. |
 | Messaging | Mostly implemented for MVP | Direct conversations, grid-open messaging, swipe match gating, intro-note handling, partner chat invite/accept/decline/leave, block-aware conversations, message review path. | WebSocket realtime, typing/read realtime, and deeper consent tests should be added before beta. |
 | Activity | Partially implemented | Activity event model, newest-first activity, flirts, album requests, gating by entitlement, block checks, risk checks. | Tabs, opt-outs/incognito behavior, partner-context activity separation, and complete reveal-depth UX need review. |
@@ -116,7 +116,6 @@ A checked box should not mean "final production-ready" unless the surrounding sp
 1. Grid scalability is not yet proven.
    - Redis candidate caching is not complete.
    - A 5,000-candidate repository proof exists; the full concurrent grid load test is not complete.
-   - Movement-threshold refresh policy is not implemented.
    - WebSocket presence deltas are not implemented.
 
 2. Swipe server authority needs another hardening pass.
@@ -158,7 +157,7 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Add Docker-backed integration tests, lint/static analysis, and Android artifact checks when those suites are ready.
 
 2. Finish Grid hardening before starting more Swipe behavior.
-   - Grid: movement threshold policy, scroll-preservation regression coverage, thumbnail preloading, WebSocket presence deltas.
+   - Grid: scroll-preservation regression coverage, thumbnail preloading, WebSocket presence deltas.
    - Grid later: Redis candidate cache when measurement justifies the extra cache invalidation and hydration complexity.
    - Swipe later: deck session validation, rank-token validation, cursor pagination, action idempotency, rewind path.
 

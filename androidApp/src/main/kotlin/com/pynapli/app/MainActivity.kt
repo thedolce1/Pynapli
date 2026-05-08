@@ -17,6 +17,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import com.pynapli.app.location.DeviceLocation
+import com.pynapli.app.location.GridLocationRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.PickedMediaForUpload
 import com.pynapli.shared.settings.AppSettings
@@ -238,15 +239,17 @@ class MainActivity : ComponentActivity() {
 
     private fun submitDeviceLocation(currentLocation: Location) {
         activityScope.launch {
-            val updated = appGraph.locationStateHolder.submitLocation(
+            val result = appGraph.locationStateHolder.submitLocation(
                 DeviceLocation(
                     latitude = currentLocation.latitude,
                     longitude = currentLocation.longitude,
                     accuracyMeters = currentLocation.accuracyMetersOrNull()
                 )
             )
-            if (updated) {
-                appGraph.gridStateHolder.load()
+            when (result.gridRefresh) {
+                GridLocationRefresh.None -> Unit
+                GridLocationRefresh.QuietRefresh,
+                GridLocationRefresh.Refresh -> appGraph.gridStateHolder.load()
             }
         }
     }

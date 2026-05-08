@@ -139,6 +139,7 @@ Expected behavior:
 - API returns a capped lightweight page.
 - Client appends/reorders incrementally.
 - Filter changes animate differences instead of blanking the grid.
+- Small location changes do not refresh or reshuffle the grid.
 - Presence/distance changes do not reshuffle the whole grid.
 
 ### Grid Performance Budgets

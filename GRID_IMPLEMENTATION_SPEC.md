@@ -338,6 +338,13 @@ Recommended behavior:
 - City/neighborhood change: fetch new grid.
 - Filter change: fetch filtered IDs, diff, animate.
 
+Current implementation:
+
+- The mobile client keeps the exact last-submitted device coordinate locally.
+- Movement under 250m is not submitted to the backend and does not refresh the grid.
+- Movement from 250m to 1km submits location and refreshes the existing grid without clearing visible cards.
+- Movement of 1km or more submits location and requests a normal grid refresh.
+
 ### Battery References
 
 Android recommends removing location updates when not needed, setting timeouts, batching requests, and throttling background location.
@@ -586,7 +593,7 @@ Battery:
 - [ ] Partial: filter updates keep existing state, but diffed list animation behavior is not yet verified.
 - [ ] Partial: profile open/close preserves current screen state in the MVP flow; emulator regression coverage is still needed.
 - [ ] WebSocket presence deltas update dots without full refresh.
-- [ ] Location updates use thresholds.
+- [x] Location updates use thresholds before backend submission and grid refresh.
 - [ ] Partial: background location is avoided in current app code, but platform QA and policy review are still needed.
 - [ ] Partial: thumbnail caching relies on the image loader; explicit preloading is not implemented.
 - [x] Message rate limiting exists.
