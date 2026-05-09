@@ -94,7 +94,10 @@ internal fun GridFiltersSheet(
             )
 
             SectionTitle("Intent")
-            ComingSoonSection(message = "Solo, together, open to both, social, dating, events — ships in F3.")
+            IntentSection(
+                selected = draft.discoveryStyles,
+                onChange = { draft = draft.copy(discoveryStyles = it) }
+            )
 
             SectionTitle("Lifestyle")
             ComingSoonSection(message = "Soft swap, full swap, same-room, separate-room — age-gated, ships in F4.")
@@ -184,6 +187,22 @@ private fun AgeSection(
 @Composable
 private fun PresenceSection(online: Boolean, onToggle: () -> Unit) {
     SheetToggleChip(label = "Online now", active = online, onClick = onToggle)
+}
+
+@Composable
+private fun IntentSection(
+    selected: Set<DiscoveryStyle>,
+    onChange: (Set<DiscoveryStyle>) -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        DiscoveryStyle.entries.forEach { style ->
+            val active = style in selected
+            SheetToggleChip(label = style.label, active = active) {
+                val next = if (active) selected - style else selected + style
+                onChange(next)
+            }
+        }
+    }
 }
 
 @Composable

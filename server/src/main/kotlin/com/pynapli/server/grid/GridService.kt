@@ -37,7 +37,8 @@ class GridService(
             linkedOnly = request.linkedOnly,
             verifiedOnly = request.verifiedOnly,
             facePhotoVerifiedOnly = request.facePhotoVerifiedOnly,
-            ageVerifiedOnly = request.ageVerifiedOnly
+            ageVerifiedOnly = request.ageVerifiedOnly,
+            discoveryStyles = request.discoveryStyles
         ) { _ -> GridException("INVALID_GRID_FILTER") }
         val advancedFiltersApplied = filters.hasAdvancedFilters || request.onlineOnly
         val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()

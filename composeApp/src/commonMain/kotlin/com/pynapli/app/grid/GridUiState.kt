@@ -28,6 +28,7 @@ data class GridFilters(
     val verified: Boolean = false,
     val facePhotoVerified: Boolean = false,
     val ageVerified: Boolean = false,
+    val discoveryStyles: Set<DiscoveryStyle> = emptySet(),
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
     val maximumAge: Int? = null
@@ -42,6 +43,7 @@ data class GridFilters(
             if (verified) count += 1
             if (facePhotoVerified) count += 1
             if (ageVerified) count += 1
+            if (discoveryStyles.isNotEmpty()) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
             return count
@@ -65,7 +67,8 @@ data class GridFilters(
             onlineOnly = online,
             verifiedOnly = verified,
             facePhotoVerifiedOnly = facePhotoVerified,
-            ageVerifiedOnly = ageVerified
+            ageVerifiedOnly = ageVerified,
+            discoveryStyles = discoveryStyles.map { it.serverValue }
         )
     }
 
@@ -92,6 +95,18 @@ enum class QuickFilterId {
     Singles,
     Linked,
     Verified
+}
+
+/**
+ * Mirrors the values allowed by the `profiles.discovery_style` CHECK constraint
+ * (V3 migration). Ask-in-chat is intentionally omitted from the grid filter UI —
+ * it's a profile-level preference, not a discovery filter the viewer chooses.
+ */
+enum class DiscoveryStyle(val serverValue: String, val label: String) {
+    Solo("solo", "Solo"),
+    Together("together", "Together"),
+    OpenToBoth("both", "Open to both"),
+    Social("social", "Social")
 }
 
 @Immutable

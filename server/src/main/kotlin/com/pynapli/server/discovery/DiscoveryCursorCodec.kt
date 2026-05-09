@@ -105,6 +105,8 @@ class DiscoveryCursorCodec(
                 append("|ageVerifiedOnly=").append(filters.ageVerifiedOnly)
                 append("|relationshipContexts=")
                 append(filters.relationshipContexts.sorted().joinToString(","))
+                append("|discoveryStyles=")
+                append(filters.discoveryStyles.sorted().joinToString(","))
             }
             return sha256Base64Url(normalized)
         }

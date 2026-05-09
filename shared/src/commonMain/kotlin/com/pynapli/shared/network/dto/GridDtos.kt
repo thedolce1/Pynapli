@@ -14,7 +14,8 @@ data class GridQueryRequestDto(
     val onlineOnly: Boolean = false,
     val verifiedOnly: Boolean = false,
     val facePhotoVerifiedOnly: Boolean = false,
-    val ageVerifiedOnly: Boolean = false
+    val ageVerifiedOnly: Boolean = false,
+    val discoveryStyles: List<String> = emptyList()
 )
 
 @Serializable

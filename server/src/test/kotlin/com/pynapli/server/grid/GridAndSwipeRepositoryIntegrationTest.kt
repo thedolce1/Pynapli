@@ -321,6 +321,39 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "grid query with discoveryStyles filters to matching style" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000c01")
+            val solo = UUID.fromString("00000000-0000-0000-0000-000000000c02")
+            val together = UUID.fromString("00000000-0000-0000-0000-000000000c03")
+            val social = UUID.fromString("00000000-0000-0000-0000-000000000c04")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(solo, "Solo", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(together, "Together", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(social, "Social", age = 32, longitude = -122.0830, latitude = 37.4230)
+            dataSource.setProfileDiscoveryStyle(solo, "solo")
+            dataSource.setProfileDiscoveryStyle(together, "together")
+            dataSource.setProfileDiscoveryStyle(social, "social")
+
+            val repository = JdbcGridRepository(dataSource)
+            val soloOnly = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(discoveryStyles = setOf("solo"))
+            ).cards
+            val soloOrTogether = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(discoveryStyles = setOf("solo", "together"))
+            ).cards
+
+            assertEquals(listOf(solo), soloOnly.map { it.userId })
+            assertEquals(setOf(solo, together), soloOrTogether.map { it.userId }.toSet())
+        }
+    }
+
     "grid query with facePhotoVerifiedOnly and ageVerifiedOnly each filter to their column" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b01")
@@ -455,6 +488,19 @@ private fun DataSource.markFacePhotoVerified(userId: UUID) =
 
 private fun DataSource.markAgeVerified(userId: UUID) =
     setProfileTimestamp(userId, column = "age_verified_at")
+
+private fun DataSource.setProfileDiscoveryStyle(userId: UUID, style: String) {
+    require(style in setOf("solo", "together", "both", "social", "ask_in_chat")) {
+        "Refusing to UPDATE profiles.discovery_style to invalid value from a test helper: $style"
+    }
+    connection.use { connection ->
+        connection.prepareStatement("UPDATE profiles SET discovery_style = ? WHERE user_id = ?").use { statement ->
+            statement.setString(1, style)
+            statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+    }
+}
 
 private fun DataSource.setProfileTimestamp(userId: UUID, column: String) {
     require(column in setOf("verified_at", "face_photo_verified_at", "age_verified_at")) {

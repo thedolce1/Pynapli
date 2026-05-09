@@ -153,6 +153,7 @@ class JdbcGridRepository(
                   AND (?::boolean = false OR p.verified_at IS NOT NULL)
                   AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
                   AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
+                  AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
                   AND NOT EXISTS (
                       SELECT 1
                       FROM user_blocks ub
@@ -196,16 +197,19 @@ class JdbcGridRepository(
                 statement.setBoolean(15, filters.verifiedOnly)
                 statement.setBoolean(16, filters.facePhotoVerifiedOnly)
                 statement.setBoolean(17, filters.ageVerifiedOnly)
-                statement.setObject(18, viewerUserId)
-                statement.setObject(19, viewerUserId)
-                statement.setBoolean(20, cursor != null)
-                statement.setObject(21, cursor?.boostBucket)
-                statement.setObject(22, cursor?.boostBucket)
-                statement.setObject(23, cursor?.distanceBucketMeters)
+                val styles = connection.createArrayOf("text", filters.discoveryStyles.toTypedArray())
+                statement.setArray(18, styles)
+                statement.setArray(19, styles)
+                statement.setObject(20, viewerUserId)
+                statement.setObject(21, viewerUserId)
+                statement.setBoolean(22, cursor != null)
+                statement.setObject(23, cursor?.boostBucket)
                 statement.setObject(24, cursor?.boostBucket)
                 statement.setObject(25, cursor?.distanceBucketMeters)
-                statement.setObject(26, cursor?.userId)
-                statement.setInt(27, limit + 1)
+                statement.setObject(26, cursor?.boostBucket)
+                statement.setObject(27, cursor?.distanceBucketMeters)
+                statement.setObject(28, cursor?.userId)
+                statement.setInt(29, limit + 1)
                 statement.executeQuery().use { rs ->
                     buildList {
                         while (rs.next()) {

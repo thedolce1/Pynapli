@@ -517,7 +517,7 @@ Do not rely on bios for filtering.
 - [ ] Swipe filters support flexible vs dealbreaker behavior.
 - [x] Linked does not automatically imply together.
 - [x] No couple cards are generated from filters.
-- [ ] Partial: basic intent/discovery controls exist for free users via the always-visible chip row (Online, Nearby radius, Singles, Linked) and the Filters sheet (Distance, Age, Presence, Who). Solo / Together / Open to both are not yet schema-backed and ship in F3.
+- [ ] Partial: basic intent/discovery controls exist for free users via the always-visible chip row (Online, Nearby radius, Singles, Linked, Verified) and the Filters sheet (Distance, Age, Presence, Who, Trust, Intent). The Intent group surfaces Solo / Together / Open to both / Social, backed by `profiles.discovery_style` (existing CHECK constraint), with server filter coverage in `GridAndSwipeRepositoryIntegrationTest` "discoveryStyles filters to matching style" and client coverage in `GridStateHolderTest.applyingDiscoveryStylesSerializesToServerValues`. Dating / Events / Open to singles / Open to couples / Open to groups / Chat first remain in a follow-up because they require new schema beyond `discovery_style`.
 - [x] Safety filters are not paywalled.
 - [ ] Partial: lifestyle terms are documented, but glossary UX is not implemented.
 - [ ] High-sensitivity terms are age-gated.

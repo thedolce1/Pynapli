@@ -32,6 +32,22 @@ class GridStateHolderTest {
     }
 
     @Test
+    fun applyingDiscoveryStylesSerializesToServerValues() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.applyFilters(
+            stateHolder.state.value.filters.copy(
+                discoveryStyles = setOf(DiscoveryStyle.Solo, DiscoveryStyle.Together)
+            )
+        )
+
+        val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+        assertEquals(setOf("solo", "together"), request.discoveryStyles.toSet())
+    }
+
+    @Test
     fun togglingVerifiedSetsVerifiedOnlyOnRequest() = runBlocking {
         val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
         val stateHolder = GridStateHolder(repository)

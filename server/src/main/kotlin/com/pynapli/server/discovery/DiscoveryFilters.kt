@@ -7,7 +7,8 @@ data class DiscoveryFilters(
     val linkedOnly: Boolean? = null,
     val verifiedOnly: Boolean = false,
     val facePhotoVerifiedOnly: Boolean = false,
-    val ageVerifiedOnly: Boolean = false
+    val ageVerifiedOnly: Boolean = false,
+    val discoveryStyles: Set<String> = emptySet()
 ) {
     val hasAdvancedFilters: Boolean
         get() = minimumAge != null ||
@@ -16,7 +17,8 @@ data class DiscoveryFilters(
             linkedOnly != null ||
             verifiedOnly ||
             facePhotoVerifiedOnly ||
-            ageVerifiedOnly
+            ageVerifiedOnly ||
+            discoveryStyles.isNotEmpty()
 }
 
 fun discoveryFiltersFrom(
@@ -27,6 +29,7 @@ fun discoveryFiltersFrom(
     verifiedOnly: Boolean = false,
     facePhotoVerifiedOnly: Boolean = false,
     ageVerifiedOnly: Boolean = false,
+    discoveryStyles: List<String> = emptyList(),
     errorFactory: (String) -> RuntimeException
 ): DiscoveryFilters {
     val min = minimumAge?.also { age ->
@@ -50,6 +53,14 @@ fun discoveryFiltersFrom(
         }
         .toSet()
 
+    val styles = discoveryStyles
+        .map { it.trim().lowercase() }
+        .filter { it.isNotEmpty() }
+        .onEach { value ->
+            if (value !in ALLOWED_DISCOVERY_STYLES) throw errorFactory("INVALID_DISCOVERY_FILTER")
+        }
+        .toSet()
+
     return DiscoveryFilters(
         minimumAge = min,
         maximumAge = max,
@@ -57,7 +68,8 @@ fun discoveryFiltersFrom(
         linkedOnly = linkedOnly,
         verifiedOnly = verifiedOnly,
         facePhotoVerifiedOnly = facePhotoVerifiedOnly,
-        ageVerifiedOnly = ageVerifiedOnly
+        ageVerifiedOnly = ageVerifiedOnly,
+        discoveryStyles = styles
     )
 }
 
@@ -65,3 +77,6 @@ private const val MIN_FILTER_AGE = 18
 private const val MAX_FILTER_AGE = 99
 private const val MAX_RELATIONSHIP_CONTEXT_FILTERS = 8
 private const val MAX_RELATIONSHIP_CONTEXT_LENGTH = 40
+
+// Mirrors the CHECK constraint on profiles.discovery_style (V3__create_profile_foundation.sql).
+private val ALLOWED_DISCOVERY_STYLES = setOf("solo", "together", "both", "social", "ask_in_chat")
