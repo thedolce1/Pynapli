@@ -30,6 +30,7 @@ data class GridFilters(
     val ageVerified: Boolean = false,
     val discoveryStyles: Set<DiscoveryStyle> = emptySet(),
     val lifestyleTags: Set<LifestyleTag> = emptySet(),
+    val logisticsTags: Set<LogisticsTag> = emptySet(),
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
     val maximumAge: Int? = null
@@ -46,6 +47,7 @@ data class GridFilters(
             if (ageVerified) count += 1
             if (discoveryStyles.isNotEmpty()) count += 1
             if (lifestyleTags.isNotEmpty()) count += 1
+            if (logisticsTags.isNotEmpty()) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
             return count
@@ -71,7 +73,8 @@ data class GridFilters(
             facePhotoVerifiedOnly = facePhotoVerified,
             ageVerifiedOnly = ageVerified,
             discoveryStyles = discoveryStyles.map { it.serverValue },
-            lifestyleTags = lifestyleTags.map { it.serverValue }
+            lifestyleTags = lifestyleTags.map { it.serverValue },
+            logisticsTags = logisticsTags.map { it.serverValue }
         )
     }
 
@@ -123,6 +126,18 @@ enum class DiscoveryStyle(val serverValue: String, val label: String) {
  * is visible to all viewers; the gating debt is tracked in the FILTERS_SPEC
  * checklist as "[ ] High-sensitivity terms are age-gated".
  */
+/**
+ * Logistics tags (FILTERS_SPEC L170-184). Self-declared by the profile owner
+ * and filterable as hard "has X" overlap on `profiles.logistics_tags`.
+ */
+enum class LogisticsTag(val serverValue: String, val label: String) {
+    Hosts("hosts", "Hosts"),
+    Travels("travels", "Travels"),
+    HotelFriendly("hotel_friendly", "Hotel-friendly"),
+    PublicMeetFirst("public_meet_first", "Public meet first"),
+    ClubEventOnly("club_event_only", "Club/event only")
+}
+
 enum class LifestyleTag(val serverValue: String, val label: String) {
     SoftSwap("soft_swap", "Soft swap"),
     FullSwap("full_swap", "Full swap"),

@@ -321,6 +321,38 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "grid query with logisticsTags filters to overlapping tag and excludes untagged profiles" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000e01")
+            val hosts = UUID.fromString("00000000-0000-0000-0000-000000000e02")
+            val travels = UUID.fromString("00000000-0000-0000-0000-000000000e03")
+            val untagged = UUID.fromString("00000000-0000-0000-0000-000000000e04")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(hosts, "Hosts", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(travels, "Travels", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(untagged, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
+            dataSource.setProfileLogisticsTags(hosts, listOf("hosts", "hotel_friendly"))
+            dataSource.setProfileLogisticsTags(travels, listOf("travels"))
+
+            val repository = JdbcGridRepository(dataSource)
+            val hostsOnly = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(logisticsTags = setOf("hosts"))
+            ).cards
+            val publicOnly = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(logisticsTags = setOf("public_meet_first"))
+            ).cards
+
+            assertEquals(listOf(hosts), hostsOnly.map { it.userId })
+            assertTrue(publicOnly.isEmpty(), "Untagged profile should not match a public_meet_first filter")
+        }
+    }
+
     "grid query with lifestyleTags filters to overlapping tag and excludes untagged profiles" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000d01")
@@ -541,10 +573,19 @@ private fun DataSource.setProfileDiscoveryStyle(userId: UUID, style: String) {
     }
 }
 
-private fun DataSource.setProfileLifestyleTags(userId: UUID, tags: List<String>) {
+private fun DataSource.setProfileLifestyleTags(userId: UUID, tags: List<String>) =
+    setProfileTagArray(userId, column = "lifestyle_tags", tags = tags)
+
+private fun DataSource.setProfileLogisticsTags(userId: UUID, tags: List<String>) =
+    setProfileTagArray(userId, column = "logistics_tags", tags = tags)
+
+private fun DataSource.setProfileTagArray(userId: UUID, column: String, tags: List<String>) {
+    require(column in setOf("lifestyle_tags", "logistics_tags")) {
+        "Refusing to UPDATE arbitrary profile tag column from a test helper: $column"
+    }
     connection.use { connection ->
         val array = connection.createArrayOf("text", tags.toTypedArray())
-        connection.prepareStatement("UPDATE profiles SET lifestyle_tags = ? WHERE user_id = ?").use { statement ->
+        connection.prepareStatement("UPDATE profiles SET $column = ? WHERE user_id = ?").use { statement ->
             statement.setArray(1, array)
             statement.setObject(2, userId)
             statement.executeUpdate()

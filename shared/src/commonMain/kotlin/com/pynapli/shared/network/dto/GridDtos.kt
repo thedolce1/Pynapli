@@ -16,7 +16,8 @@ data class GridQueryRequestDto(
     val facePhotoVerifiedOnly: Boolean = false,
     val ageVerifiedOnly: Boolean = false,
     val discoveryStyles: List<String> = emptyList(),
-    val lifestyleTags: List<String> = emptyList()
+    val lifestyleTags: List<String> = emptyList(),
+    val logisticsTags: List<String> = emptyList()
 )
 
 @Serializable

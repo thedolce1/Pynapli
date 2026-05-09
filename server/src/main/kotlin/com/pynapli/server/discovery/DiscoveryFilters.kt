@@ -9,7 +9,8 @@ data class DiscoveryFilters(
     val facePhotoVerifiedOnly: Boolean = false,
     val ageVerifiedOnly: Boolean = false,
     val discoveryStyles: Set<String> = emptySet(),
-    val lifestyleTags: Set<String> = emptySet()
+    val lifestyleTags: Set<String> = emptySet(),
+    val logisticsTags: Set<String> = emptySet()
 ) {
     val hasAdvancedFilters: Boolean
         get() = minimumAge != null ||
@@ -20,7 +21,8 @@ data class DiscoveryFilters(
             facePhotoVerifiedOnly ||
             ageVerifiedOnly ||
             discoveryStyles.isNotEmpty() ||
-            lifestyleTags.isNotEmpty()
+            lifestyleTags.isNotEmpty() ||
+            logisticsTags.isNotEmpty()
 }
 
 fun discoveryFiltersFrom(
@@ -33,6 +35,7 @@ fun discoveryFiltersFrom(
     ageVerifiedOnly: Boolean = false,
     discoveryStyles: List<String> = emptyList(),
     lifestyleTags: List<String> = emptyList(),
+    logisticsTags: List<String> = emptyList(),
     errorFactory: (String) -> RuntimeException
 ): DiscoveryFilters {
     val min = minimumAge?.also { age ->
@@ -75,6 +78,17 @@ fun discoveryFiltersFrom(
         }
         .toSet()
 
+    if (logisticsTags.size > MAX_LOGISTICS_TAG_FILTERS) {
+        throw errorFactory("INVALID_DISCOVERY_FILTER")
+    }
+    val logistics = logisticsTags
+        .map { it.trim().lowercase() }
+        .filter { it.isNotEmpty() }
+        .onEach { value ->
+            if (value !in ALLOWED_LOGISTICS_TAGS) throw errorFactory("INVALID_DISCOVERY_FILTER")
+        }
+        .toSet()
+
     return DiscoveryFilters(
         minimumAge = min,
         maximumAge = max,
@@ -84,7 +98,8 @@ fun discoveryFiltersFrom(
         facePhotoVerifiedOnly = facePhotoVerifiedOnly,
         ageVerifiedOnly = ageVerifiedOnly,
         discoveryStyles = styles,
-        lifestyleTags = tags
+        lifestyleTags = tags,
+        logisticsTags = logistics
     )
 }
 
@@ -111,4 +126,16 @@ private val ALLOWED_LIFESTYLE_TAGS = setOf(
     "vanilla_social",
     "enm",
     "swinging"
+)
+
+private const val MAX_LOGISTICS_TAG_FILTERS = 8
+
+// FILTERS_SPEC L170-184. "Distance radius" / "City/neighborhood" / "Travel dates" are
+// modeled separately and are intentionally not in this set.
+private val ALLOWED_LOGISTICS_TAGS = setOf(
+    "hosts",
+    "travels",
+    "hotel_friendly",
+    "public_meet_first",
+    "club_event_only"
 )
