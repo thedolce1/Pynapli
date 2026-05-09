@@ -248,7 +248,7 @@ class MainActivity : ComponentActivity() {
             )
             when (result.gridRefresh) {
                 GridLocationRefresh.None -> Unit
-                GridLocationRefresh.QuietRefresh,
+                GridLocationRefresh.QuietRefresh -> appGraph.gridStateHolder.load(quiet = true)
                 GridLocationRefresh.Refresh -> appGraph.gridStateHolder.load()
             }
         }

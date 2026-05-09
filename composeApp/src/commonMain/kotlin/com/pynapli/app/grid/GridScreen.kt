@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -257,6 +258,8 @@ private fun GridScreenContent(
     onOpenStore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val gridState = rememberLazyGridState()
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -284,6 +287,7 @@ private fun GridScreenContent(
             state = state,
             locationState = locationState,
             distanceUnit = distanceUnit,
+            gridState = gridState,
             onProfileSelected = onProfileSelected,
             onLoadMore = onLoadMore,
             onUseCurrentLocation = onUseCurrentLocation,
@@ -511,13 +515,13 @@ private fun GridAdSlot() {
 private fun ProfileGrid(
     cards: List<GridProfileCardUi>,
     distanceUnit: String,
+    gridState: LazyGridState,
     onProfileSelected: (GridProfileCardUi) -> Unit,
     onLoadMore: () -> Unit,
     canLoadMore: Boolean,
     isLoadingMore: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val gridState = rememberLazyGridState()
     val shouldLoadMore by remember(cards.size, gridState, isLoadingMore, canLoadMore) {
         derivedStateOf {
             val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
@@ -677,6 +681,7 @@ private fun GridBody(
     state: GridUiState,
     locationState: LocationUiState,
     distanceUnit: String,
+    gridState: LazyGridState,
     onProfileSelected: (GridProfileCardUi) -> Unit,
     onLoadMore: () -> Unit,
     onUseCurrentLocation: () -> Unit,
@@ -746,6 +751,7 @@ private fun GridBody(
             ProfileGrid(
                 cards = state.cards,
                 distanceUnit = distanceUnit,
+                gridState = gridState,
                 onProfileSelected = onProfileSelected,
                 onLoadMore = onLoadMore,
                 canLoadMore = state.nextCursor != null,

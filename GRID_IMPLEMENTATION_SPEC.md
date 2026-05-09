@@ -1,6 +1,6 @@
 # Pynapli Grid Implementation Spec
 
-Last updated: 2026-05-08
+Last updated: 2026-05-09
 
 ## Purpose
 
@@ -342,8 +342,8 @@ Current implementation:
 
 - The mobile client keeps the exact last-submitted device coordinate locally.
 - Movement under 250m is not submitted to the backend and does not refresh the grid.
-- Movement from 250m to 1km submits location and refreshes the existing grid without clearing visible cards.
-- Movement of 1km or more submits location and requests a normal grid refresh.
+- Movement from 250m to 1km submits location and refreshes the existing grid quietly: the grid state holder keeps the existing cards visible, never flips `isRefreshing` while cards exist, and a failed quiet refresh leaves the visible cards and prior `errorMessage`/`errorCode` untouched. The new feed is swapped in atomically when it arrives.
+- Movement of 1km or more submits location and requests a normal grid refresh (clears `errorMessage`, sets `isRefreshing`, and surfaces failures).
 
 ### Battery References
 
@@ -588,7 +588,7 @@ Battery:
 - [x] Signed stable cursor pagination is implemented for live grid responses.
 - [x] 5,000-candidate dense grid integration proof exists for stable cursor pages.
 - [x] Compose grid uses stable keys.
-- [ ] Partial: Compose grid uses retained `LazyGridState` while the screen instance is alive; lifecycle/navigation regression tests still need to prove it.
+- [ ] Partial: Compose grid lifts `rememberLazyGridState()` to the screen-level composable so it survives `GridBody` branch flips (loading/error/loaded) and the profile detail sheet; an emulator/Compose-UI regression test for scroll preservation still needs to be added.
 - [x] Grid cards use fixed square dimensions.
 - [ ] Partial: filter updates keep existing state, but diffed list animation behavior is not yet verified.
 - [ ] Partial: profile open/close preserves current screen state in the MVP flow; emulator regression coverage is still needed.

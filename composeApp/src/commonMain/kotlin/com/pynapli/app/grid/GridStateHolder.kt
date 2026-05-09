@@ -14,9 +14,18 @@ class GridStateHolder(
     private val _state = MutableStateFlow(GridUiState(isRefreshing = true))
     val state: StateFlow<GridUiState> = _state.asStateFlow()
 
-    suspend fun load() {
-        val selectedFilter = _state.value.filters.firstOrNull { it.active }?.type ?: GridFilterType.Nearby
-        _state.update { current -> current.copy(isRefreshing = true, errorCode = null, errorMessage = null) }
+    suspend fun load(quiet: Boolean = false) {
+        val before = _state.value
+        val selectedFilter = before.filters.firstOrNull { it.active }?.type ?: GridFilterType.Nearby
+        val keepCardsVisible = quiet && before.cards.isNotEmpty()
+
+        _state.update { current ->
+            current.copy(
+                isRefreshing = if (keepCardsVisible) current.isRefreshing else true,
+                errorCode = if (keepCardsVisible) current.errorCode else null,
+                errorMessage = if (keepCardsVisible) current.errorMessage else null
+            )
+        }
         runCatching { repository.loadGrid(selectedFilter) }
             .onSuccess { feed ->
                 _state.update { current ->
@@ -36,25 +45,29 @@ class GridStateHolder(
                 _state.update { current ->
                     val code = (error as? GridFeedException)?.code
                     val entitlementRequired = code == "ENTITLEMENT_REQUIRED"
-                    current.copy(
-                        isRefreshing = false,
-                        filters = if (entitlementRequired) {
-                            current.filters.withPaidLocks(adSupported = true).withActiveFilter(GridFilterType.Nearby)
-                        } else {
-                            current.filters
-                        },
-                        paywallMessage = if (entitlementRequired) {
-                            "Social or Select unlocks this filter."
-                        } else {
-                            current.paywallMessage
-                        },
-                        errorCode = code,
-                        errorMessage = if (entitlementRequired && current.cards.isNotEmpty()) {
-                            null
-                        } else {
-                            error.message ?: "Grid could not be loaded."
-                        }
-                    )
+                    if (keepCardsVisible && !entitlementRequired) {
+                        current.copy(isRefreshing = false)
+                    } else {
+                        current.copy(
+                            isRefreshing = false,
+                            filters = if (entitlementRequired) {
+                                current.filters.withPaidLocks(adSupported = true).withActiveFilter(GridFilterType.Nearby)
+                            } else {
+                                current.filters
+                            },
+                            paywallMessage = if (entitlementRequired) {
+                                "Social or Select unlocks this filter."
+                            } else {
+                                current.paywallMessage
+                            },
+                            errorCode = code,
+                            errorMessage = if (entitlementRequired && current.cards.isNotEmpty()) {
+                                null
+                            } else {
+                                error.message ?: "Grid could not be loaded."
+                            }
+                        )
+                    }
                 }
             }
     }
