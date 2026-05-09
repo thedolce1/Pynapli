@@ -25,6 +25,9 @@ data class GridFilters(
     val singles: Boolean = false,
     val partnered: Boolean = false,
     val linked: Boolean = false,
+    val verified: Boolean = false,
+    val facePhotoVerified: Boolean = false,
+    val ageVerified: Boolean = false,
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
     val maximumAge: Int? = null
@@ -36,6 +39,9 @@ data class GridFilters(
             if (singles) count += 1
             if (partnered) count += 1
             if (linked) count += 1
+            if (verified) count += 1
+            if (facePhotoVerified) count += 1
+            if (ageVerified) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
             return count
@@ -56,7 +62,10 @@ data class GridFilters(
             maximumAge = maximumAge,
             relationshipContexts = contexts,
             linkedOnly = if (linked) true else null,
-            onlineOnly = online
+            onlineOnly = online,
+            verifiedOnly = verified,
+            facePhotoVerifiedOnly = facePhotoVerified,
+            ageVerifiedOnly = ageVerified
         )
     }
 
@@ -81,7 +90,8 @@ data class GridFilters(
 enum class QuickFilterId {
     Online,
     Singles,
-    Linked
+    Linked,
+    Verified
 }
 
 @Immutable

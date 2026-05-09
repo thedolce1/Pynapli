@@ -449,6 +449,13 @@ private fun QuickFilterRow(
                 onClick = { onToggled(QuickFilterId.Linked) }
             )
         }
+        item(key = QuickFilterId.Verified.name) {
+            QuickToggleChip(
+                label = "Verified",
+                active = filters.verified,
+                onClick = { onToggled(QuickFilterId.Verified) }
+            )
+        }
     }
 }
 

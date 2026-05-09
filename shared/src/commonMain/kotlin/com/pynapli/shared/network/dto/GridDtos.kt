@@ -11,7 +11,10 @@ data class GridQueryRequestDto(
     val maximumAge: Int? = null,
     val relationshipContexts: List<String> = emptyList(),
     val linkedOnly: Boolean? = null,
-    val onlineOnly: Boolean = false
+    val onlineOnly: Boolean = false,
+    val verifiedOnly: Boolean = false,
+    val facePhotoVerifiedOnly: Boolean = false,
+    val ageVerifiedOnly: Boolean = false
 )
 
 @Serializable

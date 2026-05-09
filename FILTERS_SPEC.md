@@ -513,7 +513,7 @@ Do not rely on bios for filtering.
 ## Implementation Checklist
 
 - [x] Grid and Swipe have separate filter models.
-- [ ] Partial: Grid filters are combinable and hard for implemented fields (Online, Singles, Linked, Partnered, distance radius, age range). The grid client now uses an immutable `GridFilters` object — multiple filters can be active simultaneously and combine into a single server query (`GridStateHolderTest.togglingMultipleQuickFiltersCombinesIntoSingleRequest`). Trust (F2), Intent (F3), Lifestyle (F4), Logistics (F5), and Tonight/availability (F6) filter groups remain unimplemented; the in-app filter sheet labels them "Coming soon".
+- [ ] Partial: Grid filters are combinable and hard for implemented fields (Online, Singles, Linked, Partnered, Verified / Face photo verified / Age verified, distance radius, age range). The grid client uses an immutable `GridFilters` object — multiple filters can be active simultaneously and combine into a single server query (`GridStateHolderTest.togglingMultipleQuickFiltersCombinesIntoSingleRequest`). Trust filters are backed by `profiles.verified_at`/`face_photo_verified_at`/`age_verified_at` (V35 migration) with `IS NOT NULL` predicates and partial indexes; covered by `GridAndSwipeRepositoryIntegrationTest` "verifiedOnly excludes unverified" and "facePhotoVerifiedOnly / ageVerifiedOnly each filter to their column". Intent (F3), Lifestyle (F4), Logistics (F5), and Tonight/availability (F6) filter groups remain unimplemented; the in-app filter sheet labels them "Coming soon".
 - [ ] Swipe filters support flexible vs dealbreaker behavior.
 - [x] Linked does not automatically imply together.
 - [x] No couple cards are generated from filters.

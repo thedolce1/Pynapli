@@ -296,6 +296,62 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
             )
         }
     }
+
+    "grid query with verifiedOnly excludes unverified profiles" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000a01")
+            val verifiedTarget = UUID.fromString("00000000-0000-0000-0000-000000000a02")
+            val unverifiedTarget = UUID.fromString("00000000-0000-0000-0000-000000000a03")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(verifiedTarget, "Vera", age = 35, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(unverifiedTarget, "Una", age = 33, longitude = -122.0838, latitude = 37.4228)
+            dataSource.markProfileVerified(verifiedTarget)
+
+            val repository = JdbcGridRepository(dataSource)
+            val unfiltered = repository.queryNearby(viewer, radiusMeters = 100_000, limit = 10).cards
+            val verifiedOnly = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(verifiedOnly = true)
+            ).cards
+
+            assertEquals(setOf(verifiedTarget, unverifiedTarget), unfiltered.map { it.userId }.toSet())
+            assertEquals(listOf(verifiedTarget), verifiedOnly.map { it.userId })
+        }
+    }
+
+    "grid query with facePhotoVerifiedOnly and ageVerifiedOnly each filter to their column" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b01")
+            val faceOnly = UUID.fromString("00000000-0000-0000-0000-000000000b02")
+            val ageOnly = UUID.fromString("00000000-0000-0000-0000-000000000b03")
+            val unverified = UUID.fromString("00000000-0000-0000-0000-000000000b04")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(faceOnly, "Face", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(ageOnly, "Age", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(unverified, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
+            dataSource.markFacePhotoVerified(faceOnly)
+            dataSource.markAgeVerified(ageOnly)
+
+            val repository = JdbcGridRepository(dataSource)
+            val faceFiltered = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(facePhotoVerifiedOnly = true)
+            ).cards
+            val ageFiltered = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(ageVerifiedOnly = true)
+            ).cards
+
+            assertEquals(listOf(faceOnly), faceFiltered.map { it.userId })
+            assertEquals(listOf(ageOnly), ageFiltered.map { it.userId })
+        }
+    }
 })
 
 private fun DataSource.insertDiscoverableUser(
@@ -386,6 +442,27 @@ private fun DataSource.insertActiveProfileLink(userId: UUID, linkedUserId: UUID)
             statement.setObject(1, UUID.randomUUID())
             statement.setObject(2, userId)
             statement.setObject(3, linkedUserId)
+            statement.executeUpdate()
+        }
+    }
+}
+
+private fun DataSource.markProfileVerified(userId: UUID) =
+    setProfileTimestamp(userId, column = "verified_at")
+
+private fun DataSource.markFacePhotoVerified(userId: UUID) =
+    setProfileTimestamp(userId, column = "face_photo_verified_at")
+
+private fun DataSource.markAgeVerified(userId: UUID) =
+    setProfileTimestamp(userId, column = "age_verified_at")
+
+private fun DataSource.setProfileTimestamp(userId: UUID, column: String) {
+    require(column in setOf("verified_at", "face_photo_verified_at", "age_verified_at")) {
+        "Refusing to UPDATE arbitrary profile column from a test helper: $column"
+    }
+    connection.use { connection ->
+        connection.prepareStatement("UPDATE profiles SET $column = now() WHERE user_id = ?").use { statement ->
+            statement.setObject(1, userId)
             statement.executeUpdate()
         }
     }

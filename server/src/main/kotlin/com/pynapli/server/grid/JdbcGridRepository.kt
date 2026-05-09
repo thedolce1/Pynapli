@@ -150,6 +150,9 @@ class JdbcGridRepository(
                       OR (?::boolean = true AND linked_partner.linked_partner_user_id IS NOT NULL)
                       OR (?::boolean = false AND linked_partner.linked_partner_user_id IS NULL)
                   )
+                  AND (?::boolean = false OR p.verified_at IS NOT NULL)
+                  AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
+                  AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
                   AND NOT EXISTS (
                       SELECT 1
                       FROM user_blocks ub
@@ -190,16 +193,19 @@ class JdbcGridRepository(
                 statement.setObject(12, filters.linkedOnly)
                 statement.setObject(13, filters.linkedOnly)
                 statement.setObject(14, filters.linkedOnly)
-                statement.setObject(15, viewerUserId)
-                statement.setObject(16, viewerUserId)
-                statement.setBoolean(17, cursor != null)
-                statement.setObject(18, cursor?.boostBucket)
-                statement.setObject(19, cursor?.boostBucket)
-                statement.setObject(20, cursor?.distanceBucketMeters)
+                statement.setBoolean(15, filters.verifiedOnly)
+                statement.setBoolean(16, filters.facePhotoVerifiedOnly)
+                statement.setBoolean(17, filters.ageVerifiedOnly)
+                statement.setObject(18, viewerUserId)
+                statement.setObject(19, viewerUserId)
+                statement.setBoolean(20, cursor != null)
                 statement.setObject(21, cursor?.boostBucket)
-                statement.setObject(22, cursor?.distanceBucketMeters)
-                statement.setObject(23, cursor?.userId)
-                statement.setInt(24, limit + 1)
+                statement.setObject(22, cursor?.boostBucket)
+                statement.setObject(23, cursor?.distanceBucketMeters)
+                statement.setObject(24, cursor?.boostBucket)
+                statement.setObject(25, cursor?.distanceBucketMeters)
+                statement.setObject(26, cursor?.userId)
+                statement.setInt(27, limit + 1)
                 statement.executeQuery().use { rs ->
                     buildList {
                         while (rs.next()) {

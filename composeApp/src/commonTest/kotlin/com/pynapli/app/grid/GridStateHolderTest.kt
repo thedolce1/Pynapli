@@ -32,6 +32,21 @@ class GridStateHolderTest {
     }
 
     @Test
+    fun togglingVerifiedSetsVerifiedOnlyOnRequest() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.toggleQuickFilter(QuickFilterId.Verified)
+
+        val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+        assertTrue(stateHolder.state.value.filters.verified)
+        assertEquals(true, request.verifiedOnly)
+        assertEquals(false, request.facePhotoVerifiedOnly)
+        assertEquals(false, request.ageVerifiedOnly)
+    }
+
+    @Test
     fun togglingMultipleQuickFiltersCombinesIntoSingleRequest() = runBlocking {
         val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
         val stateHolder = GridStateHolder(repository)

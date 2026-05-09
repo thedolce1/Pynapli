@@ -165,6 +165,7 @@ class GridStateHolder(
         QuickFilterId.Online -> copy(online = !online)
         QuickFilterId.Singles -> copy(singles = !singles)
         QuickFilterId.Linked -> copy(linked = !linked)
+        QuickFilterId.Verified -> copy(verified = !verified)
     }
 
     private fun normalizedAgeRange(minimum: Int?, maximum: Int?): Pair<Int?, Int?> {

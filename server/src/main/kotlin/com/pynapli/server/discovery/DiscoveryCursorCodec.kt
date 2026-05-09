@@ -100,6 +100,9 @@ class DiscoveryCursorCodec(
                 append("|maxAge=").append(filters.maximumAge ?: "")
                 append("|linkedOnly=").append(filters.linkedOnly ?: "")
                 append("|onlineOnly=").append(onlineOnly)
+                append("|verifiedOnly=").append(filters.verifiedOnly)
+                append("|facePhotoVerifiedOnly=").append(filters.facePhotoVerifiedOnly)
+                append("|ageVerifiedOnly=").append(filters.ageVerifiedOnly)
                 append("|relationshipContexts=")
                 append(filters.relationshipContexts.sorted().joinToString(","))
             }

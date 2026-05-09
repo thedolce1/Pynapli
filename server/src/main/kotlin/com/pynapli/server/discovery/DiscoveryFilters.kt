@@ -4,13 +4,19 @@ data class DiscoveryFilters(
     val minimumAge: Int? = null,
     val maximumAge: Int? = null,
     val relationshipContexts: Set<String> = emptySet(),
-    val linkedOnly: Boolean? = null
+    val linkedOnly: Boolean? = null,
+    val verifiedOnly: Boolean = false,
+    val facePhotoVerifiedOnly: Boolean = false,
+    val ageVerifiedOnly: Boolean = false
 ) {
     val hasAdvancedFilters: Boolean
         get() = minimumAge != null ||
             maximumAge != null ||
             relationshipContexts.isNotEmpty() ||
-            linkedOnly != null
+            linkedOnly != null ||
+            verifiedOnly ||
+            facePhotoVerifiedOnly ||
+            ageVerifiedOnly
 }
 
 fun discoveryFiltersFrom(
@@ -18,6 +24,9 @@ fun discoveryFiltersFrom(
     maximumAge: Int?,
     relationshipContexts: List<String>,
     linkedOnly: Boolean?,
+    verifiedOnly: Boolean = false,
+    facePhotoVerifiedOnly: Boolean = false,
+    ageVerifiedOnly: Boolean = false,
     errorFactory: (String) -> RuntimeException
 ): DiscoveryFilters {
     val min = minimumAge?.also { age ->
@@ -45,7 +54,10 @@ fun discoveryFiltersFrom(
         minimumAge = min,
         maximumAge = max,
         relationshipContexts = contexts,
-        linkedOnly = linkedOnly
+        linkedOnly = linkedOnly,
+        verifiedOnly = verifiedOnly,
+        facePhotoVerifiedOnly = facePhotoVerifiedOnly,
+        ageVerifiedOnly = ageVerifiedOnly
     )
 }
 

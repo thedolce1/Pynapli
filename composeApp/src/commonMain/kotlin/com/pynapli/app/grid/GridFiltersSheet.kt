@@ -84,7 +84,14 @@ internal fun GridFiltersSheet(
             )
 
             SectionTitle("Trust")
-            ComingSoonSection(message = "Verified, face photo verified, age verified — ships in F2.")
+            TrustSection(
+                verified = draft.verified,
+                facePhotoVerified = draft.facePhotoVerified,
+                ageVerified = draft.ageVerified,
+                onTogglesChanged = { v, fp, av ->
+                    draft = draft.copy(verified = v, facePhotoVerified = fp, ageVerified = av)
+                }
+            )
 
             SectionTitle("Intent")
             ComingSoonSection(message = "Solo, together, open to both, social, dating, events — ships in F3.")
@@ -177,6 +184,26 @@ private fun AgeSection(
 @Composable
 private fun PresenceSection(online: Boolean, onToggle: () -> Unit) {
     SheetToggleChip(label = "Online now", active = online, onClick = onToggle)
+}
+
+@Composable
+private fun TrustSection(
+    verified: Boolean,
+    facePhotoVerified: Boolean,
+    ageVerified: Boolean,
+    onTogglesChanged: (Boolean, Boolean, Boolean) -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SheetToggleChip(label = "Verified", active = verified) {
+            onTogglesChanged(!verified, facePhotoVerified, ageVerified)
+        }
+        SheetToggleChip(label = "Face photo", active = facePhotoVerified) {
+            onTogglesChanged(verified, !facePhotoVerified, ageVerified)
+        }
+        SheetToggleChip(label = "Age verified", active = ageVerified) {
+            onTogglesChanged(verified, facePhotoVerified, !ageVerified)
+        }
+    }
 }
 
 @Composable

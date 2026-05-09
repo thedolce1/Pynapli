@@ -34,7 +34,10 @@ class GridService(
             minimumAge = request.minimumAge,
             maximumAge = request.maximumAge,
             relationshipContexts = request.relationshipContexts,
-            linkedOnly = request.linkedOnly
+            linkedOnly = request.linkedOnly,
+            verifiedOnly = request.verifiedOnly,
+            facePhotoVerifiedOnly = request.facePhotoVerifiedOnly,
+            ageVerifiedOnly = request.ageVerifiedOnly
         ) { _ -> GridException("INVALID_GRID_FILTER") }
         val advancedFiltersApplied = filters.hasAdvancedFilters || request.onlineOnly
         val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
