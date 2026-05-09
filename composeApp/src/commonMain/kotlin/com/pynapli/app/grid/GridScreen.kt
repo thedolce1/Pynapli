@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
@@ -47,12 +46,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -107,7 +107,9 @@ fun GridScreen(
         profileImageUrl = profileImageUrl,
         distanceUnit = distanceUnit,
         gridState = gridState,
-        onFilterSelected = { type -> scope.launch { stateHolder.selectFilter(type) } },
+        onQuickFilterToggled = { id -> scope.launch { stateHolder.toggleQuickFilter(id) } },
+        onApplyFilters = { filters -> scope.launch { stateHolder.applyFilters(filters) } },
+        onClearAllFilters = { scope.launch { stateHolder.clearAllFilters() } },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onProfileSelected = { card ->
             scope.launch { profileDetailStateHolder.open(card) }
@@ -256,7 +258,9 @@ private fun GridScreenContent(
     profileImageUrl: String?,
     distanceUnit: String,
     gridState: LazyGridState,
-    onFilterSelected: (GridFilterType) -> Unit,
+    onQuickFilterToggled: (QuickFilterId) -> Unit,
+    onApplyFilters: (GridFilters) -> Unit,
+    onClearAllFilters: () -> Unit,
     onLoadMore: () -> Unit,
     onProfileSelected: (GridProfileCardUi) -> Unit,
     onUseCurrentLocation: () -> Unit,
@@ -264,6 +268,8 @@ private fun GridScreenContent(
     onOpenStore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var sheetVisible by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -274,9 +280,10 @@ private fun GridScreenContent(
             profileImageUrl = profileImageUrl,
             onProfileIconClick = onProfileIconClick
         )
-        FilterRow(
+        QuickFilterRow(
             filters = state.filters,
-            onFilterSelected = onFilterSelected
+            onToggled = onQuickFilterToggled,
+            onOpenSheet = { sheetVisible = true }
         )
         state.paywallMessage?.let { message ->
             GridPaywallRow(
@@ -296,6 +303,21 @@ private fun GridScreenContent(
             onLoadMore = onLoadMore,
             onUseCurrentLocation = onUseCurrentLocation,
             modifier = Modifier.weight(1f)
+        )
+    }
+
+    if (sheetVisible) {
+        GridFiltersSheet(
+            initial = state.filters,
+            onDismiss = { sheetVisible = false },
+            onApply = { applied ->
+                sheetVisible = false
+                onApplyFilters(applied)
+            },
+            onClearAll = {
+                sheetVisible = false
+                onClearAllFilters()
+            }
         )
     }
 }
@@ -390,77 +412,124 @@ private fun GridHeader(
 }
 
 @Composable
-private fun FilterRow(
-    filters: List<GridFilterUi>,
-    onFilterSelected: (GridFilterType) -> Unit
+private fun QuickFilterRow(
+    filters: GridFilters,
+    onToggled: (QuickFilterId) -> Unit,
+    onOpenSheet: () -> Unit
 ) {
     LazyRow(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag(GridFilterTags.QUICK_ROW),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        filters.forEach { filter ->
-            item(key = filter.type.name) {
-                FilterChip(
-                    label = filter.label,
-                    active = filter.active,
-                    locked = filter.locked,
-                    icon = when {
-                        filter.locked -> Icons.Filled.Lock
-                        filter.type == GridFilterType.Tonight -> Icons.Filled.StarBorder
-                        else -> null
-                    },
-                    onClick = { onFilterSelected(filter.type) }
-                )
-            }
+        item(key = "filters-button") {
+            FiltersOpenChip(activeCount = filters.activeCount, onClick = onOpenSheet)
+        }
+        item(key = QuickFilterId.Online.name) {
+            QuickToggleChip(
+                label = "Online",
+                active = filters.online,
+                onClick = { onToggled(QuickFilterId.Online) }
+            )
+        }
+        item(key = "nearby-radius") {
+            NearbyRadiusChip(radiusMeters = filters.radiusMeters, onClick = onOpenSheet)
+        }
+        item(key = QuickFilterId.Singles.name) {
+            QuickToggleChip(
+                label = "Singles",
+                active = filters.singles,
+                onClick = { onToggled(QuickFilterId.Singles) }
+            )
+        }
+        item(key = QuickFilterId.Linked.name) {
+            QuickToggleChip(
+                label = "Linked",
+                active = filters.linked,
+                onClick = { onToggled(QuickFilterId.Linked) }
+            )
         }
     }
 }
 
 @Composable
-private fun FilterChip(
+private fun FiltersOpenChip(activeCount: Int, onClick: () -> Unit) {
+    val label = if (activeCount == 0) "Filters" else "Filters · $activeCount"
+    AssistChip(
+        onClick = onClick,
+        label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Filled.FilterList,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+        },
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            labelColor = MaterialTheme.colorScheme.onSurface,
+            leadingIconContentColor = MaterialTheme.colorScheme.primary
+        ),
+        border = AssistChipDefaults.assistChipBorder(
+            enabled = true,
+            borderColor = MaterialTheme.colorScheme.outline
+        ),
+        modifier = Modifier.testTag(GridFilterTags.OPEN_SHEET)
+    )
+}
+
+@Composable
+private fun QuickToggleChip(
     label: String,
     active: Boolean,
-    locked: Boolean,
-    icon: ImageVector? = null,
     onClick: () -> Unit
 ) {
     AssistChip(
         onClick = onClick,
-        label = {
-            Text(
-                text = label,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        },
-        leadingIcon = icon?.let {
-            {
-                Icon(
-                    imageVector = it,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        },
+        label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         colors = AssistChipDefaults.assistChipColors(
             containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            labelColor = when {
-                active -> MaterialTheme.colorScheme.onPrimary
-                locked -> MaterialTheme.colorScheme.onSurfaceVariant
-                else -> MaterialTheme.colorScheme.onSurface
-            },
-            leadingIconContentColor = when {
-                active -> MaterialTheme.colorScheme.onPrimary
-                locked -> MaterialTheme.colorScheme.onSurfaceVariant
-                else -> MaterialTheme.colorScheme.primary
-            }
+            labelColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
         ),
         border = AssistChipDefaults.assistChipBorder(
             enabled = true,
             borderColor = MaterialTheme.colorScheme.outline
         )
     )
+}
+
+@Composable
+private fun NearbyRadiusChip(radiusMeters: Int, onClick: () -> Unit) {
+    val km = (radiusMeters + 500) / 1_000
+    val label = "≤ ${km} km"
+    AssistChip(
+        onClick = onClick,
+        label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Filled.LocationOn,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+        },
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            labelColor = MaterialTheme.colorScheme.onSurface,
+            leadingIconContentColor = MaterialTheme.colorScheme.primary
+        ),
+        border = AssistChipDefaults.assistChipBorder(
+            enabled = true,
+            borderColor = MaterialTheme.colorScheme.outline
+        )
+    )
+}
+
+internal object GridFilterTags {
+    const val QUICK_ROW: String = "grid-quick-filter-row"
+    const val OPEN_SHEET: String = "grid-filters-open"
+    const val SHEET: String = "grid-filters-sheet"
+    const val APPLY: String = "grid-filters-apply"
+    const val CLEAR_ALL: String = "grid-filters-clear-all"
 }
 
 @Composable
@@ -766,6 +835,30 @@ private fun GridBody(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        state.cards.isEmpty() && state.filters.isAnyActive -> {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 28.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "No one matches these filters right now.",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Try widening distance or clearing one filter.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
         }

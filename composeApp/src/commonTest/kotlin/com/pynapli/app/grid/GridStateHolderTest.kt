@@ -1,5 +1,6 @@
 package com.pynapli.app.grid
 
+import com.pynapli.shared.network.dto.PresenceDeltaDto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -15,37 +16,95 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GridStateHolderTest {
+
     @Test
-    fun loadLocksPaidFiltersWhenFeedIsAdSupported() = runBlocking {
-        val repository = FakeGridFeedRepository(
-            feed = GridFeedUi(cards = emptyList(), adSupported = true)
-        )
+    fun togglingOnlineSetsFlagAndCallsRepoWithCombinedFilters() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
         val stateHolder = GridStateHolder(repository)
 
         stateHolder.load()
+        stateHolder.toggleQuickFilter(QuickFilterId.Online)
 
-        val filters = stateHolder.state.value.filters
-        assertFalse(filters.first { it.type == GridFilterType.Nearby }.locked)
-        assertTrue(filters.first { it.type == GridFilterType.Online }.locked)
-        assertTrue(filters.first { it.type == GridFilterType.Linked }.locked)
-        assertTrue(filters.first { it.type == GridFilterType.Age }.locked)
-        assertTrue(stateHolder.state.value.adSupported)
+        assertEquals(2, repository.loadCount)
+        val latest = repository.lastFilters
+        assertTrue(latest != null && latest.online)
+        assertEquals(true, latest.toGridQueryRequest(cursor = null).onlineOnly)
     }
 
     @Test
-    fun selectingLockedFilterShowsPaywallWithoutReloading() = runBlocking {
-        val repository = FakeGridFeedRepository(
-            feed = GridFeedUi(cards = emptyList(), adSupported = true)
-        )
+    fun togglingMultipleQuickFiltersCombinesIntoSingleRequest() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
         val stateHolder = GridStateHolder(repository)
 
         stateHolder.load()
-        stateHolder.selectFilter(GridFilterType.Online)
+        stateHolder.toggleQuickFilter(QuickFilterId.Online)
+        stateHolder.toggleQuickFilter(QuickFilterId.Linked)
+        stateHolder.toggleQuickFilter(QuickFilterId.Singles)
 
-        val state = stateHolder.state.value
-        assertEquals(1, repository.loadCount)
-        assertEquals("Online is included with Social or Select.", state.paywallMessage)
-        assertTrue(state.filters.first { it.type == GridFilterType.Nearby }.active)
+        val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+        assertEquals(true, request.onlineOnly)
+        assertEquals(true, request.linkedOnly)
+        assertEquals(listOf(GridFilters.SINGLES_CONTEXT), request.relationshipContexts)
+    }
+
+    @Test
+    fun setRadiusMetersClampsAndReloads() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.setRadiusMeters(5_000)
+
+        val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+        assertEquals(5_000, request.radiusMeters)
+
+        stateHolder.setRadiusMeters(meters = 999_999)
+        assertEquals(GridFilters.MAX_RADIUS_METERS, repository.lastFilters!!.radiusMeters)
+
+        stateHolder.setRadiusMeters(meters = 0)
+        assertEquals(GridFilters.MIN_RADIUS_METERS, repository.lastFilters!!.radiusMeters)
+    }
+
+    @Test
+    fun setAgeRangeNormalizesReversedBoundsAndReloads() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.setAgeRange(minimum = 50, maximum = 30)
+
+        val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+        assertEquals(30, request.minimumAge)
+        assertEquals(50, request.maximumAge)
+    }
+
+    @Test
+    fun clearAllFiltersResetsToDefaultsAndReloads() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.toggleQuickFilter(QuickFilterId.Online)
+        stateHolder.toggleQuickFilter(QuickFilterId.Linked)
+        stateHolder.setRadiusMeters(2_000)
+        val callsBefore = repository.loadCount
+
+        stateHolder.clearAllFilters()
+
+        assertEquals(GridFilters.defaults, stateHolder.state.value.filters)
+        assertEquals(callsBefore + 1, repository.loadCount)
+    }
+
+    @Test
+    fun applyFiltersWithSameValueIsNoOp() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        val before = repository.loadCount
+        stateHolder.applyFilters(stateHolder.state.value.filters)
+
+        assertEquals(before, repository.loadCount)
     }
 
     @Test
@@ -88,7 +147,6 @@ class GridStateHolderTest {
                 .launchIn(this)
 
             val quietJob = async(Dispatchers.Default) { stateHolder.load(quiet = true) }
-            // Let the quiet load enter the repository call and yield a few times.
             repeat(3) { yield() }
 
             assertTrue(
@@ -190,7 +248,7 @@ class GridStateHolderTest {
                 .onEach { cardIdsDuringSelect += it.cards.map { card -> card.id } }
                 .launchIn(this)
 
-            val selectJob = async(Dispatchers.Default) { stateHolder.selectFilter(GridFilterType.Online) }
+            val selectJob = async(Dispatchers.Default) { stateHolder.toggleQuickFilter(QuickFilterId.Online) }
             repeat(3) { yield() }
 
             assertTrue(
@@ -205,7 +263,7 @@ class GridStateHolderTest {
 
         val finalState = stateHolder.state.value
         assertEquals(listOf("second"), finalState.cards.map { it.id })
-        assertTrue(finalState.filters.first { it.type == GridFilterType.Online }.active)
+        assertTrue(finalState.filters.online)
         assertFalse(finalState.isRefreshing)
     }
 
@@ -223,18 +281,10 @@ class GridStateHolderTest {
         assertEquals(1, repository.loadCount)
 
         stateHolder.applyPresenceDelta(
-            com.pynapli.shared.network.dto.PresenceDeltaDto(
-                userId = "b",
-                online = false,
-                lastActiveAt = "2026-05-09T12:00:00Z"
-            )
+            PresenceDeltaDto(userId = "b", online = false, lastActiveAt = "2026-05-09T12:00:00Z")
         )
         stateHolder.applyPresenceDelta(
-            com.pynapli.shared.network.dto.PresenceDeltaDto(
-                userId = "c",
-                online = true,
-                lastActiveAt = "2026-05-09T12:00:01Z"
-            )
+            PresenceDeltaDto(userId = "c", online = true, lastActiveAt = "2026-05-09T12:00:01Z")
         )
 
         val resulting = stateHolder.state.value.cards
@@ -256,11 +306,7 @@ class GridStateHolderTest {
 
         val before = stateHolder.state.value
         stateHolder.applyPresenceDelta(
-            com.pynapli.shared.network.dto.PresenceDeltaDto(
-                userId = "not-in-grid",
-                online = false,
-                lastActiveAt = "2026-05-09T12:00:00Z"
-            )
+            PresenceDeltaDto(userId = "not-in-grid", online = false, lastActiveAt = "2026-05-09T12:00:00Z")
         )
         val after = stateHolder.state.value
         assertEquals(before.cards, after.cards)
@@ -309,10 +355,13 @@ private class FakeGridFeedRepository(
     var loadCount = 0
         private set
     val receivedCursors = mutableListOf<String?>()
+    var lastFilters: GridFilters? = null
+        private set
 
-    override suspend fun loadGrid(filter: GridFilterType, cursor: String?): GridFeedUi {
+    override suspend fun loadGrid(filters: GridFilters, cursor: String?): GridFeedUi {
         receivedCursors += cursor
         loadCount += 1
+        lastFilters = filters
         return feeds.getOrElse(loadCount - 1) { feeds.last() }
     }
 }
@@ -324,7 +373,7 @@ private class GatedGridFeedRepository(
 ) : GridFeedRepository {
     private var loadCount = 0
 
-    override suspend fun loadGrid(filter: GridFilterType, cursor: String?): GridFeedUi {
+    override suspend fun loadGrid(filters: GridFilters, cursor: String?): GridFeedUi {
         val index = loadCount
         loadCount += 1
         if (index >= gateBeforeIndex) {
@@ -344,7 +393,7 @@ private class ScriptedGridFeedRepository(
 ) : GridFeedRepository {
     private var loadCount = 0
 
-    override suspend fun loadGrid(filter: GridFilterType, cursor: String?): GridFeedUi {
+    override suspend fun loadGrid(filters: GridFilters, cursor: String?): GridFeedUi {
         val outcome = outcomes.getOrElse(loadCount) { outcomes.last() }
         loadCount += 1
         return when (outcome) {

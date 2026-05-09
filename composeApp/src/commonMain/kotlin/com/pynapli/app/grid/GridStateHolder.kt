@@ -2,7 +2,6 @@ package com.pynapli.app.grid
 
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
-import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +18,6 @@ class GridStateHolder(
 
     suspend fun load(quiet: Boolean = false) {
         val before = _state.value
-        val selectedFilter = before.filters.firstOrNull { it.active }?.type ?: GridFilterType.Nearby
         val keepCardsVisible = quiet && before.cards.isNotEmpty()
 
         _state.update { current ->
@@ -29,14 +27,13 @@ class GridStateHolder(
                 errorMessage = if (keepCardsVisible) current.errorMessage else null
             )
         }
-        runCatching { repository.loadGrid(selectedFilter) }
+        runCatching { repository.loadGrid(_state.value.filters) }
             .onSuccess { feed ->
                 _state.update { current ->
                     current.copy(
                         cards = feed.cards,
                         nextCursor = feed.nextCursor,
                         adSupported = feed.adSupported,
-                        filters = current.filters.withPaidLocks(feed.adSupported),
                         paywallMessage = null,
                         isRefreshing = false,
                         errorCode = null,
@@ -53,11 +50,7 @@ class GridStateHolder(
                     } else {
                         current.copy(
                             isRefreshing = false,
-                            filters = if (entitlementRequired) {
-                                current.filters.withPaidLocks(adSupported = true).withActiveFilter(GridFilterType.Nearby)
-                            } else {
-                                current.filters
-                            },
+                            filters = if (entitlementRequired) GridFilters.defaults else current.filters,
                             paywallMessage = if (entitlementRequired) {
                                 "Social or Select unlocks this filter."
                             } else {
@@ -75,25 +68,10 @@ class GridStateHolder(
             }
     }
 
-    suspend fun selectFilter(type: GridFilterType) {
-        val selected = _state.value.filters.firstOrNull { it.type == type } ?: return
-        if (selected.locked) {
-            _state.update { current ->
-                current.copy(
-                    paywallMessage = "${selected.label} is included with Social or Select.",
-                    errorCode = null,
-                    errorMessage = null
-                )
-            }
-            return
-        }
-        if (selected.active) {
-            _state.update { current -> current.copy(paywallMessage = null) }
-            return
-        }
+    suspend fun toggleQuickFilter(id: QuickFilterId) {
         _state.update { current ->
             current.copy(
-                filters = current.filters.withActiveFilter(type),
+                filters = current.filters.toggle(id),
                 paywallMessage = null,
                 errorCode = null,
                 errorMessage = null
@@ -102,14 +80,40 @@ class GridStateHolder(
         load()
     }
 
+    suspend fun applyFilters(filters: GridFilters) {
+        if (_state.value.filters == filters) return
+        _state.update { current ->
+            current.copy(
+                filters = filters,
+                paywallMessage = null,
+                errorCode = null,
+                errorMessage = null
+            )
+        }
+        load()
+    }
+
+    suspend fun setRadiusMeters(meters: Int) {
+        val clamped = meters.coerceIn(GridFilters.MIN_RADIUS_METERS, GridFilters.MAX_RADIUS_METERS)
+        applyFilters(_state.value.filters.copy(radiusMeters = clamped))
+    }
+
+    suspend fun setAgeRange(minimum: Int?, maximum: Int?) {
+        val (lo, hi) = normalizedAgeRange(minimum, maximum)
+        applyFilters(_state.value.filters.copy(minimumAge = lo, maximumAge = hi))
+    }
+
+    suspend fun clearAllFilters() {
+        applyFilters(GridFilters.defaults)
+    }
+
     suspend fun loadMore() {
         val current = _state.value
         val cursor = current.nextCursor ?: return
         if (current.isRefreshing || current.isLoadingMore || current.cards.isEmpty()) return
 
-        val selectedFilter = current.filters.firstOrNull { it.active }?.type ?: GridFilterType.Nearby
         _state.update { it.copy(isLoadingMore = true, errorCode = null, errorMessage = null) }
-        runCatching { repository.loadGrid(selectedFilter, cursor) }
+        runCatching { repository.loadGrid(current.filters, cursor) }
             .onSuccess { feed ->
                 _state.update { existing ->
                     val existingIds = existing.cards.mapTo(mutableSetOf()) { it.id }
@@ -118,7 +122,6 @@ class GridStateHolder(
                         cards = existing.cards + appended,
                         nextCursor = feed.nextCursor,
                         adSupported = feed.adSupported,
-                        filters = existing.filters.withPaidLocks(feed.adSupported),
                         isLoadingMore = false,
                         errorCode = null,
                         errorMessage = null
@@ -157,17 +160,33 @@ class GridStateHolder(
     val visibleUserIds: kotlinx.coroutines.flow.Flow<Set<String>> = state
         .map { ui -> ui.cards.mapTo(LinkedHashSet(ui.cards.size)) { it.id } }
         .distinctUntilChanged()
+
+    private fun GridFilters.toggle(id: QuickFilterId): GridFilters = when (id) {
+        QuickFilterId.Online -> copy(online = !online)
+        QuickFilterId.Singles -> copy(singles = !singles)
+        QuickFilterId.Linked -> copy(linked = !linked)
+    }
+
+    private fun normalizedAgeRange(minimum: Int?, maximum: Int?): Pair<Int?, Int?> {
+        val lo = minimum?.coerceIn(GridFilters.MIN_FILTER_AGE, GridFilters.MAX_FILTER_AGE)
+        val hi = maximum?.coerceIn(GridFilters.MIN_FILTER_AGE, GridFilters.MAX_FILTER_AGE)
+        return when {
+            lo == null && hi == null -> null to null
+            lo != null && hi != null && lo > hi -> hi to lo
+            else -> lo to hi
+        }
+    }
 }
 
 interface GridFeedRepository {
-    suspend fun loadGrid(filter: GridFilterType, cursor: String? = null): GridFeedUi
+    suspend fun loadGrid(filters: GridFilters, cursor: String? = null): GridFeedUi
 }
 
 class ApiGridFeedRepository(
     private val apiClient: PynapliApiClient
 ) : GridFeedRepository {
-    override suspend fun loadGrid(filter: GridFilterType, cursor: String?): GridFeedUi =
-        when (val result = apiClient.queryGrid(filter.toRequest(cursor))) {
+    override suspend fun loadGrid(filters: GridFilters, cursor: String?): GridFeedUi =
+        when (val result = apiClient.queryGrid(filters.toGridQueryRequest(cursor))) {
             is AppResult.Success -> GridFeedUi(
                 cards = result.value.items.mapIndexed { index, card ->
                     card.toGridProfileCardUi(index)
@@ -185,11 +204,11 @@ class ApiGridFeedRepository(
 }
 
 class SampleGridFeedRepository : GridFeedRepository {
-    override suspend fun loadGrid(filter: GridFilterType, cursor: String?): GridFeedUi =
+    override suspend fun loadGrid(filters: GridFilters, cursor: String?): GridFeedUi =
         GridFeedUi(
             cards = sampleGridCards,
             adSupported = true,
-            advancedFiltersApplied = filter != GridFilterType.Nearby
+            advancedFiltersApplied = filters.isAnyActive
         )
 }
 
@@ -204,14 +223,6 @@ private class GridFeedException(
     val code: String,
     override val message: String
 ) : RuntimeException(message)
-
-private fun GridFilterType.toRequest(cursor: String?): GridQueryRequestDto = when (this) {
-    GridFilterType.Nearby -> GridQueryRequestDto(radiusMeters = 50_000, limit = 60, cursor = cursor)
-    GridFilterType.Online -> GridQueryRequestDto(limit = 60, cursor = cursor, onlineOnly = true)
-    GridFilterType.Linked -> GridQueryRequestDto(limit = 60, cursor = cursor, linkedOnly = true)
-    GridFilterType.Age -> GridQueryRequestDto(limit = 60, cursor = cursor, minimumAge = 30, maximumAge = 55)
-    GridFilterType.Tonight -> GridQueryRequestDto(limit = 60, cursor = cursor)
-}
 
 private val sampleGridCards = listOf(
     GridProfileCardUi(

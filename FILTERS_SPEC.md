@@ -1,6 +1,6 @@
 # Pynapli Filters Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-09
 
 ## Purpose
 
@@ -513,18 +513,18 @@ Do not rely on bios for filtering.
 ## Implementation Checklist
 
 - [x] Grid and Swipe have separate filter models.
-- [ ] Partial: Grid filters are mostly hard for implemented fields; the full filter model is not complete.
+- [ ] Partial: Grid filters are combinable and hard for implemented fields (Online, Singles, Linked, Partnered, distance radius, age range). The grid client now uses an immutable `GridFilters` object — multiple filters can be active simultaneously and combine into a single server query (`GridStateHolderTest.togglingMultipleQuickFiltersCombinesIntoSingleRequest`). Trust (F2), Intent (F3), Lifestyle (F4), Logistics (F5), and Tonight/availability (F6) filter groups remain unimplemented; the in-app filter sheet labels them "Coming soon".
 - [ ] Swipe filters support flexible vs dealbreaker behavior.
 - [x] Linked does not automatically imply together.
 - [x] No couple cards are generated from filters.
-- [ ] Partial: basic intent/discovery controls exist for free users; the full filter surface is not complete.
+- [ ] Partial: basic intent/discovery controls exist for free users via the always-visible chip row (Online, Nearby radius, Singles, Linked) and the Filters sheet (Distance, Age, Presence, Who). Solo / Together / Open to both are not yet schema-backed and ship in F3.
 - [x] Safety filters are not paywalled.
 - [ ] Partial: lifestyle terms are documented, but glossary UX is not implemented.
 - [ ] High-sensitivity terms are age-gated.
 - [ ] Partial: implemented filters are stored as structured fields; the full lifestyle taxonomy is not modeled yet.
 - [x] Profile text is not used as the primary filter source.
-- [x] Empty states are neutral and useful.
-- [ ] Filter changes on Grid animate diffs, not full refresh.
+- [x] Empty states are neutral and useful: when filters are active and the feed is empty, the grid shows "No one matches these filters right now. Try widening distance or clearing one filter." per L481.
+- [x] Filter changes on Grid animate diffs, not full refresh: `GridStateHolder` swaps cards atomically; stable `LazyVerticalGrid` keys + `Modifier.animateItem()` animate the diff. `GridStateHolderTest.filterChangeKeepsCardsVisibleUntilNewFeedLands` and `GridScreenScrollPreservationTest.filterChangeWithSameFeedKeepsScrollPosition` enforce non-clearing and scroll preservation.
 - [ ] Partial: Swipe filter changes request a new deck, but true deck sessions are not complete.
 
 ## Do Not Implement
