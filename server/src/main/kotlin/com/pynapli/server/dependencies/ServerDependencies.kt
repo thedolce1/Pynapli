@@ -32,12 +32,16 @@ import com.pynapli.server.notifications.NotificationDispatchService
 import com.pynapli.server.notifications.NotificationDispatchWorker
 import com.pynapli.server.notifications.NotificationService
 import com.pynapli.server.notifications.PushNotificationSender
+import com.pynapli.server.presence.OnlinePresenceTracker
+import com.pynapli.server.presence.PresenceBroadcaster
+import com.pynapli.server.presence.PresenceOfflineScanner
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.presence.RedisPresenceRepository
 import com.pynapli.server.profile.JdbcProfileRepository
 import com.pynapli.server.profile.ProfileService
 import com.pynapli.server.profilelink.JdbcProfileLinkRepository
 import com.pynapli.server.profilelink.ProfileLinkService
+import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockService
 import com.pynapli.server.safety.JdbcBlockRepository
 import com.pynapli.server.safety.JdbcReportRepository
@@ -83,11 +87,15 @@ class ServerDependencies(
     val subscriptionService: SubscriptionService?,
     val playStoreSubscriptionSyncWorker: PlayStoreSubscriptionSyncWorker?,
     val localMediaUploadStorage: LocalMediaUploadStorage?,
+    val presenceBroadcaster: PresenceBroadcaster?,
+    val presenceOfflineScanner: PresenceOfflineScanner?,
+    val blockRepository: BlockRepository?,
     private val probes: List<DependencyProbe>
 ) : AutoCloseable {
     suspend fun checkAll() = probes.map { it.check() }
 
     override fun close() {
+        runCatching { presenceOfflineScanner?.close() }
         runCatching { playStoreSubscriptionSyncWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
         probes.asReversed().forEach { probe ->
@@ -105,7 +113,19 @@ class ServerDependencies(
             val redis = RedisDependencyProbe(redisCache)
             val authService = AuthService(JdbcAuthRepository(database.dataSource))
             val locationService = LocationService(JdbcLocationRepository(database.dataSource))
-            val presenceService = PresenceService(RedisPresenceRepository(redisCache))
+            val presenceRepository = RedisPresenceRepository(redisCache)
+            val presenceBroadcaster = PresenceBroadcaster()
+            val onlinePresenceTracker = OnlinePresenceTracker()
+            val presenceService = PresenceService(
+                repository = presenceRepository,
+                broadcaster = presenceBroadcaster,
+                onlineTracker = onlinePresenceTracker
+            )
+            val presenceOfflineScanner = PresenceOfflineScanner(
+                tracker = onlinePresenceTracker,
+                repository = presenceRepository,
+                broadcaster = presenceBroadcaster
+            )
             val mediaAssetUrlResolver: MediaAssetUrlResolver? =
                 if (config.mediaStorageProvider.equals("local", ignoreCase = true)) {
                     LocalMediaAssetUrlResolver(config.mediaUploadBaseUrl)
@@ -268,6 +288,9 @@ class ServerDependencies(
                 subscriptionService = subscriptionService,
                 playStoreSubscriptionSyncWorker = playStoreSubscriptionSyncWorker,
                 localMediaUploadStorage = localMediaUploadStorage,
+                presenceBroadcaster = presenceBroadcaster,
+                presenceOfflineScanner = presenceOfflineScanner,
+                blockRepository = blockRepository,
                 probes = listOf(postgres, redis)
             )
         }
@@ -306,6 +329,9 @@ class ServerDependencies(
                 subscriptionService = null,
                 playStoreSubscriptionSyncWorker = null,
                 localMediaUploadStorage = null,
+                presenceBroadcaster = null,
+                presenceOfflineScanner = null,
+                blockRepository = null,
                 probes = emptyList()
             )
     }

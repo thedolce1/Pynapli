@@ -18,6 +18,7 @@ import com.pynapli.server.plugins.configureMonitoring
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.presence.configurePresenceRoutes
+import com.pynapli.server.presence.configurePresenceStreamRoutes
 import com.pynapli.server.profile.configureProfileRoutes
 import com.pynapli.server.profilelink.configureProfileLinkRoutes
 import com.pynapli.server.routing.configureHealthRoutes
@@ -47,6 +48,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     closeDependenciesOnStop(dependencies)
     dependencies.notificationDispatchWorker?.start()
     dependencies.playStoreSubscriptionSyncWorker?.start()
+    dependencies.presenceOfflineScanner?.start()
     configureSerialization()
     configureStatusPages()
     configureMonitoring()
@@ -62,6 +64,11 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureProfileLinkRoutes(dependencies.authService, dependencies.profileLinkService)
     configureLocationRoutes(dependencies.authService, dependencies.locationService)
     configurePresenceRoutes(dependencies.authService, dependencies.presenceService)
+    configurePresenceStreamRoutes(
+        authService = dependencies.authService,
+        broadcaster = dependencies.presenceBroadcaster,
+        blockRepository = dependencies.blockRepository
+    )
     configureGridRoutes(dependencies.authService, dependencies.gridService)
     configureActivityRoutes(dependencies.authService, dependencies.activityService)
     configureNotificationRoutes(dependencies.authService, dependencies.notificationService)
