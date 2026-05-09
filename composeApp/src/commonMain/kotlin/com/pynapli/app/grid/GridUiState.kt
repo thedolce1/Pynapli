@@ -91,6 +91,35 @@ data class GridFilters(
         const val SINGLES_CONTEXT: String = "single"
         const val PARTNERED_CONTEXT: String = "partnered"
         val defaults: GridFilters = GridFilters()
+
+        /**
+         * Rehydrate a saved preset payload back into a `GridFilters` instance.
+         * Unknown discovery_style / lifestyle / logistics tokens are dropped silently
+         * so older presets remain partially applicable after a taxonomy change; the
+         * server re-validates on the next `/v1/grid/query` regardless.
+         */
+        fun fromGridQueryRequest(request: GridQueryRequestDto): GridFilters {
+            val contexts = request.relationshipContexts.toSet()
+            val styleByValue = DiscoveryStyle.entries.associateBy { it.serverValue }
+            val lifestyleByValue = LifestyleTag.entries.associateBy { it.serverValue }
+            val logisticsByValue = LogisticsTag.entries.associateBy { it.serverValue }
+            return GridFilters(
+                online = request.onlineOnly,
+                singles = SINGLES_CONTEXT in contexts,
+                partnered = PARTNERED_CONTEXT in contexts,
+                linked = request.linkedOnly == true,
+                verified = request.verifiedOnly,
+                facePhotoVerified = request.facePhotoVerifiedOnly,
+                ageVerified = request.ageVerifiedOnly,
+                discoveryStyles = request.discoveryStyles.mapNotNull { styleByValue[it] }.toSet(),
+                lifestyleTags = request.lifestyleTags.mapNotNull { lifestyleByValue[it] }.toSet(),
+                logisticsTags = request.logisticsTags.mapNotNull { logisticsByValue[it] }.toSet(),
+                tonightAvailable = request.tonightAvailableOnly,
+                radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
+                minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
+                maximumAge = request.maximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE)
+            )
+        }
     }
 }
 

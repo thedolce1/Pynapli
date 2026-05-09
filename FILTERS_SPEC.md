@@ -474,6 +474,8 @@ Recommended presets:
 
 Saved filters can be premium, but basic manually applied filters should remain usable.
 
+Implementation status: server-side CRUD lives at `/v1/me/grid-filters` (GET/POST/DELETE) backed by `saved_grid_filters` (V39) and gated by `EntitlementPolicy.advancedFiltersAllowed` so free-tier users get an `ENTITLEMENT_REQUIRED` response. The client `SavedGridFilterStateHolder` loads on grid open, surfaces a "Saved" chip row at the top of the filter sheet, and exposes a name+save row. Free-tier users see a "Saved filter presets unlock with Social or Select." copy in the same slot. Manual filtering remains free. Cap is 12 presets/user, name length ≤ 60, names case-insensitive unique per user.
+
 ## Empty States
 
 Grid empty state:

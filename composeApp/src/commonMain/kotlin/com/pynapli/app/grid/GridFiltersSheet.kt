@@ -36,12 +36,17 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun GridFiltersSheet(
     initial: GridFilters,
+    savedState: SavedGridFiltersUiState = SavedGridFiltersUiState(),
     onDismiss: () -> Unit,
     onApply: (GridFilters) -> Unit,
-    onClearAll: () -> Unit
+    onClearAll: () -> Unit,
+    onSavePreset: (name: String, GridFilters) -> Unit = { _, _ -> },
+    onApplySavedPreset: (com.pynapli.shared.network.dto.SavedGridFilterDto) -> Unit = {},
+    onDeleteSavedPreset: (id: String) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var draft by remember(initial) { mutableStateOf(initial) }
+    var saveName by remember { mutableStateOf("") }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -54,6 +59,18 @@ internal fun GridFiltersSheet(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            if (savedState.items.isNotEmpty() || savedState.entitlementRequired) {
+                SectionTitle("Saved")
+                SavedFiltersSection(
+                    state = savedState,
+                    onApply = { dto ->
+                        draft = GridFilters.fromGridQueryRequest(dto.payload)
+                        onApplySavedPreset(dto)
+                    },
+                    onDelete = onDeleteSavedPreset
+                )
+            }
+
             SectionTitle("Distance")
             DistanceSection(
                 radiusMeters = draft.radiusMeters,
@@ -113,6 +130,21 @@ internal fun GridFiltersSheet(
                 onChange = { draft = draft.copy(logisticsTags = it) }
             )
 
+            if (!savedState.entitlementRequired) {
+                SectionTitle("Save current filters")
+                SavePresetRow(
+                    name = saveName,
+                    onNameChange = { saveName = it },
+                    isSaving = savedState.isSaving,
+                    onSave = {
+                        if (saveName.isNotBlank()) {
+                            onSavePreset(saveName, draft)
+                            saveName = ""
+                        }
+                    }
+                )
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -131,6 +163,53 @@ internal fun GridFiltersSheet(
                 ) { Text(text = "Apply") }
             }
         }
+    }
+}
+
+@Composable
+private fun SavedFiltersSection(
+    state: SavedGridFiltersUiState,
+    onApply: (com.pynapli.shared.network.dto.SavedGridFilterDto) -> Unit,
+    onDelete: (id: String) -> Unit
+) {
+    if (state.entitlementRequired) {
+        ComingSoonSection(message = "Saved filter presets unlock with Social or Select.")
+        return
+    }
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        state.items.forEach { dto ->
+            SheetToggleChip(label = dto.name, active = false) { onApply(dto) }
+        }
+    }
+}
+
+@Composable
+private fun SavePresetRow(
+    name: String,
+    onNameChange: (String) -> Unit,
+    isSaving: Boolean,
+    onSave: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        androidx.compose.material3.OutlinedTextField(
+            value = name,
+            onValueChange = onNameChange,
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+            placeholder = { Text(text = "Name this filter") }
+        )
+        androidx.compose.material3.Button(
+            onClick = onSave,
+            enabled = !isSaving && name.isNotBlank()
+        ) { Text(text = if (isSaving) "Saving" else "Save") }
     }
 }
 

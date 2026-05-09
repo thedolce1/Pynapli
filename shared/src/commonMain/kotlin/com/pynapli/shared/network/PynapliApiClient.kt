@@ -17,8 +17,11 @@ import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateProfileLinkInvitationRequestDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
+import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
+import com.pynapli.shared.network.dto.SavedGridFilterDto
+import com.pynapli.shared.network.dto.SavedGridFiltersListDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlockUserRequestDto
@@ -91,6 +94,12 @@ interface PynapliApiClient {
     suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto>
 
     suspend fun queryGrid(request: GridQueryRequestDto = GridQueryRequestDto()): AppResult<GridQueryResponseDto>
+
+    suspend fun listSavedGridFilters(): AppResult<SavedGridFiltersListDto>
+
+    suspend fun createSavedGridFilter(request: CreateSavedGridFilterRequestDto): AppResult<SavedGridFilterDto>
+
+    suspend fun deleteSavedGridFilter(id: String): AppResult<Unit>
 
     suspend fun getMe(): AppResult<MeDto>
 
@@ -239,6 +248,34 @@ class KtorPynapliApiClient(
                 contentType(ContentType.Application.Json)
                 setBody(request)
             }.toAppResult(json)
+        }
+
+    override suspend fun listSavedGridFilters(): AppResult<SavedGridFiltersListDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/me/grid-filters")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun createSavedGridFilter(request: CreateSavedGridFilterRequestDto): AppResult<SavedGridFilterDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/me/grid-filters")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun deleteSavedGridFilter(id: String): AppResult<Unit> =
+        authenticatedPost { token ->
+            val response = httpClient.delete(config.endpoint("/v1/me/grid-filters/$id")) {
+                bearerAuth(token)
+            }
+            if (response.status.value in 200..299) {
+                AppResult.Success(Unit)
+            } else {
+                response.toAppResult<Unit>(json)
+            }
         }
 
     override suspend fun getMe(): AppResult<MeDto> =

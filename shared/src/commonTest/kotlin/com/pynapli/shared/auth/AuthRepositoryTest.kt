@@ -190,6 +190,17 @@ private class FakeApiClient(
     override suspend fun queryGrid(request: GridQueryRequestDto): AppResult<GridQueryResponseDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun listSavedGridFilters(): AppResult<com.pynapli.shared.network.dto.SavedGridFiltersListDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun createSavedGridFilter(
+        request: com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
+    ): AppResult<com.pynapli.shared.network.dto.SavedGridFilterDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun deleteSavedGridFilter(id: String): AppResult<Unit> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun getMe(): AppResult<MeDto> = meResult
 
     override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> =

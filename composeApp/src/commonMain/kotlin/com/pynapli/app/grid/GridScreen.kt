@@ -85,6 +85,7 @@ fun GridScreen(
     locationState: LocationUiState = LocationUiState(),
     profileImageUrl: String? = null,
     profileLinksStateHolder: ProfileLinksStateHolder? = null,
+    savedGridFilterStateHolder: SavedGridFilterStateHolder? = null,
     distanceUnit: String = AppSettings.UNIT_METRIC,
     gridState: LazyGridState = rememberLazyGridState(),
     onUseCurrentLocation: () -> Unit = {},
@@ -95,14 +96,21 @@ fun GridScreen(
     val profileState by profileDetailStateHolder.state.collectAsState()
     val profileLinksState by profileLinksStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf(null) }
+    val savedFiltersState by savedGridFilterStateHolder?.state?.collectAsState()
+        ?: remember { mutableStateOf(SavedGridFiltersUiState()) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(stateHolder) {
         stateHolder.load()
     }
 
+    LaunchedEffect(savedGridFilterStateHolder) {
+        savedGridFilterStateHolder?.load()
+    }
+
     GridScreenContent(
         state = state,
+        savedFiltersState = savedFiltersState,
         locationState = locationState,
         profileImageUrl = profileImageUrl,
         distanceUnit = distanceUnit,
@@ -110,6 +118,15 @@ fun GridScreen(
         onQuickFilterToggled = { id -> scope.launch { stateHolder.toggleQuickFilter(id) } },
         onApplyFilters = { filters -> scope.launch { stateHolder.applyFilters(filters) } },
         onClearAllFilters = { scope.launch { stateHolder.clearAllFilters() } },
+        onSavePreset = { name, filters ->
+            savedGridFilterStateHolder?.let { holder -> scope.launch { holder.save(name, filters) } }
+        },
+        onApplySavedPreset = { dto ->
+            scope.launch { stateHolder.applyFilters(GridFilters.fromGridQueryRequest(dto.payload)) }
+        },
+        onDeleteSavedPreset = { id ->
+            savedGridFilterStateHolder?.let { holder -> scope.launch { holder.delete(id) } }
+        },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onProfileSelected = { card ->
             scope.launch { profileDetailStateHolder.open(card) }
@@ -254,6 +271,7 @@ private fun rememberConversationStateHolder(): ConversationStateHolder {
 @Composable
 private fun GridScreenContent(
     state: GridUiState,
+    savedFiltersState: SavedGridFiltersUiState,
     locationState: LocationUiState,
     profileImageUrl: String?,
     distanceUnit: String,
@@ -261,6 +279,9 @@ private fun GridScreenContent(
     onQuickFilterToggled: (QuickFilterId) -> Unit,
     onApplyFilters: (GridFilters) -> Unit,
     onClearAllFilters: () -> Unit,
+    onSavePreset: (String, GridFilters) -> Unit,
+    onApplySavedPreset: (com.pynapli.shared.network.dto.SavedGridFilterDto) -> Unit,
+    onDeleteSavedPreset: (String) -> Unit,
     onLoadMore: () -> Unit,
     onProfileSelected: (GridProfileCardUi) -> Unit,
     onUseCurrentLocation: () -> Unit,
@@ -309,6 +330,7 @@ private fun GridScreenContent(
     if (sheetVisible) {
         GridFiltersSheet(
             initial = state.filters,
+            savedState = savedFiltersState,
             onDismiss = { sheetVisible = false },
             onApply = { applied ->
                 sheetVisible = false
@@ -317,7 +339,13 @@ private fun GridScreenContent(
             onClearAll = {
                 sheetVisible = false
                 onClearAllFilters()
-            }
+            },
+            onSavePreset = onSavePreset,
+            onApplySavedPreset = { dto ->
+                sheetVisible = false
+                onApplySavedPreset(dto)
+            },
+            onDeleteSavedPreset = onDeleteSavedPreset
         )
     }
 }

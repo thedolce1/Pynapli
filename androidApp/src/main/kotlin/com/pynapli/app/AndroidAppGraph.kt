@@ -17,8 +17,10 @@ import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
 import com.pynapli.app.conversation.ApiConversationRepository
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.ApiGridFeedRepository
+import com.pynapli.app.grid.ApiSavedGridFilterRepository
 import com.pynapli.app.grid.GridPresenceStreamCoordinator
 import com.pynapli.app.grid.GridStateHolder
+import com.pynapli.app.grid.SavedGridFilterStateHolder
 import com.pynapli.app.location.ApiLocationUpdateRepository
 import com.pynapli.app.location.LocationStateHolder
 import com.pynapli.app.media.ApiMediaAlbumsRepository
@@ -102,6 +104,10 @@ class AndroidAppGraph(context: Context) {
 
     val gridStateHolder = GridStateHolder(
         repository = ApiGridFeedRepository(apiClient)
+    )
+
+    val savedGridFilterStateHolder = SavedGridFilterStateHolder(
+        repository = ApiSavedGridFilterRepository(apiClient)
     )
 
     val gridPresenceStreamCoordinator = GridPresenceStreamCoordinator(
