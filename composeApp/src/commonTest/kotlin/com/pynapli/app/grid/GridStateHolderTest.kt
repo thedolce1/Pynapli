@@ -210,6 +210,63 @@ class GridStateHolderTest {
     }
 
     @Test
+    fun presenceDeltaUpdatesOnlineFlagWithoutReorderingOrRefreshing() = runBlocking {
+        val cards = listOf(
+            GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null, tone = GridCardTone.Warm),
+            GridProfileCardUi(id = "b", displayName = "B", online = true, distanceLabel = null, tone = GridCardTone.Slate),
+            GridProfileCardUi(id = "c", displayName = "C", online = false, distanceLabel = null, tone = GridCardTone.Rust)
+        )
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = cards))
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        assertEquals(1, repository.loadCount)
+
+        stateHolder.applyPresenceDelta(
+            com.pynapli.shared.network.dto.PresenceDeltaDto(
+                userId = "b",
+                online = false,
+                lastActiveAt = "2026-05-09T12:00:00Z"
+            )
+        )
+        stateHolder.applyPresenceDelta(
+            com.pynapli.shared.network.dto.PresenceDeltaDto(
+                userId = "c",
+                online = true,
+                lastActiveAt = "2026-05-09T12:00:01Z"
+            )
+        )
+
+        val resulting = stateHolder.state.value.cards
+        assertEquals(listOf("a", "b", "c"), resulting.map { it.id }, "Order must not change after presence deltas")
+        assertEquals(true, resulting[0].online, "Card a online flag unchanged")
+        assertEquals(false, resulting[1].online, "Card b flipped to offline")
+        assertEquals(true, resulting[2].online, "Card c flipped to online")
+        assertEquals(1, repository.loadCount, "Presence delta must not trigger a grid refresh")
+    }
+
+    @Test
+    fun presenceDeltaForUnknownUserIsNoOp() = runBlocking {
+        val cards = listOf(
+            GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null, tone = GridCardTone.Warm)
+        )
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = cards))
+        val stateHolder = GridStateHolder(repository)
+        stateHolder.load()
+
+        val before = stateHolder.state.value
+        stateHolder.applyPresenceDelta(
+            com.pynapli.shared.network.dto.PresenceDeltaDto(
+                userId = "not-in-grid",
+                online = false,
+                lastActiveAt = "2026-05-09T12:00:00Z"
+            )
+        )
+        val after = stateHolder.state.value
+        assertEquals(before.cards, after.cards)
+    }
+
+    @Test
     fun loadMoreAppendsUniqueCardsAndAdvancesCursor() = runBlocking {
         val first = GridProfileCardUi(
             id = "first",

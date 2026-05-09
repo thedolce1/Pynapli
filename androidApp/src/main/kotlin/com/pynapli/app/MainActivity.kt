@@ -21,6 +21,7 @@ import com.pynapli.app.location.GridLocationRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.PickedMediaForUpload
 import com.pynapli.shared.settings.AppSettings
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
     }
     private val activityScope = MainScope()
     private var pendingLocationSignal: CancellationSignal? = null
+    private var presenceStreamJob: Job? = null
     private var pendingMediaAlbumKind: MediaAlbumKindUi? = null
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -82,6 +84,20 @@ class MainActivity : ComponentActivity() {
                 devLoginCredentials = appGraph.devLoginCredentials.takeIf { isDebuggable() }
             )
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (presenceStreamJob?.isActive == true) return
+        presenceStreamJob = activityScope.launch {
+            runCatching { appGraph.gridPresenceStreamCoordinator.run() }
+        }
+    }
+
+    override fun onStop() {
+        presenceStreamJob?.cancel()
+        presenceStreamJob = null
+        super.onStop()
     }
 
     override fun onDestroy() {

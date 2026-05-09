@@ -168,3 +168,22 @@ private class ChannelPresenceStreamSession(
         job.cancel()
     }
 }
+
+/**
+ * Builds a [PresenceStreamClient] using a platform-supplied WebSocket-capable [HttpClient].
+ * The HTTP client must have the Ktor [io.ktor.client.plugins.websocket.WebSockets] plugin installed
+ * and use an engine that supports WebSockets (OkHttp on Android, Darwin on iOS, CIO/Java on JVM).
+ */
+fun buildPresenceStreamClient(
+    websocketHttpClient: HttpClient,
+    websocketBaseUrl: String,
+    tokenProvider: AccessTokenProvider,
+    backoff: PresenceStreamBackoff = PresenceStreamBackoff()
+): PresenceStreamClient = PresenceStreamClient(
+    sessionFactory = KtorPresenceStreamSessionFactory(
+        httpClient = websocketHttpClient,
+        streamUrl = websocketBaseUrl.trimEnd('/') + "/v1/presence/stream"
+    ),
+    tokenProvider = tokenProvider,
+    backoff = backoff
+)

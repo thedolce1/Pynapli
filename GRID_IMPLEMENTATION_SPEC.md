@@ -1,6 +1,6 @@
 # Pynapli Grid Implementation Spec
 
-Last updated: 2026-05-09
+Last updated: 2026-05-09 (presence stream)
 
 ## Purpose
 
@@ -592,7 +592,7 @@ Battery:
 - [x] Grid cards use fixed square dimensions.
 - [x] Filter updates keep existing state: `GridStateHolder` swaps cards atomically without clearing the visible list, and `LazyVerticalGrid` uses stable `key = card.id` + `Modifier.animateItem()` so card identity is preserved across changes. `GridStateHolderTest.filterChangeKeepsCardsVisibleUntilNewFeedLands` enforces non-clearing at the state-holder level; `GridScreenScrollPreservationTest.filterChangeWithSameFeedKeepsScrollPosition` enforces the rendered scroll position survives a filter change end-to-end.
 - [ ] Partial: profile open/close preserves current screen state in the MVP flow; emulator regression coverage is still needed.
-- [ ] WebSocket presence deltas update dots without full refresh.
+- [x] WebSocket presence deltas update dots without full refresh: server installs Ktor WebSockets at `/v1/presence/stream`, authenticates via the existing Bearer token, and fans out `PresenceDeltaDto` events from `PresenceBroadcaster`. `PresenceService.heartbeat` emits `online=true` deltas; `PresenceOfflineScanner` emits `online=false` deltas every 30s for tracked users that have left Redis. The route applies a per-delta `BlockRepository.isBlockedEitherWay(viewer, target)` privacy filter and a subscription scope so a viewer only receives deltas for userIds they explicitly subscribed to. `PresenceStreamRouteTest` covers happy path, unsubscribed-target filtering, and blocked-relationship filtering; `PresenceOfflineScannerTest` covers offline emission for disappeared users and no-emission for still-online users. The shared `PresenceStreamClient` (in `:shared`) reconnects with exponential backoff (1s→30s) and re-sends the current `userIds` subscription on every flow update, covered by `PresenceStreamClientTest`. `GridStateHolder.applyPresenceDelta` flips the matching card's `online` flag in place — no reorder, no `load()` call — covered by `GridStateHolderTest.presenceDeltaUpdatesOnlineFlagWithoutReorderingOrRefreshing`. Android wires the stream via `AndroidAppGraph.gridPresenceStreamCoordinator` and starts/stops collection in `MainActivity.onStart`/`onStop`. WebSocket transport on Android requires the OkHttp engine because `ktor-client-android` does not support WebSockets in Ktor 3.x.
 - [x] Location updates use thresholds before backend submission and grid refresh.
 - [ ] Partial: background location is avoided in current app code, but platform QA and policy review are still needed.
 - [x] Thumbnail prefetch is implemented: `planThumbnailPrefetch` derives the next `GRID_THUMBNAIL_PREFETCH_WINDOW` (12) cards beyond the last visible index, deduplicated and skipping null URLs, covered by `ThumbnailPrefetchPlannerTest`. `ProfileGrid` enqueues the planned URLs into the Coil 3 `SingletonImageLoader` from a `LaunchedEffect` keyed on the planned URL list, populating the memory/disk cache without rendering.

@@ -17,6 +17,7 @@ import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
 import com.pynapli.app.conversation.ApiConversationRepository
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.ApiGridFeedRepository
+import com.pynapli.app.grid.GridPresenceStreamCoordinator
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.location.ApiLocationUpdateRepository
 import com.pynapli.app.location.LocationStateHolder
@@ -43,6 +44,7 @@ import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.core.config.PynapliConfigs
 import com.pynapli.shared.network.KtorMediaByteUploader
 import com.pynapli.shared.network.KtorPynapliApiClient
+import com.pynapli.shared.network.buildAndroidPresenceStreamClient
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
 import java.util.Locale
@@ -100,6 +102,14 @@ class AndroidAppGraph(context: Context) {
 
     val gridStateHolder = GridStateHolder(
         repository = ApiGridFeedRepository(apiClient)
+    )
+
+    val gridPresenceStreamCoordinator = GridPresenceStreamCoordinator(
+        client = buildAndroidPresenceStreamClient(
+            websocketBaseUrl = PynapliConfigs.LocalAndroidEmulator.websocketBaseUrl,
+            tokenProvider = sessionStore
+        ),
+        gridStateHolder = gridStateHolder
     )
 
     val profileDetailStateHolder = ProfileDetailStateHolder(

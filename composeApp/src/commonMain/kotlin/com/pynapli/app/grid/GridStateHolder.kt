@@ -3,9 +3,12 @@ package com.pynapli.app.grid
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.GridQueryRequestDto
+import com.pynapli.shared.network.dto.PresenceDeltaDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
 class GridStateHolder(
@@ -138,6 +141,22 @@ class GridStateHolder(
             current.copy(cards = current.cards.filterNot { it.id == userId })
         }
     }
+
+    fun applyPresenceDelta(delta: PresenceDeltaDto) {
+        _state.update { current ->
+            val targetIndex = current.cards.indexOfFirst { it.id == delta.userId }
+            if (targetIndex < 0) return@update current
+            val target = current.cards[targetIndex]
+            if (target.online == delta.online) return@update current
+            val updated = current.cards.toMutableList()
+            updated[targetIndex] = target.copy(online = delta.online)
+            current.copy(cards = updated)
+        }
+    }
+
+    val visibleUserIds: kotlinx.coroutines.flow.Flow<Set<String>> = state
+        .map { ui -> ui.cards.mapTo(LinkedHashSet(ui.cards.size)) { it.id } }
+        .distinctUntilChanged()
 }
 
 interface GridFeedRepository {
