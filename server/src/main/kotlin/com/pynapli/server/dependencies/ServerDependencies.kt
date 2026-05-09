@@ -41,6 +41,7 @@ import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.presence.RedisPresenceRepository
 import com.pynapli.server.profile.JdbcProfileRepository
 import com.pynapli.server.profile.ProfileService
+import com.pynapli.server.profile.TonightAvailabilityService
 import com.pynapli.server.profilelink.JdbcProfileLinkRepository
 import com.pynapli.server.profilelink.ProfileLinkService
 import com.pynapli.server.safety.BlockRepository
@@ -93,6 +94,7 @@ class ServerDependencies(
     val presenceOfflineScanner: PresenceOfflineScanner?,
     val blockRepository: BlockRepository?,
     val savedGridFilterService: SavedGridFilterService?,
+    val tonightAvailabilityService: TonightAvailabilityService?,
     private val probes: List<DependencyProbe>
 ) : AutoCloseable {
     suspend fun checkAll() = probes.map { it.check() }
@@ -244,6 +246,7 @@ class ServerDependencies(
                 repository = JdbcSavedGridFilterRepository(database.dataSource),
                 subscriptionService = subscriptionService
             )
+            val tonightAvailabilityService = TonightAvailabilityService(database.dataSource)
             val messagingRepository = JdbcMessagingRepository(database.dataSource)
             val messagingService = MessagingService(
                 repository = messagingRepository,
@@ -299,6 +302,7 @@ class ServerDependencies(
                 presenceOfflineScanner = presenceOfflineScanner,
                 blockRepository = blockRepository,
                 savedGridFilterService = savedGridFilterService,
+                tonightAvailabilityService = tonightAvailabilityService,
                 probes = listOf(postgres, redis)
             )
         }
@@ -341,6 +345,7 @@ class ServerDependencies(
                 presenceOfflineScanner = null,
                 blockRepository = null,
                 savedGridFilterService = null,
+                tonightAvailabilityService = null,
                 probes = emptyList()
             )
     }

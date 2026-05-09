@@ -5,6 +5,7 @@ import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.authStatusFor
 import com.pynapli.server.grid.GridException
 import com.pynapli.server.grid.SavedGridFilterException
+import com.pynapli.server.profile.TonightAvailabilityException
 import com.pynapli.server.location.LocationException
 import com.pynapli.server.media.MediaException
 import com.pynapli.server.messaging.MessagingException
@@ -88,6 +89,17 @@ fun Application.configureStatusPages() {
         exception<SavedGridFilterException> { call, cause ->
             call.respond(
                 status = savedGridFilterStatusFor(cause.code),
+                message = ApiErrorDto(
+                    code = cause.code,
+                    message = userSafeMessage(cause.code),
+                    requestId = call.request.headers["X-Request-Id"] ?: "unknown"
+                )
+            )
+        }
+
+        exception<TonightAvailabilityException> { call, cause ->
+            call.respond(
+                status = tonightAvailabilityStatusFor(cause.code),
                 message = ApiErrorDto(
                     code = cause.code,
                     message = userSafeMessage(cause.code),
@@ -237,6 +249,7 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_SAVED_FILTER_ID" -> "Saved filter could not be found."
     "SAVED_FILTER_NAME_TAKEN" -> "You already have a saved filter with that name."
     "SAVED_FILTER_LIMIT_REACHED" -> "You have reached the saved filter limit."
+    "INVALID_TONIGHT_DURATION" -> "Tonight availability must be between 1 and 24 hours."
     "INVALID_FLIRT_TARGET" -> "Spark could not be sent."
     "FLIRT_NOT_ALLOWED" -> "This profile is not accepting Sparks."
     "INVALID_ALBUM_REQUEST_TARGET" -> "Album request could not be sent."
@@ -348,6 +361,12 @@ private fun savedGridFilterStatusFor(code: String): HttpStatusCode = when (code)
     "INVALID_SAVED_FILTER_NAME" -> HttpStatusCode.BadRequest
     "INVALID_SAVED_FILTER_PAYLOAD" -> HttpStatusCode.BadRequest
     "INVALID_SAVED_FILTER_ID" -> HttpStatusCode.BadRequest
+    else -> HttpStatusCode.BadRequest
+}
+
+private fun tonightAvailabilityStatusFor(code: String): HttpStatusCode = when (code) {
+    "INVALID_TONIGHT_DURATION" -> HttpStatusCode.BadRequest
+    "PROFILE_NOT_FOUND" -> HttpStatusCode.NotFound
     else -> HttpStatusCode.BadRequest
 }
 

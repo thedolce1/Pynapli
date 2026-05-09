@@ -37,12 +37,15 @@ import androidx.compose.ui.unit.dp
 internal fun GridFiltersSheet(
     initial: GridFilters,
     savedState: SavedGridFiltersUiState = SavedGridFiltersUiState(),
+    tonightState: TonightAvailabilityUiState = TonightAvailabilityUiState(),
     onDismiss: () -> Unit,
     onApply: (GridFilters) -> Unit,
     onClearAll: () -> Unit,
     onSavePreset: (name: String, GridFilters) -> Unit = { _, _ -> },
     onApplySavedPreset: (com.pynapli.shared.network.dto.SavedGridFilterDto) -> Unit = {},
-    onDeleteSavedPreset: (id: String) -> Unit = {}
+    onDeleteSavedPreset: (id: String) -> Unit = {},
+    onSetTonightAvailable: () -> Unit = {},
+    onClearTonightAvailable: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var draft by remember(initial) { mutableStateOf(initial) }
@@ -90,6 +93,11 @@ internal fun GridFiltersSheet(
                 tonightAvailable = draft.tonightAvailable,
                 onOnlineToggle = { draft = draft.copy(online = !draft.online) },
                 onTonightToggle = { draft = draft.copy(tonightAvailable = !draft.tonightAvailable) }
+            )
+            TonightAvailabilityRow(
+                state = tonightState,
+                onSet = onSetTonightAvailable,
+                onClear = onClearTonightAvailable
             )
 
             SectionTitle("Who")
@@ -281,6 +289,36 @@ private fun PresenceSection(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SheetToggleChip(label = "Online now", active = online, onClick = onOnlineToggle)
         SheetToggleChip(label = "Available tonight", active = tonightAvailable, onClick = onTonightToggle)
+    }
+}
+
+@Composable
+private fun TonightAvailabilityRow(
+    state: TonightAvailabilityUiState,
+    onSet: () -> Unit,
+    onClear: () -> Unit
+) {
+    val label = when {
+        state.isMutating -> "Updating…"
+        state.isCurrentlyAvailable -> "You're marked available tonight"
+        else -> "Mark me available tonight (12h)"
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        if (state.isCurrentlyAvailable) {
+            TextButton(onClick = onClear, enabled = !state.isMutating) { Text(text = "Clear") }
+        } else {
+            TextButton(onClick = onSet, enabled = !state.isMutating) { Text(text = "Set") }
+        }
     }
 }
 

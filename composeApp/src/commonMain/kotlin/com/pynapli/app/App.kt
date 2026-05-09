@@ -91,6 +91,7 @@ fun PynapliApp(
     swipeStateHolder: SwipeStateHolder,
     storeStateHolder: StoreStateHolder,
     savedGridFilterStateHolder: com.pynapli.app.grid.SavedGridFilterStateHolder? = null,
+    tonightAvailabilityStateHolder: com.pynapli.app.grid.TonightAvailabilityStateHolder? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
     devLoginCredentials: DevLoginCredentials? = null
@@ -359,6 +360,7 @@ fun PynapliApp(
                         profileImageUrl = profileImageUrl,
                         profileLinksStateHolder = profileLinksStateHolder,
                         savedGridFilterStateHolder = savedGridFilterStateHolder,
+                        tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
                         distanceUnit = distanceUnit,
                         onUseCurrentLocation = onUseCurrentLocation,
                         onProfileIconClick = { profileSurface = ProfileSurface.Hub },

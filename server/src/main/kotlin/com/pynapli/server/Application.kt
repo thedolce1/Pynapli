@@ -21,6 +21,7 @@ import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.presence.configurePresenceRoutes
 import com.pynapli.server.presence.configurePresenceStreamRoutes
 import com.pynapli.server.profile.configureProfileRoutes
+import com.pynapli.server.profile.configureTonightAvailabilityRoutes
 import com.pynapli.server.profilelink.configureProfileLinkRoutes
 import com.pynapli.server.routing.configureHealthRoutes
 import com.pynapli.server.safety.configureSafetyRoutes
@@ -72,6 +73,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     )
     configureGridRoutes(dependencies.authService, dependencies.gridService)
     configureSavedGridFilterRoutes(dependencies.authService, dependencies.savedGridFilterService)
+    configureTonightAvailabilityRoutes(dependencies.authService, dependencies.tonightAvailabilityService)
     configureActivityRoutes(dependencies.authService, dependencies.activityService)
     configureNotificationRoutes(dependencies.authService, dependencies.notificationService)
     configureSubscriptionRoutes(dependencies.authService, dependencies.subscriptionService)

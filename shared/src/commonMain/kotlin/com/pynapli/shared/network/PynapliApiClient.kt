@@ -22,6 +22,8 @@ import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.SavedGridFilterDto
 import com.pynapli.shared.network.dto.SavedGridFiltersListDto
+import com.pynapli.shared.network.dto.SetTonightAvailableRequestDto
+import com.pynapli.shared.network.dto.TonightAvailabilityDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlockUserRequestDto
@@ -100,6 +102,12 @@ interface PynapliApiClient {
     suspend fun createSavedGridFilter(request: CreateSavedGridFilterRequestDto): AppResult<SavedGridFilterDto>
 
     suspend fun deleteSavedGridFilter(id: String): AppResult<Unit>
+
+    suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto>
+
+    suspend fun setTonightAvailability(request: SetTonightAvailableRequestDto = SetTonightAvailableRequestDto()): AppResult<TonightAvailabilityDto>
+
+    suspend fun clearTonightAvailability(): AppResult<TonightAvailabilityDto>
 
     suspend fun getMe(): AppResult<MeDto>
 
@@ -276,6 +284,29 @@ class KtorPynapliApiClient(
             } else {
                 response.toAppResult<Unit>(json)
             }
+        }
+
+    override suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/me/availability/tonight")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun setTonightAvailability(request: SetTonightAvailableRequestDto): AppResult<TonightAvailabilityDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/me/availability/tonight")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun clearTonightAvailability(): AppResult<TonightAvailabilityDto> =
+        authenticatedPost { token ->
+            httpClient.delete(config.endpoint("/v1/me/availability/tonight")) {
+                bearerAuth(token)
+            }.toAppResult(json)
         }
 
     override suspend fun getMe(): AppResult<MeDto> =

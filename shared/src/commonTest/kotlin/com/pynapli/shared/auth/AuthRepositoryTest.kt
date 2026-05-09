@@ -201,6 +201,17 @@ private class FakeApiClient(
     override suspend fun deleteSavedGridFilter(id: String): AppResult<Unit> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun getTonightAvailability(): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun setTonightAvailability(
+        request: com.pynapli.shared.network.dto.SetTonightAvailableRequestDto
+    ): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun clearTonightAvailability(): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun getMe(): AppResult<MeDto> = meResult
 
     override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> =

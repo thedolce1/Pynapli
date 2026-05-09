@@ -86,6 +86,7 @@ fun GridScreen(
     profileImageUrl: String? = null,
     profileLinksStateHolder: ProfileLinksStateHolder? = null,
     savedGridFilterStateHolder: SavedGridFilterStateHolder? = null,
+    tonightAvailabilityStateHolder: TonightAvailabilityStateHolder? = null,
     distanceUnit: String = AppSettings.UNIT_METRIC,
     gridState: LazyGridState = rememberLazyGridState(),
     onUseCurrentLocation: () -> Unit = {},
@@ -98,6 +99,8 @@ fun GridScreen(
         ?: remember { mutableStateOf(null) }
     val savedFiltersState by savedGridFilterStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf(SavedGridFiltersUiState()) }
+    val tonightState by tonightAvailabilityStateHolder?.state?.collectAsState()
+        ?: remember { mutableStateOf(TonightAvailabilityUiState()) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(stateHolder) {
@@ -108,9 +111,14 @@ fun GridScreen(
         savedGridFilterStateHolder?.load()
     }
 
+    LaunchedEffect(tonightAvailabilityStateHolder) {
+        tonightAvailabilityStateHolder?.load()
+    }
+
     GridScreenContent(
         state = state,
         savedFiltersState = savedFiltersState,
+        tonightState = tonightState,
         locationState = locationState,
         profileImageUrl = profileImageUrl,
         distanceUnit = distanceUnit,
@@ -126,6 +134,12 @@ fun GridScreen(
         },
         onDeleteSavedPreset = { id ->
             savedGridFilterStateHolder?.let { holder -> scope.launch { holder.delete(id) } }
+        },
+        onSetTonightAvailable = {
+            tonightAvailabilityStateHolder?.let { holder -> scope.launch { holder.setAvailable() } }
+        },
+        onClearTonightAvailable = {
+            tonightAvailabilityStateHolder?.let { holder -> scope.launch { holder.clear() } }
         },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onProfileSelected = { card ->
@@ -272,6 +286,7 @@ private fun rememberConversationStateHolder(): ConversationStateHolder {
 private fun GridScreenContent(
     state: GridUiState,
     savedFiltersState: SavedGridFiltersUiState,
+    tonightState: TonightAvailabilityUiState,
     locationState: LocationUiState,
     profileImageUrl: String?,
     distanceUnit: String,
@@ -282,6 +297,8 @@ private fun GridScreenContent(
     onSavePreset: (String, GridFilters) -> Unit,
     onApplySavedPreset: (com.pynapli.shared.network.dto.SavedGridFilterDto) -> Unit,
     onDeleteSavedPreset: (String) -> Unit,
+    onSetTonightAvailable: () -> Unit,
+    onClearTonightAvailable: () -> Unit,
     onLoadMore: () -> Unit,
     onProfileSelected: (GridProfileCardUi) -> Unit,
     onUseCurrentLocation: () -> Unit,
@@ -331,6 +348,7 @@ private fun GridScreenContent(
         GridFiltersSheet(
             initial = state.filters,
             savedState = savedFiltersState,
+            tonightState = tonightState,
             onDismiss = { sheetVisible = false },
             onApply = { applied ->
                 sheetVisible = false
@@ -345,7 +363,9 @@ private fun GridScreenContent(
                 sheetVisible = false
                 onApplySavedPreset(dto)
             },
-            onDeleteSavedPreset = onDeleteSavedPreset
+            onDeleteSavedPreset = onDeleteSavedPreset,
+            onSetTonightAvailable = onSetTonightAvailable,
+            onClearTonightAvailable = onClearTonightAvailable
         )
     }
 }

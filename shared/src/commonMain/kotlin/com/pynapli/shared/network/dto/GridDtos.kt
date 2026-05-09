@@ -67,3 +67,13 @@ data class CreateSavedGridFilterRequestDto(
     val name: String,
     val payload: GridQueryRequestDto
 )
+
+@Serializable
+data class SetTonightAvailableRequestDto(
+    val durationHours: Int? = null
+)
+
+@Serializable
+data class TonightAvailabilityDto(
+    val availableUntil: String?
+)
