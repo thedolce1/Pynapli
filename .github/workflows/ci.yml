@@ -17,4 +17,4 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - name: Run verification gate
-        run: ./gradlew :shared:jvmTest :shared:testAndroidHostTest :server:test :composeApp:testAndroidHostTest :androidApp:assembleDebug --no-configuration-cache
+        run: ./gradlew :shared:jvmTest :shared:testAndroidHostTest :server:test :composeApp:testAndroidHostTest :composeApp:desktopTest :androidApp:assembleDebug --no-configuration-cache

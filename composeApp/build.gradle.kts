@@ -17,6 +17,8 @@ kotlin {
         }
     }
 
+    jvm("desktop")
+
     val iosTargets = listOf(
         iosX64(),
         iosArm64(),
@@ -40,6 +42,14 @@ kotlin {
 
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+        }
+
+        val desktopTest by getting {
+            dependencies {
+                implementation(compose.desktop.currentOs)
+                @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+                implementation(compose.uiTest)
+            }
         }
 
         androidMain.dependencies {}

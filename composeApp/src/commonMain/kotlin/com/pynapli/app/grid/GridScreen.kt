@@ -83,6 +83,7 @@ fun GridScreen(
     profileImageUrl: String? = null,
     profileLinksStateHolder: ProfileLinksStateHolder? = null,
     distanceUnit: String = AppSettings.UNIT_METRIC,
+    gridState: LazyGridState = rememberLazyGridState(),
     onUseCurrentLocation: () -> Unit = {},
     onProfileIconClick: () -> Unit = {},
     onOpenStore: () -> Unit = {}
@@ -102,6 +103,7 @@ fun GridScreen(
         locationState = locationState,
         profileImageUrl = profileImageUrl,
         distanceUnit = distanceUnit,
+        gridState = gridState,
         onFilterSelected = { type -> scope.launch { stateHolder.selectFilter(type) } },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onProfileSelected = { card ->
@@ -250,6 +252,7 @@ private fun GridScreenContent(
     locationState: LocationUiState,
     profileImageUrl: String?,
     distanceUnit: String,
+    gridState: LazyGridState,
     onFilterSelected: (GridFilterType) -> Unit,
     onLoadMore: () -> Unit,
     onProfileSelected: (GridProfileCardUi) -> Unit,
@@ -258,8 +261,6 @@ private fun GridScreenContent(
     onOpenStore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val gridState = rememberLazyGridState()
-
     Column(
         modifier = modifier
             .fillMaxSize()

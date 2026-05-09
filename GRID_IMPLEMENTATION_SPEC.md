@@ -588,7 +588,7 @@ Battery:
 - [x] Signed stable cursor pagination is implemented for live grid responses.
 - [x] 5,000-candidate dense grid integration proof exists for stable cursor pages.
 - [x] Compose grid uses stable keys.
-- [ ] Partial: Compose grid lifts `rememberLazyGridState()` to the screen-level composable so it survives `GridBody` branch flips (loading/error/loaded) and the profile detail sheet; an emulator/Compose-UI regression test for scroll preservation still needs to be added.
+- [x] Compose grid lifts `rememberLazyGridState()` to the screen-level composable so it survives `GridBody` branch flips (loading/error/loaded) and the profile detail sheet, with `GridScreenScrollPreservationTest` exercising scroll-to-index → open profile sheet → dismiss → assert `firstVisibleItemIndex` and `firstVisibleItemScrollOffset` unchanged. The test runs on the `composeApp` desktop JVM target via `runComposeUiTest`.
 - [x] Grid cards use fixed square dimensions.
 - [ ] Partial: filter updates keep existing state, but diffed list animation behavior is not yet verified.
 - [ ] Partial: profile open/close preserves current screen state in the MVP flow; emulator regression coverage is still needed.
