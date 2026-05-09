@@ -321,6 +321,45 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "grid query with lifestyleTags filters to overlapping tag and excludes untagged profiles" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000d01")
+            val softSwap = UUID.fromString("00000000-0000-0000-0000-000000000d02")
+            val fullSwap = UUID.fromString("00000000-0000-0000-0000-000000000d03")
+            val untagged = UUID.fromString("00000000-0000-0000-0000-000000000d04")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(softSwap, "Soft", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(fullSwap, "Full", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(untagged, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
+            dataSource.setProfileLifestyleTags(softSwap, listOf("soft_swap", "experienced"))
+            dataSource.setProfileLifestyleTags(fullSwap, listOf("full_swap"))
+
+            val repository = JdbcGridRepository(dataSource)
+            val softOnly = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(lifestyleTags = setOf("soft_swap"))
+            ).cards
+            val softOrFull = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(lifestyleTags = setOf("soft_swap", "full_swap"))
+            ).cards
+            val anyKink = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(lifestyleTags = setOf("kink_friendly"))
+            ).cards
+
+            assertEquals(listOf(softSwap), softOnly.map { it.userId })
+            assertEquals(setOf(softSwap, fullSwap), softOrFull.map { it.userId }.toSet())
+            assertTrue(anyKink.isEmpty(), "Untagged profile should not match a kink_friendly filter")
+        }
+    }
+
     "grid query with discoveryStyles filters to matching style" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000c01")
@@ -496,6 +535,17 @@ private fun DataSource.setProfileDiscoveryStyle(userId: UUID, style: String) {
     connection.use { connection ->
         connection.prepareStatement("UPDATE profiles SET discovery_style = ? WHERE user_id = ?").use { statement ->
             statement.setString(1, style)
+            statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+    }
+}
+
+private fun DataSource.setProfileLifestyleTags(userId: UUID, tags: List<String>) {
+    connection.use { connection ->
+        val array = connection.createArrayOf("text", tags.toTypedArray())
+        connection.prepareStatement("UPDATE profiles SET lifestyle_tags = ? WHERE user_id = ?").use { statement ->
+            statement.setArray(1, array)
             statement.setObject(2, userId)
             statement.executeUpdate()
         }

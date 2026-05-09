@@ -29,6 +29,7 @@ data class GridFilters(
     val facePhotoVerified: Boolean = false,
     val ageVerified: Boolean = false,
     val discoveryStyles: Set<DiscoveryStyle> = emptySet(),
+    val lifestyleTags: Set<LifestyleTag> = emptySet(),
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
     val maximumAge: Int? = null
@@ -44,6 +45,7 @@ data class GridFilters(
             if (facePhotoVerified) count += 1
             if (ageVerified) count += 1
             if (discoveryStyles.isNotEmpty()) count += 1
+            if (lifestyleTags.isNotEmpty()) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
             return count
@@ -68,7 +70,8 @@ data class GridFilters(
             verifiedOnly = verified,
             facePhotoVerifiedOnly = facePhotoVerified,
             ageVerifiedOnly = ageVerified,
-            discoveryStyles = discoveryStyles.map { it.serverValue }
+            discoveryStyles = discoveryStyles.map { it.serverValue },
+            lifestyleTags = lifestyleTags.map { it.serverValue }
         )
     }
 
@@ -107,6 +110,30 @@ enum class DiscoveryStyle(val serverValue: String, val label: String) {
     Together("together", "Together"),
     OpenToBoth("both", "Open to both"),
     Social("social", "Social")
+}
+
+/**
+ * Lifestyle tags drawn from LANGUAGE_AND_TAXONOMY_SPEC. Server values match the
+ * canonical tokens stored in `profiles.lifestyle_tags` (lower_snake). A profile
+ * matches when its tag array overlaps any selected tag. NULL/empty profile tag
+ * arrays are excluded when the filter is active (hard "has X" semantics).
+ *
+ * High-sensitivity rule (FILTERS_SPEC L163): the spec asks for these to be
+ * gated behind age-confirmation onboarding. Until that flow exists this group
+ * is visible to all viewers; the gating debt is tracked in the FILTERS_SPEC
+ * checklist as "[ ] High-sensitivity terms are age-gated".
+ */
+enum class LifestyleTag(val serverValue: String, val label: String) {
+    SoftSwap("soft_swap", "Soft swap"),
+    FullSwap("full_swap", "Full swap"),
+    SameRoom("same_room", "Same-room"),
+    SeparateRoom("separate_room", "Separate-room"),
+    NewToLifestyle("new_to_lifestyle", "New"),
+    Experienced("experienced", "Experienced"),
+    KinkFriendly("kink_friendly", "Kink-friendly"),
+    VanillaSocial("vanilla_social", "Vanilla/social"),
+    Enm("enm", "ENM"),
+    Swinging("swinging", "Swinging")
 }
 
 @Immutable

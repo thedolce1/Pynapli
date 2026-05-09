@@ -107,6 +107,8 @@ class DiscoveryCursorCodec(
                 append(filters.relationshipContexts.sorted().joinToString(","))
                 append("|discoveryStyles=")
                 append(filters.discoveryStyles.sorted().joinToString(","))
+                append("|lifestyleTags=")
+                append(filters.lifestyleTags.sorted().joinToString(","))
             }
             return sha256Base64Url(normalized)
         }

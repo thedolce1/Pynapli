@@ -32,6 +32,22 @@ class GridStateHolderTest {
     }
 
     @Test
+    fun applyingLifestyleTagsSerializesToCanonicalTokens() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.applyFilters(
+            stateHolder.state.value.filters.copy(
+                lifestyleTags = setOf(LifestyleTag.SoftSwap, LifestyleTag.SameRoom)
+            )
+        )
+
+        val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+        assertEquals(setOf("soft_swap", "same_room"), request.lifestyleTags.toSet())
+    }
+
+    @Test
     fun applyingDiscoveryStylesSerializesToServerValues() = runBlocking {
         val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
         val stateHolder = GridStateHolder(repository)

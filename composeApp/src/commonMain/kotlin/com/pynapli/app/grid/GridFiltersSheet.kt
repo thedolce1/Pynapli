@@ -100,7 +100,10 @@ internal fun GridFiltersSheet(
             )
 
             SectionTitle("Lifestyle")
-            ComingSoonSection(message = "Soft swap, full swap, same-room, separate-room — age-gated, ships in F4.")
+            LifestyleSection(
+                selected = draft.lifestyleTags,
+                onChange = { draft = draft.copy(lifestyleTags = it) }
+            )
 
             SectionTitle("Logistics")
             ComingSoonSection(message = "Hosts, travels, hotel-friendly, public meet first — ships in F5.")
@@ -187,6 +190,25 @@ private fun AgeSection(
 @Composable
 private fun PresenceSection(online: Boolean, onToggle: () -> Unit) {
     SheetToggleChip(label = "Online now", active = online, onClick = onToggle)
+}
+
+@Composable
+private fun LifestyleSection(
+    selected: Set<LifestyleTag>,
+    onChange: (Set<LifestyleTag>) -> Unit
+) {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        LifestyleTag.entries.forEach { tag ->
+            val active = tag in selected
+            SheetToggleChip(label = tag.label, active = active) {
+                onChange(if (active) selected - tag else selected + tag)
+            }
+        }
+    }
 }
 
 @Composable
