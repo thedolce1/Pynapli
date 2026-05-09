@@ -69,7 +69,10 @@ import com.pynapli.app.profilelink.ProfileLinksStateHolder
 import com.pynapli.app.profilelink.ProfileLinksUiState
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.settings.AppSettings
+import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
 import kotlinx.coroutines.launch
 
 @Composable
@@ -532,6 +535,25 @@ private fun ProfileGrid(
 
     LaunchedEffect(shouldLoadMore, cards.size, canLoadMore, isLoadingMore) {
         if (shouldLoadMore) onLoadMore()
+    }
+
+    val prefetchUrls by remember(cards, gridState) {
+        derivedStateOf {
+            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            planThumbnailPrefetch(cards = cards, lastVisibleIndex = lastVisibleIndex)
+        }
+    }
+    val platformContext = LocalPlatformContext.current
+    LaunchedEffect(prefetchUrls) {
+        if (prefetchUrls.isEmpty()) return@LaunchedEffect
+        val imageLoader = runCatching { SingletonImageLoader.get(platformContext) }.getOrNull() ?: return@LaunchedEffect
+        prefetchUrls.forEach { url ->
+            imageLoader.enqueue(
+                ImageRequest.Builder(platformContext)
+                    .data(url)
+                    .build()
+            )
+        }
     }
 
     LazyVerticalGrid(

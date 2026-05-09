@@ -595,7 +595,7 @@ Battery:
 - [ ] WebSocket presence deltas update dots without full refresh.
 - [x] Location updates use thresholds before backend submission and grid refresh.
 - [ ] Partial: background location is avoided in current app code, but platform QA and policy review are still needed.
-- [ ] Partial: thumbnail caching relies on the image loader; explicit preloading is not implemented.
+- [x] Thumbnail prefetch is implemented: `planThumbnailPrefetch` derives the next `GRID_THUMBNAIL_PREFETCH_WINDOW` (12) cards beyond the last visible index, deduplicated and skipping null URLs, covered by `ThumbnailPrefetchPlannerTest`. `ProfileGrid` enqueues the planned URLs into the Coil 3 `SingletonImageLoader` from a `LaunchedEffect` keyed on the planned URL list, populating the memory/disk cache without rendering.
 - [x] Message rate limiting exists.
 - [x] Ranking does not reward spam volume.
 
