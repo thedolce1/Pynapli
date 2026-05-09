@@ -31,6 +31,7 @@ data class GridFilters(
     val discoveryStyles: Set<DiscoveryStyle> = emptySet(),
     val lifestyleTags: Set<LifestyleTag> = emptySet(),
     val logisticsTags: Set<LogisticsTag> = emptySet(),
+    val intents: Set<Intent> = emptySet(),
     val tonightAvailable: Boolean = false,
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
@@ -49,6 +50,7 @@ data class GridFilters(
             if (discoveryStyles.isNotEmpty()) count += 1
             if (lifestyleTags.isNotEmpty()) count += 1
             if (logisticsTags.isNotEmpty()) count += 1
+            if (intents.isNotEmpty()) count += 1
             if (tonightAvailable) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
@@ -77,7 +79,8 @@ data class GridFilters(
             discoveryStyles = discoveryStyles.map { it.serverValue },
             lifestyleTags = lifestyleTags.map { it.serverValue },
             logisticsTags = logisticsTags.map { it.serverValue },
-            tonightAvailableOnly = tonightAvailable
+            tonightAvailableOnly = tonightAvailable,
+            intents = intents.map { it.serverValue }
         )
     }
 
@@ -103,6 +106,7 @@ data class GridFilters(
             val styleByValue = DiscoveryStyle.entries.associateBy { it.serverValue }
             val lifestyleByValue = LifestyleTag.entries.associateBy { it.serverValue }
             val logisticsByValue = LogisticsTag.entries.associateBy { it.serverValue }
+            val intentByValue = Intent.entries.associateBy { it.serverValue }
             return GridFilters(
                 online = request.onlineOnly,
                 singles = SINGLES_CONTEXT in contexts,
@@ -114,6 +118,7 @@ data class GridFilters(
                 discoveryStyles = request.discoveryStyles.mapNotNull { styleByValue[it] }.toSet(),
                 lifestyleTags = request.lifestyleTags.mapNotNull { lifestyleByValue[it] }.toSet(),
                 logisticsTags = request.logisticsTags.mapNotNull { logisticsByValue[it] }.toSet(),
+                intents = request.intents.mapNotNull { intentByValue[it] }.toSet(),
                 tonightAvailable = request.tonightAvailableOnly,
                 radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
                 minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
@@ -146,6 +151,20 @@ enum class DiscoveryStyle(val serverValue: String, val label: String) {
     Together("together", "Together"),
     OpenToBoth("both", "Open to both"),
     Social("social", "Social")
+}
+
+/**
+ * Additional intent tokens beyond `discovery_style`. Stored in `profiles.intents`
+ * and overlap-matched. Spec: FILTERS_SPEC L114-138.
+ */
+enum class Intent(val serverValue: String, val label: String) {
+    Dating("dating", "Dating"),
+    ChatFirst("chat_first", "Chat first"),
+    Events("events", "Events"),
+    OpenToSingles("open_to_singles", "Open to singles"),
+    OpenToCouples("open_to_couples", "Open to couples"),
+    OpenToLinkedPartners("open_to_linked_partners", "Open to linked partners"),
+    OpenToGroups("open_to_groups", "Open to groups")
 }
 
 /**

@@ -11,7 +11,8 @@ data class DiscoveryFilters(
     val discoveryStyles: Set<String> = emptySet(),
     val lifestyleTags: Set<String> = emptySet(),
     val logisticsTags: Set<String> = emptySet(),
-    val tonightAvailableOnly: Boolean = false
+    val tonightAvailableOnly: Boolean = false,
+    val intents: Set<String> = emptySet()
 ) {
     val hasAdvancedFilters: Boolean
         get() = minimumAge != null ||
@@ -24,7 +25,8 @@ data class DiscoveryFilters(
             discoveryStyles.isNotEmpty() ||
             lifestyleTags.isNotEmpty() ||
             logisticsTags.isNotEmpty() ||
-            tonightAvailableOnly
+            tonightAvailableOnly ||
+            intents.isNotEmpty()
 }
 
 fun discoveryFiltersFrom(
@@ -39,6 +41,7 @@ fun discoveryFiltersFrom(
     lifestyleTags: List<String> = emptyList(),
     logisticsTags: List<String> = emptyList(),
     tonightAvailableOnly: Boolean = false,
+    intents: List<String> = emptyList(),
     errorFactory: (String) -> RuntimeException
 ): DiscoveryFilters {
     val min = minimumAge?.also { age ->
@@ -92,6 +95,17 @@ fun discoveryFiltersFrom(
         }
         .toSet()
 
+    if (intents.size > MAX_INTENT_FILTERS) {
+        throw errorFactory("INVALID_DISCOVERY_FILTER")
+    }
+    val intentValues = intents
+        .map { it.trim().lowercase() }
+        .filter { it.isNotEmpty() }
+        .onEach { value ->
+            if (value !in ALLOWED_INTENTS) throw errorFactory("INVALID_DISCOVERY_FILTER")
+        }
+        .toSet()
+
     return DiscoveryFilters(
         minimumAge = min,
         maximumAge = max,
@@ -103,7 +117,8 @@ fun discoveryFiltersFrom(
         discoveryStyles = styles,
         lifestyleTags = tags,
         logisticsTags = logistics,
-        tonightAvailableOnly = tonightAvailableOnly
+        tonightAvailableOnly = tonightAvailableOnly,
+        intents = intentValues
     )
 }
 
@@ -142,4 +157,18 @@ private val ALLOWED_LOGISTICS_TAGS = setOf(
     "hotel_friendly",
     "public_meet_first",
     "club_event_only"
+)
+
+private const val MAX_INTENT_FILTERS = 8
+
+// FILTERS_SPEC L114-138 Intent group, minus values already covered by `discovery_style`
+// (solo/together/both/social/ask_in_chat).
+private val ALLOWED_INTENTS = setOf(
+    "dating",
+    "chat_first",
+    "events",
+    "open_to_singles",
+    "open_to_couples",
+    "open_to_linked_partners",
+    "open_to_groups"
 )

@@ -18,7 +18,8 @@ data class GridQueryRequestDto(
     val discoveryStyles: List<String> = emptyList(),
     val lifestyleTags: List<String> = emptyList(),
     val logisticsTags: List<String> = emptyList(),
-    val tonightAvailableOnly: Boolean = false
+    val tonightAvailableOnly: Boolean = false,
+    val intents: List<String> = emptyList()
 )
 
 @Serializable

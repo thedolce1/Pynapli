@@ -157,6 +157,7 @@ class JdbcGridRepository(
                   AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
                   AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
                   AND (?::boolean = false OR (p.tonight_available_until IS NOT NULL AND p.tonight_available_until > now()))
+                  AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
                   AND NOT EXISTS (
                       SELECT 1
                       FROM user_blocks ub
@@ -210,16 +211,19 @@ class JdbcGridRepository(
                 statement.setArray(22, logisticsTags)
                 statement.setArray(23, logisticsTags)
                 statement.setBoolean(24, filters.tonightAvailableOnly)
-                statement.setObject(25, viewerUserId)
-                statement.setObject(26, viewerUserId)
-                statement.setBoolean(27, cursor != null)
-                statement.setObject(28, cursor?.boostBucket)
-                statement.setObject(29, cursor?.boostBucket)
-                statement.setObject(30, cursor?.distanceBucketMeters)
+                val intents = connection.createArrayOf("text", filters.intents.toTypedArray())
+                statement.setArray(25, intents)
+                statement.setArray(26, intents)
+                statement.setObject(27, viewerUserId)
+                statement.setObject(28, viewerUserId)
+                statement.setBoolean(29, cursor != null)
+                statement.setObject(30, cursor?.boostBucket)
                 statement.setObject(31, cursor?.boostBucket)
                 statement.setObject(32, cursor?.distanceBucketMeters)
-                statement.setObject(33, cursor?.userId)
-                statement.setInt(34, limit + 1)
+                statement.setObject(33, cursor?.boostBucket)
+                statement.setObject(34, cursor?.distanceBucketMeters)
+                statement.setObject(35, cursor?.userId)
+                statement.setInt(36, limit + 1)
                 statement.executeQuery().use { rs ->
                     buildList {
                         while (rs.next()) {

@@ -112,6 +112,8 @@ class DiscoveryCursorCodec(
                 append("|logisticsTags=")
                 append(filters.logisticsTags.sorted().joinToString(","))
                 append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
+                append("|intents=")
+                append(filters.intents.sorted().joinToString(","))
             }
             return sha256Base64Url(normalized)
         }

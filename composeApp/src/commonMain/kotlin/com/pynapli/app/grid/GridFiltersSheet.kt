@@ -125,6 +125,10 @@ internal fun GridFiltersSheet(
                 selected = draft.discoveryStyles,
                 onChange = { draft = draft.copy(discoveryStyles = it) }
             )
+            IntentExtendedSection(
+                selected = draft.intents,
+                onChange = { draft = draft.copy(intents = it) }
+            )
 
             SectionTitle("Lifestyle")
             LifestyleSection(
@@ -336,6 +340,25 @@ private fun LogisticsSection(
             val active = tag in selected
             SheetToggleChip(label = tag.label, active = active) {
                 onChange(if (active) selected - tag else selected + tag)
+            }
+        }
+    }
+}
+
+@Composable
+private fun IntentExtendedSection(
+    selected: Set<Intent>,
+    onChange: (Set<Intent>) -> Unit
+) {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Intent.entries.forEach { intent ->
+            val active = intent in selected
+            SheetToggleChip(label = intent.label, active = active) {
+                onChange(if (active) selected - intent else selected + intent)
             }
         }
     }

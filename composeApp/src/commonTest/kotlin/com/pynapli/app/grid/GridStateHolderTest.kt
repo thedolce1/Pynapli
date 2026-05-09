@@ -32,6 +32,22 @@ class GridStateHolderTest {
     }
 
     @Test
+    fun applyingIntentsSerializesToCanonicalTokens() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.applyFilters(
+            stateHolder.state.value.filters.copy(
+                intents = setOf(Intent.Dating, Intent.OpenToCouples)
+            )
+        )
+
+        val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+        assertEquals(setOf("dating", "open_to_couples"), request.intents.toSet())
+    }
+
+    @Test
     fun togglingTonightSetsTonightAvailableOnlyOnRequest() = runBlocking {
         val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
         val stateHolder = GridStateHolder(repository)

@@ -321,6 +321,38 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "grid query with intents filters to overlapping intent and excludes empty profiles" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000000a1")
+            val dating = UUID.fromString("00000000-0000-0000-0000-0000000000a2")
+            val events = UUID.fromString("00000000-0000-0000-0000-0000000000a3")
+            val noIntent = UUID.fromString("00000000-0000-0000-0000-0000000000a4")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(dating, "Dating", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(events, "Events", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(noIntent, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
+            dataSource.setProfileIntents(dating, listOf("dating", "open_to_singles"))
+            dataSource.setProfileIntents(events, listOf("events"))
+
+            val repository = JdbcGridRepository(dataSource)
+            val datingOnly = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(intents = setOf("dating"))
+            ).cards
+            val openToCouples = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(intents = setOf("open_to_couples"))
+            ).cards
+
+            assertEquals(listOf(dating), datingOnly.map { it.userId })
+            assertTrue(openToCouples.isEmpty(), "Untagged profile should not match an open_to_couples filter")
+        }
+    }
+
     "grid query with tonightAvailableOnly excludes profiles whose availability is null or expired" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000f01")
@@ -606,6 +638,9 @@ private fun DataSource.setProfileLifestyleTags(userId: UUID, tags: List<String>)
 private fun DataSource.setProfileLogisticsTags(userId: UUID, tags: List<String>) =
     setProfileTagArray(userId, column = "logistics_tags", tags = tags)
 
+private fun DataSource.setProfileIntents(userId: UUID, tags: List<String>) =
+    setProfileTagArray(userId, column = "intents", tags = tags)
+
 private fun DataSource.setTonightAvailableUntil(userId: UUID, hoursFromNow: Long) {
     connection.use { connection ->
         connection.prepareStatement(
@@ -619,7 +654,7 @@ private fun DataSource.setTonightAvailableUntil(userId: UUID, hoursFromNow: Long
 }
 
 private fun DataSource.setProfileTagArray(userId: UUID, column: String, tags: List<String>) {
-    require(column in setOf("lifestyle_tags", "logistics_tags")) {
+    require(column in setOf("lifestyle_tags", "logistics_tags", "intents")) {
         "Refusing to UPDATE arbitrary profile tag column from a test helper: $column"
     }
     connection.use { connection ->
