@@ -8,6 +8,7 @@ import com.pynapli.app.profile.SamplePublicProfileRepository
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class GridScreenScrollPreservationTest {
 
@@ -57,11 +58,56 @@ class GridScreenScrollPreservationTest {
         assertEquals(indexBefore, gridState.firstVisibleItemIndex, "firstVisibleItemIndex changed across profile open/close")
         assertEquals(offsetBefore, gridState.firstVisibleItemScrollOffset, "firstVisibleItemScrollOffset changed across profile open/close")
     }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun filterChangeWithSameFeedKeepsScrollPosition() = runComposeUiTest {
+        val cards = (0 until 60).map { index ->
+            GridProfileCardUi(
+                id = "card-$index",
+                displayName = "User $index",
+                online = index % 2 == 0,
+                distanceLabel = "${index + 1} km",
+                tone = GridCardTone.entries[index % GridCardTone.entries.size],
+                distanceMeters = (index + 1) * 100
+            )
+        }
+        val gridStateHolder = GridStateHolder(StaticGridFeedRepository(cards))
+        val profileDetailStateHolder = ProfileDetailStateHolder(SamplePublicProfileRepository())
+        val gridState = LazyGridState()
+
+        setContent {
+            GridScreen(
+                stateHolder = gridStateHolder,
+                profileDetailStateHolder = profileDetailStateHolder,
+                gridState = gridState
+            )
+        }
+        waitForIdle()
+        waitUntil(timeoutMillis = 5_000) { gridStateHolder.state.value.cards.isNotEmpty() }
+        waitForIdle()
+
+        runBlocking { gridState.scrollToItem(index = 30) }
+        waitForIdle()
+
+        val indexBefore = gridState.firstVisibleItemIndex
+        val offsetBefore = gridState.firstVisibleItemScrollOffset
+
+        runBlocking { gridStateHolder.selectFilter(GridFilterType.Online) }
+        waitForIdle()
+
+        assertTrue(
+            gridStateHolder.state.value.filters.first { it.type == GridFilterType.Online }.active,
+            "Online filter should be active after selectFilter(Online)"
+        )
+        assertEquals(indexBefore, gridState.firstVisibleItemIndex, "firstVisibleItemIndex changed across filter change with same feed")
+        assertEquals(offsetBefore, gridState.firstVisibleItemScrollOffset, "firstVisibleItemScrollOffset changed across filter change with same feed")
+    }
 }
 
 private class StaticGridFeedRepository(
     private val cards: List<GridProfileCardUi>
 ) : GridFeedRepository {
     override suspend fun loadGrid(filter: GridFilterType, cursor: String?): GridFeedUi =
-        GridFeedUi(cards = cards)
+        GridFeedUi(cards = cards, adSupported = false)
 }

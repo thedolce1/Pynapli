@@ -156,6 +156,60 @@ class GridStateHolderTest {
     }
 
     @Test
+    fun filterChangeKeepsCardsVisibleUntilNewFeedLands() = runBlocking {
+        val firstCard = GridProfileCardUi(
+            id = "first",
+            displayName = "First",
+            online = true,
+            distanceLabel = "1 km",
+            tone = GridCardTone.Warm
+        )
+        val secondCard = GridProfileCardUi(
+            id = "second",
+            displayName = "Second",
+            online = false,
+            distanceLabel = "2 km",
+            tone = GridCardTone.Slate
+        )
+        val gate = CompletableDeferred<Unit>()
+        val repository = GatedGridFeedRepository(
+            feeds = listOf(
+                GridFeedUi(cards = listOf(firstCard), adSupported = false),
+                GridFeedUi(cards = listOf(secondCard), adSupported = false)
+            ),
+            gateBeforeIndex = 1,
+            gate = gate
+        )
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+
+        coroutineScope {
+            val cardIdsDuringSelect = mutableListOf<List<String>>()
+            val observerJob = stateHolder.state
+                .onEach { cardIdsDuringSelect += it.cards.map { card -> card.id } }
+                .launchIn(this)
+
+            val selectJob = async(Dispatchers.Default) { stateHolder.selectFilter(GridFilterType.Online) }
+            repeat(3) { yield() }
+
+            assertTrue(
+                cardIdsDuringSelect.all { it == listOf("first") },
+                "Filter change must not clear visible cards before the new feed lands. Saw: $cardIdsDuringSelect"
+            )
+
+            gate.complete(Unit)
+            selectJob.await()
+            observerJob.cancel()
+        }
+
+        val finalState = stateHolder.state.value
+        assertEquals(listOf("second"), finalState.cards.map { it.id })
+        assertTrue(finalState.filters.first { it.type == GridFilterType.Online }.active)
+        assertFalse(finalState.isRefreshing)
+    }
+
+    @Test
     fun loadMoreAppendsUniqueCardsAndAdvancesCursor() = runBlocking {
         val first = GridProfileCardUi(
             id = "first",

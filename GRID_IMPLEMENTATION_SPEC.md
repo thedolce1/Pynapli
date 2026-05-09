@@ -590,7 +590,7 @@ Battery:
 - [x] Compose grid uses stable keys.
 - [x] Compose grid lifts `rememberLazyGridState()` to the screen-level composable so it survives `GridBody` branch flips (loading/error/loaded) and the profile detail sheet, with `GridScreenScrollPreservationTest` exercising scroll-to-index → open profile sheet → dismiss → assert `firstVisibleItemIndex` and `firstVisibleItemScrollOffset` unchanged. The test runs on the `composeApp` desktop JVM target via `runComposeUiTest`.
 - [x] Grid cards use fixed square dimensions.
-- [ ] Partial: filter updates keep existing state, but diffed list animation behavior is not yet verified.
+- [x] Filter updates keep existing state: `GridStateHolder` swaps cards atomically without clearing the visible list, and `LazyVerticalGrid` uses stable `key = card.id` + `Modifier.animateItem()` so card identity is preserved across changes. `GridStateHolderTest.filterChangeKeepsCardsVisibleUntilNewFeedLands` enforces non-clearing at the state-holder level; `GridScreenScrollPreservationTest.filterChangeWithSameFeedKeepsScrollPosition` enforces the rendered scroll position survives a filter change end-to-end.
 - [ ] Partial: profile open/close preserves current screen state in the MVP flow; emulator regression coverage is still needed.
 - [ ] WebSocket presence deltas update dots without full refresh.
 - [x] Location updates use thresholds before backend submission and grid refresh.
