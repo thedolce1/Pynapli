@@ -8,6 +8,8 @@ import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.grid.GridService
 import com.pynapli.server.grid.JdbcGridRepository
+import com.pynapli.server.grid.JdbcSavedGridFilterRepository
+import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.location.JdbcLocationRepository
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.media.JdbcMediaRepository
@@ -90,6 +92,7 @@ class ServerDependencies(
     val presenceBroadcaster: PresenceBroadcaster?,
     val presenceOfflineScanner: PresenceOfflineScanner?,
     val blockRepository: BlockRepository?,
+    val savedGridFilterService: SavedGridFilterService?,
     private val probes: List<DependencyProbe>
 ) : AutoCloseable {
     suspend fun checkAll() = probes.map { it.check() }
@@ -237,6 +240,10 @@ class ServerDependencies(
                 blockRepository = blockRepository,
                 subscriptionService = subscriptionService
             )
+            val savedGridFilterService = SavedGridFilterService(
+                repository = JdbcSavedGridFilterRepository(database.dataSource),
+                subscriptionService = subscriptionService
+            )
             val messagingRepository = JdbcMessagingRepository(database.dataSource)
             val messagingService = MessagingService(
                 repository = messagingRepository,
@@ -291,6 +298,7 @@ class ServerDependencies(
                 presenceBroadcaster = presenceBroadcaster,
                 presenceOfflineScanner = presenceOfflineScanner,
                 blockRepository = blockRepository,
+                savedGridFilterService = savedGridFilterService,
                 probes = listOf(postgres, redis)
             )
         }
@@ -332,6 +340,7 @@ class ServerDependencies(
                 presenceBroadcaster = null,
                 presenceOfflineScanner = null,
                 blockRepository = null,
+                savedGridFilterService = null,
                 probes = emptyList()
             )
     }

@@ -4,6 +4,7 @@ import com.pynapli.server.activity.ActivityException
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.authStatusFor
 import com.pynapli.server.grid.GridException
+import com.pynapli.server.grid.SavedGridFilterException
 import com.pynapli.server.location.LocationException
 import com.pynapli.server.media.MediaException
 import com.pynapli.server.messaging.MessagingException
@@ -76,6 +77,17 @@ fun Application.configureStatusPages() {
         exception<GridException> { call, cause ->
             call.respond(
                 status = gridStatusFor(cause.code),
+                message = ApiErrorDto(
+                    code = cause.code,
+                    message = userSafeMessage(cause.code),
+                    requestId = call.request.headers["X-Request-Id"] ?: "unknown"
+                )
+            )
+        }
+
+        exception<SavedGridFilterException> { call, cause ->
+            call.respond(
+                status = savedGridFilterStatusFor(cause.code),
                 message = ApiErrorDto(
                     code = cause.code,
                     message = userSafeMessage(cause.code),
@@ -220,6 +232,11 @@ private fun userSafeMessage(code: String): String = when (code) {
     "ENTITLEMENT_REQUIRED" -> "Upgrade is required for this feature."
     "INVALID_GRID_FILTER" -> "Grid filters are not valid."
     "INVALID_GRID_CURSOR" -> "Grid position is no longer valid."
+    "INVALID_SAVED_FILTER_NAME" -> "Saved filter name is not valid."
+    "INVALID_SAVED_FILTER_PAYLOAD" -> "Saved filter contains a value that is no longer supported."
+    "INVALID_SAVED_FILTER_ID" -> "Saved filter could not be found."
+    "SAVED_FILTER_NAME_TAKEN" -> "You already have a saved filter with that name."
+    "SAVED_FILTER_LIMIT_REACHED" -> "You have reached the saved filter limit."
     "INVALID_FLIRT_TARGET" -> "Spark could not be sent."
     "FLIRT_NOT_ALLOWED" -> "This profile is not accepting Sparks."
     "INVALID_ALBUM_REQUEST_TARGET" -> "Album request could not be sent."
@@ -321,6 +338,16 @@ private fun gridStatusFor(code: String): HttpStatusCode = when (code) {
     "ENTITLEMENT_REQUIRED" -> HttpStatusCode.Forbidden
     "INVALID_GRID_FILTER" -> HttpStatusCode.BadRequest
     "INVALID_GRID_CURSOR" -> HttpStatusCode.BadRequest
+    else -> HttpStatusCode.BadRequest
+}
+
+private fun savedGridFilterStatusFor(code: String): HttpStatusCode = when (code) {
+    "ENTITLEMENT_REQUIRED" -> HttpStatusCode.Forbidden
+    "SAVED_FILTER_NAME_TAKEN" -> HttpStatusCode.Conflict
+    "SAVED_FILTER_LIMIT_REACHED" -> HttpStatusCode.Conflict
+    "INVALID_SAVED_FILTER_NAME" -> HttpStatusCode.BadRequest
+    "INVALID_SAVED_FILTER_PAYLOAD" -> HttpStatusCode.BadRequest
+    "INVALID_SAVED_FILTER_ID" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest
 }
 

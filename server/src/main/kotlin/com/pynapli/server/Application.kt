@@ -6,6 +6,7 @@ import com.pynapli.server.auth.configureAuthRoutes
 import com.pynapli.server.dependencies.ServerDependencies
 import com.pynapli.server.dependencies.closeDependenciesOnStop
 import com.pynapli.server.grid.configureGridRoutes
+import com.pynapli.server.grid.configureSavedGridFilterRoutes
 import com.pynapli.server.location.configureLocationRoutes
 import com.pynapli.server.media.configureMediaRoutes
 import com.pynapli.server.messaging.configureMessagingRoutes
@@ -70,6 +71,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         blockRepository = dependencies.blockRepository
     )
     configureGridRoutes(dependencies.authService, dependencies.gridService)
+    configureSavedGridFilterRoutes(dependencies.authService, dependencies.savedGridFilterService)
     configureActivityRoutes(dependencies.authService, dependencies.activityService)
     configureNotificationRoutes(dependencies.authService, dependencies.notificationService)
     configureSubscriptionRoutes(dependencies.authService, dependencies.subscriptionService)

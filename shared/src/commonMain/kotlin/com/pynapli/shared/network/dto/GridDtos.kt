@@ -47,3 +47,23 @@ data class LinkedPartnerMiniDto(
     val displayName: String? = null,
     val thumbnailUrl: String? = null
 )
+
+@Serializable
+data class SavedGridFilterDto(
+    val id: String,
+    val name: String,
+    val payload: GridQueryRequestDto,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class SavedGridFiltersListDto(
+    val items: List<SavedGridFilterDto>
+)
+
+@Serializable
+data class CreateSavedGridFilterRequestDto(
+    val name: String,
+    val payload: GridQueryRequestDto
+)
