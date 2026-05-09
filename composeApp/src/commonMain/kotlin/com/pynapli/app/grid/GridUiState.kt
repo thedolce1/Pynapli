@@ -31,6 +31,7 @@ data class GridFilters(
     val discoveryStyles: Set<DiscoveryStyle> = emptySet(),
     val lifestyleTags: Set<LifestyleTag> = emptySet(),
     val logisticsTags: Set<LogisticsTag> = emptySet(),
+    val tonightAvailable: Boolean = false,
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
     val maximumAge: Int? = null
@@ -48,6 +49,7 @@ data class GridFilters(
             if (discoveryStyles.isNotEmpty()) count += 1
             if (lifestyleTags.isNotEmpty()) count += 1
             if (logisticsTags.isNotEmpty()) count += 1
+            if (tonightAvailable) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
             return count
@@ -74,7 +76,8 @@ data class GridFilters(
             ageVerifiedOnly = ageVerified,
             discoveryStyles = discoveryStyles.map { it.serverValue },
             lifestyleTags = lifestyleTags.map { it.serverValue },
-            logisticsTags = logisticsTags.map { it.serverValue }
+            logisticsTags = logisticsTags.map { it.serverValue },
+            tonightAvailableOnly = tonightAvailable
         )
     }
 
@@ -100,7 +103,8 @@ enum class QuickFilterId {
     Online,
     Singles,
     Linked,
-    Verified
+    Verified,
+    Tonight
 }
 
 /**

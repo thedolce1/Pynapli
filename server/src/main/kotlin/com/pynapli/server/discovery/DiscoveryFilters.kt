@@ -10,7 +10,8 @@ data class DiscoveryFilters(
     val ageVerifiedOnly: Boolean = false,
     val discoveryStyles: Set<String> = emptySet(),
     val lifestyleTags: Set<String> = emptySet(),
-    val logisticsTags: Set<String> = emptySet()
+    val logisticsTags: Set<String> = emptySet(),
+    val tonightAvailableOnly: Boolean = false
 ) {
     val hasAdvancedFilters: Boolean
         get() = minimumAge != null ||
@@ -22,7 +23,8 @@ data class DiscoveryFilters(
             ageVerifiedOnly ||
             discoveryStyles.isNotEmpty() ||
             lifestyleTags.isNotEmpty() ||
-            logisticsTags.isNotEmpty()
+            logisticsTags.isNotEmpty() ||
+            tonightAvailableOnly
 }
 
 fun discoveryFiltersFrom(
@@ -36,6 +38,7 @@ fun discoveryFiltersFrom(
     discoveryStyles: List<String> = emptyList(),
     lifestyleTags: List<String> = emptyList(),
     logisticsTags: List<String> = emptyList(),
+    tonightAvailableOnly: Boolean = false,
     errorFactory: (String) -> RuntimeException
 ): DiscoveryFilters {
     val min = minimumAge?.also { age ->
@@ -99,7 +102,8 @@ fun discoveryFiltersFrom(
         ageVerifiedOnly = ageVerifiedOnly,
         discoveryStyles = styles,
         lifestyleTags = tags,
-        logisticsTags = logistics
+        logisticsTags = logistics,
+        tonightAvailableOnly = tonightAvailableOnly
     )
 }
 

@@ -32,6 +32,19 @@ class GridStateHolderTest {
     }
 
     @Test
+    fun togglingTonightSetsTonightAvailableOnlyOnRequest() = runBlocking {
+        val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+        val stateHolder = GridStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.toggleQuickFilter(QuickFilterId.Tonight)
+
+        val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+        assertTrue(stateHolder.state.value.filters.tonightAvailable)
+        assertEquals(true, request.tonightAvailableOnly)
+    }
+
+    @Test
     fun applyingLogisticsTagsSerializesToCanonicalTokens() = runBlocking {
         val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
         val stateHolder = GridStateHolder(repository)

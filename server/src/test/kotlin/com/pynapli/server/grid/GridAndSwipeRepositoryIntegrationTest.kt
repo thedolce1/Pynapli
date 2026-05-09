@@ -321,6 +321,33 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "grid query with tonightAvailableOnly excludes profiles whose availability is null or expired" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000f01")
+            val activeTonight = UUID.fromString("00000000-0000-0000-0000-000000000f02")
+            val expiredTonight = UUID.fromString("00000000-0000-0000-0000-000000000f03")
+            val noTonight = UUID.fromString("00000000-0000-0000-0000-000000000f04")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(activeTonight, "Tonight", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(expiredTonight, "Was", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(noTonight, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
+            dataSource.setTonightAvailableUntil(activeTonight, hoursFromNow = 6)
+            dataSource.setTonightAvailableUntil(expiredTonight, hoursFromNow = -1)
+
+            val repository = JdbcGridRepository(dataSource)
+            val tonightOnly = repository.queryNearby(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(tonightAvailableOnly = true)
+            ).cards
+            val unfiltered = repository.queryNearby(viewer, radiusMeters = 100_000, limit = 10).cards
+
+            assertEquals(listOf(activeTonight), tonightOnly.map { it.userId })
+            assertEquals(setOf(activeTonight, expiredTonight, noTonight), unfiltered.map { it.userId }.toSet())
+        }
+    }
+
     "grid query with logisticsTags filters to overlapping tag and excludes untagged profiles" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000e01")
@@ -578,6 +605,18 @@ private fun DataSource.setProfileLifestyleTags(userId: UUID, tags: List<String>)
 
 private fun DataSource.setProfileLogisticsTags(userId: UUID, tags: List<String>) =
     setProfileTagArray(userId, column = "logistics_tags", tags = tags)
+
+private fun DataSource.setTonightAvailableUntil(userId: UUID, hoursFromNow: Long) {
+    connection.use { connection ->
+        connection.prepareStatement(
+            "UPDATE profiles SET tonight_available_until = now() + (? || ' hours')::interval WHERE user_id = ?"
+        ).use { statement ->
+            statement.setString(1, hoursFromNow.toString())
+            statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+    }
+}
 
 private fun DataSource.setProfileTagArray(userId: UUID, column: String, tags: List<String>) {
     require(column in setOf("lifestyle_tags", "logistics_tags")) {

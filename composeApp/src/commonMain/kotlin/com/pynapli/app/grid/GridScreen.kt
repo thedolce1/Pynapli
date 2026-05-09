@@ -456,6 +456,13 @@ private fun QuickFilterRow(
                 onClick = { onToggled(QuickFilterId.Verified) }
             )
         }
+        item(key = QuickFilterId.Tonight.name) {
+            QuickToggleChip(
+                label = "Tonight",
+                active = filters.tonightAvailable,
+                onClick = { onToggled(QuickFilterId.Tonight) }
+            )
+        }
     }
 }
 

@@ -70,7 +70,9 @@ internal fun GridFiltersSheet(
             SectionTitle("Presence")
             PresenceSection(
                 online = draft.online,
-                onToggle = { draft = draft.copy(online = !draft.online) }
+                tonightAvailable = draft.tonightAvailable,
+                onOnlineToggle = { draft = draft.copy(online = !draft.online) },
+                onTonightToggle = { draft = draft.copy(tonightAvailable = !draft.tonightAvailable) }
             )
 
             SectionTitle("Who")
@@ -191,8 +193,16 @@ private fun AgeSection(
 }
 
 @Composable
-private fun PresenceSection(online: Boolean, onToggle: () -> Unit) {
-    SheetToggleChip(label = "Online now", active = online, onClick = onToggle)
+private fun PresenceSection(
+    online: Boolean,
+    tonightAvailable: Boolean,
+    onOnlineToggle: () -> Unit,
+    onTonightToggle: () -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SheetToggleChip(label = "Online now", active = online, onClick = onOnlineToggle)
+        SheetToggleChip(label = "Available tonight", active = tonightAvailable, onClick = onTonightToggle)
+    }
 }
 
 @Composable

@@ -156,6 +156,7 @@ class JdbcGridRepository(
                   AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
                   AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
                   AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+                  AND (?::boolean = false OR (p.tonight_available_until IS NOT NULL AND p.tonight_available_until > now()))
                   AND NOT EXISTS (
                       SELECT 1
                       FROM user_blocks ub
@@ -208,16 +209,17 @@ class JdbcGridRepository(
                 val logisticsTags = connection.createArrayOf("text", filters.logisticsTags.toTypedArray())
                 statement.setArray(22, logisticsTags)
                 statement.setArray(23, logisticsTags)
-                statement.setObject(24, viewerUserId)
+                statement.setBoolean(24, filters.tonightAvailableOnly)
                 statement.setObject(25, viewerUserId)
-                statement.setBoolean(26, cursor != null)
-                statement.setObject(27, cursor?.boostBucket)
+                statement.setObject(26, viewerUserId)
+                statement.setBoolean(27, cursor != null)
                 statement.setObject(28, cursor?.boostBucket)
-                statement.setObject(29, cursor?.distanceBucketMeters)
-                statement.setObject(30, cursor?.boostBucket)
-                statement.setObject(31, cursor?.distanceBucketMeters)
-                statement.setObject(32, cursor?.userId)
-                statement.setInt(33, limit + 1)
+                statement.setObject(29, cursor?.boostBucket)
+                statement.setObject(30, cursor?.distanceBucketMeters)
+                statement.setObject(31, cursor?.boostBucket)
+                statement.setObject(32, cursor?.distanceBucketMeters)
+                statement.setObject(33, cursor?.userId)
+                statement.setInt(34, limit + 1)
                 statement.executeQuery().use { rs ->
                     buildList {
                         while (rs.next()) {
