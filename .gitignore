@@ -15,6 +15,7 @@ out/
 
 # Generated local QA artifacts
 artifacts/
+logs/
 
 # Android
 local.properties
