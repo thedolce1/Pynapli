@@ -232,6 +232,10 @@ function Get-DevSession {
         -Body @{
             email = $Email
             password = $Password
+            birthdate = "1990-01-01"
+            confirmedAdult = $true
+            acceptedTerms = $true
+            acceptedPrivacy = $true
             deviceId = "local-dev-seed"
             platform = "seed"
             appVersion = "0.1.0"

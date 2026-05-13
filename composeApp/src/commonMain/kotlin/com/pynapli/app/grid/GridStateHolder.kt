@@ -34,7 +34,7 @@ class GridStateHolder(
                         cards = feed.cards,
                         nextCursor = feed.nextCursor,
                         adSupported = feed.adSupported,
-                        paywallMessage = null,
+                        paywallMessage = feed.resultLimitPaywallMessage,
                         isRefreshing = false,
                         errorCode = null,
                         errorMessage = null
@@ -122,6 +122,7 @@ class GridStateHolder(
                         cards = existing.cards + appended,
                         nextCursor = feed.nextCursor,
                         adSupported = feed.adSupported,
+                        paywallMessage = feed.resultLimitPaywallMessage,
                         isLoadingMore = false,
                         errorCode = null,
                         errorMessage = null
@@ -195,7 +196,9 @@ class ApiGridFeedRepository(
                 },
                 nextCursor = result.value.nextCursor,
                 adSupported = result.value.adSupported,
-                advancedFiltersApplied = result.value.advancedFiltersApplied
+                advancedFiltersApplied = result.value.advancedFiltersApplied,
+                resultLimitReached = result.value.resultLimitReached,
+                resultLimitTier = result.value.resultLimitTier
             )
 
             is AppResult.Failure -> throw GridFeedException(
@@ -218,8 +221,21 @@ data class GridFeedUi(
     val cards: List<GridProfileCardUi>,
     val nextCursor: String? = null,
     val adSupported: Boolean = false,
-    val advancedFiltersApplied: Boolean = false
-)
+    val advancedFiltersApplied: Boolean = false,
+    val resultLimitReached: Boolean = false,
+    val resultLimitTier: String? = null
+) {
+    val resultLimitPaywallMessage: String?
+        get() = if (!resultLimitReached) {
+            null
+        } else {
+            when (resultLimitTier) {
+                "free" -> "Social unlocks more nearby profiles."
+                "social" -> "Select unlocks the largest nearby grid."
+                else -> null
+            }
+        }
+}
 
 private class GridFeedException(
     val code: String,

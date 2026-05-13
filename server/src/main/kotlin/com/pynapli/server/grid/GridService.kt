@@ -12,6 +12,8 @@ import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
 import java.util.UUID
@@ -24,14 +26,15 @@ class GridService(
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val blockRepository: BlockRepository? = null,
     private val subscriptionService: SubscriptionService? = null,
-    private val viewerTrustRepository: GridViewerTrustRepository? = null
+    private val viewerTrustRepository: GridViewerTrustRepository? = null,
+    private val rateLimitService: RateLimitService? = null
 ) {
     suspend fun queryGrid(
         viewerUserId: UUID,
         request: GridQueryRequestDto
     ): GridQueryResponseDto {
+        requireGridQueryRateLimit(viewerUserId)
         val radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
-        val limit = request.limit.coerceIn(1, MAX_LIMIT)
         val filters = discoveryFiltersFrom(
             minimumAge = request.minimumAge,
             maximumAge = request.maximumAge,
@@ -52,11 +55,12 @@ class GridService(
         if (advancedFiltersApplied && !policy.advancedFiltersAllowed) {
             throw GridException("ENTITLEMENT_REQUIRED")
         }
+        val pageLimit = request.limit.coerceIn(1, minOf(MAX_LIMIT, policy.gridPageLimit))
 
         val cursorScopeHash = DiscoveryCursorCodec.gridScopeHash(
             viewerUserId = viewerUserId,
             radiusMeters = radiusMeters,
-            limit = limit,
+            limit = pageLimit,
             filters = filters,
             onlineOnly = request.onlineOnly
         )
@@ -66,6 +70,18 @@ class GridService(
             } catch (_: DiscoveryCursorException) {
                 throw GridException("INVALID_GRID_CURSOR")
             }
+        }
+        val remainingVisible = policy.remainingGridResults(cursor?.seenCount ?: 0)
+        val limit = pageLimit.coerceAtMost(remainingVisible)
+        if (limit <= 0) {
+            return GridQueryResponseDto(
+                items = emptyList(),
+                nextCursor = null,
+                adSupported = policy.adSupported,
+                advancedFiltersApplied = advancedFiltersApplied,
+                resultLimitReached = policy.gridResultDepthLimit != Int.MAX_VALUE,
+                resultLimitTier = policy.tier.takeIf { policy.gridResultDepthLimit != Int.MAX_VALUE }
+            )
         }
 
         val result = repository.queryNearby(viewerUserId, radiusMeters, limit, filters, cursor)
@@ -85,13 +101,27 @@ class GridService(
         } else {
             visibleCards
         }
+        val dtoCards = filteredCards.map { it.toDto(onlineUserIds) }
+        val seenCount = (cursor?.seenCount ?: 0) + dtoCards.size
+        val resultLimitReached = result.nextCursorAnchor != null &&
+            policy.gridResultDepthLimit != Int.MAX_VALUE &&
+            seenCount >= policy.gridResultDepthLimit
 
         return GridQueryResponseDto(
-            items = filteredCards.map { it.toDto(onlineUserIds) },
-            nextCursor = result.nextCursorAnchor?.let { cursorCodec.encodeGridCursor(cursorScopeHash, it) },
+            items = dtoCards,
+            nextCursor = result.nextCursorAnchor
+                ?.takeUnless { resultLimitReached }
+                ?.let { cursorCodec.encodeGridCursor(cursorScopeHash, it.copy(seenCount = seenCount)) },
             adSupported = policy.adSupported,
-            advancedFiltersApplied = advancedFiltersApplied
+            advancedFiltersApplied = advancedFiltersApplied,
+            resultLimitReached = resultLimitReached,
+            resultLimitTier = policy.tier.takeIf { resultLimitReached }
         )
+    }
+
+    private suspend fun requireGridQueryRateLimit(viewerUserId: UUID) {
+        val decision = rateLimitService?.check(viewerUserId, RateLimitedAction.GRID_QUERY) ?: return
+        if (!decision.allowed) throw GridException("RATE_LIMITED")
     }
 
     private suspend fun refreshViewerPresence(viewerUserId: UUID) {
@@ -135,3 +165,10 @@ class GridService(
 }
 
 class GridException(val code: String) : RuntimeException(code)
+
+private fun EntitlementPolicy.remainingGridResults(seenCount: Int): Int =
+    if (gridResultDepthLimit == Int.MAX_VALUE) {
+        Int.MAX_VALUE
+    } else {
+        (gridResultDepthLimit - seenCount).coerceAtLeast(0)
+    }

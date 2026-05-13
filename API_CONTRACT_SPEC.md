@@ -197,6 +197,16 @@ Response:
 
 ```kotlin
 @Serializable
+data class GridQueryResponseDto(
+    val items: List<GridCardDto>,
+    val nextCursor: String? = null,
+    val adSupported: Boolean = false,
+    val advancedFiltersApplied: Boolean = false,
+    val resultLimitReached: Boolean = false,
+    val resultLimitTier: String? = null
+)
+
+@Serializable
 data class GridCardDto(
     val userId: String,
     val displayName: String,
@@ -212,6 +222,9 @@ Rules:
 - Open messaging is allowed from Grid if recipient settings and risk policy allow.
 - Grid cards stay minimal.
 - Apply blocks/privacy/risk before returning cards.
+- Ktor enforces tier volume caps. Free is page 60 / depth 60, Social is page 90 / depth 600, and Select is page 120 / uncapped depth.
+- Cursor tokens include scope and seen-count state so clients cannot bypass tier depth by changing requested limits.
+- `resultLimitReached` is true when a capped tier reached its available Grid depth and more eligible candidates exist behind the paid gate.
 
 ## Swipe API
 

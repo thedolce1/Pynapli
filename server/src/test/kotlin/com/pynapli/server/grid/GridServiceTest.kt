@@ -6,6 +6,9 @@ import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.presence.PresenceState
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.subscriptions.LinkedPartnerSubscriptionRecord
+import com.pynapli.server.safety.RateLimitCounter
+import com.pynapli.server.safety.RateLimitRepository
+import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.subscriptions.StoredEntitlementRecord
 import com.pynapli.server.subscriptions.SubscriptionRecord
 import com.pynapli.server.subscriptions.SubscriptionRepository
@@ -268,6 +271,59 @@ class GridServiceTest {
     }
 
     @Test
+    fun queryGridAppliesFreeTierGridVolumeLimit() = runBlocking {
+        val viewerId = UUID.randomUUID()
+        val repository = LimitAwareGridRepository(totalCards = 90)
+        val service = GridService(
+            repository = repository,
+            subscriptionService = freeSubscriptionService()
+        )
+
+        val response = service.queryGrid(viewerId, GridQueryRequestDto(limit = 120))
+
+        assertEquals(listOf(60), repository.receivedLimits)
+        assertEquals(60, response.items.size)
+        assertNull(response.nextCursor)
+        assertEquals(true, response.resultLimitReached)
+        assertEquals(SubscriptionTier.FREE, response.resultLimitTier)
+    }
+
+    @Test
+    fun queryGridCarriesSeenCountThroughPaidTierCursor() = runBlocking {
+        val viewerId = UUID.randomUUID()
+        val repository = LimitAwareGridRepository(totalCards = 220)
+        val service = GridService(
+            repository = repository,
+            subscriptionService = paidSubscriptionService(viewerId, SubscriptionTier.SOCIAL)
+        )
+
+        val firstPage = service.queryGrid(viewerId, GridQueryRequestDto(limit = 90))
+        val nextCursor = assertNotNull(firstPage.nextCursor)
+        service.queryGrid(viewerId, GridQueryRequestDto(limit = 90, cursor = nextCursor))
+
+        assertEquals(listOf(90, 90), repository.receivedLimits)
+        assertEquals(90, firstPage.items.size)
+        assertEquals(90, repository.receivedCursors[1]?.seenCount)
+        assertEquals(false, firstPage.resultLimitReached)
+    }
+
+    @Test
+    fun queryGridRejectsRateLimitedViewerBeforeRepositoryQuery() = runBlocking {
+        val repository = LimitAwareGridRepository(totalCards = 10)
+        val service = GridService(
+            repository = repository,
+            rateLimitService = denyingRateLimitService()
+        )
+
+        val error = assertFailsWith<GridException> {
+            service.queryGrid(UUID.randomUUID(), GridQueryRequestDto())
+        }
+
+        assertEquals("RATE_LIMITED", error.code)
+        assertEquals(emptyList(), repository.receivedLimits)
+    }
+
+    @Test
     fun queryGridReturnsSignedCursorAndPassesDecodedAnchorToRepository() = runBlocking {
         val viewerId = UUID.randomUUID()
         val targetId = UUID.randomUUID()
@@ -297,7 +353,7 @@ class GridServiceTest {
         val nextCursor = assertNotNull(firstPage.nextCursor)
         service.queryGrid(viewerId, GridQueryRequestDto(limit = 1, cursor = nextCursor))
 
-        assertEquals(listOf(null, anchor), repository.receivedCursors)
+        assertEquals(listOf(null, anchor.copy(seenCount = 1)), repository.receivedCursors)
     }
 
     @Test
@@ -400,6 +456,42 @@ private class CapturingGridRepository(
     }
 }
 
+private class LimitAwareGridRepository(
+    totalCards: Int
+) : GridRepository {
+    val receivedLimits = mutableListOf<Int>()
+    val receivedCursors = mutableListOf<GridCursorAnchor?>()
+
+    private val cards = List(totalCards) { index ->
+        GridCardRecord(
+            userId = UUID.nameUUIDFromBytes("grid-limit-card-$index".toByteArray()),
+            displayName = "Grid $index",
+            showDistance = true,
+            distanceMeters = index.toDouble(),
+            distanceBucketMeters = index
+        )
+    }
+
+    override suspend fun queryNearby(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        cursor: GridCursorAnchor?
+    ): GridQueryResult {
+        receivedLimits += limit
+        receivedCursors += cursor
+        val startIndex = cursor?.distanceBucketMeters?.plus(1) ?: 0
+        val page = cards.drop(startIndex).take(limit)
+        val hasMore = cards.size > startIndex + limit
+        return GridQueryResult(
+            viewerHadLocation = true,
+            cards = page,
+            nextCursorAnchor = if (hasMore && page.isNotEmpty()) page.last().toCursorAnchor() else null
+        )
+    }
+}
+
 private class StaticPresenceRepository(
     private val onlineIds: Set<UUID>
 ) : PresenceRepository {
@@ -436,6 +528,14 @@ private fun paidSubscriptionService(userId: UUID, tier: String): SubscriptionSer
                 )
             )
         )
+    )
+
+private fun denyingRateLimitService(): RateLimitService =
+    RateLimitService(
+        object : RateLimitRepository {
+            override suspend fun increment(key: String, windowSeconds: Long): RateLimitCounter =
+                RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
+        }
     )
 
 private class StaticSubscriptionRepository(

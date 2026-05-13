@@ -6,6 +6,10 @@ import com.pynapli.server.swipe.canonicalPair
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.kotest.core.spec.style.StringSpec
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
 import org.testcontainers.containers.PostgreSQLContainer
@@ -41,7 +45,7 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
                 jdbcUrl = postgres.jdbcUrl
                 username = postgres.username
                 password = postgres.password
-                maximumPoolSize = 2
+                maximumPoolSize = 16
                 poolName = "pynapli-grid-swipe-test"
             }
         )
@@ -293,6 +297,51 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
             assertTrue(
                 elapsedMillis < 10_000,
                 "Dense grid query should remain comfortably under 10s in local Testcontainers; actual=${elapsedMillis}ms"
+            )
+        }
+    }
+
+    "grid query handles 100 concurrent filtered requests over 5000 nearby candidates" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000972")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDenseDiscoverableUsers(
+                count = 5_000,
+                baseLongitude = -122.0841,
+                baseLatitude = 37.4220
+            )
+
+            val repository = JdbcGridRepository(dataSource)
+            val filterSet = listOf(
+                DiscoveryFilters(),
+                DiscoveryFilters(relationshipContexts = setOf("single")),
+                DiscoveryFilters(relationshipContexts = setOf("linked")),
+                DiscoveryFilters(minimumAge = 35, maximumAge = 45)
+            )
+            val timingsMillis = coroutineScope {
+                (0 until 100).map { index ->
+                    async(Dispatchers.IO) {
+                        val startedAt = System.nanoTime()
+                        val result = repository.queryNearby(
+                            viewerUserId = viewer,
+                            radiusMeters = 100_000,
+                            limit = 60,
+                            filters = filterSet[index % filterSet.size]
+                        )
+                        val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000
+                        assertTrue(result.viewerHadLocation)
+                        assertTrue(result.cards.isNotEmpty())
+                        elapsedMillis
+                    }
+                }.awaitAll()
+            }
+            val p95Millis = timingsMillis.sorted()[94]
+            val maxMillis = timingsMillis.maxOrNull() ?: 0
+            println("Grid dense 5000 candidate 100-concurrent filtered p95=${p95Millis}ms max=${maxMillis}ms")
+
+            assertTrue(
+                p95Millis < 5_000,
+                "Dense concurrent grid p95 should stay below the local regression ceiling; actual=${p95Millis}ms"
             )
         }
     }

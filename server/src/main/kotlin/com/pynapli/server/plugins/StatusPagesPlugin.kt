@@ -373,6 +373,7 @@ private fun gridStatusFor(code: String): HttpStatusCode = when (code) {
     "LOCATION_REQUIRED" -> HttpStatusCode.BadRequest
     "ENTITLEMENT_REQUIRED",
     "AGE_VERIFICATION_REQUIRED" -> HttpStatusCode.Forbidden
+    "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
     "INVALID_GRID_FILTER" -> HttpStatusCode.BadRequest
     "INVALID_GRID_CURSOR" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest

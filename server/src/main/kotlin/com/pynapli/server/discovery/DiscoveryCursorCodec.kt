@@ -28,7 +28,8 @@ class DiscoveryCursorCodec(
                 scopeHash = scopeHash,
                 boostBucket = anchor.boostBucket,
                 distanceBucketMeters = anchor.distanceBucketMeters,
-                userId = anchor.userId.toString()
+                userId = anchor.userId.toString(),
+                seenCount = anchor.seenCount
             )
         )
 
@@ -43,7 +44,8 @@ class DiscoveryCursorCodec(
             distanceBucketMeters = payload.distanceBucketMeters ?: throw DiscoveryCursorException(),
             userId = runCatching {
                 UUID.fromString(payload.userId ?: throw DiscoveryCursorException())
-            }.getOrElse { throw DiscoveryCursorException() }
+            }.getOrElse { throw DiscoveryCursorException() },
+            seenCount = payload.seenCount ?: 0
         )
     }
 
@@ -138,5 +140,6 @@ private data class DiscoveryCursorPayload(
     val scopeHash: String,
     val boostBucket: Int? = null,
     val distanceBucketMeters: Int? = null,
-    val userId: String? = null
+    val userId: String? = null,
+    val seenCount: Int? = null
 )

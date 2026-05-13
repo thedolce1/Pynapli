@@ -718,7 +718,9 @@ data class EntitlementPolicy(
     val adSupported: Boolean,
     val activityRevealLimit: Int,
     val advancedFiltersAllowed: Boolean,
-    val introNoteInventoryRequired: Boolean
+    val introNoteInventoryRequired: Boolean,
+    val gridPageLimit: Int,
+    val gridResultDepthLimit: Int
 ) {
     val fullActivityReveal: Boolean
         get() = activityRevealLimit == Int.MAX_VALUE
@@ -730,7 +732,9 @@ data class EntitlementPolicy(
                 adSupported = false,
                 activityRevealLimit = Int.MAX_VALUE,
                 advancedFiltersAllowed = true,
-                introNoteInventoryRequired = true
+                introNoteInventoryRequired = true,
+                gridPageLimit = 120,
+                gridResultDepthLimit = Int.MAX_VALUE
             )
     }
 }
@@ -742,21 +746,27 @@ fun SubscriptionEntitlementDto.toPolicy(): EntitlementPolicy =
             adSupported = adSupported,
             activityRevealLimit = Int.MAX_VALUE,
             advancedFiltersAllowed = true,
-            introNoteInventoryRequired = true
+            introNoteInventoryRequired = true,
+            gridPageLimit = 120,
+            gridResultDepthLimit = Int.MAX_VALUE
         )
         SubscriptionTier.SOCIAL -> EntitlementPolicy(
             tier = tier,
             adSupported = adSupported,
             activityRevealLimit = 10,
             advancedFiltersAllowed = true,
-            introNoteInventoryRequired = true
+            introNoteInventoryRequired = true,
+            gridPageLimit = 90,
+            gridResultDepthLimit = 600
         )
         else -> EntitlementPolicy(
             tier = SubscriptionTier.FREE,
             adSupported = true,
             activityRevealLimit = 1,
             advancedFiltersAllowed = false,
-            introNoteInventoryRequired = true
+            introNoteInventoryRequired = true,
+            gridPageLimit = 60,
+            gridResultDepthLimit = 60
         )
     }
 

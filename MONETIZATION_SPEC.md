@@ -462,7 +462,7 @@ Bad paywall moments:
 | Ads | Yes | No | No |
 | Basic profile | Yes | Yes | Yes |
 | Basic grid | Yes | Yes | Yes |
-| Expanded grid | Limited | Yes | Larger |
+| Expanded grid | 60-profile nearby depth | 600-profile nearby depth | Largest uncapped nearby depth |
 | Grid messaging | Yes | Yes | Yes |
 | Basic filters | Yes | Yes | Yes |
 | Advanced filters | No | Some | Yes |

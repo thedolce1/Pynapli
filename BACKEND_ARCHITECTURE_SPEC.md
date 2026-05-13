@@ -185,7 +185,7 @@ Responsibilities:
 - Apply blocks/hides
 - Apply location radius
 - Apply hard filters
-- Apply tier volume gates
+- Apply tier volume gates: Free page 60 / depth 60, Social page 90 / depth 600, Select page 120 / uncapped depth.
 - Apply ranking
 - Return lightweight card DTOs
 - Return stable cursor
@@ -551,7 +551,7 @@ entitlement:cache:{userId}
 
 Use TTLs aggressively for ephemeral state.
 
-Redis is cache/ephemeral state, not authoritative records.
+Redis is cache/ephemeral state, not authoritative records. Candidate ID caching remains evidence-gated; the current implementation uses Redis for presence and rate limits while PostGIS remains authoritative for Grid eligibility.
 
 ## API Shape
 

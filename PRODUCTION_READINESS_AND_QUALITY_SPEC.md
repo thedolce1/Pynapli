@@ -130,12 +130,12 @@ Before public beta, load test a metro-cell scenario with:
 
 The app must not request or render all 5,000 profiles.
 
-Current status: a Docker-backed repository integration test proves stable two-page Grid cursor paging over 5,000 nearby candidates. The full beta load test with concurrent users, online presence distribution, mixed filters, and tier visibility remains open.
+Current status: Docker-backed repository integration tests prove stable two-page Grid cursor paging over 5,000 nearby candidates and a 100-concurrent filtered query regression guardrail. Latest local Testcontainers run on 2026-05-13: two-page dense query 170ms; 100-concurrent filtered p95 1230ms, max 1692ms. The full beta API/device load test with online presence distribution, mixed tiers, profile opens, and Android rendering remains open.
 
 Expected behavior:
 
 - Backend narrows candidates with PostGIS and indexed filters.
-- Redis/H3-style coarse location caches hold hot candidate ID sets.
+- Redis/H3-style coarse location caches hold hot candidate ID sets if the API-level load test shows PostGIS cannot meet warm/filter p95 budgets without them.
 - API returns a capped lightweight page.
 - Client appends/reorders incrementally.
 - Filter changes animate differences instead of blanking the grid.
@@ -170,6 +170,8 @@ Every grid query must apply:
 - Partner visibility rules.
 - Subscription visibility limits.
 - Rate limits.
+
+Current implementation enforces Grid page/depth caps server-side by entitlement tier: Free page 60 / depth 60, Social page 90 / depth 600, Select page 120 / uncapped depth. Cursor payloads include seen-count state, so a capped tier cannot bypass depth by changing requested page size.
 
 These rules must be tested as backend integration tests.
 

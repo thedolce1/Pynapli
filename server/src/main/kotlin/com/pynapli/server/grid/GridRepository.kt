@@ -39,7 +39,8 @@ data class GridCardRecord(
 data class GridCursorAnchor(
     val boostBucket: Int,
     val distanceBucketMeters: Int,
-    val userId: UUID
+    val userId: UUID,
+    val seenCount: Int = 0
 )
 
 fun GridCardRecord.toCursorAnchor(): GridCursorAnchor =

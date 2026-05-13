@@ -50,7 +50,8 @@ class RateLimitService(
             RateLimitPolicy(action = RateLimitedAction.ALBUM_REQUEST, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
             RateLimitPolicy(action = RateLimitedAction.PROFILE_VIEW, limit = 240, windowSeconds = ONE_HOUR_SECONDS),
             RateLimitPolicy(action = RateLimitedAction.SWIPE_ACTION, limit = 500, windowSeconds = ONE_HOUR_SECONDS),
-            RateLimitPolicy(action = RateLimitedAction.FIRST_MESSAGE, limit = 30, windowSeconds = ONE_HOUR_SECONDS)
+            RateLimitPolicy(action = RateLimitedAction.FIRST_MESSAGE, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
+            RateLimitPolicy(action = RateLimitedAction.GRID_QUERY, limit = 720, windowSeconds = ONE_HOUR_SECONDS)
         ).associateBy { it.action }
 
         private const val ONE_HOUR_SECONDS = 3_600L
@@ -64,6 +65,7 @@ object RateLimitedAction {
     const val PROFILE_VIEW = "profile_view"
     const val SWIPE_ACTION = "swipe_action"
     const val FIRST_MESSAGE = "first_message"
+    const val GRID_QUERY = "grid_query"
 }
 
 data class RateLimitDecision(

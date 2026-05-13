@@ -245,7 +245,8 @@ class ServerDependencies(
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
                 blockRepository = blockRepository,
                 subscriptionService = subscriptionService,
-                viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource)
+                viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
+                rateLimitService = rateLimitService
             )
             val savedGridFilterService = SavedGridFilterService(
                 repository = JdbcSavedGridFilterRepository(database.dataSource),

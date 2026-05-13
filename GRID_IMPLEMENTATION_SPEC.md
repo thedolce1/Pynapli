@@ -587,6 +587,9 @@ Battery:
 - [ ] Partial: Redis candidate cache is not implemented; Redis is currently used for presence/rate limits.
 - [x] Signed stable cursor pagination is implemented for live grid responses.
 - [x] 5,000-candidate dense grid integration proof exists for stable cursor pages.
+- [x] 100-concurrent filtered repository regression proof exists against the same dense dataset. Latest local Testcontainers run on 2026-05-13: two-page dense query 170ms; 100-concurrent filtered p95 1230ms, max 1692ms. This is a regression guardrail, not the final production API p95 budget.
+- [x] Server-enforced Grid volume caps exist by tier: Free page 60 / depth 60, Social page 90 / depth 600, Select page 120 / uncapped depth. Cursor payloads carry seen-count state so capped tiers cannot bypass depth by asking for larger pages.
+- [x] Redis-backed Grid query rate limiting is wired through `RateLimitService` in production dependencies.
 - [x] Compose grid uses stable keys.
 - [x] Compose grid lifts `rememberLazyGridState()` to the screen-level composable so it survives `GridBody` branch flips (loading/error/loaded) and the profile detail sheet, with `GridScreenScrollPreservationTest` exercising scroll-to-index → open profile sheet → dismiss → assert `firstVisibleItemIndex` and `firstVisibleItemScrollOffset` unchanged. The test runs on the `composeApp` desktop JVM target via `runComposeUiTest`.
 - [x] Grid cards use fixed square dimensions.
