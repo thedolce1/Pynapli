@@ -42,6 +42,7 @@ service-account*.json
 
 # Local server logs
 .pynapli-local-logs/
+.pynapli-logs/
 
 # OS
 .DS_Store

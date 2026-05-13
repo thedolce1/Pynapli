@@ -132,7 +132,9 @@ The app must not request or render all 5,000 profiles.
 
 Current status: Docker-backed repository integration tests prove stable two-page Grid cursor paging over 5,000 nearby candidates and a 100-concurrent filtered query regression guardrail. Latest local Testcontainers run on 2026-05-13: two-page dense query 170ms; 100-concurrent filtered p95 1230ms, max 1692ms.
 
-The API-level Ktor load harness now exists at `scripts/grid-api-load-test.ps1`. It exercises 5,000 dense candidates, 1,000 online presence keys, 100 concurrent mixed Free/Social/Select users, presence heartbeats, first grid query, filtered grid query, page-two query where entitlement allows it, and profile opens. Latest local run on 2026-05-13 produced zero HTTP errors, but p95 latency is still over beta budgets:
+The API-level Ktor load harness now exists at `scripts/grid-api-load-test.ps1`. It exercises 5,000 dense candidates, 1,000 online presence keys, 100 concurrent mixed Free/Social/Select users, presence heartbeats, first grid query, filtered grid query, page-two query where entitlement allows it, and profile opens.
+
+Earlier pre-optimization local runs on 2026-05-13 produced zero HTTP errors but missed p95 budgets:
 
 | Server Shape | Scenario | P95 | Budget | Status |
 | --- | --- | ---: | ---: | --- |
@@ -147,9 +149,9 @@ The API-level Ktor load harness now exists at `scripts/grid-api-load-test.ps1`. 
 | Tuned DB pool 32 / min idle 8 | Presence heartbeat | 341ms | 300ms | Over |
 | Tuned DB pool 32 / min idle 8 | Profile open | 1181ms | 800ms | Over |
 
-This is useful evidence, not a failure to hide: the API path is stable under this local load shape, but it needs profiling and optimization before the Grid can be called beta-ready. Next work should capture endpoint-level DB timings, Hikari pool behavior, and slow query plans, then decide from evidence whether Redis candidate caching is necessary now.
+This is useful evidence, not a failure to hide: the API path was stable under this local load shape, but it needed profiling and optimization before the Grid could be called beta-ready.
 
-Profiled follow-up on 2026-05-13 with `PYNAPLI_API_PROFILING_ENABLED=true` and the same DB pool 32 / min idle 8 showed:
+Pre-optimization profiled follow-up on 2026-05-13 with `PYNAPLI_API_PROFILING_ENABLED=true` and the same DB pool 32 / min idle 8 showed:
 
 - Grid initial p95 1793ms; server route p95 1749ms; service p95 1607ms; repository p95 1138ms; DB candidate query p95 1064ms; DB connection wait p95 161ms.
 - Grid filter p95 1650ms; repository p95 1018ms; DB candidate query p95 897ms; DB connection wait p95 189ms.
@@ -160,7 +162,17 @@ Profiled follow-up on 2026-05-13 with `PYNAPLI_API_PROFILING_ENABLED=true` and t
 
 Representative `EXPLAIN (ANALYZE, BUFFERS)` for the no-filter Grid candidate query returned 61 cards in about 103ms alone, touched about 98k shared buffers, and looped through about 5,100 candidates while running lateral profile-photo, linked-partner, block, and boost checks. The evidence points to DB pressure from over-hydrating/ranking the full dense candidate set under concurrency.
 
-Decision: do not jump straight to Redis candidate caching yet. First optimize the Grid SQL shape to generate candidate IDs/distance/rank first, cap to the requested page plus cursor buffer, then hydrate only those cards. Rerun the same profiled harness after that. Redis candidate caching becomes justified if the two-phase SQL still cannot meet warm/filter p95 budgets.
+The Grid repository now uses a two-phase SQL shape: it ranks eligible candidate IDs/distance/boost state first, caps to the requested page plus cursor buffer, then hydrates profile thumbnail and linked-partner details only for that page. Post-optimization profiled follow-up on 2026-05-13 with the same 5,000-candidate / 100-concurrent / DB pool 32 shape produced zero HTTP errors:
+
+| Scenario | Client P95 | Server Route P95 | Service P95 | Repository P95 | Candidate Query P95 | Budget | Status |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Grid initial | 884ms | 798ms | 779ms | 571ms | 557ms | 800ms | Slightly over client budget |
+| Grid filter | 737ms | 634ms | 614ms | 444ms | 441ms | 500ms | Over filter budget |
+| Grid page two | 872ms | 795ms | 775ms | 640ms | 604ms | 800ms | Slightly over client budget |
+| Presence heartbeat | 171ms | 71ms | 42ms | n/a | n/a | 300ms | OK |
+| Profile open | 439ms | 374ms | 351ms | 109ms | n/a | 800ms | OK |
+
+Decision: do not jump straight to Redis candidate caching yet. The two-phase SQL removed the worst over-hydration pressure and brought server route p95 close to the current cold/page budgets. Redis candidate caching should be reconsidered only after the remaining side-query pressure is reduced, especially entitlement/rate-limit lookups around Grid and profile-view activity writes around profile open.
 
 The Android rendering/device load test remains open.
 
