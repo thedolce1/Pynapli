@@ -129,7 +129,8 @@ class ProfileService(
         discoveryStyle = discoveryStyle,
         profileCompletenessScore = profileCompletenessScore,
         moderationStatus = moderationStatus,
-        visibilityStatus = visibilityStatus
+        visibilityStatus = visibilityStatus,
+        ageVerified = ageVerified
     )
 
     private fun PublicProfileRecord.toDto(): PublicProfileDto = PublicProfileDto(

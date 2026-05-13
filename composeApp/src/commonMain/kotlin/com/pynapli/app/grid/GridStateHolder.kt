@@ -210,7 +210,7 @@ class SampleGridFeedRepository : GridFeedRepository {
         GridFeedUi(
             cards = sampleGridCards,
             adSupported = true,
-            advancedFiltersApplied = filters.isAnyActive
+            advancedFiltersApplied = filters.requiresAdvancedEntitlement
         )
 }
 

@@ -242,6 +242,7 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_LOCATION_LABEL" -> "Location label is not valid."
     "LOCATION_REQUIRED" -> "Location is required before loading the grid."
     "ENTITLEMENT_REQUIRED" -> "Upgrade is required for this feature."
+    "AGE_VERIFICATION_REQUIRED" -> "Age verification is required for this feature."
     "INVALID_GRID_FILTER" -> "Grid filters are not valid."
     "INVALID_GRID_CURSOR" -> "Grid position is no longer valid."
     "INVALID_SAVED_FILTER_NAME" -> "Saved filter name is not valid."
@@ -348,14 +349,16 @@ private fun profileLinkStatusFor(code: String): HttpStatusCode = when (code) {
 
 private fun gridStatusFor(code: String): HttpStatusCode = when (code) {
     "LOCATION_REQUIRED" -> HttpStatusCode.BadRequest
-    "ENTITLEMENT_REQUIRED" -> HttpStatusCode.Forbidden
+    "ENTITLEMENT_REQUIRED",
+    "AGE_VERIFICATION_REQUIRED" -> HttpStatusCode.Forbidden
     "INVALID_GRID_FILTER" -> HttpStatusCode.BadRequest
     "INVALID_GRID_CURSOR" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest
 }
 
 private fun savedGridFilterStatusFor(code: String): HttpStatusCode = when (code) {
-    "ENTITLEMENT_REQUIRED" -> HttpStatusCode.Forbidden
+    "ENTITLEMENT_REQUIRED",
+    "AGE_VERIFICATION_REQUIRED" -> HttpStatusCode.Forbidden
     "SAVED_FILTER_NAME_TAKEN" -> HttpStatusCode.Conflict
     "SAVED_FILTER_LIMIT_REACHED" -> HttpStatusCode.Conflict
     "INVALID_SAVED_FILTER_NAME" -> HttpStatusCode.BadRequest

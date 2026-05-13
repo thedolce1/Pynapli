@@ -154,7 +154,8 @@ class JdbcProfileRepository(
                 discoveryStyle = getString("discovery_style"),
                 profileCompletenessScore = getInt("profile_completeness_score"),
                 moderationStatus = getString("moderation_status"),
-                visibilityStatus = getString("visibility_status")
+                visibilityStatus = getString("visibility_status"),
+                ageVerified = getBoolean("age_verified")
             ),
             discoverySettings = DiscoverySettingsRecord(
                 gridVisible = getBoolean("grid_visible"),
@@ -189,6 +190,7 @@ class JdbcProfileRepository(
                    p.profile_completeness_score,
                    p.moderation_status,
                    p.visibility_status,
+                   (p.age_verified_at IS NOT NULL) AS age_verified,
                    ds.grid_visible,
                    ds.swipe_visible,
                    ds.events_visible,

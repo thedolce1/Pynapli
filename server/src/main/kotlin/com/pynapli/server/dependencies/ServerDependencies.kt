@@ -8,6 +8,7 @@ import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.grid.GridService
 import com.pynapli.server.grid.JdbcGridRepository
+import com.pynapli.server.grid.JdbcGridViewerTrustRepository
 import com.pynapli.server.grid.JdbcSavedGridFilterRepository
 import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.location.JdbcLocationRepository
@@ -240,11 +241,13 @@ class ServerDependencies(
                 presenceService = presenceService,
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
                 blockRepository = blockRepository,
-                subscriptionService = subscriptionService
+                subscriptionService = subscriptionService,
+                viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource)
             )
             val savedGridFilterService = SavedGridFilterService(
                 repository = JdbcSavedGridFilterRepository(database.dataSource),
-                subscriptionService = subscriptionService
+                subscriptionService = subscriptionService,
+                viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource)
             )
             val tonightAvailabilityService = TonightAvailabilityService(database.dataSource)
             val messagingRepository = JdbcMessagingRepository(database.dataSource)

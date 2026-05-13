@@ -114,9 +114,9 @@ Ktor owns filter correctness.
 
 ## QA Checklist
 
-- [ ] Partial: empty optional fields soft-include for implemented filters; full taxonomy coverage is incomplete.
+- [x] Optional lifestyle/logistics fields soft-include by default and only hard-exclude when the viewer explicitly applies the matching overlap filter; full taxonomy coverage remains intentionally curated.
 - [ ] Has-photo excludes profiles with no public photo.
-- [ ] Verified-only excludes unverified profiles.
+- [x] Verified-only excludes unverified profiles.
 - [x] Blocks exclude bidirectionally.
 - [ ] Dealbreakers are respected.
 - [x] Linked does not imply together.

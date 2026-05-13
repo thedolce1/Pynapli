@@ -2,6 +2,7 @@ package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.discovery.DiscoveryCursorException
+import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.discoveryFiltersFrom
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
@@ -22,7 +23,8 @@ class GridService(
     private val presenceService: PresenceService? = null,
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val blockRepository: BlockRepository? = null,
-    private val subscriptionService: SubscriptionService? = null
+    private val subscriptionService: SubscriptionService? = null,
+    private val viewerTrustRepository: GridViewerTrustRepository? = null
 ) {
     suspend fun queryGrid(
         viewerUserId: UUID,
@@ -44,7 +46,8 @@ class GridService(
             tonightAvailableOnly = request.tonightAvailableOnly,
             intents = request.intents
         ) { _ -> GridException("INVALID_GRID_FILTER") }
-        val advancedFiltersApplied = filters.hasAdvancedFilters || request.onlineOnly
+        requireLifestyleFilterAccess(viewerUserId, filters)
+        val advancedFiltersApplied = filters.requiresAdvancedEntitlement
         val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
         if (advancedFiltersApplied && !policy.advancedFiltersAllowed) {
             throw GridException("ENTITLEMENT_REQUIRED")
@@ -99,6 +102,12 @@ class GridService(
         runCatching {
             presenceService?.onlineUserIds(cards.map { it.userId }).orEmpty()
         }.getOrDefault(emptySet())
+
+    private suspend fun requireLifestyleFilterAccess(viewerUserId: UUID, filters: DiscoveryFilters) {
+        if (filters.lifestyleTags.isEmpty()) return
+        val verified = viewerTrustRepository?.isAgeVerified(viewerUserId) ?: true
+        if (!verified) throw GridException("AGE_VERIFICATION_REQUIRED")
+    }
 
     private fun GridCardRecord.toDto(onlineUserIds: Set<UUID>): GridCardDto = GridCardDto(
         userId = userId.toString(),

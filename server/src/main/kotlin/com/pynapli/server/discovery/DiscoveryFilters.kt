@@ -14,6 +14,7 @@ data class DiscoveryFilters(
     val tonightAvailableOnly: Boolean = false,
     val intents: Set<String> = emptySet()
 ) {
+    // Broad non-default filter signal used by Swipe's stricter paid gate.
     val hasAdvancedFilters: Boolean
         get() = minimumAge != null ||
             maximumAge != null ||
@@ -27,6 +28,12 @@ data class DiscoveryFilters(
             logisticsTags.isNotEmpty() ||
             tonightAvailableOnly ||
             intents.isNotEmpty()
+
+    // Basic intent, trust, who, distance, age, online, and tonight filters stay free.
+    // Paid "advanced" status is reserved for high-specificity lifestyle/logistics controls.
+    val requiresAdvancedEntitlement: Boolean
+        get() = lifestyleTags.isNotEmpty() ||
+            logisticsTags.any { it in ADVANCED_LOGISTICS_TAGS }
 }
 
 fun discoveryFiltersFrom(
@@ -158,6 +165,8 @@ private val ALLOWED_LOGISTICS_TAGS = setOf(
     "public_meet_first",
     "club_event_only"
 )
+
+private val ADVANCED_LOGISTICS_TAGS = ALLOWED_LOGISTICS_TAGS - "public_meet_first"
 
 private const val MAX_INTENT_FILTERS = 8
 

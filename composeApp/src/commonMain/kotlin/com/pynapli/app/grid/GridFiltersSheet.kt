@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
@@ -38,6 +40,7 @@ internal fun GridFiltersSheet(
     initial: GridFilters,
     savedState: SavedGridFiltersUiState = SavedGridFiltersUiState(),
     tonightState: TonightAvailabilityUiState = TonightAvailabilityUiState(),
+    lifestyleFiltersAllowed: Boolean = true,
     onDismiss: () -> Unit,
     onApply: (GridFilters) -> Unit,
     onClearAll: () -> Unit,
@@ -48,8 +51,12 @@ internal fun GridFiltersSheet(
     onClearTonightAvailable: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var draft by remember(initial) { mutableStateOf(initial) }
+    val initialDraft = remember(initial, lifestyleFiltersAllowed) {
+        initial.withLifestyleAccess(lifestyleFiltersAllowed)
+    }
+    var draft by remember(initialDraft) { mutableStateOf(initialDraft) }
     var saveName by remember { mutableStateOf("") }
+    var glossaryVisible by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -68,6 +75,7 @@ internal fun GridFiltersSheet(
                     state = savedState,
                     onApply = { dto ->
                         draft = GridFilters.fromGridQueryRequest(dto.payload)
+                            .withLifestyleAccess(lifestyleFiltersAllowed)
                         onApplySavedPreset(dto)
                     },
                     onDelete = onDeleteSavedPreset
@@ -130,11 +138,18 @@ internal fun GridFiltersSheet(
                 onChange = { draft = draft.copy(intents = it) }
             )
 
-            SectionTitle("Lifestyle")
-            LifestyleSection(
-                selected = draft.lifestyleTags,
-                onChange = { draft = draft.copy(lifestyleTags = it) }
-            )
+            if (lifestyleFiltersAllowed) {
+                LifestyleSectionHeader(onOpenGlossary = { glossaryVisible = true })
+                LifestyleSection(
+                    selected = draft.lifestyleTags,
+                    onChange = { draft = draft.copy(lifestyleTags = it) }
+                )
+            } else {
+                SectionTitle("Lifestyle")
+                ComingSoonSection(
+                    message = "Verify your age in profile settings to access lifestyle filters."
+                )
+            }
 
             SectionTitle("Logistics")
             LogisticsSection(
@@ -150,7 +165,7 @@ internal fun GridFiltersSheet(
                     isSaving = savedState.isSaving,
                     onSave = {
                         if (saveName.isNotBlank()) {
-                            onSavePreset(saveName, draft)
+                            onSavePreset(saveName, draft.withLifestyleAccess(lifestyleFiltersAllowed))
                             saveName = ""
                         }
                     }
@@ -170,13 +185,64 @@ internal fun GridFiltersSheet(
                 Box(modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = onDismiss) { Text(text = "Cancel") }
                 androidx.compose.material3.Button(
-                    onClick = { onApply(draft) },
+                    onClick = { onApply(draft.withLifestyleAccess(lifestyleFiltersAllowed)) },
                     modifier = Modifier.testTag(GridFilterTags.APPLY)
                 ) { Text(text = "Apply") }
             }
         }
     }
+
+    if (glossaryVisible) {
+        LifestyleGlossaryDialog(onDismiss = { glossaryVisible = false })
+    }
 }
+
+private fun GridFilters.withLifestyleAccess(allowed: Boolean): GridFilters =
+    if (allowed) this else copy(lifestyleTags = emptySet())
+
+@Composable
+private fun LifestyleGlossaryDialog(onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(text = "Close") }
+        },
+        title = { Text(text = "Lifestyle terms") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                LIFESTYLE_GLOSSARY.forEach { (label, definition) ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(text = label, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            text = definition,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    )
+}
+
+// Definitions sourced from LANGUAGE_AND_TAXONOMY_SPEC L274 onwards.
+private val LIFESTYLE_GLOSSARY: List<Pair<String, String>> = listOf(
+    "Soft swap" to "Open to some shared intimacy, with limits agreed beforehand.",
+    "Full swap" to "Open to partner exchange when everyone involved consents.",
+    "Same-room" to "Prefer experiences where partners stay in the same room.",
+    "Separate-room" to "Open to partners being in separate spaces.",
+    "New" to "Still learning or early in the lifestyle community.",
+    "Experienced" to "Comfortable with lifestyle spaces, norms, and communication.",
+    "Kink-friendly" to "Open to respectful conversations about kink, boundaries, and consent.",
+    "Vanilla/social" to "Interested in conventional social connection or lower-intensity lifestyle interaction.",
+    "ENM" to "Ethical non-monogamy; open to multiple connections with everyone's knowledge and consent.",
+    "Swinging" to "A lifestyle where people, often couples, consensually socialize or connect with others outside their primary relationship."
+)
 
 @Composable
 private fun SavedFiltersSection(
@@ -361,6 +427,23 @@ private fun IntentExtendedSection(
                 onChange(if (active) selected - intent else selected + intent)
             }
         }
+    }
+}
+
+@Composable
+private fun LifestyleSectionHeader(onOpenGlossary: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "Lifestyle",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onOpenGlossary) { Text(text = "Glossary") }
     }
 }
 

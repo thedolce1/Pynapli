@@ -110,6 +110,7 @@ fun PynapliApp(
         val activityState by activityStateHolder.state.collectAsState()
         val mediaAlbumsState by mediaAlbumsStateHolder.state.collectAsState()
         val profileLinksState by profileLinksStateHolder.state.collectAsState()
+        val profileHubState by profileHubStateHolder.state.collectAsState()
         val scope = rememberCoroutineScope()
         var selectedTab by remember { mutableStateOf(PynapliTab.Grid) }
         var profileSurface by remember { mutableStateOf(ProfileSurface.None) }
@@ -361,6 +362,7 @@ fun PynapliApp(
                         profileLinksStateHolder = profileLinksStateHolder,
                         savedGridFilterStateHolder = savedGridFilterStateHolder,
                         tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
+                        lifestyleFiltersAllowed = profileHubState.me?.profile?.ageVerified == true,
                         distanceUnit = distanceUnit,
                         onUseCurrentLocation = onUseCurrentLocation,
                         onProfileIconClick = { profileSurface = ProfileSurface.Hub },

@@ -1,6 +1,7 @@
 package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.discoveryFiltersFrom
+import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
@@ -13,6 +14,7 @@ import java.util.UUID
 class SavedGridFilterService(
     private val repository: SavedGridFilterRepository,
     private val subscriptionService: SubscriptionService? = null,
+    private val viewerTrustRepository: GridViewerTrustRepository? = null,
     private val json: Json = Json,
     private val idFactory: () -> UUID = UUID::randomUUID
 ) {
@@ -33,7 +35,8 @@ class SavedGridFilterService(
         if (name.isEmpty() || name.length > MAX_NAME_LENGTH) {
             throw SavedGridFilterException("INVALID_SAVED_FILTER_NAME")
         }
-        validatePayload(request.payload)
+        val filters = validatePayload(request.payload)
+        requireLifestyleFilterAccess(viewerUserId, filters)
         if (repository.countForUser(viewerUserId) >= MAX_PRESETS_PER_USER) {
             throw SavedGridFilterException("SAVED_FILTER_LIMIT_REACHED")
         }
@@ -65,10 +68,10 @@ class SavedGridFilterService(
         }
     }
 
-    private fun validatePayload(payload: GridQueryRequestDto) {
+    private fun validatePayload(payload: GridQueryRequestDto): DiscoveryFilters {
         // Re-runs the same validation the live grid query uses; rejects unknown
         // discovery_styles / lifestyle / logistics tokens at save time.
-        discoveryFiltersFrom(
+        return discoveryFiltersFrom(
             minimumAge = payload.minimumAge,
             maximumAge = payload.maximumAge,
             relationshipContexts = payload.relationshipContexts,
@@ -82,6 +85,12 @@ class SavedGridFilterService(
             tonightAvailableOnly = payload.tonightAvailableOnly,
             intents = payload.intents
         ) { _ -> SavedGridFilterException("INVALID_SAVED_FILTER_PAYLOAD") }
+    }
+
+    private suspend fun requireLifestyleFilterAccess(viewerUserId: UUID, filters: DiscoveryFilters) {
+        if (filters.lifestyleTags.isEmpty()) return
+        val verified = viewerTrustRepository?.isAgeVerified(viewerUserId) ?: true
+        if (!verified) throw SavedGridFilterException("AGE_VERIFICATION_REQUIRED")
     }
 
     /**

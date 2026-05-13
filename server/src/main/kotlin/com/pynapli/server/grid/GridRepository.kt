@@ -13,6 +13,10 @@ interface GridRepository {
     ): GridQueryResult
 }
 
+interface GridViewerTrustRepository {
+    suspend fun isAgeVerified(userId: UUID): Boolean
+}
+
 data class GridQueryResult(
     val viewerHadLocation: Boolean,
     val cards: List<GridCardRecord>,

@@ -180,14 +180,65 @@ class GridServiceTest {
         val viewerId = UUID.randomUUID()
         val service = GridService(
             repository = StaticGridRepository(GridQueryResult(viewerHadLocation = true, cards = emptyList())),
+            viewerTrustRepository = StaticGridViewerTrustRepository(ageVerifiedUserIds = setOf(viewerId)),
             subscriptionService = freeSubscriptionService()
         )
 
         val error = assertFailsWith<GridException> {
-            service.queryGrid(viewerId, GridQueryRequestDto(minimumAge = 30))
+            service.queryGrid(viewerId, GridQueryRequestDto(lifestyleTags = listOf("soft_swap")))
         }
 
         assertEquals("ENTITLEMENT_REQUIRED", error.code)
+    }
+
+    @Test
+    fun queryGridRejectsLifestyleFiltersForUnverifiedViewers() = runBlocking {
+        val viewerId = UUID.randomUUID()
+        val service = GridService(
+            repository = StaticGridRepository(GridQueryResult(viewerHadLocation = true, cards = emptyList())),
+            viewerTrustRepository = StaticGridViewerTrustRepository(ageVerifiedUserIds = emptySet()),
+            subscriptionService = paidSubscriptionService(viewerId, SubscriptionTier.SOCIAL)
+        )
+
+        val error = assertFailsWith<GridException> {
+            service.queryGrid(viewerId, GridQueryRequestDto(lifestyleTags = listOf("soft_swap")))
+        }
+
+        assertEquals("AGE_VERIFICATION_REQUIRED", error.code)
+    }
+
+    @Test
+    fun queryGridAllowsSafetyAndBasicIntentFiltersForFreeUsers() = runBlocking {
+        val viewerId = UUID.randomUUID()
+        val targetId = UUID.randomUUID()
+        val service = GridService(
+            repository = StaticGridRepository(
+                GridQueryResult(
+                    viewerHadLocation = true,
+                    cards = listOf(GridCardRecord(targetId, "Alex", showDistance = true, distanceMeters = 300.0))
+                )
+            ),
+            presenceService = PresenceService(StaticPresenceRepository(setOf(targetId))),
+            subscriptionService = freeSubscriptionService()
+        )
+
+        val response = service.queryGrid(
+            viewerId,
+            GridQueryRequestDto(
+                onlineOnly = true,
+                verifiedOnly = true,
+                facePhotoVerifiedOnly = true,
+                ageVerifiedOnly = true,
+                discoveryStyles = listOf("solo"),
+                intents = listOf("dating"),
+                logisticsTags = listOf("public_meet_first"),
+                tonightAvailableOnly = true
+            )
+        )
+
+        assertEquals(listOf(targetId.toString()), response.items.map { it.userId })
+        assertEquals(true, response.adSupported)
+        assertEquals(false, response.advancedFiltersApplied)
     }
 
     @Test
@@ -213,7 +264,7 @@ class GridServiceTest {
 
         assertEquals(listOf(onlineTarget.toString()), response.items.map { it.userId })
         assertEquals(false, response.adSupported)
-        assertEquals(true, response.advancedFiltersApplied)
+        assertEquals(false, response.advancedFiltersApplied)
     }
 
     @Test
@@ -356,6 +407,12 @@ private class StaticPresenceRepository(
 
     override suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> =
         userIds.filterTo(mutableSetOf()) { it in onlineIds }
+}
+
+private class StaticGridViewerTrustRepository(
+    private val ageVerifiedUserIds: Set<UUID>
+) : GridViewerTrustRepository {
+    override suspend fun isAgeVerified(userId: UUID): Boolean = userId in ageVerifiedUserIds
 }
 
 private class StaticMediaAssetUrlResolver : MediaAssetUrlResolver {

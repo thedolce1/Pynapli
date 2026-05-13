@@ -87,6 +87,7 @@ fun GridScreen(
     profileLinksStateHolder: ProfileLinksStateHolder? = null,
     savedGridFilterStateHolder: SavedGridFilterStateHolder? = null,
     tonightAvailabilityStateHolder: TonightAvailabilityStateHolder? = null,
+    lifestyleFiltersAllowed: Boolean = true,
     distanceUnit: String = AppSettings.UNIT_METRIC,
     gridState: LazyGridState = rememberLazyGridState(),
     onUseCurrentLocation: () -> Unit = {},
@@ -119,6 +120,7 @@ fun GridScreen(
         state = state,
         savedFiltersState = savedFiltersState,
         tonightState = tonightState,
+        lifestyleFiltersAllowed = lifestyleFiltersAllowed,
         locationState = locationState,
         profileImageUrl = profileImageUrl,
         distanceUnit = distanceUnit,
@@ -287,6 +289,7 @@ private fun GridScreenContent(
     state: GridUiState,
     savedFiltersState: SavedGridFiltersUiState,
     tonightState: TonightAvailabilityUiState,
+    lifestyleFiltersAllowed: Boolean,
     locationState: LocationUiState,
     profileImageUrl: String?,
     distanceUnit: String,
@@ -349,6 +352,7 @@ private fun GridScreenContent(
             initial = state.filters,
             savedState = savedFiltersState,
             tonightState = tonightState,
+            lifestyleFiltersAllowed = lifestyleFiltersAllowed,
             onDismiss = { sheetVisible = false },
             onApply = { applied ->
                 sheetVisible = false
@@ -361,7 +365,10 @@ private fun GridScreenContent(
             onSavePreset = onSavePreset,
             onApplySavedPreset = { dto ->
                 sheetVisible = false
-                onApplySavedPreset(dto)
+                val filters = GridFilters.fromGridQueryRequest(dto.payload)
+                onApplyFilters(
+                    if (lifestyleFiltersAllowed) filters else filters.copy(lifestyleTags = emptySet())
+                )
             },
             onDeleteSavedPreset = onDeleteSavedPreset,
             onSetTonightAvailable = onSetTonightAvailable,

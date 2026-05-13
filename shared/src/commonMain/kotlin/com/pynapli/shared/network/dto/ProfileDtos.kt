@@ -21,7 +21,8 @@ data class ProfileDto(
     val discoveryStyle: String,
     val profileCompletenessScore: Int,
     val moderationStatus: String,
-    val visibilityStatus: String
+    val visibilityStatus: String,
+    val ageVerified: Boolean = false
 )
 
 @Serializable

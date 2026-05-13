@@ -59,6 +59,10 @@ data class GridFilters(
 
     val isAnyActive: Boolean get() = activeCount > 0
 
+    val requiresAdvancedEntitlement: Boolean
+        get() = lifestyleTags.isNotEmpty() ||
+            logisticsTags.any { it != LogisticsTag.PublicMeetFirst }
+
     fun toGridQueryRequest(cursor: String?): GridQueryRequestDto {
         val contexts = buildList {
             if (singles) add(SINGLES_CONTEXT)
@@ -173,23 +177,10 @@ enum class Intent(val serverValue: String, val label: String) {
  * matches when its tag array overlaps any selected tag. NULL/empty profile tag
  * arrays are excluded when the filter is active (hard "has X" semantics).
  *
- * High-sensitivity rule (FILTERS_SPEC L163): the spec asks for these to be
- * gated behind age-confirmation onboarding. Until that flow exists this group
- * is visible to all viewers; the gating debt is tracked in the FILTERS_SPEC
- * checklist as "[ ] High-sensitivity terms are age-gated".
+ * High-sensitivity rule (FILTERS_SPEC L163): these are hidden in the sheet unless
+ * the viewer is age-verified, and Ktor rejects crafted lifestyle filter payloads
+ * from unverified viewers.
  */
-/**
- * Logistics tags (FILTERS_SPEC L170-184). Self-declared by the profile owner
- * and filterable as hard "has X" overlap on `profiles.logistics_tags`.
- */
-enum class LogisticsTag(val serverValue: String, val label: String) {
-    Hosts("hosts", "Hosts"),
-    Travels("travels", "Travels"),
-    HotelFriendly("hotel_friendly", "Hotel-friendly"),
-    PublicMeetFirst("public_meet_first", "Public meet first"),
-    ClubEventOnly("club_event_only", "Club/event only")
-}
-
 enum class LifestyleTag(val serverValue: String, val label: String) {
     SoftSwap("soft_swap", "Soft swap"),
     FullSwap("full_swap", "Full swap"),
@@ -201,6 +192,18 @@ enum class LifestyleTag(val serverValue: String, val label: String) {
     VanillaSocial("vanilla_social", "Vanilla/social"),
     Enm("enm", "ENM"),
     Swinging("swinging", "Swinging")
+}
+
+/**
+ * Logistics tags (FILTERS_SPEC L170-184). Self-declared by the profile owner
+ * and filterable as hard "has X" overlap on `profiles.logistics_tags`.
+ */
+enum class LogisticsTag(val serverValue: String, val label: String) {
+    Hosts("hosts", "Hosts"),
+    Travels("travels", "Travels"),
+    HotelFriendly("hotel_friendly", "Hotel-friendly"),
+    PublicMeetFirst("public_meet_first", "Public meet first"),
+    ClubEventOnly("club_event_only", "Club/event only")
 }
 
 @Immutable
