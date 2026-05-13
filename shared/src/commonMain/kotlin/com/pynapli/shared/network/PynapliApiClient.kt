@@ -4,6 +4,8 @@ import com.pynapli.shared.core.config.PynapliConfig
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ActivityFeedResponseDto
+import com.pynapli.shared.network.dto.AgeVerificationRequirementsDto
+import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.ApiErrorDto
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.BoostActivationDto
@@ -23,6 +25,7 @@ import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.SavedGridFilterDto
 import com.pynapli.shared.network.dto.SavedGridFiltersListDto
 import com.pynapli.shared.network.dto.SetTonightAvailableRequestDto
+import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.TonightAvailabilityDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.BlockSummaryDto
@@ -114,6 +117,14 @@ interface PynapliApiClient {
     suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto>
 
     suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto>
+
+    suspend fun getAgeVerificationRequirements(): AppResult<AgeVerificationRequirementsDto>
+
+    suspend fun getAgeVerificationStatus(): AppResult<AgeVerificationStatusDto>
+
+    suspend fun startAgeVerification(
+        request: StartAgeVerificationRequestDto
+    ): AppResult<AgeVerificationStatusDto>
 
     suspend fun getNotificationPreferences(): AppResult<NotificationPreferencesDto>
 
@@ -328,6 +339,31 @@ class KtorPynapliApiClient(
     override suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto> =
         authenticatedPost { token ->
             httpClient.patch(config.endpoint("/v1/me/discovery-settings")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun getAgeVerificationRequirements(): AppResult<AgeVerificationRequirementsDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/verification/requirements")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun getAgeVerificationStatus(): AppResult<AgeVerificationStatusDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/verification/status")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun startAgeVerification(
+        request: StartAgeVerificationRequestDto
+    ): AppResult<AgeVerificationStatusDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/verification/start")) {
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)

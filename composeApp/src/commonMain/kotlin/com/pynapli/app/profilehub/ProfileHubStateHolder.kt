@@ -3,9 +3,11 @@ package com.pynapli.app.profilehub
 import androidx.compose.runtime.Immutable
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.DiscoverySettingsDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.ProfileDto
+import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +26,9 @@ data class ProfileHubUiState(
     val activityVisible: Boolean = false,
     val appSettingsVisible: Boolean = false,
     val notificationCenterVisible: Boolean = false,
+    val ageVerificationDialogVisible: Boolean = false,
+    val ageVerificationStatus: AgeVerificationStatusDto? = null,
+    val isAgeVerificationMutating: Boolean = false,
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val errorMessage: String? = null,
@@ -69,9 +74,14 @@ class ProfileHubStateHolder(
 
         when (val result = repository.loadMe()) {
             is AppResult.Success -> {
+                val ageVerificationStatus = when (val status = repository.loadAgeVerificationStatus()) {
+                    is AppResult.Success -> status.value
+                    is AppResult.Failure -> null
+                }
                 _state.update { existing ->
                     existing.copy(
                         me = result.value,
+                        ageVerificationStatus = ageVerificationStatus,
                         draft = if (existing.editVisible) existing.draft else result.value.profile.toDraft(),
                         privacyDraft = if (existing.privacyVisible) {
                             existing.privacyDraft
@@ -108,6 +118,7 @@ class ProfileHubStateHolder(
                 activityVisible = false,
                 appSettingsVisible = false,
                 notificationCenterVisible = false,
+                ageVerificationDialogVisible = false,
                 draft = existing.me?.profile?.toDraft() ?: existing.draft,
                 feedbackMessage = null,
                 errorMessage = null
@@ -133,6 +144,7 @@ class ProfileHubStateHolder(
                 activityVisible = false,
                 appSettingsVisible = false,
                 notificationCenterVisible = false,
+                ageVerificationDialogVisible = false,
                 privacyDraft = existing.me?.discoverySettings?.toPrivacyDraft() ?: existing.privacyDraft,
                 feedbackMessage = null,
                 errorMessage = null
@@ -158,6 +170,7 @@ class ProfileHubStateHolder(
                 privacyVisible = false,
                 appSettingsVisible = false,
                 notificationCenterVisible = false,
+                ageVerificationDialogVisible = false,
                 activityDraft = existing.me?.discoverySettings?.toActivityDraft() ?: existing.activityDraft,
                 feedbackMessage = null,
                 errorMessage = null
@@ -183,6 +196,7 @@ class ProfileHubStateHolder(
                 privacyVisible = false,
                 activityVisible = false,
                 notificationCenterVisible = false,
+                ageVerificationDialogVisible = false,
                 feedbackMessage = null,
                 errorMessage = null
             )
@@ -201,6 +215,7 @@ class ProfileHubStateHolder(
                 privacyVisible = false,
                 activityVisible = false,
                 appSettingsVisible = false,
+                ageVerificationDialogVisible = false,
                 feedbackMessage = null,
                 errorMessage = null
             )
@@ -209,6 +224,25 @@ class ProfileHubStateHolder(
 
     fun dismissNotificationCenter() {
         _state.update { it.copy(notificationCenterVisible = false, errorMessage = null) }
+    }
+
+    fun openAgeVerification() {
+        _state.update { existing ->
+            existing.copy(
+                ageVerificationDialogVisible = true,
+                editVisible = false,
+                privacyVisible = false,
+                activityVisible = false,
+                appSettingsVisible = false,
+                notificationCenterVisible = false,
+                feedbackMessage = null,
+                errorMessage = null
+            )
+        }
+    }
+
+    fun dismissAgeVerification() {
+        _state.update { it.copy(ageVerificationDialogVisible = false, errorMessage = null) }
     }
 
     fun closeAppSettingsWithFeedback(message: String) {
@@ -400,6 +434,46 @@ class ProfileHubStateHolder(
         }
     }
 
+    suspend fun startAgeVerification() {
+        val current = state.value
+        if (current.isAgeVerificationMutating) return
+
+        _state.update {
+            it.copy(
+                isAgeVerificationMutating = true,
+                errorMessage = null,
+                feedbackMessage = null
+            )
+        }
+
+        when (
+            val result = repository.startAgeVerification(
+                StartAgeVerificationRequestDto(confirmedAdult = true)
+            )
+        ) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        ageVerificationStatus = result.value,
+                        ageVerificationDialogVisible = false,
+                        isAgeVerificationMutating = false,
+                        errorMessage = null,
+                        feedbackMessage = result.value.message
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update {
+                    it.copy(
+                        isAgeVerificationMutating = false,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
     private fun updateDraft(transform: (ProfileEditDraft) -> ProfileEditDraft) {
         _state.update {
             it.copy(
@@ -434,6 +508,12 @@ class ProfileHubStateHolder(
 interface ProfileHubRepository {
     suspend fun loadMe(): AppResult<MeDto>
 
+    suspend fun loadAgeVerificationStatus(): AppResult<AgeVerificationStatusDto>
+
+    suspend fun startAgeVerification(
+        request: StartAgeVerificationRequestDto
+    ): AppResult<AgeVerificationStatusDto>
+
     suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto>
 
     suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto>
@@ -444,6 +524,14 @@ class ApiProfileHubRepository(
 ) : ProfileHubRepository {
     override suspend fun loadMe(): AppResult<MeDto> =
         apiClient.getMe()
+
+    override suspend fun loadAgeVerificationStatus(): AppResult<AgeVerificationStatusDto> =
+        apiClient.getAgeVerificationStatus()
+
+    override suspend fun startAgeVerification(
+        request: StartAgeVerificationRequestDto
+    ): AppResult<AgeVerificationStatusDto> =
+        apiClient.startAgeVerification(request)
 
     override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> =
         apiClient.updateProfile(request)

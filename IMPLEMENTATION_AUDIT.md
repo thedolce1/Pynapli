@@ -1,6 +1,6 @@
 # Pynapli Implementation Audit
 
-Date: 2026-05-07
+Date: 2026-05-12
 
 ## Purpose
 
@@ -41,7 +41,7 @@ Primary local specs:
 Current code evidence:
 
 - Kotlin Multiplatform shared module, Compose app module, Android app module, Ktor server module.
-- PostgreSQL/PostGIS migrations through `server/src/main/resources/db/migration/V34__boost_activations.sql`.
+- PostgreSQL/PostGIS migrations through `server/src/main/resources/db/migration/V41__create_age_verifications.sql`.
 - Redis-backed presence/rate-limit paths.
 - Firebase Cloud Messaging integration path.
 - Google Play Billing client and server purchase verification path.
@@ -62,6 +62,7 @@ Latest known green baseline after restoring server JUnit 4 coverage:
   - `:composeApp:testAndroidHostTest`
   - `:androidApp:assembleDebug`
 - Ktor `/health` was confirmed healthy after the last restart.
+- Age verification targeted tests passed for service rules, JDBC migration/profile timestamp side effects, and Profile Hub state behavior.
 
 Current CI state:
 
@@ -75,8 +76,8 @@ Current CI state:
 | Product model | Aligned | Individual autonomous accounts, optional linked partner, linked partner preview, partner chat invite flow, linked subscription benefit. | Keep avoiding couple-owned accounts or couple cards. |
 | Language and positioning | Mostly aligned | Specs define LS-aware, classy, non-cheesy language. | Needs continuous UI copy review as screens mature. |
 | Frontend design direction | Partially implemented | Subdued Compose surfaces, bottom nav, header profile entry, grid/swipe/messages/activity/store/settings surfaces. | Needs screenshot review on real emulator across all implemented flows before visual polish can be called complete. |
-| Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling. | 18+ DOB confirmation and enhanced age verification are not complete. |
-| Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display. | Profile verification, data export/delete, blocked/hidden management, and full safety center need completion. |
+| Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling. | Signup-time 18+ DOB confirmation and enhanced/provider age verification are not complete. |
+| Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display, age-verification entry. | Data export/delete, blocked/hidden management, and full safety center need completion. |
 | Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs. | Server-side location trust/spoofing checks and movement thresholds need hardening. |
 | Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, fixed square cards, stable Compose keys, 5,000-candidate dense integration proof, client movement-threshold policy, retained lazy grid state while screen is alive, block/risk filtering, partner preview, WebSocket presence deltas, and explicit thumbnail prefetching. | Redis candidate cache, full concurrent load test, automated Android visual regression, and platform battery/location QA are still needed. |
 | Swipe | Partially implemented | Swipe deck endpoint, action endpoint, server-authoritative match creation, immutable normal actions, block/report path, intro notes, pineapple-like inventory, boost influence, partner preview. | Robust deck-session/rank-token validation, cursor pagination, rewind, offline action cap, image preloading, top picks, passport/travel mode, and dealbreaker settings remain incomplete. |
@@ -86,9 +87,9 @@ Current CI state:
 | Private albums/media | Partially implemented | Upload contract, local-dev upload endpoint, albums, private grants, album request activity. | Production object storage signed URLs, CDN strategy, moderation/scanning policy, and secure media cleanup jobs remain. |
 | Notifications | Partially implemented | Preferences, device registration, FCM gateway, grouping/rate-limit logic. | Real device token lifecycle, APNs/iOS path, notification analytics without sensitive payloads, and denied-permission QA remain. |
 | Monetization | Partially implemented | Free/Social/Select tiers, server entitlements, linked partner benefit, activity/filters gates, intro notes, pineapple likes, boosts, ads policy, safety-free rule. | StoreKit 2 path is missing. Google Play path exists but needs real console credentials/config validation. Paywall copy needs final Social/Select review in app. |
-| Trust and safety | Partially implemented | Risk model/events, Redis rate limits, duplicate message checks, held-message review, reports queue, risk queue, social action restrictions, severe action triggers, partner subscription abuse cooldown. | Risk middleware, device/account-farm signals, location spoofing signals, verification risk adjustments, appeals/support flow, false-positive metrics, and account notice workflow remain. |
+| Trust and safety | Partially implemented | Risk model/events, Redis rate limits, duplicate message checks, held-message review, reports queue, risk queue, social action restrictions, severe action triggers, partner subscription abuse cooldown, age-verification status/start/admin review/callback path. | Risk middleware, device/account-farm signals, location spoofing signals, verification provider/market integration, appeals/support flow, false-positive metrics, and account notice workflow remain. |
 | Admin moderation | Partially implemented | Reports queue/actions/audit, risk review/actions/audit, held message review/release/remove/audit. | Roles/permissions, MFA, user lookup, appeals, subscription support, partner-link review, sensitive reveal reason flow outside held messages, and separated admin API need work. |
-| API contract | Partially implemented | `/v1` routes, shared DTOs, Ktor error handling, many server-side entitlement/block/risk checks, signed Grid cursor pagination, and the Grid presence WebSocket contract. | Cursor pagination remains incomplete on other live surfaces, idempotency keys are not consistently implemented, and realtime contracts for messages/activity/notifications remain incomplete. |
+| API contract | Partially implemented | `/v1` routes, shared DTOs, Ktor error handling, many server-side entitlement/block/risk checks, signed Grid cursor pagination, age-verification endpoints, and the Grid presence WebSocket contract. | Cursor pagination remains incomplete on other live surfaces, idempotency keys are not consistently implemented, and realtime contracts for messages/activity/notifications remain incomplete. |
 | Backend architecture | Partially implemented | Ktor authoritative services, PostgreSQL/PostGIS, Flyway, Redis, Docker local services, FCM path, server-side subscription model, and Grid presence WebSockets. | Redis candidate cache, signed object storage, sensitive log redaction, analytics redaction, and formal cloud environment setup remain. |
 | Mobile architecture | Partially implemented | KMP shared network/client/domain types, Compose feature state holders, Android platform integrations for billing/FCM/location, and Android Grid presence stream wiring. | iOS platform integrations, secure token storage review, offline queue rules, and broader emulator/device visual QA coverage need work. |
 | Testing | Good start, not enough | Server test suite restored, shared tests, Compose Android host tests, local verification script. | Android instrumented/E2E tests, iOS tests, real DB container integration coverage expansion, abuse tests, load tests, and visual screenshot regression need work. |
@@ -128,11 +129,11 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Branch protection, required status checks, Docker service tests, lint/static analysis, and artifact checks still need to be added.
 
 4. Production safety is not complete.
-   - 18+ verification, appeals/support, false-positive metrics, device/account-farm signals, and location spoofing signals are not done.
+   - Age verification has an MVP entry/review path, but signup-time capture, provider/market integration, appeals/support, false-positive metrics, device/account-farm signals, and location spoofing signals are not done.
    - App Check is not wired into the production security posture.
 
 5. Settings and account management are incomplete.
-   - Safety center, blocked/hidden users, data export/delete, verification, notification controls, and privacy settings need a complete user-facing path.
+   - Safety center, blocked/hidden users, data export/delete, notification controls, and privacy settings need a complete user-facing path.
 
 6. Media is still local-dev oriented.
    - Production signed object-storage URLs, moderation/scanning policy, cleanup jobs, and secure delivery need implementation.
@@ -163,7 +164,7 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Swipe later: deck session validation, rank-token validation, cursor pagination, action idempotency, rewind path.
 
 3. Finish the profile/settings safety surface.
-   - Safety center, block list, hidden users if retained, report history/support contact, data export/delete, notification settings.
+   - Safety center, block list, hidden users if retained, report history/support contact, data export/delete, notification settings, and production age-verification provider/market wiring.
 
 4. Move media from local-dev to production-safe storage.
    - Signed upload/download URLs, private album grant enforcement, cleanup jobs, and scanning hooks.

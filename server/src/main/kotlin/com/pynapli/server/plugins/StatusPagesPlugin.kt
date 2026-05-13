@@ -17,6 +17,7 @@ import com.pynapli.server.safety.SafetyException
 import com.pynapli.server.swipe.SwipeException
 import com.pynapli.server.subscriptions.SubscriptionException
 import com.pynapli.shared.network.dto.ApiErrorDto
+import com.pynapli.server.verification.VerificationException
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -196,6 +197,17 @@ fun Application.configureStatusPages() {
             )
         }
 
+        exception<VerificationException> { call, cause ->
+            call.respond(
+                status = verificationStatusFor(cause.code),
+                message = ApiErrorDto(
+                    code = cause.code,
+                    message = userSafeMessage(cause.code),
+                    requestId = call.request.headers["X-Request-Id"] ?: "unknown"
+                )
+            )
+        }
+
         exception<Throwable> { call, cause ->
             statusPagesLogger.error(
                 "Unhandled request failure: ${call.request.httpMethod.value} ${call.request.uri}",
@@ -224,6 +236,14 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_DISPLAY_NAME" -> "Display name must be 2 to 32 characters."
     "INVALID_BIRTHDATE" -> "Enter a valid birthdate."
     "AGE_RESTRICTED" -> "You must be 18 or older to use Pynapli."
+    "BIRTHDATE_REQUIRED" -> "Add your birthdate before starting age verification."
+    "ADULT_CONFIRMATION_REQUIRED" -> "Confirm that you are 18 or older."
+    "INVALID_VERIFICATION_METHOD" -> "Choose a valid verification method."
+    "INVALID_VERIFICATION_STATUS" -> "Choose a valid verification status."
+    "INVALID_VERIFICATION_ID" -> "Verification item was not found."
+    "VERIFICATION_NOT_FOUND" -> "Verification item was not found."
+    "INVALID_VERIFICATION_CALLBACK" -> "Verification callback is not valid."
+    "VERIFICATION_REASON_TOO_LONG" -> "Verification reason is too long."
     "INVALID_DISCOVERY_STYLE" -> "Choose a valid discovery style."
     "INVALID_PROFILE_FIELD" -> "Profile field is not valid."
     "INVALID_PROFILE_LINK_TARGET" -> "Request could not be completed."
@@ -469,6 +489,20 @@ private fun moderationStatusFor(code: String): HttpStatusCode = when (code) {
     "INVALID_REPORT_REVIEW_STATUS",
     "INVALID_RISK_TIER",
     "INVALID_RISK_TIER_FILTER" -> HttpStatusCode.BadRequest
+    else -> HttpStatusCode.BadRequest
+}
+
+private fun verificationStatusFor(code: String): HttpStatusCode = when (code) {
+    "PROFILE_NOT_FOUND",
+    "VERIFICATION_NOT_FOUND" -> HttpStatusCode.NotFound
+    "AGE_RESTRICTED",
+    "BIRTHDATE_REQUIRED",
+    "ADULT_CONFIRMATION_REQUIRED",
+    "INVALID_VERIFICATION_METHOD",
+    "INVALID_VERIFICATION_STATUS",
+    "INVALID_VERIFICATION_ID",
+    "INVALID_VERIFICATION_CALLBACK",
+    "VERIFICATION_REASON_TOO_LONG" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest
 }
 

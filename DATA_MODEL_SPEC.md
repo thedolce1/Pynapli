@@ -1,6 +1,6 @@
 # Pynapli Data Model Spec
 
-Last updated: 2026-05-06
+Last updated: 2026-05-12
 
 ## Purpose
 
@@ -131,6 +131,9 @@ Fields:
 - `profile_completeness_score`
 - `moderation_status`: pending, approved, limited, rejected
 - `visibility_status`: visible, paused, hidden
+- `verified_at`, nullable trust timestamp
+- `face_photo_verified_at`, nullable trust timestamp
+- `age_verified_at`, nullable age-assurance timestamp
 
 Rules:
 
@@ -755,13 +758,27 @@ Fields:
 - `market`
 - `method`
 - `provider`
+- `provider_reference`, nullable
 - `status`
+- `requested_at`
 - `verified_at`
 - `expires_at`
+- `reviewed_at`
+- `reviewer_id`
+- `review_reason`
+- `created_at`
+- `updated_at`
+
+Indexes:
+
+- `(user_id, created_at desc)`
+- `(status, created_at desc)`
+- unique `(provider, provider_reference)` where provider reference exists
 
 Rules:
 
 - Do not store raw ID/biometric data unless legally required and reviewed.
+- Successful verification also updates `profiles.age_verified_at`; discovery filters use the profile timestamp, not raw provider data.
 
 ## Blocks And Hides
 
@@ -902,6 +919,7 @@ Do not store unless legally reviewed and required:
 - [x] Activity events are separate from messages.
 - [x] Entitlements are server-authoritative.
 - [x] Risk state and moderation tables exist.
+- [x] Age verification records and profile age timestamp exist.
 - [ ] Blocks and hides are separate.
 - [x] Notification events are Ktor-owned.
 - [x] Redis only stores ephemeral/cache data.

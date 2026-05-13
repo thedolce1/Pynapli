@@ -197,6 +197,7 @@ fun ProfileHubScreen(
             onEditProfile = stateHolder::openEditor,
             onOpenPrivacy = stateHolder::openPrivacySettings,
             onOpenActivityControls = stateHolder::openActivityControls,
+            onOpenAgeVerification = stateHolder::openAgeVerification,
             onOpenAppSettings = {
                 appSettingsStateHolder.editFromCurrent()
                 stateHolder.openAppSettings()
@@ -205,6 +206,15 @@ fun ProfileHubScreen(
             onLogoutClick = { showLogoutConfirm = true },
             onClearMessage = stateHolder::clearMessage,
             modifier = modifier
+        )
+    }
+
+    if (state.ageVerificationDialogVisible) {
+        AgeVerificationDialog(
+            state = state,
+            onDismiss = stateHolder::dismissAgeVerification,
+            onEditProfile = stateHolder::openEditor,
+            onStart = { scope.launch { stateHolder.startAgeVerification() } }
         )
     }
 
@@ -246,6 +256,7 @@ private fun ProfileHubContent(
     onEditProfile: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenActivityControls: () -> Unit,
+    onOpenAgeVerification: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onOpenAlbums: () -> Unit,
     onLogoutClick: () -> Unit,
@@ -401,6 +412,12 @@ private fun ProfileHubContent(
                     value = activityControlsSummary(state),
                     onClick = onOpenActivityControls
                 )
+                ProfileHubRow(
+                    icon = Icons.Filled.Lock,
+                    label = "Age verification",
+                    value = ageVerificationSummary(state),
+                    onClick = onOpenAgeVerification
+                )
             }
         }
 
@@ -421,6 +438,60 @@ private fun ProfileHubContent(
             }
         }
     }
+}
+
+@Composable
+private fun AgeVerificationDialog(
+    state: ProfileHubUiState,
+    onDismiss: () -> Unit,
+    onEditProfile: () -> Unit,
+    onStart: () -> Unit
+) {
+    val profile = state.me?.profile
+    val status = state.ageVerificationStatus?.status
+    val hasBirthdate = !profile?.birthdate.isNullOrBlank()
+    val alreadyVerified = profile?.ageVerified == true || status == "verified"
+    val pending = status == "pending"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Age verification") },
+        text = {
+            Text(
+                text = when {
+                    alreadyVerified -> "Your age verification is complete."
+                    pending -> "Your age verification is pending review."
+                    !hasBirthdate -> "Add your birthdate in Edit profile before starting age verification."
+                    else -> "Age verification unlocks age-gated lifestyle filters. By continuing, you confirm you are 18 or older. Only the result and review status are stored."
+                }
+            )
+        },
+        confirmButton = {
+            when {
+                alreadyVerified || pending -> {
+                    TextButton(onClick = onDismiss) { Text("Close") }
+                }
+
+                !hasBirthdate -> {
+                    Button(onClick = onEditProfile) { Text("Edit profile") }
+                }
+
+                else -> {
+                    Button(
+                        onClick = onStart,
+                        enabled = !state.isAgeVerificationMutating
+                    ) {
+                        Text(if (state.isAgeVerificationMutating) "Starting" else "Confirm & start")
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            if (!alreadyVerified && !pending) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
 }
 
 @Composable
@@ -1607,6 +1678,16 @@ private fun activityControlsSummary(state: ProfileHubUiState): String {
         settings.allowAlbumRequests
     ).count { it }
     return "$viewed, $allowedSignals allowed"
+}
+
+private fun ageVerificationSummary(state: ProfileHubUiState): String {
+    if (state.me?.profile?.ageVerified == true) return "Verified"
+    return when (state.ageVerificationStatus?.status) {
+        "verified" -> "Verified"
+        "pending" -> "Pending review"
+        "rejected" -> "Needs review"
+        else -> if (state.me?.profile?.birthdate.isNullOrBlank()) "Add birthdate" else "Start"
+    }
 }
 
 private fun appSettingsSummary(state: AppSettingsUiState): String {

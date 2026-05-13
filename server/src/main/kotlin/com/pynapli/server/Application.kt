@@ -29,6 +29,8 @@ import com.pynapli.server.subscriptions.configurePlayStoreRtdnRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionAdminRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionRoutes
 import com.pynapli.server.swipe.configureSwipeRoutes
+import com.pynapli.server.verification.configureAgeVerificationAdminRoutes
+import com.pynapli.server.verification.configureAgeVerificationRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
@@ -59,10 +61,12 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAdminModerationRoutes(dependencies.config, dependencies.messageModerationService)
     configureAdminReportRoutes(dependencies.config, dependencies.adminReportService)
     configureAdminRiskRoutes(dependencies.config, dependencies.adminRiskService)
+    configureAgeVerificationAdminRoutes(dependencies.config, dependencies.ageVerificationService)
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)
     configureAuthRoutes(dependencies.authService)
     configureProfileRoutes(dependencies.authService, dependencies.profileService)
+    configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)
     configureProfileLinkRoutes(dependencies.authService, dependencies.profileLinkService)
     configureLocationRoutes(dependencies.authService, dependencies.locationService)
     configurePresenceRoutes(dependencies.authService, dependencies.presenceService)

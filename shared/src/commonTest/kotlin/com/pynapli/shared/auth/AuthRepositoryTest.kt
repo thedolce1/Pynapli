@@ -4,6 +4,8 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.ActivityFeedResponseDto
+import com.pynapli.shared.network.dto.AgeVerificationRequirementsDto
+import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.BoostActivationDto
@@ -46,6 +48,7 @@ import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
+import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
@@ -213,6 +216,17 @@ private class FakeApiClient(
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun getMe(): AppResult<MeDto> = meResult
+
+    override suspend fun getAgeVerificationRequirements(): AppResult<AgeVerificationRequirementsDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun getAgeVerificationStatus(): AppResult<AgeVerificationStatusDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun startAgeVerification(
+        request: StartAgeVerificationRequestDto
+    ): AppResult<AgeVerificationStatusDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))

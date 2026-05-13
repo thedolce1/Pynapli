@@ -62,6 +62,8 @@ import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.swipe.JdbcSwipeRepository
 import com.pynapli.server.swipe.SwipeService
+import com.pynapli.server.verification.AgeVerificationService
+import com.pynapli.server.verification.JdbcAgeVerificationRepository
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
 import java.nio.file.Path
@@ -96,6 +98,7 @@ class ServerDependencies(
     val blockRepository: BlockRepository?,
     val savedGridFilterService: SavedGridFilterService?,
     val tonightAvailabilityService: TonightAvailabilityService?,
+    val ageVerificationService: AgeVerificationService?,
     private val probes: List<DependencyProbe>
 ) : AutoCloseable {
     suspend fun checkAll() = probes.map { it.check() }
@@ -250,6 +253,9 @@ class ServerDependencies(
                 viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource)
             )
             val tonightAvailabilityService = TonightAvailabilityService(database.dataSource)
+            val ageVerificationService = AgeVerificationService(
+                JdbcAgeVerificationRepository(database.dataSource)
+            )
             val messagingRepository = JdbcMessagingRepository(database.dataSource)
             val messagingService = MessagingService(
                 repository = messagingRepository,
@@ -306,6 +312,7 @@ class ServerDependencies(
                 blockRepository = blockRepository,
                 savedGridFilterService = savedGridFilterService,
                 tonightAvailabilityService = tonightAvailabilityService,
+                ageVerificationService = ageVerificationService,
                 probes = listOf(postgres, redis)
             )
         }
@@ -349,6 +356,7 @@ class ServerDependencies(
                 blockRepository = null,
                 savedGridFilterService = null,
                 tonightAvailabilityService = null,
+                ageVerificationService = null,
                 probes = emptyList()
             )
     }

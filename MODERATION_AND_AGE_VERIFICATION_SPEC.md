@@ -1,6 +1,6 @@
 # Pynapli Moderation And Age Verification Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-12
 
 ## Purpose
 
@@ -16,8 +16,8 @@ Legal requirements change. Before launch, current age-verification, app-store, a
 
 Baseline all markets:
 
-- Date of birth at account creation.
-- Explicit 18+ confirmation.
+- Date of birth at account creation or profile setup. The current MVP stores profile DOB; signup-time capture remains required before beta.
+- Explicit 18+ confirmation before an age-verification request starts.
 - Terms/privacy acceptance.
 - App store age signals where available/required.
 
@@ -34,6 +34,15 @@ Privacy:
 - Store only pass/fail, method, timestamp, and provider reference where needed.
 - Delete raw verification data as soon as legally/product-wise possible.
 - Do not use age-verification data for ads or profiling.
+
+Current MVP slice:
+
+- Profile Hub exposes an Age verification entry.
+- Ktor exposes requirements/status/start endpoints for authenticated users.
+- Admin/provider paths can review or callback verification results.
+- Results are stored in `age_verifications`; successful verification also sets `profiles.age_verified_at`.
+- Raw ID, selfie, and biometric payloads are not stored by this slice.
+- Still required before beta: signup-time DOB/18+ confirmation, provider selection, market-specific rules, legal review, and production admin controls.
 
 ## Content Zones
 
@@ -171,9 +180,9 @@ Avoid:
 
 ## Implementation Checklist
 
-- [ ] 18+ DOB and confirmation.
+- [ ] Partial: 18+ DOB and confirmation exist for the profile-hub verification start path; signup-time DOB/18+ capture is still required.
 - [ ] Market-driven enhanced verification flags.
-- [ ] Verification data minimization.
+- [x] Verification data minimization.
 - [ ] Public content moderation before visibility.
 - [ ] Partial: private album grants and report flow exist; media moderation/scanning policy is not complete.
 - [x] Report categories implemented.

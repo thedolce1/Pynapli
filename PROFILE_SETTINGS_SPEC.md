@@ -1,6 +1,6 @@
 # Pynapli Profile And Settings Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-12
 
 ## Purpose
 
@@ -401,6 +401,12 @@ Rules:
 - Verification status should be clear but not overpromised.
 - Verification can gate sensitive features where required.
 
+Current MVP slice:
+
+- The Safety section in Profile Hub includes an Age verification row.
+- The dialog explains the gate, blocks start until profile DOB exists, sends explicit adult confirmation, and shows pending/verified/rejected status.
+- Admin/provider completion is server-side; mobile never receives raw provider data.
+
 ## Safety Center
 
 Safety center includes:
@@ -634,7 +640,7 @@ Client-local:
 - [x] Swipe discovery settings exist.
 - [x] Activity settings exist.
 - [x] Notification detail levels exist.
-- [ ] Verification flow entry exists.
+- [x] Verification flow entry exists.
 - [ ] Safety center exists.
 - [ ] Blocked and hidden users are separate.
 - [ ] Discreet app icon exists or is planned.

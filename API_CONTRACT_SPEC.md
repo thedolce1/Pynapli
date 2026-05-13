@@ -1,6 +1,6 @@
 # Pynapli API Contract Spec
 
-Last updated: 2026-05-06
+Last updated: 2026-05-12
 
 ## Purpose
 
@@ -396,12 +396,17 @@ GET  /v1/verification/requirements
 POST /v1/verification/start
 POST /v1/verification/callback
 GET  /v1/verification/status
+POST /v1/admin/verification/age/{verificationId}/review
 ```
 
 Rules:
 
 - Market requirements are server-controlled.
 - Do not expose raw provider data to clients.
+- Authenticated user endpoints return only status/method/provider/timestamps and user-safe messages.
+- `POST /v1/verification/start` requires `confirmedAdult=true`, an adult DOB on the profile, and a supported verification method.
+- Callback/admin review endpoints are not mobile-client surfaces; they require admin/provider authorization and a review reason.
+- Successful verification sets the age-verification record and the profile age-verification timestamp used by age-gated filters.
 
 ## Notifications API
 
@@ -486,6 +491,7 @@ Rules:
 - [ ] Partial: idempotency keys exist for notification/outbox and some workflows, but actions/purchases are not consistently idempotent.
 - [x] Server-side entitlement checks.
 - [x] Server-side block/privacy/risk checks.
+- [x] Age-verification requirements/status/start plus admin review/provider callback contract exists.
 - [ ] WebSocket reconnect canonical refetch.
 - [ ] Partial: error codes are mapped centrally, but the full API error catalog is not complete.
 - [ ] Partial: admin routes are under `/v1/admin`, but production admin separation, roles, and MFA are not complete.
