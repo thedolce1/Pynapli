@@ -55,6 +55,21 @@ Run the Ktor server locally after Docker is running:
 .\gradlew.bat :server:run
 ```
 
+For local Grid load testing, start the server first, then run:
+
+```powershell
+.\scripts\grid-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000
+```
+
+The server database pool can be tuned for load runs with:
+
+```powershell
+$env:PYNAPLI_DATABASE_MAX_POOL_SIZE='32'
+$env:PYNAPLI_DATABASE_MIN_IDLE='8'
+$env:PYNAPLI_DATABASE_CONNECTION_TIMEOUT_MS='5000'
+.\gradlew.bat :server:run
+```
+
 Seed local development accounts after the server is running:
 
 ```powershell

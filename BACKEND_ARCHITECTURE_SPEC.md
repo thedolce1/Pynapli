@@ -1,6 +1,6 @@
 # Pynapli Backend Architecture Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-13
 
 ## Purpose
 
@@ -735,6 +735,16 @@ Recommended libraries/patterns:
 - HikariCP for JDBC pooling
 - OpenTelemetry for tracing
 - Structured logging
+
+Current local Ktor database pool configuration is environment-driven:
+
+```text
+PYNAPLI_DATABASE_MAX_POOL_SIZE
+PYNAPLI_DATABASE_MIN_IDLE
+PYNAPLI_DATABASE_CONNECTION_TIMEOUT_MS
+```
+
+Defaults are intentionally conservative for local development: max pool 10, min idle 1, connection timeout 5000ms. Load-test runs can increase the pool, but pool tuning is not a substitute for query and endpoint profiling.
 
 For geospatial queries, prefer explicit SQL over hiding PostGIS behind a weak abstraction.
 

@@ -1,6 +1,6 @@
 # Pynapli Grid Implementation Spec
 
-Last updated: 2026-05-09 (presence stream)
+Last updated: 2026-05-13 (API load harness baseline)
 
 ## Purpose
 
@@ -570,6 +570,14 @@ Interaction:
 - Filter apply: no blank grid if old cards exist.
 - Presence update: no full refetch.
 
+Current API-level baseline:
+
+- `scripts/grid-api-load-test.ps1` seeds and exercises the mixed Grid workload through real Ktor endpoints.
+- Latest 2026-05-13 local full run used 5,000 candidates, 1,000 online presence keys, 100 mixed Free/Social/Select viewers, and 100-way API concurrency.
+- The run produced zero HTTP errors.
+- With a tuned local DB pool of 32 / min idle 8, p95 remained over target: initial Grid 1977ms, filtered Grid 1509ms, page two 1795ms, profile open 1181ms, presence heartbeat 341ms.
+- The next Grid hardening step is targeted profiling and optimization of the Ktor/Grid/profile/presence path before adding Redis candidate caching complexity.
+
 Battery:
 
 - No continuous exact GPS in background.
@@ -588,6 +596,8 @@ Battery:
 - [x] Signed stable cursor pagination is implemented for live grid responses.
 - [x] 5,000-candidate dense grid integration proof exists for stable cursor pages.
 - [x] 100-concurrent filtered repository regression proof exists against the same dense dataset. Latest local Testcontainers run on 2026-05-13: two-page dense query 170ms; 100-concurrent filtered p95 1230ms, max 1692ms. This is a regression guardrail, not the final production API p95 budget.
+- [x] API-level mixed-tier Grid load harness exists at `scripts/grid-api-load-test.ps1`, covering dense candidates, online presence, filter changes, pagination, and profile opens through real Ktor endpoints.
+- [ ] Partial: latest API-level 5,000-candidate / 100-concurrent run is zero-error but over p95 budgets, so Grid is not yet beta-scale complete.
 - [x] Server-enforced Grid volume caps exist by tier: Free page 60 / depth 60, Social page 90 / depth 600, Select page 120 / uncapped depth. Cursor payloads carry seen-count state so capped tiers cannot bypass depth by asking for larger pages.
 - [x] Redis-backed Grid query rate limiting is wired through `RateLimitService` in production dependencies.
 - [x] Compose grid uses stable keys.

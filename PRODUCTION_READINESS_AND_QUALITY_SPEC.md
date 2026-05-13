@@ -1,6 +1,6 @@
 # Pynapli Production Readiness And Quality Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-13
 
 ## Purpose
 
@@ -130,7 +130,26 @@ Before public beta, load test a metro-cell scenario with:
 
 The app must not request or render all 5,000 profiles.
 
-Current status: Docker-backed repository integration tests prove stable two-page Grid cursor paging over 5,000 nearby candidates and a 100-concurrent filtered query regression guardrail. Latest local Testcontainers run on 2026-05-13: two-page dense query 170ms; 100-concurrent filtered p95 1230ms, max 1692ms. The full beta API/device load test with online presence distribution, mixed tiers, profile opens, and Android rendering remains open.
+Current status: Docker-backed repository integration tests prove stable two-page Grid cursor paging over 5,000 nearby candidates and a 100-concurrent filtered query regression guardrail. Latest local Testcontainers run on 2026-05-13: two-page dense query 170ms; 100-concurrent filtered p95 1230ms, max 1692ms.
+
+The API-level Ktor load harness now exists at `scripts/grid-api-load-test.ps1`. It exercises 5,000 dense candidates, 1,000 online presence keys, 100 concurrent mixed Free/Social/Select users, presence heartbeats, first grid query, filtered grid query, page-two query where entitlement allows it, and profile opens. Latest local run on 2026-05-13 produced zero HTTP errors, but p95 latency is still over beta budgets:
+
+| Server Shape | Scenario | P95 | Budget | Status |
+| --- | --- | ---: | ---: | --- |
+| Default DB pool 10 | Grid initial | 4338ms | 800ms | Over |
+| Default DB pool 10 | Grid filter | 3766ms | 500ms | Over |
+| Default DB pool 10 | Grid page two | 3369ms | 800ms | Over |
+| Default DB pool 10 | Presence heartbeat | 479ms | 300ms | Over |
+| Default DB pool 10 | Profile open | 4596ms | 800ms | Over |
+| Tuned DB pool 32 / min idle 8 | Grid initial | 1977ms | 800ms | Over |
+| Tuned DB pool 32 / min idle 8 | Grid filter | 1509ms | 500ms | Over |
+| Tuned DB pool 32 / min idle 8 | Grid page two | 1795ms | 800ms | Over |
+| Tuned DB pool 32 / min idle 8 | Presence heartbeat | 341ms | 300ms | Over |
+| Tuned DB pool 32 / min idle 8 | Profile open | 1181ms | 800ms | Over |
+
+This is useful evidence, not a failure to hide: the API path is stable under this local load shape, but it needs profiling and optimization before the Grid can be called beta-ready. Next work should capture endpoint-level DB timings, Hikari pool behavior, and slow query plans, then decide from evidence whether Redis candidate caching is necessary now.
+
+The Android rendering/device load test remains open.
 
 Expected behavior:
 
@@ -398,7 +417,7 @@ Every major screen should test:
 
 ## Load Testing
 
-Use k6, Gatling, or equivalent.
+Use k6, Gatling, PowerShell 7 local harnesses, or equivalent.
 
 Required scenarios before beta:
 
@@ -415,6 +434,14 @@ Required scenarios before beta:
 - Album grant/revoke.
 - Partner link accept/unlink.
 - Playing Tonight activation.
+
+Current local Grid API harness:
+
+```powershell
+.\scripts\grid-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000
+```
+
+Use `-FailOnBudget` when the harness should fail the shell on p95 budget regressions.
 
 Minimum beta load targets:
 

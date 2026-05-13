@@ -6,6 +6,9 @@ data class ServerConfig(
     val databaseUrl: String,
     val databaseUser: String,
     val databasePassword: String,
+    val databaseMaximumPoolSize: Int = 10,
+    val databaseMinimumIdle: Int = 1,
+    val databaseConnectionTimeoutMillis: Long = 5_000L,
     val redisUrl: String,
     val mediaStorageProvider: String = "local",
     val mediaStorageBucket: String = "pynapli-local-media",
@@ -53,6 +56,18 @@ data class ServerConfig(
                 databaseUrl = System.getenv("PYNAPLI_DATABASE_URL") ?: "jdbc:postgresql://localhost:5432/pynapli_dev",
                 databaseUser = System.getenv("PYNAPLI_DATABASE_USER") ?: "pynapli",
                 databasePassword = System.getenv("PYNAPLI_DATABASE_PASSWORD") ?: "pynapli_dev_password",
+                databaseMaximumPoolSize = System.getenv("PYNAPLI_DATABASE_MAX_POOL_SIZE")
+                    ?.toIntOrNull()
+                    ?.coerceIn(1, 100)
+                    ?: 10,
+                databaseMinimumIdle = System.getenv("PYNAPLI_DATABASE_MIN_IDLE")
+                    ?.toIntOrNull()
+                    ?.coerceIn(0, 100)
+                    ?: 1,
+                databaseConnectionTimeoutMillis = System.getenv("PYNAPLI_DATABASE_CONNECTION_TIMEOUT_MS")
+                    ?.toLongOrNull()
+                    ?.coerceIn(1_000L, 60_000L)
+                    ?: 5_000L,
                 redisUrl = System.getenv("PYNAPLI_REDIS_URL") ?: "redis://localhost:6379",
                 mediaStorageProvider = mediaStorageProvider,
                 mediaStorageBucket = System.getenv("PYNAPLI_MEDIA_STORAGE_BUCKET") ?: "pynapli-local-media",

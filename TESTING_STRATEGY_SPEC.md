@@ -1,6 +1,6 @@
 # Pynapli Testing Strategy Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-13
 
 ## Purpose
 
@@ -63,6 +63,14 @@ Use k6 or equivalent for:
 
 Use PostgreSQL `EXPLAIN ANALYZE` for slow query regression.
 
+Current local Grid API harness:
+
+```powershell
+.\scripts\grid-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000
+```
+
+The harness exercises real Ktor endpoints with mixed Free/Social/Select viewers, presence heartbeats, first Grid query, filtered Grid query, page-two Grid query where available, and profile opens. Add `-FailOnBudget` when using it as a hard performance gate.
+
 ## Security/Abuse Tests
 
 - Mass first-message bot throttled.
@@ -81,6 +89,7 @@ Use PostgreSQL `EXPLAIN ANALYZE` for slow query regression.
 - [ ] Critical E2E tests passing on iOS.
 - [ ] Partial: Ktor/server integration tests with Testcontainers exist and pass locally; full release-grade DB container coverage is not complete.
 - [ ] Performance benchmarks under thresholds.
+- [ ] Partial: Grid API load harness exists and runs zero-error locally, but latest p95 timings are still above the beta budgets.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [ ] Location denied path tested.

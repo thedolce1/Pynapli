@@ -12,9 +12,9 @@ class Database(config: ServerConfig) : AutoCloseable {
             jdbcUrl = config.databaseUrl
             username = config.databaseUser
             password = config.databasePassword
-            maximumPoolSize = 10
-            minimumIdle = 1
-            connectionTimeout = 5_000
+            maximumPoolSize = config.databaseMaximumPoolSize
+            minimumIdle = config.databaseMinimumIdle.coerceAtMost(config.databaseMaximumPoolSize)
+            connectionTimeout = config.databaseConnectionTimeoutMillis
             validationTimeout = 3_000
             poolName = "pynapli-postgres"
         }
@@ -32,4 +32,3 @@ class Database(config: ServerConfig) : AutoCloseable {
         (dataSource as HikariDataSource).close()
     }
 }
-
