@@ -27,9 +27,17 @@ class JdbcNotificationRepository(
 
     override suspend fun getDeliveryGate(userId: UUID): NotificationDeliveryGate? = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            connection.ensurePreferences(userId)
             connection.prepareStatement(
                 """
+                WITH ensured_preferences AS (
+                    INSERT INTO notification_preferences (user_id)
+                    SELECT id
+                    FROM users
+                    WHERE id = ?
+                      AND deleted_at IS NULL
+                    ON CONFLICT (user_id) DO NOTHING
+                    RETURNING user_id
+                )
                 SELECT np.user_id,
                        np.detail_level,
                        np.messages_enabled,
@@ -67,6 +75,7 @@ class JdbcNotificationRepository(
                 """.trimIndent()
             ).use { statement ->
                 statement.setObject(1, userId)
+                statement.setObject(2, userId)
                 statement.executeQuery().use { rs ->
                     if (!rs.next()) return@withContext null
                     NotificationDeliveryGate(

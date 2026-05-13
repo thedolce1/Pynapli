@@ -1,10 +1,18 @@
 package com.pynapli.server.subscriptions
 
+import com.pynapli.shared.network.dto.EntitlementSource
 import java.time.Instant
 import java.time.Duration
 import java.util.UUID
 
 interface SubscriptionRepository {
+    suspend fun findBestActiveEntitlement(userId: UUID, now: Instant): ActiveEntitlementRecord? =
+        listOfNotNull(
+            findBestActiveOwnSubscription(userId, now)?.toActiveEntitlementRecord(),
+            findBestActiveStoredEntitlement(userId, now)?.toActiveEntitlementRecord(),
+            findBestActiveLinkedPartnerSubscription(userId, now)?.toActiveEntitlementRecord()
+        ).maxWithOrNull(activeEntitlementComparator())
+
     suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord?
 
     suspend fun findBestActiveLinkedPartnerSubscription(userId: UUID, now: Instant): LinkedPartnerSubscriptionRecord?
@@ -117,6 +125,16 @@ data class LinkedPartnerSubscriptionRecord(
     val partnerLinkId: UUID
 )
 
+data class ActiveEntitlementRecord(
+    val tier: String,
+    val source: String,
+    val sourceSubscriptionId: UUID?,
+    val sourceUserId: UUID,
+    val linkedPartnerUserId: UUID?,
+    val startsAt: Instant,
+    val endsAt: Instant?
+)
+
 data class StoredEntitlementRecord(
     val entitlementId: UUID,
     val userId: UUID,
@@ -142,3 +160,57 @@ data class BoostActivationResult(
     val activation: BoostActivationRecord,
     val consumedInventory: Boolean
 )
+
+private fun SubscriptionRecord.toActiveEntitlementRecord(): ActiveEntitlementRecord =
+    ActiveEntitlementRecord(
+        tier = tier,
+        source = EntitlementSource.OWN_SUBSCRIPTION,
+        sourceSubscriptionId = subscriptionId,
+        sourceUserId = userId,
+        linkedPartnerUserId = null,
+        startsAt = currentPeriodStart,
+        endsAt = currentPeriodEnd
+    )
+
+private fun LinkedPartnerSubscriptionRecord.toActiveEntitlementRecord(): ActiveEntitlementRecord =
+    ActiveEntitlementRecord(
+        tier = subscription.tier,
+        source = EntitlementSource.LINKED_PARTNER_BENEFIT,
+        sourceSubscriptionId = subscription.subscriptionId,
+        sourceUserId = linkedPartnerUserId,
+        linkedPartnerUserId = linkedPartnerUserId,
+        startsAt = subscription.currentPeriodStart,
+        endsAt = subscription.currentPeriodEnd
+    )
+
+private fun StoredEntitlementRecord.toActiveEntitlementRecord(): ActiveEntitlementRecord =
+    ActiveEntitlementRecord(
+        tier = tier,
+        source = source,
+        sourceSubscriptionId = sourceId,
+        sourceUserId = userId,
+        linkedPartnerUserId = null,
+        startsAt = startsAt,
+        endsAt = endsAt
+    )
+
+private fun activeEntitlementComparator(): Comparator<ActiveEntitlementRecord> =
+    compareBy<ActiveEntitlementRecord> { entitlementTierRank(it.tier) }
+        .thenBy { entitlementSourcePriority(it.source) }
+        .thenBy { it.endsAt ?: Instant.EPOCH }
+
+private fun entitlementTierRank(tier: String): Int =
+    when (tier) {
+        "select" -> 2
+        "social" -> 1
+        else -> 0
+    }
+
+private fun entitlementSourcePriority(source: String): Int =
+    when (source) {
+        EntitlementSource.OWN_SUBSCRIPTION -> 3
+        EntitlementSource.ADMIN -> 2
+        EntitlementSource.PROMO -> 1
+        EntitlementSource.LINKED_PARTNER_BENEFIT -> 0
+        else -> -1
+    }

@@ -578,7 +578,10 @@ Current API-level baseline:
 - With a tuned local DB pool of 32 / min idle 8, p95 remained over target: initial Grid 1977ms, filtered Grid 1509ms, page two 1795ms, profile open 1181ms, presence heartbeat 341ms.
 - The profiled follow-up run showed the DB candidate query and pool saturation are the main Grid pressure points: initial Grid DB candidate query p95 1064ms, filtered Grid DB candidate query p95 897ms, page-two DB candidate query p95 1226ms, with Hikari waiting threads p95 around 24-27 under the 100-way load shape.
 - Representative `EXPLAIN (ANALYZE, BUFFERS)` returned 61 cards in about 103ms alone but touched about 98k shared buffers and looped through about 5,100 candidates with lateral media/link/boost checks.
-- Decision: optimize the Grid SQL into a two-phase query before adding Redis candidate caching. Phase one should rank/cap candidate IDs using location, filters, safety, blocks, boost, and cursor. Phase two should hydrate only the returned page cards and linked partner metadata. Redis candidate caching should be revisited after this rerun if p95 is still over budget.
+- The Grid SQL is now two-phase: phase one ranks/caps candidate IDs using location, filters, safety, blocks, boost, and cursor; phase two hydrates only the returned page cards and linked partner metadata.
+- A follow-up side-query pass added short-lived server entitlement caching, one Redis Lua call for rate limits, one profile-view eligibility/upsert statement, a combined notification delivery gate query, and bounded background profile-view recording for production profile opens.
+- Latest 2026-05-13 profiled run after the side-query pass produced zero HTTP errors. Client p95: Grid initial 876ms, Grid filter 831ms, Grid page two 1103ms, profile open 360ms, presence heartbeat 198ms. Server route p95: Grid initial 788ms, Grid filter 777ms, Grid page two 1023ms, profile open 281ms, presence heartbeat 105ms.
+- Decision: Grid is more stable and profile opens are healthy, but filter/page-two p95 is still over target. Next step is a focused `EXPLAIN`/index pass on the current two-phase candidate query and cursor/page-two behavior. Redis candidate caching should be decided from that evidence.
 
 Battery:
 
@@ -601,7 +604,7 @@ Battery:
 - [x] API-level mixed-tier Grid load harness exists at `scripts/grid-api-load-test.ps1`, covering dense candidates, online presence, filter changes, pagination, and profile opens through real Ktor endpoints.
 - [ ] Partial: latest API-level 5,000-candidate / 100-concurrent run is zero-error but over p95 budgets, so Grid is not yet beta-scale complete.
 - [x] Opt-in server profiling exists for Grid, profile open, and presence heartbeat using `PYNAPLI_API_PROFILING_ENABLED=true` plus the load harness `-ServerProfile` switch.
-- [ ] Partial: profiled Grid evidence points to DB candidate-query pressure and Hikari waiting under concurrency; two-phase SQL optimization remains open.
+- [ ] Partial: profiled Grid evidence still points to DB candidate-query pressure and Hikari waiting under concurrency; two-phase SQL and side-query optimization are implemented, but filter/page-two p95 remains over budget.
 - [x] Server-enforced Grid volume caps exist by tier: Free page 60 / depth 60, Social page 90 / depth 600, Select page 120 / uncapped depth. Cursor payloads carry seen-count state so capped tiers cannot bypass depth by asking for larger pages.
 - [x] Redis-backed Grid query rate limiting is wired through `RateLimitService` in production dependencies.
 - [x] Compose grid uses stable keys.

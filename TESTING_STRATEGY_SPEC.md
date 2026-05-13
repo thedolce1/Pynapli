@@ -86,7 +86,7 @@ Then run:
 .\scripts\grid-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000 -ServerProfile
 ```
 
-The current profiled baseline is zero-error after the Grid two-phase SQL optimization. Latest 2026-05-13 run with 5,000 candidates / 100 concurrent mixed-tier users / DB pool 32 produced client p95 of Grid initial 884ms, Grid filter 737ms, Grid page two 872ms, profile open 439ms, and presence heartbeat 171ms. The next performance test should rerun this exact harness after reducing entitlement/rate-limit/profile-view side-query pressure.
+The current profiled baseline is zero-error after the Grid two-phase SQL optimization and side-query optimization. Latest 2026-05-13 run with 5,000 candidates / 100 concurrent mixed-tier users / DB pool 32 produced client p95 of Grid initial 876ms, Grid filter 831ms, Grid page two 1103ms, profile open 360ms, and presence heartbeat 198ms. Entitlement lookup is near-zero on filter/page-two cache hits and profile-view activity enqueue is near-zero. The next performance test should rerun this exact harness after a focused EXPLAIN/index pass on the candidate query and page-two cursor path.
 
 ## Security/Abuse Tests
 
@@ -107,7 +107,7 @@ The current profiled baseline is zero-error after the Grid two-phase SQL optimiz
 - [ ] Partial: Ktor/server integration tests with Testcontainers exist and pass locally; full release-grade DB container coverage is not complete.
 - [ ] Performance benchmarks under thresholds.
 - [ ] Partial: Grid API load harness exists and runs zero-error locally, but Grid filter and client-observed initial/page-two p95 timings are still above beta budgets.
-- [ ] Partial: Grid API profiling exists and the two-phase Grid SQL optimization is implemented; remaining hot-path work is side-query pressure around entitlement/rate-limit/profile-view activity paths.
+- [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, and entitlement/rate-limit/profile-view side-query pressure has been reduced; remaining hot-path work is candidate query and DB pool pressure under filter/page-two concurrency.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [ ] Location denied path tested.

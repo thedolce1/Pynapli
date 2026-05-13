@@ -7,6 +7,7 @@ import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncStatus
 import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
@@ -89,6 +90,32 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    fun getEntitlementUsesShortLivedCache() = runBlocking {
+        val user = uuid(301)
+        val repository = CountingActiveEntitlementRepository(
+            ActiveEntitlementRecord(
+                tier = SubscriptionTier.SOCIAL,
+                source = EntitlementSource.OWN_SUBSCRIPTION,
+                sourceSubscriptionId = uuid(3010),
+                sourceUserId = user,
+                linkedPartnerUserId = null,
+                startsAt = Instant.parse("2026-05-01T00:00:00Z"),
+                endsAt = Instant.parse("2026-06-01T00:00:00Z")
+            )
+        )
+        val service = SubscriptionService(
+            repository = repository,
+            clock = clock,
+            entitlementCacheTtl = Duration.ofSeconds(5)
+        )
+
+        assertEquals(SubscriptionTier.SOCIAL, service.getEntitlement(user).tier)
+        assertEquals(SubscriptionTier.SOCIAL, service.getEntitlement(user).tier)
+
+        assertEquals(1, repository.lookupCount)
+    }
+
+    @Test
     fun adminGrantCreatesStoredEntitlementAndUpdatesPolicy() = runBlocking {
         val user = uuid(31)
         val repository = InMemorySubscriptionRepository(validUsers = setOf(user))
@@ -107,6 +134,29 @@ class SubscriptionServiceTest {
 
         assertEquals(SubscriptionTier.SELECT, record.tier)
         assertEquals(EntitlementSource.ADMIN, record.source)
+        assertEquals(SubscriptionTier.SELECT, entitlement.tier)
+        assertEquals(EntitlementSource.ADMIN, entitlement.source)
+    }
+
+    @Test
+    fun adminGrantInvalidatesCachedFreeEntitlement() = runBlocking {
+        val user = uuid(310)
+        val repository = InMemorySubscriptionRepository(validUsers = setOf(user))
+        val service = SubscriptionService(repository, clock)
+
+        assertEquals(SubscriptionTier.FREE, service.getEntitlement(user).tier)
+        service.grantStoredEntitlement(
+            userIdText = user.toString(),
+            tierText = SubscriptionTier.SELECT,
+            sourceText = EntitlementSource.ADMIN,
+            startsAtText = "2026-05-06T12:00:00Z",
+            endsAtText = "2026-06-06T12:00:00Z",
+            actorId = "billing-ops",
+            reason = "launch support"
+        )
+
+        val entitlement = service.getEntitlement(user)
+
         assertEquals(SubscriptionTier.SELECT, entitlement.tier)
         assertEquals(EntitlementSource.ADMIN, entitlement.source)
     }
@@ -525,6 +575,29 @@ private class InMemorySubscriptionRepository(
         verifiedPurchases += record
         return record
     }
+}
+
+private class CountingActiveEntitlementRepository(
+    private val entitlement: ActiveEntitlementRecord?
+) : SubscriptionRepository {
+    var lookupCount: Int = 0
+        private set
+
+    override suspend fun findBestActiveEntitlement(userId: UUID, now: Instant): ActiveEntitlementRecord? {
+        lookupCount += 1
+        return entitlement?.takeIf { it.sourceUserId == userId }
+    }
+
+    override suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? = null
+
+    override suspend fun findBestActiveLinkedPartnerSubscription(
+        userId: UUID,
+        now: Instant
+    ): LinkedPartnerSubscriptionRecord? = null
+
+    override suspend fun findBestActiveStoredEntitlement(userId: UUID, now: Instant): StoredEntitlementRecord? = null
+
+    override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean = false
 }
 
 private class FakePlayStorePurchaseVerifier(

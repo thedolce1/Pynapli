@@ -18,6 +18,26 @@ import javax.sql.DataSource
 class JdbcSubscriptionRepository(
     private val dataSource: DataSource
 ) : SubscriptionRepository {
+    override suspend fun findBestActiveEntitlement(userId: UUID, now: Instant): ActiveEntitlementRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(ACTIVE_ENTITLEMENT_QUERY).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.setTimestamp(2, Timestamp.from(now))
+                    statement.setTimestamp(3, Timestamp.from(now))
+                    statement.setObject(4, userId)
+                    statement.setTimestamp(5, Timestamp.from(now))
+                    statement.setTimestamp(6, Timestamp.from(now))
+                    statement.setTimestamp(7, Timestamp.from(now))
+                    statement.setTimestamp(8, Timestamp.from(now))
+                    statement.setObject(9, userId)
+                    statement.executeQuery().use { rs ->
+                        if (rs.next()) rs.toActiveEntitlementRecord() else null
+                    }
+                }
+            }
+        }
+
     override suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
@@ -365,6 +385,17 @@ class JdbcSubscriptionRepository(
             status = getString("status")
         )
 
+    private fun ResultSet.toActiveEntitlementRecord(): ActiveEntitlementRecord =
+        ActiveEntitlementRecord(
+            tier = getString("tier"),
+            source = getString("source"),
+            sourceSubscriptionId = getObject("source_subscription_id", UUID::class.java),
+            sourceUserId = getObject("source_user_id", UUID::class.java),
+            linkedPartnerUserId = getObject("linked_partner_user_id", UUID::class.java),
+            startsAt = getTimestamp("starts_at").toInstant(),
+            endsAt = getTimestamp("ends_at")?.toInstant()
+        )
+
     private fun ResultSet.toBoostActivationRecord(): BoostActivationRecord =
         BoostActivationRecord(
             activationId = getObject("boost_activation_id", UUID::class.java),
@@ -457,6 +488,108 @@ class JdbcSubscriptionRepository(
 
     companion object {
         private val ACTIVE_STATUSES = "('active', 'grace')"
+
+        private val ACTIVE_ENTITLEMENT_QUERY = """
+            SELECT tier,
+                   source,
+                   source_subscription_id,
+                   source_user_id,
+                   linked_partner_user_id,
+                   starts_at,
+                   ends_at
+            FROM (
+                SELECT s.id AS stable_id,
+                       s.id AS source_subscription_id,
+                       s.user_id AS source_user_id,
+                       NULL::uuid AS linked_partner_user_id,
+                       s.tier,
+                       'own_subscription' AS source,
+                       s.current_period_start AS starts_at,
+                       s.current_period_end AS ends_at,
+                       CASE s.tier
+                           WHEN 'select' THEN 2
+                           WHEN 'social' THEN 1
+                           ELSE 0
+                       END AS tier_rank,
+                       3 AS source_rank
+                FROM subscriptions s
+                JOIN users u
+                  ON u.id = s.user_id
+                 AND u.status = 'active'
+                 AND u.deleted_at IS NULL
+                WHERE s.user_id = ?
+                  AND s.status IN $ACTIVE_STATUSES
+                  AND s.current_period_start <= ?
+                  AND s.current_period_end > ?
+
+                UNION ALL
+
+                SELECT e.id AS stable_id,
+                       e.source_id AS source_subscription_id,
+                       e.user_id AS source_user_id,
+                       NULL::uuid AS linked_partner_user_id,
+                       e.tier,
+                       e.source,
+                       e.starts_at AS starts_at,
+                       e.ends_at AS ends_at,
+                       CASE e.tier
+                           WHEN 'select' THEN 2
+                           WHEN 'social' THEN 1
+                           ELSE 0
+                       END AS tier_rank,
+                       CASE e.source
+                           WHEN 'own_subscription' THEN 3
+                           WHEN 'admin' THEN 2
+                           WHEN 'promo' THEN 1
+                           WHEN 'linked_partner_benefit' THEN 0
+                           ELSE -1
+                       END AS source_rank
+                FROM entitlements e
+                JOIN users u
+                  ON u.id = e.user_id
+                 AND u.status = 'active'
+                 AND u.deleted_at IS NULL
+                WHERE e.user_id = ?
+                  AND e.status = 'active'
+                  AND e.starts_at <= ?
+                  AND (e.ends_at IS NULL OR e.ends_at > ?)
+
+                UNION ALL
+
+                SELECT s.id AS stable_id,
+                       s.id AS source_subscription_id,
+                       linked_user.id AS source_user_id,
+                       linked_user.id AS linked_partner_user_id,
+                       s.tier,
+                       'linked_partner_benefit' AS source,
+                       s.current_period_start AS starts_at,
+                       s.current_period_end AS ends_at,
+                       CASE s.tier
+                           WHEN 'select' THEN 2
+                           WHEN 'social' THEN 1
+                           ELSE 0
+                       END AS tier_rank,
+                       0 AS source_rank
+                FROM user_profile_links upl
+                JOIN users linked_user
+                  ON linked_user.id = upl.linked_user_id
+                 AND linked_user.status = 'active'
+                 AND linked_user.deleted_at IS NULL
+                JOIN subscriptions s
+                  ON s.user_id = linked_user.id
+                 AND s.status IN $ACTIVE_STATUSES
+                 AND s.current_period_start <= ?
+                 AND s.current_period_end > ?
+                WHERE upl.user_id = ?
+                  AND upl.status = 'active'
+                  AND upl.unlinked_at IS NULL
+            ) candidates
+            ORDER BY tier_rank DESC,
+                     source_rank DESC,
+                     ends_at DESC NULLS FIRST,
+                     stable_id ASC
+            LIMIT 1
+        """.trimIndent()
 
         private val ACTIVE_OWN_SUBSCRIPTION_QUERY = """
             SELECT s.id AS subscription_id,

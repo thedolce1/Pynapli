@@ -172,7 +172,17 @@ The Grid repository now uses a two-phase SQL shape: it ranks eligible candidate 
 | Presence heartbeat | 171ms | 71ms | 42ms | n/a | n/a | 300ms | OK |
 | Profile open | 439ms | 374ms | 351ms | 109ms | n/a | 800ms | OK |
 
-Decision: do not jump straight to Redis candidate caching yet. The two-phase SQL removed the worst over-hydration pressure and brought server route p95 close to the current cold/page budgets. Redis candidate caching should be reconsidered only after the remaining side-query pressure is reduced, especially entitlement/rate-limit lookups around Grid and profile-view activity writes around profile open.
+The side-query optimization pass now reduces repeated entitlement reads with a short-lived server cache, uses a single Redis Lua call for rate-limit counters, folds profile-view eligibility into one upsert statement, avoids a separate notification-preference round trip, and moves production profile-view activity recording onto a bounded background path. Latest 2026-05-13 profiled follow-up with the same load shape produced zero HTTP errors:
+
+| Scenario | Client P95 | Server Route P95 | Service P95 | Repository P95 | Candidate Query P95 | Notable Side-Query P95 | Budget | Status |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- |
+| Grid initial | 876ms | 788ms | 743ms | 641ms | 610ms | entitlement 73ms, rate-limit 47ms | 800ms | Slightly over client budget |
+| Grid filter | 831ms | 777ms | 741ms | 661ms | 651ms | entitlement 0ms, rate-limit 38ms | 500ms | Over filter budget |
+| Grid page two | 1103ms | 1023ms | 979ms | 901ms | 869ms | entitlement 0ms, rate-limit 49ms | 800ms | Over page budget |
+| Presence heartbeat | 198ms | 105ms | 45ms | n/a | n/a | Redis heartbeat 45ms | 300ms | OK |
+| Profile open | 360ms | 281ms | 237ms | 173ms | n/a | activity enqueue 0.1ms | 800ms | OK |
+
+Decision: the side-query pressure is materially reduced, but Grid is still not beta-scale complete because candidate SQL and DB pool saturation dominate filter/page-two p95. Redis candidate caching is now back on the decision table, but the next evidence-driven step should be a focused `EXPLAIN`/index pass on the two-phase candidate query, especially cursor/page-two behavior, before adding Redis candidate caches.
 
 The Android rendering/device load test remains open.
 

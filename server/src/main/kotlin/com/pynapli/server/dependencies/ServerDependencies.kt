@@ -67,6 +67,10 @@ import com.pynapli.server.verification.AgeVerificationService
 import com.pynapli.server.verification.JdbcAgeVerificationRepository
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import java.nio.file.Path
 import java.time.Duration
 
@@ -101,6 +105,7 @@ class ServerDependencies(
     val tonightAvailabilityService: TonightAvailabilityService?,
     val ageVerificationService: AgeVerificationService?,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
+    private val profileActivityScope: CoroutineScope? = null,
     private val probes: List<DependencyProbe>
 ) : AutoCloseable {
     suspend fun checkAll() = probes.map { it.check() }
@@ -109,6 +114,7 @@ class ServerDependencies(
         runCatching { presenceOfflineScanner?.close() }
         runCatching { playStoreSubscriptionSyncWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
+        runCatching { profileActivityScope?.cancel() }
         probes.asReversed().forEach { probe ->
             runCatching { probe.close() }
         }
@@ -128,6 +134,7 @@ class ServerDependencies(
             )
             val postgres = PostgresDependencyProbe(database)
             val redis = RedisDependencyProbe(redisCache)
+            val profileActivityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             val authService = AuthService(JdbcAuthRepository(database.dataSource))
             val locationService = LocationService(JdbcLocationRepository(database.dataSource))
             val presenceRepository = RedisPresenceRepository(redisCache)
@@ -238,7 +245,9 @@ class ServerDependencies(
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
                 activityService = activityService,
                 blockRepository = blockRepository,
-                riskPolicyService = riskPolicyService
+                riskPolicyService = riskPolicyService,
+                profileViewRecordScope = profileActivityScope,
+                profileViewRecordConcurrency = 4
             )
             val profileLinkService = ProfileLinkService(
                 repository = JdbcProfileLinkRepository(database.dataSource),
@@ -323,6 +332,7 @@ class ServerDependencies(
                 tonightAvailabilityService = tonightAvailabilityService,
                 ageVerificationService = ageVerificationService,
                 requestProfilerFactory = requestProfilerFactory,
+                profileActivityScope = profileActivityScope,
                 probes = listOf(postgres, redis)
             )
         }

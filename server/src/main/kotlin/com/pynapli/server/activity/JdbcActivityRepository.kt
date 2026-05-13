@@ -17,24 +17,16 @@ class JdbcActivityRepository(
         if (viewerUserId == targetUserId) return@withContext false
 
         dataSource.connection.use { connection ->
-            val eligible = connection.prepareStatement(PROFILE_VIEW_ELIGIBILITY_QUERY).use { statement ->
-                statement.setObject(1, viewerUserId)
-                statement.setObject(2, targetUserId)
-                statement.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getBoolean(1)
-                }
-            }
-            if (!eligible) return@withContext false
-
-            connection.prepareStatement(UPSERT_PROFILE_VIEW_QUERY).use { statement ->
+            connection.prepareStatement(UPSERT_ELIGIBLE_PROFILE_VIEW_QUERY).use { statement ->
                 statement.setObject(1, UUID.randomUUID())
                 statement.setObject(2, targetUserId)
                 statement.setObject(3, viewerUserId)
                 statement.setObject(4, targetUserId)
-                statement.setString(5, "${profileViewCooldown.toMinutes()} minutes")
-                statement.setString(6, "${profileViewCooldown.toMinutes()} minutes")
-                statement.executeUpdate() > 0
+                statement.setObject(5, viewerUserId)
+                statement.setObject(6, targetUserId)
+                statement.setString(7, "${profileViewCooldown.toMinutes()} minutes")
+                statement.setString(8, "${profileViewCooldown.toMinutes()} minutes")
+                statement.executeQuery().use { rs -> rs.next() }
             }
         }
     }
@@ -161,8 +153,21 @@ class JdbcActivityRepository(
     }
 
     companion object {
-        private val PROFILE_VIEW_ELIGIBILITY_QUERY = """
-            SELECT EXISTS (
+        private val UPSERT_ELIGIBLE_PROFILE_VIEW_QUERY = """
+            INSERT INTO activity_events (
+                id,
+                recipient_user_id,
+                actor_user_id,
+                event_type,
+                target_user_id,
+                aggregate_count,
+                first_occurred_at,
+                last_counted_at,
+                occurred_at,
+                updated_at
+            )
+            SELECT ?, ?, ?, 'profile_view', ?, 1, now(), now(), now(), now()
+            WHERE EXISTS (
                 SELECT 1
                 FROM users viewer
                 JOIN discovery_settings viewer_settings ON viewer_settings.user_id = viewer.id
@@ -181,22 +186,6 @@ class JdbcActivityRepository(
                   AND target.status = 'active'
                   AND target.deleted_at IS NULL
             )
-        """.trimIndent()
-
-        private val UPSERT_PROFILE_VIEW_QUERY = """
-            INSERT INTO activity_events (
-                id,
-                recipient_user_id,
-                actor_user_id,
-                event_type,
-                target_user_id,
-                aggregate_count,
-                first_occurred_at,
-                last_counted_at,
-                occurred_at,
-                updated_at
-            )
-            VALUES (?, ?, ?, 'profile_view', ?, 1, now(), now(), now(), now())
             ON CONFLICT (recipient_user_id, actor_user_id, event_type, target_user_id)
             WHERE event_type = 'profile_view' AND deleted_at IS NULL
             DO UPDATE SET
@@ -213,6 +202,7 @@ class JdbcActivityRepository(
                 occurred_at = now(),
                 updated_at = now(),
                 visibility_status = 'visible'
+            RETURNING id
         """.trimIndent()
 
         private val FLIRT_ELIGIBILITY_QUERY = """

@@ -15,6 +15,12 @@ import com.pynapli.shared.network.dto.ProfileDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.LocalDate
 import java.time.Period
@@ -26,8 +32,13 @@ class ProfileService(
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val activityService: ActivityService? = null,
     private val blockRepository: BlockRepository? = null,
-    private val riskPolicyService: RiskPolicyService? = null
+    private val riskPolicyService: RiskPolicyService? = null,
+    private val profileViewRecordScope: CoroutineScope? = null,
+    profileViewRecordConcurrency: Int = 4
 ) {
+    private val profileViewRecordSemaphore = profileViewRecordScope
+        ?.let { Semaphore(profileViewRecordConcurrency.coerceAtLeast(1)) }
+
     suspend fun getMe(userId: UUID): MeDto =
         repository.getMe(userId)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
 
@@ -43,9 +54,48 @@ class ProfileService(
         }
             ?: throw ProfileException("PROFILE_NOT_FOUND")
         profile("profile.activityRecord") {
-            runCatching { activityService?.recordProfileView(viewerUserId, targetUserId) }
+            recordProfileViewActivity(viewerUserId, targetUserId)
         }
         return profile
+    }
+
+    private suspend fun recordProfileViewActivity(viewerUserId: UUID, targetUserId: UUID) {
+        val service = activityService ?: return
+        val scope = profileViewRecordScope
+        if (scope == null) {
+            recordProfileViewActivityInline(service, viewerUserId, targetUserId)
+            return
+        }
+
+        scope.launch {
+            val semaphore = profileViewRecordSemaphore
+            if (semaphore == null) {
+                recordProfileViewActivityInline(service, viewerUserId, targetUserId)
+            } else {
+                semaphore.withPermit {
+                    recordProfileViewActivityInline(service, viewerUserId, targetUserId)
+                }
+            }
+        }
+    }
+
+    private suspend fun recordProfileViewActivityInline(
+        service: ActivityService,
+        viewerUserId: UUID,
+        targetUserId: UUID
+    ) {
+        try {
+            service.recordProfileView(viewerUserId, targetUserId)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            logger.warn(
+                "Failed to record profile-view activity for viewer {} target {}",
+                viewerUserId,
+                targetUserId,
+                error
+            )
+        }
     }
 
     suspend fun updateProfile(userId: UUID, request: UpdateProfileRequestDto): MeDto {
@@ -205,6 +255,7 @@ class ProfileService(
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(ProfileService::class.java)
         private val DISCOVERY_STYLES = setOf("solo", "together", "both", "social", "ask_in_chat")
         private val GRID_MESSAGE_POLICIES = setOf("everyone", "matches_only", "no_one")
     }

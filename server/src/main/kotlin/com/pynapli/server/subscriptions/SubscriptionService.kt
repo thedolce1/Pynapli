@@ -14,6 +14,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class SubscriptionService(
     private val repository: SubscriptionRepository,
@@ -21,15 +22,19 @@ class SubscriptionService(
     private val playStorePackageName: String = "com.pynapli.app",
     private val playStorePurchaseVerifier: PlayStorePurchaseVerifier = DisabledPlayStorePurchaseVerifier,
     private val playStoreSyncStaleAfter: Duration = Duration.ofHours(6),
-    private val playStoreSyncRenewalLookahead: Duration = Duration.ofHours(24)
+    private val playStoreSyncRenewalLookahead: Duration = Duration.ofHours(24),
+    private val entitlementCacheTtl: Duration = Duration.ofSeconds(5),
+    private val entitlementCacheMaxSize: Int = 10_000
 ) {
+    private val entitlementCache = ConcurrentHashMap<UUID, CachedEntitlement>()
+
     suspend fun getEntitlement(userId: UUID): SubscriptionEntitlementDto {
         val now = clock.instant()
-        val own = repository.findBestActiveOwnSubscription(userId, now)?.toEntitlement()
-        val linked = repository.findBestActiveLinkedPartnerSubscription(userId, now)?.toEntitlement()
-        val stored = repository.findBestActiveStoredEntitlement(userId, now)?.toEntitlement()
+        cachedEntitlement(userId, now)?.let { return it }
 
-        return listOfNotNull(own, stored, linked).maxWithOrNull(entitlementComparator()) ?: freeEntitlement()
+        val entitlement = repository.findBestActiveEntitlement(userId, now)?.toEntitlement() ?: freeEntitlement()
+        cacheEntitlement(userId, entitlement, now)
+        return entitlement
     }
 
     suspend fun listStoredEntitlementsForUser(
@@ -62,7 +67,7 @@ class SubscriptionService(
         val normalizedActorId = actorId.validatedAdminActor()
         val normalizedReason = reason.validatedAdminReason()
 
-        return repository.grantStoredEntitlement(
+        val record = repository.grantStoredEntitlement(
             userId = userId,
             tier = tier,
             source = source,
@@ -71,6 +76,8 @@ class SubscriptionService(
             actorId = normalizedActorId,
             reason = normalizedReason
         ) ?: throw SubscriptionException("INVALID_ENTITLEMENT_USER")
+        invalidateEntitlement(userId)
+        return record
     }
 
     suspend fun revokeStoredEntitlement(
@@ -79,11 +86,13 @@ class SubscriptionService(
         reason: String
     ): StoredEntitlementRecord {
         val entitlementId = entitlementIdText.toUuidOrThrow("ENTITLEMENT_NOT_FOUND")
-        return repository.revokeStoredEntitlement(
+        val record = repository.revokeStoredEntitlement(
             entitlementId = entitlementId,
             actorId = actorId.validatedAdminActor(),
             reason = reason.validatedAdminReason()
         ) ?: throw SubscriptionException("ENTITLEMENT_NOT_FOUND")
+        invalidateEntitlement(record.userId)
+        return record
     }
 
     fun getInventory(): SubscriptionInventoryResponseDto =
@@ -398,6 +407,17 @@ class SubscriptionService(
             endsAt = endsAt
         )
 
+    private fun ActiveEntitlementRecord.toEntitlement(): SubscriptionEntitlementDto =
+        paidEntitlement(
+            tier = tier,
+            source = source,
+            sourceSubscriptionId = sourceSubscriptionId,
+            sourceUserId = sourceUserId,
+            linkedPartnerUserId = linkedPartnerUserId,
+            startsAt = startsAt,
+            endsAt = endsAt
+        )
+
     private fun paidEntitlement(
         tier: String,
         source: String,
@@ -428,20 +448,6 @@ class SubscriptionService(
             adSupported = true,
             linkedPartnerIncluded = false
         )
-
-    private fun entitlementComparator(): Comparator<SubscriptionEntitlementDto> =
-        compareBy<SubscriptionEntitlementDto> { tierRank(it.tier) }
-            .thenBy { sourcePriority(it.source) }
-            .thenBy { it.endsAt ?: "" }
-
-    private fun sourcePriority(source: String): Int =
-        when (source) {
-            EntitlementSource.OWN_SUBSCRIPTION -> 3
-            EntitlementSource.ADMIN -> 2
-            EntitlementSource.PROMO -> 1
-            EntitlementSource.LINKED_PARTNER_BENEFIT -> 0
-            else -> -1
-        }
 
     private fun tierRank(tier: String): Int =
         when (tier) {
@@ -657,7 +663,7 @@ class SubscriptionService(
         verifiedAt: Instant
     ): SubscriptionRecord {
         val subscriptionStatus = purchase.toSubscriptionStatus(verifiedAt)
-        return repository.upsertVerifiedPlayStoreSubscriptionPurchase(
+        val subscription = repository.upsertVerifiedPlayStoreSubscriptionPurchase(
             userId = userId,
             productId = purchase.productId,
             purchaseToken = purchase.purchaseToken,
@@ -671,6 +677,35 @@ class SubscriptionService(
             currentPeriodEnd = purchase.currentPeriodEnd,
             verifiedAt = verifiedAt
         )
+        invalidateEntitlement(userId)
+        return subscription
+    }
+
+    private fun cachedEntitlement(userId: UUID, now: Instant): SubscriptionEntitlementDto? {
+        val cached = entitlementCache[userId] ?: return null
+        if (cached.expiresAt > now) return cached.entitlement
+        entitlementCache.remove(userId, cached)
+        return null
+    }
+
+    private fun cacheEntitlement(userId: UUID, entitlement: SubscriptionEntitlementDto, now: Instant) {
+        if (entitlementCacheTtl <= Duration.ZERO || entitlementCacheMaxSize <= 0) return
+        trimEntitlementCache(now)
+        entitlementCache[userId] = CachedEntitlement(
+            entitlement = entitlement,
+            expiresAt = now.plus(entitlementCacheTtl)
+        )
+    }
+
+    private fun trimEntitlementCache(now: Instant) {
+        if (entitlementCache.size < entitlementCacheMaxSize) return
+        entitlementCache.entries.removeIf { it.value.expiresAt <= now }
+        if (entitlementCache.size < entitlementCacheMaxSize) return
+        entitlementCache.keys.firstOrNull()?.let { entitlementCache.remove(it) }
+    }
+
+    private fun invalidateEntitlement(userId: UUID) {
+        entitlementCache.remove(userId)
     }
 
     private fun VerifiedPlayStoreSubscriptionPurchase.toSubscriptionStatus(now: Instant): String {
@@ -697,6 +732,11 @@ class SubscriptionService(
         private const val PLAY_STORE_SYNC_MAX_LIMIT = 500
         private const val PLAY_STORE_PRODUCT_TYPE_SUBSCRIPTION = 1
     }
+
+    private data class CachedEntitlement(
+        val entitlement: SubscriptionEntitlementDto,
+        val expiresAt: Instant
+    )
 }
 
 class SubscriptionException(val code: String) : RuntimeException(code)
