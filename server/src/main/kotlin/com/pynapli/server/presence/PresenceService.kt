@@ -2,6 +2,7 @@ package com.pynapli.server.presence
 
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import com.pynapli.shared.network.dto.PresenceHeartbeatResponseDto
+import com.pynapli.server.profiling.profile
 import java.time.Clock
 import java.util.UUID
 
@@ -12,15 +13,17 @@ class PresenceService(
     private val clock: Clock = Clock.systemUTC()
 ) {
     suspend fun heartbeat(userId: UUID): PresenceHeartbeatResponseDto {
-        val state = repository.heartbeat(userId)
-        broadcaster?.emit(
-            PresenceDeltaDto(
-                userId = userId.toString(),
-                online = true,
-                lastActiveAt = clock.instant().toString()
+        val state = profile("presence.repository.heartbeat") { repository.heartbeat(userId) }
+        profile("presence.broadcast") {
+            broadcaster?.emit(
+                PresenceDeltaDto(
+                    userId = userId.toString(),
+                    online = true,
+                    lastActiveAt = clock.instant().toString()
+                )
             )
-        )
-        onlineTracker?.markOnline(userId)
+        }
+        profile("presence.tracker") { onlineTracker?.markOnline(userId) }
         return PresenceHeartbeatResponseDto(
             online = state.online,
             expiresInSeconds = state.expiresInSeconds
@@ -28,9 +31,10 @@ class PresenceService(
     }
 
     suspend fun refreshOnline(userId: UUID) {
-        repository.heartbeat(userId)
-        onlineTracker?.markOnline(userId)
+        profile("presence.repository.refresh") { repository.heartbeat(userId) }
+        profile("presence.trackerRefresh") { onlineTracker?.markOnline(userId) }
     }
 
-    suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> = repository.onlineUserIds(userIds)
+    suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> =
+        profile("presence.repository.onlineUserIds") { repository.onlineUserIds(userIds) }
 }

@@ -1,6 +1,7 @@
 package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.profiling.profileBlocking
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -16,14 +17,16 @@ class JdbcGridRepository(
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?
     ): GridQueryResult = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            val viewerHasLocation = connection.prepareStatement(
-                "SELECT EXISTS (SELECT 1 FROM user_locations WHERE user_id = ?)"
-            ).use { statement ->
-                statement.setObject(1, viewerUserId)
-                statement.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getBoolean(1)
+        profileBlocking("grid.db.connectionWait") { dataSource.connection }.use { connection ->
+            val viewerHasLocation = profileBlocking("grid.db.viewerLocation") {
+                connection.prepareStatement(
+                    "SELECT EXISTS (SELECT 1 FROM user_locations WHERE user_id = ?)"
+                ).use { statement ->
+                    statement.setObject(1, viewerUserId)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getBoolean(1)
+                    }
                 }
             }
 
@@ -31,8 +34,9 @@ class JdbcGridRepository(
                 return@withContext GridQueryResult(viewerHadLocation = false, cards = emptyList())
             }
 
-            val fetchedCards = connection.prepareStatement(
-                """
+            val fetchedCards = profileBlocking("grid.db.candidateQuery") {
+                connection.prepareStatement(
+                    """
                 WITH viewer_location AS (
                     SELECT geom
                     FROM user_locations
@@ -182,68 +186,72 @@ class JdbcGridRepository(
                          user_id ASC
                 LIMIT ?
                 """.trimIndent()
-            ).use { statement ->
-                val contexts = connection.createArrayOf("text", filters.relationshipContexts.toTypedArray())
-                statement.setObject(1, viewerUserId)
-                statement.setObject(2, viewerUserId)
-                statement.setObject(3, viewerUserId)
-                statement.setObject(4, viewerUserId)
-                statement.setDouble(5, radiusMeters.toDouble())
-                statement.setObject(6, filters.minimumAge)
-                statement.setObject(7, filters.minimumAge)
-                statement.setObject(8, filters.maximumAge)
-                statement.setObject(9, filters.maximumAge)
-                statement.setArray(10, contexts)
-                statement.setArray(11, contexts)
-                statement.setObject(12, filters.linkedOnly)
-                statement.setObject(13, filters.linkedOnly)
-                statement.setObject(14, filters.linkedOnly)
-                statement.setBoolean(15, filters.verifiedOnly)
-                statement.setBoolean(16, filters.facePhotoVerifiedOnly)
-                statement.setBoolean(17, filters.ageVerifiedOnly)
-                val styles = connection.createArrayOf("text", filters.discoveryStyles.toTypedArray())
-                statement.setArray(18, styles)
-                statement.setArray(19, styles)
-                val lifestyleTags = connection.createArrayOf("text", filters.lifestyleTags.toTypedArray())
-                statement.setArray(20, lifestyleTags)
-                statement.setArray(21, lifestyleTags)
-                val logisticsTags = connection.createArrayOf("text", filters.logisticsTags.toTypedArray())
-                statement.setArray(22, logisticsTags)
-                statement.setArray(23, logisticsTags)
-                statement.setBoolean(24, filters.tonightAvailableOnly)
-                val intents = connection.createArrayOf("text", filters.intents.toTypedArray())
-                statement.setArray(25, intents)
-                statement.setArray(26, intents)
-                statement.setObject(27, viewerUserId)
-                statement.setObject(28, viewerUserId)
-                statement.setBoolean(29, cursor != null)
-                statement.setObject(30, cursor?.boostBucket)
-                statement.setObject(31, cursor?.boostBucket)
-                statement.setObject(32, cursor?.distanceBucketMeters)
-                statement.setObject(33, cursor?.boostBucket)
-                statement.setObject(34, cursor?.distanceBucketMeters)
-                statement.setObject(35, cursor?.userId)
-                statement.setInt(36, limit + 1)
-                statement.executeQuery().use { rs ->
-                    buildList {
-                        while (rs.next()) {
-                            add(
-                                GridCardRecord(
-                                    userId = rs.getObject("user_id", UUID::class.java),
-                                    displayName = rs.getString("display_name"),
-                                    thumbnailMediaAssetId = rs.getObject("thumbnail_media_asset_id", UUID::class.java),
-                                    showDistance = rs.getBoolean("show_distance"),
-                                    distanceMeters = rs.getDouble("distance_meters"),
-                                    boostBucket = rs.getInt("boost_bucket"),
-                                    distanceBucketMeters = rs.getInt("distance_bucket_meters"),
-                                    linkedPartnerUserId = rs.getObject("linked_partner_user_id", UUID::class.java),
-                                    linkedPartnerDisplayName = rs.getString("linked_partner_display_name"),
-                                    linkedPartnerThumbnailMediaAssetId = rs.getObject(
-                                        "linked_partner_thumbnail_media_asset_id",
-                                        UUID::class.java
+                ).use { statement ->
+                    val contexts = connection.createArrayOf("text", filters.relationshipContexts.toTypedArray())
+                    statement.setObject(1, viewerUserId)
+                    statement.setObject(2, viewerUserId)
+                    statement.setObject(3, viewerUserId)
+                    statement.setObject(4, viewerUserId)
+                    statement.setDouble(5, radiusMeters.toDouble())
+                    statement.setObject(6, filters.minimumAge)
+                    statement.setObject(7, filters.minimumAge)
+                    statement.setObject(8, filters.maximumAge)
+                    statement.setObject(9, filters.maximumAge)
+                    statement.setArray(10, contexts)
+                    statement.setArray(11, contexts)
+                    statement.setObject(12, filters.linkedOnly)
+                    statement.setObject(13, filters.linkedOnly)
+                    statement.setObject(14, filters.linkedOnly)
+                    statement.setBoolean(15, filters.verifiedOnly)
+                    statement.setBoolean(16, filters.facePhotoVerifiedOnly)
+                    statement.setBoolean(17, filters.ageVerifiedOnly)
+                    val styles = connection.createArrayOf("text", filters.discoveryStyles.toTypedArray())
+                    statement.setArray(18, styles)
+                    statement.setArray(19, styles)
+                    val lifestyleTags = connection.createArrayOf("text", filters.lifestyleTags.toTypedArray())
+                    statement.setArray(20, lifestyleTags)
+                    statement.setArray(21, lifestyleTags)
+                    val logisticsTags = connection.createArrayOf("text", filters.logisticsTags.toTypedArray())
+                    statement.setArray(22, logisticsTags)
+                    statement.setArray(23, logisticsTags)
+                    statement.setBoolean(24, filters.tonightAvailableOnly)
+                    val intents = connection.createArrayOf("text", filters.intents.toTypedArray())
+                    statement.setArray(25, intents)
+                    statement.setArray(26, intents)
+                    statement.setObject(27, viewerUserId)
+                    statement.setObject(28, viewerUserId)
+                    statement.setBoolean(29, cursor != null)
+                    statement.setObject(30, cursor?.boostBucket)
+                    statement.setObject(31, cursor?.boostBucket)
+                    statement.setObject(32, cursor?.distanceBucketMeters)
+                    statement.setObject(33, cursor?.boostBucket)
+                    statement.setObject(34, cursor?.distanceBucketMeters)
+                    statement.setObject(35, cursor?.userId)
+                    statement.setInt(36, limit + 1)
+                    statement.executeQuery().use { rs ->
+                        buildList {
+                            while (rs.next()) {
+                                add(
+                                    GridCardRecord(
+                                        userId = rs.getObject("user_id", UUID::class.java),
+                                        displayName = rs.getString("display_name"),
+                                        thumbnailMediaAssetId = rs.getObject(
+                                            "thumbnail_media_asset_id",
+                                            UUID::class.java
+                                        ),
+                                        showDistance = rs.getBoolean("show_distance"),
+                                        distanceMeters = rs.getDouble("distance_meters"),
+                                        boostBucket = rs.getInt("boost_bucket"),
+                                        distanceBucketMeters = rs.getInt("distance_bucket_meters"),
+                                        linkedPartnerUserId = rs.getObject("linked_partner_user_id", UUID::class.java),
+                                        linkedPartnerDisplayName = rs.getString("linked_partner_display_name"),
+                                        linkedPartnerThumbnailMediaAssetId = rs.getObject(
+                                            "linked_partner_thumbnail_media_asset_id",
+                                            UUID::class.java
+                                        )
                                     )
                                 )
-                            )
+                            }
                         }
                     }
                 }

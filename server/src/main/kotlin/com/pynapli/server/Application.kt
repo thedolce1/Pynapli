@@ -65,17 +65,17 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)
     configureAuthRoutes(dependencies.authService)
-    configureProfileRoutes(dependencies.authService, dependencies.profileService)
+    configureProfileRoutes(dependencies.authService, dependencies.profileService, dependencies.requestProfilerFactory)
     configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)
     configureProfileLinkRoutes(dependencies.authService, dependencies.profileLinkService)
     configureLocationRoutes(dependencies.authService, dependencies.locationService)
-    configurePresenceRoutes(dependencies.authService, dependencies.presenceService)
+    configurePresenceRoutes(dependencies.authService, dependencies.presenceService, dependencies.requestProfilerFactory)
     configurePresenceStreamRoutes(
         authService = dependencies.authService,
         broadcaster = dependencies.presenceBroadcaster,
         blockRepository = dependencies.blockRepository
     )
-    configureGridRoutes(dependencies.authService, dependencies.gridService)
+    configureGridRoutes(dependencies.authService, dependencies.gridService, dependencies.requestProfilerFactory)
     configureSavedGridFilterRoutes(dependencies.authService, dependencies.savedGridFilterService)
     configureTonightAvailabilityRoutes(dependencies.authService, dependencies.tonightAvailabilityService)
     configureActivityRoutes(dependencies.authService, dependencies.activityService)

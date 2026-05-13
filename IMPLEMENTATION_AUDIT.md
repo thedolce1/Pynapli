@@ -66,6 +66,7 @@ Latest known green baseline after restoring server JUnit 4 coverage:
 - Signup age-gate targeted tests passed for Auth service validation, JDBC persistence, and shared request forwarding.
 - Grid API load harness exists at `scripts/grid-api-load-test.ps1`.
 - Latest 2026-05-13 local full Grid API run used 5,000 candidates, 1,000 online candidates, 100 mixed-tier viewers, and 100-way concurrency. It produced zero HTTP errors but missed p95 budgets; with DB pool 32 / min idle 8, p95 was Grid initial 1977ms, Grid filter 1509ms, page two 1795ms, profile open 1181ms, and presence heartbeat 341ms.
+- Opt-in server profiling now exists for Grid/profile/presence hot paths. Latest profiled 2026-05-13 full Grid API run still produced zero HTTP errors; p95 was Grid initial 1793ms, Grid filter 1650ms, page two 1807ms, profile open 1188ms, and presence heartbeat 272ms. The Grid candidate query dominated repository time and Hikari waiting appeared under the 100-way load shape.
 
 Current CI state:
 
@@ -82,7 +83,7 @@ Current CI state:
 | Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling, signup DOB, explicit 18+ confirmation, Terms acceptance, Privacy acceptance. | Social auth parity, signup progress resume, and enhanced/provider age verification are not complete. |
 | Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display, age-verification entry. | Data export/delete, blocked/hidden management, and full safety center need completion. |
 | Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs. | Server-side location trust/spoofing checks and movement thresholds need hardening. |
-| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, tier page/depth caps, Redis-backed query rate limit, fixed square cards, stable Compose keys, 5,000-candidate dense integration proof, 100-concurrent filtered repository regression proof, API-level mixed-tier Ktor load harness, client movement-threshold policy, retained lazy grid state while screen is alive, block/risk filtering, partner preview, WebSocket presence deltas, and explicit thumbnail prefetching. | API-level load harness is zero-error but currently over p95 budgets; targeted endpoint profiling, DB/pool/query optimization, Redis candidate cache decision, automated Android visual regression, and platform battery/location QA are still needed. |
+| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, tier page/depth caps, Redis-backed query rate limit, fixed square cards, stable Compose keys, 5,000-candidate dense integration proof, 100-concurrent filtered repository regression proof, API-level mixed-tier Ktor load harness, opt-in server profiling, client movement-threshold policy, retained lazy grid state while screen is alive, block/risk filtering, partner preview, WebSocket presence deltas, and explicit thumbnail prefetching. | API-level load harness is zero-error but currently over p95 budgets; two-phase Grid SQL optimization, Redis candidate cache decision after rerun, automated Android visual regression, and platform battery/location QA are still needed. |
 | Swipe | Partially implemented | Swipe deck endpoint, action endpoint, server-authoritative match creation, immutable normal actions, block/report path, intro notes, pineapple-like inventory, boost influence, partner preview. | Robust deck-session/rank-token validation, cursor pagination, rewind, offline action cap, image preloading, top picks, passport/travel mode, and dealbreaker settings remain incomplete. |
 | Messaging | Mostly implemented for MVP | Direct conversations, grid-open messaging, swipe match gating, intro-note handling, partner chat invite/accept/decline/leave, block-aware conversations, message review path. | WebSocket realtime, typing/read realtime, and deeper consent tests should be added before beta. |
 | Activity | Partially implemented | Activity event model, newest-first activity, flirts, album requests, gating by entitlement, block checks, risk checks. | Tabs, opt-outs/incognito behavior, partner-context activity separation, and complete reveal-depth UX need review. |
@@ -120,7 +121,8 @@ A checked box should not mean "final production-ready" unless the surrounding sp
 1. Grid scalability is not yet proven to beta budgets.
    - Redis candidate caching is not complete.
    - A 5,000-candidate repository proof, 100-concurrent filtered repository regression proof, and full API-level mixed-tier Ktor load harness exist.
-   - The API harness is currently zero-error but over p95 budgets, so the next work is profiling and optimization rather than more feature surface.
+   - The API harness is currently zero-error but over p95 budgets.
+   - Profiling shows Grid candidate-query pressure, Hikari waiting under 100-way load, and profile-view activity writes contributing to profile-open p95.
    - Manual emulator QA exists for the current Grid path, but automated Android visual regression is not complete.
 
 2. Swipe server authority needs another hardening pass.
@@ -163,9 +165,9 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Add Docker-backed integration tests, lint/static analysis, and Android artifact checks when those suites are ready.
 
 2. Finish Grid hardening before starting more Swipe behavior.
-   - Grid: profile the Ktor API path under `scripts/grid-api-load-test.ps1`, capture DB timings/pool wait/slow plans, optimize the hot path, then rerun the 5,000-candidate / 100-concurrent harness.
+   - Grid: optimize `JdbcGridRepository` into a two-phase candidate/rank then hydrate query, then rerun the profiled 5,000-candidate / 100-concurrent harness.
+   - Grid later: decide Redis candidate caching only after the two-phase query evidence.
    - Grid: automated Android visual regression and platform battery/location QA.
-   - Grid later: Redis candidate cache when measurement justifies the extra cache invalidation and hydration complexity.
    - Swipe later: deck session validation, rank-token validation, cursor pagination, action idempotency, rewind path.
 
 3. Finish the profile/settings safety surface.

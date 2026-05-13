@@ -1,5 +1,6 @@
 package com.pynapli.server.profile
 
+import com.pynapli.server.profiling.profileBlocking
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Date
@@ -12,12 +13,13 @@ class JdbcProfileRepository(
     private val dataSource: DataSource
 ) : ProfileRepository {
     override suspend fun getMe(userId: UUID): MeRecord? = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            connection.prepareStatement(ME_QUERY).use { statement ->
-                statement.setObject(1, userId)
-                statement.executeQuery().use { rs ->
-                    if (!rs.next()) return@withContext null
-                    rs.toMeRecord()
+        profileBlocking("profile.db.connectionWait") { dataSource.connection }.use { connection ->
+            profileBlocking("profile.db.meQuery") {
+                connection.prepareStatement(ME_QUERY).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeQuery().use { rs ->
+                        if (rs.next()) rs.toMeRecord() else null
+                    }
                 }
             }
         }
@@ -27,19 +29,20 @@ class JdbcProfileRepository(
         viewerUserId: UUID,
         targetUserId: UUID
     ): PublicProfileRecord? = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            connection.prepareStatement(PUBLIC_PROFILE_QUERY).use { statement ->
-                statement.setObject(1, viewerUserId)
-                statement.setObject(2, viewerUserId)
-                statement.setObject(3, viewerUserId)
-                statement.setObject(4, viewerUserId)
-                statement.setObject(5, viewerUserId)
-                statement.setObject(6, viewerUserId)
-                statement.setObject(7, viewerUserId)
-                statement.setObject(8, targetUserId)
-                statement.executeQuery().use { rs ->
-                    if (!rs.next()) return@withContext null
-                    rs.toPublicProfileRecord()
+        profileBlocking("profile.db.connectionWait") { dataSource.connection }.use { connection ->
+            profileBlocking("profile.db.publicQuery") {
+                connection.prepareStatement(PUBLIC_PROFILE_QUERY).use { statement ->
+                    statement.setObject(1, viewerUserId)
+                    statement.setObject(2, viewerUserId)
+                    statement.setObject(3, viewerUserId)
+                    statement.setObject(4, viewerUserId)
+                    statement.setObject(5, viewerUserId)
+                    statement.setObject(6, viewerUserId)
+                    statement.setObject(7, viewerUserId)
+                    statement.setObject(8, targetUserId)
+                    statement.executeQuery().use { rs ->
+                        if (rs.next()) rs.toPublicProfileRecord() else null
+                    }
                 }
             }
         }

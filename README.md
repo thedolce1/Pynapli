@@ -70,6 +70,20 @@ $env:PYNAPLI_DATABASE_CONNECTION_TIMEOUT_MS='5000'
 .\gradlew.bat :server:run
 ```
 
+For profiled Grid load runs, enable local timing headers before starting Ktor:
+
+```powershell
+$env:PYNAPLI_API_PROFILING_ENABLED='true'
+$env:PYNAPLI_API_PROFILING_SLOW_SPAN_MS='250'
+.\gradlew.bat :server:run
+```
+
+Then request and aggregate the server timings:
+
+```powershell
+.\scripts\grid-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000 -ServerProfile
+```
+
 Seed local development accounts after the server is running:
 
 ```powershell

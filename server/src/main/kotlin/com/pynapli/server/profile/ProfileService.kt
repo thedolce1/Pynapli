@@ -4,6 +4,7 @@ import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.shared.network.dto.AuthUserDto
@@ -31,15 +32,19 @@ class ProfileService(
         repository.getMe(userId)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
 
     suspend fun getPublicProfile(viewerUserId: UUID, targetUserId: UUID): PublicProfileDto {
-        if (blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) == true) {
+        if (profile("profile.blockCheck") { blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) } == true) {
             throw ProfileException("PROFILE_NOT_FOUND")
         }
-        if (riskPolicyService?.shouldHideFromDiscovery(targetUserId) == true) {
+        if (profile("profile.riskCheck") { riskPolicyService?.shouldHideFromDiscovery(targetUserId) } == true) {
             throw ProfileException("PROFILE_NOT_FOUND")
         }
-        val profile = repository.getPublicProfile(viewerUserId, targetUserId)?.toDto()
+        val profile = profile("profile.repository") {
+            repository.getPublicProfile(viewerUserId, targetUserId)?.toDto()
+        }
             ?: throw ProfileException("PROFILE_NOT_FOUND")
-        runCatching { activityService?.recordProfileView(viewerUserId, targetUserId) }
+        profile("profile.activityRecord") {
+            runCatching { activityService?.recordProfileView(viewerUserId, targetUserId) }
+        }
         return profile
     }
 

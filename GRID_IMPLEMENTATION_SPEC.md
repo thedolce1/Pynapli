@@ -576,7 +576,9 @@ Current API-level baseline:
 - Latest 2026-05-13 local full run used 5,000 candidates, 1,000 online presence keys, 100 mixed Free/Social/Select viewers, and 100-way API concurrency.
 - The run produced zero HTTP errors.
 - With a tuned local DB pool of 32 / min idle 8, p95 remained over target: initial Grid 1977ms, filtered Grid 1509ms, page two 1795ms, profile open 1181ms, presence heartbeat 341ms.
-- The next Grid hardening step is targeted profiling and optimization of the Ktor/Grid/profile/presence path before adding Redis candidate caching complexity.
+- The profiled follow-up run showed the DB candidate query and pool saturation are the main Grid pressure points: initial Grid DB candidate query p95 1064ms, filtered Grid DB candidate query p95 897ms, page-two DB candidate query p95 1226ms, with Hikari waiting threads p95 around 24-27 under the 100-way load shape.
+- Representative `EXPLAIN (ANALYZE, BUFFERS)` returned 61 cards in about 103ms alone but touched about 98k shared buffers and looped through about 5,100 candidates with lateral media/link/boost checks.
+- Decision: optimize the Grid SQL into a two-phase query before adding Redis candidate caching. Phase one should rank/cap candidate IDs using location, filters, safety, blocks, boost, and cursor. Phase two should hydrate only the returned page cards and linked partner metadata. Redis candidate caching should be revisited after this rerun if p95 is still over budget.
 
 Battery:
 
@@ -598,6 +600,8 @@ Battery:
 - [x] 100-concurrent filtered repository regression proof exists against the same dense dataset. Latest local Testcontainers run on 2026-05-13: two-page dense query 170ms; 100-concurrent filtered p95 1230ms, max 1692ms. This is a regression guardrail, not the final production API p95 budget.
 - [x] API-level mixed-tier Grid load harness exists at `scripts/grid-api-load-test.ps1`, covering dense candidates, online presence, filter changes, pagination, and profile opens through real Ktor endpoints.
 - [ ] Partial: latest API-level 5,000-candidate / 100-concurrent run is zero-error but over p95 budgets, so Grid is not yet beta-scale complete.
+- [x] Opt-in server profiling exists for Grid, profile open, and presence heartbeat using `PYNAPLI_API_PROFILING_ENABLED=true` plus the load harness `-ServerProfile` switch.
+- [ ] Partial: profiled Grid evidence points to DB candidate-query pressure and Hikari waiting under concurrency; two-phase SQL optimization remains open.
 - [x] Server-enforced Grid volume caps exist by tier: Free page 60 / depth 60, Social page 90 / depth 600, Select page 120 / uncapped depth. Cursor payloads carry seen-count state so capped tiers cannot bypass depth by asking for larger pages.
 - [x] Redis-backed Grid query rate limiting is wired through `RateLimitService` in production dependencies.
 - [x] Compose grid uses stable keys.

@@ -2,6 +2,8 @@ package com.pynapli.server.profile
 
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.profiling.RequestProfilerFactory
+import com.pynapli.server.profiling.profilerContextElement
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import io.ktor.http.HttpHeaders
@@ -13,11 +15,13 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 fun Application.configureProfileRoutes(
     authService: AuthService?,
-    profileService: ProfileService?
+    profileService: ProfileService?,
+    requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled()
 ) {
     if (authService == null || profileService == null) return
 
@@ -40,10 +44,23 @@ fun Application.configureProfileRoutes(
         }
 
         get("/v1/profiles/{userId}") {
-            val user = authService.authenticate(call.requiredBearerToken())
-            val targetUserId = call.parameters["userId"]?.toUuidOrNull()
-                ?: throw ProfileException("PROFILE_NOT_FOUND")
-            call.respond(profileService.getPublicProfile(user.id, targetUserId))
+            val profiler = requestProfilerFactory.start(call)
+            val response = withContext(profilerContextElement(profiler)) {
+                profiler.measure("profile.route.total") {
+                    val user = profiler.measure("profile.route.auth") {
+                        authService.authenticate(call.requiredBearerToken())
+                    }
+                    val targetUserId = profiler.measure("profile.route.params") {
+                        call.parameters["userId"]?.toUuidOrNull()
+                            ?: throw ProfileException("PROFILE_NOT_FOUND")
+                    }
+                    profiler.measure("profile.service.total") {
+                        profileService.getPublicProfile(user.id, targetUserId)
+                    }
+                }
+            }
+            profiler.appendHeaders(call)
+            call.respond(response)
         }
     }
 }

@@ -9,6 +9,9 @@ data class ServerConfig(
     val databaseMaximumPoolSize: Int = 10,
     val databaseMinimumIdle: Int = 1,
     val databaseConnectionTimeoutMillis: Long = 5_000L,
+    val apiProfilingEnabled: Boolean = false,
+    val apiProfilingHeaderRequired: Boolean = true,
+    val apiProfilingSlowSpanThresholdMillis: Double = 250.0,
     val redisUrl: String,
     val mediaStorageProvider: String = "local",
     val mediaStorageBucket: String = "pynapli-local-media",
@@ -68,6 +71,15 @@ data class ServerConfig(
                     ?.toLongOrNull()
                     ?.coerceIn(1_000L, 60_000L)
                     ?: 5_000L,
+                apiProfilingEnabled = System.getenv("PYNAPLI_API_PROFILING_ENABLED")?.toBooleanStrictOrNull()
+                    ?: false,
+                apiProfilingHeaderRequired = System.getenv("PYNAPLI_API_PROFILING_HEADER_REQUIRED")
+                    ?.toBooleanStrictOrNull()
+                    ?: true,
+                apiProfilingSlowSpanThresholdMillis = System.getenv("PYNAPLI_API_PROFILING_SLOW_SPAN_MS")
+                    ?.toDoubleOrNull()
+                    ?.coerceAtLeast(0.0)
+                    ?: 250.0,
                 redisUrl = System.getenv("PYNAPLI_REDIS_URL") ?: "redis://localhost:6379",
                 mediaStorageProvider = mediaStorageProvider,
                 mediaStorageBucket = System.getenv("PYNAPLI_MEDIA_STORAGE_BUCKET") ?: "pynapli-local-media",

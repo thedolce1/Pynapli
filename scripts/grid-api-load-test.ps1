@@ -9,6 +9,7 @@ param(
     [int]$GridFilterBudgetP95Ms = 500,
     [int]$GridPageBudgetP95Ms = 800,
     [int]$ProfileOpenBudgetP95Ms = 800,
+    [switch]$ServerProfile,
     [switch]$FailOnBudget
 )
 
@@ -412,6 +413,35 @@ function Get-Percentile {
     return [Math]::Round([double]$sorted[$index], 1)
 }
 
+function Convert-MetricHeader {
+    param([string]$Header)
+
+    $metrics = @{}
+    if ([string]::IsNullOrWhiteSpace($Header)) {
+        return $metrics
+    }
+
+    foreach ($part in ($Header -split ",")) {
+        $pair = $part -split "=", 2
+        if ($pair.Count -ne 2) {
+            continue
+        }
+        $name = $pair[0].Trim()
+        $rawValue = $pair[1].Trim()
+        $value = 0.0
+        if ([double]::TryParse(
+                $rawValue,
+                [System.Globalization.NumberStyles]::Float,
+                [System.Globalization.CultureInfo]::InvariantCulture,
+                [ref]$value
+            )) {
+            $metrics[$name] = $value
+        }
+    }
+
+    return $metrics
+}
+
 function Write-ScenarioSummary {
     param([array]$Results)
 
@@ -475,6 +505,124 @@ function Write-ScenarioSummary {
     }
 }
 
+function Write-ProfileSummary {
+    param([array]$Results)
+
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($result in $Results) {
+        if ([string]::IsNullOrWhiteSpace($result.Profile)) {
+            continue
+        }
+        $metrics = Convert-MetricHeader -Header $result.Profile
+        foreach ($key in $metrics.Keys) {
+            $rows.Add([pscustomobject]@{
+                Scenario = $result.Scenario
+                Phase = $key
+                Millis = [double]$metrics[$key]
+            })
+        }
+    }
+
+    if ($rows.Count -eq 0) {
+        return
+    }
+
+    Write-Host ""
+    Write-Host "Server profile timing summary"
+    Write-Host "-----------------------------"
+    $summaryRows = New-Object System.Collections.Generic.List[object]
+    foreach ($scenarioGroup in ($rows | Group-Object Scenario | Sort-Object Name)) {
+        foreach ($phaseGroup in ($scenarioGroup.Group | Group-Object Phase | Sort-Object Name)) {
+            $latencies = @($phaseGroup.Group | ForEach-Object { [double]$_.Millis })
+            $summaryRows.Add([pscustomobject]@{
+                Scenario = $scenarioGroup.Name
+                Phase = $phaseGroup.Name
+                Count = $phaseGroup.Count
+                P50Ms = Get-Percentile -Values $latencies -Percentile 50
+                P95Ms = Get-Percentile -Values $latencies -Percentile 95
+                MaxMs = if ($latencies.Count -gt 0) { [Math]::Round(($latencies | Measure-Object -Maximum).Maximum, 1) } else { $null }
+            })
+        }
+    }
+    $summaryRows | Format-Table -AutoSize
+}
+
+function Write-SlowProfileSummary {
+    param([array]$Results)
+
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($result in $Results) {
+        if ([string]::IsNullOrWhiteSpace($result.SlowProfile)) {
+            continue
+        }
+        $metrics = Convert-MetricHeader -Header $result.SlowProfile
+        foreach ($key in $metrics.Keys) {
+            $rows.Add([pscustomobject]@{
+                Scenario = $result.Scenario
+                Tier = $result.Tier
+                UserIndex = $result.UserIndex
+                Phase = $key
+                Millis = [double]$metrics[$key]
+            })
+        }
+    }
+
+    if ($rows.Count -eq 0) {
+        return
+    }
+
+    Write-Host ""
+    Write-Host "Slow server profile spans"
+    Write-Host "-------------------------"
+    $rows |
+        Sort-Object Millis -Descending |
+        Select-Object -First 30 Scenario, Tier, UserIndex, Phase, Millis |
+        Format-Table -AutoSize
+}
+
+function Write-PoolSummary {
+    param([array]$Results)
+
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($result in $Results) {
+        if ([string]::IsNullOrWhiteSpace($result.Pool)) {
+            continue
+        }
+        $metrics = Convert-MetricHeader -Header $result.Pool
+        foreach ($key in @("active", "idle", "total", "waiting")) {
+            if ($metrics.ContainsKey($key)) {
+                $rows.Add([pscustomobject]@{
+                    Scenario = $result.Scenario
+                    Metric = $key
+                    Value = [double]$metrics[$key]
+                })
+            }
+        }
+    }
+
+    if ($rows.Count -eq 0) {
+        return
+    }
+
+    Write-Host ""
+    Write-Host "Hikari pool snapshot summary"
+    Write-Host "---------------------------"
+    $summaryRows = New-Object System.Collections.Generic.List[object]
+    foreach ($scenarioGroup in ($rows | Group-Object Scenario | Sort-Object Name)) {
+        foreach ($metricGroup in ($scenarioGroup.Group | Group-Object Metric | Sort-Object Name)) {
+            $values = @($metricGroup.Group | ForEach-Object { [double]$_.Value })
+            $summaryRows.Add([pscustomobject]@{
+                Scenario = $scenarioGroup.Name
+                Metric = $metricGroup.Name
+                P50 = Get-Percentile -Values $values -Percentile 50
+                P95 = Get-Percentile -Values $values -Percentile 95
+                Max = if ($values.Count -gt 0) { [Math]::Round(($values | Measure-Object -Maximum).Maximum, 1) } else { $null }
+            })
+        }
+    }
+    $summaryRows | Format-Table -AutoSize
+}
+
 $health = Invoke-PynapliJson -Method GET -Path "/health/deep" -TimeoutSec 5
 Assert-Success -Response $health -Action "Ktor deep health"
 
@@ -508,6 +656,26 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
             Accept = "application/json"
             Authorization = "Bearer $($session.AccessToken)"
         }
+        if ($using:ServerProfile) {
+            $headers["X-Pynapli-Profile"] = "true"
+        }
+
+        function Get-HeaderValue {
+            param(
+                [object]$Headers,
+                [string]$Name
+            )
+
+            $value = $Headers[$Name]
+            if ($null -eq $value) {
+                return $null
+            }
+            if ($value -is [array]) {
+                return ($value -join ",")
+            }
+            return [string]$value
+        }
+
         $parameters = @{
             Method = $Method
             Uri = "$baseUrl$Path"
@@ -524,9 +692,15 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
         $statusCode = 0
         $bodyObject = $null
         $errorText = $null
+        $profileHeader = $null
+        $slowProfileHeader = $null
+        $poolHeader = $null
         try {
             $response = Invoke-WebRequest @parameters
             $statusCode = [int]$response.StatusCode
+            $profileHeader = Get-HeaderValue -Headers $response.Headers -Name "X-Pynapli-Profile"
+            $slowProfileHeader = Get-HeaderValue -Headers $response.Headers -Name "X-Pynapli-Profile-Slow"
+            $poolHeader = Get-HeaderValue -Headers $response.Headers -Name "X-Pynapli-Pool"
             if (-not [string]::IsNullOrWhiteSpace($response.Content)) {
                 $bodyObject = $response.Content | ConvertFrom-Json
             }
@@ -558,6 +732,9 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
                 ItemCount = $itemCount
                 NextCursor = if ($null -ne $bodyObject) { $bodyObject.nextCursor } else { $null }
                 ResultLimitReached = if ($null -ne $bodyObject) { $bodyObject.resultLimitReached } else { $null }
+                Profile = $profileHeader
+                SlowProfile = $slowProfileHeader
+                Pool = $poolHeader
                 Error = $errorText
             }
             Body = $bodyObject
@@ -621,6 +798,9 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
             ItemCount = $null
             NextCursor = $null
             ResultLimitReached = $null
+            Profile = $null
+            SlowProfile = $null
+            Pool = $null
             Error = "No grid target returned for profile open."
         })
     }
@@ -629,6 +809,9 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
 }
 
 Write-ScenarioSummary -Results @($results)
+Write-ProfileSummary -Results @($results)
+Write-SlowProfileSummary -Results @($results)
+Write-PoolSummary -Results @($results)
 
 Write-Host ""
 Write-Host "Tier mix"

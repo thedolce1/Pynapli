@@ -40,6 +40,7 @@ import com.pynapli.server.presence.PresenceBroadcaster
 import com.pynapli.server.presence.PresenceOfflineScanner
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.presence.RedisPresenceRepository
+import com.pynapli.server.profiling.RequestProfilerFactory
 import com.pynapli.server.profile.JdbcProfileRepository
 import com.pynapli.server.profile.ProfileService
 import com.pynapli.server.profile.TonightAvailabilityService
@@ -99,6 +100,7 @@ class ServerDependencies(
     val savedGridFilterService: SavedGridFilterService?,
     val tonightAvailabilityService: TonightAvailabilityService?,
     val ageVerificationService: AgeVerificationService?,
+    val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
     private val probes: List<DependencyProbe>
 ) : AutoCloseable {
     suspend fun checkAll() = probes.map { it.check() }
@@ -118,6 +120,12 @@ class ServerDependencies(
         fun fromEnvironment(config: ServerConfig = ServerConfig.fromEnvironment()): ServerDependencies {
             val database = Database(config)
             val redisCache = RedisCache(config.redisUrl)
+            val requestProfilerFactory = RequestProfilerFactory(
+                enabled = config.apiProfilingEnabled,
+                headerRequired = config.apiProfilingHeaderRequired,
+                slowSpanThresholdMillis = config.apiProfilingSlowSpanThresholdMillis,
+                poolSnapshotProvider = database::poolSnapshot
+            )
             val postgres = PostgresDependencyProbe(database)
             val redis = RedisDependencyProbe(redisCache)
             val authService = AuthService(JdbcAuthRepository(database.dataSource))
@@ -314,6 +322,7 @@ class ServerDependencies(
                 savedGridFilterService = savedGridFilterService,
                 tonightAvailabilityService = tonightAvailabilityService,
                 ageVerificationService = ageVerificationService,
+                requestProfilerFactory = requestProfilerFactory,
                 probes = listOf(postgres, redis)
             )
         }
@@ -358,6 +367,7 @@ class ServerDependencies(
                 savedGridFilterService = null,
                 tonightAvailabilityService = null,
                 ageVerificationService = null,
+                requestProfilerFactory = RequestProfilerFactory.disabled(),
                 probes = emptyList()
             )
     }

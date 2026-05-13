@@ -11,6 +11,7 @@ import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
+import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
@@ -33,42 +34,52 @@ class GridService(
         viewerUserId: UUID,
         request: GridQueryRequestDto
     ): GridQueryResponseDto {
-        requireGridQueryRateLimit(viewerUserId)
-        val radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
-        val filters = discoveryFiltersFrom(
-            minimumAge = request.minimumAge,
-            maximumAge = request.maximumAge,
-            relationshipContexts = request.relationshipContexts,
-            linkedOnly = request.linkedOnly,
-            verifiedOnly = request.verifiedOnly,
-            facePhotoVerifiedOnly = request.facePhotoVerifiedOnly,
-            ageVerifiedOnly = request.ageVerifiedOnly,
-            discoveryStyles = request.discoveryStyles,
-            lifestyleTags = request.lifestyleTags,
-            logisticsTags = request.logisticsTags,
-            tonightAvailableOnly = request.tonightAvailableOnly,
-            intents = request.intents
-        ) { _ -> GridException("INVALID_GRID_FILTER") }
-        requireLifestyleFilterAccess(viewerUserId, filters)
+        profile("grid.rateLimit") { requireGridQueryRateLimit(viewerUserId) }
+        val radiusMeters = profile("grid.radius") {
+            request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
+        }
+        val filters = profile("grid.filters") {
+            discoveryFiltersFrom(
+                minimumAge = request.minimumAge,
+                maximumAge = request.maximumAge,
+                relationshipContexts = request.relationshipContexts,
+                linkedOnly = request.linkedOnly,
+                verifiedOnly = request.verifiedOnly,
+                facePhotoVerifiedOnly = request.facePhotoVerifiedOnly,
+                ageVerifiedOnly = request.ageVerifiedOnly,
+                discoveryStyles = request.discoveryStyles,
+                lifestyleTags = request.lifestyleTags,
+                logisticsTags = request.logisticsTags,
+                tonightAvailableOnly = request.tonightAvailableOnly,
+                intents = request.intents
+            ) { _ -> GridException("INVALID_GRID_FILTER") }
+        }
+        profile("grid.lifestyleGate") { requireLifestyleFilterAccess(viewerUserId, filters) }
         val advancedFiltersApplied = filters.requiresAdvancedEntitlement
-        val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
+        val policy = profile("grid.entitlement") {
+            subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
+        }
         if (advancedFiltersApplied && !policy.advancedFiltersAllowed) {
             throw GridException("ENTITLEMENT_REQUIRED")
         }
         val pageLimit = request.limit.coerceIn(1, minOf(MAX_LIMIT, policy.gridPageLimit))
 
-        val cursorScopeHash = DiscoveryCursorCodec.gridScopeHash(
-            viewerUserId = viewerUserId,
-            radiusMeters = radiusMeters,
-            limit = pageLimit,
-            filters = filters,
-            onlineOnly = request.onlineOnly
-        )
-        val cursor = request.cursor?.let { token ->
-            try {
-                cursorCodec.decodeGridCursor(token, cursorScopeHash)
-            } catch (_: DiscoveryCursorException) {
-                throw GridException("INVALID_GRID_CURSOR")
+        val cursorScopeHash = profile("grid.cursorScope") {
+            DiscoveryCursorCodec.gridScopeHash(
+                viewerUserId = viewerUserId,
+                radiusMeters = radiusMeters,
+                limit = pageLimit,
+                filters = filters,
+                onlineOnly = request.onlineOnly
+            )
+        }
+        val cursor = profile("grid.cursorDecode") {
+            request.cursor?.let { token ->
+                try {
+                    cursorCodec.decodeGridCursor(token, cursorScopeHash)
+                } catch (_: DiscoveryCursorException) {
+                    throw GridException("INVALID_GRID_CURSOR")
+                }
             }
         }
         val remainingVisible = policy.remainingGridResults(cursor?.seenCount ?: 0)
@@ -84,24 +95,32 @@ class GridService(
             )
         }
 
-        val result = repository.queryNearby(viewerUserId, radiusMeters, limit, filters, cursor)
+        val result = profile("grid.repository") {
+            repository.queryNearby(viewerUserId, radiusMeters, limit, filters, cursor)
+        }
         if (!result.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
 
-        val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
-        val visibleCards = if (blockedRelatedIds.isEmpty()) {
-            result.cards
-        } else {
-            result.cards.filterNot { it.userId in blockedRelatedIds }
+        val blockedRelatedIds = profile("grid.blockList") {
+            blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
+        }
+        val visibleCards = profile("grid.blockFilter") {
+            if (blockedRelatedIds.isEmpty()) {
+                result.cards
+            } else {
+                result.cards.filterNot { it.userId in blockedRelatedIds }
+            }
         }
 
-        refreshViewerPresence(viewerUserId)
-        val onlineUserIds = onlineUserIdsFor(visibleCards)
-        val filteredCards = if (request.onlineOnly) {
-            visibleCards.filter { it.userId in onlineUserIds }
-        } else {
-            visibleCards
+        profile("grid.presenceRefresh") { refreshViewerPresence(viewerUserId) }
+        val onlineUserIds = profile("grid.presenceLookup") { onlineUserIdsFor(visibleCards) }
+        val filteredCards = profile("grid.onlineFilter") {
+            if (request.onlineOnly) {
+                visibleCards.filter { it.userId in onlineUserIds }
+            } else {
+                visibleCards
+            }
         }
-        val dtoCards = filteredCards.map { it.toDto(onlineUserIds) }
+        val dtoCards = profile("grid.dto") { filteredCards.map { it.toDto(onlineUserIds) } }
         val seenCount = (cursor?.seenCount ?: 0) + dtoCards.size
         val resultLimitReached = result.nextCursorAnchor != null &&
             policy.gridResultDepthLimit != Int.MAX_VALUE &&

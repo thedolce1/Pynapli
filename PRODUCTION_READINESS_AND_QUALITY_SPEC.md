@@ -149,6 +149,19 @@ The API-level Ktor load harness now exists at `scripts/grid-api-load-test.ps1`. 
 
 This is useful evidence, not a failure to hide: the API path is stable under this local load shape, but it needs profiling and optimization before the Grid can be called beta-ready. Next work should capture endpoint-level DB timings, Hikari pool behavior, and slow query plans, then decide from evidence whether Redis candidate caching is necessary now.
 
+Profiled follow-up on 2026-05-13 with `PYNAPLI_API_PROFILING_ENABLED=true` and the same DB pool 32 / min idle 8 showed:
+
+- Grid initial p95 1793ms; server route p95 1749ms; service p95 1607ms; repository p95 1138ms; DB candidate query p95 1064ms; DB connection wait p95 161ms.
+- Grid filter p95 1650ms; repository p95 1018ms; DB candidate query p95 897ms; DB connection wait p95 189ms.
+- Grid page two p95 1807ms; repository p95 1340ms; DB candidate query p95 1226ms.
+- Presence heartbeat p95 272ms and is inside the current budget.
+- Profile open p95 1188ms; activity record p95 604ms; profile repository p95 305ms; public profile SQL p95 170ms; DB connection wait p95 126ms.
+- Hikari snapshots reached active 32 / total 32, with waiting threads p95 around 24-27 across hot scenarios.
+
+Representative `EXPLAIN (ANALYZE, BUFFERS)` for the no-filter Grid candidate query returned 61 cards in about 103ms alone, touched about 98k shared buffers, and looped through about 5,100 candidates while running lateral profile-photo, linked-partner, block, and boost checks. The evidence points to DB pressure from over-hydrating/ranking the full dense candidate set under concurrency.
+
+Decision: do not jump straight to Redis candidate caching yet. First optimize the Grid SQL shape to generate candidate IDs/distance/rank first, cap to the requested page plus cursor buffer, then hydrate only those cards. Rerun the same profiled harness after that. Redis candidate caching becomes justified if the two-phase SQL still cannot meet warm/filter p95 budgets.
+
 The Android rendering/device load test remains open.
 
 Expected behavior:
@@ -442,6 +455,8 @@ Current local Grid API harness:
 ```
 
 Use `-FailOnBudget` when the harness should fail the shell on p95 budget regressions.
+
+Use `-ServerProfile` only when Ktor was started with `PYNAPLI_API_PROFILING_ENABLED=true`; it requests per-response timing headers and prints route/service/DB/Redis/Hikari summaries.
 
 Minimum beta load targets:
 
