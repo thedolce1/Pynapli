@@ -2,8 +2,10 @@ package com.pynapli.app.grid
 
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runComposeUiTest
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profile.SamplePublicProfileRepository
@@ -152,6 +154,41 @@ class GridScreenScrollPreservationTest {
 
         assertEquals(indexBefore, gridState.firstVisibleItemIndex, "firstVisibleItemIndex changed while filter sheet was open")
         assertEquals(offsetBefore, gridState.firstVisibleItemScrollOffset, "firstVisibleItemScrollOffset changed while filter sheet was open")
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun filtersSheetScrollsToActionButtons() = runComposeUiTest {
+        val cards = (0 until 60).map { index ->
+            GridProfileCardUi(
+                id = "card-$index",
+                displayName = "User $index",
+                online = index % 2 == 0,
+                distanceLabel = "${index + 1} km",
+                tone = GridCardTone.entries[index % GridCardTone.entries.size],
+                distanceMeters = (index + 1) * 100
+            )
+        }
+        val gridStateHolder = GridStateHolder(StaticGridFeedRepository(cards))
+        val profileDetailStateHolder = ProfileDetailStateHolder(SamplePublicProfileRepository())
+
+        setContent {
+            GridScreen(
+                stateHolder = gridStateHolder,
+                profileDetailStateHolder = profileDetailStateHolder,
+                lifestyleFiltersAllowed = false
+            )
+        }
+        waitForIdle()
+        waitUntil(timeoutMillis = 5_000) { gridStateHolder.state.value.cards.isNotEmpty() }
+        waitForIdle()
+
+        onNodeWithTag(GridFilterTags.OPEN_SHEET).performClick()
+        waitForIdle()
+
+        onNodeWithTag(GridFilterTags.APPLY)
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 }
 
