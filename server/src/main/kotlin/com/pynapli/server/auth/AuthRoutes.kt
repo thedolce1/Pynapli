@@ -53,6 +53,10 @@ fun Application.configureAuthRoutes(authService: AuthService?) {
 private suspend fun AuthService.signupEmail(request: EmailSignupRequestDto) = signupEmail(
     email = request.email,
     password = request.password,
+    birthdate = request.birthdate,
+    confirmedAdult = request.confirmedAdult,
+    acceptedTerms = request.acceptedTerms,
+    acceptedPrivacy = request.acceptedPrivacy,
     deviceId = request.deviceId,
     platform = request.platform,
     appVersion = request.appVersion
@@ -76,6 +80,13 @@ fun authStatusFor(code: String): HttpStatusCode = when (code) {
     "EMAIL_ALREADY_EXISTS" -> HttpStatusCode.Conflict
     "INVALID_CREDENTIALS", "INVALID_REFRESH_TOKEN", "UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
     "ACCOUNT_NOT_ACTIVE" -> HttpStatusCode.Forbidden
-    "INVALID_EMAIL", "PASSWORD_TOO_SHORT" -> HttpStatusCode.BadRequest
+    "INVALID_EMAIL",
+    "PASSWORD_TOO_SHORT",
+    "INVALID_BIRTHDATE",
+    "BIRTHDATE_REQUIRED",
+    "AGE_RESTRICTED",
+    "ADULT_CONFIRMATION_REQUIRED",
+    "TERMS_ACCEPTANCE_REQUIRED",
+    "PRIVACY_ACCEPTANCE_REQUIRED" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest
 }

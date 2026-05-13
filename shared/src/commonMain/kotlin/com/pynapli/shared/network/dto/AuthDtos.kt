@@ -6,6 +6,10 @@ import kotlinx.serialization.Serializable
 data class EmailSignupRequestDto(
     val email: String,
     val password: String,
+    val birthdate: String? = null,
+    val confirmedAdult: Boolean = false,
+    val acceptedTerms: Boolean = false,
+    val acceptedPrivacy: Boolean = false,
     val deviceId: String? = null,
     val platform: String? = null,
     val appVersion: String? = null
@@ -42,4 +46,3 @@ data class AuthUserDto(
 data class LogoutResponseDto(
     val loggedOut: Boolean
 )
-

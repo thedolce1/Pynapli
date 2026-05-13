@@ -1,6 +1,6 @@
 # Pynapli API Contract Spec
 
-Last updated: 2026-05-12
+Last updated: 2026-05-13
 
 ## Purpose
 
@@ -122,6 +122,8 @@ Rules:
 - Tokens stored securely client-side.
 - Ktor verifies Apple/Google/Firebase tokens where used.
 - Refresh tokens rotate.
+- Email signup requires `birthdate`, `confirmedAdult=true`, `acceptedTerms=true`, and `acceptedPrivacy=true`.
+- Ktor validates adult age from DOB, then records acceptance timestamps and server-controlled terms/privacy versions.
 
 ## Me / Profile API
 

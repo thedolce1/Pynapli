@@ -1,6 +1,6 @@
 # Pynapli Data Model Spec
 
-Last updated: 2026-05-12
+Last updated: 2026-05-13
 
 ## Purpose
 
@@ -63,6 +63,11 @@ Fields:
 - `phone_hash`
 - `firebase_uid`, nullable if Firebase Auth is used
 - `status`: active, paused, suspended, banned, deleted
+- `adult_confirmed_at`
+- `terms_accepted_at`
+- `terms_version`
+- `privacy_accepted_at`
+- `privacy_version`
 - `created_at`
 - `updated_at`
 - `deleted_at`
@@ -71,6 +76,7 @@ Rules:
 
 - A user is always one autonomous person.
 - Never model a couple as a user.
+- Account-level age/terms/privacy acceptance is stored on the user; profile DOB/display age remains on the profile for discovery/profile behavior.
 
 ### auth_identities
 

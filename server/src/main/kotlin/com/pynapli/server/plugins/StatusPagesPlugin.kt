@@ -238,6 +238,8 @@ private fun userSafeMessage(code: String): String = when (code) {
     "AGE_RESTRICTED" -> "You must be 18 or older to use Pynapli."
     "BIRTHDATE_REQUIRED" -> "Add your birthdate before starting age verification."
     "ADULT_CONFIRMATION_REQUIRED" -> "Confirm that you are 18 or older."
+    "TERMS_ACCEPTANCE_REQUIRED" -> "Accept the Terms before creating an account."
+    "PRIVACY_ACCEPTANCE_REQUIRED" -> "Accept the Privacy Policy before creating an account."
     "INVALID_VERIFICATION_METHOD" -> "Choose a valid verification method."
     "INVALID_VERIFICATION_STATUS" -> "Choose a valid verification status."
     "INVALID_VERIFICATION_ID" -> "Verification item was not found."

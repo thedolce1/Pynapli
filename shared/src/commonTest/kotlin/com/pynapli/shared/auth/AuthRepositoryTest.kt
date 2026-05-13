@@ -95,11 +95,24 @@ class AuthRepositoryTest {
         )
         val repository = AuthRepository(apiClient, sessionStore)
 
-        val result = repository.signupEmail("maya@example.com", "correct horse battery", "android", "0.1.0")
+        val result = repository.signupEmail(
+            email = "maya@example.com",
+            password = "correct horse battery",
+            birthdate = "1990-01-01",
+            confirmedAdult = true,
+            acceptedTerms = true,
+            acceptedPrivacy = true,
+            platform = "android",
+            appVersion = "0.1.0"
+        )
 
         val success = assertIs<AppResult.Success<StoredSession>>(result)
         assertEquals("access-2", success.value.accessToken)
         assertEquals("refresh-2", sessionStore.currentSession()?.refreshToken)
+        assertEquals("1990-01-01", apiClient.lastSignupRequest?.birthdate)
+        assertEquals(true, apiClient.lastSignupRequest?.confirmedAdult)
+        assertEquals(true, apiClient.lastSignupRequest?.acceptedTerms)
+        assertEquals(true, apiClient.lastSignupRequest?.acceptedPrivacy)
     }
 
     @Test
@@ -178,7 +191,13 @@ private class FakeApiClient(
     private val logoutResult: AppResult<LogoutResponseDto> = AppResult.Success(LogoutResponseDto(loggedOut = true)),
     private val meResult: AppResult<MeDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 ) : PynapliApiClient {
-    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> = signupResult
+    var lastSignupRequest: EmailSignupRequestDto? = null
+        private set
+
+    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> {
+        lastSignupRequest = request
+        return signupResult
+    }
 
     override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> = loginResult
 

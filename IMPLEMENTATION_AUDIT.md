@@ -1,6 +1,6 @@
 # Pynapli Implementation Audit
 
-Date: 2026-05-12
+Date: 2026-05-13
 
 ## Purpose
 
@@ -41,7 +41,7 @@ Primary local specs:
 Current code evidence:
 
 - Kotlin Multiplatform shared module, Compose app module, Android app module, Ktor server module.
-- PostgreSQL/PostGIS migrations through `server/src/main/resources/db/migration/V41__create_age_verifications.sql`.
+- PostgreSQL/PostGIS migrations through `server/src/main/resources/db/migration/V42__add_signup_age_gate_acceptance.sql`.
 - Redis-backed presence/rate-limit paths.
 - Firebase Cloud Messaging integration path.
 - Google Play Billing client and server purchase verification path.
@@ -63,6 +63,7 @@ Latest known green baseline after restoring server JUnit 4 coverage:
   - `:androidApp:assembleDebug`
 - Ktor `/health` was confirmed healthy after the last restart.
 - Age verification targeted tests passed for service rules, JDBC migration/profile timestamp side effects, and Profile Hub state behavior.
+- Signup age-gate targeted tests passed for Auth service validation, JDBC persistence, and shared request forwarding.
 
 Current CI state:
 
@@ -76,7 +77,7 @@ Current CI state:
 | Product model | Aligned | Individual autonomous accounts, optional linked partner, linked partner preview, partner chat invite flow, linked subscription benefit. | Keep avoiding couple-owned accounts or couple cards. |
 | Language and positioning | Mostly aligned | Specs define LS-aware, classy, non-cheesy language. | Needs continuous UI copy review as screens mature. |
 | Frontend design direction | Partially implemented | Subdued Compose surfaces, bottom nav, header profile entry, grid/swipe/messages/activity/store/settings surfaces. | Needs screenshot review on real emulator across all implemented flows before visual polish can be called complete. |
-| Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling. | Signup-time 18+ DOB confirmation and enhanced/provider age verification are not complete. |
+| Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling, signup DOB, explicit 18+ confirmation, Terms acceptance, Privacy acceptance. | Social auth parity, signup progress resume, and enhanced/provider age verification are not complete. |
 | Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display, age-verification entry. | Data export/delete, blocked/hidden management, and full safety center need completion. |
 | Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs. | Server-side location trust/spoofing checks and movement thresholds need hardening. |
 | Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, fixed square cards, stable Compose keys, 5,000-candidate dense integration proof, client movement-threshold policy, retained lazy grid state while screen is alive, block/risk filtering, partner preview, WebSocket presence deltas, and explicit thumbnail prefetching. | Redis candidate cache, full concurrent load test, automated Android visual regression, and platform battery/location QA are still needed. |
@@ -129,7 +130,7 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Branch protection, required status checks, Docker service tests, lint/static analysis, and artifact checks still need to be added.
 
 4. Production safety is not complete.
-   - Age verification has an MVP entry/review path, but signup-time capture, provider/market integration, appeals/support, false-positive metrics, device/account-farm signals, and location spoofing signals are not done.
+   - Age verification has signup DOB/18+/terms capture and an MVP entry/review path, but provider/market integration, appeals/support, false-positive metrics, device/account-farm signals, and location spoofing signals are not done.
    - App Check is not wired into the production security posture.
 
 5. Settings and account management are incomplete.

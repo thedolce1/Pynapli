@@ -282,6 +282,8 @@ fun PynapliApp(
                 state = authState,
                 onEmailChanged = authStateHolder::updateEmail,
                 onPasswordChanged = authStateHolder::updatePassword,
+                onBirthdateChanged = authStateHolder::updateBirthdate,
+                onAcceptedAgeAndTermsChanged = authStateHolder::updateAcceptedAgeAndTerms,
                 onModeSelected = authStateHolder::switchMode,
                 onSubmit = {
                     scope.launch { authStateHolder.submit() }

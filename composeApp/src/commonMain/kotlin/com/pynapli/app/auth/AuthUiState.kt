@@ -8,6 +8,8 @@ data class AuthUiState(
     val mode: AuthMode = AuthMode.SignIn,
     val email: String = "",
     val password: String = "",
+    val birthdate: String = "",
+    val acceptedAgeAndTerms: Boolean = false,
     val isCheckingSession: Boolean = true,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,

@@ -1,6 +1,6 @@
 # Pynapli Moderation And Age Verification Spec
 
-Last updated: 2026-05-12
+Last updated: 2026-05-13
 
 ## Purpose
 
@@ -16,9 +16,9 @@ Legal requirements change. Before launch, current age-verification, app-store, a
 
 Baseline all markets:
 
-- Date of birth at account creation or profile setup. The current MVP stores profile DOB; signup-time capture remains required before beta.
-- Explicit 18+ confirmation before an age-verification request starts.
-- Terms/privacy acceptance.
+- Date of birth at account creation.
+- Explicit 18+ confirmation at account creation and before age-verification review start.
+- Terms/privacy acceptance at account creation.
 - App store age signals where available/required.
 
 Enhanced markets:
@@ -37,12 +37,14 @@ Privacy:
 
 Current MVP slice:
 
+- Email signup requires DOB, explicit 18+ confirmation, Terms acceptance, and Privacy Policy acceptance before a session is created.
+- Signup writes DOB/display age to the profile and writes acceptance timestamps/version markers to the account.
 - Profile Hub exposes an Age verification entry.
 - Ktor exposes requirements/status/start endpoints for authenticated users.
 - Admin/provider paths can review or callback verification results.
 - Results are stored in `age_verifications`; successful verification also sets `profiles.age_verified_at`.
 - Raw ID, selfie, and biometric payloads are not stored by this slice.
-- Still required before beta: signup-time DOB/18+ confirmation, provider selection, market-specific rules, legal review, and production admin controls.
+- Still required before beta: provider selection, market-specific rules, legal review, social-auth parity, and production admin controls.
 
 ## Content Zones
 
@@ -180,7 +182,8 @@ Avoid:
 
 ## Implementation Checklist
 
-- [ ] Partial: 18+ DOB and confirmation exist for the profile-hub verification start path; signup-time DOB/18+ capture is still required.
+- [x] 18+ DOB and confirmation exist for email signup and profile-hub verification start.
+- [x] Terms/privacy acceptance exists for email signup.
 - [ ] Market-driven enhanced verification flags.
 - [x] Verification data minimization.
 - [ ] Public content moderation before visibility.

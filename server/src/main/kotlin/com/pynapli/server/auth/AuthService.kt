@@ -9,6 +9,9 @@ import com.pynapli.shared.network.dto.AuthUserDto
 import java.sql.SQLException
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
+import java.time.Period
 import java.util.UUID
 
 class AuthService(
@@ -19,11 +22,21 @@ class AuthService(
     suspend fun signupEmail(
         email: String,
         password: String,
+        birthdate: String?,
+        confirmedAdult: Boolean,
+        acceptedTerms: Boolean,
+        acceptedPrivacy: Boolean,
         deviceId: String?,
         platform: String?,
         appVersion: String?
     ): AuthSessionDto {
         validateEmailPassword(email, password)
+        val ageGate = validateSignupAgeGate(
+            birthdate = birthdate,
+            confirmedAdult = confirmedAdult,
+            acceptedTerms = acceptedTerms,
+            acceptedPrivacy = acceptedPrivacy
+        )
         val emailHash = Sha256.hash(normalizeEmail(email))
         val passwordHash = passwordHasher.hash(password)
         val user = try {
@@ -31,7 +44,14 @@ class AuthService(
                 userId = UUID.randomUUID(),
                 identityId = UUID.randomUUID(),
                 emailHash = emailHash,
-                passwordHash = passwordHash
+                passwordHash = passwordHash,
+                birthdate = ageGate.birthdate,
+                displayAge = ageGate.displayAge,
+                adultConfirmedAt = ageGate.acceptedAt,
+                termsAcceptedAt = ageGate.acceptedAt,
+                termsVersion = TERMS_VERSION,
+                privacyAcceptedAt = ageGate.acceptedAt,
+                privacyVersion = PRIVACY_VERSION
             )
         } catch (error: SQLException) {
             if (error.sqlState == "23505") throw AuthException("EMAIL_ALREADY_EXISTS")
@@ -138,11 +158,44 @@ class AuthService(
         if (password.length < 12) throw AuthException("PASSWORD_TOO_SHORT")
     }
 
+    private fun validateSignupAgeGate(
+        birthdate: String?,
+        confirmedAdult: Boolean,
+        acceptedTerms: Boolean,
+        acceptedPrivacy: Boolean
+    ): SignupAgeGate {
+        if (!confirmedAdult) throw AuthException("ADULT_CONFIRMATION_REQUIRED")
+        if (!acceptedTerms) throw AuthException("TERMS_ACCEPTANCE_REQUIRED")
+        if (!acceptedPrivacy) throw AuthException("PRIVACY_ACCEPTANCE_REQUIRED")
+
+        val parsedBirthdate = birthdate?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { value ->
+                runCatching { LocalDate.parse(value) }.getOrElse { throw AuthException("INVALID_BIRTHDATE") }
+            }
+            ?: throw AuthException("BIRTHDATE_REQUIRED")
+
+        val age = Period.between(parsedBirthdate, LocalDate.now(clock)).years
+        if (age < 18) throw AuthException("AGE_RESTRICTED")
+
+        return SignupAgeGate(
+            birthdate = parsedBirthdate,
+            displayAge = age,
+            acceptedAt = clock.instant()
+        )
+    }
+
     companion object {
         private val ACCESS_TOKEN_TTL: Duration = Duration.ofMinutes(15)
         private val REFRESH_TOKEN_TTL: Duration = Duration.ofDays(30)
+        private const val TERMS_VERSION = "2026-05-13"
+        private const val PRIVACY_VERSION = "2026-05-13"
     }
 }
 
 class AuthException(val code: String) : RuntimeException(code)
 
+private data class SignupAgeGate(
+    val birthdate: LocalDate,
+    val displayAge: Int,
+    val acceptedAt: Instant
+)

@@ -1,6 +1,6 @@
 # Pynapli Onboarding And Auth Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-13
 
 ## Purpose
 
@@ -33,7 +33,7 @@ Session security:
 
 Recommended steps:
 
-1. Create account.
+1. Create account with email/password.
 2. Date of birth.
 3. Display name.
 4. Gender/orientation basics.
@@ -117,7 +117,7 @@ Do not:
 - [ ] Partial: token storage exists, but secure platform storage is not complete.
 - [ ] Signup progress saved.
 - [ ] Skippable photo/tags/looking-for.
-- [ ] Age gate before access.
+- [x] Age gate before access for email signup: DOB, explicit 18+ confirmation, Terms acceptance, and Privacy acceptance are required before the session is created.
 - [ ] Partial: some permission-denied states exist; full onboarding QA coverage is not complete.
 - [ ] First grid uses signup data.
 - [ ] Post-signup nudges are bounded.

@@ -47,6 +47,10 @@ class AuthRepository(
     suspend fun signupEmail(
         email: String,
         password: String,
+        birthdate: String,
+        confirmedAdult: Boolean,
+        acceptedTerms: Boolean,
+        acceptedPrivacy: Boolean,
         platform: String,
         appVersion: String
     ): AppResult<StoredSession> {
@@ -54,6 +58,10 @@ class AuthRepository(
             EmailSignupRequestDto(
                 email = email,
                 password = password,
+                birthdate = birthdate,
+                confirmedAdult = confirmedAdult,
+                acceptedTerms = acceptedTerms,
+                acceptedPrivacy = acceptedPrivacy,
                 platform = platform,
                 appVersion = appVersion
             )

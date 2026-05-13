@@ -4,6 +4,7 @@ import com.pynapli.server.auth.security.PasswordHash
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -14,13 +15,7 @@ class AuthServiceTest {
     fun signupCreatesSessionAndMeCanAuthenticate() = runBlocking {
         val service = AuthService(InMemoryAuthRepository())
 
-        val session = service.signupEmail(
-            email = "alex@example.com",
-            password = "correct horse battery",
-            deviceId = "device-1",
-            platform = "android",
-            appVersion = "0.1"
-        )
+        val session = signup(service, deviceId = "device-1", platform = "android", appVersion = "0.1")
 
         val user = service.authenticate(session.accessToken)
 
@@ -31,7 +26,7 @@ class AuthServiceTest {
     @Test
     fun loginRejectsWrongPassword() = runBlocking {
         val service = AuthService(InMemoryAuthRepository())
-        service.signupEmail("alex@example.com", "correct horse battery", null, null, null)
+        signup(service)
 
         val error = assertFailsWith<AuthException> {
             service.loginEmail("alex@example.com", "wrong horse battery", null, null, null)
@@ -43,7 +38,7 @@ class AuthServiceTest {
     @Test
     fun refreshRotatesTokens() = runBlocking {
         val service = AuthService(InMemoryAuthRepository())
-        val session = service.signupEmail("alex@example.com", "correct horse battery", null, null, null)
+        val session = signup(service)
 
         val refreshed = service.refresh(session.refreshToken)
 
@@ -56,7 +51,7 @@ class AuthServiceTest {
     fun suspendedCurrentUserCannotAuthenticateExistingSession() = runBlocking {
         val repository = InMemoryAuthRepository()
         val service = AuthService(repository)
-        val session = service.signupEmail("alex@example.com", "correct horse battery", null, null, null)
+        val session = signup(service)
         repository.setUserStatus(UUID.fromString(session.user.userId), "suspended")
 
         val error = assertFailsWith<AuthException> {
@@ -71,28 +66,121 @@ class AuthServiceTest {
         val service = AuthService(InMemoryAuthRepository())
 
         val error = assertFailsWith<AuthException> {
-            service.signupEmail("alex@example.com", "short", null, null, null)
+            signup(service, password = "short")
         }
 
         assertEquals("PASSWORD_TOO_SHORT", error.code)
     }
+
+    @Test
+    fun signupStoresBirthdateAndAcceptanceState() = runBlocking {
+        val repository = InMemoryAuthRepository()
+        val service = AuthService(repository)
+
+        val session = signup(service, birthdate = "1990-05-13")
+        val profile = repository.signupProfiles.getValue(UUID.fromString(session.user.userId))
+
+        assertEquals(LocalDate.parse("1990-05-13"), profile.birthdate)
+        assertEquals(true, profile.adultConfirmed)
+        assertEquals(true, profile.termsAccepted)
+        assertEquals(true, profile.privacyAccepted)
+    }
+
+    @Test
+    fun signupRequiresBirthdate() = runBlocking {
+        val service = AuthService(InMemoryAuthRepository())
+
+        val error = assertFailsWith<AuthException> {
+            signup(service, birthdate = null)
+        }
+
+        assertEquals("BIRTHDATE_REQUIRED", error.code)
+    }
+
+    @Test
+    fun signupRejectsUnderageBirthdate() = runBlocking {
+        val service = AuthService(InMemoryAuthRepository())
+
+        val error = assertFailsWith<AuthException> {
+            signup(service, birthdate = "2010-01-01")
+        }
+
+        assertEquals("AGE_RESTRICTED", error.code)
+    }
+
+    @Test
+    fun signupRequiresAgeAndTermsAcceptance() = runBlocking {
+        val service = AuthService(InMemoryAuthRepository())
+
+        val adultError = assertFailsWith<AuthException> {
+            signup(service, confirmedAdult = false)
+        }
+        val termsError = assertFailsWith<AuthException> {
+            signup(service, acceptedTerms = false)
+        }
+        val privacyError = assertFailsWith<AuthException> {
+            signup(service, acceptedPrivacy = false)
+        }
+
+        assertEquals("ADULT_CONFIRMATION_REQUIRED", adultError.code)
+        assertEquals("TERMS_ACCEPTANCE_REQUIRED", termsError.code)
+        assertEquals("PRIVACY_ACCEPTANCE_REQUIRED", privacyError.code)
+    }
 }
+
+private suspend fun signup(
+    service: AuthService,
+    email: String = "alex@example.com",
+    password: String = "correct horse battery",
+    birthdate: String? = "1990-01-01",
+    confirmedAdult: Boolean = true,
+    acceptedTerms: Boolean = true,
+    acceptedPrivacy: Boolean = true,
+    deviceId: String? = null,
+    platform: String? = null,
+    appVersion: String? = null
+) = service.signupEmail(
+    email = email,
+    password = password,
+    birthdate = birthdate,
+    confirmedAdult = confirmedAdult,
+    acceptedTerms = acceptedTerms,
+    acceptedPrivacy = acceptedPrivacy,
+    deviceId = deviceId,
+    platform = platform,
+    appVersion = appVersion
+)
 
 private class InMemoryAuthRepository : AuthRepository {
     private val users = linkedMapOf<UUID, UserRecord>()
     private val identitiesByEmailHash = linkedMapOf<String, EmailIdentityRecord>()
     private val sessions = linkedMapOf<UUID, SessionRecord>()
+    val signupProfiles = linkedMapOf<UUID, SignupProfile>()
 
     override suspend fun createEmailUser(
         userId: UUID,
         identityId: UUID,
         emailHash: String,
-        passwordHash: PasswordHash
+        passwordHash: PasswordHash,
+        birthdate: LocalDate,
+        displayAge: Int,
+        adultConfirmedAt: Instant,
+        termsAcceptedAt: Instant,
+        termsVersion: String,
+        privacyAcceptedAt: Instant,
+        privacyVersion: String
     ): UserRecord {
         if (identitiesByEmailHash.containsKey(emailHash)) throw AuthException("EMAIL_ALREADY_EXISTS")
         val user = UserRecord(userId, "active")
         users[userId] = user
         identitiesByEmailHash[emailHash] = EmailIdentityRecord(userId, passwordHash, "active")
+        signupProfiles[userId] = SignupProfile(
+            birthdate = birthdate,
+            displayAge = displayAge,
+            adultConfirmed = adultConfirmedAt == termsAcceptedAt,
+            termsAccepted = termsVersion.isNotBlank(),
+            privacyAccepted = privacyVersion.isNotBlank()
+        )
         return user
     }
 
@@ -166,3 +254,11 @@ private class InMemoryAuthRepository : AuthRepository {
     private fun SessionRecord.withCurrentUserStatus(): SessionRecord =
         copy(userStatus = users[userId]?.status ?: userStatus)
 }
+
+private data class SignupProfile(
+    val birthdate: LocalDate,
+    val displayAge: Int,
+    val adultConfirmed: Boolean,
+    val termsAccepted: Boolean,
+    val privacyAccepted: Boolean
+)

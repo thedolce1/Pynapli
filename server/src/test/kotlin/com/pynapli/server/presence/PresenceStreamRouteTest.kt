@@ -28,6 +28,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -200,7 +201,14 @@ private class SingleSessionAuthRepository(private val session: SessionRecord) : 
         userId: UUID,
         identityId: UUID,
         emailHash: String,
-        passwordHash: PasswordHash
+        passwordHash: PasswordHash,
+        birthdate: LocalDate,
+        displayAge: Int,
+        adultConfirmedAt: Instant,
+        termsAcceptedAt: Instant,
+        termsVersion: String,
+        privacyAcceptedAt: Instant,
+        privacyVersion: String
     ): UserRecord = throw UnsupportedOperationException()
 
     override suspend fun findEmailIdentity(emailHash: String): EmailIdentityRecord? = null

@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -34,6 +35,8 @@ fun AuthScreen(
     state: AuthUiState,
     onEmailChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
+    onBirthdateChanged: (String) -> Unit,
+    onAcceptedAgeAndTermsChanged: (Boolean) -> Unit,
     onModeSelected: (AuthMode) -> Unit,
     onSubmit: () -> Unit,
     onDevLogin: (() -> Unit)? = null,
@@ -89,6 +92,44 @@ fun AuthScreen(
             colors = authTextFieldColors(),
             modifier = Modifier.fillMaxWidth()
         )
+
+        if (state.mode == AuthMode.CreateAccount) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = state.birthdate,
+                onValueChange = onBirthdateChanged,
+                label = { Text("Birthdate") },
+                placeholder = { Text("YYYY-MM-DD") },
+                singleLine = true,
+                enabled = !state.isSubmitting,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                colors = authTextFieldColors(),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Checkbox(
+                    checked = state.acceptedAgeAndTerms,
+                    onCheckedChange = onAcceptedAgeAndTermsChanged,
+                    enabled = !state.isSubmitting
+                )
+                Text(
+                    text = "I confirm I am 18 or older and accept the Terms and Privacy Policy.",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(top = 12.dp)
+                )
+            }
+        }
 
         state.errorMessage?.let { message ->
             Spacer(modifier = Modifier.height(12.dp))
