@@ -97,6 +97,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        pendingLocationSignal?.cancel()
+        pendingLocationSignal = null
         presenceStreamJob?.cancel()
         presenceStreamJob = null
         super.onStop()

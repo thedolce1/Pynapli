@@ -1,6 +1,6 @@
 # Pynapli Grid Implementation Spec
 
-Last updated: 2026-05-13 (focused EXPLAIN/index pass)
+Last updated: 2026-05-14 (connected Android golden QA and 500-concurrent proof)
 
 ## Purpose
 
@@ -344,6 +344,7 @@ Current implementation:
 - Movement under 250m is not submitted to the backend and does not refresh the grid.
 - Movement from 250m to 1km submits location and refreshes the existing grid quietly: the grid state holder keeps the existing cards visible, never flips `isRefreshing` while cards exist, and a failed quiet refresh leaves the visible cards and prior `errorMessage`/`errorCode` untouched. The new feed is swapped in atomically when it arrives.
 - Movement of 1km or more submits location and requests a normal grid refresh (clears `errorMessage`, sets `isRefreshing`, and surfaces failures).
+- Android uses last-known location first, then a cancellable one-shot `getCurrentLocation` request only when needed. `MainActivity.onStop` cancels any pending one-shot location request so the Grid does not keep GPS work alive after the app backgrounds.
 
 ### Battery References
 
@@ -584,7 +585,8 @@ Current API-level baseline:
 - Migration `V43__add_grid_query_covering_indexes.sql` adds covering partial lookup indexes for active users, visible profiles, and visible Grid discovery settings.
 - The API load harness now refreshes planner statistics after bulk seeding so local dense-load timings reflect the query plan, not stale Testcontainers/dev seed statistics.
 - Latest warm 2026-05-13 profiled API run after the index pass produced zero HTTP errors with 5,000 candidates, 1,000 online candidates, 100 mixed-tier viewers, and 100-way API concurrency. Client p95: Grid initial 450.4ms, Grid filter 354.5ms, Grid page two 477.0ms, profile open 138.8ms, presence heartbeat 118.0ms. Server route p95: Grid initial 407.3ms, Grid filter 293.1ms, Grid page two 417.3ms, profile open 93.2ms, presence heartbeat 41.0ms.
-- Decision: the Grid now meets the current 100-concurrent warm API budget locally after the index pass. Redis candidate caching should not be added blindly yet; revisit it for the 500-concurrent beta target, colder-cache stability, larger metro datasets, or if page-two candidate-query p95 rises again.
+- 500-concurrent local proof runs on 2026-05-14 used 5,000 candidates, 1,000 online candidate presence keys, 500 mixed-tier viewers, and 500-way API concurrency. Warm run: zero HTTP errors; p95 Grid initial 838.3ms, Grid filter 702.6ms, Grid page two 943.4ms, profile open 318.9ms, presence heartbeat 220.3ms. Cold Redis-cleared run: zero HTTP errors; p95 Grid initial 638.2ms, Grid filter 492.0ms, Grid page two 709.8ms, profile open 167.9ms, presence heartbeat 144.4ms.
+- Decision: the Grid now meets the current 100-concurrent warm API budget locally after the index pass and is stable at 500-concurrent locally with zero HTTP errors. Redis candidate caching should not be added blindly yet; the warm 500-concurrent p95 variance means the next scale step is repeat 500-concurrent runs with `-ServerProfile` before deciding whether Redis/H3-style candidate caches are justified.
 
 Battery:
 
@@ -604,10 +606,10 @@ Battery:
 - [x] Signed stable cursor pagination is implemented for live grid responses.
 - [x] 5,000-candidate dense grid integration proof exists for stable cursor pages.
 - [x] 100-concurrent filtered repository regression proof exists against the same dense dataset. Dense bulk-seed tests now refresh planner statistics before timing the query path so the regression guardrail reflects the intended indexed plan.
-- [x] API-level mixed-tier Grid load harness exists at `scripts/grid-api-load-test.ps1`, covering dense candidates, online presence, filter changes, pagination, and profile opens through real Ktor endpoints.
+- [x] API-level mixed-tier Grid load harness exists at `scripts/grid-api-load-test.ps1`, covering dense candidates, online presence, filter changes, pagination, and profile opens through real Ktor endpoints. It writes `summary.json` and `results.csv` artifacts and supports `-ColdCache` Redis-cleared runs.
 - [x] Latest warm API-level 5,000-candidate / 100-concurrent run is zero-error and inside current local p95 budgets.
 - [x] Opt-in server profiling exists for Grid, profile open, and presence heartbeat using `PYNAPLI_API_PROFILING_ENABLED=true` plus the load harness `-ServerProfile` switch.
-- [ ] Partial: profiled Grid evidence still points to candidate-query scanning for broad/page-two workloads; V43 reduced buffer pressure enough for the current 100-concurrent warm budget, but 500-concurrent beta testing and larger metro datasets are still open.
+- [ ] Partial: 500-concurrent API proof artifacts exist and are zero-error; the cold Redis-cleared run met current p95 budgets, but the warm run exceeded Grid initial/filter/page-two budgets. Repeat 500-concurrent server-profiled runs and larger metro datasets are still open.
 - [x] Server-enforced Grid volume caps exist by tier: Free page 60 / depth 60, Social page 90 / depth 600, Select page 120 / uncapped depth. Cursor payloads carry seen-count state so capped tiers cannot bypass depth by asking for larger pages.
 - [x] Redis-backed Grid query rate limiting is wired through `RateLimitService` in production dependencies.
 - [x] Compose grid uses stable keys.
@@ -616,10 +618,10 @@ Battery:
 - [x] Filter updates keep existing state: `GridStateHolder` swaps cards atomically without clearing the visible list, and `LazyVerticalGrid` uses stable `key = card.id` + `Modifier.animateItem()` so card identity is preserved across changes. `GridStateHolderTest.filterChangeKeepsCardsVisibleUntilNewFeedLands` enforces non-clearing at the state-holder level; `GridScreenScrollPreservationTest.filterChangeWithSameFeedKeepsScrollPosition` enforces the rendered scroll position survives a filter change end-to-end.
 - [x] The Grid filter sheet is scrollable on constrained Android screens, so lower sections and Clear/Cancel/Apply controls remain reachable. `GridScreenScrollPreservationTest.filtersSheetScrollsToActionButtons` covers this regression, and manual emulator QA confirmed the Lifestyle gate, Logistics, Save preset row, and Apply return path.
 - [x] Automated Grid visual-signature regression exists in `GridScreenVisualRegressionTest`: it renders the real `GridScreen` in a fixed mobile viewport with the dark Pynapli theme, captures pixels, and asserts the premium dark surface, visible card grid, online dots, linked-partner accents, readable text, and filter-sheet surface are present. This runs in the Compose desktop JVM test gate and protects the shared UI used by Android.
-- [ ] Partial: profile open/close preserves current screen state in the MVP flow and is covered by desktop Compose regression tests; automated Android instrumentation coverage is still needed.
+- [x] Connected Android Grid QA exists at `scripts/android-grid-qa.ps1` with structural golden assertions in `scripts/android-grid-qa-goldens.json`. It runs the installed Android app against local Ktor, captures screenshots/XML/signatures, verifies Grid load, filter sheet, Online empty state, profile detail, filter-clear stability, and profile-close return to the same visible card order/position.
 - [x] WebSocket presence deltas update dots without full refresh: server installs Ktor WebSockets at `/v1/presence/stream`, authenticates via the existing Bearer token, and fans out `PresenceDeltaDto` events from `PresenceBroadcaster`. `PresenceService.heartbeat` emits `online=true` deltas; `PresenceOfflineScanner` emits `online=false` deltas every 30s for tracked users that have left Redis. The route applies a per-delta `BlockRepository.isBlockedEitherWay(viewer, target)` privacy filter and a subscription scope so a viewer only receives deltas for userIds they explicitly subscribed to. `PresenceStreamRouteTest` covers happy path, unsubscribed-target filtering, and blocked-relationship filtering; `PresenceOfflineScannerTest` covers offline emission for disappeared users and no-emission for still-online users. The shared `PresenceStreamClient` (in `:shared`) reconnects with exponential backoff (1s→30s) and re-sends the current `userIds` subscription on every flow update, covered by `PresenceStreamClientTest`. `GridStateHolder.applyPresenceDelta` flips the matching card's `online` flag in place — no reorder, no `load()` call — covered by `GridStateHolderTest.presenceDeltaUpdatesOnlineFlagWithoutReorderingOrRefreshing`. Android wires the stream via `AndroidAppGraph.gridPresenceStreamCoordinator` and starts/stops collection in `MainActivity.onStart`/`onStop`. WebSocket transport on Android requires the OkHttp engine because `ktor-client-android` does not support WebSockets in Ktor 3.x.
 - [x] Location updates use thresholds before backend submission and grid refresh.
-- [ ] Partial: background location is avoided in current app code, but platform QA and policy review are still needed.
+- [ ] Partial: Android background location is avoided and guarded by `scripts/android-location-policy-check.ps1`, including no background permission, no foreground location service, no continuous location updates, and one-shot cancellation on app stop. Real-device battery profiling and store policy review are still needed.
 - [x] Thumbnail prefetch is implemented: `planThumbnailPrefetch` derives the next `GRID_THUMBNAIL_PREFETCH_WINDOW` (12) cards beyond the last visible index, deduplicated and skipping null URLs, covered by `ThumbnailPrefetchPlannerTest`. `ProfileGrid` enqueues the planned URLs into the Coil 3 `SingletonImageLoader` from a `LaunchedEffect` keyed on the planned URL list, populating the memory/disk cache without rendering.
 - [x] Message rate limiting exists.
 - [x] Ranking does not reward spam volume.

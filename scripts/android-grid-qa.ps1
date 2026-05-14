@@ -8,10 +8,18 @@ param(
     [switch]$SkipBuild,
     [switch]$SkipInstall,
     [switch]$KeepAppData,
+    [string]$GoldenSpec = "scripts\android-grid-qa-goldens.json",
+    [switch]$SkipGoldenAssertions,
     [int]$WaitSeconds = 35
 )
 
 $ErrorActionPreference = "Stop"
+
+try {
+    Add-Type -AssemblyName System.Drawing
+} catch {
+    throw "System.Drawing is required for Android Grid screenshot signatures. Run this script on Windows with the local desktop tooling."
+}
 
 function Find-Adb {
     $command = Get-Command "adb" -ErrorAction SilentlyContinue
@@ -230,6 +238,20 @@ function Tap-Text {
 function Get-FirstGridCardNode {
     param([xml]$Xml)
 
+    $first = @(Get-GridCardSnapshot $Xml 1 | Select-Object -First 1)
+    if ($first.Count -eq 0) {
+        throw "No visible Grid card text was found."
+    }
+
+    return $first[0].Node
+}
+
+function Get-GridCardSnapshot {
+    param(
+        [xml]$Xml,
+        [int]$Limit = 12
+    )
+
     $chromeTexts = @(
         "Current location",
         "Filters",
@@ -243,7 +265,8 @@ function Get-FirstGridCardNode {
         "Store"
     )
 
-    $candidates = foreach ($node in Get-UiTextNodes $Xml) {
+    $candidates = @(
+        foreach ($node in Get-UiTextNodes $Xml) {
         $text = $node.GetAttribute("text")
         if ([string]::IsNullOrWhiteSpace($text)) {
             continue
@@ -265,15 +288,42 @@ function Get-FirstGridCardNode {
             Text = $text
             Top = $bounds.Top
             Left = $bounds.Left
+            Right = $bounds.Right
+            Bottom = $bounds.Bottom
+        }
+        }
+    )
+
+    @($candidates | Sort-Object Top, Left | Select-Object -First $Limit)
+}
+
+function Assert-GridSnapshotStable {
+    param(
+        [object[]]$Before,
+        [object[]]$After,
+        [string]$Stage,
+        [int]$MinimumCards = 9,
+        [int]$MaxPositionDeltaPx = 8
+    )
+
+    $count = [Math]::Min($Before.Count, $After.Count)
+    if ($count -lt $MinimumCards) {
+        throw "$Stage did not expose enough comparable Grid cards. Before=$($Before.Count) After=$($After.Count)"
+    }
+
+    for ($index = 0; $index -lt $MinimumCards; $index++) {
+        $beforeCard = $Before[$index]
+        $afterCard = $After[$index]
+        if ($beforeCard.Text -ne $afterCard.Text) {
+            throw "$Stage changed Grid card order at position $index. Before='$($beforeCard.Text)' After='$($afterCard.Text)'"
+        }
+
+        $leftDelta = [Math]::Abs([int]$beforeCard.Left - [int]$afterCard.Left)
+        $topDelta = [Math]::Abs([int]$beforeCard.Top - [int]$afterCard.Top)
+        if ($leftDelta -gt $MaxPositionDeltaPx -or $topDelta -gt $MaxPositionDeltaPx) {
+            throw "$Stage moved Grid card '$($beforeCard.Text)' too far. LeftDelta=$leftDelta TopDelta=$topDelta"
         }
     }
-
-    $first = @($candidates | Sort-Object Top, Left | Select-Object -First 1)
-    if ($first.Count -eq 0) {
-        throw "No visible Grid card text was found."
-    }
-
-    return $first[0].Node
 }
 
 function Tap-Node {
@@ -320,6 +370,134 @@ function Assert-TextPresent {
     }
 }
 
+function Get-ImageSignature {
+    param([string]$Path)
+
+    $bitmap = [System.Drawing.Bitmap]::new($Path)
+    $buckets = @{}
+    try {
+        $stepX = [Math]::Max(1, [int][Math]::Floor($bitmap.Width / 96))
+        $stepY = [Math]::Max(1, [int][Math]::Floor($bitmap.Height / 160))
+        $sampleCount = 0
+        $dark = 0
+        $bright = 0
+        $nonBlack = 0
+        $accentYellow = 0
+
+        for ($y = 0; $y -lt $bitmap.Height; $y += $stepY) {
+            for ($x = 0; $x -lt $bitmap.Width; $x += $stepX) {
+                $color = $bitmap.GetPixel($x, $y)
+                $sampleCount += 1
+                $luma = (0.2126 * $color.R) + (0.7152 * $color.G) + (0.0722 * $color.B)
+                if ($luma -lt 45) { $dark += 1 }
+                if ($luma -gt 210) { $bright += 1 }
+                if ($luma -gt 15) { $nonBlack += 1 }
+                if ($color.R -gt 200 -and $color.G -gt 150 -and $color.B -lt 90) { $accentYellow += 1 }
+
+                $bucket = "$([int]($color.R / 32)):$([int]($color.G / 32)):$([int]($color.B / 32))"
+                $buckets[$bucket] = $true
+            }
+        }
+
+        return [pscustomobject]@{
+            width = $bitmap.Width
+            height = $bitmap.Height
+            sampleCount = $sampleCount
+            darkRatio = [Math]::Round($dark / [double]$sampleCount, 4)
+            brightRatio = [Math]::Round($bright / [double]$sampleCount, 4)
+            nonBlackRatio = [Math]::Round($nonBlack / [double]$sampleCount, 4)
+            accentYellowRatio = [Math]::Round($accentYellow / [double]$sampleCount, 4)
+            colorBucketCount = $buckets.Count
+        }
+    } finally {
+        $bitmap.Dispose()
+    }
+}
+
+function Assert-ImageSignature {
+    param(
+        [string]$StageName,
+        [string]$ScreenshotPath,
+        $StageSpec
+    )
+
+    if ($null -eq $StageSpec.image) {
+        return $null
+    }
+
+    $signature = Get-ImageSignature $ScreenshotPath
+    $checks = @{
+        minWidth = "width"
+        minHeight = "height"
+        minDarkRatio = "darkRatio"
+        maxBrightRatio = "brightRatio"
+        minNonBlackRatio = "nonBlackRatio"
+        minAccentYellowRatio = "accentYellowRatio"
+        minColorBucketCount = "colorBucketCount"
+    }
+
+    foreach ($check in $checks.GetEnumerator()) {
+        $expected = $StageSpec.image.($check.Key)
+        if ($null -eq $expected) {
+            continue
+        }
+
+        $actual = $signature.($check.Value)
+        if ($check.Key.StartsWith("max")) {
+            if ([double]$actual -gt [double]$expected) {
+                throw "$StageName screenshot signature exceeded $($check.Key): actual=$actual expectedMax=$expected path=$ScreenshotPath"
+            }
+        } else {
+            if ([double]$actual -lt [double]$expected) {
+                throw "$StageName screenshot signature missed $($check.Key): actual=$actual expectedMin=$expected path=$ScreenshotPath"
+            }
+        }
+    }
+
+    return $signature
+}
+
+function Assert-GoldenStage {
+    param(
+        [string]$StageName,
+        [xml]$Xml,
+        [string]$ScreenshotPath = $null
+    )
+
+    if ($SkipGoldenAssertions -or $null -eq $script:GoldenSpecData) {
+        return $null
+    }
+
+    $stageSpec = $script:GoldenSpecData.stages.$StageName
+    if ($null -eq $stageSpec) {
+        throw "Golden stage '$StageName' is missing from $GoldenSpec"
+    }
+
+    foreach ($text in @($stageSpec.requiredTexts)) {
+        Assert-TextPresent $Xml $text "$StageName golden"
+    }
+
+    $visibleText = (Get-VisibleTexts $Xml) -join "`n"
+    foreach ($text in @($stageSpec.forbiddenTexts)) {
+        if (-not [string]::IsNullOrWhiteSpace($text) -and $visibleText.Contains($text)) {
+            throw "$StageName golden displayed forbidden text '$text'. Visible text: $visibleText"
+        }
+    }
+
+    if ($null -ne $stageSpec.minGridCards) {
+        $cards = @(Get-GridCardSnapshot $Xml ([int]$stageSpec.minGridCards))
+        if ($cards.Count -lt [int]$stageSpec.minGridCards) {
+            throw "$StageName golden expected at least $($stageSpec.minGridCards) Grid cards but found $($cards.Count)."
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ScreenshotPath)) {
+        return Assert-ImageSignature $StageName $ScreenshotPath $stageSpec
+    }
+
+    return $null
+}
+
 function Write-Summary {
     param([hashtable]$Summary)
 
@@ -333,6 +511,14 @@ function Write-Summary {
 
 if (-not (Test-Path ".\gradlew.bat")) {
     throw "Run this script from the Pynapli repo root."
+}
+
+$script:GoldenSpecData = $null
+if (-not $SkipGoldenAssertions) {
+    if (-not (Test-Path $GoldenSpec)) {
+        throw "Golden spec not found at $GoldenSpec. Pass -SkipGoldenAssertions to run without screenshot golden checks."
+    }
+    $script:GoldenSpecData = Get-Content -Raw -Path $GoldenSpec | ConvertFrom-Json
 }
 
 $script:Adb = Find-Adb
@@ -420,7 +606,9 @@ Assert-NoAppErrorText $gridXml "Initial Grid"
 Assert-TextPresent $gridXml "Filters" "Initial Grid"
 $firstCard = Get-FirstGridCardNode $gridXml
 $firstCardText = $firstCard.GetAttribute("text")
+$initialGridCards = @(Get-GridCardSnapshot $gridXml 12)
 $gridShot = Save-Screen "02_grid_initial"
+$gridSignature = Assert-GoldenStage "gridInitial" $gridXml $gridShot
 Write-Host "[ok] First visible Grid card: $firstCardText"
 
 Tap-Text "Filters"
@@ -431,6 +619,7 @@ Assert-TextPresent $filterSheetXml "Presence" "Filter sheet"
 Assert-TextPresent $filterSheetXml "Trust" "Filter sheet"
 Assert-TextPresent $filterSheetXml "Intent" "Filter sheet"
 $filterSheetShot = Save-Screen "03_filters_sheet"
+$filterSheetSignature = Assert-GoldenStage "filtersSheet" $filterSheetXml $filterSheetShot
 
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_BACK") | Out-Null
 Wait-ForAnyText @($firstCardText, "Filters") | Out-Null
@@ -441,6 +630,7 @@ $onlineXml = Dump-Ui "04_grid_online_filter" -Keep
 Assert-NoAppErrorText $onlineXml "Online Grid filter"
 Assert-TextPresent $onlineXml "Filters" "Online Grid filter"
 $onlineShot = Save-Screen "04_grid_online_filter"
+$onlineSignature = Assert-GoldenStage "onlineFilter" $onlineXml $onlineShot
 
 Tap-Text "Online"
 Wait-ForAnyText @($firstCardText) 45 | Out-Null
@@ -448,10 +638,10 @@ $clearedXml = Dump-Ui "05_grid_filter_cleared" -Keep
 Assert-NoAppErrorText $clearedXml "Cleared Grid filter"
 $firstAfterClear = Get-FirstGridCardNode $clearedXml
 $firstAfterClearText = $firstAfterClear.GetAttribute("text")
-if ($firstAfterClearText -ne $firstCardText) {
-    throw "Filter clear did not restore the same first Grid card. Before='$firstCardText' After='$firstAfterClearText'"
-}
+$clearedGridCards = @(Get-GridCardSnapshot $clearedXml 12)
+Assert-GridSnapshotStable $initialGridCards $clearedGridCards "Filter clear"
 $clearedShot = Save-Screen "05_grid_filter_cleared"
+$clearedSignature = Assert-GoldenStage "filterCleared" $clearedXml $clearedShot
 
 Tap-Node $firstAfterClear
 Wait-ForAnyText @("Message", "Spark", "Request", "Link") 45 | Out-Null
@@ -460,6 +650,7 @@ Assert-NoAppErrorText $profileXml "Profile detail"
 Assert-TextPresent $profileXml $firstCardText "Profile detail"
 Assert-TextPresent $profileXml "Message" "Profile detail"
 $profileShot = Save-Screen "06_profile_detail"
+$profileSignature = Assert-GoldenStage "profileDetail" $profileXml $profileShot
 
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_BACK") | Out-Null
 Wait-ForAnyText @($firstCardText, "Filters") 30 | Out-Null
@@ -467,10 +658,10 @@ $returnXml = Dump-Ui "07_grid_return_from_profile" -Keep
 Assert-NoAppErrorText $returnXml "Returned Grid"
 $firstAfterReturn = Get-FirstGridCardNode $returnXml
 $firstAfterReturnText = $firstAfterReturn.GetAttribute("text")
-if ($firstAfterReturnText -ne $firstCardText) {
-    throw "Profile close did not return to the same Grid position. Before='$firstCardText' After='$firstAfterReturnText'"
-}
+$returnGridCards = @(Get-GridCardSnapshot $returnXml 12)
+Assert-GridSnapshotStable $initialGridCards $returnGridCards "Profile close"
 $returnShot = Save-Screen "07_grid_return_from_profile"
+$returnSignature = Assert-GoldenStage "gridReturnFromProfile" $returnXml $returnShot
 
 Write-Summary @{
     passed = $true
@@ -479,6 +670,15 @@ Write-Summary @{
     packageName = $PackageName
     apk = $apk.FullName
     firstGridCard = $firstCardText
+    visibleGridCards = @($initialGridCards | ForEach-Object { $_.Text })
+    visualSignatures = @{
+        gridInitial = $gridSignature
+        filtersSheet = $filterSheetSignature
+        onlineFilter = $onlineSignature
+        filterCleared = $clearedSignature
+        profileDetail = $profileSignature
+        gridReturnFromProfile = $returnSignature
+    }
     screenshots = @{
         login = $loginShot
         notificationPrompt = $promptShot

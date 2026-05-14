@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "description": "Connected Android Grid QA golden assertions. These are intentionally structural signatures rather than exact pixel images because emulator time, density, and platform chrome can vary.",
+  "stages": {
+    "gridInitial": {
+      "requiredTexts": [
+        "Current location",
+        "Filters",
+        "Online",
+        "\u2264 50 km",
+        "Singles",
+        "Grid",
+        "Swipe",
+        "Activity",
+        "Messages",
+        "Store"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed",
+        "No one matches these filters right now."
+      ],
+      "minGridCards": 9,
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.45,
+        "maxBrightRatio": 0.18,
+        "minNonBlackRatio": 0.32,
+        "minAccentYellowRatio": 0.0008,
+        "minColorBucketCount": 12
+      }
+    },
+    "filtersSheet": {
+      "requiredTexts": [
+        "Distance",
+        "Within 50 km",
+        "Age",
+        "Presence",
+        "Who",
+        "Trust",
+        "Intent",
+        "Online now",
+        "Available tonight",
+        "Singles",
+        "Linked",
+        "Partnered",
+        "Verified",
+        "Face photo",
+        "Age verified",
+        "Together"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.55,
+        "maxBrightRatio": 0.16,
+        "minNonBlackRatio": 0.20,
+        "minAccentYellowRatio": 0.004,
+        "minColorBucketCount": 8
+      }
+    },
+    "onlineFilter": {
+      "requiredTexts": [
+        "Filters",
+        "Online",
+        "No one matches these filters right now.",
+        "Try widening distance or clearing one filter.",
+        "Grid",
+        "Swipe",
+        "Activity",
+        "Messages",
+        "Store"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.70,
+        "maxBrightRatio": 0.10,
+        "minNonBlackRatio": 0.08,
+        "minAccentYellowRatio": 0.0008,
+        "minColorBucketCount": 8
+      }
+    },
+    "filterCleared": {
+      "requiredTexts": [
+        "Current location",
+        "Filters",
+        "Online",
+        "\u2264 50 km",
+        "Singles",
+        "Grid",
+        "Swipe",
+        "Activity",
+        "Messages",
+        "Store"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed",
+        "No one matches these filters right now."
+      ],
+      "minGridCards": 9,
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.45,
+        "maxBrightRatio": 0.18,
+        "minNonBlackRatio": 0.32,
+        "minAccentYellowRatio": 0.0008,
+        "minColorBucketCount": 12
+      }
+    },
+    "profileDetail": {
+      "requiredTexts": [
+        "Message",
+        "Spark",
+        "Request",
+        "Link"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.55,
+        "maxBrightRatio": 0.14,
+        "minNonBlackRatio": 0.20,
+        "minAccentYellowRatio": 0.010,
+        "minColorBucketCount": 10
+      }
+    },
+    "gridReturnFromProfile": {
+      "requiredTexts": [
+        "Current location",
+        "Filters",
+        "Online",
+        "\u2264 50 km",
+        "Singles",
+        "Grid",
+        "Swipe",
+        "Activity",
+        "Messages",
+        "Store"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed",
+        "No one matches these filters right now."
+      ],
+      "minGridCards": 9,
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.45,
+        "maxBrightRatio": 0.18,
+        "minNonBlackRatio": 0.32,
+        "minAccentYellowRatio": 0.0008,
+        "minColorBucketCount": 12
+      }
+    }
+  }
+}

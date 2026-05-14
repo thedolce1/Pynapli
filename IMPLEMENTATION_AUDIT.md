@@ -1,6 +1,6 @@
 # Pynapli Implementation Audit
 
-Date: 2026-05-13
+Date: 2026-05-14
 
 ## Purpose
 
@@ -70,7 +70,10 @@ Latest known green baseline after restoring server JUnit 4 coverage:
 - The Grid SQL hot path now ranks/caps candidate IDs first and hydrates profile photo plus linked-partner card details only for the returned page. A follow-up side-query pass added a short-lived server entitlement cache, one Redis Lua call for rate limits, one profile-view eligibility/upsert statement, a combined notification delivery gate query, and bounded background profile-view recording for production profile opens.
 - A focused `EXPLAIN`/index pass added V43 covering partial indexes for active user lookup, visible profile card lookup, and visible Grid discovery lookup. The load harness and dense repository performance tests now refresh planner statistics after bulk seeding.
 - Latest warm profiled API run produced zero HTTP errors with 5,000 candidates, 1,000 online candidates, 100 mixed-tier viewers, and 100-way concurrency. Client p95: Grid initial 450.4ms, Grid filter 354.5ms, page two 477.0ms, profile open 138.8ms, presence heartbeat 118.0ms. Server route p95: Grid initial 407.3ms, Grid filter 293.1ms, page two 417.3ms, profile open 93.2ms, presence heartbeat 41.0ms.
-- Connected Android Grid QA exists at `scripts/android-grid-qa.ps1`. It seeds dev data, builds/installs the debug APK unless skipped, logs into the installed app on a connected emulator/device, captures Grid/filter/profile screenshots, checks for app error text, and verifies profile close returns to the same first visible Grid card.
+- Connected Android Grid QA exists at `scripts/android-grid-qa.ps1`. It seeds dev data, builds/installs the debug APK unless skipped, logs into the installed app on a connected emulator/device, captures Grid/filter/profile screenshots, checks for app error text, verifies structural screenshot golden signatures, and verifies profile close plus filter clear return to the same visible Grid card sequence.
+- Grid API load artifacts are now durable: `scripts/grid-api-load-test.ps1` writes `summary.json` and `results.csv`, supports named output roots, and has a `-ColdCache` mode that clears Redis before a proof run.
+- Latest 2026-05-14 500-concurrent local API proofs used 5,000 candidates, 1,000 online presence keys, 500 mixed-tier viewers, and 500-way concurrency. Warm run: zero HTTP errors; p95 Grid initial 838.3ms, filter 702.6ms, page two 943.4ms, presence 220.3ms, profile open 318.9ms. Cold Redis-cleared run: zero HTTP errors; p95 Grid initial 638.2ms, filter 492.0ms, page two 709.8ms, presence 144.4ms, profile open 167.9ms.
+- Android Grid location policy checks exist at `scripts/android-location-policy-check.ps1` and are included in `scripts/verify.ps1`; the check rejects background location, foreground location service use, continuous updates, and missing one-shot cancellation on app stop.
 
 Current CI state:
 
@@ -83,11 +86,11 @@ Current CI state:
 | --- | --- | --- | --- |
 | Product model | Aligned | Individual autonomous accounts, optional linked partner, linked partner preview, partner chat invite flow, linked subscription benefit. | Keep avoiding couple-owned accounts or couple cards. |
 | Language and positioning | Mostly aligned | Specs define LS-aware, classy, non-cheesy language. | Needs continuous UI copy review as screens mature. |
-| Frontend design direction | Partially implemented | Subdued Compose surfaces, bottom nav, header profile entry, grid/swipe/messages/activity/store/settings surfaces, an automated Grid visual-signature regression over the shared Compose UI, and a connected Android Grid QA harness for the installed app. | Needs golden-image assertions, real-device screenshot review, and wider flow coverage before visual polish can be called complete. |
+| Frontend design direction | Partially implemented | Subdued Compose surfaces, bottom nav, header profile entry, grid/swipe/messages/activity/store/settings surfaces, an automated Grid visual-signature regression over the shared Compose UI, and connected Android structural golden assertions for the installed app. | Needs real-device screenshot review, denied-location coverage, and wider flow coverage before visual polish can be called complete. |
 | Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling, signup DOB, explicit 18+ confirmation, Terms acceptance, Privacy acceptance. | Social auth parity, signup progress resume, and enhanced/provider age verification are not complete. |
 | Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display, age-verification entry. | Data export/delete, blocked/hidden management, and full safety center need completion. |
-| Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs. | Server-side location trust/spoofing checks and movement thresholds need hardening. |
-| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, tier page/depth caps, Redis-backed query rate limit, fixed square cards, stable Compose keys, shared-UI visual-signature regression, connected Android Grid QA harness, 5,000-candidate dense integration proof, 100-concurrent filtered repository regression proof, API-level mixed-tier Ktor load harness, opt-in server profiling, two-phase candidate-rank then card-hydration SQL, V43 covering lookup indexes, side-query optimization for entitlement/rate-limit/profile-view paths, planner-stat refresh in dense load tests, client movement-threshold policy, retained lazy grid state while screen is alive, block/risk filtering, partner preview, WebSocket presence deltas, and explicit thumbnail prefetching. | Current warm 100-concurrent API harness is zero-error and inside local p95 budgets. Page-two remains candidate-scan-bound, so 500-concurrent beta load, larger dense metros, cold-cache repeatability, connected Android golden assertions, and platform battery/location QA are still needed. |
+| Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs, client movement thresholds, and Android while-in-use location policy guard. | Server-side location trust/spoofing checks and real-device battery profiling remain. |
+| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, tier page/depth caps, Redis-backed query rate limit, fixed square cards, stable Compose keys, shared-UI visual-signature regression, connected Android structural golden QA, Android location policy guard, 5,000-candidate dense integration proof, 100-concurrent filtered repository regression proof, 500-concurrent API proof artifacts, cold Redis-cache proof artifacts, opt-in server profiling, two-phase candidate-rank then card-hydration SQL, V43 covering lookup indexes, side-query optimization for entitlement/rate-limit/profile-view paths, planner-stat refresh in dense load tests, client movement-threshold policy, retained lazy grid state while screen is alive, block/risk filtering, partner preview, WebSocket presence deltas, and explicit thumbnail prefetching. | Current 500-concurrent API shape is zero-error locally, but warm p95 variance still exceeds some budgets and needs repeat profiling. Larger dense metros and real-device battery/location QA are still needed. |
 | Swipe | Partially implemented | Swipe deck endpoint, action endpoint, server-authoritative match creation, immutable normal actions, block/report path, intro notes, pineapple-like inventory, boost influence, partner preview. | Robust deck-session/rank-token validation, cursor pagination, rewind, offline action cap, image preloading, top picks, passport/travel mode, and dealbreaker settings remain incomplete. |
 | Messaging | Mostly implemented for MVP | Direct conversations, grid-open messaging, swipe match gating, intro-note handling, partner chat invite/accept/decline/leave, block-aware conversations, message review path. | WebSocket realtime, typing/read realtime, and deeper consent tests should be added before beta. |
 | Activity | Partially implemented | Activity event model, newest-first activity, flirts, album requests, gating by entitlement, block checks, risk checks, and bounded background profile-view recording for production profile opens. | Tabs, opt-outs/incognito behavior, partner-context activity separation, and complete reveal-depth UX need review. |
@@ -126,8 +129,10 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Redis candidate caching is not complete.
    - A 5,000-candidate repository proof, 100-concurrent filtered repository regression proof, full API-level mixed-tier Ktor load harness, focused EXPLAIN/index pass, and V43 covering indexes exist.
    - The current warm 100-concurrent API harness is zero-error and inside local p95 budgets.
+   - A 2026-05-14 500-concurrent warm API run completed with zero HTTP errors but exceeded p95 budgets for Grid initial/filter/page two.
+   - A 2026-05-14 500-concurrent cold Redis-cleared API run completed with zero HTTP errors and met the current p95 budgets.
    - Page two still scans most eligible candidates because cursor ordering depends on computed distance. Redis candidate caching should be reconsidered for 500-concurrent beta targets, larger metros, cold-cache repeatability, or if page-two p95 regresses.
-   - Shared Compose Grid visual-signature regression and connected Android Grid scripted QA exist, but emulator golden assertions and broader device coverage are not complete.
+   - Shared Compose Grid visual-signature regression and connected Android structural golden QA exist, but broader real-device coverage is not complete.
 
 2. Swipe server authority needs another hardening pass.
    - Deck-session/rank-token validation is still too lightweight.
@@ -169,9 +174,9 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Add Docker-backed integration tests, lint/static analysis, and Android artifact checks when those suites are ready.
 
 2. Finish Grid hardening before starting more Swipe behavior.
-   - Grid: extend load testing from the current warm 100-concurrent API proof toward the beta target, including 500 concurrent Grid users, cold-cache repeatability, and larger dense metro datasets.
-   - Grid later: decide Redis candidate caching from that evidence if candidate SQL cannot meet the higher beta targets.
-   - Grid: promote connected Android QA screenshots into golden assertions, then run platform battery/location QA.
+   - Grid: repeat 500-concurrent runs with server profiling enabled so warm-run variance can be traced to candidate SQL, DB pool waits, local machine noise, or another hot path.
+   - Grid later: decide Redis candidate caching from that repeat evidence if candidate SQL cannot reliably meet the higher beta targets.
+   - Grid: run real-device battery/location QA and add denied-location Android QA coverage.
    - Swipe later: deck session validation, rank-token validation, cursor pagination, action idempotency, rewind path.
 
 3. Finish the profile/settings safety surface.

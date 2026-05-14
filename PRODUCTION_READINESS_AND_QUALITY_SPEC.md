@@ -1,6 +1,6 @@
 # Pynapli Production Readiness And Quality Spec
 
-Last updated: 2026-05-13
+Last updated: 2026-05-14
 
 ## Purpose
 
@@ -202,9 +202,16 @@ Latest warm profiled follow-up after migration `V43__add_grid_query_covering_ind
 | Presence heartbeat | 118.0ms | 41.0ms | 22.7ms | n/a | n/a | 300ms | OK |
 | Profile open | 138.8ms | 93.2ms | 79.3ms | 52.4ms | n/a | 800ms | OK |
 
-Decision after the index pass: do not add Redis candidate caching yet just because it is in the architecture plan. The current warm 100-concurrent API shape meets budget locally. Revisit Redis/H3-style candidate caching when testing 500 concurrent Grid users, larger dense metros, cold-cache repeatability, or if page-two candidate-query p95 regresses.
+500-concurrent proof runs on 2026-05-14 used 5,000 candidates, 1,000 online candidate presence keys, 500 mixed-tier viewers, and 500-way concurrency. The load harness now writes `summary.json` and `results.csv` artifacts and supports `-ColdCache` to clear Redis before a run.
 
-The Android rendering/device load test remains open.
+| Run | Errors | Grid Initial P95 | Grid Filter P95 | Grid Page Two P95 | Presence P95 | Profile Open P95 | Status |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Warm local run | 0 | 838.3ms | 702.6ms | 943.4ms | 220.3ms | 318.9ms | Stable, over Grid p95 budgets |
+| Cold Redis-cleared local run | 0 | 638.2ms | 492.0ms | 709.8ms | 144.4ms | 167.9ms | Stable, within current budgets |
+
+Decision after the index pass and first 500-concurrent proofs: do not add Redis candidate caching yet just because it is in the architecture plan. The current 500-concurrent API path is stable with zero HTTP errors, but warm-run p95 variance means the next step should be repeat 500-concurrent runs with server profiling enabled. Revisit Redis/H3-style candidate caching if repeated 500-concurrent profiled runs show candidate SQL/page-two scans cannot reliably meet budget, or when larger dense metro datasets increase p95.
+
+Connected Android rendering QA now exists through `scripts/android-grid-qa.ps1` and structural golden assertions in `scripts/android-grid-qa-goldens.json`. It verifies Grid load, filter sheet, Online empty state, profile open, filter-clear stability, profile-return stability, screenshot signatures, and visible card order/position. Android location policy QA now exists through `scripts/android-location-policy-check.ps1`; it rejects background location, foreground location services, continuous location updates, and missing one-shot cancellation on app stop. Real-device battery/location profiling remains open.
 
 Expected behavior:
 
@@ -279,6 +286,7 @@ Rules:
 
 - Use while-in-use location only unless a future feature justifies more.
 - Location updates use movement/time thresholds.
+- Android one-shot location requests are canceled when the app stops.
 - Presence heartbeats are throttled.
 - WebSocket reconnect uses backoff.
 - Push handles inactive users instead of constant polling.
@@ -434,7 +442,7 @@ Location rules:
 - Database migration tests.
 - Contract tests for API DTOs.
 - Mobile ViewModel/state tests.
-- Compose screenshot/regression tests for core components. Current Grid coverage includes a shared-UI visual-signature pixel test in `GridScreenVisualRegressionTest`; connected Android screenshot/golden tests are still required before beta.
+- Compose screenshot/regression tests for core components. Current Grid coverage includes a shared-UI visual-signature pixel test in `GridScreenVisualRegressionTest`, connected Android screenshot/golden assertions in `scripts/android-grid-qa.ps1`, and Android location policy checks in `scripts/android-location-policy-check.ps1`.
 - E2E tests for critical journeys.
 - Load tests for grid, swipe, messages, activity, and auth.
 - Abuse tests for spam, scraping, and rate limits.

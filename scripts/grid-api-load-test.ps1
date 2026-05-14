@@ -9,6 +9,8 @@ param(
     [int]$GridFilterBudgetP95Ms = 500,
     [int]$GridPageBudgetP95Ms = 800,
     [int]$ProfileOpenBudgetP95Ms = 800,
+    [string]$OutputRoot = "artifacts\grid-api-load",
+    [switch]$ColdCache,
     [switch]$ServerProfile,
     [switch]$FailOnBudget
 )
@@ -22,6 +24,15 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $viewerLatitude = 37.4220
 $viewerLongitude = -122.0841
+$startedAt = Get-Date
+$artifactStamp = $startedAt.ToString("yyyyMMdd-HHmmss")
+$artifactDir = Join-Path $repoRoot (Join-Path $OutputRoot $artifactStamp)
+New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+$script:ScenarioSummaryRows = @()
+$script:ScenarioBudgetFailed = $false
+$script:ProfileSummaryRows = @()
+$script:SlowProfileRows = @()
+$script:PoolSummaryRows = @()
 
 function Invoke-PynapliJson {
     param(
@@ -110,6 +121,13 @@ function Invoke-DockerPsql {
         throw "psql failed: $output"
     }
     return $output
+}
+
+function Clear-GridRuntimeCaches {
+    docker exec pynapli-redis redis-cli FLUSHDB | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to clear Redis before cold Grid load run."
+    }
 }
 
 function New-LoadViewerSession {
@@ -506,6 +524,8 @@ function Write-ScenarioSummary {
         })
     }
     $summaryRows | Format-Table -AutoSize
+    $script:ScenarioSummaryRows = @($summaryRows.ToArray())
+    $script:ScenarioBudgetFailed = $failedBudget
 
     if ($Results.StatusCode -contains 0 -or @($Results | Where-Object { $_.StatusCode -ge 400 }).Count -gt 0) {
         Write-Host ""
@@ -518,7 +538,8 @@ function Write-ScenarioSummary {
     }
 
     if ($FailOnBudget -and $failedBudget) {
-        throw "One or more scenarios exceeded the configured p95 budget."
+        Write-Host ""
+        Write-Host "Budget gate will fail after writing artifacts."
     }
 }
 
@@ -562,6 +583,7 @@ function Write-ProfileSummary {
         }
     }
     $summaryRows | Format-Table -AutoSize
+    $script:ProfileSummaryRows = @($summaryRows.ToArray())
 }
 
 function Write-SlowProfileSummary {
@@ -595,6 +617,7 @@ function Write-SlowProfileSummary {
         Sort-Object Millis -Descending |
         Select-Object -First 30 Scenario, Tier, UserIndex, Phase, Millis |
         Format-Table -AutoSize
+    $script:SlowProfileRows = @($rows | Sort-Object Millis -Descending | Select-Object -First 30 Scenario, Tier, UserIndex, Phase, Millis)
 }
 
 function Write-PoolSummary {
@@ -638,10 +661,17 @@ function Write-PoolSummary {
         }
     }
     $summaryRows | Format-Table -AutoSize
+    $script:PoolSummaryRows = @($summaryRows.ToArray())
 }
 
 $health = Invoke-PynapliJson -Method GET -Path "/health/deep" -TimeoutSec 5
 Assert-Success -Response $health -Action "Ktor deep health"
+
+Write-Host "Grid API load artifacts: $artifactDir"
+if ($ColdCache) {
+    Write-Host "Clearing Redis runtime caches for cold Grid load run..."
+    Clear-GridRuntimeCaches
+}
 
 Write-Host "Seeding $CandidateCount dense Grid candidates..."
 Seed-DenseCandidates -Count $CandidateCount
@@ -838,4 +868,57 @@ Write-Host "Tier mix"
 Write-Host "--------"
 $sessions | Group-Object Tier | Sort-Object Name | Select-Object Name, Count | Format-Table -AutoSize
 
+$finishedAt = Get-Date
+$tierMix = @($sessions | Group-Object Tier | Sort-Object Name | ForEach-Object {
+    [pscustomobject]@{
+        Tier = $_.Name
+        Count = $_.Count
+    }
+})
+
+$parameters = [pscustomobject]@{
+    baseUrl = $BaseUrl
+    candidateCount = $CandidateCount
+    viewerCount = $ViewerCount
+    concurrentUsers = $ConcurrentUsers
+    onlineCandidateCount = $OnlineCandidateCount
+    coldCache = [bool]$ColdCache
+    serverProfile = [bool]$ServerProfile
+    failOnBudget = [bool]$FailOnBudget
+    budgets = [pscustomobject]@{
+        gridInitialP95Ms = $GridInitialBudgetP95Ms
+        gridFilterP95Ms = $GridFilterBudgetP95Ms
+        gridPageP95Ms = $GridPageBudgetP95Ms
+        profileOpenP95Ms = $ProfileOpenBudgetP95Ms
+        presenceHeartbeatP95Ms = 300
+    }
+}
+
+$summary = [pscustomobject]@{
+    startedAt = $startedAt.ToUniversalTime().ToString("o")
+    finishedAt = $finishedAt.ToUniversalTime().ToString("o")
+    durationSeconds = [Math]::Round(($finishedAt - $startedAt).TotalSeconds, 1)
+    parameters = $parameters
+    scenarioSummary = @($script:ScenarioSummaryRows)
+    profileSummary = @($script:ProfileSummaryRows)
+    slowProfile = @($script:SlowProfileRows)
+    poolSummary = @($script:PoolSummaryRows)
+    tierMix = $tierMix
+    errorCount = @($results | Where-Object { $_.StatusCode -lt 200 -or $_.StatusCode -ge 300 }).Count
+    budgetFailed = [bool]$script:ScenarioBudgetFailed
+}
+
+$summaryPath = Join-Path $artifactDir "summary.json"
+$resultsPath = Join-Path $artifactDir "results.csv"
+$summary | ConvertTo-Json -Depth 12 | Set-Content -Path $summaryPath -Encoding UTF8
+$results | Export-Csv -NoTypeInformation -Path $resultsPath
+
+Write-Host ""
+Write-Host "Grid API load artifacts written:"
+Write-Host "  Summary: $summaryPath"
+Write-Host "  Results: $resultsPath"
 Write-Host "Grid API load test complete."
+
+if ($FailOnBudget -and $script:ScenarioBudgetFailed) {
+    throw "One or more scenarios exceeded the configured p95 budget. Artifacts were written to $artifactDir"
+}

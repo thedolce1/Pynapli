@@ -1,6 +1,6 @@
 # Pynapli Testing Strategy Spec
 
-Last updated: 2026-05-13
+Last updated: 2026-05-14
 
 ## Purpose
 
@@ -43,13 +43,16 @@ Current Grid coverage:
 - `GridScreenVisualRegressionTest` renders the real shared Compose `GridScreen` in a fixed mobile viewport with the dark Pynapli theme.
 - The test captures pixels and checks for the intended visual signature: subdued dark surface, dense card grid, readable text/icons, online indicators, linked-partner/accent color, and filter-sheet surface after opening filters.
 - This is a fast shared-UI guardrail that runs in `:composeApp:desktopTest`, so it is included in `scripts/verify.ps1`.
-- `scripts/android-grid-qa.ps1` runs the installed Android debug app against local Ktor on a connected emulator/device. It seeds dev data, optionally builds/installs the APK, logs in through dev login, captures screenshots, verifies the Grid loads, opens the filter sheet, toggles the Online quick filter, opens a profile, and asserts closing the profile returns to the same first visible Grid card.
+- `scripts/android-grid-qa.ps1` runs the installed Android debug app against local Ktor on a connected emulator/device. It seeds dev data, optionally builds/installs the APK, logs in through dev login, captures screenshots, verifies the Grid loads, opens the filter sheet, toggles the Online quick filter, opens a profile, and asserts closing the profile returns to the same visible Grid card sequence.
+- `scripts/android-grid-qa-goldens.json` defines connected Android structural golden assertions: required/forbidden UI text, minimum visible Grid-card counts, and screenshot visual signatures for Grid, filter sheet, empty filtered state, profile detail, and return-to-grid.
+- `scripts/android-location-policy-check.ps1` verifies the Android Grid location path stays while-in-use only: no background location permission, no foreground location service, no continuous `requestLocationUpdates`, one-shot `getCurrentLocation`, and cancellation on `MainActivity.onStop`.
 
 Still open before beta:
 
-- Promote connected Android emulator screenshots from scripted QA artifacts into golden/regression comparisons for the installed `androidApp`.
+- Exact-image golden comparisons are still optional future work; current connected Android golden coverage uses structural UI and screenshot-signature checks to avoid status-bar/time false positives.
 - Manual device pass on mid-range and low-end Android hardware.
-- Visual checks with real thumbnail loading, denied location state, empty Grid, and profile-detail sheet.
+- Visual checks with denied location state, empty Grid outside the Online-filter empty state, and more real-device thumbnail loading still need coverage.
+- Real battery profiling with movement/background/foreground scenarios still needs a device pass.
 
 ## Performance Benchmarks
 
@@ -86,6 +89,8 @@ Current local Grid API harness:
 
 The harness exercises real Ktor endpoints with mixed Free/Social/Select viewers, presence heartbeats, first Grid query, filtered Grid query, page-two Grid query where available, and profile opens. Add `-FailOnBudget` when using it as a hard performance gate.
 
+The harness writes `summary.json` and `results.csv` under `artifacts/grid-api-load/<timestamp>` by default. Use `-OutputRoot` for named proof runs and `-ColdCache` to clear Redis before seeding/running the workload.
+
 For endpoint breakdowns, start Ktor with:
 
 ```powershell
@@ -101,7 +106,16 @@ Then run:
 .\scripts\grid-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000 -ServerProfile
 ```
 
-The current profiled baseline is zero-error after the Grid two-phase SQL optimization, side-query optimization, and V43 covering-index pass. Latest warm 2026-05-13 run with 5,000 candidates / 100 concurrent mixed-tier users / DB pool 32 produced client p95 of Grid initial 450.4ms, Grid filter 354.5ms, Grid page two 477.0ms, profile open 138.8ms, and presence heartbeat 118.0ms. The harness refreshes planner statistics after bulk seeding before timing the API workload.
+The current profiled 100-concurrent baseline is zero-error after the Grid two-phase SQL optimization, side-query optimization, and V43 covering-index pass. Latest warm 2026-05-13 run with 5,000 candidates / 100 concurrent mixed-tier users / DB pool 32 produced client p95 of Grid initial 450.4ms, Grid filter 354.5ms, Grid page two 477.0ms, profile open 138.8ms, and presence heartbeat 118.0ms. The harness refreshes planner statistics after bulk seeding before timing the API workload.
+
+Latest 500-concurrent local proof runs on 2026-05-14 used 5,000 candidates, 1,000 online candidate presence keys, 500 mixed-tier viewers, and 500-way concurrency:
+
+| Run | Errors | Grid Initial P95 | Grid Filter P95 | Grid Page Two P95 | Presence P95 | Profile Open P95 | Artifact |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Warm | 0 | 838.3ms | 702.6ms | 943.4ms | 220.3ms | 318.9ms | `artifacts/grid-api-load-500/20260514-083700` |
+| Cold Redis cache | 0 | 638.2ms | 492.0ms | 709.8ms | 144.4ms | 167.9ms | `artifacts/grid-api-load-500-cold/20260514-084048` |
+
+Decision: the 500-concurrent API path is stable with zero HTTP errors. One warm local run exceeded the current p95 budgets for Grid initial/filter/page two, while the cold Redis-cleared repeat was inside budget. Do not hide this variance; repeat 500-concurrent runs with server profiling before deciding whether Redis candidate caching is justified.
 
 ## Connected Android Grid QA
 
@@ -124,7 +138,17 @@ Requirements:
 - One Android emulator/device must be connected through `adb`, or pass `-DeviceId`.
 - Debug builds must expose the `Dev login` button.
 
-The script writes PNG screenshots, UI hierarchy XML, and `qa-summary.json` under `artifacts/android-grid-qa/<timestamp>`. A passing run proves the installed app can complete the current critical Grid loop, but it is not a replacement for future golden-image assertions or real-device battery/location testing.
+The script writes PNG screenshots, UI hierarchy XML, screenshot signatures, visible card sequence, and `qa-summary.json` under `artifacts/android-grid-qa/<timestamp>`. A passing run proves the installed app can complete the current critical Grid loop and preserve visible card order/position through filter clear and profile close, but it is not a replacement for real-device battery/location testing.
+
+## Android Location Policy QA
+
+Run this after Android location or lifecycle changes:
+
+```powershell
+.\scripts\android-location-policy-check.ps1 -RunUnitTests
+```
+
+The script is also part of `scripts/verify.ps1` without `-RunUnitTests`. It protects the Grid battery policy by rejecting background location permission, foreground location service declarations, continuous location updates, or missing one-shot cancellation on app stop. The optional unit-test flag also runs `LocationStateHolderTest`, which covers the 250m no-submit threshold, 250m-1km quiet refresh, and 1km+ normal refresh.
 
 ## Security/Abuse Tests
 
@@ -143,10 +167,10 @@ The script writes PNG screenshots, UI hierarchy XML, and `qa-summary.json` under
 - [ ] Critical E2E tests passing on Android.
 - [ ] Critical E2E tests passing on iOS.
 - [ ] Partial: Ktor/server integration tests with Testcontainers exist and pass locally; full release-grade DB container coverage is not complete.
-- [ ] Partial: Performance benchmarks are under current local 100-concurrent Grid budgets, but beta-scale 500-concurrent Grid testing is still open.
+- [ ] Partial: Performance benchmarks are under current local 100-concurrent Grid budgets; 500-concurrent proof exists with zero errors, but warm-run p95 variance still needs repeat profiling.
 - [x] Grid API load harness exists and runs zero-error locally for the current 5,000-candidate / 100-concurrent warm workload.
-- [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, entitlement/rate-limit/profile-view side-query pressure has been reduced, and V43 covering indexes are in place; remaining hot-path work is proving page-two/candidate-query behavior at 500-concurrent beta scale and larger dense metro datasets.
-- [ ] Partial: Grid shared-UI visual-signature regression exists and runs in the local verification gate; connected Android Grid QA is scripted and produces screenshots, but golden comparisons are still open.
+- [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, entitlement/rate-limit/profile-view side-query pressure has been reduced, V43 covering indexes are in place, and 500-concurrent proof artifacts exist; remaining hot-path work is repeat server-profiled 500-concurrent runs and larger dense metro datasets.
+- [ ] Partial: Grid shared-UI visual-signature regression, connected Android Grid structural golden QA, and Android location policy checks exist and run locally; real-device screenshot and battery coverage is still open.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [ ] Location denied path tested.
