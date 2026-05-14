@@ -434,7 +434,7 @@ Location rules:
 - Database migration tests.
 - Contract tests for API DTOs.
 - Mobile ViewModel/state tests.
-- Compose screenshot/regression tests for core components.
+- Compose screenshot/regression tests for core components. Current Grid coverage includes a shared-UI visual-signature pixel test in `GridScreenVisualRegressionTest`; connected Android screenshot/golden tests are still required before beta.
 - E2E tests for critical journeys.
 - Load tests for grid, swipe, messages, activity, and auth.
 - Abuse tests for spam, scraping, and rate limits.

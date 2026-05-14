@@ -36,6 +36,20 @@ For production release gates, load targets, security matrices, and CI/CD quality
 - Subscription purchase/restore/linked partner entitlement.
 - Block/report removes visibility.
 
+## Visual Regression
+
+Current Grid coverage:
+
+- `GridScreenVisualRegressionTest` renders the real shared Compose `GridScreen` in a fixed mobile viewport with the dark Pynapli theme.
+- The test captures pixels and checks for the intended visual signature: subdued dark surface, dense card grid, readable text/icons, online indicators, linked-partner/accent color, and filter-sheet surface after opening filters.
+- This is a fast shared-UI guardrail that runs in `:composeApp:desktopTest`, so it is included in `scripts/verify.ps1`.
+
+Still open before beta:
+
+- Connected Android emulator screenshot/golden tests for the installed `androidApp`.
+- Manual device pass on mid-range and low-end Android hardware.
+- Visual checks with real thumbnail loading, denied location state, empty Grid, and profile-detail sheet.
+
 ## Performance Benchmarks
 
 Targets:
@@ -108,6 +122,7 @@ The current profiled baseline is zero-error after the Grid two-phase SQL optimiz
 - [ ] Partial: Performance benchmarks are under current local 100-concurrent Grid budgets, but beta-scale 500-concurrent Grid testing is still open.
 - [x] Grid API load harness exists and runs zero-error locally for the current 5,000-candidate / 100-concurrent warm workload.
 - [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, entitlement/rate-limit/profile-view side-query pressure has been reduced, and V43 covering indexes are in place; remaining hot-path work is proving page-two/candidate-query behavior at 500-concurrent beta scale and larger dense metro datasets.
+- [ ] Partial: Grid shared-UI visual-signature regression exists and runs in the local verification gate; connected Android emulator screenshot/golden coverage is still open.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [ ] Location denied path tested.
