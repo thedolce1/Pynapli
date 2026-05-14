@@ -199,8 +199,8 @@ Ktor owns deck generation and swipe actions.
 Endpoints:
 
 ```http
-POST /v1/swipe/deck
-POST /v1/swipe/action
+POST /v1/swipe/deck/query
+POST /v1/swipe/actions
 POST /v1/swipe/rewind
 ```
 

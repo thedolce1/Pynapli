@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.update
 
 @Immutable
 data class SwipeUiState(
+    val deckSessionId: String? = null,
     val cards: List<SwipeCardDto> = emptyList(),
     val filters: List<SwipeFilterUi> = defaultSwipeFilters,
     val isLoading: Boolean = false,
@@ -55,6 +56,7 @@ class SwipeStateHolder(
         when (val result = repository.loadDeck(selectedFilter)) {
             is AppResult.Success -> _state.update {
                 it.copy(
+                    deckSessionId = result.value.deckSessionId,
                     cards = result.value.cards,
                     filters = it.filters.withPaidLocks(result.value.adSupported),
                     adSupported = result.value.adSupported,
@@ -153,7 +155,8 @@ class SwipeStateHolder(
         }
         if (!shouldSubmit) return
 
-        when (val result = repository.submitAction(card.userId, action, noteText)) {
+        val deckSessionId = _state.value.deckSessionId
+        when (val result = repository.submitAction(deckSessionId, card, action, noteText)) {
             is AppResult.Success -> _state.update { current ->
                 current.copy(
                     isSubmitting = false,
@@ -205,7 +208,12 @@ class SwipeStateHolder(
 interface SwipeRepository {
     suspend fun loadDeck(filter: SwipeFilterType): AppResult<SwipeDeckUi>
 
-    suspend fun submitAction(targetUserId: String, action: String, noteText: String? = null): AppResult<MatchDto?>
+    suspend fun submitAction(
+        deckSessionId: String?,
+        card: SwipeCardDto,
+        action: String,
+        noteText: String? = null
+    ): AppResult<MatchDto?>
 }
 
 class ApiSwipeRepository(
@@ -215,6 +223,7 @@ class ApiSwipeRepository(
         when (val result = apiClient.querySwipeDeck(filter.toRequest())) {
             is AppResult.Success -> AppResult.Success(
                 SwipeDeckUi(
+                    deckSessionId = result.value.deckSessionId,
                     cards = result.value.items,
                     adSupported = result.value.adSupported,
                     advancedFiltersApplied = result.value.advancedFiltersApplied
@@ -223,10 +232,21 @@ class ApiSwipeRepository(
             is AppResult.Failure -> result
         }
 
-    override suspend fun submitAction(targetUserId: String, action: String, noteText: String?): AppResult<MatchDto?> =
+    override suspend fun submitAction(
+        deckSessionId: String?,
+        card: SwipeCardDto,
+        action: String,
+        noteText: String?
+    ): AppResult<MatchDto?> =
         when (
             val result = apiClient.submitSwipeAction(
-                SwipeActionRequestDto(targetUserId = targetUserId, action = action, noteText = noteText)
+                SwipeActionRequestDto(
+                    deckSessionId = deckSessionId.orEmpty(),
+                    cardToken = card.rankToken,
+                    targetUserId = card.userId,
+                    action = action,
+                    noteText = noteText
+                )
             )
         ) {
             is AppResult.Success -> AppResult.Success(result.value.match)
@@ -263,20 +283,27 @@ class SampleSwipeRepository : SwipeRepository {
     override suspend fun loadDeck(filter: SwipeFilterType): AppResult<SwipeDeckUi> =
         AppResult.Success(
             SwipeDeckUi(
+                deckSessionId = "sample-session",
                 cards = cards.toList(),
                 adSupported = true,
                 advancedFiltersApplied = filter != SwipeFilterType.ForYou
             )
         )
 
-    override suspend fun submitAction(targetUserId: String, action: String, noteText: String?): AppResult<MatchDto?> {
-        cards.removeAll { it.userId == targetUserId }
+    override suspend fun submitAction(
+        deckSessionId: String?,
+        card: SwipeCardDto,
+        action: String,
+        noteText: String?
+    ): AppResult<MatchDto?> {
+        cards.removeAll { it.userId == card.userId }
         return AppResult.Success(null)
     }
 }
 
 @Immutable
 data class SwipeDeckUi(
+    val deckSessionId: String? = null,
     val cards: List<SwipeCardDto>,
     val adSupported: Boolean = false,
     val advancedFiltersApplied: Boolean = false

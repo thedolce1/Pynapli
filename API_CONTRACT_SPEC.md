@@ -229,8 +229,8 @@ Rules:
 ## Swipe API
 
 ```http
-POST /v1/swipe/deck
-POST /v1/swipe/action
+POST /v1/swipe/deck/query
+POST /v1/swipe/actions
 POST /v1/swipe/rewind
 GET  /v1/swipe/likes-you
 GET  /v1/swipe/picks

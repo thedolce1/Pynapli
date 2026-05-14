@@ -33,6 +33,8 @@ data class SwipeCardDto(
 
 @Serializable
 data class SwipeDeckResponseDto(
+    val deckSessionId: String = "",
+    val generatedAt: String? = null,
     val items: List<SwipeCardDto>,
     val nextCursor: String? = null,
     val adSupported: Boolean = false,
@@ -41,6 +43,8 @@ data class SwipeDeckResponseDto(
 
 @Serializable
 data class SwipeActionRequestDto(
+    val deckSessionId: String = "",
+    val cardToken: String = "",
     val targetUserId: String,
     val action: String,
     val noteText: String? = null

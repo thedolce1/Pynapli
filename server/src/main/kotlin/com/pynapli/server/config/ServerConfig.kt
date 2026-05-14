@@ -40,7 +40,8 @@ data class ServerConfig(
     val playStoreRtdnOidcAudience: String? = null,
     val playStoreRtdnOidcServiceAccountEmail: String? = null,
     val adminApiToken: String? = null,
-    val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret"
+    val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
+    val swipeDeckTokenSecret: String = "pynapli-local-dev-swipe-deck-token-secret"
 ) {
     companion object {
         fun fromEnvironment(): ServerConfig {
@@ -167,7 +168,11 @@ data class ServerConfig(
                 discoveryCursorSecret = System.getenv("PYNAPLI_DISCOVERY_CURSOR_SECRET")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }
-                    ?: "pynapli-local-dev-discovery-cursor-secret"
+                    ?: "pynapli-local-dev-discovery-cursor-secret",
+                swipeDeckTokenSecret = System.getenv("PYNAPLI_SWIPE_DECK_TOKEN_SECRET")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: "pynapli-local-dev-swipe-deck-token-secret"
             )
         }
     }

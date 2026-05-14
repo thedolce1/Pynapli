@@ -62,6 +62,7 @@ import com.pynapli.server.subscriptions.GooglePlayStorePurchaseVerifier
 import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.swipe.JdbcSwipeRepository
+import com.pynapli.server.swipe.SwipeDeckTokenCodec
 import com.pynapli.server.swipe.SwipeService
 import com.pynapli.server.verification.AgeVerificationService
 import com.pynapli.server.verification.JdbcAgeVerificationRepository
@@ -299,7 +300,8 @@ class ServerDependencies(
                 notificationPublisher = notificationService,
                 rateLimitService = rateLimitService,
                 riskPolicyService = riskPolicyService,
-                subscriptionService = subscriptionService
+                subscriptionService = subscriptionService,
+                deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret)
             )
             return ServerDependencies(
                 config = config,

@@ -54,7 +54,8 @@ private class FakeSwipeRepository(
         AppResult.Success(deck)
 
     override suspend fun submitAction(
-        targetUserId: String,
+        deckSessionId: String?,
+        card: SwipeCardDto,
         action: String,
         noteText: String?
     ): AppResult<MatchDto?> {

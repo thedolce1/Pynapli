@@ -25,7 +25,10 @@ import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
+import java.time.Clock
+import java.time.Duration
 import java.time.Instant
+import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -43,7 +46,7 @@ class SwipeServiceTest {
 
         val response = service.submitAction(
             viewer,
-            SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.LIKE)
+            swipeActionRequest(viewer, target, SwipeAction.LIKE)
         )
 
         assertTrue(response.recorded)
@@ -60,11 +63,11 @@ class SwipeServiceTest {
 
         service.submitAction(
             target,
-            SwipeActionRequestDto(targetUserId = viewer.toString(), action = SwipeAction.LIKE)
+            swipeActionRequest(target, viewer, SwipeAction.LIKE)
         )
         val response = service.submitAction(
             viewer,
-            SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.LIKE)
+            swipeActionRequest(viewer, target, SwipeAction.LIKE)
         )
 
         assertTrue(response.recorded)
@@ -83,11 +86,11 @@ class SwipeServiceTest {
 
         service.submitAction(
             target,
-            SwipeActionRequestDto(targetUserId = viewer.toString(), action = SwipeAction.LIKE)
+            swipeActionRequest(target, viewer, SwipeAction.LIKE)
         )
         val response = service.submitAction(
             viewer,
-            SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.PASS)
+            swipeActionRequest(viewer, target, SwipeAction.PASS)
         )
 
         assertTrue(response.recorded)
@@ -102,7 +105,7 @@ class SwipeServiceTest {
         val error = assertFailsWith<SwipeException> {
             service.submitAction(
                 viewer,
-                SwipeActionRequestDto(targetUserId = viewer.toString(), action = SwipeAction.LIKE)
+                swipeActionRequest(viewer, viewer, SwipeAction.LIKE)
             )
         }
 
@@ -118,7 +121,7 @@ class SwipeServiceTest {
         val error = assertFailsWith<SwipeException> {
             service.submitAction(
                 viewer,
-                SwipeActionRequestDto(targetUserId = target.toString(), action = "super_like")
+                swipeActionRequest(viewer, target, "super_like")
             )
         }
 
@@ -135,11 +138,74 @@ class SwipeServiceTest {
         val error = assertFailsWith<SwipeException> {
             service.submitAction(
                 viewer,
-                SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.LIKE)
+                swipeActionRequest(viewer, target, SwipeAction.LIKE)
             )
         }
 
         assertEquals("INVALID_SWIPE_TARGET", error.code)
+        assertEquals(emptyMap(), repository.actionsSnapshot())
+    }
+
+    @Test
+    fun actionWithoutDeckSessionIsRejectedBeforeRecording() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000245")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000246")
+        val repository = InMemorySwipeRepository()
+        val service = SwipeService(repository)
+
+        val error = assertFailsWith<SwipeException> {
+            service.submitAction(
+                viewer,
+                SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.LIKE)
+            )
+        }
+
+        assertEquals("INVALID_SWIPE_DECK_SESSION", error.code)
+        assertEquals(emptyMap(), repository.actionsSnapshot())
+    }
+
+    @Test
+    fun actionWithMismatchedCardTokenIsRejectedBeforeRecording() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000247")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000248")
+        val otherTarget = UUID.fromString("00000000-0000-0000-0000-000000000249")
+        val repository = InMemorySwipeRepository()
+        val service = SwipeService(repository)
+
+        val error = assertFailsWith<SwipeException> {
+            service.submitAction(
+                viewer,
+                swipeActionRequest(viewer, otherTarget, SwipeAction.LIKE).copy(
+                    targetUserId = target.toString()
+                )
+            )
+        }
+
+        assertEquals("INVALID_SWIPE_CARD_TOKEN", error.code)
+        assertEquals(emptyMap(), repository.actionsSnapshot())
+    }
+
+    @Test
+    fun expiredDeckSessionIsRejectedBeforeRecording() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000250")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000251")
+        val repository = InMemorySwipeRepository()
+        val issuedAt = Instant.parse("2026-04-28T18:00:00Z")
+        val codec = SwipeDeckTokenCodec()
+        val service = SwipeService(
+            repository = repository,
+            deckTokenCodec = codec,
+            clock = Clock.fixed(issuedAt.plus(Duration.ofMinutes(31)), ZoneOffset.UTC)
+        )
+
+        val error = assertFailsWith<SwipeException> {
+            service.submitAction(
+                viewer,
+                swipeActionRequest(viewer, target, SwipeAction.LIKE, issuedAt = issuedAt, deckTokenCodec = codec)
+            )
+        }
+
+        assertEquals("STALE_SWIPE_DECK_SESSION", error.code)
         assertEquals(emptyMap(), repository.actionsSnapshot())
     }
 
@@ -156,7 +222,7 @@ class SwipeServiceTest {
         val error = assertFailsWith<SwipeException> {
             service.submitAction(
                 viewer,
-                SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.LIKE)
+                swipeActionRequest(viewer, target, SwipeAction.LIKE)
             )
         }
 
@@ -177,7 +243,7 @@ class SwipeServiceTest {
         val error = assertFailsWith<SwipeException> {
             service.submitAction(
                 viewer,
-                SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.LIKE)
+                swipeActionRequest(viewer, target, SwipeAction.LIKE)
             )
         }
 
@@ -198,8 +264,9 @@ class SwipeServiceTest {
         val error = assertFailsWith<SwipeException> {
             service.submitAction(
                 viewer,
-                SwipeActionRequestDto(
-                    targetUserId = target.toString(),
+                swipeActionRequest(
+                    viewerUserId = viewer,
+                    targetUserId = target,
                     action = SwipeAction.INTRO_NOTE,
                     noteText = "Hi, your vibe caught my eye."
                 )
@@ -223,8 +290,9 @@ class SwipeServiceTest {
 
         val response = service.submitAction(
             viewer,
-            SwipeActionRequestDto(
-                targetUserId = target.toString(),
+            swipeActionRequest(
+                viewerUserId = viewer,
+                targetUserId = target,
                 action = SwipeAction.INTRO_NOTE,
                 noteText = "Hi, your vibe caught my eye."
             )
@@ -248,8 +316,9 @@ class SwipeServiceTest {
         val error = assertFailsWith<SwipeException> {
             service.submitAction(
                 viewer,
-                SwipeActionRequestDto(
-                    targetUserId = target.toString(),
+                swipeActionRequest(
+                    viewerUserId = viewer,
+                    targetUserId = target,
                     action = SwipeAction.INTRO_NOTE,
                     noteText = "Hi, your vibe caught my eye."
                 )
@@ -278,11 +347,11 @@ class SwipeServiceTest {
 
         service.submitAction(
             target,
-            SwipeActionRequestDto(targetUserId = viewer.toString(), action = SwipeAction.LIKE)
+            swipeActionRequest(target, viewer, SwipeAction.LIKE)
         )
         val response = service.submitAction(
             viewer,
-            SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.PINEAPPLE_LIKE)
+            swipeActionRequest(viewer, target, SwipeAction.PINEAPPLE_LIKE)
         )
 
         assertTrue(response.recorded)
@@ -309,7 +378,7 @@ class SwipeServiceTest {
         val error = assertFailsWith<SwipeException> {
             service.submitAction(
                 viewer,
-                SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.PINEAPPLE_LIKE)
+                swipeActionRequest(viewer, target, SwipeAction.PINEAPPLE_LIKE)
             )
         }
 
@@ -367,13 +436,13 @@ class SwipeServiceTest {
         val service = SwipeService(repository)
         service.submitAction(
             viewer,
-            SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.PASS)
+            swipeActionRequest(viewer, target, SwipeAction.PASS)
         )
 
         val error = assertFailsWith<SwipeException> {
             service.submitAction(
                 viewer,
-                SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.LIKE)
+                swipeActionRequest(viewer, target, SwipeAction.LIKE)
             )
         }
 
@@ -417,6 +486,43 @@ class SwipeServiceTest {
         assertEquals(target.toString(), deck.items.single().userId)
         assertEquals("800 m", deck.items.single().distanceLabel)
         assertEquals(800, deck.items.single().distanceMeters)
+    }
+
+    @Test
+    fun deckQueryTokensAuthorizeReturnedCardAction() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000260")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000261")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = target,
+                    displayName = "Maya",
+                    displayAge = 31,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 850.0
+                )
+            )
+        )
+        val service = SwipeService(repository)
+
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+        val card = deck.items.single()
+        val response = service.submitAction(
+            viewer,
+            SwipeActionRequestDto(
+                deckSessionId = deck.deckSessionId,
+                cardToken = card.rankToken,
+                targetUserId = target.toString(),
+                action = SwipeAction.LIKE
+            )
+        )
+
+        assertTrue(deck.deckSessionId.isNotBlank())
+        assertTrue(deck.generatedAt?.isNotBlank() == true)
+        assertTrue(card.rankToken.isNotBlank())
+        assertTrue(response.recorded)
+        assertEquals(SwipeAction.LIKE, repository.actionsSnapshot().getValue(viewer to target))
     }
 
     @Test
@@ -507,6 +613,42 @@ class SwipeServiceTest {
 
         assertEquals(emptyList(), response.matches)
     }
+}
+
+private fun swipeActionRequest(
+    viewerUserId: UUID,
+    targetUserId: UUID,
+    action: String,
+    noteText: String? = null,
+    issuedAt: Instant = Instant.now(),
+    deckTokenCodec: SwipeDeckTokenCodec = SwipeDeckTokenCodec()
+): SwipeActionRequestDto {
+    val scopeHash = SwipeDeckTokenCodec.deckScopeHash(
+        viewerUserId = viewerUserId,
+        radiusMeters = 100_000,
+        limit = 60,
+        filters = DiscoveryFilters()
+    )
+    val deckSession = deckTokenCodec.issueDeckSession(
+        viewerUserId = viewerUserId,
+        scopeHash = scopeHash,
+        now = issuedAt
+    )
+    return SwipeActionRequestDto(
+        deckSessionId = deckSession.deckSessionId,
+        cardToken = deckTokenCodec.issueCardToken(
+            deckSessionId = deckSession.deckSessionId,
+            viewerUserId = viewerUserId,
+            targetUserId = targetUserId,
+            scopeHash = scopeHash,
+            generatedAt = deckSession.generatedAt,
+            expiresAt = deckSession.expiresAt,
+            position = 0
+        ),
+        targetUserId = targetUserId.toString(),
+        action = action,
+        noteText = noteText
+    )
 }
 
 private class InMemorySwipeRepository(

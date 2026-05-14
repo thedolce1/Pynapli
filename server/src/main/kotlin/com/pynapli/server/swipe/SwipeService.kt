@@ -23,6 +23,7 @@ import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckResponseDto
 import com.pynapli.shared.network.dto.SubscriptionTier
+import java.time.Clock
 import java.util.UUID
 
 class SwipeService(
@@ -32,7 +33,9 @@ class SwipeService(
     private val notificationPublisher: NotificationPublisher? = null,
     private val rateLimitService: RateLimitService? = null,
     private val riskPolicyService: RiskPolicyService? = null,
-    private val subscriptionService: SubscriptionService? = null
+    private val subscriptionService: SubscriptionService? = null,
+    private val deckTokenCodec: SwipeDeckTokenCodec = SwipeDeckTokenCodec(),
+    private val clock: Clock = Clock.systemUTC()
 ) {
     suspend fun queryDeck(viewerUserId: UUID, request: SwipeDeckRequestDto): SwipeDeckResponseDto {
         val radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
@@ -57,9 +60,30 @@ class SwipeService(
         } else {
             result.cards.filterNot { it.userId in blockedRelatedIds }
         }
+        val now = clock.instant()
+        val scopeHash = SwipeDeckTokenCodec.deckScopeHash(
+            viewerUserId = viewerUserId,
+            radiusMeters = radiusMeters,
+            limit = limit,
+            filters = filters
+        )
+        val deckSession = deckTokenCodec.issueDeckSession(
+            viewerUserId = viewerUserId,
+            scopeHash = scopeHash,
+            now = now
+        )
 
         return SwipeDeckResponseDto(
-            items = visible.map { it.toDto() },
+            deckSessionId = deckSession.deckSessionId,
+            generatedAt = deckSession.generatedAt.toString(),
+            items = visible.mapIndexed { index, card ->
+                card.toDto(
+                    viewerUserId = viewerUserId,
+                    deckSession = deckSession,
+                    scopeHash = scopeHash,
+                    position = index
+                )
+            },
             nextCursor = null,
             adSupported = policy.adSupported,
             advancedFiltersApplied = filters.hasAdvancedFilters
@@ -78,6 +102,21 @@ class SwipeService(
             if (noteText.length > INTRO_NOTE_MAX_LENGTH) throw SwipeException("INTRO_NOTE_TOO_LONG")
         } else if (!noteText.isNullOrEmpty()) {
             throw SwipeException("INVALID_SWIPE_ACTION")
+        }
+        val deckSessionId = request.deckSessionId.trim()
+        if (deckSessionId.isEmpty()) throw SwipeException(SwipeDeckTokenCodec.INVALID_DECK_SESSION)
+        val cardToken = request.cardToken.trim()
+        if (cardToken.isEmpty()) throw SwipeException(SwipeDeckTokenCodec.INVALID_CARD_TOKEN)
+        try {
+            deckTokenCodec.validateAction(
+                deckSessionId = deckSessionId,
+                cardToken = cardToken,
+                viewerUserId = viewerUserId,
+                targetUserId = targetUserId,
+                now = clock.instant()
+            )
+        } catch (error: SwipeDeckTokenException) {
+            throw SwipeException(error.code)
         }
         if (riskPolicyService?.isSocialActionRestricted(viewerUserId) == true) {
             throw SwipeException("RISK_RESTRICTED")
@@ -185,7 +224,12 @@ class SwipeService(
         )
     }
 
-    private fun SwipeCardRecord.toDto(): SwipeCardDto = SwipeCardDto(
+    private fun SwipeCardRecord.toDto(
+        viewerUserId: UUID,
+        deckSession: IssuedSwipeDeckSession,
+        scopeHash: String,
+        position: Int
+    ): SwipeCardDto = SwipeCardDto(
         userId = userId.toString(),
         displayName = displayName,
         displayAge = displayAge,
@@ -200,7 +244,15 @@ class SwipeService(
                     ?.let { mediaAssetUrlResolver?.publicContentUrl(it) }
             )
         },
-        rankToken = "swipe:v1:$userId"
+        rankToken = deckTokenCodec.issueCardToken(
+            deckSessionId = deckSession.deckSessionId,
+            viewerUserId = viewerUserId,
+            targetUserId = userId,
+            scopeHash = scopeHash,
+            generatedAt = deckSession.generatedAt,
+            expiresAt = deckSession.expiresAt,
+            position = position
+        )
     )
 
     private fun String.toUuidOrThrow(): UUID =

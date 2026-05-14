@@ -673,7 +673,7 @@ Network:
 ## Implementation Checklist
 
 - [x] Swipe card DTO exists.
-- [ ] Partial: deck query endpoint exists; true persisted deck sessions and hardened rank-token validation are not complete.
+- [ ] Partial: deck query endpoint returns signed deck sessions/card tokens and action endpoint validates them; persisted deck state for rewind/offline replay is not complete.
 - [x] Like/pass/Pineapple Like/Intro Note action endpoint exists.
 - [x] Match creation is server-authoritative.
 - [ ] Rewind is server-aware.
