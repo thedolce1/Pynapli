@@ -211,7 +211,7 @@ Latest warm profiled follow-up after migration `V43__add_grid_query_covering_ind
 
 Decision after the index pass and first 500-concurrent proofs: do not add Redis candidate caching yet just because it is in the architecture plan. The current 500-concurrent API path is stable with zero HTTP errors, but warm-run p95 variance means the next step should be repeat 500-concurrent runs with server profiling enabled. Revisit Redis/H3-style candidate caching if repeated 500-concurrent profiled runs show candidate SQL/page-two scans cannot reliably meet budget, or when larger dense metro datasets increase p95.
 
-Connected Android rendering QA now exists through `scripts/android-grid-qa.ps1` and structural golden assertions in `scripts/android-grid-qa-goldens.json`. It verifies Grid load, filter sheet, Online empty state, profile open, filter-clear stability, profile-return stability, screenshot signatures, and visible card order/position. Android location policy QA now exists through `scripts/android-location-policy-check.ps1`; it rejects background location, foreground location services, continuous location updates, and missing one-shot cancellation on app stop. Real-device battery/location profiling remains open.
+Connected Android rendering QA now exists through `scripts/android-grid-qa.ps1` and structural golden assertions in `scripts/android-grid-qa-goldens.json`. It verifies Grid load, filter sheet, Online empty state, profile open, filter-clear stability, profile-return stability, screenshot signatures, and visible card order/position. Denied-location QA now exists through `scripts/android-grid-denied-location-qa.ps1`; it removes the dev viewer's server location, exercises Android permission denial, verifies the denied state, and restores dev data. Android location policy QA now exists through `scripts/android-location-policy-check.ps1`; it rejects background location, foreground location services, continuous location updates, and missing one-shot cancellation on app stop. Battery/location profile artifact capture now exists through `scripts/android-grid-battery-profile.ps1`, but real-device profiling remains open until a physical Android device is connected and reviewed.
 
 Expected behavior:
 
@@ -287,6 +287,7 @@ Rules:
 - Use while-in-use location only unless a future feature justifies more.
 - Location updates use movement/time thresholds.
 - Android one-shot location requests are canceled when the app stops.
+- Denied location shows a clear recovery path and does not leak Grid cards.
 - Presence heartbeats are throttled.
 - WebSocket reconnect uses backoff.
 - Push handles inactive users instead of constant polling.
@@ -299,6 +300,11 @@ Battery test scenarios:
 - 30 minutes chat/media use.
 - App backgrounded for 2 hours.
 - Poor network reconnect loop.
+
+Current tooling:
+
+- `scripts/android-grid-denied-location-qa.ps1` proves denied-location UI behavior on a connected emulator/device and restores dev data after the run.
+- `scripts/android-grid-battery-profile.ps1 -ForegroundMinutes 30 -BackgroundSeconds 7200` is the physical-device battery/location profile path. `-AllowEmulator` is only for harness smoke testing and must not be counted as real battery evidence.
 
 ## Backend Performance Requirements
 
@@ -442,7 +448,7 @@ Location rules:
 - Database migration tests.
 - Contract tests for API DTOs.
 - Mobile ViewModel/state tests.
-- Compose screenshot/regression tests for core components. Current Grid coverage includes a shared-UI visual-signature pixel test in `GridScreenVisualRegressionTest`, connected Android screenshot/golden assertions in `scripts/android-grid-qa.ps1`, and Android location policy checks in `scripts/android-location-policy-check.ps1`.
+- Compose screenshot/regression tests for core components. Current Grid coverage includes a shared-UI visual-signature pixel test in `GridScreenVisualRegressionTest`, connected Android screenshot/golden assertions in `scripts/android-grid-qa.ps1`, denied-location screenshots/assertions in `scripts/android-grid-denied-location-qa.ps1`, Android location policy checks in `scripts/android-location-policy-check.ps1`, and physical-device battery/profile capture in `scripts/android-grid-battery-profile.ps1`.
 - E2E tests for critical journeys.
 - Load tests for grid, swipe, messages, activity, and auth.
 - Abuse tests for spam, scraping, and rate limits.

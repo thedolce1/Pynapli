@@ -45,13 +45,15 @@ Current Grid coverage:
 - This is a fast shared-UI guardrail that runs in `:composeApp:desktopTest`, so it is included in `scripts/verify.ps1`.
 - `scripts/android-grid-qa.ps1` runs the installed Android debug app against local Ktor on a connected emulator/device. It seeds dev data, optionally builds/installs the APK, logs in through dev login, captures screenshots, verifies the Grid loads, opens the filter sheet, toggles the Online quick filter, opens a profile, and asserts closing the profile returns to the same visible Grid card sequence.
 - `scripts/android-grid-qa-goldens.json` defines connected Android structural golden assertions: required/forbidden UI text, minimum visible Grid-card counts, and screenshot visual signatures for Grid, filter sheet, empty filtered state, profile detail, and return-to-grid.
+- `scripts/android-grid-denied-location-qa.ps1` runs the installed Android app with the dev viewer's server-side location removed, exercises the Android location permission denial prompt, verifies the no-location and denied-permission UI states, confirms no Grid cards leak into the denied state, captures screenshots/XML, and restores the dev location afterward.
 - `scripts/android-location-policy-check.ps1` verifies the Android Grid location path stays while-in-use only: no background location permission, no foreground location service, no continuous `requestLocationUpdates`, one-shot `getCurrentLocation`, and cancellation on `MainActivity.onStop`.
+- `scripts/android-grid-battery-profile.ps1` captures a repeatable foreground/background Grid battery-location profile bundle through `adb`. It refuses emulator evidence unless `-AllowEmulator` is passed, so real-device evidence stays distinct from harness smoke testing.
 
 Still open before beta:
 
 - Exact-image golden comparisons are still optional future work; current connected Android golden coverage uses structural UI and screenshot-signature checks to avoid status-bar/time false positives.
 - Manual device pass on mid-range and low-end Android hardware.
-- Visual checks with denied location state, empty Grid outside the Online-filter empty state, and more real-device thumbnail loading still need coverage.
+- Visual checks with empty Grid outside the Online-filter empty state and more real-device thumbnail loading still need coverage.
 - Real battery profiling with movement/background/foreground scenarios still needs a device pass.
 
 ## Performance Benchmarks
@@ -140,6 +142,22 @@ Requirements:
 
 The script writes PNG screenshots, UI hierarchy XML, screenshot signatures, visible card sequence, and `qa-summary.json` under `artifacts/android-grid-qa/<timestamp>`. A passing run proves the installed app can complete the current critical Grid loop and preserve visible card order/position through filter clear and profile close, but it is not a replacement for real-device battery/location testing.
 
+## Connected Android Denied-Location QA
+
+Run this before beta and after any Grid/location permission changes:
+
+```powershell
+.\scripts\android-grid-denied-location-qa.ps1
+```
+
+Useful faster rerun after the APK is already built:
+
+```powershell
+.\scripts\android-grid-denied-location-qa.ps1 -SkipBuild
+```
+
+The script seeds dev data, removes only the dev viewer's `user_locations` row, installs/launches the app, dev-logs in, denies notification if prompted, verifies the `LOCATION_REQUIRED` empty state, taps the exact `Use current location` button, denies Android location permission, verifies the app shows `Location permission is required to load nearby profiles.`, confirms Grid card text is absent, writes screenshots/XML/permission dumps under `artifacts/android-grid-denied-location-qa/<timestamp>`, and restores the dev location at cleanup.
+
 ## Android Location Policy QA
 
 Run this after Android location or lifecycle changes:
@@ -149,6 +167,21 @@ Run this after Android location or lifecycle changes:
 ```
 
 The script is also part of `scripts/verify.ps1` without `-RunUnitTests`. It protects the Grid battery policy by rejecting background location permission, foreground location service declarations, continuous location updates, or missing one-shot cancellation on app stop. The optional unit-test flag also runs `LocationStateHolderTest`, which covers the 250m no-submit threshold, 250m-1km quiet refresh, and 1km+ normal refresh.
+
+## Android Battery/Location Profile QA
+
+Run this on a physical Android device before beta:
+
+```powershell
+.\scripts\android-grid-battery-profile.ps1 -ForegroundMinutes 30 -BackgroundSeconds 7200
+```
+
+Use `-DeviceId` when more than one Android device is attached. The script intentionally rejects emulators unless `-AllowEmulator` is provided, because emulator results are only harness smoke evidence. It captures battery dumps, batterystats, location dumps, activity service state, Grid screenshots, foreground observation, background observation, and a `battery-profile-summary.json` under `artifacts/android-grid-battery-profile/<timestamp>`.
+
+Current local proof:
+
+- `scripts/android-grid-denied-location-qa.ps1 -SkipBuild` passed on emulator on 2026-05-14 with artifacts under `artifacts/android-grid-denied-location-qa/20260514-091231`.
+- `scripts/android-grid-battery-profile.ps1 -AllowEmulator -SkipBuild -ForegroundMinutes 0 -BackgroundSeconds 5` completed on 2026-05-14 with artifacts under `artifacts/android-grid-battery-profile/20260514-091341`. This proves the harness, not real battery behavior.
 
 ## Security/Abuse Tests
 
@@ -170,10 +203,11 @@ The script is also part of `scripts/verify.ps1` without `-RunUnitTests`. It prot
 - [ ] Partial: Performance benchmarks are under current local 100-concurrent Grid budgets; 500-concurrent proof exists with zero errors, but warm-run p95 variance still needs repeat profiling.
 - [x] Grid API load harness exists and runs zero-error locally for the current 5,000-candidate / 100-concurrent warm workload.
 - [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, entitlement/rate-limit/profile-view side-query pressure has been reduced, V43 covering indexes are in place, and 500-concurrent proof artifacts exist; remaining hot-path work is repeat server-profiled 500-concurrent runs and larger dense metro datasets.
-- [ ] Partial: Grid shared-UI visual-signature regression, connected Android Grid structural golden QA, and Android location policy checks exist and run locally; real-device screenshot and battery coverage is still open.
+- [ ] Partial: Grid shared-UI visual-signature regression, connected Android Grid structural golden QA, denied-location QA, battery-profile harness, and Android location policy checks exist and run locally; real-device screenshot and battery coverage is still open.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
-- [ ] Location denied path tested.
+- [x] Location denied path tested on connected Android emulator/device through `scripts/android-grid-denied-location-qa.ps1`.
+- [ ] Real-device Grid battery/location profile completed and reviewed.
 - [ ] Partial: notification denied logic has unit coverage; manual device QA is not complete.
 - [ ] Low-network path tested.
 
