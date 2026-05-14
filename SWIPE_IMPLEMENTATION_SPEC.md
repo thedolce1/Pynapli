@@ -673,9 +673,10 @@ Network:
 ## Implementation Checklist
 
 - [x] Swipe card DTO exists.
-- [ ] Partial: deck query endpoint returns signed deck sessions/card tokens and action endpoint validates them; persisted deck state for rewind/offline replay is not complete.
+- [x] Deck query endpoint returns signed persisted deck sessions/card tokens and action endpoint validates dealt-card state.
 - [x] Like/pass/Pineapple Like/Intro Note action endpoint exists.
 - [x] Match creation is server-authoritative.
+- [x] Cursor pagination continues a persisted deck session without duplicate returned cards.
 - [ ] Rewind is server-aware.
 - [x] Intro Note inventory and delivery rules exist.
 - [x] Likes You is represented in Activity.

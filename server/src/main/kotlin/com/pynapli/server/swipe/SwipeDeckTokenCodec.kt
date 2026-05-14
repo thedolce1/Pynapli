@@ -28,12 +28,14 @@ class SwipeDeckTokenCodec(
         scopeHash: String,
         now: Instant,
         ttl: Duration = DEFAULT_SESSION_TTL,
+        sessionId: UUID = UUID.randomUUID(),
         nonce: UUID = UUID.randomUUID()
     ): IssuedSwipeDeckSession {
         val expiresAt = now.plus(ttl)
         val deckSessionId = encode(
             SwipeDeckTokenPayload(
                 kind = KIND_DECK_SESSION,
+                sessionId = sessionId.toString(),
                 viewerUserId = viewerUserId.toString(),
                 scopeHash = scopeHash,
                 generatedAtEpochSeconds = now.epochSecond,
@@ -43,7 +45,9 @@ class SwipeDeckTokenCodec(
             invalidCode = INVALID_DECK_SESSION
         )
         return IssuedSwipeDeckSession(
+            sessionId = sessionId,
             deckSessionId = deckSessionId,
+            deckSessionTokenHash = tokenHash(deckSessionId),
             generatedAt = now,
             expiresAt = expiresAt
         )
@@ -61,6 +65,7 @@ class SwipeDeckTokenCodec(
         encode(
             SwipeDeckTokenPayload(
                 kind = KIND_CARD,
+                sessionId = null,
                 viewerUserId = viewerUserId.toString(),
                 targetUserId = targetUserId.toString(),
                 scopeHash = scopeHash,
@@ -78,8 +83,9 @@ class SwipeDeckTokenCodec(
         viewerUserId: UUID,
         targetUserId: UUID,
         now: Instant
-    ) {
+    ): ValidatedSwipeActionTokens {
         val session = decode(deckSessionId, invalidCode = INVALID_DECK_SESSION)
+        val sessionId = session.sessionId.toUuidOrThrow(INVALID_DECK_SESSION)
         if (
             session.version != VERSION ||
             session.kind != KIND_DECK_SESSION ||
@@ -106,7 +112,60 @@ class SwipeDeckTokenCodec(
         if (now.epochSecond >= card.expiresAtEpochSeconds) {
             throw SwipeDeckTokenException(STALE_DECK_SESSION)
         }
+        return ValidatedSwipeActionTokens(
+            sessionId = sessionId,
+            deckSessionTokenHash = tokenHash(deckSessionId),
+            cardTokenHash = tokenHash(cardToken),
+            scopeHash = session.scopeHash
+        )
     }
+
+    fun issueCursor(
+        deckSession: IssuedSwipeDeckSession,
+        viewerUserId: UUID,
+        scopeHash: String,
+        nextPosition: Int
+    ): String =
+        encode(
+            SwipeDeckTokenPayload(
+                kind = KIND_CURSOR,
+                sessionId = deckSession.sessionId.toString(),
+                viewerUserId = viewerUserId.toString(),
+                scopeHash = scopeHash,
+                deckSessionHash = deckSession.deckSessionTokenHash,
+                generatedAtEpochSeconds = deckSession.generatedAt.epochSecond,
+                expiresAtEpochSeconds = deckSession.expiresAt.epochSecond,
+                position = nextPosition
+            ),
+            invalidCode = INVALID_CURSOR
+        )
+
+    fun decodeCursor(cursor: String, viewerUserId: UUID, now: Instant): DecodedSwipeDeckCursor {
+        val payload = decode(cursor, invalidCode = INVALID_CURSOR)
+        val sessionId = payload.sessionId.toUuidOrThrow(INVALID_CURSOR)
+        val nextPosition = payload.position ?: throw SwipeDeckTokenException(INVALID_CURSOR)
+        if (
+            payload.version != VERSION ||
+            payload.kind != KIND_CURSOR ||
+            payload.viewerUserId != viewerUserId.toString() ||
+            payload.scopeHash.isBlank() ||
+            payload.deckSessionHash.isNullOrBlank() ||
+            nextPosition < 0
+        ) {
+            throw SwipeDeckTokenException(INVALID_CURSOR)
+        }
+        if (now.epochSecond >= payload.expiresAtEpochSeconds) {
+            throw SwipeDeckTokenException(STALE_DECK_SESSION)
+        }
+        return DecodedSwipeDeckCursor(
+            sessionId = sessionId,
+            deckSessionTokenHash = payload.deckSessionHash,
+            scopeHash = payload.scopeHash,
+            nextPosition = nextPosition
+        )
+    }
+
+    fun tokenHash(token: String): String = sha256Base64Url(token)
 
     private fun encode(payload: SwipeDeckTokenPayload, invalidCode: String): String {
         val payloadJson = runCatching {
@@ -150,11 +209,13 @@ class SwipeDeckTokenCodec(
         const val INVALID_DECK_SESSION = "INVALID_SWIPE_DECK_SESSION"
         const val STALE_DECK_SESSION = "STALE_SWIPE_DECK_SESSION"
         const val INVALID_CARD_TOKEN = "INVALID_SWIPE_CARD_TOKEN"
+        const val INVALID_CURSOR = "INVALID_SWIPE_CURSOR"
 
         private const val VERSION = 1
         private const val TOKEN_VERSION = "v1"
         private const val KIND_DECK_SESSION = "deck_session"
         private const val KIND_CARD = "card"
+        private const val KIND_CURSOR = "cursor"
         private val DEFAULT_SESSION_TTL: Duration = Duration.ofMinutes(30)
 
         fun deckScopeHash(
@@ -203,9 +264,25 @@ class SwipeDeckTokenCodec(
 }
 
 data class IssuedSwipeDeckSession(
+    val sessionId: UUID,
     val deckSessionId: String,
+    val deckSessionTokenHash: String,
     val generatedAt: Instant,
     val expiresAt: Instant
+)
+
+data class ValidatedSwipeActionTokens(
+    val sessionId: UUID,
+    val deckSessionTokenHash: String,
+    val cardTokenHash: String,
+    val scopeHash: String
+)
+
+data class DecodedSwipeDeckCursor(
+    val sessionId: UUID,
+    val deckSessionTokenHash: String,
+    val scopeHash: String,
+    val nextPosition: Int
 )
 
 class SwipeDeckTokenException(val code: String) : RuntimeException(code)
@@ -214,6 +291,7 @@ class SwipeDeckTokenException(val code: String) : RuntimeException(code)
 private data class SwipeDeckTokenPayload(
     val version: Int = 1,
     val kind: String,
+    val sessionId: String? = null,
     val viewerUserId: String,
     val scopeHash: String,
     val targetUserId: String? = null,
@@ -223,3 +301,7 @@ private data class SwipeDeckTokenPayload(
     val nonce: String? = null,
     val position: Int? = null
 )
+
+private fun String?.toUuidOrThrow(code: String): UUID =
+    runCatching { UUID.fromString(this ?: throw SwipeDeckTokenException(code)) }
+        .getOrElse { throw SwipeDeckTokenException(code) }

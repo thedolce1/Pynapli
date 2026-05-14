@@ -9,8 +9,31 @@ interface SwipeRepository {
         viewerUserId: UUID,
         radiusMeters: Int,
         limit: Int,
-        filters: DiscoveryFilters = DiscoveryFilters()
+        filters: DiscoveryFilters = DiscoveryFilters(),
+        excludedTargetUserIds: Set<UUID> = emptySet()
     ): SwipeDeckResult
+
+    suspend fun upsertDeckSession(session: SwipeDeckSessionRecord, cards: List<SwipeDeckSessionCardRecord>)
+
+    suspend fun findDeckSession(sessionId: UUID, viewerUserId: UUID): SwipeDeckSessionRecord?
+
+    suspend fun listDeckSessionTargetIds(sessionId: UUID): Set<UUID>
+
+    suspend fun isDeckCardActionable(
+        sessionId: UUID,
+        cardTokenHash: String,
+        viewerUserId: UUID,
+        targetUserId: UUID,
+        now: Instant
+    ): Boolean
+
+    suspend fun markDeckCardActionRecorded(
+        sessionId: UUID,
+        cardTokenHash: String,
+        targetUserId: UUID,
+        action: String,
+        now: Instant
+    )
 
     suspend fun isActionTargetEligible(
         viewerUserId: UUID,
@@ -39,6 +62,29 @@ interface SwipeRepository {
 data class SwipeDeckResult(
     val viewerHadLocation: Boolean,
     val cards: List<SwipeCardRecord>
+)
+
+data class SwipeDeckSessionRecord(
+    val sessionId: UUID,
+    val deckSessionToken: String,
+    val deckSessionTokenHash: String,
+    val viewerUserId: UUID,
+    val scopeHash: String,
+    val radiusMeters: Int,
+    val pageLimit: Int,
+    val filterPayload: String,
+    val generatedAt: Instant,
+    val expiresAt: Instant
+)
+
+data class SwipeDeckSessionCardRecord(
+    val cardId: UUID,
+    val sessionId: UUID,
+    val viewerUserId: UUID,
+    val targetUserId: UUID,
+    val cardTokenHash: String,
+    val position: Int,
+    val dealtAt: Instant
 )
 
 data class SwipeCardRecord(

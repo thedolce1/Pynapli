@@ -2,7 +2,12 @@ package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.swipe.JdbcSwipeRepository
+import com.pynapli.server.swipe.SwipeException
+import com.pynapli.server.swipe.SwipeService
 import com.pynapli.server.swipe.canonicalPair
+import com.pynapli.shared.network.dto.SwipeAction
+import com.pynapli.shared.network.dto.SwipeActionRequestDto
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.kotest.core.spec.style.StringSpec
@@ -17,6 +22,7 @@ import org.testcontainers.utility.DockerImageName
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -136,6 +142,53 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
             val matches = JdbcSwipeRepository(dataSource).listMatches(viewer, limit = 10)
 
             assertEquals(listOf(visibleMatch), matches.map { it.matchedUserId })
+        }
+    }
+
+    "swipe service persists deck pages and actioned card state" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000925")
+            val firstTarget = UUID.fromString("00000000-0000-0000-0000-000000000926")
+            val secondTarget = UUID.fromString("00000000-0000-0000-0000-000000000927")
+            val thirdTarget = UUID.fromString("00000000-0000-0000-0000-000000000928")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(firstTarget, "First", age = 35, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(secondTarget, "Second", age = 36, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(thirdTarget, "Third", age = 37, longitude = -122.0840, latitude = 37.4230)
+            val service = SwipeService(JdbcSwipeRepository(dataSource))
+
+            val firstPage = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 2))
+            val secondPage = service.queryDeck(
+                viewer,
+                SwipeDeckRequestDto(limit = 2, cursor = assertNotNull(firstPage.nextCursor))
+            )
+            val actionedCard = firstPage.items.first()
+            val response = service.submitAction(
+                viewer,
+                SwipeActionRequestDto(
+                    deckSessionId = firstPage.deckSessionId,
+                    cardToken = actionedCard.rankToken,
+                    targetUserId = actionedCard.userId,
+                    action = SwipeAction.LIKE
+                )
+            )
+            val repeated = assertFailsWith<SwipeException> {
+                service.submitAction(
+                    viewer,
+                    SwipeActionRequestDto(
+                        deckSessionId = firstPage.deckSessionId,
+                        cardToken = actionedCard.rankToken,
+                        targetUserId = actionedCard.userId,
+                        action = SwipeAction.LIKE
+                    )
+                )
+            }
+
+            assertEquals(listOf(firstTarget, secondTarget).map { it.toString() }, firstPage.items.map { it.userId })
+            assertEquals(listOf(thirdTarget.toString()), secondPage.items.map { it.userId })
+            assertEquals(firstPage.deckSessionId, secondPage.deckSessionId)
+            assertTrue(response.recorded)
+            assertEquals("INVALID_SWIPE_CARD_TOKEN", repeated.code)
         }
     }
 

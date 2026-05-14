@@ -13,6 +13,7 @@ object SwipeAction {
 data class SwipeDeckRequestDto(
     val radiusMeters: Int = 25_000,
     val limit: Int = 30,
+    val cursor: String? = null,
     val minimumAge: Int? = null,
     val maximumAge: Int? = null,
     val relationshipContexts: List<String> = emptyList(),

@@ -236,6 +236,17 @@ GET  /v1/swipe/likes-you
 GET  /v1/swipe/picks
 ```
 
+Deck query:
+
+```kotlin
+@Serializable
+data class SwipeDeckRequest(
+    val radiusMeters: Int = 25_000,
+    val limit: Int = 30,
+    val cursor: String? = null
+)
+```
+
 Action:
 
 ```kotlin

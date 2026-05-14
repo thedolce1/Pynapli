@@ -526,6 +526,38 @@ class SwipeServiceTest {
     }
 
     @Test
+    fun deckQueryCursorContinuesPersistedSessionWithoutDuplicateCards() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000265")
+        val targets = listOf(
+            UUID.fromString("00000000-0000-0000-0000-000000000266"),
+            UUID.fromString("00000000-0000-0000-0000-000000000267"),
+            UUID.fromString("00000000-0000-0000-0000-000000000268")
+        )
+        val repository = InMemorySwipeRepository(
+            seededCards = targets.mapIndexed { index, target ->
+                SwipeCardRecord(
+                    userId = target,
+                    displayName = "Card ${index + 1}",
+                    displayAge = 31,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 800.0 + index
+                )
+            }
+        )
+        val service = SwipeService(repository)
+
+        val firstPage = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 2))
+        val secondPage = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 2, cursor = firstPage.nextCursor))
+
+        assertEquals(targets.take(2).map { it.toString() }, firstPage.items.map { it.userId })
+        assertNotNull(firstPage.nextCursor)
+        assertEquals(listOf(targets.last().toString()), secondPage.items.map { it.userId })
+        assertNull(secondPage.nextCursor)
+        assertEquals(firstPage.deckSessionId, secondPage.deckSessionId)
+    }
+
+    @Test
     fun deckQueryIncludesLinkedPartnerMiniWhenProjected() = runBlocking {
         val viewer = UUID.fromString("00000000-0000-0000-0000-000000000062")
         val target = UUID.fromString("00000000-0000-0000-0000-000000000063")
@@ -665,10 +697,66 @@ private class InMemorySwipeRepository(
         viewerUserId: UUID,
         radiusMeters: Int,
         limit: Int,
-        filters: DiscoveryFilters
+        filters: DiscoveryFilters,
+        excludedTargetUserIds: Set<UUID>
     ): SwipeDeckResult {
         if (!viewerHasLocation) return SwipeDeckResult(viewerHadLocation = false, cards = emptyList())
-        return SwipeDeckResult(viewerHadLocation = true, cards = seededCards.take(limit))
+        return SwipeDeckResult(
+            viewerHadLocation = true,
+            cards = seededCards.filterNot { it.userId in excludedTargetUserIds }.take(limit)
+        )
+    }
+
+    private val deckSessions = mutableMapOf<UUID, SwipeDeckSessionRecord>()
+    private val deckCards = mutableListOf<SwipeDeckSessionCardRecord>()
+    private val actionedDeckCards = mutableSetOf<Pair<UUID, String>>()
+
+    override suspend fun upsertDeckSession(
+        session: SwipeDeckSessionRecord,
+        cards: List<SwipeDeckSessionCardRecord>
+    ) {
+        deckSessions[session.sessionId] = session
+        for (card in cards) {
+            if (deckCards.none { it.sessionId == card.sessionId && it.targetUserId == card.targetUserId }) {
+                deckCards += card
+            }
+        }
+    }
+
+    override suspend fun findDeckSession(sessionId: UUID, viewerUserId: UUID): SwipeDeckSessionRecord? =
+        deckSessions[sessionId]?.takeIf { it.viewerUserId == viewerUserId }
+
+    override suspend fun listDeckSessionTargetIds(sessionId: UUID): Set<UUID> =
+        deckCards.filter { it.sessionId == sessionId }.mapTo(mutableSetOf()) { it.targetUserId }
+
+    override suspend fun isDeckCardActionable(
+        sessionId: UUID,
+        cardTokenHash: String,
+        viewerUserId: UUID,
+        targetUserId: UUID,
+        now: Instant
+    ): Boolean {
+        if (deckSessions.isEmpty()) return true
+        val session = deckSessions[sessionId] ?: return false
+        return session.viewerUserId == viewerUserId &&
+            session.expiresAt.isAfter(now) &&
+            sessionId to cardTokenHash !in actionedDeckCards &&
+            deckCards.any {
+                it.sessionId == sessionId &&
+                    it.viewerUserId == viewerUserId &&
+                    it.targetUserId == targetUserId &&
+                    it.cardTokenHash == cardTokenHash
+            }
+    }
+
+    override suspend fun markDeckCardActionRecorded(
+        sessionId: UUID,
+        cardTokenHash: String,
+        targetUserId: UUID,
+        action: String,
+        now: Instant
+    ) {
+        actionedDeckCards += sessionId to cardTokenHash
     }
 
     override suspend fun isActionTargetEligible(

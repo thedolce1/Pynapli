@@ -304,6 +304,7 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_SWIPE_DECK_SESSION",
     "STALE_SWIPE_DECK_SESSION" -> "Refresh your swipe deck and try again."
     "INVALID_SWIPE_CARD_TOKEN" -> "That swipe card is no longer valid."
+    "INVALID_SWIPE_CURSOR" -> "Swipe deck position is no longer valid."
     "INTRO_NOTE_EMPTY" -> "Enter an Intro Note."
     "INTRO_NOTE_TOO_LONG" -> "Intro Note is too long."
     "INTRO_NOTE_INVENTORY_REQUIRED" -> "You do not have an Intro Note available."
@@ -449,6 +450,7 @@ private fun swipeStatusFor(code: String): HttpStatusCode = when (code) {
     "INVALID_SWIPE_DECK_SESSION",
     "STALE_SWIPE_DECK_SESSION",
     "INVALID_SWIPE_CARD_TOKEN",
+    "INVALID_SWIPE_CURSOR",
     "INTRO_NOTE_EMPTY",
     "INTRO_NOTE_TOO_LONG" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest

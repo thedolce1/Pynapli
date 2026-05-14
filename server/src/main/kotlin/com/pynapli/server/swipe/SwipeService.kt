@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.discoveryFiltersFrom
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
@@ -24,6 +25,7 @@ import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckResponseDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import java.time.Clock
+import java.time.Instant
 import java.util.UUID
 
 class SwipeService(
@@ -50,8 +52,56 @@ class SwipeService(
         if (filters.hasAdvancedFilters && !policy.advancedFiltersAllowed) {
             throw SwipeException("ENTITLEMENT_REQUIRED")
         }
+        val now = clock.instant()
+        val scopeHash = SwipeDeckTokenCodec.deckScopeHash(
+            viewerUserId = viewerUserId,
+            radiusMeters = radiusMeters,
+            limit = limit,
+            filters = filters
+        )
+        val cursor = request.cursor?.trim()?.takeIf { it.isNotEmpty() }?.let { token ->
+            try {
+                deckTokenCodec.decodeCursor(token, viewerUserId, now)
+            } catch (error: SwipeDeckTokenException) {
+                throw SwipeException(error.code)
+            }
+        }
+        if (cursor != null && cursor.scopeHash != scopeHash) {
+            throw SwipeException(SwipeDeckTokenCodec.INVALID_CURSOR)
+        }
+        val existingSession = cursor?.let { decoded ->
+            val stored = repository.findDeckSession(decoded.sessionId, viewerUserId)
+                ?: throw SwipeException(SwipeDeckTokenCodec.INVALID_CURSOR)
+            if (
+                stored.deckSessionTokenHash != decoded.deckSessionTokenHash ||
+                stored.scopeHash != decoded.scopeHash ||
+                !stored.expiresAt.isAfter(now)
+            ) {
+                throw SwipeException(
+                    if (!stored.expiresAt.isAfter(now)) {
+                        SwipeDeckTokenCodec.STALE_DECK_SESSION
+                    } else {
+                        SwipeDeckTokenCodec.INVALID_CURSOR
+                    }
+                )
+            }
+            stored
+        }
+        val deckSession = existingSession?.toIssuedDeckSession() ?: deckTokenCodec.issueDeckSession(
+            viewerUserId = viewerUserId,
+            scopeHash = scopeHash,
+            now = now
+        )
+        val excludedTargetUserIds = existingSession?.let { repository.listDeckSessionTargetIds(it.sessionId) }.orEmpty()
+        val startPosition = cursor?.nextPosition ?: 0
 
-        val result = repository.queryDeck(viewerUserId, radiusMeters, limit, filters)
+        val result = repository.queryDeck(
+            viewerUserId = viewerUserId,
+            radiusMeters = radiusMeters,
+            limit = limit + 1,
+            filters = filters,
+            excludedTargetUserIds = excludedTargetUserIds
+        )
         if (!result.viewerHadLocation) throw SwipeException("LOCATION_REQUIRED")
 
         val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
@@ -60,31 +110,57 @@ class SwipeService(
         } else {
             result.cards.filterNot { it.userId in blockedRelatedIds }
         }
-        val now = clock.instant()
-        val scopeHash = SwipeDeckTokenCodec.deckScopeHash(
-            viewerUserId = viewerUserId,
-            radiusMeters = radiusMeters,
-            limit = limit,
-            filters = filters
+        val pageCards = visible.take(limit)
+        val pageItems = pageCards.mapIndexed { index, card ->
+            val position = startPosition + index
+            val cardToken = deckTokenCodec.issueCardToken(
+                deckSessionId = deckSession.deckSessionId,
+                viewerUserId = viewerUserId,
+                targetUserId = card.userId,
+                scopeHash = scopeHash,
+                generatedAt = deckSession.generatedAt,
+                expiresAt = deckSession.expiresAt,
+                position = position
+            )
+            SwipeDeckPageItem(
+                dto = card.toDto(rankToken = cardToken),
+                persistedCard = SwipeDeckSessionCardRecord(
+                    cardId = UUID.randomUUID(),
+                    sessionId = deckSession.sessionId,
+                    viewerUserId = viewerUserId,
+                    targetUserId = card.userId,
+                    cardTokenHash = deckTokenCodec.tokenHash(cardToken),
+                    position = position,
+                    dealtAt = now
+                )
+            )
+        }
+        repository.upsertDeckSession(
+            session = deckSession.toSessionRecord(
+                viewerUserId = viewerUserId,
+                scopeHash = scopeHash,
+                radiusMeters = radiusMeters,
+                pageLimit = limit,
+                filterPayload = filters.toPersistedJson()
+            ),
+            cards = pageItems.map { it.persistedCard }
         )
-        val deckSession = deckTokenCodec.issueDeckSession(
-            viewerUserId = viewerUserId,
-            scopeHash = scopeHash,
-            now = now
-        )
+        val nextCursor = if (visible.size > limit) {
+            deckTokenCodec.issueCursor(
+                deckSession = deckSession,
+                viewerUserId = viewerUserId,
+                scopeHash = scopeHash,
+                nextPosition = startPosition + pageItems.size
+            )
+        } else {
+            null
+        }
 
         return SwipeDeckResponseDto(
             deckSessionId = deckSession.deckSessionId,
             generatedAt = deckSession.generatedAt.toString(),
-            items = visible.mapIndexed { index, card ->
-                card.toDto(
-                    viewerUserId = viewerUserId,
-                    deckSession = deckSession,
-                    scopeHash = scopeHash,
-                    position = index
-                )
-            },
-            nextCursor = null,
+            items = pageItems.map { it.dto },
+            nextCursor = nextCursor,
             adSupported = policy.adSupported,
             advancedFiltersApplied = filters.hasAdvancedFilters
         )
@@ -107,16 +183,27 @@ class SwipeService(
         if (deckSessionId.isEmpty()) throw SwipeException(SwipeDeckTokenCodec.INVALID_DECK_SESSION)
         val cardToken = request.cardToken.trim()
         if (cardToken.isEmpty()) throw SwipeException(SwipeDeckTokenCodec.INVALID_CARD_TOKEN)
-        try {
+        val now = clock.instant()
+        val actionTokens = try {
             deckTokenCodec.validateAction(
                 deckSessionId = deckSessionId,
                 cardToken = cardToken,
                 viewerUserId = viewerUserId,
                 targetUserId = targetUserId,
-                now = clock.instant()
+                now = now
             )
         } catch (error: SwipeDeckTokenException) {
             throw SwipeException(error.code)
+        }
+        if (!repository.isDeckCardActionable(
+                sessionId = actionTokens.sessionId,
+                cardTokenHash = actionTokens.cardTokenHash,
+                viewerUserId = viewerUserId,
+                targetUserId = targetUserId,
+                now = now
+            )
+        ) {
+            throw SwipeException(SwipeDeckTokenCodec.INVALID_CARD_TOKEN)
         }
         if (riskPolicyService?.isSocialActionRestricted(viewerUserId) == true) {
             throw SwipeException("RISK_RESTRICTED")
@@ -160,6 +247,15 @@ class SwipeService(
             action = action,
             noteText = noteText
         )
+        if (result.recorded) {
+            repository.markDeckCardActionRecorded(
+                sessionId = actionTokens.sessionId,
+                cardTokenHash = actionTokens.cardTokenHash,
+                targetUserId = targetUserId,
+                action = action,
+                now = clock.instant()
+            )
+        }
         val match = result.match
         if (match != null) {
             notificationPublisher?.enqueue(
@@ -224,12 +320,7 @@ class SwipeService(
         )
     }
 
-    private fun SwipeCardRecord.toDto(
-        viewerUserId: UUID,
-        deckSession: IssuedSwipeDeckSession,
-        scopeHash: String,
-        position: Int
-    ): SwipeCardDto = SwipeCardDto(
+    private fun SwipeCardRecord.toDto(rankToken: String): SwipeCardDto = SwipeCardDto(
         userId = userId.toString(),
         displayName = displayName,
         displayAge = displayAge,
@@ -244,19 +335,68 @@ class SwipeService(
                     ?.let { mediaAssetUrlResolver?.publicContentUrl(it) }
             )
         },
-        rankToken = deckTokenCodec.issueCardToken(
-            deckSessionId = deckSession.deckSessionId,
-            viewerUserId = viewerUserId,
-            targetUserId = userId,
-            scopeHash = scopeHash,
-            generatedAt = deckSession.generatedAt,
-            expiresAt = deckSession.expiresAt,
-            position = position
-        )
+        rankToken = rankToken
     )
+
+    private fun IssuedSwipeDeckSession.toSessionRecord(
+        viewerUserId: UUID,
+        scopeHash: String,
+        radiusMeters: Int,
+        pageLimit: Int,
+        filterPayload: String
+    ): SwipeDeckSessionRecord =
+        SwipeDeckSessionRecord(
+            sessionId = sessionId,
+            deckSessionToken = deckSessionId,
+            deckSessionTokenHash = deckSessionTokenHash,
+            viewerUserId = viewerUserId,
+            scopeHash = scopeHash,
+            radiusMeters = radiusMeters,
+            pageLimit = pageLimit,
+            filterPayload = filterPayload,
+            generatedAt = generatedAt,
+            expiresAt = expiresAt
+        )
+
+    private fun SwipeDeckSessionRecord.toIssuedDeckSession(): IssuedSwipeDeckSession =
+        IssuedSwipeDeckSession(
+            sessionId = sessionId,
+            deckSessionId = deckSessionToken,
+            deckSessionTokenHash = deckSessionTokenHash,
+            generatedAt = generatedAt,
+            expiresAt = expiresAt
+        )
+
+    private fun DiscoveryFilters.toPersistedJson(): String =
+        buildString {
+            append("{")
+            append("\"minimumAge\":").append(minimumAge?.toString() ?: "null")
+            append(",\"maximumAge\":").append(maximumAge?.toString() ?: "null")
+            append(",\"linkedOnly\":").append(linkedOnly?.toString() ?: "null")
+            append(",\"relationshipContexts\":").append(relationshipContexts.toJsonArray())
+            append(",\"verifiedOnly\":").append(verifiedOnly)
+            append(",\"facePhotoVerifiedOnly\":").append(facePhotoVerifiedOnly)
+            append(",\"ageVerifiedOnly\":").append(ageVerifiedOnly)
+            append(",\"discoveryStyles\":").append(discoveryStyles.toJsonArray())
+            append(",\"lifestyleTags\":").append(lifestyleTags.toJsonArray())
+            append(",\"logisticsTags\":").append(logisticsTags.toJsonArray())
+            append(",\"tonightAvailableOnly\":").append(tonightAvailableOnly)
+            append(",\"intents\":").append(intents.toJsonArray())
+            append("}")
+        }
+
+    private fun Set<String>.toJsonArray(): String =
+        sorted().joinToString(prefix = "[", postfix = "]") { value ->
+            "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        }
 
     private fun String.toUuidOrThrow(): UUID =
         runCatching { UUID.fromString(this) }.getOrElse { throw SwipeException("INVALID_SWIPE_TARGET") }
+
+    private data class SwipeDeckPageItem(
+        val dto: SwipeCardDto,
+        val persistedCard: SwipeDeckSessionCardRecord
+    )
 
     companion object {
         private const val MIN_RADIUS_METERS = 1_000
