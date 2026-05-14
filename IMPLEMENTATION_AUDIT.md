@@ -41,7 +41,7 @@ Primary local specs:
 Current code evidence:
 
 - Kotlin Multiplatform shared module, Compose app module, Android app module, Ktor server module.
-- PostgreSQL/PostGIS migrations through `server/src/main/resources/db/migration/V42__add_signup_age_gate_acceptance.sql`.
+- PostgreSQL/PostGIS migrations through `server/src/main/resources/db/migration/V43__add_grid_query_covering_indexes.sql`.
 - Redis-backed presence/rate-limit paths.
 - Firebase Cloud Messaging integration path.
 - Google Play Billing client and server purchase verification path.
@@ -67,7 +67,9 @@ Latest known green baseline after restoring server JUnit 4 coverage:
 - Grid API load harness exists at `scripts/grid-api-load-test.ps1`.
 - Latest 2026-05-13 local full Grid API run used 5,000 candidates, 1,000 online candidates, 100 mixed-tier viewers, and 100-way concurrency.
 - Opt-in server profiling now exists for Grid/profile/presence hot paths. Pre-optimization profiling showed Grid candidate-query over-hydration and Hikari waiting as the dominant hot path.
-- The Grid SQL hot path now ranks/caps candidate IDs first and hydrates profile photo plus linked-partner card details only for the returned page. A follow-up side-query pass added a short-lived server entitlement cache, one Redis Lua call for rate limits, one profile-view eligibility/upsert statement, a combined notification delivery gate query, and bounded background profile-view recording for production profile opens. Latest profiled run produced zero HTTP errors; client p95 was Grid initial 876ms, Grid filter 831ms, page two 1103ms, profile open 360ms, and presence heartbeat 198ms. Server route p95 was Grid initial 788ms, Grid filter 777ms, page two 1023ms, profile open 281ms, and presence heartbeat 105ms. Entitlement is now near-zero on filter/page-two cache hits and profile activity enqueue is near-zero, so remaining Grid pressure is candidate query and pool saturation.
+- The Grid SQL hot path now ranks/caps candidate IDs first and hydrates profile photo plus linked-partner card details only for the returned page. A follow-up side-query pass added a short-lived server entitlement cache, one Redis Lua call for rate limits, one profile-view eligibility/upsert statement, a combined notification delivery gate query, and bounded background profile-view recording for production profile opens.
+- A focused `EXPLAIN`/index pass added V43 covering partial indexes for active user lookup, visible profile card lookup, and visible Grid discovery lookup. The load harness and dense repository performance tests now refresh planner statistics after bulk seeding.
+- Latest warm profiled API run produced zero HTTP errors with 5,000 candidates, 1,000 online candidates, 100 mixed-tier viewers, and 100-way concurrency. Client p95: Grid initial 450.4ms, Grid filter 354.5ms, page two 477.0ms, profile open 138.8ms, presence heartbeat 118.0ms. Server route p95: Grid initial 407.3ms, Grid filter 293.1ms, page two 417.3ms, profile open 93.2ms, presence heartbeat 41.0ms.
 
 Current CI state:
 
@@ -84,7 +86,7 @@ Current CI state:
 | Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling, signup DOB, explicit 18+ confirmation, Terms acceptance, Privacy acceptance. | Social auth parity, signup progress resume, and enhanced/provider age verification are not complete. |
 | Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display, age-verification entry. | Data export/delete, blocked/hidden management, and full safety center need completion. |
 | Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs. | Server-side location trust/spoofing checks and movement thresholds need hardening. |
-| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, tier page/depth caps, Redis-backed query rate limit, fixed square cards, stable Compose keys, 5,000-candidate dense integration proof, 100-concurrent filtered repository regression proof, API-level mixed-tier Ktor load harness, opt-in server profiling, two-phase candidate-rank then card-hydration SQL, side-query optimization for entitlement/rate-limit/profile-view paths, client movement-threshold policy, retained lazy grid state while screen is alive, block/risk filtering, partner preview, WebSocket presence deltas, and explicit thumbnail prefetching. | API-level load harness is zero-error and profile opens are healthy, but Grid filter/page-two p95 still need tightening around candidate SQL and pool saturation; Redis candidate cache decision should follow a focused EXPLAIN/index pass, and automated Android visual regression plus platform battery/location QA are still needed. |
+| Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, tier page/depth caps, Redis-backed query rate limit, fixed square cards, stable Compose keys, 5,000-candidate dense integration proof, 100-concurrent filtered repository regression proof, API-level mixed-tier Ktor load harness, opt-in server profiling, two-phase candidate-rank then card-hydration SQL, V43 covering lookup indexes, side-query optimization for entitlement/rate-limit/profile-view paths, planner-stat refresh in dense load tests, client movement-threshold policy, retained lazy grid state while screen is alive, block/risk filtering, partner preview, WebSocket presence deltas, and explicit thumbnail prefetching. | Current warm 100-concurrent API harness is zero-error and inside local p95 budgets. Page-two remains candidate-scan-bound, so 500-concurrent beta load, larger dense metros, cold-cache repeatability, automated Android visual regression, and platform battery/location QA are still needed. |
 | Swipe | Partially implemented | Swipe deck endpoint, action endpoint, server-authoritative match creation, immutable normal actions, block/report path, intro notes, pineapple-like inventory, boost influence, partner preview. | Robust deck-session/rank-token validation, cursor pagination, rewind, offline action cap, image preloading, top picks, passport/travel mode, and dealbreaker settings remain incomplete. |
 | Messaging | Mostly implemented for MVP | Direct conversations, grid-open messaging, swipe match gating, intro-note handling, partner chat invite/accept/decline/leave, block-aware conversations, message review path. | WebSocket realtime, typing/read realtime, and deeper consent tests should be added before beta. |
 | Activity | Partially implemented | Activity event model, newest-first activity, flirts, album requests, gating by entitlement, block checks, risk checks, and bounded background profile-view recording for production profile opens. | Tabs, opt-outs/incognito behavior, partner-context activity separation, and complete reveal-depth UX need review. |
@@ -119,11 +121,11 @@ A checked box should not mean "final production-ready" unless the surrounding sp
 
 ## Highest-Risk Gaps
 
-1. Grid scalability is close but not yet proven to beta budgets.
+1. Grid scalability is stronger but not fully proven to beta scale.
    - Redis candidate caching is not complete.
-   - A 5,000-candidate repository proof, 100-concurrent filtered repository regression proof, and full API-level mixed-tier Ktor load harness exist.
-   - The API harness is zero-error and profile-open p95 is healthy after side-query optimization, but Grid filter/page-two p95 still need work.
-   - Profiling now points back to candidate SQL and DB pool saturation under concurrency. Redis candidate caching is back on the decision table, but should follow a focused EXPLAIN/index pass on the current two-phase query.
+   - A 5,000-candidate repository proof, 100-concurrent filtered repository regression proof, full API-level mixed-tier Ktor load harness, focused EXPLAIN/index pass, and V43 covering indexes exist.
+   - The current warm 100-concurrent API harness is zero-error and inside local p95 budgets.
+   - Page two still scans most eligible candidates because cursor ordering depends on computed distance. Redis candidate caching should be reconsidered for 500-concurrent beta targets, larger metros, cold-cache repeatability, or if page-two p95 regresses.
    - Manual emulator QA exists for the current Grid path, but automated Android visual regression is not complete.
 
 2. Swipe server authority needs another hardening pass.
@@ -166,8 +168,8 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Add Docker-backed integration tests, lint/static analysis, and Android artifact checks when those suites are ready.
 
 2. Finish Grid hardening before starting more Swipe behavior.
-   - Grid: run a focused EXPLAIN/index pass on the current two-phase candidate query, especially filter and page-two cursor behavior, then rerun the profiled 5,000-candidate / 100-concurrent harness.
-   - Grid later: decide Redis candidate caching from that evidence if candidate SQL cannot meet warm/filter/page-two budgets.
+   - Grid: extend load testing from the current warm 100-concurrent API proof toward the beta target, including 500 concurrent Grid users, cold-cache repeatability, and larger dense metro datasets.
+   - Grid later: decide Redis candidate caching from that evidence if candidate SQL cannot meet the higher beta targets.
    - Grid: automated Android visual regression and platform battery/location QA.
    - Swipe later: deck session validation, rank-token validation, cursor pagination, action idempotency, rewind path.
 

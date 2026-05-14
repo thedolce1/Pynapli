@@ -184,6 +184,26 @@ The side-query optimization pass now reduces repeated entitlement reads with a s
 
 Decision: the side-query pressure is materially reduced, but Grid is still not beta-scale complete because candidate SQL and DB pool saturation dominate filter/page-two p95. Redis candidate caching is now back on the decision table, but the next evidence-driven step should be a focused `EXPLAIN`/index pass on the two-phase candidate query, especially cursor/page-two behavior, before adding Redis candidate caches.
 
+Focused `EXPLAIN`/index pass on 2026-05-13:
+
+- PostgreSQL underestimates dense `ST_DWithin` result size in the local 5,000-candidate metro seed, so broad and page-two Grid queries still scan/rank most nearby candidates.
+- Covering partial indexes for active users, visible profiles, and visible Grid discovery settings reduced the no-filter candidate plan from about 57.5k shared buffers / 73ms to about 42.3k shared buffers / 61ms.
+- Filtered candidate plans were materially cheaper: relationship-context and style+intent filters were about 20-22k shared buffers / 46-47ms, and the age-range filter was about 25.5k shared buffers / 37ms.
+- Page two remains candidate-scan-bound because cursor filtering depends on computed boost/distance/user ordering. This is acceptable at the current 100-concurrent warm API target, but it is the first place to re-evaluate for 500-concurrent beta targets.
+- `scripts/grid-api-load-test.ps1` now refreshes planner statistics after bulk seeding, and the dense repository performance tests do the same before timing.
+
+Latest warm profiled follow-up after migration `V43__add_grid_query_covering_indexes.sql` with the same 5,000-candidate / 100-concurrent / DB pool 32 shape produced zero HTTP errors:
+
+| Scenario | Client P95 | Server Route P95 | Service P95 | Repository P95 | Candidate Query P95 | Budget | Status |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Grid initial | 450.4ms | 407.3ms | 396.4ms | 332.3ms | 320.7ms | 800ms | OK |
+| Grid filter | 354.5ms | 293.1ms | 280.9ms | 235.6ms | 223.5ms | 500ms | OK |
+| Grid page two | 477.0ms | 417.3ms | 400.9ms | 365.4ms | 357.2ms | 800ms | OK |
+| Presence heartbeat | 118.0ms | 41.0ms | 22.7ms | n/a | n/a | 300ms | OK |
+| Profile open | 138.8ms | 93.2ms | 79.3ms | 52.4ms | n/a | 800ms | OK |
+
+Decision after the index pass: do not add Redis candidate caching yet just because it is in the architecture plan. The current warm 100-concurrent API shape meets budget locally. Revisit Redis/H3-style candidate caching when testing 500 concurrent Grid users, larger dense metros, cold-cache repeatability, or if page-two candidate-query p95 regresses.
+
 The Android rendering/device load test remains open.
 
 Expected behavior:

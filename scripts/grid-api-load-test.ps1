@@ -397,6 +397,23 @@ function Seed-OnlineCandidates {
     }
 }
 
+function Update-GridPlannerStats {
+    $sql = @"
+ANALYZE users;
+ANALYZE profiles;
+ANALYZE discovery_settings;
+ANALYZE user_locations;
+ANALYZE user_blocks;
+ANALYZE user_profile_links;
+ANALYZE boost_activations;
+ANALYZE media_albums;
+ANALYZE media_album_items;
+ANALYZE media_assets;
+"@
+
+    Invoke-DockerPsql -Sql $sql | Out-Null
+}
+
 function Get-Percentile {
     param(
         [double[]]$Values,
@@ -637,6 +654,9 @@ $sessions = for ($i = 1; $i -le $ViewerCount; $i++) {
     New-LoadViewerSession -Index $i -Tier (Get-TierForIndex -Index $i)
 }
 Set-LoadSubscriptions -Sessions $sessions
+
+Write-Host "Refreshing Grid planner statistics..."
+Update-GridPlannerStats
 
 Write-Host "Running API load: $ViewerCount viewers, throttle $ConcurrentUsers..."
 $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel {

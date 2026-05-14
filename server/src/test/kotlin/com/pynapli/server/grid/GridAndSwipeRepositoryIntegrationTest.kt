@@ -274,6 +274,7 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
                 baseLongitude = -122.0841,
                 baseLatitude = 37.4220
             )
+            dataSource.analyzeGridPlannerTables()
 
             val repository = JdbcGridRepository(dataSource)
             val startedAt = System.nanoTime()
@@ -310,6 +311,7 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
                 baseLongitude = -122.0841,
                 baseLatitude = 37.4220
             )
+            dataSource.analyzeGridPlannerTables()
 
             val repository = JdbcGridRepository(dataSource)
             val filterSet = listOf(
@@ -882,6 +884,27 @@ private fun DataSource.insertDenseDiscoverableUsers(
                 statement.addBatch()
             }
             statement.executeBatch()
+        }
+    }
+}
+
+private fun DataSource.analyzeGridPlannerTables() {
+    connection.use { connection ->
+        connection.createStatement().use { statement ->
+            listOf(
+                "users",
+                "profiles",
+                "discovery_settings",
+                "user_locations",
+                "user_blocks",
+                "user_profile_links",
+                "boost_activations",
+                "media_albums",
+                "media_album_items",
+                "media_assets"
+            ).forEach { tableName ->
+                statement.execute("ANALYZE $tableName")
+            }
         }
     }
 }

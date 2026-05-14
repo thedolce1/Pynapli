@@ -86,7 +86,7 @@ Then run:
 .\scripts\grid-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000 -ServerProfile
 ```
 
-The current profiled baseline is zero-error after the Grid two-phase SQL optimization and side-query optimization. Latest 2026-05-13 run with 5,000 candidates / 100 concurrent mixed-tier users / DB pool 32 produced client p95 of Grid initial 876ms, Grid filter 831ms, Grid page two 1103ms, profile open 360ms, and presence heartbeat 198ms. Entitlement lookup is near-zero on filter/page-two cache hits and profile-view activity enqueue is near-zero. The next performance test should rerun this exact harness after a focused EXPLAIN/index pass on the candidate query and page-two cursor path.
+The current profiled baseline is zero-error after the Grid two-phase SQL optimization, side-query optimization, and V43 covering-index pass. Latest warm 2026-05-13 run with 5,000 candidates / 100 concurrent mixed-tier users / DB pool 32 produced client p95 of Grid initial 450.4ms, Grid filter 354.5ms, Grid page two 477.0ms, profile open 138.8ms, and presence heartbeat 118.0ms. The harness refreshes planner statistics after bulk seeding before timing the API workload.
 
 ## Security/Abuse Tests
 
@@ -105,9 +105,9 @@ The current profiled baseline is zero-error after the Grid two-phase SQL optimiz
 - [ ] Critical E2E tests passing on Android.
 - [ ] Critical E2E tests passing on iOS.
 - [ ] Partial: Ktor/server integration tests with Testcontainers exist and pass locally; full release-grade DB container coverage is not complete.
-- [ ] Performance benchmarks under thresholds.
-- [ ] Partial: Grid API load harness exists and runs zero-error locally, but Grid filter and client-observed initial/page-two p95 timings are still above beta budgets.
-- [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, and entitlement/rate-limit/profile-view side-query pressure has been reduced; remaining hot-path work is candidate query and DB pool pressure under filter/page-two concurrency.
+- [ ] Partial: Performance benchmarks are under current local 100-concurrent Grid budgets, but beta-scale 500-concurrent Grid testing is still open.
+- [x] Grid API load harness exists and runs zero-error locally for the current 5,000-candidate / 100-concurrent warm workload.
+- [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, entitlement/rate-limit/profile-view side-query pressure has been reduced, and V43 covering indexes are in place; remaining hot-path work is proving page-two/candidate-query behavior at 500-concurrent beta scale and larger dense metro datasets.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [ ] Location denied path tested.

@@ -1,6 +1,6 @@
 # Pynapli Grid Implementation Spec
 
-Last updated: 2026-05-13 (API load harness baseline)
+Last updated: 2026-05-13 (focused EXPLAIN/index pass)
 
 ## Purpose
 
@@ -580,8 +580,11 @@ Current API-level baseline:
 - Representative `EXPLAIN (ANALYZE, BUFFERS)` returned 61 cards in about 103ms alone but touched about 98k shared buffers and looped through about 5,100 candidates with lateral media/link/boost checks.
 - The Grid SQL is now two-phase: phase one ranks/caps candidate IDs using location, filters, safety, blocks, boost, and cursor; phase two hydrates only the returned page cards and linked partner metadata.
 - A follow-up side-query pass added short-lived server entitlement caching, one Redis Lua call for rate limits, one profile-view eligibility/upsert statement, a combined notification delivery gate query, and bounded background profile-view recording for production profile opens.
-- Latest 2026-05-13 profiled run after the side-query pass produced zero HTTP errors. Client p95: Grid initial 876ms, Grid filter 831ms, Grid page two 1103ms, profile open 360ms, presence heartbeat 198ms. Server route p95: Grid initial 788ms, Grid filter 777ms, Grid page two 1023ms, profile open 281ms, presence heartbeat 105ms.
-- Decision: Grid is more stable and profile opens are healthy, but filter/page-two p95 is still over target. Next step is a focused `EXPLAIN`/index pass on the current two-phase candidate query and cursor/page-two behavior. Redis candidate caching should be decided from that evidence.
+- A focused `EXPLAIN (ANALYZE, BUFFERS)` pass on the current two-phase candidate query showed PostgreSQL underestimates dense `ST_DWithin` results, so the broad Grid path still scans/ranks most nearby candidates. Covering partial indexes reduced the no-filter candidate plan from about 57.5k shared buffers / 73ms to about 42.3k shared buffers / 61ms in the local dense dataset. Filtered plans were cheaper: relationship-context and style+intent filters were about 20-22k shared buffers / 46-47ms, and the age-range filter was about 25.5k shared buffers / 37ms. Page two still scans most eligible candidates because the cursor depends on computed distance ordering.
+- Migration `V43__add_grid_query_covering_indexes.sql` adds covering partial lookup indexes for active users, visible profiles, and visible Grid discovery settings.
+- The API load harness now refreshes planner statistics after bulk seeding so local dense-load timings reflect the query plan, not stale Testcontainers/dev seed statistics.
+- Latest warm 2026-05-13 profiled API run after the index pass produced zero HTTP errors with 5,000 candidates, 1,000 online candidates, 100 mixed-tier viewers, and 100-way API concurrency. Client p95: Grid initial 450.4ms, Grid filter 354.5ms, Grid page two 477.0ms, profile open 138.8ms, presence heartbeat 118.0ms. Server route p95: Grid initial 407.3ms, Grid filter 293.1ms, Grid page two 417.3ms, profile open 93.2ms, presence heartbeat 41.0ms.
+- Decision: the Grid now meets the current 100-concurrent warm API budget locally after the index pass. Redis candidate caching should not be added blindly yet; revisit it for the 500-concurrent beta target, colder-cache stability, larger metro datasets, or if page-two candidate-query p95 rises again.
 
 Battery:
 
@@ -600,11 +603,11 @@ Battery:
 - [ ] Partial: Redis candidate cache is not implemented; Redis is currently used for presence/rate limits.
 - [x] Signed stable cursor pagination is implemented for live grid responses.
 - [x] 5,000-candidate dense grid integration proof exists for stable cursor pages.
-- [x] 100-concurrent filtered repository regression proof exists against the same dense dataset. Latest local Testcontainers run on 2026-05-13: two-page dense query 170ms; 100-concurrent filtered p95 1230ms, max 1692ms. This is a regression guardrail, not the final production API p95 budget.
+- [x] 100-concurrent filtered repository regression proof exists against the same dense dataset. Dense bulk-seed tests now refresh planner statistics before timing the query path so the regression guardrail reflects the intended indexed plan.
 - [x] API-level mixed-tier Grid load harness exists at `scripts/grid-api-load-test.ps1`, covering dense candidates, online presence, filter changes, pagination, and profile opens through real Ktor endpoints.
-- [ ] Partial: latest API-level 5,000-candidate / 100-concurrent run is zero-error but over p95 budgets, so Grid is not yet beta-scale complete.
+- [x] Latest warm API-level 5,000-candidate / 100-concurrent run is zero-error and inside current local p95 budgets.
 - [x] Opt-in server profiling exists for Grid, profile open, and presence heartbeat using `PYNAPLI_API_PROFILING_ENABLED=true` plus the load harness `-ServerProfile` switch.
-- [ ] Partial: profiled Grid evidence still points to DB candidate-query pressure and Hikari waiting under concurrency; two-phase SQL and side-query optimization are implemented, but filter/page-two p95 remains over budget.
+- [ ] Partial: profiled Grid evidence still points to candidate-query scanning for broad/page-two workloads; V43 reduced buffer pressure enough for the current 100-concurrent warm budget, but 500-concurrent beta testing and larger metro datasets are still open.
 - [x] Server-enforced Grid volume caps exist by tier: Free page 60 / depth 60, Social page 90 / depth 600, Select page 120 / uncapped depth. Cursor payloads carry seen-count state so capped tiers cannot bypass depth by asking for larger pages.
 - [x] Redis-backed Grid query rate limiting is wired through `RateLimitService` in production dependencies.
 - [x] Compose grid uses stable keys.
