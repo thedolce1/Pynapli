@@ -63,6 +63,7 @@ import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckResponseDto
+import com.pynapli.shared.network.dto.SwipeRewindResponseDto
 import com.pynapli.shared.network.dto.MatchesListResponseDto
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
@@ -221,6 +222,8 @@ interface PynapliApiClient {
     suspend fun querySwipeDeck(request: SwipeDeckRequestDto = SwipeDeckRequestDto()): AppResult<SwipeDeckResponseDto>
 
     suspend fun submitSwipeAction(request: SwipeActionRequestDto): AppResult<SwipeActionResponseDto>
+
+    suspend fun rewindSwipeAction(): AppResult<SwipeRewindResponseDto>
 
     suspend fun listMatches(): AppResult<MatchesListResponseDto>
 
@@ -715,6 +718,13 @@ class KtorPynapliApiClient(
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun rewindSwipeAction(): AppResult<SwipeRewindResponseDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/swipe/rewind")) {
+                bearerAuth(token)
             }.toAppResult(json)
         }
 

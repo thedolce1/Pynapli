@@ -8,6 +8,7 @@ import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
+import com.pynapli.shared.network.dto.SwipeRewindResponseDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +22,7 @@ data class SwipeUiState(
     val filters: List<SwipeFilterUi> = defaultSwipeFilters,
     val isLoading: Boolean = false,
     val isSubmitting: Boolean = false,
+    val isRewinding: Boolean = false,
     val adSupported: Boolean = false,
     val pendingActionCount: Int = 0,
     val pendingActionLimit: Int = MAX_PENDING_ACTIONS,
@@ -179,6 +181,73 @@ class SwipeStateHolder(
         flushPendingActions()
     }
 
+    suspend fun rewind() {
+        val pendingAction = if (pendingActions.isNotEmpty()) {
+            pendingActions.removeAt(pendingActions.lastIndex)
+        } else {
+            null
+        }
+        if (pendingAction != null) {
+            _state.update { current ->
+                current.copy(
+                    cards = current.cards.withRestoredTopCard(pendingAction.card),
+                    pendingActionCount = pendingActions.size,
+                    isSubmitting = pendingActions.isNotEmpty(),
+                    paywallMessage = null,
+                    errorCode = null,
+                    errorMessage = null
+                )
+            }
+            return
+        }
+
+        _state.update {
+            it.copy(
+                isRewinding = true,
+                paywallMessage = null,
+                errorCode = null,
+                errorMessage = null
+            )
+        }
+        when (val result = repository.rewind()) {
+            is AppResult.Success -> _state.update { current ->
+                val rewind = result.value
+                if (rewind == null) {
+                    current.copy(
+                        isRewinding = false,
+                        errorCode = null,
+                        errorMessage = "Nothing to rewind."
+                    )
+                } else {
+                    current.copy(
+                        deckSessionId = rewind.deckSessionId.takeIf { it.isNotBlank() } ?: current.deckSessionId,
+                        cards = current.cards.withRestoredTopCard(rewind.card),
+                        isRewinding = false,
+                        paywallMessage = null,
+                        errorCode = null,
+                        errorMessage = null
+                    )
+                }
+            }
+            is AppResult.Failure -> _state.update {
+                it.copy(
+                    isRewinding = false,
+                    paywallMessage = if (result.error.code == "ENTITLEMENT_REQUIRED") {
+                        "Rewind is included with Social or Select."
+                    } else {
+                        it.paywallMessage
+                    },
+                    errorCode = result.error.code,
+                    errorMessage = if (result.error.code == "ENTITLEMENT_REQUIRED") {
+                        null
+                    } else {
+                        result.error.message
+                    }
+                )
+            }
+        }
+    }
+
     private suspend fun flushPendingActions() {
         if (isFlushingActions) return
         isFlushingActions = true
@@ -258,6 +327,8 @@ interface SwipeRepository {
     suspend fun loadDeck(filter: SwipeFilterType): AppResult<SwipeDeckUi>
 
     suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?>
+
+    suspend fun rewind(): AppResult<SwipeRewindUi?>
 }
 
 class ApiSwipeRepository(
@@ -290,6 +361,12 @@ class ApiSwipeRepository(
             )
         ) {
             is AppResult.Success -> AppResult.Success(result.value.match)
+            is AppResult.Failure -> result
+        }
+
+    override suspend fun rewind(): AppResult<SwipeRewindUi?> =
+        when (val result = apiClient.rewindSwipeAction()) {
+            is AppResult.Success -> AppResult.Success(result.value.toUi())
             is AppResult.Failure -> result
         }
 }
@@ -334,6 +411,9 @@ class SampleSwipeRepository : SwipeRepository {
         cards.removeAll { it.userId == action.card.userId }
         return AppResult.Success(null)
     }
+
+    override suspend fun rewind(): AppResult<SwipeRewindUi?> =
+        AppResult.Success(null)
 }
 
 @Immutable
@@ -342,6 +422,12 @@ data class SwipeDeckUi(
     val cards: List<SwipeCardDto>,
     val adSupported: Boolean = false,
     val advancedFiltersApplied: Boolean = false
+)
+
+@Immutable
+data class SwipeRewindUi(
+    val deckSessionId: String,
+    val card: SwipeCardDto
 )
 
 @Immutable
@@ -362,6 +448,19 @@ private fun QueuedSwipeAction.paywallMessageFor(errorCode: String): String? =
         }
         "PINEAPPLE_LIKE_INVENTORY_REQUIRED" -> "Pineapple Likes are scarce high-intent signals."
         else -> null
+    }
+
+private fun SwipeRewindResponseDto.toUi(): SwipeRewindUi? {
+    val restoredCard = card ?: return null
+    if (!rewound) return null
+    return SwipeRewindUi(deckSessionId = deckSessionId, card = restoredCard)
+}
+
+private fun List<SwipeCardDto>.withRestoredTopCard(card: SwipeCardDto): List<SwipeCardDto> =
+    if (any { it.userId == card.userId }) {
+        this
+    } else {
+        listOf(card) + this
     }
 
 internal val defaultSwipeFilters = listOf(

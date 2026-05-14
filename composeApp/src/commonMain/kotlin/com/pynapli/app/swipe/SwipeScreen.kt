@@ -222,8 +222,10 @@ fun SwipeScreen(
         }
 
         SwipeActions(
-            enabled = state.hasMore && !state.actionQueueFull,
+            actionEnabled = state.hasMore && !state.actionQueueFull,
+            rewindEnabled = !state.isSubmitting && !state.isRewinding,
             isSubmitting = false,
+            onRewind = { scope.launch { stateHolder.rewind() } },
             onPass = { requestedAction = SwipeAction.PASS },
             onIntroNote = {
                 state.topCard?.let { card ->
@@ -783,8 +785,10 @@ private fun SwipeLinkedPartnerBadge(
 
 @Composable
 private fun SwipeActions(
-    enabled: Boolean,
+    actionEnabled: Boolean,
+    rewindEnabled: Boolean,
     isSubmitting: Boolean,
+    onRewind: () -> Unit,
     onPass: () -> Unit,
     onIntroNote: () -> Unit,
     onPineappleLike: () -> Unit,
@@ -792,11 +796,21 @@ private fun SwipeActions(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp, alignment = Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(10.dp, alignment = Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
         SwipeActionButton(
-            enabled = enabled,
+            enabled = rewindEnabled,
+            isSubmitting = isSubmitting,
+            testTag = SwipeTestTags.REWIND_ACTION,
+            icon = Icons.Filled.Refresh,
+            contentDescription = "Rewind",
+            background = MaterialTheme.colorScheme.surfaceVariant,
+            iconTint = MaterialTheme.colorScheme.primary,
+            onClick = onRewind
+        )
+        SwipeActionButton(
+            enabled = actionEnabled,
             isSubmitting = isSubmitting,
             testTag = SwipeTestTags.PASS_ACTION,
             icon = Icons.Filled.Close,
@@ -806,7 +820,7 @@ private fun SwipeActions(
             onClick = onPass
         )
         SwipeActionButton(
-            enabled = enabled,
+            enabled = actionEnabled,
             isSubmitting = isSubmitting,
             testTag = SwipeTestTags.INTRO_NOTE_ACTION,
             icon = Icons.Filled.Edit,
@@ -816,7 +830,7 @@ private fun SwipeActions(
             onClick = onIntroNote
         )
         SwipeActionButton(
-            enabled = enabled,
+            enabled = actionEnabled,
             isSubmitting = isSubmitting,
             testTag = SwipeTestTags.PINEAPPLE_LIKE_ACTION,
             icon = Icons.Filled.Star,
@@ -826,7 +840,7 @@ private fun SwipeActions(
             onClick = onPineappleLike
         )
         SwipeActionButton(
-            enabled = enabled,
+            enabled = actionEnabled,
             isSubmitting = isSubmitting,
             testTag = SwipeTestTags.LIKE_ACTION,
             icon = Icons.Filled.Favorite,
@@ -914,7 +928,7 @@ private fun SwipeActionButton(
 ) {
     Box(
         modifier = Modifier
-            .size(64.dp)
+            .size(56.dp)
             .clip(CircleShape)
             .background(background)
             .border(1.dp, iconTint.copy(alpha = 0.45f), CircleShape),
@@ -923,7 +937,7 @@ private fun SwipeActionButton(
         IconButton(
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.size(64.dp).testTag(testTag)
+            modifier = Modifier.size(56.dp).testTag(testTag)
         ) {
             if (isSubmitting) {
                 CircularProgressIndicator(
@@ -936,7 +950,7 @@ private fun SwipeActionButton(
                     imageVector = icon,
                     contentDescription = contentDescription,
                     tint = iconTint,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
@@ -1083,6 +1097,7 @@ internal object SwipeTestTags {
     const val ROOT = "swipe-root"
     const val TOP_CARD = "swipe-top-card"
     const val CARD_PREFIX = "swipe-card-"
+    const val REWIND_ACTION = "swipe-action-rewind"
     const val PASS_ACTION = "swipe-action-pass"
     const val INTRO_NOTE_ACTION = "swipe-action-intro-note"
     const val PINEAPPLE_LIKE_ACTION = "swipe-action-pineapple-like"

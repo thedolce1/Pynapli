@@ -149,6 +149,9 @@ private class StaticSwipeVisualRepository(
         submittedActions += action
         return AppResult.Success(null)
     }
+
+    override suspend fun rewind(): AppResult<SwipeRewindUi?> =
+        AppResult.Success(null)
 }
 
 private fun ImageBitmap.assertSwipeVisualSignature() {

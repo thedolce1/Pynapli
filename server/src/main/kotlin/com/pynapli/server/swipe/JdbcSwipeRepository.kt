@@ -156,6 +156,7 @@ class JdbcSwipeRepository(
                       SELECT 1 FROM swipe_actions sa
                       WHERE sa.actor_user_id = ?
                         AND sa.target_user_id = u.id
+                        AND sa.rewound_at IS NULL
                   )
                   AND (
                       cardinality(?::uuid[]) = 0
@@ -223,67 +224,8 @@ class JdbcSwipeRepository(
             val previousAutoCommit = connection.autoCommit
             connection.autoCommit = false
             try {
-                connection.prepareStatement(
-                    """
-                    INSERT INTO swipe_deck_sessions (
-                        id,
-                        deck_session_token,
-                        deck_session_token_hash,
-                        viewer_user_id,
-                        scope_hash,
-                        radius_meters,
-                        page_limit,
-                        filter_payload,
-                        generated_at,
-                        expires_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)
-                    ON CONFLICT (id) DO UPDATE
-                    SET updated_at = now()
-                    """.trimIndent()
-                ).use { statement ->
-                    statement.setObject(1, session.sessionId)
-                    statement.setString(2, session.deckSessionToken)
-                    statement.setString(3, session.deckSessionTokenHash)
-                    statement.setObject(4, session.viewerUserId)
-                    statement.setString(5, session.scopeHash)
-                    statement.setInt(6, session.radiusMeters)
-                    statement.setInt(7, session.pageLimit)
-                    statement.setString(8, session.filterPayload)
-                    statement.setTimestamp(9, Timestamp.from(session.generatedAt))
-                    statement.setTimestamp(10, Timestamp.from(session.expiresAt))
-                    statement.executeUpdate()
-                }
-
-                if (cards.isNotEmpty()) {
-                    connection.prepareStatement(
-                        """
-                        INSERT INTO swipe_deck_cards (
-                            id,
-                            deck_session_id,
-                            viewer_user_id,
-                            target_user_id,
-                            card_token_hash,
-                            position,
-                            dealt_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT DO NOTHING
-                        """.trimIndent()
-                    ).use { statement ->
-                        for (card in cards) {
-                            statement.setObject(1, card.cardId)
-                            statement.setObject(2, card.sessionId)
-                            statement.setObject(3, card.viewerUserId)
-                            statement.setObject(4, card.targetUserId)
-                            statement.setString(5, card.cardTokenHash)
-                            statement.setInt(6, card.position)
-                            statement.setTimestamp(7, Timestamp.from(card.dealtAt))
-                            statement.addBatch()
-                        }
-                        statement.executeBatch()
-                    }
-                }
+                connection.insertDeckSession(session)
+                connection.insertDeckCards(cards)
 
                 connection.commit()
             } catch (error: Throwable) {
@@ -454,6 +396,7 @@ class JdbcSwipeRepository(
                           SELECT 1 FROM swipe_actions sa
                           WHERE sa.actor_user_id = ?
                             AND sa.target_user_id = target.id
+                            AND sa.rewound_at IS NULL
                       )
                 )
                 """.trimIndent()
@@ -478,6 +421,179 @@ class JdbcSwipeRepository(
                 connection.findSwipeActionById(actionId, actorUserId)
             }
         }
+
+    override suspend fun findLatestRewindableAction(
+        viewerUserId: UUID,
+        radiusMeters: Int
+    ): SwipeRewindCandidateRecord? = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """
+                WITH viewer_location AS (
+                    SELECT geom
+                    FROM user_locations
+                    WHERE user_id = ?
+                )
+                SELECT sa.id AS action_id,
+                       sa.target_user_id,
+                       sa.action,
+                       COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+                       p.display_age,
+                       profile_photo.media_asset_id AS thumbnail_media_asset_id,
+                       linked_partner.linked_partner_user_id,
+                       linked_partner.linked_partner_display_name,
+                       linked_partner.linked_partner_thumbnail_media_asset_id,
+                       ds.show_distance,
+                       ST_Distance(v.geom, ul.geom) AS distance_meters
+                FROM swipe_actions sa
+                JOIN viewer_location v ON true
+                JOIN users u
+                  ON u.id = sa.target_user_id
+                JOIN user_locations ul
+                  ON ul.user_id = u.id
+                JOIN profiles p
+                  ON p.user_id = u.id
+                JOIN discovery_settings ds
+                  ON ds.user_id = u.id
+                LEFT JOIN account_risk_states ars
+                  ON ars.user_id = u.id
+                LEFT JOIN LATERAL (
+                    SELECT mai.media_asset_id
+                    FROM media_albums ma
+                    JOIN media_album_items mai
+                      ON mai.album_id = ma.id
+                     AND mai.removed_at IS NULL
+                    JOIN media_assets m
+                      ON m.id = mai.media_asset_id
+                     AND m.owner_user_id = ma.owner_user_id
+                     AND m.deleted_at IS NULL
+                    WHERE ma.owner_user_id = u.id
+                      AND ma.kind = 'profile'
+                      AND ma.visibility_status = 'visible'
+                      AND ma.deleted_at IS NULL
+                      AND m.media_type = 'image'
+                      AND m.processing_status = 'ready'
+                      AND m.moderation_status = 'approved'
+                    ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
+                    LIMIT 1
+                ) profile_photo ON true
+                LEFT JOIN LATERAL (
+                    SELECT upl.linked_user_id AS linked_partner_user_id,
+                           COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
+                           linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id
+                    FROM user_profile_links upl
+                    JOIN users linked_user
+                      ON linked_user.id = upl.linked_user_id
+                    JOIN profiles linked_profile
+                      ON linked_profile.user_id = linked_user.id
+                    JOIN discovery_settings linked_ds
+                      ON linked_ds.user_id = linked_user.id
+                    LEFT JOIN account_risk_states linked_risk
+                      ON linked_risk.user_id = linked_user.id
+                    LEFT JOIN LATERAL (
+                        SELECT mai.media_asset_id
+                        FROM media_albums ma
+                        JOIN media_album_items mai
+                          ON mai.album_id = ma.id
+                         AND mai.removed_at IS NULL
+                        JOIN media_assets m
+                          ON m.id = mai.media_asset_id
+                         AND m.owner_user_id = ma.owner_user_id
+                         AND m.deleted_at IS NULL
+                        WHERE ma.owner_user_id = linked_user.id
+                          AND ma.kind = 'profile'
+                          AND ma.visibility_status = 'visible'
+                          AND ma.deleted_at IS NULL
+                          AND m.media_type = 'image'
+                          AND m.processing_status = 'ready'
+                          AND m.moderation_status = 'approved'
+                        ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
+                        LIMIT 1
+                    ) linked_partner_photo ON true
+                    WHERE upl.user_id = u.id
+                      AND upl.status = 'active'
+                      AND upl.unlinked_at IS NULL
+                      AND linked_user.status = 'active'
+                      AND linked_user.deleted_at IS NULL
+                      AND linked_profile.visibility_status = 'visible'
+                      AND linked_ds.incognito = false
+                      AND COALESCE(linked_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM user_blocks ub
+                          WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
+                             OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
+                      )
+                    ORDER BY upl.accepted_at DESC NULLS LAST, upl.created_at DESC, upl.id ASC
+                    LIMIT 1
+                ) linked_partner ON true
+                WHERE sa.actor_user_id = ?
+                  AND sa.rewound_at IS NULL
+                  AND sa.action IN ('like', 'pass')
+                  AND u.status = 'active'
+                  AND u.deleted_at IS NULL
+                  AND p.visibility_status = 'visible'
+                  AND ds.swipe_visible = true
+                  AND ds.incognito = false
+                  AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
+                  AND ST_DWithin(v.geom, ul.geom, ?)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM user_blocks ub
+                      WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = u.id)
+                         OR (ub.blocker_user_id = u.id AND ub.blocked_user_id = ?)
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM matches m
+                      WHERE (m.user_a = sa.actor_user_id AND m.user_b = sa.target_user_id)
+                         OR (m.user_a = sa.target_user_id AND m.user_b = sa.actor_user_id)
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM safety_reports sr
+                      WHERE sr.reporter_user_id = sa.actor_user_id
+                        AND sr.reported_user_id = sa.target_user_id
+                  )
+                ORDER BY sa.created_at DESC, sa.id DESC
+                LIMIT 1
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, viewerUserId)
+                statement.setObject(2, viewerUserId)
+                statement.setObject(3, viewerUserId)
+                statement.setObject(4, viewerUserId)
+                statement.setDouble(5, radiusMeters.toDouble())
+                statement.setObject(6, viewerUserId)
+                statement.setObject(7, viewerUserId)
+                statement.executeQuery().use { rs ->
+                    if (!rs.next()) {
+                        null
+                    } else {
+                        SwipeRewindCandidateRecord(
+                            actionId = rs.getObject("action_id", UUID::class.java),
+                            targetUserId = rs.getObject("target_user_id", UUID::class.java),
+                            action = rs.getString("action"),
+                            card = SwipeCardRecord(
+                                userId = rs.getObject("target_user_id", UUID::class.java),
+                                displayName = rs.getString("display_name"),
+                                displayAge = rs.getInt("display_age").takeUnless { rs.wasNull() },
+                                thumbnailMediaAssetId = rs.getObject("thumbnail_media_asset_id", UUID::class.java),
+                                showDistance = rs.getBoolean("show_distance"),
+                                distanceMeters = rs.getDouble("distance_meters"),
+                                linkedPartnerUserId = rs.getObject("linked_partner_user_id", UUID::class.java),
+                                linkedPartnerDisplayName = rs.getString("linked_partner_display_name"),
+                                linkedPartnerThumbnailMediaAssetId = rs.getObject(
+                                    "linked_partner_thumbnail_media_asset_id",
+                                    UUID::class.java
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     override suspend fun recordSwipeAction(
         actionId: UUID,
@@ -522,6 +638,7 @@ class JdbcSwipeRepository(
                             WHERE actor_user_id = ?
                               AND target_user_id = ?
                               AND action IN ('like', 'pineapple_like')
+                              AND rewound_at IS NULL
                         )
                         """.trimIndent()
                     ).use { statement ->
@@ -544,6 +661,65 @@ class JdbcSwipeRepository(
 
                 connection.commit()
                 SwipeActionResult(recorded = true, match = match)
+            } catch (error: Throwable) {
+                connection.rollback()
+                throw error
+            } finally {
+                connection.autoCommit = previousAutoCommit
+            }
+        }
+    }
+
+    override suspend fun rewindSwipeAction(
+        actionId: UUID,
+        actorUserId: UUID,
+        targetUserId: UUID,
+        session: SwipeDeckSessionRecord,
+        card: SwipeDeckSessionCardRecord,
+        rewoundAt: Instant
+    ): Boolean = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            val previousAutoCommit = connection.autoCommit
+            connection.autoCommit = false
+            try {
+                val updated = connection.prepareStatement(
+                    """
+                    UPDATE swipe_actions sa
+                    SET rewound_at = ?
+                    WHERE sa.id = ?
+                      AND sa.actor_user_id = ?
+                      AND sa.target_user_id = ?
+                      AND sa.rewound_at IS NULL
+                      AND sa.action IN ('like', 'pass')
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM matches m
+                          WHERE (m.user_a = sa.actor_user_id AND m.user_b = sa.target_user_id)
+                             OR (m.user_a = sa.target_user_id AND m.user_b = sa.actor_user_id)
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM safety_reports sr
+                          WHERE sr.reporter_user_id = sa.actor_user_id
+                            AND sr.reported_user_id = sa.target_user_id
+                      )
+                    """.trimIndent()
+                ).use { statement ->
+                    statement.setTimestamp(1, Timestamp.from(rewoundAt))
+                    statement.setObject(2, actionId)
+                    statement.setObject(3, actorUserId)
+                    statement.setObject(4, targetUserId)
+                    statement.executeUpdate()
+                }
+                if (updated == 0) {
+                    connection.rollback()
+                    return@withContext false
+                }
+
+                connection.insertDeckSession(session)
+                connection.insertDeckCards(listOf(card))
+                connection.commit()
+                true
             } catch (error: Throwable) {
                 connection.rollback()
                 throw error
@@ -647,6 +823,71 @@ class JdbcSwipeRepository(
         }
     }
 
+    private fun Connection.insertDeckSession(session: SwipeDeckSessionRecord) {
+        prepareStatement(
+            """
+            INSERT INTO swipe_deck_sessions (
+                id,
+                deck_session_token,
+                deck_session_token_hash,
+                viewer_user_id,
+                scope_hash,
+                radius_meters,
+                page_limit,
+                filter_payload,
+                generated_at,
+                expires_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)
+            ON CONFLICT (id) DO UPDATE
+            SET updated_at = now()
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, session.sessionId)
+            statement.setString(2, session.deckSessionToken)
+            statement.setString(3, session.deckSessionTokenHash)
+            statement.setObject(4, session.viewerUserId)
+            statement.setString(5, session.scopeHash)
+            statement.setInt(6, session.radiusMeters)
+            statement.setInt(7, session.pageLimit)
+            statement.setString(8, session.filterPayload)
+            statement.setTimestamp(9, Timestamp.from(session.generatedAt))
+            statement.setTimestamp(10, Timestamp.from(session.expiresAt))
+            statement.executeUpdate()
+        }
+    }
+
+    private fun Connection.insertDeckCards(cards: List<SwipeDeckSessionCardRecord>) {
+        if (cards.isEmpty()) return
+        prepareStatement(
+            """
+            INSERT INTO swipe_deck_cards (
+                id,
+                deck_session_id,
+                viewer_user_id,
+                target_user_id,
+                card_token_hash,
+                position,
+                dealt_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT DO NOTHING
+            """.trimIndent()
+        ).use { statement ->
+            for (card in cards) {
+                statement.setObject(1, card.cardId)
+                statement.setObject(2, card.sessionId)
+                statement.setObject(3, card.viewerUserId)
+                statement.setObject(4, card.targetUserId)
+                statement.setString(5, card.cardTokenHash)
+                statement.setInt(6, card.position)
+                statement.setTimestamp(7, Timestamp.from(card.dealtAt))
+                statement.addBatch()
+            }
+            statement.executeBatch()
+        }
+    }
+
     private fun Connection.upsertMatch(
         actorUserId: UUID,
         targetUserId: UUID,
@@ -700,6 +941,7 @@ class JdbcSwipeRepository(
                    sa.action,
                    sa.note_text,
                    sa.created_at AS action_created_at,
+                   sa.rewound_at,
                    m.id AS match_id,
                    m.user_a,
                    m.user_b,
@@ -728,6 +970,7 @@ class JdbcSwipeRepository(
                         action = rs.getString("action"),
                         noteText = rs.getString("note_text"),
                         createdAt = rs.getTimestamp("action_created_at").toInstant(),
+                        rewoundAt = rs.getTimestamp("rewound_at")?.toInstant(),
                         match = matchId?.let {
                             MatchRecord(
                                 matchId = it,

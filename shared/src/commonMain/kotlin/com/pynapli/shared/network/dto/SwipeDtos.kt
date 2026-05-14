@@ -68,6 +68,13 @@ data class SwipeActionResponseDto(
 )
 
 @Serializable
+data class SwipeRewindResponseDto(
+    val rewound: Boolean,
+    val deckSessionId: String = "",
+    val card: SwipeCardDto? = null
+)
+
+@Serializable
 data class MatchesListResponseDto(
     val matches: List<MatchDto>,
     val nextCursor: String? = null

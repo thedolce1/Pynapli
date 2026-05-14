@@ -1,6 +1,6 @@
 # Pynapli Swipe Implementation Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-14
 
 ## Purpose
 
@@ -248,11 +248,18 @@ Rewind should undo the most recent eligible swipe decision.
 
 Rules:
 
-- Paid feature, likely Plus and above.
+- Paid feature for Social and Select.
 - Can undo Like, Pass, or Super Like when technically safe.
 - Cannot undo after a block/report.
 - Cannot undo if the target has already matched and entered a resolved state where reversal would be confusing.
 - Must be server-aware, not only local UI rollback.
+
+Current MVP implementation:
+
+- Social and Select users can server-rewind the latest eligible Like or Pass.
+- The server soft-rewinds the previous action, keeps history, and issues a fresh deck session/card token for the restored card.
+- Local queued swipes can be undone before sync.
+- Pineapple Like rewind remains intentionally incomplete until inventory refund semantics are defined.
 
 ## Likes You
 
@@ -680,7 +687,7 @@ Network:
 - [x] Like/pass/Pineapple Like/Intro Note action endpoint exists.
 - [x] Match creation is server-authoritative.
 - [x] Cursor pagination continues a persisted deck session without duplicate returned cards.
-- [ ] Rewind is server-aware.
+- [ ] Partial: Rewind is server-aware for the latest eligible Like/Pass and local queued actions; Pineapple Like inventory-safe rewind is not complete.
 - [x] Intro Note inventory and delivery rules exist.
 - [x] Likes You is represented in Activity.
 - [ ] Top Picks/Picks daily refresh exists.

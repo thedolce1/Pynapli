@@ -44,6 +44,11 @@ interface SwipeRepository {
 
     suspend fun findSwipeActionById(actionId: UUID, actorUserId: UUID): SwipeActionRecord?
 
+    suspend fun findLatestRewindableAction(
+        viewerUserId: UUID,
+        radiusMeters: Int
+    ): SwipeRewindCandidateRecord?
+
     /**
      * Inserts the swipe action if the actor has not already decided on this target.
      * If the action is `like` and the target had already liked the actor, also inserts a match
@@ -57,6 +62,15 @@ interface SwipeRepository {
         noteText: String? = null,
         matchIdFactory: () -> UUID = UUID::randomUUID
     ): SwipeActionResult
+
+    suspend fun rewindSwipeAction(
+        actionId: UUID,
+        actorUserId: UUID,
+        targetUserId: UUID,
+        session: SwipeDeckSessionRecord,
+        card: SwipeDeckSessionCardRecord,
+        rewoundAt: Instant
+    ): Boolean
 
     suspend fun listMatches(viewerUserId: UUID, limit: Int): List<MatchSummaryRecord>
 }
@@ -113,7 +127,15 @@ data class SwipeActionRecord(
     val action: String,
     val noteText: String?,
     val createdAt: Instant,
+    val rewoundAt: Instant?,
     val match: MatchRecord?
+)
+
+data class SwipeRewindCandidateRecord(
+    val actionId: UUID,
+    val targetUserId: UUID,
+    val action: String,
+    val card: SwipeCardRecord
 )
 
 data class MatchRecord(

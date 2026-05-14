@@ -642,6 +642,177 @@ class SwipeServiceTest {
     }
 
     @Test
+    fun rewindRequiresPaidEntitlement() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000273")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000274")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = target,
+                    displayName = "Maya",
+                    displayAge = 31,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 850.0
+                )
+            )
+        )
+        val service = SwipeService(
+            repository = repository,
+            subscriptionService = freeSubscriptionService()
+        )
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+        service.submitAction(
+            viewer,
+            SwipeActionRequestDto(
+                actionId = UUID.randomUUID().toString(),
+                deckSessionId = deck.deckSessionId,
+                cardToken = deck.items.single().rankToken,
+                targetUserId = target.toString(),
+                action = SwipeAction.PASS
+            )
+        )
+
+        val error = assertFailsWith<SwipeException> {
+            service.rewind(viewer)
+        }
+
+        assertEquals("ENTITLEMENT_REQUIRED", error.code)
+        assertEquals(SwipeAction.PASS, repository.actionsSnapshot().getValue(viewer to target))
+    }
+
+    @Test
+    fun paidRewindRestoresLatestEligibleCardWithFreshToken() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000275")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000276")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = target,
+                    displayName = "Maya",
+                    displayAge = 31,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 850.0
+                )
+            )
+        )
+        val service = SwipeService(
+            repository = repository,
+            subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SOCIAL, introNotes = 0)
+        )
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+        service.submitAction(
+            viewer,
+            SwipeActionRequestDto(
+                actionId = UUID.randomUUID().toString(),
+                deckSessionId = deck.deckSessionId,
+                cardToken = deck.items.single().rankToken,
+                targetUserId = target.toString(),
+                action = SwipeAction.PASS
+            )
+        )
+
+        val rewind = service.rewind(viewer)
+        val restoredCard = assertNotNull(rewind.card)
+        val replay = service.submitAction(
+            viewer,
+            SwipeActionRequestDto(
+                actionId = UUID.randomUUID().toString(),
+                deckSessionId = rewind.deckSessionId,
+                cardToken = restoredCard.rankToken,
+                targetUserId = target.toString(),
+                action = SwipeAction.LIKE
+            )
+        )
+
+        assertTrue(rewind.rewound)
+        assertEquals(target.toString(), restoredCard.userId)
+        assertTrue(rewind.deckSessionId.isNotBlank())
+        assertTrue(restoredCard.rankToken.isNotBlank())
+        assertTrue(replay.recorded)
+        assertEquals(SwipeAction.LIKE, repository.actionsSnapshot().getValue(viewer to target))
+    }
+
+    @Test
+    fun rewoundActionIdRetryDoesNotReapplyDecision() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000277")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000278")
+        val actionId = UUID.fromString("00000000-0000-0000-0000-000000000279")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = target,
+                    displayName = "Maya",
+                    displayAge = 31,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 850.0
+                )
+            )
+        )
+        val service = SwipeService(
+            repository = repository,
+            subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SELECT, introNotes = 0)
+        )
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+        val request = SwipeActionRequestDto(
+            actionId = actionId.toString(),
+            deckSessionId = deck.deckSessionId,
+            cardToken = deck.items.single().rankToken,
+            targetUserId = target.toString(),
+            action = SwipeAction.PASS
+        )
+        service.submitAction(viewer, request)
+        service.rewind(viewer)
+
+        val retry = service.submitAction(viewer, request)
+
+        assertEquals(false, retry.recorded)
+        assertEquals(emptyMap(), repository.actionsSnapshot())
+    }
+
+    @Test
+    fun matchedActionCannotBeRewound() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000280")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000281")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = target,
+                    displayName = "Maya",
+                    displayAge = 31,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 850.0
+                )
+            )
+        )
+        val service = SwipeService(
+            repository = repository,
+            subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SOCIAL, introNotes = 0)
+        )
+
+        service.submitAction(target, swipeActionRequest(target, viewer, SwipeAction.LIKE))
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+        service.submitAction(
+            viewer,
+            SwipeActionRequestDto(
+                actionId = UUID.randomUUID().toString(),
+                deckSessionId = deck.deckSessionId,
+                cardToken = deck.items.single().rankToken,
+                targetUserId = target.toString(),
+                action = SwipeAction.LIKE
+            )
+        )
+
+        val rewind = service.rewind(viewer)
+
+        assertEquals(false, rewind.rewound)
+        assertEquals(SwipeAction.LIKE, repository.actionsSnapshot().getValue(viewer to target))
+    }
+
+    @Test
     fun listMatchesFiltersBlockedRelatedUsers() = runBlocking {
         val viewer = UUID.fromString("00000000-0000-0000-0000-000000000070")
         val blockedMatch = UUID.fromString("00000000-0000-0000-0000-000000000071")
@@ -744,6 +915,7 @@ private class InMemorySwipeRepository(
 ) : SwipeRepository {
     private val actions = mutableMapOf<Pair<UUID, UUID>, String>()
     private val actionRecords = mutableMapOf<UUID, SwipeActionRecord>()
+    private val actionOrder = mutableListOf<UUID>()
     private val matches = seededMatches.toMutableList()
     private val now = Instant.parse("2026-04-28T18:00:00Z")
 
@@ -757,7 +929,10 @@ private class InMemorySwipeRepository(
         if (!viewerHasLocation) return SwipeDeckResult(viewerHadLocation = false, cards = emptyList())
         return SwipeDeckResult(
             viewerHadLocation = true,
-            cards = seededCards.filterNot { it.userId in excludedTargetUserIds }.take(limit)
+            cards = seededCards
+                .filterNot { it.userId in excludedTargetUserIds }
+                .filterNot { viewerUserId to it.userId in actions }
+                .take(limit)
         )
     }
 
@@ -827,6 +1002,35 @@ private class InMemorySwipeRepository(
         return record.copy(match = findMatch(record.actorUserId, record.targetUserId))
     }
 
+    override suspend fun findLatestRewindableAction(
+        viewerUserId: UUID,
+        radiusMeters: Int
+    ): SwipeRewindCandidateRecord? {
+        val record = actionOrder.asReversed()
+            .asSequence()
+            .mapNotNull { actionRecords[it] }
+            .firstOrNull { record ->
+                record.actorUserId == viewerUserId &&
+                    record.rewoundAt == null &&
+                    record.action in REWINDABLE_ACTIONS &&
+                    findMatch(record.actorUserId, record.targetUserId) == null
+            } ?: return null
+        val card = seededCards.firstOrNull { it.userId == record.targetUserId } ?: SwipeCardRecord(
+            userId = record.targetUserId,
+            displayName = "Pynapli User",
+            displayAge = null,
+            thumbnailMediaAssetId = null,
+            showDistance = true,
+            distanceMeters = 1_000.0
+        )
+        return SwipeRewindCandidateRecord(
+            actionId = record.actionId,
+            targetUserId = record.targetUserId,
+            action = record.action,
+            card = card
+        )
+    }
+
     override suspend fun recordSwipeAction(
         actionId: UUID,
         actorUserId: UUID,
@@ -860,9 +1064,30 @@ private class InMemorySwipeRepository(
             action = action,
             noteText = noteText,
             createdAt = now,
+            rewoundAt = null,
             match = match
         )
+        actionOrder += actionId
         return SwipeActionResult(recorded = true, match = match)
+    }
+
+    override suspend fun rewindSwipeAction(
+        actionId: UUID,
+        actorUserId: UUID,
+        targetUserId: UUID,
+        session: SwipeDeckSessionRecord,
+        card: SwipeDeckSessionCardRecord,
+        rewoundAt: Instant
+    ): Boolean {
+        val record = actionRecords[actionId]
+            ?.takeIf { it.actorUserId == actorUserId && it.targetUserId == targetUserId }
+            ?: return false
+        if (record.rewoundAt != null || record.action !in REWINDABLE_ACTIONS) return false
+        if (findMatch(actorUserId, targetUserId) != null) return false
+        actionRecords[actionId] = record.copy(rewoundAt = rewoundAt)
+        actions.remove(actorUserId to targetUserId)
+        upsertDeckSession(session, listOf(card))
+        return true
     }
 
     private fun findMatch(actorUserId: UUID, targetUserId: UUID): MatchRecord? {
@@ -885,6 +1110,7 @@ private class InMemorySwipeRepository(
 
     companion object {
         private val POSITIVE_ACTIONS = setOf(SwipeAction.LIKE, SwipeAction.PINEAPPLE_LIKE)
+        private val REWINDABLE_ACTIONS = setOf(SwipeAction.LIKE, SwipeAction.PASS)
     }
 }
 

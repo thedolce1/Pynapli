@@ -194,6 +194,47 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "swipe rewind soft-rewinds action and restores a fresh actionable card" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000929")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000930")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+            val service = SwipeService(JdbcSwipeRepository(dataSource))
+
+            val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 2))
+            val originalRequest = SwipeActionRequestDto(
+                actionId = UUID.randomUUID().toString(),
+                deckSessionId = deck.deckSessionId,
+                cardToken = deck.items.single().rankToken,
+                targetUserId = target.toString(),
+                action = SwipeAction.PASS
+            )
+            service.submitAction(viewer, originalRequest)
+
+            val rewind = service.rewind(viewer)
+            val restoredCard = assertNotNull(rewind.card)
+            val replay = service.submitAction(
+                viewer,
+                SwipeActionRequestDto(
+                    actionId = UUID.randomUUID().toString(),
+                    deckSessionId = rewind.deckSessionId,
+                    cardToken = restoredCard.rankToken,
+                    targetUserId = target.toString(),
+                    action = SwipeAction.LIKE
+                )
+            )
+            val oldRetry = service.submitAction(viewer, originalRequest)
+
+            assertTrue(rewind.rewound)
+            assertEquals(target.toString(), restoredCard.userId)
+            assertTrue(rewind.deckSessionId.isNotBlank())
+            assertTrue(restoredCard.rankToken.isNotBlank())
+            assertTrue(replay.recorded)
+            assertEquals(false, oldRetry.recorded)
+        }
+    }
+
     "grid and swipe queries apply advanced discovery filters" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000931")

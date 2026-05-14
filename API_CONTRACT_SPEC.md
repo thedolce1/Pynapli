@@ -1,6 +1,6 @@
 # Pynapli API Contract Spec
 
-Last updated: 2026-05-13
+Last updated: 2026-05-14
 
 ## Purpose
 
@@ -262,6 +262,17 @@ data class SwipeActionRequest(
 )
 ```
 
+Rewind:
+
+```kotlin
+@Serializable
+data class SwipeRewindResponse(
+    val rewound: Boolean,
+    val deckSessionId: String = "",
+    val card: SwipeCardDto? = null
+)
+```
+
 Rules:
 
 - Match creation is server-authoritative.
@@ -269,6 +280,8 @@ Rules:
 - The server rejects a reused `actionId` when target/action/note payload differs from the original action.
 - Idempotent retries must not spend Intro Note or Pineapple Like inventory again.
 - Intro Notes require entitlement/inventory and recipient eligibility.
+- Rewind is entitlement-gated, soft-rewinds the latest eligible active Like/Pass, and returns a fresh deck session/card token for the restored card when successful.
+- Rewind returns `rewound=false` when there is no safe eligible action to restore.
 - Dealbreakers are hard.
 - Soft filters may expand only when allowed.
 
@@ -517,7 +530,7 @@ Rules:
 
 - [x] `/v1` versioning.
 - [x] Shared DTO conventions.
-- [ ] Partial: signed cursor pagination is implemented for Grid, but swipe/activity and other live cursor behavior is incomplete.
+- [ ] Partial: signed cursor pagination is implemented for Grid and Swipe decks, but activity and other live cursor behavior is incomplete.
 - [ ] Partial: idempotency keys exist for notification/outbox, swipe actions, and some workflows, but purchases and all mutations are not consistently idempotent.
 - [x] Server-side entitlement checks.
 - [x] Server-side block/privacy/risk checks.

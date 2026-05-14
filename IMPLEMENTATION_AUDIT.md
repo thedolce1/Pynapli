@@ -41,7 +41,7 @@ Primary local specs:
 Current code evidence:
 
 - Kotlin Multiplatform shared module, Compose app module, Android app module, Ktor server module.
-- PostgreSQL/PostGIS migrations through `server/src/main/resources/db/migration/V43__add_grid_query_covering_indexes.sql`.
+- PostgreSQL/PostGIS migrations through `server/src/main/resources/db/migration/V45__add_swipe_rewind.sql`.
 - Redis-backed presence/rate-limit paths.
 - Firebase Cloud Messaging integration path.
 - Google Play Billing client and server purchase verification path.
@@ -76,6 +76,7 @@ Latest known green baseline after restoring server JUnit 4 coverage:
 - Android Grid location policy checks exist at `scripts/android-location-policy-check.ps1` and are included in `scripts/verify.ps1`; the check rejects background location, foreground location service use, continuous updates, and missing one-shot cancellation on app stop.
 - Android denied-location QA exists at `scripts/android-grid-denied-location-qa.ps1`. Latest local emulator run on 2026-05-14 passed with screenshots/XML/permission dumps under `artifacts/android-grid-denied-location-qa/20260514-091231`.
 - Android battery/location profile capture exists at `scripts/android-grid-battery-profile.ps1`. Latest local emulator smoke on 2026-05-14 completed under `artifacts/android-grid-battery-profile/20260514-091341`, but this is harness evidence only; physical-device battery profiling remains required.
+- Swipe Rewind targeted coverage now exists for Social/Select entitlement, latest eligible Like/Pass restoration, fresh restored card tokens, matched-action protection, old action-id retry suppression, local queued-action rollback, and the desktop Swipe action row visual/interaction path.
 
 Current CI state:
 
@@ -93,7 +94,7 @@ Current CI state:
 | Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display, age-verification entry. | Data export/delete, blocked/hidden management, and full safety center need completion. |
 | Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs, client movement thresholds, Android while-in-use location policy guard, denied-location Android QA, and battery/location profile artifact capture. | Server-side location trust/spoofing checks and physical-device battery profiling remain. |
 | Grid | Partially implemented | Lightweight grid DTO, separate profile endpoint, PostGIS radius/distance query, signed stable cursor pagination, tier page/depth caps, Redis-backed query rate limit, fixed square cards, stable Compose keys, shared-UI visual-signature regression, connected Android structural golden QA, Android denied-location QA, Android location policy guard, battery/profile harness, 5,000-candidate dense integration proof, 100-concurrent filtered repository regression proof, 500-concurrent API proof artifacts, cold Redis-cache proof artifacts, opt-in server profiling, two-phase candidate-rank then card-hydration SQL, V43 covering lookup indexes, side-query optimization for entitlement/rate-limit/profile-view paths, planner-stat refresh in dense load tests, client movement-threshold policy, retained lazy grid state while screen is alive, block/risk filtering, partner preview, WebSocket presence deltas, and explicit thumbnail prefetching. | Current 500-concurrent API shape is zero-error locally, but warm p95 variance still exceeds some budgets and needs repeat profiling. Larger dense metros and physical-device battery/location QA are still needed. |
-| Swipe | Partially implemented | Swipe deck endpoint, persisted deck sessions/cards, signed deck-session/card-token validation, cursor pagination, action endpoint, server-authoritative match creation, immutable normal actions, idempotent swipe action IDs, bounded in-memory client action queue, active-stack image preloading, desktop visual/interaction QA, block/report path, intro notes, pineapple-like inventory, boost influence, partner preview. | Rewind, durable offline action persistence, top picks, passport/travel mode, and dealbreaker settings remain incomplete. |
+| Swipe | Partially implemented | Swipe deck endpoint, persisted deck sessions/cards, signed deck-session/card-token validation, cursor pagination, action endpoint, server-authoritative match creation, immutable normal actions, idempotent swipe action IDs, server-aware Rewind for latest eligible Like/Pass, local queued-action rollback, bounded in-memory client action queue, active-stack image preloading, desktop visual/interaction QA, block/report path, intro notes, pineapple-like inventory, boost influence, partner preview. | Pineapple Like inventory-safe rewind, durable offline action persistence, top picks, passport/travel mode, and dealbreaker settings remain incomplete. |
 | Messaging | Mostly implemented for MVP | Direct conversations, grid-open messaging, swipe match gating, intro-note handling, partner chat invite/accept/decline/leave, block-aware conversations, message review path. | WebSocket realtime, typing/read realtime, and deeper consent tests should be added before beta. |
 | Activity | Partially implemented | Activity event model, newest-first activity, flirts, album requests, gating by entitlement, block checks, risk checks, and bounded background profile-view recording for production profile opens. | Tabs, opt-outs/incognito behavior, partner-context activity separation, and complete reveal-depth UX need review. |
 | Partner links | Strong MVP path | Invite, accept, decline, unlink, one active beneficiary, cooldown/abuse controls, linked partner subscription benefit. | Support/admin review and forced unlink workflow need moderation tooling. |
@@ -140,8 +141,8 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Signed persisted deck-session/card-token validation exists for action authorization.
    - Cursor pagination now continues a persisted deck session without duplicate returned cards.
    - Swipe action IDs now make normal retries idempotent and prevent duplicate inventory spend.
-   - A bounded in-memory client action queue exists, but durable offline persistence across app process death is not implemented.
-   - Rewind entitlement flow is not implemented.
+   - A bounded in-memory client action queue exists, including local rollback for queued actions, but durable offline persistence across app process death is not implemented.
+   - Rewind entitlement flow exists for Social/Select and latest eligible Like/Pass actions; Pineapple Like inventory-safe rewind remains incomplete.
 
 3. Production-grade CI controls are not complete.
    - The Gradle verification gate is wired into CI.
@@ -181,7 +182,7 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Grid: repeat 500-concurrent runs with server profiling enabled so warm-run variance can be traced to candidate SQL, DB pool waits, local machine noise, or another hot path.
    - Grid later: decide Redis candidate caching from that repeat evidence if candidate SQL cannot reliably meet the higher beta targets.
    - Grid: run physical-device battery/location QA with `scripts/android-grid-battery-profile.ps1`; denied-location Android QA is now covered.
-   - Swipe later: durable offline action persistence, rewind path, and remaining premium discovery features.
+   - Swipe later: durable offline action persistence, Pineapple Like inventory-safe rewind, and remaining premium discovery features.
 
 3. Finish the profile/settings safety surface.
    - Safety center, block list, hidden users if retained, report history/support contact, data export/delete, notification settings, and production age-verification provider/market wiring.

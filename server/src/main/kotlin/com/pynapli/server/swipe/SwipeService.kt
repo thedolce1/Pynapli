@@ -23,6 +23,7 @@ import com.pynapli.shared.network.dto.SwipeActionResponseDto
 import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckResponseDto
+import com.pynapli.shared.network.dto.SwipeRewindResponseDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import java.time.Clock
 import java.time.Instant
@@ -189,6 +190,9 @@ class SwipeService(
             ) {
                 throw SwipeException("INVALID_SWIPE_ACTION_ID")
             }
+            if (existingAction.rewoundAt != null) {
+                return SwipeActionResponseDto(recorded = false)
+            }
             return existingAction.toResponse(viewerUserId)
         }
         val deckSessionId = request.deckSessionId.trim()
@@ -298,6 +302,82 @@ class SwipeService(
                 )
             }
         )
+    }
+
+    suspend fun rewind(viewerUserId: UUID): SwipeRewindResponseDto {
+        if (riskPolicyService?.isSocialActionRestricted(viewerUserId) == true) {
+            throw SwipeException("RISK_RESTRICTED")
+        }
+        val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
+        if (policy.tier == SubscriptionTier.FREE) {
+            throw SwipeException("ENTITLEMENT_REQUIRED")
+        }
+        if (rateLimitService?.check(viewerUserId, RateLimitedAction.SWIPE_ACTION)?.allowed == false) {
+            throw SwipeException("RATE_LIMITED")
+        }
+
+        val candidate = repository.findLatestRewindableAction(
+            viewerUserId = viewerUserId,
+            radiusMeters = MAX_RADIUS_METERS
+        ) ?: return SwipeRewindResponseDto(rewound = false)
+        if (blockRepository?.isBlockedEitherWay(viewerUserId, candidate.targetUserId) == true) {
+            return SwipeRewindResponseDto(rewound = false)
+        }
+
+        val now = clock.instant()
+        val filters = DiscoveryFilters()
+        val scopeHash = SwipeDeckTokenCodec.deckScopeHash(
+            viewerUserId = viewerUserId,
+            radiusMeters = MAX_RADIUS_METERS,
+            limit = 1,
+            filters = filters
+        )
+        val deckSession = deckTokenCodec.issueDeckSession(
+            viewerUserId = viewerUserId,
+            scopeHash = scopeHash,
+            now = now
+        )
+        val cardToken = deckTokenCodec.issueCardToken(
+            deckSessionId = deckSession.deckSessionId,
+            viewerUserId = viewerUserId,
+            targetUserId = candidate.targetUserId,
+            scopeHash = scopeHash,
+            generatedAt = deckSession.generatedAt,
+            expiresAt = deckSession.expiresAt,
+            position = 0
+        )
+        val rewound = repository.rewindSwipeAction(
+            actionId = candidate.actionId,
+            actorUserId = viewerUserId,
+            targetUserId = candidate.targetUserId,
+            session = deckSession.toSessionRecord(
+                viewerUserId = viewerUserId,
+                scopeHash = scopeHash,
+                radiusMeters = MAX_RADIUS_METERS,
+                pageLimit = 1,
+                filterPayload = filters.toPersistedJson()
+            ),
+            card = SwipeDeckSessionCardRecord(
+                cardId = UUID.randomUUID(),
+                sessionId = deckSession.sessionId,
+                viewerUserId = viewerUserId,
+                targetUserId = candidate.targetUserId,
+                cardTokenHash = deckTokenCodec.tokenHash(cardToken),
+                position = 0,
+                dealtAt = now
+            ),
+            rewoundAt = now
+        )
+
+        return if (rewound) {
+            SwipeRewindResponseDto(
+                rewound = true,
+                deckSessionId = deckSession.deckSessionId,
+                card = candidate.card.toDto(rankToken = cardToken)
+            )
+        } else {
+            SwipeRewindResponseDto(rewound = false)
+        }
     }
 
     suspend fun listMatches(viewerUserId: UUID): MatchesListResponseDto {

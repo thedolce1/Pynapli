@@ -58,6 +58,7 @@ import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckResponseDto
+import com.pynapli.shared.network.dto.SwipeRewindResponseDto
 import com.pynapli.shared.network.dto.MatchesListResponseDto
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
@@ -395,6 +396,9 @@ private class FakeApiClient(
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun submitSwipeAction(request: SwipeActionRequestDto): AppResult<SwipeActionResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun rewindSwipeAction(): AppResult<SwipeRewindResponseDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun listMatches(): AppResult<MatchesListResponseDto> =

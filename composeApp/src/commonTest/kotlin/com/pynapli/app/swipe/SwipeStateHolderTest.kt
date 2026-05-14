@@ -115,13 +115,83 @@ class SwipeStateHolderTest {
         assertEquals(cards[10], state.topCard)
         assertEquals(10, actionIndex)
     }
+
+    @Test
+    fun rewindRestoresRecoverableQueuedActionWithoutServerCall() = runBlocking {
+        val card = swipeCard(userId = "target-1")
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = listOf(card), deckSessionId = "deck-1"),
+            actionResult = AppResult.Failure(AppError("NETWORK_ERROR", "Offline", recoverable = true))
+        )
+        val stateHolder = SwipeStateHolder(repository, actionIdFactory = { "action-1" })
+
+        stateHolder.load()
+        stateHolder.submitAction(card, SwipeAction.LIKE)
+        stateHolder.rewind()
+
+        val state = stateHolder.state.value
+        assertEquals(1, repository.submitCount)
+        assertEquals(0, repository.rewindCount)
+        assertEquals(0, state.pendingActionCount)
+        assertEquals(card, state.topCard)
+        assertNull(state.errorMessage)
+    }
+
+    @Test
+    fun rewindPrependsServerRestoredCardAndDeckSession() = runBlocking {
+        val first = swipeCard(userId = "target-1")
+        val restored = swipeCard(userId = "target-2").copy(rankToken = "rank-restored")
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = listOf(first), deckSessionId = "deck-1"),
+            rewindResult = AppResult.Success(
+                SwipeRewindUi(
+                    deckSessionId = "deck-restored",
+                    card = restored
+                )
+            )
+        )
+        val stateHolder = SwipeStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.rewind()
+
+        val state = stateHolder.state.value
+        assertEquals(1, repository.rewindCount)
+        assertEquals("deck-restored", state.deckSessionId)
+        assertEquals(restored, state.topCard)
+        assertNull(state.errorMessage)
+    }
+
+    @Test
+    fun rewindEntitlementFailureShowsPaywallMessage() = runBlocking {
+        val card = swipeCard(userId = "target-1")
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = listOf(card), deckSessionId = "deck-1"),
+            rewindResult = AppResult.Failure(
+                AppError("ENTITLEMENT_REQUIRED", "Upgrade required.", recoverable = false)
+            )
+        )
+        val stateHolder = SwipeStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.rewind()
+
+        val state = stateHolder.state.value
+        assertEquals(1, repository.rewindCount)
+        assertEquals("Rewind is included with Social or Select.", state.paywallMessage)
+        assertNull(state.errorMessage)
+        assertEquals(card, state.topCard)
+    }
 }
 
 private class FakeSwipeRepository(
     private val deck: SwipeDeckUi,
-    var actionResult: AppResult<MatchDto?> = AppResult.Success(null)
+    var actionResult: AppResult<MatchDto?> = AppResult.Success(null),
+    var rewindResult: AppResult<SwipeRewindUi?> = AppResult.Success(null)
 ) : SwipeRepository {
     var submitCount = 0
+        private set
+    var rewindCount = 0
         private set
     val submittedActions = mutableListOf<QueuedSwipeAction>()
 
@@ -132,6 +202,11 @@ private class FakeSwipeRepository(
         submitCount += 1
         submittedActions += action
         return actionResult
+    }
+
+    override suspend fun rewind(): AppResult<SwipeRewindUi?> {
+        rewindCount += 1
+        return rewindResult
     }
 }
 

@@ -34,6 +34,11 @@ fun Application.configureSwipeRoutes(
             call.respond(swipeService.submitAction(user.id, request))
         }
 
+        post("/v1/swipe/rewind") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(swipeService.rewind(user.id))
+        }
+
         get("/v1/matches") {
             val user = authService.authenticate(call.requiredBearerToken())
             call.respond(swipeService.listMatches(user.id))

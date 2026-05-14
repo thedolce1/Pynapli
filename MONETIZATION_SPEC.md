@@ -574,6 +574,7 @@ Do not experiment with:
 - [x] Restore purchases exists.
 - [x] Activity gating is implemented.
 - [x] Advanced filters are gated.
+- [x] Rewind is gated to Social/Select for latest eligible Like/Pass.
 - [x] Boost inventory exists.
 - [x] Pineapple Like inventory exists.
 - [x] Intro Note inventory exists.
