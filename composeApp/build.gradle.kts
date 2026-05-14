@@ -37,6 +37,7 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor3)
+            implementation(libs.kotlinx.serialization.json)
             implementation(libs.koin.compose)
         }
 

@@ -112,8 +112,8 @@ fun SwipeScreen(
     val platformContext = LocalPlatformContext.current
     val swipeImagePrefetchUrls = remember(state.cards) { planSwipeImagePrefetch(state.cards) }
 
-    LaunchedEffect(stateHolder) {
-        stateHolder.load()
+    LaunchedEffect(stateHolder, viewerUserId) {
+        stateHolder.load(ownerUserId = viewerUserId)
     }
 
     LaunchedEffect(swipeImagePrefetchUrls) {

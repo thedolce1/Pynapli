@@ -52,21 +52,24 @@ enum class SwipeFilterType {
 
 class SwipeStateHolder(
     private val repository: SwipeRepository,
-    private val actionIdFactory: () -> String = ::newSwipeActionId
+    private val actionIdFactory: () -> String = ::newSwipeActionId,
+    private val queueStore: SwipeActionQueueStore = NoOpSwipeActionQueueStore
 ) {
     private val _state = MutableStateFlow(SwipeUiState())
     val state: StateFlow<SwipeUiState> = _state.asStateFlow()
     private val pendingActions = mutableListOf<QueuedSwipeAction>()
     private var isFlushingActions = false
+    private var restoredQueueOwnerUserId: String? = null
 
-    suspend fun load() {
+    suspend fun load(ownerUserId: String? = null) {
+        restorePendingActions(ownerUserId)
         val selectedFilter = _state.value.filters.firstOrNull { it.active }?.type ?: SwipeFilterType.ForYou
         _state.update { it.copy(isLoading = true, errorCode = null, errorMessage = null) }
         when (val result = repository.loadDeck(selectedFilter)) {
             is AppResult.Success -> _state.update {
                 it.copy(
                     deckSessionId = result.value.deckSessionId,
-                    cards = result.value.cards,
+                    cards = result.value.cards.filterNotPending(),
                     filters = it.filters.withPaidLocks(result.value.adSupported),
                     adSupported = result.value.adSupported,
                     paywallMessage = null,
@@ -95,6 +98,9 @@ class SwipeStateHolder(
                     }
                 )
             }
+        }
+        if (pendingActions.isNotEmpty()) {
+            flushPendingActions()
         }
     }
 
@@ -165,6 +171,7 @@ class SwipeStateHolder(
             noteText = noteText
         )
         pendingActions += queuedAction
+        persistPendingActions()
         _state.update { current ->
             current.copy(
                 cards = current.cards.drop(1),
@@ -188,6 +195,7 @@ class SwipeStateHolder(
             null
         }
         if (pendingAction != null) {
+            persistPendingActions()
             _state.update { current ->
                 current.copy(
                     cards = current.cards.withRestoredTopCard(pendingAction.card),
@@ -258,6 +266,7 @@ class SwipeStateHolder(
                 when (val result = repository.submitAction(queued)) {
                     is AppResult.Success -> {
                         pendingActions.removeAt(0)
+                        persistPendingActions()
                         _state.update { current ->
                             current.copy(
                                 isSubmitting = pendingActions.isNotEmpty(),
@@ -281,6 +290,7 @@ class SwipeStateHolder(
                             return
                         }
                         pendingActions.removeAt(0)
+                        persistPendingActions()
                         _state.update {
                             it.copy(
                                 cards = if (it.cards.any { cardInDeck -> cardInDeck.userId == queued.card.userId }) {
@@ -320,6 +330,36 @@ class SwipeStateHolder(
     private suspend fun act(action: String) {
         val card = _state.value.topCard ?: return
         submitAction(card, action)
+    }
+
+    private suspend fun restorePendingActions(ownerUserId: String?) {
+        if (restoredQueueOwnerUserId == ownerUserId) return
+        restoredQueueOwnerUserId = ownerUserId
+        pendingActions.clear()
+        pendingActions += queueStore.load(ownerUserId).take(MAX_PENDING_ACTIONS)
+        _state.update {
+            it.copy(
+                pendingActionCount = pendingActions.size,
+                isSubmitting = false
+            )
+        }
+    }
+
+    private suspend fun persistPendingActions() {
+        val ownerUserId = restoredQueueOwnerUserId
+        runCatching {
+            if (pendingActions.isEmpty()) {
+                queueStore.clear(ownerUserId)
+            } else {
+                queueStore.save(ownerUserId, pendingActions.take(MAX_PENDING_ACTIONS))
+            }
+        }
+    }
+
+    private fun List<SwipeCardDto>.filterNotPending(): List<SwipeCardDto> {
+        if (pendingActions.isEmpty()) return this
+        val pendingTargetIds = pendingActions.mapTo(mutableSetOf()) { it.card.userId }
+        return filterNot { it.userId in pendingTargetIds }
     }
 }
 

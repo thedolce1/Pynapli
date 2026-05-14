@@ -239,7 +239,7 @@ Use local storage for:
 - Auth session metadata, securely where needed
 - User settings cache
 - Last grid card snapshot
-- Swipe deck action queue, once durable persistence is implemented
+- Swipe deck action queue
 - Message draft text
 - Recent messages cache
 - Feature flags
@@ -304,7 +304,7 @@ Client requirements:
 
 - Render only top 2-3 cards.
 - Use deck session from server.
-- Optimistic action queue.
+- Optimistic action queue with durable local persistence where platform storage is wired.
 - Physics-based gestures.
 - Image preloading.
 
@@ -486,7 +486,7 @@ Client test coverage:
 - ViewModel state transitions.
 - Repository API mapping.
 - Grid scroll preservation.
-- Swipe action queue.
+- Swipe action queue, including durable retry behavior.
 - WebSocket reconnect handling.
 - Partner invite flows.
 - Permission denied states.
@@ -511,7 +511,7 @@ Manual/device:
 - [ ] Partial: location update flow exists, but platform expect/actual location provider abstraction is not complete.
 - [ ] Partial: Android Play Billing bridge exists; iOS StoreKit bridge is missing.
 - [ ] Partial: Grid preserves scroll state while the screen instance is alive; navigation/lifecycle regression coverage is still needed.
-- [ ] Partial: Swipe action queue is capped in memory; durable local persistence across app process death is not implemented.
+- [ ] Partial: Swipe action queue is capped and Android persists it through SQLDelight; iOS wiring and process-death device QA remain incomplete.
 - [x] Activity and Messages are separate.
 - [x] Partner invite consent flow implemented.
 - [ ] Firebase analytics excludes sensitive data.

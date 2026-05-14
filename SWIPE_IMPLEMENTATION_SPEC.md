@@ -483,6 +483,13 @@ Rules:
 - Do not allow unlimited offline swiping without server sync.
 - Cap local unsynced actions.
 
+Current MVP implementation:
+
+- Pending swipe actions use stable action IDs and a 10-action cap.
+- Android persists pending actions through SQLDelight, scoped by viewer user ID.
+- Restored pending targets are filtered out of a freshly loaded deck until Ktor accepts or rejects the queued action.
+- Cross-platform store wiring for iOS and process-death device QA remain open.
+
 ## Compose Swipe Implementation
 
 Recommended Kotlin client stack:
@@ -697,7 +704,7 @@ Network:
 - [x] Compose card stack renders only 2-3 cards.
 - [x] Swipe gestures use physics/thresholds.
 - [x] Card image preloading exists for the active/near-next Swipe stack.
-- [ ] Partial: offline action cap exists as a bounded in-memory Compose queue with stable action IDs; durable offline persistence across app process death is not implemented.
+- [ ] Partial: offline action cap exists with stable action IDs and Android SQLDelight persistence; iOS wiring and process-death device QA remain incomplete.
 - [x] Block/report available from card.
 - [x] Linked partner preview does not turn into couple card.
 
