@@ -315,6 +315,36 @@ class KtorPynapliApiClientTest {
     }
 
     @Test
+    fun getPublicProfileToleratesOmittedNullableProfileFields() = runBlocking {
+        val httpClient = testHttpClient {
+            respond(
+                content = """
+                    {
+                      "userId": "target-1",
+                      "displayName": "Dense 2550",
+                      "discoveryStyle": "social",
+                      "allowGridMessages": true,
+                      "allowFlirts": true,
+                      "allowAlbumRequests": true
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.getPublicProfile("target-1")
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        val profile = success.value as PublicProfileDto
+        assertEquals("Dense 2550", profile.displayName)
+        assertEquals(null, profile.gender)
+        assertEquals(null, profile.orientation)
+        assertEquals(null, profile.relationshipContext)
+    }
+
+    @Test
     fun getSubscriptionEntitlementSendsBearerTokenAndMapsTier() = runBlocking {
         var authorizationHeader: String? = null
         var requestPath: String? = null
