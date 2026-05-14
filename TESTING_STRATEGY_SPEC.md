@@ -43,10 +43,11 @@ Current Grid coverage:
 - `GridScreenVisualRegressionTest` renders the real shared Compose `GridScreen` in a fixed mobile viewport with the dark Pynapli theme.
 - The test captures pixels and checks for the intended visual signature: subdued dark surface, dense card grid, readable text/icons, online indicators, linked-partner/accent color, and filter-sheet surface after opening filters.
 - This is a fast shared-UI guardrail that runs in `:composeApp:desktopTest`, so it is included in `scripts/verify.ps1`.
+- `scripts/android-grid-qa.ps1` runs the installed Android debug app against local Ktor on a connected emulator/device. It seeds dev data, optionally builds/installs the APK, logs in through dev login, captures screenshots, verifies the Grid loads, opens the filter sheet, toggles the Online quick filter, opens a profile, and asserts closing the profile returns to the same first visible Grid card.
 
 Still open before beta:
 
-- Connected Android emulator screenshot/golden tests for the installed `androidApp`.
+- Promote connected Android emulator screenshots from scripted QA artifacts into golden/regression comparisons for the installed `androidApp`.
 - Manual device pass on mid-range and low-end Android hardware.
 - Visual checks with real thumbnail loading, denied location state, empty Grid, and profile-detail sheet.
 
@@ -102,6 +103,29 @@ Then run:
 
 The current profiled baseline is zero-error after the Grid two-phase SQL optimization, side-query optimization, and V43 covering-index pass. Latest warm 2026-05-13 run with 5,000 candidates / 100 concurrent mixed-tier users / DB pool 32 produced client p95 of Grid initial 450.4ms, Grid filter 354.5ms, Grid page two 477.0ms, profile open 138.8ms, and presence heartbeat 118.0ms. The harness refreshes planner statistics after bulk seeding before timing the API workload.
 
+## Connected Android Grid QA
+
+Run this before and after meaningful Grid/profile/filter UI or API-contract changes:
+
+```powershell
+.\scripts\android-grid-qa.ps1
+```
+
+Useful faster rerun after the APK is already built:
+
+```powershell
+.\scripts\android-grid-qa.ps1 -SkipBuild
+```
+
+Requirements:
+
+- Local Ktor must be healthy at `http://127.0.0.1:8080/health/deep`.
+- Docker Postgres/Redis must be running for the local server.
+- One Android emulator/device must be connected through `adb`, or pass `-DeviceId`.
+- Debug builds must expose the `Dev login` button.
+
+The script writes PNG screenshots, UI hierarchy XML, and `qa-summary.json` under `artifacts/android-grid-qa/<timestamp>`. A passing run proves the installed app can complete the current critical Grid loop, but it is not a replacement for future golden-image assertions or real-device battery/location testing.
+
 ## Security/Abuse Tests
 
 - Mass first-message bot throttled.
@@ -122,7 +146,7 @@ The current profiled baseline is zero-error after the Grid two-phase SQL optimiz
 - [ ] Partial: Performance benchmarks are under current local 100-concurrent Grid budgets, but beta-scale 500-concurrent Grid testing is still open.
 - [x] Grid API load harness exists and runs zero-error locally for the current 5,000-candidate / 100-concurrent warm workload.
 - [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, entitlement/rate-limit/profile-view side-query pressure has been reduced, and V43 covering indexes are in place; remaining hot-path work is proving page-two/candidate-query behavior at 500-concurrent beta scale and larger dense metro datasets.
-- [ ] Partial: Grid shared-UI visual-signature regression exists and runs in the local verification gate; connected Android emulator screenshot/golden coverage is still open.
+- [ ] Partial: Grid shared-UI visual-signature regression exists and runs in the local verification gate; connected Android Grid QA is scripted and produces screenshots, but golden comparisons are still open.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [ ] Location denied path tested.
