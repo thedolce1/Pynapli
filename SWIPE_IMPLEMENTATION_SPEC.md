@@ -689,7 +689,7 @@ Network:
 - [ ] Dealbreaker settings exist.
 - [x] Compose card stack renders only 2-3 cards.
 - [x] Swipe gestures use physics/thresholds.
-- [ ] Card image preloading exists.
+- [x] Card image preloading exists for the active/near-next Swipe stack.
 - [ ] Partial: offline action cap exists as a bounded in-memory Compose queue with stable action IDs; durable offline persistence across app process death is not implemented.
 - [x] Block/report available from card.
 - [x] Linked partner preview does not turn into couple card.

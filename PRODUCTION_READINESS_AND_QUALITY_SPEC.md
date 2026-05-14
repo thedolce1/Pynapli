@@ -448,7 +448,7 @@ Location rules:
 - Database migration tests.
 - Contract tests for API DTOs.
 - Mobile ViewModel/state tests.
-- Compose screenshot/regression tests for core components. Current Grid coverage includes a shared-UI visual-signature pixel test in `GridScreenVisualRegressionTest`, connected Android screenshot/golden assertions in `scripts/android-grid-qa.ps1`, denied-location screenshots/assertions in `scripts/android-grid-denied-location-qa.ps1`, Android location policy checks in `scripts/android-location-policy-check.ps1`, and physical-device battery/profile capture in `scripts/android-grid-battery-profile.ps1`.
+- Compose screenshot/regression tests for core components. Current Grid coverage includes a shared-UI visual-signature pixel test in `GridScreenVisualRegressionTest`, connected Android screenshot/golden assertions in `scripts/android-grid-qa.ps1`, denied-location screenshots/assertions in `scripts/android-grid-denied-location-qa.ps1`, Android location policy checks in `scripts/android-location-policy-check.ps1`, and physical-device battery/profile capture in `scripts/android-grid-battery-profile.ps1`. Current Swipe coverage includes `SwipeScreenVisualInteractionTest` for shared-UI visual signature plus Like/Pass/Intro Note interaction checks.
 - E2E tests for critical journeys.
 - Load tests for grid, swipe, messages, activity, and auth.
 - Abuse tests for spam, scraping, and rate limits.

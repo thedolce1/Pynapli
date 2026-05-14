@@ -61,12 +61,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
 import com.pynapli.app.ads.AdPlacement
 import com.pynapli.app.ads.AdPlacementPolicy
 import com.pynapli.app.conversation.ConversationStateHolder
@@ -105,9 +109,23 @@ fun SwipeScreen(
     var profileActionMode by remember { mutableStateOf(ProfileDetailActionMode.SwipeUnmatched) }
     var introNoteCard by remember { mutableStateOf<SwipeCardDto?>(null) }
     var introNoteText by remember { mutableStateOf("") }
+    val platformContext = LocalPlatformContext.current
+    val swipeImagePrefetchUrls = remember(state.cards) { planSwipeImagePrefetch(state.cards) }
 
     LaunchedEffect(stateHolder) {
         stateHolder.load()
+    }
+
+    LaunchedEffect(swipeImagePrefetchUrls) {
+        if (swipeImagePrefetchUrls.isEmpty()) return@LaunchedEffect
+        val imageLoader = runCatching { SingletonImageLoader.get(platformContext) }.getOrNull() ?: return@LaunchedEffect
+        swipeImagePrefetchUrls.forEach { url ->
+            imageLoader.enqueue(
+                ImageRequest.Builder(platformContext)
+                    .data(url)
+                    .build()
+            )
+        }
     }
 
     LaunchedEffect(state.pendingMatch, matchNotificationsEnabled) {
@@ -127,6 +145,7 @@ fun SwipeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .testTag(SwipeTestTags.ROOT)
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .padding(horizontal = 18.dp, vertical = 12.dp)
@@ -553,6 +572,7 @@ private fun SwipeCard(
     val scope = rememberCoroutineScope()
     val offset = remember(card.userId) { Animatable(Offset.Zero, Offset.VectorConverter) }
     val threshold = widthPx * 0.26f
+    var isProgrammaticFlyOut by remember(card.userId) { mutableStateOf(false) }
 
     suspend fun settleBack() {
         offset.animateTo(Offset.Zero, tween(durationMillis = 180))
@@ -572,11 +592,22 @@ private fun SwipeCard(
 
     LaunchedEffect(requestedAction, card.userId) {
         val action = requestedAction ?: return@LaunchedEffect
+        if (isProgrammaticFlyOut) {
+            onActionConsumed()
+            return@LaunchedEffect
+        }
+        isProgrammaticFlyOut = true
+        scope.launch {
+            try {
+                flyOut(action)
+            } finally {
+                isProgrammaticFlyOut = false
+            }
+        }
         onActionConsumed()
-        flyOut(action)
     }
 
-    val dragModifier = if (isTop && enabled) {
+    val dragModifier = if (isTop && enabled && !isProgrammaticFlyOut) {
         Modifier.pointerInput(card.userId, widthPx) {
             detectDragGestures(
                 onDrag = { change, dragAmount ->
@@ -637,6 +668,7 @@ private fun SwipeCard(
                     rotationZ = (offset.value.x / 42f).coerceIn(-10f, 10f)
                 }
             }
+            .testTag(if (isTop) SwipeTestTags.TOP_CARD else "${SwipeTestTags.CARD_PREFIX}${card.userId}")
             .then(dragModifier)
             .clickable(
                 enabled = isTop && enabled,
@@ -766,6 +798,7 @@ private fun SwipeActions(
         SwipeActionButton(
             enabled = enabled,
             isSubmitting = isSubmitting,
+            testTag = SwipeTestTags.PASS_ACTION,
             icon = Icons.Filled.Close,
             contentDescription = "Pass",
             background = Color(0x33EE6650),
@@ -775,6 +808,7 @@ private fun SwipeActions(
         SwipeActionButton(
             enabled = enabled,
             isSubmitting = isSubmitting,
+            testTag = SwipeTestTags.INTRO_NOTE_ACTION,
             icon = Icons.Filled.Edit,
             contentDescription = "Intro Note",
             background = MaterialTheme.colorScheme.surfaceVariant,
@@ -784,6 +818,7 @@ private fun SwipeActions(
         SwipeActionButton(
             enabled = enabled,
             isSubmitting = isSubmitting,
+            testTag = SwipeTestTags.PINEAPPLE_LIKE_ACTION,
             icon = Icons.Filled.Star,
             contentDescription = "Pineapple Like",
             background = Color(0x33F2B84B),
@@ -793,6 +828,7 @@ private fun SwipeActions(
         SwipeActionButton(
             enabled = enabled,
             isSubmitting = isSubmitting,
+            testTag = SwipeTestTags.LIKE_ACTION,
             icon = Icons.Filled.Favorite,
             contentDescription = "Like",
             background = Color(0x331FBF7B),
@@ -869,6 +905,7 @@ private fun IntroNoteDialog(
 private fun SwipeActionButton(
     enabled: Boolean,
     isSubmitting: Boolean,
+    testTag: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     background: Color,
@@ -886,7 +923,7 @@ private fun SwipeActionButton(
         IconButton(
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.size(64.dp)
+            modifier = Modifier.size(64.dp).testTag(testTag)
         ) {
             if (isSubmitting) {
                 CircularProgressIndicator(
@@ -1041,3 +1078,13 @@ private fun String.stableIndex(size: Int): Int =
 
 private const val INTRO_NOTE_MAX_LENGTH = 140
 private const val INTRO_NOTE_INPUT_MAX_LENGTH = 160
+
+internal object SwipeTestTags {
+    const val ROOT = "swipe-root"
+    const val TOP_CARD = "swipe-top-card"
+    const val CARD_PREFIX = "swipe-card-"
+    const val PASS_ACTION = "swipe-action-pass"
+    const val INTRO_NOTE_ACTION = "swipe-action-intro-note"
+    const val PINEAPPLE_LIKE_ACTION = "swipe-action-pineapple-like"
+    const val LIKE_ACTION = "swipe-action-like"
+}

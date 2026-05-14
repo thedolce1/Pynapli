@@ -49,11 +49,19 @@ Current Grid coverage:
 - `scripts/android-location-policy-check.ps1` verifies the Android Grid location path stays while-in-use only: no background location permission, no foreground location service, no continuous `requestLocationUpdates`, one-shot `getCurrentLocation`, and cancellation on `MainActivity.onStop`.
 - `scripts/android-grid-battery-profile.ps1` captures a repeatable foreground/background Grid battery-location profile bundle through `adb`. It refuses emulator evidence unless `-AllowEmulator` is passed, so real-device evidence stays distinct from harness smoke testing.
 
+Current Swipe coverage:
+
+- `SwipeScreenVisualInteractionTest` renders the real shared Compose `SwipeScreen` in a fixed mobile viewport with the dark Pynapli theme.
+- The test captures pixels and checks for the intended visual signature: subdued dark surface, tonal card body, readable text/icons, Pynapli gold accent, and Like action accent.
+- The test also clicks Like and Pass through the real action buttons and verifies the deck advances, then verifies the Intro Note dialog opens.
+- `SwipeImagePrefetchPlannerTest` verifies the active/near-next Swipe image prefetch window, URL ordering, and deduplication.
+
 Still open before beta:
 
 - Exact-image golden comparisons are still optional future work; current connected Android golden coverage uses structural UI and screenshot-signature checks to avoid status-bar/time false positives.
 - Manual device pass on mid-range and low-end Android hardware.
 - Visual checks with empty Grid outside the Online-filter empty state and more real-device thumbnail loading still need coverage.
+- Connected Android Swipe screenshot/gesture QA still needs a script once the Swipe surface is closer to feature complete.
 - Real battery profiling with movement/background/foreground scenarios still needs a device pass.
 
 ## Performance Benchmarks
