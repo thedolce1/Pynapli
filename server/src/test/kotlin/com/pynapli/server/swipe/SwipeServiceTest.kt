@@ -156,7 +156,11 @@ class SwipeServiceTest {
         val error = assertFailsWith<SwipeException> {
             service.submitAction(
                 viewer,
-                SwipeActionRequestDto(targetUserId = target.toString(), action = SwipeAction.LIKE)
+                SwipeActionRequestDto(
+                    actionId = UUID.randomUUID().toString(),
+                    targetUserId = target.toString(),
+                    action = SwipeAction.LIKE
+                )
             )
         }
 
@@ -301,6 +305,52 @@ class SwipeServiceTest {
         assertTrue(response.recorded)
         assertEquals(SwipeAction.INTRO_NOTE, repository.actionsSnapshot().getValue(viewer to target))
         assertEquals(0, subscriptionRepository.introNotesRemaining(viewer))
+    }
+
+    @Test
+    fun idempotentIntroNoteRetryDoesNotConsumeInventoryAgain() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000252")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000253")
+        val actionId = UUID.fromString("00000000-0000-0000-0000-000000000254")
+        val repository = InMemorySwipeRepository()
+        val subscriptionRepository = StaticSubscriptionRepository.paid(viewer, SubscriptionTier.SELECT, introNotes = 1)
+        val service = SwipeService(
+            repository = repository,
+            subscriptionService = SubscriptionService(subscriptionRepository)
+        )
+        val request = swipeActionRequest(
+            viewerUserId = viewer,
+            targetUserId = target,
+            action = SwipeAction.INTRO_NOTE,
+            noteText = "Hi, your vibe caught my eye.",
+            actionId = actionId
+        )
+
+        val first = service.submitAction(viewer, request)
+        val retry = service.submitAction(viewer, request)
+
+        assertTrue(first.recorded)
+        assertTrue(retry.recorded)
+        assertEquals(SwipeAction.INTRO_NOTE, repository.actionsSnapshot().getValue(viewer to target))
+        assertEquals(0, subscriptionRepository.introNotesRemaining(viewer))
+    }
+
+    @Test
+    fun reusedActionIdWithDifferentPayloadIsRejectedBeforeSideEffects() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000255")
+        val firstTarget = UUID.fromString("00000000-0000-0000-0000-000000000256")
+        val secondTarget = UUID.fromString("00000000-0000-0000-0000-000000000257")
+        val actionId = UUID.fromString("00000000-0000-0000-0000-000000000258")
+        val repository = InMemorySwipeRepository()
+        val service = SwipeService(repository)
+
+        service.submitAction(viewer, swipeActionRequest(viewer, firstTarget, SwipeAction.LIKE, actionId = actionId))
+        val error = assertFailsWith<SwipeException> {
+            service.submitAction(viewer, swipeActionRequest(viewer, secondTarget, SwipeAction.LIKE, actionId = actionId))
+        }
+
+        assertEquals("INVALID_SWIPE_ACTION_ID", error.code)
+        assertEquals(mapOf(viewer to firstTarget to SwipeAction.LIKE), repository.actionsSnapshot())
     }
 
     @Test
@@ -511,6 +561,7 @@ class SwipeServiceTest {
         val response = service.submitAction(
             viewer,
             SwipeActionRequestDto(
+                actionId = UUID.randomUUID().toString(),
                 deckSessionId = deck.deckSessionId,
                 cardToken = card.rankToken,
                 targetUserId = target.toString(),
@@ -652,6 +703,7 @@ private fun swipeActionRequest(
     targetUserId: UUID,
     action: String,
     noteText: String? = null,
+    actionId: UUID = UUID.randomUUID(),
     issuedAt: Instant = Instant.now(),
     deckTokenCodec: SwipeDeckTokenCodec = SwipeDeckTokenCodec()
 ): SwipeActionRequestDto {
@@ -667,6 +719,7 @@ private fun swipeActionRequest(
         now = issuedAt
     )
     return SwipeActionRequestDto(
+        actionId = actionId.toString(),
         deckSessionId = deckSession.deckSessionId,
         cardToken = deckTokenCodec.issueCardToken(
             deckSessionId = deckSession.deckSessionId,
@@ -690,6 +743,7 @@ private class InMemorySwipeRepository(
     seededMatches: List<MatchRecord> = emptyList()
 ) : SwipeRepository {
     private val actions = mutableMapOf<Pair<UUID, UUID>, String>()
+    private val actionRecords = mutableMapOf<UUID, SwipeActionRecord>()
     private val matches = seededMatches.toMutableList()
     private val now = Instant.parse("2026-04-28T18:00:00Z")
 
@@ -768,31 +822,52 @@ private class InMemorySwipeRepository(
         viewerUserId to targetUserId !in ineligibleTargets &&
             viewerUserId to targetUserId !in actions
 
+    override suspend fun findSwipeActionById(actionId: UUID, actorUserId: UUID): SwipeActionRecord? {
+        val record = actionRecords[actionId]?.takeIf { it.actorUserId == actorUserId } ?: return null
+        return record.copy(match = findMatch(record.actorUserId, record.targetUserId))
+    }
+
     override suspend fun recordSwipeAction(
+        actionId: UUID,
         actorUserId: UUID,
         targetUserId: UUID,
         action: String,
         noteText: String?,
-        actionIdFactory: () -> UUID,
         matchIdFactory: () -> UUID
     ): SwipeActionResult {
+        actionRecords[actionId]?.takeIf { it.actorUserId == actorUserId }?.let { existing ->
+            return SwipeActionResult(recorded = true, match = findMatch(existing.actorUserId, existing.targetUserId))
+        }
         if (actorUserId to targetUserId in actions) {
             return SwipeActionResult(recorded = false, match = null)
         }
         actions[actorUserId to targetUserId] = action
-        if (action !in POSITIVE_ACTIONS) return SwipeActionResult(recorded = true, match = null)
-        val theyLikedMe = actions[targetUserId to actorUserId] in POSITIVE_ACTIONS
-        if (!theyLikedMe) return SwipeActionResult(recorded = true, match = null)
-
-        val (a, b) = canonicalPair(actorUserId, targetUserId)
-        val existing = matches.firstOrNull { it.userA == a && it.userB == b }
-        val match = existing ?: MatchRecord(
-            matchId = matchIdFactory(),
-            userA = a,
-            userB = b,
-            createdAt = now
-        ).also { matches.add(it) }
+        val match = if (action in POSITIVE_ACTIONS && actions[targetUserId to actorUserId] in POSITIVE_ACTIONS) {
+            val (a, b) = canonicalPair(actorUserId, targetUserId)
+            matches.firstOrNull { it.userA == a && it.userB == b } ?: MatchRecord(
+                matchId = matchIdFactory(),
+                userA = a,
+                userB = b,
+                createdAt = now
+            ).also { matches.add(it) }
+        } else {
+            null
+        }
+        actionRecords[actionId] = SwipeActionRecord(
+            actionId = actionId,
+            actorUserId = actorUserId,
+            targetUserId = targetUserId,
+            action = action,
+            noteText = noteText,
+            createdAt = now,
+            match = match
+        )
         return SwipeActionResult(recorded = true, match = match)
+    }
+
+    private fun findMatch(actorUserId: UUID, targetUserId: UUID): MatchRecord? {
+        val (a, b) = canonicalPair(actorUserId, targetUserId)
+        return matches.firstOrNull { it.userA == a && it.userB == b }
     }
 
     override suspend fun listMatches(viewerUserId: UUID, limit: Int): List<MatchSummaryRecord> =

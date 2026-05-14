@@ -1,12 +1,15 @@
 package com.pynapli.app.swipe
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.network.dto.MatchDto
+import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SwipeStateHolderTest {
@@ -42,25 +45,93 @@ class SwipeStateHolderTest {
         assertEquals("Intro note must be 140 characters or less.", state.errorMessage)
         assertEquals(card, state.topCard)
     }
+
+    @Test
+    fun recoverableFailureKeepsSwipeQueuedForRetry() = runBlocking {
+        val card = swipeCard(userId = "target-1")
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = listOf(card), deckSessionId = "deck-1"),
+            actionResult = AppResult.Failure(AppError("NETWORK_ERROR", "Offline", recoverable = true))
+        )
+        val stateHolder = SwipeStateHolder(repository, actionIdFactory = { "action-1" })
+
+        stateHolder.load()
+        stateHolder.submitAction(card, SwipeAction.LIKE)
+
+        assertEquals(1, repository.submitCount)
+        assertEquals("action-1", repository.submittedActions.single().actionId)
+        assertEquals("deck-1", repository.submittedActions.single().deckSessionId)
+        assertEquals(1, stateHolder.state.value.pendingActionCount)
+        assertNull(stateHolder.state.value.topCard)
+        assertEquals("Swipe saved. We will retry when the connection is back.", stateHolder.state.value.errorMessage)
+
+        repository.actionResult = AppResult.Success(null)
+        stateHolder.retryPendingActions()
+
+        assertEquals(2, repository.submitCount)
+        assertEquals("action-1", repository.submittedActions.last().actionId)
+        assertEquals(0, stateHolder.state.value.pendingActionCount)
+        assertNull(stateHolder.state.value.errorMessage)
+    }
+
+    @Test
+    fun nonRecoverableFailureRestoresCardAndClearsQueue() = runBlocking {
+        val card = swipeCard(userId = "target-1")
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = listOf(card), deckSessionId = "deck-1"),
+            actionResult = AppResult.Failure(AppError("INVALID_SWIPE_CARD_TOKEN", "Card expired.", recoverable = false))
+        )
+        val stateHolder = SwipeStateHolder(repository, actionIdFactory = { "action-1" })
+
+        stateHolder.load()
+        stateHolder.submitAction(card, SwipeAction.PASS)
+
+        val state = stateHolder.state.value
+        assertEquals(1, repository.submitCount)
+        assertEquals(0, state.pendingActionCount)
+        assertEquals(card, state.topCard)
+        assertEquals("Card expired.", state.errorMessage)
+    }
+
+    @Test
+    fun queueFullStopsAdditionalOptimisticActions() = runBlocking {
+        val cards = (1..11).map { index -> swipeCard(userId = "target-$index") }
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = cards, deckSessionId = "deck-1"),
+            actionResult = AppResult.Failure(AppError("NETWORK_ERROR", "Offline", recoverable = true))
+        )
+        var actionIndex = 0
+        val stateHolder = SwipeStateHolder(repository, actionIdFactory = { "action-${++actionIndex}" })
+
+        stateHolder.load()
+        repeat(10) {
+            stateHolder.submitAction(stateHolder.state.value.topCard ?: error("expected top card"), SwipeAction.LIKE)
+        }
+        stateHolder.submitAction(stateHolder.state.value.topCard ?: error("expected top card"), SwipeAction.LIKE)
+
+        val state = stateHolder.state.value
+        assertEquals(10, state.pendingActionCount)
+        assertEquals("SWIPE_ACTION_QUEUE_FULL", state.errorCode)
+        assertEquals(cards[10], state.topCard)
+        assertEquals(10, actionIndex)
+    }
 }
 
 private class FakeSwipeRepository(
-    private val deck: SwipeDeckUi
+    private val deck: SwipeDeckUi,
+    var actionResult: AppResult<MatchDto?> = AppResult.Success(null)
 ) : SwipeRepository {
     var submitCount = 0
         private set
+    val submittedActions = mutableListOf<QueuedSwipeAction>()
 
     override suspend fun loadDeck(filter: SwipeFilterType): AppResult<SwipeDeckUi> =
         AppResult.Success(deck)
 
-    override suspend fun submitAction(
-        deckSessionId: String?,
-        card: SwipeCardDto,
-        action: String,
-        noteText: String?
-    ): AppResult<MatchDto?> {
+    override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
         submitCount += 1
-        return AppResult.Success(null)
+        submittedActions += action
+        return actionResult
     }
 }
 

@@ -42,17 +42,19 @@ interface SwipeRepository {
         requireIntroNotesAllowed: Boolean = false
     ): Boolean
 
+    suspend fun findSwipeActionById(actionId: UUID, actorUserId: UUID): SwipeActionRecord?
+
     /**
      * Inserts the swipe action if the actor has not already decided on this target.
      * If the action is `like` and the target had already liked the actor, also inserts a match
      * row in canonical order and returns it.
      */
     suspend fun recordSwipeAction(
+        actionId: UUID,
         actorUserId: UUID,
         targetUserId: UUID,
         action: String,
         noteText: String? = null,
-        actionIdFactory: () -> UUID = UUID::randomUUID,
         matchIdFactory: () -> UUID = UUID::randomUUID
     ): SwipeActionResult
 
@@ -101,6 +103,16 @@ data class SwipeCardRecord(
 
 data class SwipeActionResult(
     val recorded: Boolean,
+    val match: MatchRecord?
+)
+
+data class SwipeActionRecord(
+    val actionId: UUID,
+    val actorUserId: UUID,
+    val targetUserId: UUID,
+    val action: String,
+    val noteText: String?,
+    val createdAt: Instant,
     val match: MatchRecord?
 )
 

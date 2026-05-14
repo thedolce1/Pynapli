@@ -252,6 +252,7 @@ Action:
 ```kotlin
 @Serializable
 data class SwipeActionRequest(
+    val actionId: String,
     val deckSessionId: String,
     val cardToken: String,
     val targetUserId: String,
@@ -264,6 +265,9 @@ data class SwipeActionRequest(
 Rules:
 
 - Match creation is server-authoritative.
+- `actionId` is a client-generated idempotency key for retrying the same swipe action safely.
+- The server rejects a reused `actionId` when target/action/note payload differs from the original action.
+- Idempotent retries must not spend Intro Note or Pineapple Like inventory again.
 - Intro Notes require entitlement/inventory and recipient eligibility.
 - Dealbreakers are hard.
 - Soft filters may expand only when allowed.
@@ -514,7 +518,7 @@ Rules:
 - [x] `/v1` versioning.
 - [x] Shared DTO conventions.
 - [ ] Partial: signed cursor pagination is implemented for Grid, but swipe/activity and other live cursor behavior is incomplete.
-- [ ] Partial: idempotency keys exist for notification/outbox and some workflows, but actions/purchases are not consistently idempotent.
+- [ ] Partial: idempotency keys exist for notification/outbox, swipe actions, and some workflows, but purchases and all mutations are not consistently idempotent.
 - [x] Server-side entitlement checks.
 - [x] Server-side block/privacy/risk checks.
 - [x] Age-verification requirements/status/start plus admin review/provider callback contract exists.

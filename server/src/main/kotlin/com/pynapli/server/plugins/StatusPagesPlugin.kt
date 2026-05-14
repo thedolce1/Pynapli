@@ -300,6 +300,7 @@ private fun userSafeMessage(code: String): String = when (code) {
     "MEDIA_GRANT_NOT_FOUND" -> "Album access was not found."
     "INVALID_SWIPE_TARGET" -> "That profile could not be swiped."
     "INVALID_SWIPE_ACTION" -> "Choose a valid swipe action."
+    "INVALID_SWIPE_ACTION_ID" -> "Swipe action could not be synced."
     "INVALID_SWIPE_FILTER" -> "Swipe filters are not valid."
     "INVALID_SWIPE_DECK_SESSION",
     "STALE_SWIPE_DECK_SESSION" -> "Refresh your swipe deck and try again."
@@ -446,6 +447,7 @@ private fun swipeStatusFor(code: String): HttpStatusCode = when (code) {
     "LOCATION_REQUIRED" -> HttpStatusCode.BadRequest
     "INVALID_SWIPE_TARGET",
     "INVALID_SWIPE_ACTION",
+    "INVALID_SWIPE_ACTION_ID",
     "INVALID_SWIPE_FILTER",
     "INVALID_SWIPE_DECK_SESSION",
     "STALE_SWIPE_DECK_SESSION",

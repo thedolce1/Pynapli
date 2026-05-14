@@ -170,7 +170,7 @@ fun SwipeScreen(
                 else -> {
                     SwipeCardStack(
                         cards = state.cards,
-                        enabled = !state.isSubmitting,
+                        enabled = !state.actionQueueFull,
                         requestedAction = requestedAction,
                         distanceUnit = distanceUnit,
                         onActionConsumed = { requestedAction = null },
@@ -194,10 +194,17 @@ fun SwipeScreen(
             SwipeInlineError(message = state.errorMessage ?: "")
             Spacer(Modifier.height(8.dp))
         }
+        if (state.pendingActionCount > 0) {
+            SwipePendingSync(
+                count = state.pendingActionCount,
+                onRetry = { scope.launch { stateHolder.retryPendingActions() } }
+            )
+            Spacer(Modifier.height(8.dp))
+        }
 
         SwipeActions(
-            enabled = state.hasMore && !state.isSubmitting,
-            isSubmitting = state.isSubmitting,
+            enabled = state.hasMore && !state.actionQueueFull,
+            isSubmitting = false,
             onPass = { requestedAction = SwipeAction.PASS },
             onIntroNote = {
                 state.topCard?.let { card ->
@@ -463,6 +470,29 @@ private fun SwipeInlineError(message: String) {
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth()
     )
+}
+
+@Composable
+private fun SwipePendingSync(count: Int, onRetry: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "$count pending",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+            Text("Retry")
+        }
+    }
 }
 
 @Composable

@@ -44,6 +44,7 @@ data class SwipeDeckResponseDto(
 
 @Serializable
 data class SwipeActionRequestDto(
+    val actionId: String = "",
     val deckSessionId: String = "",
     val cardToken: String = "",
     val targetUserId: String,

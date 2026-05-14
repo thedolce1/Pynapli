@@ -183,7 +183,7 @@ Grid profile open/close:
 
 Swipe app background/foreground:
 
-- Preserve current card and queued actions.
+- Preserve current card and queued actions where local persistence exists.
 - Reconcile with server on resume.
 
 ## Networking
@@ -239,7 +239,7 @@ Use local storage for:
 - Auth session metadata, securely where needed
 - User settings cache
 - Last grid card snapshot
-- Swipe deck action queue
+- Swipe deck action queue, once durable persistence is implemented
 - Message draft text
 - Recent messages cache
 - Feature flags
@@ -511,7 +511,7 @@ Manual/device:
 - [ ] Partial: location update flow exists, but platform expect/actual location provider abstraction is not complete.
 - [ ] Partial: Android Play Billing bridge exists; iOS StoreKit bridge is missing.
 - [ ] Partial: Grid preserves scroll state while the screen instance is alive; navigation/lifecycle regression coverage is still needed.
-- [ ] Swipe action queue capped.
+- [ ] Partial: Swipe action queue is capped in memory; durable local persistence across app process death is not implemented.
 - [x] Activity and Messages are separate.
 - [x] Partner invite consent flow implemented.
 - [ ] Firebase analytics excludes sensitive data.

@@ -472,12 +472,19 @@ class JdbcSwipeRepository(
         }
     }
 
+    override suspend fun findSwipeActionById(actionId: UUID, actorUserId: UUID): SwipeActionRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.findSwipeActionById(actionId, actorUserId)
+            }
+        }
+
     override suspend fun recordSwipeAction(
+        actionId: UUID,
         actorUserId: UUID,
         targetUserId: UUID,
         action: String,
         noteText: String?,
-        actionIdFactory: () -> UUID,
         matchIdFactory: () -> UUID
     ): SwipeActionResult = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
@@ -488,17 +495,18 @@ class JdbcSwipeRepository(
                     """
                     INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, note_text)
                     VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT (actor_user_id, target_user_id) DO NOTHING
+                    ON CONFLICT DO NOTHING
                     """.trimIndent()
                 ).use { statement ->
-                    statement.setObject(1, actionIdFactory())
+                    statement.setObject(1, actionId)
                     statement.setObject(2, actorUserId)
                     statement.setObject(3, targetUserId)
                     statement.setString(4, action)
                     statement.setString(5, noteText)
                     if (statement.executeUpdate() == 0) {
+                        val existing = connection.findSwipeActionById(actionId, actorUserId)
                         connection.rollback()
-                        return@withContext SwipeActionResult(recorded = false, match = null)
+                        return@withContext SwipeActionResult(recorded = existing != null, match = existing?.match)
                     }
                 }
 
@@ -682,6 +690,56 @@ class JdbcSwipeRepository(
             generatedAt = getTimestamp("generated_at").toInstant(),
             expiresAt = getTimestamp("expires_at").toInstant()
         )
+
+    private fun Connection.findSwipeActionById(actionId: UUID, actorUserId: UUID): SwipeActionRecord? =
+        prepareStatement(
+            """
+            SELECT sa.id AS action_id,
+                   sa.actor_user_id,
+                   sa.target_user_id,
+                   sa.action,
+                   sa.note_text,
+                   sa.created_at AS action_created_at,
+                   m.id AS match_id,
+                   m.user_a,
+                   m.user_b,
+                   m.created_at AS match_created_at
+            FROM swipe_actions sa
+            LEFT JOIN matches m
+              ON (
+                  (m.user_a = sa.actor_user_id AND m.user_b = sa.target_user_id)
+                  OR (m.user_a = sa.target_user_id AND m.user_b = sa.actor_user_id)
+              )
+            WHERE sa.id = ?
+              AND sa.actor_user_id = ?
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, actionId)
+            statement.setObject(2, actorUserId)
+            statement.executeQuery().use { rs ->
+                if (!rs.next()) {
+                    null
+                } else {
+                    val matchId = rs.getObject("match_id") as? UUID
+                    SwipeActionRecord(
+                        actionId = rs.getObject("action_id", UUID::class.java),
+                        actorUserId = rs.getObject("actor_user_id", UUID::class.java),
+                        targetUserId = rs.getObject("target_user_id", UUID::class.java),
+                        action = rs.getString("action"),
+                        noteText = rs.getString("note_text"),
+                        createdAt = rs.getTimestamp("action_created_at").toInstant(),
+                        match = matchId?.let {
+                            MatchRecord(
+                                matchId = it,
+                                userA = rs.getObject("user_a", UUID::class.java),
+                                userB = rs.getObject("user_b", UUID::class.java),
+                                createdAt = rs.getTimestamp("match_created_at").toInstant()
+                            )
+                        }
+                    )
+                }
+            }
+        }
 
     companion object {
         private val POSITIVE_ACTIONS = setOf("like", "pineapple_like")

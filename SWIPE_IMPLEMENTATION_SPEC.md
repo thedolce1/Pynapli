@@ -173,6 +173,7 @@ enum class SwipeActionType {
 }
 
 data class SwipeActionRequest(
+    val actionId: String,
     val actorUserId: String,
     val targetUserId: String,
     val actionType: SwipeActionType,
@@ -461,7 +462,7 @@ Client behavior:
 
 - Optimistically animate card away.
 - Queue action locally.
-- Send action to server.
+- Send action to server with a stable client-generated action ID.
 - Resolve match state when server responds.
 - If failure is recoverable, retry.
 - If action is rejected, show subtle correction and restore or skip as appropriate.
@@ -469,6 +470,8 @@ Client behavior:
 Rules:
 
 - Server remains authoritative.
+- Action IDs are idempotency keys; retrying the same action ID with the same payload must not consume inventory or create duplicate side effects.
+- Reusing an action ID with different target/action/note payload must be rejected.
 - Rewind must account for queued actions.
 - Do not allow unlimited offline swiping without server sync.
 - Cap local unsynced actions.
@@ -687,7 +690,7 @@ Network:
 - [x] Compose card stack renders only 2-3 cards.
 - [x] Swipe gestures use physics/thresholds.
 - [ ] Card image preloading exists.
-- [ ] Offline action cap exists.
+- [ ] Partial: offline action cap exists as a bounded in-memory Compose queue with stable action IDs; durable offline persistence across app process death is not implemented.
 - [x] Block/report available from card.
 - [x] Linked partner preview does not turn into couple card.
 

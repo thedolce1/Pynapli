@@ -163,19 +163,20 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
                 SwipeDeckRequestDto(limit = 2, cursor = assertNotNull(firstPage.nextCursor))
             )
             val actionedCard = firstPage.items.first()
-            val response = service.submitAction(
-                viewer,
-                SwipeActionRequestDto(
-                    deckSessionId = firstPage.deckSessionId,
-                    cardToken = actionedCard.rankToken,
-                    targetUserId = actionedCard.userId,
-                    action = SwipeAction.LIKE
-                )
+            val actionRequest = SwipeActionRequestDto(
+                actionId = UUID.randomUUID().toString(),
+                deckSessionId = firstPage.deckSessionId,
+                cardToken = actionedCard.rankToken,
+                targetUserId = actionedCard.userId,
+                action = SwipeAction.LIKE
             )
+            val response = service.submitAction(viewer, actionRequest)
+            val retry = service.submitAction(viewer, actionRequest)
             val repeated = assertFailsWith<SwipeException> {
                 service.submitAction(
                     viewer,
                     SwipeActionRequestDto(
+                        actionId = UUID.randomUUID().toString(),
                         deckSessionId = firstPage.deckSessionId,
                         cardToken = actionedCard.rankToken,
                         targetUserId = actionedCard.userId,
@@ -188,6 +189,7 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
             assertEquals(listOf(thirdTarget.toString()), secondPage.items.map { it.userId })
             assertEquals(firstPage.deckSessionId, secondPage.deckSessionId)
             assertTrue(response.recorded)
+            assertTrue(retry.recorded)
             assertEquals("INVALID_SWIPE_CARD_TOKEN", repeated.code)
         }
     }

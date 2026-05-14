@@ -172,12 +172,24 @@ class SwipeService(
 
         val action = request.action.trim().lowercase()
         if (action !in ACTIONS) throw SwipeException("INVALID_SWIPE_ACTION")
-        val noteText = request.noteText?.trim()
+        val noteText = request.noteText?.trim()?.takeIf { it.isNotEmpty() }
         if (action == SwipeAction.INTRO_NOTE) {
-            if (noteText.isNullOrEmpty()) throw SwipeException("INTRO_NOTE_EMPTY")
+            if (noteText == null) throw SwipeException("INTRO_NOTE_EMPTY")
             if (noteText.length > INTRO_NOTE_MAX_LENGTH) throw SwipeException("INTRO_NOTE_TOO_LONG")
-        } else if (!noteText.isNullOrEmpty()) {
+        } else if (noteText != null) {
             throw SwipeException("INVALID_SWIPE_ACTION")
+        }
+        val actionId = request.actionId.trim().toActionIdOrThrow()
+        val existingAction = repository.findSwipeActionById(actionId, viewerUserId)
+        if (existingAction != null) {
+            if (
+                existingAction.targetUserId != targetUserId ||
+                existingAction.action != action ||
+                existingAction.noteText != noteText
+            ) {
+                throw SwipeException("INVALID_SWIPE_ACTION_ID")
+            }
+            return existingAction.toResponse(viewerUserId)
         }
         val deckSessionId = request.deckSessionId.trim()
         if (deckSessionId.isEmpty()) throw SwipeException(SwipeDeckTokenCodec.INVALID_DECK_SESSION)
@@ -242,6 +254,7 @@ class SwipeService(
         }
 
         val result = repository.recordSwipeAction(
+            actionId = actionId,
             actorUserId = viewerUserId,
             targetUserId = targetUserId,
             action = action,
@@ -392,6 +405,24 @@ class SwipeService(
 
     private fun String.toUuidOrThrow(): UUID =
         runCatching { UUID.fromString(this) }.getOrElse { throw SwipeException("INVALID_SWIPE_TARGET") }
+
+    private fun String.toActionIdOrThrow(): UUID =
+        runCatching { UUID.fromString(this) }.getOrElse { throw SwipeException("INVALID_SWIPE_ACTION_ID") }
+
+    private fun SwipeActionRecord.toResponse(viewerUserId: UUID): SwipeActionResponseDto =
+        SwipeActionResponseDto(
+            recorded = true,
+            match = match?.toDto(viewerUserId)
+        )
+
+    private fun MatchRecord.toDto(viewerUserId: UUID): MatchDto =
+        MatchDto(
+            matchId = matchId.toString(),
+            matchedUserId = if (userA == viewerUserId) userB.toString() else userA.toString(),
+            matchedDisplayName = null,
+            matchedPhotoUrl = null,
+            createdAt = createdAt.toString()
+        )
 
     private data class SwipeDeckPageItem(
         val dto: SwipeCardDto,

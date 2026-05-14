@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlin.random.Random
 
 @Immutable
 data class SwipeUiState(
@@ -21,6 +22,8 @@ data class SwipeUiState(
     val isLoading: Boolean = false,
     val isSubmitting: Boolean = false,
     val adSupported: Boolean = false,
+    val pendingActionCount: Int = 0,
+    val pendingActionLimit: Int = MAX_PENDING_ACTIONS,
     val paywallMessage: String? = null,
     val errorCode: String? = null,
     val errorMessage: String? = null,
@@ -28,6 +31,7 @@ data class SwipeUiState(
 ) {
     val topCard: SwipeCardDto? get() = cards.firstOrNull()
     val hasMore: Boolean get() = cards.isNotEmpty()
+    val actionQueueFull: Boolean get() = pendingActionCount >= pendingActionLimit
 }
 
 @Immutable
@@ -45,10 +49,13 @@ enum class SwipeFilterType {
 }
 
 class SwipeStateHolder(
-    private val repository: SwipeRepository
+    private val repository: SwipeRepository,
+    private val actionIdFactory: () -> String = ::newSwipeActionId
 ) {
     private val _state = MutableStateFlow(SwipeUiState())
     val state: StateFlow<SwipeUiState> = _state.asStateFlow()
+    private val pendingActions = mutableListOf<QueuedSwipeAction>()
+    private var isFlushingActions = false
 
     suspend fun load() {
         val selectedFilter = _state.value.filters.firstOrNull { it.active }?.type ?: SwipeFilterType.ForYou
@@ -136,55 +143,97 @@ class SwipeStateHolder(
     }
 
     suspend fun submitAction(card: SwipeCardDto, action: String, noteText: String? = null) {
-        if (_state.value.isSubmitting) return
-
-        var shouldSubmit = false
-        _state.update { current ->
-            if (current.topCard?.userId != card.userId) {
-                current
-            } else {
-                shouldSubmit = true
-                current.copy(
-                    cards = current.cards.drop(1),
-                    isSubmitting = true,
-                    paywallMessage = null,
-                    errorCode = null,
-                    errorMessage = null
+        if (pendingActions.size >= MAX_PENDING_ACTIONS) {
+            _state.update {
+                it.copy(
+                    errorCode = "SWIPE_ACTION_QUEUE_FULL",
+                    errorMessage = "Reconnect to sync pending swipes before swiping more."
                 )
             }
+            return
         }
-        if (!shouldSubmit) return
 
         val deckSessionId = _state.value.deckSessionId
-        when (val result = repository.submitAction(deckSessionId, card, action, noteText)) {
-            is AppResult.Success -> _state.update { current ->
-                current.copy(
-                    isSubmitting = false,
-                    pendingMatch = result.value ?: current.pendingMatch
-                )
-            }
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    cards = if (it.cards.any { cardInDeck -> cardInDeck.userId == card.userId }) {
-                        it.cards
-                    } else {
-                        listOf(card) + it.cards
-                    },
-                    isSubmitting = false,
-                    paywallMessage = if (result.error.code == "ENTITLEMENT_REQUIRED") {
-                        if (action == SwipeAction.INTRO_NOTE) {
-                            "Intro Notes are included with Social or Select."
-                        } else {
-                            "Social or Select is required."
+        if (_state.value.topCard?.userId != card.userId) return
+        val queuedAction = QueuedSwipeAction(
+            actionId = actionIdFactory(),
+            deckSessionId = deckSessionId,
+            card = card,
+            action = action,
+            noteText = noteText
+        )
+        pendingActions += queuedAction
+        _state.update { current ->
+            current.copy(
+                cards = current.cards.drop(1),
+                pendingActionCount = pendingActions.size,
+                paywallMessage = null,
+                errorCode = null,
+                errorMessage = null
+            )
+        }
+        flushPendingActions()
+    }
+
+    suspend fun retryPendingActions() {
+        flushPendingActions()
+    }
+
+    private suspend fun flushPendingActions() {
+        if (isFlushingActions) return
+        isFlushingActions = true
+        _state.update { it.copy(isSubmitting = pendingActions.isNotEmpty()) }
+        try {
+            while (pendingActions.isNotEmpty()) {
+                val queued = pendingActions.first()
+                when (val result = repository.submitAction(queued)) {
+                    is AppResult.Success -> {
+                        pendingActions.removeAt(0)
+                        _state.update { current ->
+                            current.copy(
+                                isSubmitting = pendingActions.isNotEmpty(),
+                                pendingActionCount = pendingActions.size,
+                                errorCode = null,
+                                errorMessage = null,
+                                pendingMatch = result.value ?: current.pendingMatch
+                            )
                         }
-                    } else if (result.error.code == "PINEAPPLE_LIKE_INVENTORY_REQUIRED") {
-                        "Pineapple Likes are scarce high-intent signals."
-                    } else {
-                        it.paywallMessage
-                    },
-                    errorCode = result.error.code,
-                    errorMessage = result.error.message
-                )
+                    }
+                    is AppResult.Failure -> {
+                        if (result.error.recoverable) {
+                            _state.update {
+                                it.copy(
+                                    isSubmitting = false,
+                                    pendingActionCount = pendingActions.size,
+                                    errorCode = result.error.code,
+                                    errorMessage = "Swipe saved. We will retry when the connection is back."
+                                )
+                            }
+                            return
+                        }
+                        pendingActions.removeAt(0)
+                        _state.update {
+                            it.copy(
+                                cards = if (it.cards.any { cardInDeck -> cardInDeck.userId == queued.card.userId }) {
+                                    it.cards
+                                } else {
+                                    listOf(queued.card) + it.cards
+                                },
+                                isSubmitting = false,
+                                pendingActionCount = pendingActions.size,
+                                paywallMessage = queued.paywallMessageFor(result.error.code) ?: it.paywallMessage,
+                                errorCode = result.error.code,
+                                errorMessage = result.error.message
+                            )
+                        }
+                        return
+                    }
+                }
+            }
+        } finally {
+            isFlushingActions = false
+            if (pendingActions.isEmpty()) {
+                _state.update { it.copy(isSubmitting = false, pendingActionCount = 0) }
             }
         }
     }
@@ -208,12 +257,7 @@ class SwipeStateHolder(
 interface SwipeRepository {
     suspend fun loadDeck(filter: SwipeFilterType): AppResult<SwipeDeckUi>
 
-    suspend fun submitAction(
-        deckSessionId: String?,
-        card: SwipeCardDto,
-        action: String,
-        noteText: String? = null
-    ): AppResult<MatchDto?>
+    suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?>
 }
 
 class ApiSwipeRepository(
@@ -232,20 +276,16 @@ class ApiSwipeRepository(
             is AppResult.Failure -> result
         }
 
-    override suspend fun submitAction(
-        deckSessionId: String?,
-        card: SwipeCardDto,
-        action: String,
-        noteText: String?
-    ): AppResult<MatchDto?> =
+    override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> =
         when (
             val result = apiClient.submitSwipeAction(
                 SwipeActionRequestDto(
-                    deckSessionId = deckSessionId.orEmpty(),
-                    cardToken = card.rankToken,
-                    targetUserId = card.userId,
-                    action = action,
-                    noteText = noteText
+                    actionId = action.actionId,
+                    deckSessionId = action.deckSessionId.orEmpty(),
+                    cardToken = action.card.rankToken,
+                    targetUserId = action.card.userId,
+                    action = action.action,
+                    noteText = action.noteText
                 )
             )
         ) {
@@ -290,13 +330,8 @@ class SampleSwipeRepository : SwipeRepository {
             )
         )
 
-    override suspend fun submitAction(
-        deckSessionId: String?,
-        card: SwipeCardDto,
-        action: String,
-        noteText: String?
-    ): AppResult<MatchDto?> {
-        cards.removeAll { it.userId == card.userId }
+    override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
+        cards.removeAll { it.userId == action.card.userId }
         return AppResult.Success(null)
     }
 }
@@ -308,6 +343,26 @@ data class SwipeDeckUi(
     val adSupported: Boolean = false,
     val advancedFiltersApplied: Boolean = false
 )
+
+@Immutable
+data class QueuedSwipeAction(
+    val actionId: String,
+    val deckSessionId: String?,
+    val card: SwipeCardDto,
+    val action: String,
+    val noteText: String? = null
+)
+
+private fun QueuedSwipeAction.paywallMessageFor(errorCode: String): String? =
+    when (errorCode) {
+        "ENTITLEMENT_REQUIRED" -> if (action == SwipeAction.INTRO_NOTE) {
+            "Intro Notes are included with Social or Select."
+        } else {
+            "Social or Select is required."
+        }
+        "PINEAPPLE_LIKE_INVENTORY_REQUIRED" -> "Pineapple Likes are scarce high-intent signals."
+        else -> null
+    }
 
 internal val defaultSwipeFilters = listOf(
     SwipeFilterUi(SwipeFilterType.ForYou, "For You", active = true),
@@ -336,3 +391,24 @@ private fun SwipeFilterType.toRequest(): SwipeDeckRequestDto = when (this) {
 }
 
 private const val INTRO_NOTE_MAX_LENGTH = 140
+private const val MAX_PENDING_ACTIONS = 10
+
+internal fun newSwipeActionId(random: Random = Random.Default): String {
+    val bytes = random.nextBytes(16)
+    bytes[6] = ((bytes[6].toInt() and 0x0f) or 0x40).toByte()
+    bytes[8] = ((bytes[8].toInt() and 0x3f) or 0x80).toByte()
+    val hex = bytes.joinToString(separator = "") { byte ->
+        (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+    }
+    return buildString(36) {
+        append(hex.substring(0, 8))
+        append('-')
+        append(hex.substring(8, 12))
+        append('-')
+        append(hex.substring(12, 16))
+        append('-')
+        append(hex.substring(16, 20))
+        append('-')
+        append(hex.substring(20, 32))
+    }
+}

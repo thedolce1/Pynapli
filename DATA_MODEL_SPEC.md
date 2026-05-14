@@ -917,7 +917,7 @@ Do not store unless legally reviewed and required:
 - [x] Autonomous user model exists.
 - [x] Partner links are relationships, not accounts.
 - [x] PostGIS location table exists.
-- [ ] Partial: swipe action/match tables exist, but persisted swipe deck session tables do not.
+- [x] Swipe action, match, and persisted swipe deck session/card tables exist.
 - [ ] Psync session tables exist.
 - [ ] Playing Tonight session table exists.
 - [x] Chat participant model supports partner invite.
