@@ -5,6 +5,7 @@ import com.pynapli.app.debug.DebugQaFlags
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.MatchDto
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 
 class DebugFaultInjectingSwipeRepository(
     context: Context,
@@ -15,8 +16,8 @@ class DebugFaultInjectingSwipeRepository(
         appContext.getSharedPreferences(DebugQaFlags.PREFS_NAME, Context.MODE_PRIVATE)
     }
 
-    override suspend fun loadDeck(filter: SwipeFilterType, cursor: String?): AppResult<SwipeDeckUi> =
-        delegate.loadDeck(filter, cursor)
+    override suspend fun loadDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckUi> =
+        delegate.loadDeck(request)
 
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
         if (DebugQaFlags.isDebuggable(appContext)) {

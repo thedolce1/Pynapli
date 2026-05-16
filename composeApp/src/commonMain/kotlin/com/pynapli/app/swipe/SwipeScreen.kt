@@ -45,6 +45,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -114,6 +115,7 @@ fun SwipeScreen(
     var introNoteCard by remember { mutableStateOf<SwipeCardDto?>(null) }
     var introNoteText by remember { mutableStateOf("") }
     var linkedPartnerPreviewCard by remember { mutableStateOf<SwipeCardDto?>(null) }
+    var filtersSheetVisible by remember { mutableStateOf(false) }
     val platformContext = LocalPlatformContext.current
     val swipeImagePrefetchUrls = remember(state.cards) { planSwipeImagePrefetch(state.cards) }
 
@@ -159,7 +161,10 @@ fun SwipeScreen(
             .statusBarsPadding()
             .padding(horizontal = 18.dp, vertical = 12.dp)
     ) {
-        SwipeHeader()
+        SwipeHeader(
+            activeFilterCount = state.swipeFilters.activeCount,
+            onOpenFilters = { filtersSheetVisible = true }
+        )
         Spacer(Modifier.height(10.dp))
         SwipeFilterRow(
             filters = state.filters,
@@ -196,7 +201,11 @@ fun SwipeScreen(
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
                 !state.hasMore -> {
-                    EmptyDeck(onRefresh = { scope.launch { stateHolder.load() } })
+                    EmptyDeck(
+                        filtersActive = state.swipeFilters.isAnyActive,
+                        onRefresh = { scope.launch { stateHolder.load() } },
+                        onOpenFilters = { filtersSheetVisible = true }
+                    )
                 }
                 else -> {
                     SwipeCardStack(
@@ -353,6 +362,22 @@ fun SwipeScreen(
         }
     }
 
+    if (filtersSheetVisible) {
+        SwipeFiltersSheet(
+            initial = state.swipeFilters,
+            onDismiss = { filtersSheetVisible = false },
+            onApply = { applied ->
+                filtersSheetVisible = false
+                scope.launch { stateHolder.applyFilters(applied) }
+            },
+            onClearAll = {
+                filtersSheetVisible = false
+                scope.launch { stateHolder.applyFilters(SwipeFilters.defaults) }
+            },
+            onOpenStore = onOpenStore
+        )
+    }
+
     introNoteCard?.let { card ->
         IntroNoteDialog(
             displayName = card.displayName,
@@ -377,7 +402,10 @@ fun SwipeScreen(
 }
 
 @Composable
-private fun SwipeHeader() {
+private fun SwipeHeader(
+    activeFilterCount: Int,
+    onOpenFilters: () -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -400,6 +428,15 @@ private fun SwipeHeader() {
                 text = "Pass or like nearby profiles",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall
+            )
+        }
+        TextButton(
+            onClick = onOpenFilters,
+            modifier = Modifier.testTag(SwipeFilterTags.OPEN_SHEET)
+        ) {
+            Text(
+                text = if (activeFilterCount > 0) "Filters ($activeFilterCount)" else "Filters",
+                maxLines = 1
             )
         }
     }
@@ -1246,7 +1283,15 @@ private fun SwipeActionButton(
 }
 
 @Composable
-private fun EmptyDeck(onRefresh: () -> Unit) {
+private fun EmptyDeck(
+    filtersActive: Boolean,
+    onRefresh: () -> Unit,
+    onOpenFilters: () -> Unit
+) {
+    // FILTERS_SPEC L487-489: when filters are active and the deck is empty (server
+    // already ran the relaxation pass per B3 and still found nothing), nudge the
+    // user toward widening filters or switching to Grid. Plain "no profiles" copy
+    // remains for the unfiltered case.
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -1258,20 +1303,31 @@ private fun EmptyDeck(onRefresh: () -> Unit) {
             modifier = Modifier.size(56.dp)
         )
         Text(
-            text = "No more profiles nearby",
+            text = if (filtersActive) "No more recommendations match your filters"
+                else "No more profiles nearby",
             color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center
         )
         Text(
-            text = "Check back later or expand your radius.",
+            text = if (filtersActive)
+                "Try widening distance or removing a dealbreaker. Grid shows live nearby profiles."
+                else "Check back later or expand your radius.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
         )
-        Button(onClick = onRefresh) {
-            Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
-            Spacer(Modifier.size(6.dp))
-            Text("Refresh")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (filtersActive) {
+                OutlinedButton(onClick = onOpenFilters) {
+                    Text("Adjust filters")
+                }
+            }
+            Button(onClick = onRefresh) {
+                Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
+                Spacer(Modifier.size(6.dp))
+                Text("Refresh")
+            }
         }
     }
 }

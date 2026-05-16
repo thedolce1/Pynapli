@@ -24,6 +24,7 @@ import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 import com.pynapli.shared.network.dto.MatchDto
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -136,7 +137,7 @@ private class StaticSwipeVisualRepository(
 ) : SwipeRepository {
     val submittedActions = mutableListOf<QueuedSwipeAction>()
 
-    override suspend fun loadDeck(filter: SwipeFilterType, cursor: String?): AppResult<SwipeDeckUi> =
+    override suspend fun loadDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckUi> =
         AppResult.Success(
             SwipeDeckUi(
                 deckSessionId = "visual-session",
