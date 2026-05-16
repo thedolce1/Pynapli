@@ -1,6 +1,6 @@
 # Pynapli Swipe Implementation Spec
 
-Last updated: 2026-05-14
+Last updated: 2026-05-15 (linked-partner preview popover + partner active state + short bio + tag chips + photo carousel + verified badge added)
 
 ## Purpose
 
@@ -110,6 +110,15 @@ The card should answer:
 2. Are they broadly aligned with my intent?
 3. Are they linked, and can I inspect that context?
 
+Current MVP implementation:
+
+- Server-side hydration in `JdbcSwipeRepository` reads `profiles.bio` plus the union of `profiles.lifestyle_tags` and `profiles.logistics_tags`. The profile photo LATERAL subquery now returns both the cover thumbnail and an ordered array of up to 5 ranked profile photo media asset IDs for the carousel.
+- `SwipeService.toDto` trims the bio, drops blanks, and caps at 120 characters (one-line "short" sized); tags are case-insensitively deduped, blanks dropped, capped at 3; `photoUrls` is mapped through `MediaAssetUrlResolver` and capped at `MAX_VISIBLE_PHOTOS = 5` (defense in depth alongside the SQL `rn <= 5`).
+- The Compose card renders the bio as a single ellipsised line in the bottom gradient and shows up to 3 small pill tag chips below it. The exhaustive lifestyle checklist and large tag clouds called out in "Do not show" are intentionally avoided by the cap.
+- The photo region is a `HorizontalPager` with `userScrollEnabled = false` so the pager's own horizontal drag never competes with the like/pass drag. Tap zones on the top card route by x-fraction: tap-left (< 30%) advances to the previous photo if available, tap-right (> 70%) advances to the next, and any other tap opens the profile sheet — matching the standard tap-edges-to-advance pattern. Slim page indicator bars are overlaid at the top of the card. Non-top cards render only the cover image (no pager).
+- Image prefetch: the top card preloads up to all 5 carousel photos; the next visible cards in the prefetch window preload only their cover plus the linked-partner thumbnail.
+- Verified status is hydrated from `profiles.verified_at IS NOT NULL` (the same signal as the `verifiedOnly` discovery filter) and shown as a small accent check icon next to the displayed user's name in the bottom gradient. Photo and age verification are tracked separately in the schema (`face_photo_verified_at`, `age_verified_at`); surfacing them as distinct badges is deferred until the product needs them.
+
 ## Linked Partner Display
 
 Every swipe card represents exactly one user.
@@ -127,6 +136,13 @@ Partner preview can show:
 - Partner active state, if allowed
 - Partner distance/city, if allowed
 - View profile
+
+Current MVP implementation:
+
+- Tapping the linked-partner badge on the top swipe card opens a lightweight `LinkedPartnerPreviewDialog` showing "Linked with [partner]", partner photo (or avatar fallback), and a clarifying line that swipe stays on the displayed user.
+- Partner active state is hydrated server-side from `PresenceService` (a single presence call covers both target and partner user IDs per page) and shown as a small green dot with "Active now" in the dialog when the partner is online.
+- "View profile" routes through the existing `ProfileDetailStateHolder.openLinkedPartner` flow with `ProfileDetailActionMode.Grid`, so the partner is shown without swipe-style action buttons.
+- Partner distance/city is not yet surfaced because `SwipeCardRecord` does not carry the partner's coordinates; adding it requires a candidate-SQL change to compute partner-to-viewer distance and a "show partner distance" allow rule.
 
 Do not merge linked users into a couple card.
 
@@ -449,9 +465,12 @@ data class SwipeCardDto(
     val shortBio: String?,
     val tags: List<String>,
     val verified: Boolean,
-    val canReceiveIntroNote: Boolean
+    val canReceiveIntroNote: Boolean,
+    val online: Boolean
 )
 ```
+
+The MVP card DTO already carries `online`, populated from the presence service alongside the rest of the deck mapping; the Compose card surfaces it as a small dot next to the displayed name (matching the Grid card's visual language).
 
 Why deck sessions matter:
 
@@ -693,7 +712,7 @@ Network:
 - [x] Deck query endpoint returns signed persisted deck sessions/card tokens and action endpoint validates dealt-card state.
 - [x] Like/pass/Pineapple Like/Intro Note action endpoint exists.
 - [x] Match creation is server-authoritative.
-- [x] Cursor pagination continues a persisted deck session without duplicate returned cards.
+- [x] Cursor pagination continues a persisted deck session without duplicate returned cards. Client auto-loads the next page when the visible stack drops below the threshold, deduping against current cards and pending action targets.
 - [ ] Partial: Rewind is server-aware for the latest eligible Like/Pass and local queued actions; Pineapple Like inventory-safe rewind is not complete.
 - [x] Intro Note inventory and delivery rules exist.
 - [x] Likes You is represented in Activity.

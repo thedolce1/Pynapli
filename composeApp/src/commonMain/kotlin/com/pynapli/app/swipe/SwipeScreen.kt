@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,9 +22,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
@@ -109,11 +113,16 @@ fun SwipeScreen(
     var profileActionMode by remember { mutableStateOf(ProfileDetailActionMode.SwipeUnmatched) }
     var introNoteCard by remember { mutableStateOf<SwipeCardDto?>(null) }
     var introNoteText by remember { mutableStateOf("") }
+    var linkedPartnerPreviewCard by remember { mutableStateOf<SwipeCardDto?>(null) }
     val platformContext = LocalPlatformContext.current
     val swipeImagePrefetchUrls = remember(state.cards) { planSwipeImagePrefetch(state.cards) }
 
     LaunchedEffect(stateHolder, viewerUserId) {
         stateHolder.load(ownerUserId = viewerUserId)
+    }
+
+    LaunchedEffect(stateHolder, state.cards.size, state.nextCursor) {
+        stateHolder.loadMoreIfNeeded()
     }
 
     LaunchedEffect(swipeImagePrefetchUrls) {
@@ -177,11 +186,14 @@ fun SwipeScreen(
                 state.isLoading && state.cards.isEmpty() -> {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
-                state.errorMessage != null && state.cards.isEmpty() -> {
+                state.errorMessage != null && state.cards.isEmpty() && state.nextCursor == null -> {
                     SwipeError(
                         message = state.errorMessage ?: "Could not load swipe deck.",
                         onRetry = { scope.launch { stateHolder.load() } }
                     )
+                }
+                state.cards.isEmpty() && state.nextCursor != null -> {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
                 !state.hasMore -> {
                     EmptyDeck(onRefresh = { scope.launch { stateHolder.load() } })
@@ -199,6 +211,9 @@ fun SwipeScreen(
                             scope.launch {
                                 profileDetailStateHolder.open(card.toProfileCardUi())
                             }
+                        },
+                        onLinkedPartnerTap = { card ->
+                            linkedPartnerPreviewCard = card
                         },
                         onSwiped = { card, action ->
                             scope.launch { stateHolder.submitAction(card, action) }
@@ -315,6 +330,27 @@ fun SwipeScreen(
             },
             distanceUnit = distanceUnit
         )
+    }
+
+    linkedPartnerPreviewCard?.let { card ->
+        val partner = card.linkedPartner
+        if (partner == null) {
+            linkedPartnerPreviewCard = null
+        } else {
+            LinkedPartnerPreviewDialog(
+                cardDisplayName = card.displayName,
+                partnerDisplayName = partner.displayName,
+                partnerThumbnailUrl = partner.thumbnailUrl,
+                partnerOnline = partner.online,
+                onDismiss = { linkedPartnerPreviewCard = null },
+                onViewProfile = {
+                    linkedPartnerPreviewCard = null
+                    selectedProfileCard = null
+                    profileActionMode = ProfileDetailActionMode.Grid
+                    scope.launch { profileDetailStateHolder.openLinkedPartner(partner.toUi()) }
+                }
+            )
+        }
     }
 
     introNoteCard?.let { card ->
@@ -524,6 +560,7 @@ private fun SwipeCardStack(
     distanceUnit: String,
     onActionConsumed: () -> Unit,
     onOpenProfile: (SwipeCardDto) -> Unit,
+    onLinkedPartnerTap: (SwipeCardDto) -> Unit,
     onSwiped: (SwipeCardDto, String) -> Unit
 ) {
     val visibleStack = cards.take(3)
@@ -548,6 +585,7 @@ private fun SwipeCardStack(
                     distanceUnit = distanceUnit,
                     onActionConsumed = onActionConsumed,
                     onOpenProfile = onOpenProfile,
+                    onLinkedPartnerTap = onLinkedPartnerTap,
                     onSwiped = onSwiped
                 )
             }
@@ -566,6 +604,7 @@ private fun SwipeCard(
     distanceUnit: String,
     onActionConsumed: () -> Unit,
     onOpenProfile: (SwipeCardDto) -> Unit,
+    onLinkedPartnerTap: (SwipeCardDto) -> Unit,
     onSwiped: (SwipeCardDto, String) -> Unit
 ) {
     val verticalOffset = (depth * 8).dp
@@ -654,6 +693,29 @@ private fun SwipeCard(
         fallbackLabel = card.distanceLabel,
         distanceUnit = distanceUnit
     )
+    val resolvedPhotos = remember(card.userId, card.photoUrls, card.photoUrl) {
+        card.photoUrls.ifEmpty { listOfNotNull(card.photoUrl) }
+    }
+    val pagerState = rememberPagerState(initialPage = 0) { resolvedPhotos.size.coerceAtLeast(1) }
+    val tapZoneModifier = if (isTop && enabled) {
+        Modifier.pointerInput(card.userId, resolvedPhotos.size) {
+            detectTapGestures(
+                onTap = { tapOffset ->
+                    val width = size.width.toFloat()
+                    val zone = if (width > 0f) tapOffset.x / width else 0.5f
+                    when {
+                        resolvedPhotos.size > 1 && zone < 0.30f && pagerState.currentPage > 0 ->
+                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                        resolvedPhotos.size > 1 && zone > 0.70f && pagerState.currentPage < resolvedPhotos.lastIndex ->
+                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                        else -> onOpenProfile(card)
+                    }
+                }
+            )
+        }
+    } else {
+        Modifier
+    }
 
     Box(
         modifier = Modifier
@@ -672,20 +734,43 @@ private fun SwipeCard(
             }
             .testTag(if (isTop) SwipeTestTags.TOP_CARD else "${SwipeTestTags.CARD_PREFIX}${card.userId}")
             .then(dragModifier)
-            .clickable(
-                enabled = isTop && enabled,
-                onClick = { onOpenProfile(card) }
-            )
+            .then(tapZoneModifier)
             .clip(RoundedCornerShape(8.dp))
             .background(tone)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
     ) {
-        card.photoUrl?.let { url ->
-            AsyncImage(
-                model = url,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+        if (isTop && resolvedPhotos.size > 1) {
+            HorizontalPager(
+                state = pagerState,
+                userScrollEnabled = false,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag(SwipeTestTags.PHOTO_CAROUSEL)
+            ) { page ->
+                AsyncImage(
+                    model = resolvedPhotos[page],
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        } else {
+            resolvedPhotos.firstOrNull()?.let { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+        if (isTop && resolvedPhotos.size > 1) {
+            PhotoCarouselIndicators(
+                count = resolvedPhotos.size,
+                currentPage = pagerState.currentPage,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 12.dp, start = 18.dp, end = 18.dp)
             )
         }
         val linkedPartner = card.linkedPartner
@@ -694,7 +779,13 @@ private fun SwipeCard(
                 thumbnailUrl = linkedPartner.thumbnailUrl,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(18.dp)
+                    .padding(18.dp),
+                enabled = isTop && enabled,
+                onClick = if (isTop) {
+                    { onLinkedPartnerTap(card) }
+                } else {
+                    null
+                }
             )
         }
         if (isTop && decisionAlpha > 0f) {
@@ -724,6 +815,9 @@ private fun SwipeCard(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (card.online) {
+                    SwipeOnlineDot()
+                }
                 Text(
                     text = card.displayName,
                     color = Color.White,
@@ -733,6 +827,9 @@ private fun SwipeCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
+                if (card.verified) {
+                    SwipeVerifiedBadge()
+                }
                 card.displayAge?.let { age ->
                     Text(
                         text = "$age",
@@ -748,19 +845,120 @@ private fun SwipeCard(
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
+            card.shortBio?.takeIf { it.isNotBlank() }?.let { bio ->
+                Text(
+                    text = bio,
+                    color = Color(0xFFEDEDED),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(SwipeTestTags.SHORT_BIO)
+                )
+            }
+            if (card.tags.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(SwipeTestTags.TAGS_ROW),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    card.tags.forEach { tag ->
+                        SwipeTagChip(label = tag)
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SwipeLinkedPartnerBadge(
-    thumbnailUrl: String?,
+private fun SwipeTagChip(label: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(0x33FFFFFF))
+            .border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(50))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Text(
+            text = label,
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun PhotoCarouselIndicators(
+    count: Int,
+    currentPage: Int,
     modifier: Modifier = Modifier
 ) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag(SwipeTestTags.PHOTO_CAROUSEL_INDICATORS),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        repeat(count) { index ->
+            val active = index == currentPage
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (active) Color(0xCCFFFFFF) else Color(0x40FFFFFF))
+            )
+        }
+    }
+}
+
+@Composable
+private fun SwipeOnlineDot(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .size(34.dp)
+            .testTag(SwipeTestTags.ONLINE_DOT)
+            .size(10.dp)
             .clip(CircleShape)
+            .background(Color(0xFF13E58A))
+            .border(1.dp, Color(0xFF050505), CircleShape)
+    )
+}
+
+@Composable
+private fun SwipeVerifiedBadge(modifier: Modifier = Modifier) {
+    Icon(
+        imageVector = Icons.Filled.CheckCircle,
+        contentDescription = "Verified",
+        tint = Color(0xFF52A8FF),
+        modifier = modifier
+            .testTag(SwipeTestTags.VERIFIED_BADGE)
+            .size(18.dp)
+    )
+}
+
+@Composable
+private fun SwipeLinkedPartnerBadge(
+    thumbnailUrl: String?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: (() -> Unit)? = null
+) {
+    val baseModifier = modifier
+        .testTag(SwipeTestTags.LINKED_PARTNER_BADGE)
+        .size(34.dp)
+        .clip(CircleShape)
+    val tappableModifier = if (onClick != null && enabled) {
+        baseModifier.clickable(onClick = onClick)
+    } else {
+        baseModifier
+    }
+    Box(
+        modifier = tappableModifier
             .background(Color(0xCC1B1B1B))
             .border(1.dp, Color(0xCCFFFFFF), CircleShape),
         contentAlignment = Alignment.Center
@@ -850,6 +1048,96 @@ private fun SwipeActions(
             onClick = onLike
         )
     }
+}
+
+@Composable
+private fun LinkedPartnerPreviewDialog(
+    cardDisplayName: String,
+    partnerDisplayName: String?,
+    partnerThumbnailUrl: String?,
+    partnerOnline: Boolean,
+    onDismiss: () -> Unit,
+    onViewProfile: () -> Unit
+) {
+    val resolvedPartnerName = partnerDisplayName?.takeIf { it.isNotBlank() } ?: "their partner"
+    AlertDialog(
+        modifier = Modifier.testTag(SwipeTestTags.LINKED_PARTNER_PREVIEW_DIALOG),
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Linked with $resolvedPartnerName",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (partnerThumbnailUrl != null) {
+                            AsyncImage(
+                                model = partnerThumbnailUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = "$resolvedPartnerName is the linked partner of $cardDisplayName. " +
+                            "Swipe stays on $cardDisplayName.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (partnerOnline) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.testTag(SwipeTestTags.LINKED_PARTNER_PREVIEW_ONLINE)
+                    ) {
+                        SwipeOnlineDot()
+                        Text(
+                            text = "Active now",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onViewProfile,
+                modifier = Modifier.testTag(SwipeTestTags.LINKED_PARTNER_PREVIEW_VIEW_PROFILE)
+            ) {
+                Text("View profile")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }
 
 @Composable
@@ -1078,7 +1366,7 @@ private fun SwipeCardDto.toProfileCardUi(): GridProfileCardUi {
         id = userId,
         displayName = displayName,
         thumbnailUrl = photoUrl,
-        online = false,
+        online = online,
         distanceLabel = distanceLabel,
         tone = GridCardTone.entries[toneIndex],
         linkedPartner = linkedPartner?.toUi(),
@@ -1097,6 +1385,16 @@ internal object SwipeTestTags {
     const val ROOT = "swipe-root"
     const val TOP_CARD = "swipe-top-card"
     const val CARD_PREFIX = "swipe-card-"
+    const val ONLINE_DOT = "swipe-card-online-dot"
+    const val VERIFIED_BADGE = "swipe-card-verified-badge"
+    const val LINKED_PARTNER_BADGE = "swipe-card-linked-partner-badge"
+    const val LINKED_PARTNER_PREVIEW_DIALOG = "swipe-linked-partner-preview-dialog"
+    const val LINKED_PARTNER_PREVIEW_VIEW_PROFILE = "swipe-linked-partner-preview-view-profile"
+    const val LINKED_PARTNER_PREVIEW_ONLINE = "swipe-linked-partner-preview-online"
+    const val SHORT_BIO = "swipe-card-short-bio"
+    const val TAGS_ROW = "swipe-card-tags-row"
+    const val PHOTO_CAROUSEL = "swipe-card-photo-carousel"
+    const val PHOTO_CAROUSEL_INDICATORS = "swipe-card-photo-carousel-indicators"
     const val REWIND_ACTION = "swipe-action-rewind"
     const val PASS_ACTION = "swipe-action-pass"
     const val INTRO_NOTE_ACTION = "swipe-action-intro-note"

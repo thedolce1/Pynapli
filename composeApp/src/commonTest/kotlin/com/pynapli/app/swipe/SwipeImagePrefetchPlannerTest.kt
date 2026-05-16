@@ -14,10 +14,14 @@ class SwipeImagePrefetchPlannerTest {
     }
 
     @Test
-    fun returnsTopWindowPrimaryAndPartnerImagesInCardOrder() {
+    fun topCardPrefetchesAllCarouselPhotosAndOthersGetCoverOnly() {
         val cards = listOf(
-            card("a", photoUrl = "https://cdn/a.jpg", partnerUrl = "https://cdn/a-partner.jpg"),
-            card("b", photoUrl = "https://cdn/b.jpg"),
+            card(
+                "a",
+                photoUrls = listOf("https://cdn/a-1.jpg", "https://cdn/a-2.jpg", "https://cdn/a-3.jpg"),
+                partnerUrl = "https://cdn/a-partner.jpg"
+            ),
+            card("b", photoUrls = listOf("https://cdn/b-1.jpg", "https://cdn/b-2.jpg")),
             card("c", partnerUrl = "https://cdn/c-partner.jpg"),
             card("d", photoUrl = "https://cdn/d.jpg"),
             card("e", photoUrl = "https://cdn/e.jpg")
@@ -27,14 +31,37 @@ class SwipeImagePrefetchPlannerTest {
 
         assertEquals(
             listOf(
-                "https://cdn/a.jpg",
+                "https://cdn/a-1.jpg",
+                "https://cdn/a-2.jpg",
+                "https://cdn/a-3.jpg",
                 "https://cdn/a-partner.jpg",
-                "https://cdn/b.jpg",
+                "https://cdn/b-1.jpg",
                 "https://cdn/c-partner.jpg",
                 "https://cdn/d.jpg"
             ),
             urls
         )
+    }
+
+    @Test
+    fun topCardPhotoCountCapApplies() {
+        val cards = listOf(
+            card(
+                "top",
+                photoUrls = listOf(
+                    "https://cdn/1.jpg",
+                    "https://cdn/2.jpg",
+                    "https://cdn/3.jpg",
+                    "https://cdn/4.jpg",
+                    "https://cdn/5.jpg",
+                    "https://cdn/6.jpg"
+                )
+            )
+        )
+
+        val urls = planSwipeImagePrefetch(cards, windowSize = 1, topCardPhotoCount = 3)
+
+        assertEquals(listOf("https://cdn/1.jpg", "https://cdn/2.jpg", "https://cdn/3.jpg"), urls)
     }
 
     @Test
@@ -62,12 +89,14 @@ class SwipeImagePrefetchPlannerTest {
 private fun card(
     userId: String,
     photoUrl: String? = null,
+    photoUrls: List<String> = emptyList(),
     partnerUrl: String? = null
 ): SwipeCardDto =
     SwipeCardDto(
         userId = userId,
         displayName = "User $userId",
         photoUrl = photoUrl,
+        photoUrls = photoUrls,
         linkedPartner = partnerUrl?.let {
             LinkedPartnerMiniDto(
                 userId = "$userId-partner",

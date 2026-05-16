@@ -48,7 +48,8 @@ data class GridCardDto(
 data class LinkedPartnerMiniDto(
     val userId: String,
     val displayName: String? = null,
-    val thumbnailUrl: String? = null
+    val thumbnailUrl: String? = null,
+    val online: Boolean = false
 )
 
 @Serializable

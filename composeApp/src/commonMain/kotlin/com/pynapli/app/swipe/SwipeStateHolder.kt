@@ -23,6 +23,8 @@ data class SwipeUiState(
     val isLoading: Boolean = false,
     val isSubmitting: Boolean = false,
     val isRewinding: Boolean = false,
+    val isPaging: Boolean = false,
+    val nextCursor: String? = null,
     val adSupported: Boolean = false,
     val pendingActionCount: Int = 0,
     val pendingActionLimit: Int = MAX_PENDING_ACTIONS,
@@ -32,7 +34,7 @@ data class SwipeUiState(
     val pendingMatch: MatchDto? = null
 ) {
     val topCard: SwipeCardDto? get() = cards.firstOrNull()
-    val hasMore: Boolean get() = cards.isNotEmpty()
+    val hasMore: Boolean get() = cards.isNotEmpty() || nextCursor != null
     val actionQueueFull: Boolean get() = pendingActionCount >= pendingActionLimit
 }
 
@@ -64,12 +66,21 @@ class SwipeStateHolder(
     suspend fun load(ownerUserId: String? = null) {
         restorePendingActions(ownerUserId)
         val selectedFilter = _state.value.filters.firstOrNull { it.active }?.type ?: SwipeFilterType.ForYou
-        _state.update { it.copy(isLoading = true, errorCode = null, errorMessage = null) }
-        when (val result = repository.loadDeck(selectedFilter)) {
+        _state.update {
+            it.copy(
+                isLoading = true,
+                isPaging = false,
+                nextCursor = null,
+                errorCode = null,
+                errorMessage = null
+            )
+        }
+        when (val result = repository.loadDeck(selectedFilter, cursor = null)) {
             is AppResult.Success -> _state.update {
                 it.copy(
                     deckSessionId = result.value.deckSessionId,
                     cards = result.value.cards.filterNotPending(),
+                    nextCursor = result.value.nextCursor,
                     filters = it.filters.withPaidLocks(result.value.adSupported),
                     adSupported = result.value.adSupported,
                     paywallMessage = null,
@@ -80,6 +91,7 @@ class SwipeStateHolder(
                 val entitlementRequired = result.error.code == "ENTITLEMENT_REQUIRED"
                 it.copy(
                     isLoading = false,
+                    nextCursor = null,
                     filters = if (entitlementRequired) {
                         it.filters.withPaidLocks(adSupported = true).withActiveFilter(SwipeFilterType.ForYou)
                     } else {
@@ -101,6 +113,37 @@ class SwipeStateHolder(
         }
         if (pendingActions.isNotEmpty()) {
             flushPendingActions()
+        }
+    }
+
+    suspend fun loadMoreIfNeeded() {
+        val current = _state.value
+        if (current.isPaging || current.isLoading) return
+        val cursor = current.nextCursor ?: return
+        if (current.cards.size >= LOAD_MORE_THRESHOLD) return
+        val selectedFilter = current.filters.firstOrNull { it.active }?.type ?: SwipeFilterType.ForYou
+        _state.update { it.copy(isPaging = true) }
+        when (val result = repository.loadDeck(selectedFilter, cursor = cursor)) {
+            is AppResult.Success -> _state.update { state ->
+                val existingIds = state.cards.mapTo(mutableSetOf()) { it.userId }
+                val pendingIds = pendingActions.mapTo(mutableSetOf()) { it.card.userId }
+                val appended = result.value.cards.filter { card ->
+                    card.userId !in existingIds && card.userId !in pendingIds
+                }
+                state.copy(
+                    cards = state.cards + appended,
+                    deckSessionId = result.value.deckSessionId ?: state.deckSessionId,
+                    nextCursor = result.value.nextCursor,
+                    isPaging = false
+                )
+            }
+            is AppResult.Failure -> _state.update {
+                it.copy(
+                    isPaging = false,
+                    errorCode = result.error.code,
+                    errorMessage = result.error.message
+                )
+            }
         }
     }
 
@@ -364,7 +407,7 @@ class SwipeStateHolder(
 }
 
 interface SwipeRepository {
-    suspend fun loadDeck(filter: SwipeFilterType): AppResult<SwipeDeckUi>
+    suspend fun loadDeck(filter: SwipeFilterType, cursor: String? = null): AppResult<SwipeDeckUi>
 
     suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?>
 
@@ -374,12 +417,13 @@ interface SwipeRepository {
 class ApiSwipeRepository(
     private val apiClient: PynapliApiClient
 ) : SwipeRepository {
-    override suspend fun loadDeck(filter: SwipeFilterType): AppResult<SwipeDeckUi> =
-        when (val result = apiClient.querySwipeDeck(filter.toRequest())) {
+    override suspend fun loadDeck(filter: SwipeFilterType, cursor: String?): AppResult<SwipeDeckUi> =
+        when (val result = apiClient.querySwipeDeck(filter.toRequest(cursor = cursor))) {
             is AppResult.Success -> AppResult.Success(
                 SwipeDeckUi(
                     deckSessionId = result.value.deckSessionId,
                     cards = result.value.items,
+                    nextCursor = result.value.nextCursor,
                     adSupported = result.value.adSupported,
                     advancedFiltersApplied = result.value.advancedFiltersApplied
                 )
@@ -437,11 +481,12 @@ class SampleSwipeRepository : SwipeRepository {
         )
     )
 
-    override suspend fun loadDeck(filter: SwipeFilterType): AppResult<SwipeDeckUi> =
+    override suspend fun loadDeck(filter: SwipeFilterType, cursor: String?): AppResult<SwipeDeckUi> =
         AppResult.Success(
             SwipeDeckUi(
                 deckSessionId = "sample-session",
                 cards = cards.toList(),
+                nextCursor = null,
                 adSupported = true,
                 advancedFiltersApplied = filter != SwipeFilterType.ForYou
             )
@@ -460,6 +505,7 @@ class SampleSwipeRepository : SwipeRepository {
 data class SwipeDeckUi(
     val deckSessionId: String? = null,
     val cards: List<SwipeCardDto>,
+    val nextCursor: String? = null,
     val adSupported: Boolean = false,
     val advancedFiltersApplied: Boolean = false
 )
@@ -523,14 +569,21 @@ internal fun List<SwipeFilterUi>.withPaidLocks(adSupported: Boolean): List<Swipe
         )
     }
 
-private fun SwipeFilterType.toRequest(): SwipeDeckRequestDto = when (this) {
-    SwipeFilterType.ForYou -> SwipeDeckRequestDto(radiusMeters = 25_000, limit = 30)
-    SwipeFilterType.Linked -> SwipeDeckRequestDto(radiusMeters = 25_000, limit = 30, linkedOnly = true)
-    SwipeFilterType.Age -> SwipeDeckRequestDto(radiusMeters = 25_000, limit = 30, minimumAge = 30, maximumAge = 55)
+private fun SwipeFilterType.toRequest(cursor: String? = null): SwipeDeckRequestDto = when (this) {
+    SwipeFilterType.ForYou -> SwipeDeckRequestDto(radiusMeters = 25_000, limit = 30, cursor = cursor)
+    SwipeFilterType.Linked -> SwipeDeckRequestDto(radiusMeters = 25_000, limit = 30, cursor = cursor, linkedOnly = true)
+    SwipeFilterType.Age -> SwipeDeckRequestDto(
+        radiusMeters = 25_000,
+        limit = 30,
+        cursor = cursor,
+        minimumAge = 30,
+        maximumAge = 55
+    )
 }
 
 private const val INTRO_NOTE_MAX_LENGTH = 140
 private const val MAX_PENDING_ACTIONS = 10
+private const val LOAD_MORE_THRESHOLD = 3
 
 internal fun newSwipeActionId(random: Random = Random.Default): String {
     val bytes = random.nextBytes(16)

@@ -238,6 +238,87 @@ class SwipeStateHolderTest {
     }
 
     @Test
+    fun loadStoresNextCursorAndAutoLoadsAdditionalPage() = runBlocking {
+        val firstPage = (1..3).map { swipeCard(userId = "p1-$it") }
+        val secondPage = (1..3).map { swipeCard(userId = "p2-$it") }
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = firstPage, deckSessionId = "deck-1", nextCursor = "cursor-1"),
+            pagesByCursor = mapOf(
+                "cursor-1" to SwipeDeckUi(cards = secondPage, deckSessionId = "deck-1", nextCursor = null)
+            )
+        )
+        val stateHolder = SwipeStateHolder(repository)
+
+        stateHolder.load()
+
+        val afterInitialLoad = stateHolder.state.value
+        assertEquals("cursor-1", afterInitialLoad.nextCursor)
+        assertEquals(3, afterInitialLoad.cards.size)
+        assertTrue(afterInitialLoad.hasMore)
+        assertEquals(1, repository.deckLoadCount)
+        assertEquals(listOf<String?>(null), repository.deckCursors)
+
+        stateHolder.submitAction(stateHolder.state.value.topCard ?: error("expected top card"), SwipeAction.PASS)
+        stateHolder.loadMoreIfNeeded()
+
+        val afterPaging = stateHolder.state.value
+        assertEquals(2, repository.deckLoadCount)
+        assertEquals(listOf<String?>(null, "cursor-1"), repository.deckCursors)
+        assertEquals(listOf("p1-2", "p1-3", "p2-1", "p2-2", "p2-3"), afterPaging.cards.map { it.userId })
+        assertNull(afterPaging.nextCursor)
+        assertFalse(afterPaging.isPaging)
+    }
+
+    @Test
+    fun loadMoreSkipsWhenAboveThresholdOrNoCursor() = runBlocking {
+        val cards = (1..5).map { swipeCard(userId = "card-$it") }
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = cards, deckSessionId = "deck-1", nextCursor = "cursor-1"),
+            pagesByCursor = mapOf(
+                "cursor-1" to SwipeDeckUi(cards = emptyList(), deckSessionId = "deck-1", nextCursor = null)
+            )
+        )
+        val stateHolder = SwipeStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.loadMoreIfNeeded()
+
+        assertEquals(1, repository.deckLoadCount)
+    }
+
+    @Test
+    fun loadMoreFiltersOutAlreadyVisibleAndPendingCards() = runBlocking {
+        val first = swipeCard(userId = "shared-1")
+        val onlyOnFirstPage = swipeCard(userId = "first-only")
+        val duplicate = swipeCard(userId = "shared-1")
+        val freshSecondPageCard = swipeCard(userId = "second-only")
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(
+                cards = listOf(first, onlyOnFirstPage),
+                deckSessionId = "deck-1",
+                nextCursor = "cursor-1"
+            ),
+            pagesByCursor = mapOf(
+                "cursor-1" to SwipeDeckUi(
+                    cards = listOf(duplicate, freshSecondPageCard),
+                    deckSessionId = "deck-1",
+                    nextCursor = null
+                )
+            ),
+            actionResult = AppResult.Failure(AppError("NETWORK_ERROR", "Offline", recoverable = true))
+        )
+        val stateHolder = SwipeStateHolder(repository, actionIdFactory = { "queued-action" })
+
+        stateHolder.load()
+        stateHolder.submitAction(stateHolder.state.value.topCard ?: error("expected top card"), SwipeAction.LIKE)
+        stateHolder.loadMoreIfNeeded()
+
+        val state = stateHolder.state.value
+        assertEquals(1, state.pendingActionCount)
+        assertEquals(listOf("first-only", "second-only"), state.cards.map { it.userId })
+    }
+
+    @Test
     fun rewindEntitlementFailureShowsPaywallMessage() = runBlocking {
         val card = swipeCard(userId = "target-1")
         val repository = FakeSwipeRepository(
@@ -262,16 +343,25 @@ class SwipeStateHolderTest {
 private class FakeSwipeRepository(
     private val deck: SwipeDeckUi,
     var actionResult: AppResult<MatchDto?> = AppResult.Success(null),
-    var rewindResult: AppResult<SwipeRewindUi?> = AppResult.Success(null)
+    var rewindResult: AppResult<SwipeRewindUi?> = AppResult.Success(null),
+    private val pagesByCursor: Map<String, SwipeDeckUi> = emptyMap()
 ) : SwipeRepository {
     var submitCount = 0
         private set
     var rewindCount = 0
         private set
+    var deckLoadCount = 0
+        private set
+    val deckCursors = mutableListOf<String?>()
     val submittedActions = mutableListOf<QueuedSwipeAction>()
 
-    override suspend fun loadDeck(filter: SwipeFilterType): AppResult<SwipeDeckUi> =
-        AppResult.Success(deck)
+    override suspend fun loadDeck(filter: SwipeFilterType, cursor: String?): AppResult<SwipeDeckUi> {
+        deckLoadCount += 1
+        deckCursors += cursor
+        val payload = if (cursor == null) deck else pagesByCursor[cursor]
+            ?: return AppResult.Failure(AppError("UNKNOWN_CURSOR", "no fake page for $cursor", recoverable = false))
+        return AppResult.Success(payload)
+    }
 
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
         submitCount += 1

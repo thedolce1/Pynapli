@@ -9,6 +9,21 @@ object SwipeAction {
     const val INTRO_NOTE = "intro_note"
 }
 
+// FILTERS_SPEC L356-365: dealbreaker-eligible filter keys for the Swipe deck.
+// A filter key in SwipeDeckRequestDto.dealbreakers marks that filter as a hard
+// gate. Non-dealbreaker filters stay "soft" and may be relaxed by the server
+// when the recommendation pool runs low (FILTERS_SPEC L373, L403-409).
+object SwipeDealbreakerKey {
+    const val AGE = "age"
+    const val DISTANCE = "distance"
+    const val VERIFIED = "verified"
+    const val DISCOVERY_STYLES = "discoveryStyles"
+    const val INTENTS = "intents"
+    const val LINKED_ONLY = "linkedOnly"
+
+    val ALL: Set<String> = setOf(AGE, DISTANCE, VERIFIED, DISCOVERY_STYLES, INTENTS, LINKED_ONLY)
+}
+
 @Serializable
 data class SwipeDeckRequestDto(
     val radiusMeters: Int = 25_000,
@@ -17,7 +32,19 @@ data class SwipeDeckRequestDto(
     val minimumAge: Int? = null,
     val maximumAge: Int? = null,
     val relationshipContexts: List<String> = emptyList(),
-    val linkedOnly: Boolean? = null
+    val linkedOnly: Boolean? = null,
+    val verifiedOnly: Boolean = false,
+    val facePhotoVerifiedOnly: Boolean = false,
+    val ageVerifiedOnly: Boolean = false,
+    val discoveryStyles: List<String> = emptyList(),
+    val intents: List<String> = emptyList(),
+    val lifestyleTags: List<String> = emptyList(),
+    val logisticsTags: List<String> = emptyList(),
+    val dealbreakers: Set<String> = emptySet(),
+    // FILTERS_SPEC L344-352 "Verified preferred (ranking weight)" — soft signal that
+    // boosts verified targets in the deck ranking without filtering out unverified ones.
+    // Distinct from verifiedOnly (hard filter).
+    val verifiedPreferred: Boolean = false
 )
 
 @Serializable
@@ -28,8 +55,13 @@ data class SwipeCardDto(
     val distanceLabel: String? = null,
     val distanceMeters: Int? = null,
     val photoUrl: String? = null,
+    val photoUrls: List<String> = emptyList(),
     val linkedPartner: LinkedPartnerMiniDto? = null,
-    val rankToken: String
+    val rankToken: String,
+    val online: Boolean = false,
+    val shortBio: String? = null,
+    val tags: List<String> = emptyList(),
+    val verified: Boolean = false
 )
 
 @Serializable

@@ -136,11 +136,12 @@ private class StaticSwipeVisualRepository(
 ) : SwipeRepository {
     val submittedActions = mutableListOf<QueuedSwipeAction>()
 
-    override suspend fun loadDeck(filter: SwipeFilterType): AppResult<SwipeDeckUi> =
+    override suspend fun loadDeck(filter: SwipeFilterType, cursor: String?): AppResult<SwipeDeckUi> =
         AppResult.Success(
             SwipeDeckUi(
                 deckSessionId = "visual-session",
                 cards = cards,
+                nextCursor = null,
                 adSupported = false
             )
         )
