@@ -42,6 +42,7 @@ import com.pynapli.app.profilelink.ProfileLinksStateHolder
 import com.pynapli.app.store.ApiStoreRepository
 import com.pynapli.app.store.StoreStateHolder
 import com.pynapli.app.swipe.ApiSwipeRepository
+import com.pynapli.app.swipe.DebugFaultInjectingSwipeRepository
 import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.auth.AuthRepository
@@ -161,7 +162,10 @@ class AndroidAppGraph(context: Context) {
     )
 
     val swipeStateHolder = SwipeStateHolder(
-        repository = ApiSwipeRepository(apiClient),
+        repository = DebugFaultInjectingSwipeRepository(
+            context = appContext,
+            delegate = ApiSwipeRepository(apiClient)
+        ),
         queueStore = SqlDelightSwipeActionQueueStore(database)
     )
 

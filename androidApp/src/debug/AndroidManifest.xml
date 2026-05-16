@@ -1,3 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:usesCleartextTraffic="true" />
+    <application>
+        <receiver
+            android:name=".debug.DebugQaReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.pynapli.app.DEBUG_SET_SWIPE_FAULT" />
+            </intent-filter>
+        </receiver>
+    </application>
 </manifest>
