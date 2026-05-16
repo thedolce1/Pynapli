@@ -5,6 +5,8 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.network.dto.MatchDto
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
+import com.pynapli.shared.network.dto.SwipeDealbreakerKey
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -319,6 +321,66 @@ class SwipeStateHolderTest {
     }
 
     @Test
+    fun applyFiltersIssuesFreshDeckRequestMatchingFilters() = runBlocking {
+        // FILTERS_SPEC L401: applying filters must request a new deck session — not
+        // mutate the existing one. The new request must carry the user's filter
+        // selection so the server can rank/relax against the right surface.
+        val card = swipeCard(userId = "target-1")
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = listOf(card), deckSessionId = "deck-1")
+        )
+        val stateHolder = SwipeStateHolder(repository)
+
+        stateHolder.load()
+        assertEquals(1, repository.deckLoadCount)
+
+        val customized = SwipeFilters.defaults.copy(
+            singles = true,
+            radiusMeters = 10_000,
+            minimumAge = 30,
+            maximumAge = 45,
+            dealbreakers = setOf(SwipeDealbreakerKey.AGE, SwipeDealbreakerKey.DISTANCE)
+        )
+        stateHolder.applyFilters(customized)
+
+        assertEquals(2, repository.deckLoadCount)
+        val applied = repository.deckRequests.last()
+        assertEquals(10_000, applied.radiusMeters)
+        assertEquals(30, applied.minimumAge)
+        assertEquals(45, applied.maximumAge)
+        assertEquals(listOf(SwipeFilters.SINGLES_CONTEXT), applied.relationshipContexts)
+        assertEquals(
+            setOf(SwipeDealbreakerKey.AGE, SwipeDealbreakerKey.DISTANCE),
+            applied.dealbreakers
+        )
+        assertNull(applied.cursor)
+        assertEquals(customized, stateHolder.state.value.swipeFilters)
+    }
+
+    @Test
+    fun applyFiltersDefaultsRestoresDefaultRequest() = runBlocking {
+        // Clear-all in the sheet (C3) goes through applyFilters(defaults). Verify the
+        // resulting request DTO matches the default surface so the server hydrates an
+        // unfiltered deck — no dealbreakers, default radius, no contexts.
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = emptyList(), deckSessionId = "deck-1")
+        )
+        val stateHolder = SwipeStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.applyFilters(SwipeFilters.defaults.copy(linked = true))
+        stateHolder.applyFilters(SwipeFilters.defaults)
+
+        assertEquals(3, repository.deckLoadCount)
+        val cleared = repository.deckRequests.last()
+        assertEquals(SwipeFilters.DEFAULT_RADIUS_METERS, cleared.radiusMeters)
+        assertEquals(emptyList<String>(), cleared.relationshipContexts)
+        assertEquals(emptySet<String>(), cleared.dealbreakers)
+        assertNull(cleared.linkedOnly)
+        assertEquals(SwipeFilters.defaults, stateHolder.state.value.swipeFilters)
+    }
+
+    @Test
     fun rewindEntitlementFailureShowsPaywallMessage() = runBlocking {
         val card = swipeCard(userId = "target-1")
         val repository = FakeSwipeRepository(
@@ -353,13 +415,15 @@ private class FakeSwipeRepository(
     var deckLoadCount = 0
         private set
     val deckCursors = mutableListOf<String?>()
+    val deckRequests = mutableListOf<SwipeDeckRequestDto>()
     val submittedActions = mutableListOf<QueuedSwipeAction>()
 
-    override suspend fun loadDeck(filter: SwipeFilterType, cursor: String?): AppResult<SwipeDeckUi> {
+    override suspend fun loadDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckUi> {
         deckLoadCount += 1
-        deckCursors += cursor
-        val payload = if (cursor == null) deck else pagesByCursor[cursor]
-            ?: return AppResult.Failure(AppError("UNKNOWN_CURSOR", "no fake page for $cursor", recoverable = false))
+        deckCursors += request.cursor
+        deckRequests += request
+        val payload = if (request.cursor == null) deck else pagesByCursor[request.cursor!!]
+            ?: return AppResult.Failure(AppError("UNKNOWN_CURSOR", "no fake page for ${request.cursor}", recoverable = false))
         return AppResult.Success(payload)
     }
 
