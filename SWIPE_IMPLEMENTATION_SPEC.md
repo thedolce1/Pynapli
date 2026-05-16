@@ -719,7 +719,7 @@ Network:
 - [ ] Top Picks/Picks daily refresh exists.
 - [x] Boost affects swipe ranking without violating filters.
 - [ ] Passport/travel mode has one active location.
-- [ ] Dealbreaker settings exist.
+- [x] Dealbreaker settings exist. Server-side validation against the `SwipeDealbreakerKey` allow-list (`age`, `distance`, `verified`, `discoveryStyles`, `intents`, `linkedOnly`) honors them as hard gates and skips them from B3 relaxation. Client `SwipeFiltersSheet` exposes a per-section `Lock` chip that toggles each key; clearing the underlying filter auto-drops the lock (no orphaned hard gates). Coverage in `SwipeServiceTest` (relaxation policy) and `SwipeFiltersSheetInteractionTest` (UX reversibility).
 - [x] Compose card stack renders only 2-3 cards.
 - [x] Swipe gestures use physics/thresholds.
 - [x] Card image preloading exists for the active/near-next Swipe stack.
