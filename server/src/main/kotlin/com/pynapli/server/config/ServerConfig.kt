@@ -6,7 +6,7 @@ data class ServerConfig(
     val databaseUrl: String,
     val databaseUser: String,
     val databasePassword: String,
-    val databaseMaximumPoolSize: Int = 10,
+    val databaseMaximumPoolSize: Int = 60,
     val databaseMinimumIdle: Int = 1,
     val databaseConnectionTimeoutMillis: Long = 5_000L,
     val apiProfilingEnabled: Boolean = false,
@@ -63,7 +63,7 @@ data class ServerConfig(
                 databaseMaximumPoolSize = System.getenv("PYNAPLI_DATABASE_MAX_POOL_SIZE")
                     ?.toIntOrNull()
                     ?.coerceIn(1, 100)
-                    ?: 10,
+                    ?: 60,
                 databaseMinimumIdle = System.getenv("PYNAPLI_DATABASE_MIN_IDLE")
                     ?.toIntOrNull()
                     ?.coerceIn(0, 100)

@@ -662,6 +662,197 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
             assertEquals(listOf(ageOnly), ageFiltered.map { it.userId })
         }
     }
+
+    "swipe deck verifiedOnly excludes unverified profiles" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b01")
+            val verifiedTarget = UUID.fromString("00000000-0000-0000-0000-000000000b02")
+            val unverifiedTarget = UUID.fromString("00000000-0000-0000-0000-000000000b03")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(verifiedTarget, "Vera", age = 35, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(unverifiedTarget, "Una", age = 33, longitude = -122.0838, latitude = 37.4228)
+            dataSource.markProfileVerified(verifiedTarget)
+
+            val repository = JdbcSwipeRepository(dataSource)
+            val unfiltered = repository.queryDeck(viewer, radiusMeters = 100_000, limit = 10).cards
+            val verifiedOnly = repository.queryDeck(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(verifiedOnly = true)
+            ).cards
+
+            assertEquals(setOf(verifiedTarget, unverifiedTarget), unfiltered.map { it.userId }.toSet())
+            assertEquals(listOf(verifiedTarget), verifiedOnly.map { it.userId })
+        }
+    }
+
+    "swipe deck facePhotoVerifiedOnly and ageVerifiedOnly each filter to their column" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b11")
+            val facePhotoTarget = UUID.fromString("00000000-0000-0000-0000-000000000b12")
+            val ageTarget = UUID.fromString("00000000-0000-0000-0000-000000000b13")
+            val plainTarget = UUID.fromString("00000000-0000-0000-0000-000000000b14")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(facePhotoTarget, "Face", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(ageTarget, "Aged", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(plainTarget, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
+            dataSource.markFacePhotoVerified(facePhotoTarget)
+            dataSource.markAgeVerified(ageTarget)
+
+            val repository = JdbcSwipeRepository(dataSource)
+            val facePhotoOnly = repository.queryDeck(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(facePhotoVerifiedOnly = true)
+            ).cards
+            val ageVerifiedOnly = repository.queryDeck(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(ageVerifiedOnly = true)
+            ).cards
+
+            assertEquals(listOf(facePhotoTarget), facePhotoOnly.map { it.userId })
+            assertEquals(listOf(ageTarget), ageVerifiedOnly.map { it.userId })
+        }
+    }
+
+    "swipe deck discoveryStyles filter to matching style" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b21")
+            val soloTarget = UUID.fromString("00000000-0000-0000-0000-000000000b22")
+            val togetherTarget = UUID.fromString("00000000-0000-0000-0000-000000000b23")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(soloTarget, "Solo", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(togetherTarget, "Together", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.setProfileDiscoveryStyle(soloTarget, "solo")
+            dataSource.setProfileDiscoveryStyle(togetherTarget, "together")
+
+            val repository = JdbcSwipeRepository(dataSource)
+            val soloOnly = repository.queryDeck(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(discoveryStyles = setOf("solo"))
+            ).cards
+
+            assertEquals(listOf(soloTarget), soloOnly.map { it.userId })
+        }
+    }
+
+    "swipe deck intents filters to overlapping intent and excludes empty profiles" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b31")
+            val dating = UUID.fromString("00000000-0000-0000-0000-000000000b32")
+            val events = UUID.fromString("00000000-0000-0000-0000-000000000b33")
+            val noIntent = UUID.fromString("00000000-0000-0000-0000-000000000b34")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(dating, "Dating", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(events, "Events", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(noIntent, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
+            dataSource.setProfileIntents(dating, listOf("dating", "open_to_singles"))
+            dataSource.setProfileIntents(events, listOf("events"))
+
+            val repository = JdbcSwipeRepository(dataSource)
+            val datingOnly = repository.queryDeck(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(intents = setOf("dating"))
+            ).cards
+            val openToCouples = repository.queryDeck(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(intents = setOf("open_to_couples"))
+            ).cards
+
+            assertEquals(listOf(dating), datingOnly.map { it.userId })
+            assertTrue(openToCouples.isEmpty(), "Untagged profile should not match an open_to_couples filter")
+        }
+    }
+
+    "swipe deck lifestyleTags filters to overlapping tag and excludes untagged profiles" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b41")
+            val softSwap = UUID.fromString("00000000-0000-0000-0000-000000000b42")
+            val sameRoom = UUID.fromString("00000000-0000-0000-0000-000000000b43")
+            val untagged = UUID.fromString("00000000-0000-0000-0000-000000000b44")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(softSwap, "Soft", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(sameRoom, "Same", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(untagged, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
+            dataSource.setProfileLifestyleTags(softSwap, listOf("soft_swap"))
+            dataSource.setProfileLifestyleTags(sameRoom, listOf("same_room"))
+
+            val repository = JdbcSwipeRepository(dataSource)
+            val softSwapOnly = repository.queryDeck(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(lifestyleTags = setOf("soft_swap"))
+            ).cards
+
+            assertEquals(listOf(softSwap), softSwapOnly.map { it.userId })
+        }
+    }
+
+    "swipe deck verifiedPreferred ranks verified profiles above unverified within the same distance band" {
+        // Two candidates at the same distance from the viewer. One verified, one not.
+        // With verifiedPreferred=true, the verified target should rank first.
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000c01")
+            val verifiedTarget = UUID.fromString("00000000-0000-0000-0000-000000000c02")
+            val unverifiedTarget = UUID.fromString("00000000-0000-0000-0000-000000000c03")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            // Place verified slightly farther so distance alone would put unverified first.
+            dataSource.insertDiscoverableUser(verifiedTarget, "Vera", age = 30, longitude = -122.0830, latitude = 37.4232)
+            dataSource.insertDiscoverableUser(unverifiedTarget, "Una", age = 30, longitude = -122.0838, latitude = 37.4228)
+            dataSource.markProfileVerified(verifiedTarget)
+
+            val repository = JdbcSwipeRepository(dataSource)
+
+            // Without the preference: nearest (unverified) ranks first.
+            val unboosted = repository.queryDeck(viewer, radiusMeters = 100_000, limit = 10).cards
+            assertEquals(listOf(unverifiedTarget, verifiedTarget), unboosted.map { it.userId })
+
+            // With verifiedPreferred=true: verified outranks unverified despite being farther.
+            val preferred = repository.queryDeck(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(verifiedPreferred = true)
+            ).cards
+            assertEquals(listOf(verifiedTarget, unverifiedTarget), preferred.map { it.userId })
+        }
+    }
+
+    "swipe deck logisticsTags filters to overlapping tag and excludes untagged profiles" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b51")
+            val hosts = UUID.fromString("00000000-0000-0000-0000-000000000b52")
+            val travels = UUID.fromString("00000000-0000-0000-0000-000000000b53")
+            val untagged = UUID.fromString("00000000-0000-0000-0000-000000000b54")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(hosts, "Hosts", age = 30, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(travels, "Travels", age = 31, longitude = -122.0838, latitude = 37.4228)
+            dataSource.insertDiscoverableUser(untagged, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
+            dataSource.setProfileLogisticsTags(hosts, listOf("hosts"))
+            dataSource.setProfileLogisticsTags(travels, listOf("travels"))
+
+            val repository = JdbcSwipeRepository(dataSource)
+            val hostsOnly = repository.queryDeck(
+                viewerUserId = viewer,
+                radiusMeters = 100_000,
+                limit = 10,
+                filters = DiscoveryFilters(logisticsTags = setOf("hosts"))
+            ).cards
+
+            assertEquals(listOf(hosts), hostsOnly.map { it.userId })
+        }
+    }
 })
 
 private fun DataSource.insertDiscoverableUser(

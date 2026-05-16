@@ -42,6 +42,36 @@ interface SwipeRepository {
         requireIntroNotesAllowed: Boolean = false
     ): Boolean
 
+    /**
+     * One-shot precondition gate for action submit. Combines the deck-card actionability
+     * check and the target eligibility check that submitAction used to call separately.
+     * The default impl delegates to the existing two methods so test fakes do not have
+     * to change; JdbcSwipeRepository overrides with a single SQL round-trip.
+     */
+    suspend fun checkActionPreconditions(
+        sessionId: UUID,
+        cardTokenHash: String,
+        viewerUserId: UUID,
+        targetUserId: UUID,
+        radiusMeters: Int,
+        requireIntroNotesAllowed: Boolean,
+        now: Instant
+    ): SwipeActionPreconditionCheck = SwipeActionPreconditionCheck(
+        deckCardActionable = isDeckCardActionable(
+            sessionId = sessionId,
+            cardTokenHash = cardTokenHash,
+            viewerUserId = viewerUserId,
+            targetUserId = targetUserId,
+            now = now
+        ),
+        targetEligible = isActionTargetEligible(
+            viewerUserId = viewerUserId,
+            targetUserId = targetUserId,
+            radiusMeters = radiusMeters,
+            requireIntroNotesAllowed = requireIntroNotesAllowed
+        )
+    )
+
     suspend fun findSwipeActionById(actionId: UUID, actorUserId: UUID): SwipeActionRecord?
 
     suspend fun findLatestRewindableAction(
@@ -80,6 +110,11 @@ data class SwipeDeckResult(
     val cards: List<SwipeCardRecord>
 )
 
+data class SwipeActionPreconditionCheck(
+    val deckCardActionable: Boolean,
+    val targetEligible: Boolean
+)
+
 data class SwipeDeckSessionRecord(
     val sessionId: UUID,
     val deckSessionToken: String,
@@ -112,7 +147,11 @@ data class SwipeCardRecord(
     val distanceMeters: Double,
     val linkedPartnerUserId: UUID? = null,
     val linkedPartnerDisplayName: String? = null,
-    val linkedPartnerThumbnailMediaAssetId: UUID? = null
+    val linkedPartnerThumbnailMediaAssetId: UUID? = null,
+    val bio: String? = null,
+    val tags: List<String> = emptyList(),
+    val thumbnailMediaAssetIds: List<UUID> = emptyList(),
+    val verified: Boolean = false
 )
 
 data class SwipeActionResult(

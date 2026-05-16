@@ -1,0 +1,15 @@
+-- idx_swipe_deck_cards_session_position was created in V44 as a UNIQUE index on
+-- (deck_session_id, position). Auditing all server code paths after the engine
+-- profiling pass (artifacts/swipe-api-load/20260516-082657/findings.md): no
+-- runtime query filters by position. The position column is informational only
+-- (returned in the deck DTO to drive client-side card sequencing).
+--
+-- Keeping the index forces an extra unique-constraint check on every INSERT
+-- into swipe_deck_cards (32 inserts per deck page request × concurrent viewers
+-- = thousands of unnecessary index lookups), and an extra index update per row.
+-- Drop it.
+--
+-- The other two unique indexes are still load-bearing:
+--   idx_swipe_deck_cards_session_target  -> isDeckCardActionable, markDeckCardActionRecorded
+--   idx_swipe_deck_cards_session_token   -> isDeckCardActionable, markDeckCardActionRecorded
+DROP INDEX IF EXISTS idx_swipe_deck_cards_session_position;

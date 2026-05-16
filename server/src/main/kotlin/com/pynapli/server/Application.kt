@@ -94,6 +94,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     )
     configureSwipeRoutes(
         authService = dependencies.authService,
-        swipeService = dependencies.swipeService
+        swipeService = dependencies.swipeService,
+        requestProfilerFactory = dependencies.requestProfilerFactory
     )
 }

@@ -301,6 +301,7 @@ class ServerDependencies(
                 rateLimitService = rateLimitService,
                 riskPolicyService = riskPolicyService,
                 subscriptionService = subscriptionService,
+                presenceService = presenceService,
                 deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret)
             )
             return ServerDependencies(

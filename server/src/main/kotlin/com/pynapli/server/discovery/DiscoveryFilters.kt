@@ -12,7 +12,12 @@ data class DiscoveryFilters(
     val lifestyleTags: Set<String> = emptySet(),
     val logisticsTags: Set<String> = emptySet(),
     val tonightAvailableOnly: Boolean = false,
-    val intents: Set<String> = emptySet()
+    val intents: Set<String> = emptySet(),
+    // FILTERS_SPEC L344-352: Verified offers three modes — "Verified only" (hard, via
+    // verifiedOnly), "Verified preferred" (soft ranking weight), and "No preference".
+    // This field carries the soft-ranking signal; Swipe uses it to boost verified
+    // targets in the deck ranking. Grid ignores it.
+    val verifiedPreferred: Boolean = false
 ) {
     // Broad non-default filter signal used by Swipe's stricter paid gate.
     val hasAdvancedFilters: Boolean
@@ -49,6 +54,7 @@ fun discoveryFiltersFrom(
     logisticsTags: List<String> = emptyList(),
     tonightAvailableOnly: Boolean = false,
     intents: List<String> = emptyList(),
+    verifiedPreferred: Boolean = false,
     errorFactory: (String) -> RuntimeException
 ): DiscoveryFilters {
     val min = minimumAge?.also { age ->
@@ -125,7 +131,8 @@ fun discoveryFiltersFrom(
         lifestyleTags = tags,
         logisticsTags = logistics,
         tonightAvailableOnly = tonightAvailableOnly,
-        intents = intentValues
+        intents = intentValues,
+        verifiedPreferred = verifiedPreferred
     )
 }
 

@@ -3,12 +3,16 @@ package com.pynapli.server.swipe
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
+import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationOutboxRecord
 import com.pynapli.server.notifications.NotificationPublisher
+import com.pynapli.server.presence.PresenceRepository
+import com.pynapli.server.presence.PresenceService
+import com.pynapli.server.presence.PresenceState
 import com.pynapli.server.safety.BlockRecord
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockSummaryRecord
@@ -437,22 +441,278 @@ class SwipeServiceTest {
     }
 
     @Test
-    fun deckQueryRejectsAdvancedFiltersForFreeUsers() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000160")
+    fun deckQueryAcceptsKnownDealbreakerKeys() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000170")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000171")
         val service = SwipeService(
-            repository = InMemorySwipeRepository(),
-            subscriptionService = freeSubscriptionService()
+            repository = InMemorySwipeRepository(
+                seededCards = listOf(
+                    SwipeCardRecord(
+                        userId = target,
+                        displayName = "Maya",
+                        displayAge = 31,
+                        thumbnailMediaAssetId = null,
+                        showDistance = true,
+                        distanceMeters = 800.0
+                    )
+                )
+            )
         )
 
-        val error = assertFailsWith<SwipeException> {
-            service.queryDeck(viewer, SwipeDeckRequestDto(minimumAge = 35))
-        }
+        val deck = service.queryDeck(
+            viewer,
+            SwipeDeckRequestDto(
+                limit = 5,
+                dealbreakers = setOf("age", "distance", "verified", "discoveryStyles", "intents", "linkedOnly")
+            )
+        )
 
-        assertEquals("ENTITLEMENT_REQUIRED", error.code)
+        // Validation should pass with the canonical key set; the deck returns normally.
+        assertEquals(listOf(target.toString()), deck.items.map { it.userId })
     }
 
     @Test
-    fun deckQueryAllowsAdvancedFiltersForPaidUsers() = runBlocking {
+    fun deckQueryRejectsUnknownDealbreakerKey() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000175")
+        val service = SwipeService(InMemorySwipeRepository())
+
+        val error = assertFailsWith<SwipeException> {
+            service.queryDeck(
+                viewer,
+                SwipeDeckRequestDto(dealbreakers = setOf("not_a_real_key"))
+            )
+        }
+
+        assertEquals("INVALID_SWIPE_FILTER", error.code)
+    }
+
+    @Test
+    fun deckQueryDefaultsToNoDealbreakers() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000178")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000179")
+        val service = SwipeService(
+            repository = InMemorySwipeRepository(
+                seededCards = listOf(
+                    SwipeCardRecord(
+                        userId = target,
+                        displayName = "Sam",
+                        displayAge = 30,
+                        thumbnailMediaAssetId = null,
+                        showDistance = true,
+                        distanceMeters = 900.0
+                    )
+                )
+            )
+        )
+
+        // No dealbreakers field set — default empty set should not trigger any validation or behavior change.
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+
+        assertEquals(listOf(target.toString()), deck.items.map { it.userId })
+    }
+
+    @Test
+    fun deckQueryRelaxesNonDealbreakerFiltersWhenResultIsLow() = runBlocking {
+        // First pass with intents=[dating] returns only 1 card (simulating few matches).
+        // Below the low-water-mark of limit/3 = 4 (since limit=12), and intents is NOT
+        // a dealbreaker, so SwipeService should retry with intents relaxed.
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000200")
+        val firstPassTarget = UUID.fromString("00000000-0000-0000-0000-000000000201")
+        val relaxedTarget1 = UUID.fromString("00000000-0000-0000-0000-000000000202")
+        val relaxedTarget2 = UUID.fromString("00000000-0000-0000-0000-000000000203")
+        val repository = InMemorySwipeRepository(
+            cardsByCall = listOf(
+                listOf(swipeCardRecord(firstPassTarget, "Dating One")),
+                listOf(
+                    swipeCardRecord(firstPassTarget, "Dating One"),
+                    swipeCardRecord(relaxedTarget1, "Relaxed A"),
+                    swipeCardRecord(relaxedTarget2, "Relaxed B")
+                )
+            )
+        )
+        val service = SwipeService(repository)
+
+        val deck = service.queryDeck(
+            viewer,
+            SwipeDeckRequestDto(limit = 12, intents = listOf("dating"))
+        )
+
+        // Two repo calls (firstPass + relaxed).
+        assertEquals(2, repository.queryDeckCallCount)
+        // Relaxed second call has intents cleared.
+        assertEquals(setOf("dating"), repository.recordedQueryDeckFilters[0].intents)
+        assertEquals(emptySet(), repository.recordedQueryDeckFilters[1].intents)
+        // First-pass card stays at head; relaxed cards append; duplicates deduped.
+        assertEquals(
+            listOf(firstPassTarget, relaxedTarget1, relaxedTarget2).map { it.toString() },
+            deck.items.map { it.userId }
+        )
+    }
+
+    @Test
+    fun deckQueryDoesNotRelaxWhenAllFiltersAreDealbreakers() = runBlocking {
+        // Per FILTERS_SPEC L317-319, distance is relaxable by default (radius widens when
+        // recommendations are low). To suppress relaxation entirely, the user must
+        // dealbreaker every active filter -- here intents AND distance.
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000205")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000206")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(swipeCardRecord(target, "OnlyMatch"))
+        )
+        val service = SwipeService(repository)
+
+        val deck = service.queryDeck(
+            viewer,
+            SwipeDeckRequestDto(
+                limit = 12,
+                intents = listOf("dating"),
+                dealbreakers = setOf(SwipeDealbreakerKey.INTENTS, SwipeDealbreakerKey.DISTANCE)
+            )
+        )
+
+        assertEquals(1, repository.queryDeckCallCount)
+        assertEquals(listOf(target.toString()), deck.items.map { it.userId })
+    }
+
+    @Test
+    fun deckQueryRelaxesViaRadiusWhenDistanceIsNotDealbreakerEvenIfOtherFiltersAre() = runBlocking {
+        // intents=[dating] with intents dealbreaker but distance NOT dealbreaker.
+        // Spec L317-319: distance is flexible by default; radius widens to fill the deck.
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000207")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000208")
+        val repository = InMemorySwipeRepository(
+            cardsByCall = listOf(
+                listOf(swipeCardRecord(target, "First")),
+                listOf(swipeCardRecord(target, "First"))
+            )
+        )
+        val service = SwipeService(repository)
+
+        service.queryDeck(
+            viewer,
+            SwipeDeckRequestDto(
+                radiusMeters = 10_000,
+                limit = 12,
+                intents = listOf("dating"),
+                dealbreakers = setOf(SwipeDealbreakerKey.INTENTS)
+            )
+        )
+
+        assertEquals(2, repository.queryDeckCallCount)
+        // intents was dealbreaker -> preserved on retry
+        assertEquals(setOf("dating"), repository.recordedQueryDeckFilters[1].intents)
+        // distance not dealbreaker -> radius doubled
+        assertEquals(10_000, repository.recordedQueryDeckRadii[0])
+        assertEquals(20_000, repository.recordedQueryDeckRadii[1])
+    }
+
+    @Test
+    fun deckQueryDoesNotRelaxWhenResultMeetsThreshold() = runBlocking {
+        // First pass returns enough cards (above limit/3); no relaxation.
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000210")
+        val targets = (0 until 6).map { i ->
+            UUID.fromString("00000000-0000-0000-0000-00000000021${i}")
+        }
+        val repository = InMemorySwipeRepository(
+            seededCards = targets.mapIndexed { i, id -> swipeCardRecord(id, "Card $i") }
+        )
+        val service = SwipeService(repository)
+
+        // limit=12 -> threshold = max(12/3, 3) = 4. First pass returns 6, above threshold.
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 12, intents = listOf("dating")))
+
+        assertEquals(1, repository.queryDeckCallCount)
+        assertEquals(targets.map { it.toString() }, deck.items.map { it.userId })
+    }
+
+    @Test
+    fun deckQueryRelaxationPreservesDealbreakerFiltersOnRetry() = runBlocking {
+        // intents=[dating] flexible, age=30 dealbreaker. Relaxation should clear
+        // intents on the second call but keep minimumAge=30.
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000215")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000216")
+        val repository = InMemorySwipeRepository(
+            cardsByCall = listOf(
+                listOf(swipeCardRecord(target, "OnlyMatch")),
+                listOf(swipeCardRecord(target, "OnlyMatch"))
+            )
+        )
+        val service = SwipeService(repository)
+
+        service.queryDeck(
+            viewer,
+            SwipeDeckRequestDto(
+                limit = 12,
+                minimumAge = 30,
+                intents = listOf("dating"),
+                dealbreakers = setOf(SwipeDealbreakerKey.AGE)
+            )
+        )
+
+        assertEquals(2, repository.queryDeckCallCount)
+        // First call: full filters
+        assertEquals(30, repository.recordedQueryDeckFilters[0].minimumAge)
+        assertEquals(setOf("dating"), repository.recordedQueryDeckFilters[0].intents)
+        // Second (relaxed) call: minimumAge preserved (dealbreaker), intents cleared.
+        assertEquals(30, repository.recordedQueryDeckFilters[1].minimumAge)
+        assertEquals(emptySet(), repository.recordedQueryDeckFilters[1].intents)
+    }
+
+    @Test
+    fun deckQueryRelaxationWidensRadiusWhenDistanceIsNotDealbreaker() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000220")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000221")
+        val repository = InMemorySwipeRepository(
+            cardsByCall = listOf(
+                listOf(swipeCardRecord(target, "First")),
+                listOf(swipeCardRecord(target, "First"))
+            )
+        )
+        val service = SwipeService(repository)
+
+        service.queryDeck(
+            viewer,
+            SwipeDeckRequestDto(radiusMeters = 10_000, limit = 12, intents = listOf("dating"))
+        )
+
+        assertEquals(2, repository.queryDeckCallCount)
+        assertEquals(10_000, repository.recordedQueryDeckRadii[0])
+        // Distance is not a dealbreaker -> radius doubles (capped at MAX_RADIUS_METERS = 100_000).
+        assertEquals(20_000, repository.recordedQueryDeckRadii[1])
+    }
+
+    @Test
+    fun deckQueryAllowsBasicFiltersForFreeUsers() = runBlocking {
+        // FILTERS_SPEC L432-440: free tier keeps distance, age, singles/linked/everyone,
+        // solo/together/social basics, and verified basics. Age (and linkedOnly,
+        // relationshipContexts) must NOT trigger ENTITLEMENT_REQUIRED on free tier.
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000160")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000165")
+        val service = SwipeService(
+            repository = InMemorySwipeRepository(
+                seededCards = listOf(
+                    SwipeCardRecord(
+                        userId = target,
+                        displayName = "Maya",
+                        displayAge = 37,
+                        thumbnailMediaAssetId = null,
+                        showDistance = true,
+                        distanceMeters = 850.0
+                    )
+                )
+            ),
+            subscriptionService = freeSubscriptionService()
+        )
+
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(minimumAge = 35))
+
+        assertEquals(listOf(target.toString()), deck.items.map { it.userId })
+        // Basic filters are not advanced; do not signal advancedFiltersApplied to clients.
+        assertEquals(false, deck.advancedFiltersApplied)
+    }
+
+    @Test
+    fun deckQueryAllowsBasicFiltersForPaidUsersWithoutAdvancedFlag() = runBlocking {
         val viewer = UUID.fromString("00000000-0000-0000-0000-000000000161")
         val target = UUID.fromString("00000000-0000-0000-0000-000000000162")
         val service = SwipeService(
@@ -475,7 +735,10 @@ class SwipeServiceTest {
 
         assertEquals(listOf(target.toString()), deck.items.map { it.userId })
         assertEquals(false, deck.adSupported)
-        assertEquals(true, deck.advancedFiltersApplied)
+        // Age is a basic filter (FILTERS_SPEC L432-440) so advancedFiltersApplied stays false
+        // even for paid tier. The advanced flag should only flip when lifestyle/logistics
+        // tags or other gated filters are present (currently exposed via Grid, not Swipe).
+        assertEquals(false, deck.advancedFiltersApplied)
     }
 
     @Test
@@ -606,6 +869,267 @@ class SwipeServiceTest {
         assertEquals(listOf(targets.last().toString()), secondPage.items.map { it.userId })
         assertNull(secondPage.nextCursor)
         assertEquals(firstPage.deckSessionId, secondPage.deckSessionId)
+    }
+
+    @Test
+    fun deckQueryPopulatesOnlineFlagFromPresenceService() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000270")
+        val onlineTarget = UUID.fromString("00000000-0000-0000-0000-000000000271")
+        val offlineTarget = UUID.fromString("00000000-0000-0000-0000-000000000272")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = onlineTarget,
+                    displayName = "Online",
+                    displayAge = 30,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 800.0
+                ),
+                SwipeCardRecord(
+                    userId = offlineTarget,
+                    displayName = "Offline",
+                    displayAge = 32,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 1200.0
+                )
+            )
+        )
+        val presenceService = PresenceService(StaticPresenceRepository(setOf(onlineTarget)))
+        val service = SwipeService(repository, presenceService = presenceService)
+
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+
+        val byTarget = deck.items.associateBy { it.userId }
+        assertTrue(byTarget.getValue(onlineTarget.toString()).online)
+        assertEquals(false, byTarget.getValue(offlineTarget.toString()).online)
+    }
+
+    @Test
+    fun deckQueryPopulatesLinkedPartnerOnlineFromPresenceService() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000280")
+        val targetWithOnlinePartner = UUID.fromString("00000000-0000-0000-0000-000000000281")
+        val onlinePartner = UUID.fromString("00000000-0000-0000-0000-000000000282")
+        val targetWithOfflinePartner = UUID.fromString("00000000-0000-0000-0000-000000000283")
+        val offlinePartner = UUID.fromString("00000000-0000-0000-0000-000000000284")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = targetWithOnlinePartner,
+                    displayName = "Alex",
+                    displayAge = 30,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 800.0,
+                    linkedPartnerUserId = onlinePartner,
+                    linkedPartnerDisplayName = "Jamie"
+                ),
+                SwipeCardRecord(
+                    userId = targetWithOfflinePartner,
+                    displayName = "Sam",
+                    displayAge = 32,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 1100.0,
+                    linkedPartnerUserId = offlinePartner,
+                    linkedPartnerDisplayName = "Noa"
+                )
+            )
+        )
+        val presenceService = PresenceService(StaticPresenceRepository(setOf(onlinePartner)))
+        val service = SwipeService(repository, presenceService = presenceService)
+
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+
+        val byTarget = deck.items.associateBy { it.userId }
+        val firstCard = byTarget.getValue(targetWithOnlinePartner.toString())
+        val secondCard = byTarget.getValue(targetWithOfflinePartner.toString())
+        assertEquals(false, firstCard.online)
+        assertEquals(true, firstCard.linkedPartner?.online)
+        assertEquals(false, secondCard.online)
+        assertEquals(false, secondCard.linkedPartner?.online)
+    }
+
+    @Test
+    fun deckQueryPropagatesVerifiedFlag() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000320")
+        val verifiedTarget = UUID.fromString("00000000-0000-0000-0000-000000000321")
+        val unverifiedTarget = UUID.fromString("00000000-0000-0000-0000-000000000322")
+        val service = SwipeService(
+            repository = InMemorySwipeRepository(
+                seededCards = listOf(
+                    SwipeCardRecord(
+                        userId = verifiedTarget,
+                        displayName = "Verified",
+                        displayAge = 30,
+                        thumbnailMediaAssetId = null,
+                        showDistance = true,
+                        distanceMeters = 800.0,
+                        verified = true
+                    ),
+                    SwipeCardRecord(
+                        userId = unverifiedTarget,
+                        displayName = "Unverified",
+                        displayAge = 32,
+                        thumbnailMediaAssetId = null,
+                        showDistance = true,
+                        distanceMeters = 1100.0,
+                        verified = false
+                    )
+                )
+            )
+        )
+
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+
+        val byTarget = deck.items.associateBy { it.userId }
+        assertEquals(true, byTarget.getValue(verifiedTarget.toString()).verified)
+        assertEquals(false, byTarget.getValue(unverifiedTarget.toString()).verified)
+    }
+
+    @Test
+    fun deckQueryHydratesPhotoCarouselUrls() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000310")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000311")
+        val first = UUID.fromString("00000000-0000-0000-0000-000000000411")
+        val second = UUID.fromString("00000000-0000-0000-0000-000000000412")
+        val third = UUID.fromString("00000000-0000-0000-0000-000000000413")
+        val service = SwipeService(
+            repository = InMemorySwipeRepository(
+                seededCards = listOf(
+                    SwipeCardRecord(
+                        userId = target,
+                        displayName = "Maya",
+                        displayAge = 31,
+                        thumbnailMediaAssetId = first,
+                        showDistance = true,
+                        distanceMeters = 800.0,
+                        thumbnailMediaAssetIds = listOf(first, second, third)
+                    )
+                )
+            ),
+            mediaAssetUrlResolver = StaticMediaAssetUrlResolver()
+        )
+
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+
+        val card = deck.items.single()
+        assertEquals("https://media.example/$first", card.photoUrl)
+        assertEquals(
+            listOf(
+                "https://media.example/$first",
+                "https://media.example/$second",
+                "https://media.example/$third"
+            ),
+            card.photoUrls
+        )
+    }
+
+    @Test
+    fun deckQueryFallsBackToCoverThumbnailWhenCarouselArrayEmpty() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000314")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000315")
+        val cover = UUID.fromString("00000000-0000-0000-0000-000000000415")
+        val service = SwipeService(
+            repository = InMemorySwipeRepository(
+                seededCards = listOf(
+                    SwipeCardRecord(
+                        userId = target,
+                        displayName = "Sam",
+                        displayAge = 30,
+                        thumbnailMediaAssetId = cover,
+                        showDistance = true,
+                        distanceMeters = 1000.0
+                    )
+                )
+            ),
+            mediaAssetUrlResolver = StaticMediaAssetUrlResolver()
+        )
+
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+
+        val card = deck.items.single()
+        assertEquals("https://media.example/$cover", card.photoUrl)
+        assertEquals(listOf("https://media.example/$cover"), card.photoUrls)
+    }
+
+    @Test
+    fun deckQueryCapsBioAndDeduplicatesTags() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000290")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000291")
+        val longBio = "x".repeat(200)
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = target,
+                    displayName = "Maya",
+                    displayAge = 31,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 800.0,
+                    bio = "  $longBio  ",
+                    tags = listOf("Hosts", "  ", "hosts", "Travels", "Open", "extra")
+                )
+            )
+        )
+        val service = SwipeService(repository)
+
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+
+        val card = deck.items.single()
+        val expectedBio = "x".repeat(120)
+        assertEquals(expectedBio, card.shortBio)
+        assertEquals(listOf("Hosts", "Travels", "Open"), card.tags)
+    }
+
+    @Test
+    fun deckQueryDropsBlankBioAndTagsByDefault() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000293")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000294")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = target,
+                    displayName = "Sam",
+                    displayAge = 30,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 900.0,
+                    bio = "   "
+                )
+            )
+        )
+        val service = SwipeService(repository)
+
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+
+        val card = deck.items.single()
+        assertNull(card.shortBio)
+        assertEquals(emptyList(), card.tags)
+    }
+
+    @Test
+    fun deckQueryDefaultsOnlineFalseWhenPresenceServiceMissing() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000275")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000276")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = target,
+                    displayName = "Maya",
+                    displayAge = 31,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 900.0
+                )
+            )
+        )
+        val service = SwipeService(repository)
+
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+
+        assertEquals(false, deck.items.single().online)
     }
 
     @Test
@@ -869,6 +1393,20 @@ class SwipeServiceTest {
     }
 }
 
+private fun swipeCardRecord(
+    userId: UUID,
+    displayName: String,
+    displayAge: Int? = 30,
+    distanceMeters: Double = 1_000.0
+): SwipeCardRecord = SwipeCardRecord(
+    userId = userId,
+    displayName = displayName,
+    displayAge = displayAge,
+    thumbnailMediaAssetId = null,
+    showDistance = true,
+    distanceMeters = distanceMeters
+)
+
 private fun swipeActionRequest(
     viewerUserId: UUID,
     targetUserId: UUID,
@@ -911,13 +1449,22 @@ private class InMemorySwipeRepository(
     private val viewerHasLocation: Boolean = true,
     private val seededCards: List<SwipeCardRecord> = emptyList(),
     private val ineligibleTargets: Set<Pair<UUID, UUID>> = emptySet(),
-    seededMatches: List<MatchRecord> = emptyList()
+    seededMatches: List<MatchRecord> = emptyList(),
+    // B3 testability: per-call card overrides for verifying relaxation behavior.
+    // When set, queryDeck returns cardsByCall[callIndex] instead of seededCards on
+    // that call (callIndex starts at 0). Falls back to seededCards when null or
+    // when callIndex >= cardsByCall.size.
+    private val cardsByCall: List<List<SwipeCardRecord>>? = null
 ) : SwipeRepository {
     private val actions = mutableMapOf<Pair<UUID, UUID>, String>()
     private val actionRecords = mutableMapOf<UUID, SwipeActionRecord>()
     private val actionOrder = mutableListOf<UUID>()
     private val matches = seededMatches.toMutableList()
     private val now = Instant.parse("2026-04-28T18:00:00Z")
+    val recordedQueryDeckFilters = mutableListOf<DiscoveryFilters>()
+    val recordedQueryDeckRadii = mutableListOf<Int>()
+    var queryDeckCallCount = 0
+        private set
 
     override suspend fun queryDeck(
         viewerUserId: UUID,
@@ -926,10 +1473,15 @@ private class InMemorySwipeRepository(
         filters: DiscoveryFilters,
         excludedTargetUserIds: Set<UUID>
     ): SwipeDeckResult {
+        recordedQueryDeckFilters += filters
+        recordedQueryDeckRadii += radiusMeters
+        val callIndex = queryDeckCallCount
+        queryDeckCallCount += 1
         if (!viewerHasLocation) return SwipeDeckResult(viewerHadLocation = false, cards = emptyList())
+        val source = cardsByCall?.getOrNull(callIndex) ?: seededCards
         return SwipeDeckResult(
             viewerHadLocation = true,
-            cards = seededCards
+            cards = source
                 .filterNot { it.userId in excludedTargetUserIds }
                 .filterNot { viewerUserId to it.userId in actions }
                 .take(limit)
@@ -1237,4 +1789,14 @@ private class StaticSubscriptionRepository(
                 pineappleLikes = mapOf(userId to pineappleLikes)
             )
     }
+}
+
+private class StaticPresenceRepository(
+    private val onlineIds: Set<UUID>
+) : PresenceRepository {
+    override suspend fun heartbeat(userId: UUID): PresenceState =
+        PresenceState(online = true, expiresInSeconds = 300)
+
+    override suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> =
+        userIds.filterTo(mutableSetOf()) { it in onlineIds }
 }

@@ -18,6 +18,12 @@ class Database(config: ServerConfig) : AutoCloseable {
             connectionTimeout = config.databaseConnectionTimeoutMillis
             validationTimeout = 3_000
             poolName = "pynapli-postgres"
+            // pgjdbc batched-insert rewrite. Bundles consecutive
+            // `INSERT INTO t VALUES (?, ...)` calls in a JDBC batch into a single
+            // multi-row `INSERT INTO t VALUES (?, ...), (?, ...), (?, ...)` round
+            // trip. Big win for the swipe deck card insert path (32 rows per
+            // deck page). Docs: https://jdbc.postgresql.org/documentation/use/
+            addDataSourceProperty("reWriteBatchedInserts", "true")
         }
     )
 
