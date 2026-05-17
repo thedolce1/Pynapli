@@ -123,7 +123,8 @@ class ProfileService(
             gridMessagePolicy = normalizedGridMessagePolicy,
             allowFlirts = allowFlirts,
             allowIntroNotes = allowIntroNotes,
-            allowAlbumRequests = allowAlbumRequests
+            allowAlbumRequests = allowAlbumRequests,
+            visibleWhileTraveling = visibleWhileTraveling
         )
     }
 
@@ -227,7 +228,8 @@ class ProfileService(
         allowAlbumRequests = allowAlbumRequests,
         soloEnabled = soloEnabled,
         togetherEnabled = togetherEnabled,
-        socialEnabled = socialEnabled
+        socialEnabled = socialEnabled,
+        visibleWhileTraveling = visibleWhileTraveling
     )
 
     private fun String?.cleanOptional(maxLength: Int): String? {

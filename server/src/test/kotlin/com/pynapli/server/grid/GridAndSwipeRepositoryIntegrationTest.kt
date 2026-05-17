@@ -350,6 +350,35 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "visible_while_traveling=false hides travel-mode targets from every discovery surface" {
+        // PROFILE_SETTINGS_SPEC L221-245: opt-out makes a travel-mode target
+        // invisible to Grid AND Swipe AND Top Picks. Existing default true
+        // keeps them visible (already covered by the prior visiting test).
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000aa0")
+            val hiddenVisitor = UUID.fromString("00000000-0000-0000-0000-000000000aa1")
+            val openVisitor = UUID.fromString("00000000-0000-0000-0000-000000000aa2")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -74.0060, latitude = 40.7128)
+            // Both targets physically in SF with active travel to NYC.
+            dataSource.insertDiscoverableUser(hiddenVisitor, "Sage", age = 32, longitude = -122.4194, latitude = 37.7749)
+            dataSource.insertDiscoverableUser(openVisitor, "Maya", age = 34, longitude = -122.4180, latitude = 37.7740)
+            dataSource.insertActiveTravelLocation(hiddenVisitor, "New York", 40.7128, -74.0060)
+            dataSource.insertActiveTravelLocation(openVisitor, "New York", 40.7128, -74.0060)
+            // hiddenVisitor opts out of travel-mode visibility.
+            dataSource.setVisibleWhileTraveling(hiddenVisitor, false)
+
+            val swipeRepo = JdbcSwipeRepository(dataSource)
+            val gridRepo = JdbcGridRepository(dataSource)
+            val deck = swipeRepo.queryDeck(viewer, 5_000, 10, DiscoveryFilters())
+            val grid = gridRepo.queryNearby(viewer, 5_000, 10, DiscoveryFilters())
+
+            val deckIds = deck.cards.map { it.userId }
+            val gridIds = grid.cards.map { it.userId }
+            assertEquals(listOf(openVisitor), deckIds, "Opt-out target must be hidden from Swipe deck")
+            assertEquals(listOf(openVisitor), gridIds, "Opt-out target must be hidden from Grid")
+        }
+    }
+
     "grid cards expose visiting flag and surface travel-mode targets in destination grids" {
         // SWIPE_IMPLEMENTATION_SPEC L348 + L344-348: Grid mirrors the Swipe
         // deck — a target physically in SF with travel mode set to NYC should
@@ -1573,6 +1602,18 @@ private fun DataSource.insertClearedTravelLocation(
         }
     }
     return id
+}
+
+private fun DataSource.setVisibleWhileTraveling(userId: UUID, value: Boolean) {
+    connection.use { connection ->
+        connection.prepareStatement(
+            "UPDATE discovery_settings SET visible_while_traveling = ? WHERE user_id = ?"
+        ).use { statement ->
+            statement.setBoolean(1, value)
+            statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+    }
 }
 
 private fun DataSource.insertSwipeAction(

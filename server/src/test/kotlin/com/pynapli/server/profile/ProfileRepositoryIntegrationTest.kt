@@ -64,7 +64,8 @@ class ProfileRepositoryIntegrationTest {
                 gridMessagePolicy = "matches_only",
                 allowFlirts = false,
                 allowIntroNotes = false,
-                allowAlbumRequests = false
+                allowAlbumRequests = false,
+                visibleWhileTraveling = null
             )
         )
 

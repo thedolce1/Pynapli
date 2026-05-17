@@ -98,6 +98,7 @@ class JdbcProfileRepository(
                     allow_flirts = COALESCE(?::boolean, allow_flirts),
                     allow_intro_notes = COALESCE(?::boolean, allow_intro_notes),
                     allow_album_requests = COALESCE(?::boolean, allow_album_requests),
+                    visible_while_traveling = COALESCE(?::boolean, visible_while_traveling),
                     updated_at = now()
                 WHERE user_id = ?
                 """.trimIndent()
@@ -111,7 +112,8 @@ class JdbcProfileRepository(
                 statement.setObject(7, update.allowFlirts)
                 statement.setObject(8, update.allowIntroNotes)
                 statement.setObject(9, update.allowAlbumRequests)
-                statement.setObject(10, userId)
+                statement.setObject(10, update.visibleWhileTraveling)
+                statement.setObject(11, userId)
                 if (statement.executeUpdate() == 0) return@withContext null
             }
         }
@@ -174,7 +176,8 @@ class JdbcProfileRepository(
                 allowAlbumRequests = getBoolean("allow_album_requests"),
                 soloEnabled = getBoolean("solo_enabled"),
                 togetherEnabled = getBoolean("together_enabled"),
-                socialEnabled = getBoolean("social_enabled")
+                socialEnabled = getBoolean("social_enabled"),
+                visibleWhileTraveling = getBoolean("visible_while_traveling")
             )
         )
     }
@@ -207,7 +210,8 @@ class JdbcProfileRepository(
                    ds.allow_album_requests,
                    ds.solo_enabled,
                    ds.together_enabled,
-                   ds.social_enabled
+                   ds.social_enabled,
+                   ds.visible_while_traveling
             FROM users u
             JOIN profiles p ON p.user_id = u.id
             JOIN discovery_settings ds ON ds.user_id = u.id

@@ -115,6 +115,9 @@ class JdbcGridRepository(
                   AND p.visibility_status = 'visible'
                   AND ds.grid_visible = true
                   AND ds.incognito = false
+                  -- PROFILE_SETTINGS_SPEC L221-245 "Visible while traveling":
+                  -- target hidden everywhere while travel-active AND opted out.
+                  AND (target_travel.id IS NULL OR ds.visible_while_traveling = true)
                   AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
                   -- OR keeps both ST_DWithin halves index-eligible. First uses
                   -- the GiST on user_locations.geom; second uses the GiST on

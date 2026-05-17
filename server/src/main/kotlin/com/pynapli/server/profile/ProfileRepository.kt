@@ -49,7 +49,8 @@ data class DiscoverySettingsRecord(
     val allowAlbumRequests: Boolean,
     val soloEnabled: Boolean,
     val togetherEnabled: Boolean,
-    val socialEnabled: Boolean
+    val socialEnabled: Boolean,
+    val visibleWhileTraveling: Boolean
 )
 
 data class PublicProfileRecord(
@@ -91,5 +92,6 @@ data class DiscoverySettingsUpdate(
     val gridMessagePolicy: String?,
     val allowFlirts: Boolean?,
     val allowIntroNotes: Boolean?,
-    val allowAlbumRequests: Boolean?
+    val allowAlbumRequests: Boolean?,
+    val visibleWhileTraveling: Boolean?
 )

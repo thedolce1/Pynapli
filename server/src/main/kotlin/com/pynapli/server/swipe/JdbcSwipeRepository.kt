@@ -168,6 +168,10 @@ class JdbcSwipeRepository(
               AND p.visibility_status = 'visible'
               AND ds.swipe_visible = true
               AND ds.incognito = false
+              -- PROFILE_SETTINGS_SPEC L221-245 "Visible while traveling":
+              -- when a target is in travel mode AND opted out, they're hidden
+              -- from every discovery surface for the duration of the session.
+              AND (target_travel.id IS NULL OR ds.visible_while_traveling = true)
               AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
               -- OR keeps both ST_DWithin calls index-eligible. The first uses
               -- the GiST index on user_locations.geom for the bulk of (non-

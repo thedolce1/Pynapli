@@ -284,7 +284,8 @@ private class InMemoryProfileRepository(
             allowAlbumRequests = true,
             soloEnabled = true,
             togetherEnabled = false,
-            socialEnabled = true
+            socialEnabled = true,
+            visibleWhileTraveling = true
         )
     )
 

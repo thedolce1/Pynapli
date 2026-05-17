@@ -59,7 +59,11 @@ data class DiscoverySettingsDto(
     val allowAlbumRequests: Boolean,
     val soloEnabled: Boolean,
     val togetherEnabled: Boolean,
-    val socialEnabled: Boolean
+    val socialEnabled: Boolean,
+    // PROFILE_SETTINGS_SPEC L221-245: when false, the viewer is hidden from
+    // every discovery surface while they have an active travel_locations row.
+    // Defaults true so existing clients see the documented passport behavior.
+    val visibleWhileTraveling: Boolean = true
 )
 
 @Serializable
@@ -82,5 +86,6 @@ data class UpdateDiscoverySettingsRequestDto(
     val gridMessagePolicy: String? = null,
     val allowFlirts: Boolean? = null,
     val allowIntroNotes: Boolean? = null,
-    val allowAlbumRequests: Boolean? = null
+    val allowAlbumRequests: Boolean? = null,
+    val visibleWhileTraveling: Boolean? = null
 )
