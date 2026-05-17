@@ -723,7 +723,7 @@ Network:
 - [x] Compose card stack renders only 2-3 cards.
 - [x] Swipe gestures use physics/thresholds.
 - [x] Card image preloading exists for the active/near-next Swipe stack.
-- [ ] Partial: offline action cap exists with stable action IDs and Android SQLDelight persistence; iOS wiring and process-death device QA remain incomplete.
+- [ ] Partial: offline action cap exists with stable action IDs and SQLDelight persistence on both mobile platforms. `SqlDelightSwipeActionQueueStore` in `composeApp` commonMain runs against `PynapliDatabase` on Android (via `AndroidPynapliDatabaseFactory`) and iOS (via `IosPynapliDatabaseFactory`). `composeApp:iosMain` exposes `IosSwipeFactory.createSwipeActionQueueStore(database)` / `createSwipeStateHolder(repository, database)` so the Swift shell wires the queue with one call once it exists. Process-death device QA on a real iPhone is still pending — Windows CI cross-compiles via Kotlin/Native but can't drive an iOS simulator.
 - [x] Block/report available from card.
 - [x] Linked partner preview does not turn into couple card.
 
