@@ -6,6 +6,7 @@ import com.pynapli.server.auth.authStatusFor
 import com.pynapli.server.grid.GridException
 import com.pynapli.server.grid.SavedGridFilterException
 import com.pynapli.server.swipe.SavedSwipeFilterException
+import com.pynapli.server.swipe.TopPicksException
 import com.pynapli.server.profile.TonightAvailabilityException
 import com.pynapli.server.location.LocationException
 import com.pynapli.server.media.MediaException
@@ -102,6 +103,17 @@ fun Application.configureStatusPages() {
         exception<SavedSwipeFilterException> { call, cause ->
             call.respond(
                 status = savedSwipeFilterStatusFor(cause.code),
+                message = ApiErrorDto(
+                    code = cause.code,
+                    message = userSafeMessage(cause.code),
+                    requestId = call.request.headers["X-Request-Id"] ?: "unknown"
+                )
+            )
+        }
+
+        exception<TopPicksException> { call, cause ->
+            call.respond(
+                status = topPicksStatusFor(cause.code),
                 message = ApiErrorDto(
                     code = cause.code,
                     message = userSafeMessage(cause.code),
@@ -404,6 +416,12 @@ private fun savedGridFilterStatusFor(code: String): HttpStatusCode = when (code)
     "INVALID_SAVED_FILTER_NAME" -> HttpStatusCode.BadRequest
     "INVALID_SAVED_FILTER_PAYLOAD" -> HttpStatusCode.BadRequest
     "INVALID_SAVED_FILTER_ID" -> HttpStatusCode.BadRequest
+    else -> HttpStatusCode.BadRequest
+}
+
+private fun topPicksStatusFor(code: String): HttpStatusCode = when (code) {
+    "LOCATION_REQUIRED" -> HttpStatusCode.UnprocessableEntity
+    "STALE_TOP_PICK_SESSION" -> HttpStatusCode.Conflict
     else -> HttpStatusCode.BadRequest
 }
 

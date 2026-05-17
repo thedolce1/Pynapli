@@ -27,6 +27,7 @@ import com.pynapli.shared.network.dto.SavedGridFilterDto
 import com.pynapli.shared.network.dto.SavedGridFiltersListDto
 import com.pynapli.shared.network.dto.SavedSwipeFilterDto
 import com.pynapli.shared.network.dto.SavedSwipeFiltersListDto
+import com.pynapli.shared.network.dto.TopPicksResponseDto
 import com.pynapli.shared.network.dto.SetTonightAvailableRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.TonightAvailabilityDto
@@ -115,6 +116,8 @@ interface PynapliApiClient {
     suspend fun createSavedSwipeFilter(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto>
 
     suspend fun deleteSavedSwipeFilter(id: String): AppResult<Unit>
+
+    suspend fun getTopPicks(): AppResult<TopPicksResponseDto>
 
     suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto>
 
@@ -335,6 +338,13 @@ class KtorPynapliApiClient(
             } else {
                 response.toAppResult<Unit>(json)
             }
+        }
+
+    override suspend fun getTopPicks(): AppResult<TopPicksResponseDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/swipe/picks")) {
+                bearerAuth(token)
+            }.toAppResult(json)
         }
 
     override suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto> =

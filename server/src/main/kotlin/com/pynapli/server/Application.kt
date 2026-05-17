@@ -30,6 +30,7 @@ import com.pynapli.server.subscriptions.configureSubscriptionAdminRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionRoutes
 import com.pynapli.server.swipe.configureSavedSwipeFilterRoutes
 import com.pynapli.server.swipe.configureSwipeRoutes
+import com.pynapli.server.swipe.configureTopPicksRoutes
 import com.pynapli.server.verification.configureAgeVerificationAdminRoutes
 import com.pynapli.server.verification.configureAgeVerificationRoutes
 import io.ktor.server.application.Application
@@ -99,4 +100,9 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         requestProfilerFactory = dependencies.requestProfilerFactory
     )
     configureSavedSwipeFilterRoutes(dependencies.authService, dependencies.savedSwipeFilterService)
+    configureTopPicksRoutes(
+        authService = dependencies.authService,
+        topPicksService = dependencies.topPicksService,
+        requestProfilerFactory = dependencies.requestProfilerFactory
+    )
 }

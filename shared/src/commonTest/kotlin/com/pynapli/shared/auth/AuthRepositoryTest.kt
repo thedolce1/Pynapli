@@ -235,6 +235,9 @@ private class FakeApiClient(
     override suspend fun deleteSavedSwipeFilter(id: String): AppResult<Unit> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun getTopPicks(): AppResult<com.pynapli.shared.network.dto.TopPicksResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun getTonightAvailability(): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 

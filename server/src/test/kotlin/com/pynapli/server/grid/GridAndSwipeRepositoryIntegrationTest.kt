@@ -281,6 +281,34 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "top picks generates and reuses a daily session backed by a real deck session" {
+        // SWIPE_IMPLEMENTATION_SPEC L308: stable picks within the 24h window.
+        // Two reads return the same session id; the backing swipe_deck_sessions
+        // row is queryable so submitAction tokens validate against it.
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000950")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000951")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+            val swipeRepository = JdbcSwipeRepository(dataSource)
+            val service = com.pynapli.server.swipe.TopPicksService(
+                topPicksRepository = com.pynapli.server.swipe.JdbcTopPicksRepository(dataSource),
+                swipeRepository = swipeRepository
+            )
+
+            val first = service.getCurrentPicks(viewer)
+            val second = service.getCurrentPicks(viewer)
+
+            assertEquals(first.sessionId, second.sessionId)
+            assertEquals(10, first.tierLimit)
+            assertEquals(1, first.picks.size)
+            assertEquals(target.toString(), first.picks.single().card.userId)
+            // Same raw token returned on the cached read — proves deterministic
+            // reissue against the persisted card_token_hash.
+            assertEquals(first.picks.single().card.rankToken, second.picks.single().card.rankToken)
+        }
+    }
+
     "grid and swipe queries apply advanced discovery filters" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000931")

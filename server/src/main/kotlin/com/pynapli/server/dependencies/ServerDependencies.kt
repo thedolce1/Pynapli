@@ -63,9 +63,11 @@ import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.swipe.JdbcSavedSwipeFilterRepository
 import com.pynapli.server.swipe.JdbcSwipeRepository
+import com.pynapli.server.swipe.JdbcTopPicksRepository
 import com.pynapli.server.swipe.SavedSwipeFilterService
 import com.pynapli.server.swipe.SwipeDeckTokenCodec
 import com.pynapli.server.swipe.SwipeService
+import com.pynapli.server.swipe.TopPicksService
 import com.pynapli.server.verification.AgeVerificationService
 import com.pynapli.server.verification.JdbcAgeVerificationRepository
 import io.ktor.server.application.Application
@@ -106,6 +108,7 @@ class ServerDependencies(
     val blockRepository: BlockRepository?,
     val savedGridFilterService: SavedGridFilterService?,
     val savedSwipeFilterService: SavedSwipeFilterService?,
+    val topPicksService: TopPicksService?,
     val tonightAvailabilityService: TonightAvailabilityService?,
     val ageVerificationService: AgeVerificationService?,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
@@ -301,8 +304,9 @@ class ServerDependencies(
             val adminRiskService = AdminRiskService(
                 JdbcAdminRiskRepository(database.dataSource)
             )
+            val swipeRepository = JdbcSwipeRepository(database.dataSource)
             val swipeService = SwipeService(
-                repository = JdbcSwipeRepository(database.dataSource),
+                repository = swipeRepository,
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
                 blockRepository = blockRepository,
                 notificationPublisher = notificationService,
@@ -310,6 +314,14 @@ class ServerDependencies(
                 riskPolicyService = riskPolicyService,
                 subscriptionService = subscriptionService,
                 presenceService = presenceService,
+                deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret)
+            )
+            val topPicksService = TopPicksService(
+                topPicksRepository = JdbcTopPicksRepository(database.dataSource),
+                swipeRepository = swipeRepository,
+                subscriptionService = subscriptionService,
+                presenceService = presenceService,
+                mediaAssetUrlResolver = mediaAssetUrlResolver,
                 deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret)
             )
             return ServerDependencies(
@@ -341,6 +353,7 @@ class ServerDependencies(
                 blockRepository = blockRepository,
                 savedGridFilterService = savedGridFilterService,
                 savedSwipeFilterService = savedSwipeFilterService,
+                topPicksService = topPicksService,
                 tonightAvailabilityService = tonightAvailabilityService,
                 ageVerificationService = ageVerificationService,
                 requestProfilerFactory = requestProfilerFactory,
@@ -388,6 +401,7 @@ class ServerDependencies(
                 blockRepository = null,
                 savedGridFilterService = null,
                 savedSwipeFilterService = null,
+                topPicksService = null,
                 tonightAvailabilityService = null,
                 ageVerificationService = null,
                 requestProfilerFactory = RequestProfilerFactory.disabled(),

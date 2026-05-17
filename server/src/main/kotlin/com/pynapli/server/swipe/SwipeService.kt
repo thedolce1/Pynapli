@@ -678,29 +678,6 @@ class SwipeService(
             expiresAt = expiresAt
         )
 
-    private fun DiscoveryFilters.toPersistedJson(): String =
-        buildString {
-            append("{")
-            append("\"minimumAge\":").append(minimumAge?.toString() ?: "null")
-            append(",\"maximumAge\":").append(maximumAge?.toString() ?: "null")
-            append(",\"linkedOnly\":").append(linkedOnly?.toString() ?: "null")
-            append(",\"relationshipContexts\":").append(relationshipContexts.toJsonArray())
-            append(",\"verifiedOnly\":").append(verifiedOnly)
-            append(",\"facePhotoVerifiedOnly\":").append(facePhotoVerifiedOnly)
-            append(",\"ageVerifiedOnly\":").append(ageVerifiedOnly)
-            append(",\"discoveryStyles\":").append(discoveryStyles.toJsonArray())
-            append(",\"lifestyleTags\":").append(lifestyleTags.toJsonArray())
-            append(",\"logisticsTags\":").append(logisticsTags.toJsonArray())
-            append(",\"tonightAvailableOnly\":").append(tonightAvailableOnly)
-            append(",\"intents\":").append(intents.toJsonArray())
-            append("}")
-        }
-
-    private fun Set<String>.toJsonArray(): String =
-        sorted().joinToString(prefix = "[", postfix = "]") { value ->
-            "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
-        }
-
     private fun String.toUuidOrThrow(): UUID =
         runCatching { UUID.fromString(this) }.getOrElse { throw SwipeException("INVALID_SWIPE_TARGET") }
 
