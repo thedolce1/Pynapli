@@ -384,6 +384,123 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    fun playStoreSyncInvalidRevocationInvalidatesEntitlementCache() = runBlocking {
+        // Without invalidation, a user whose subscription is voided/revoked by Play Store
+        // would keep seeing their cached paid tier (and the policy that comes with it)
+        // for up to the cache TTL — a small window of "lying entitlement". Verify the
+        // sync path's Invalid branch clears the cache so the next lookup reflects reality.
+        val user = uuid(50)
+        val repository = MutableEntitlementRepository(
+            user = user,
+            initialEntitlement = activeEntitlement(user, SubscriptionTier.SELECT),
+            dueCandidates = listOf(
+                PlayStoreSubscriptionVerificationCandidate(
+                    userId = user,
+                    productId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
+                    purchaseToken = "purchase-token-00000000000000000050",
+                    tier = SubscriptionTier.SELECT,
+                    status = "active",
+                    currentPeriodStart = Instant.parse("2026-05-01T00:00:00Z"),
+                    currentPeriodEnd = Instant.parse("2026-06-01T00:00:00Z")
+                )
+            )
+        )
+        val service = SubscriptionService(
+            repository = repository,
+            clock = clock,
+            entitlementCacheTtl = Duration.ofSeconds(30),
+            playStorePurchaseVerifier = FakePlayStorePurchaseVerifier(
+                PlayStorePurchaseVerificationResult.Invalid("INVALID_PURCHASE_TOKEN")
+            )
+        )
+
+        assertEquals(SubscriptionTier.SELECT, service.getEntitlement(user).tier)
+        assertEquals(1, repository.lookupCount)
+
+        service.syncDuePlayStoreSubscriptions()
+        assertEquals(SubscriptionTier.FREE, service.getEntitlement(user).tier)
+        assertEquals(2, repository.lookupCount)
+    }
+
+    @Test
+    fun rtdnInvalidRevocationInvalidatesEntitlementCache() = runBlocking {
+        // RTDN Invalid branch (Play Store reports the purchase as invalid out-of-band)
+        // must drop the cache so the user falls back to FREE on the next lookup.
+        val user = uuid(51)
+        val repository = MutableEntitlementRepository(
+            user = user,
+            initialEntitlement = activeEntitlement(user, SubscriptionTier.SOCIAL),
+            linkedPurchase = PlayStoreSubscriptionVerificationCandidate(
+                userId = user,
+                productId = SubscriptionProductId.PLAY_SOCIAL_MONTHLY,
+                purchaseToken = "purchase-token-00000000000000000051",
+                tier = SubscriptionTier.SOCIAL,
+                status = "active",
+                currentPeriodStart = Instant.parse("2026-05-01T00:00:00Z"),
+                currentPeriodEnd = Instant.parse("2026-06-01T00:00:00Z")
+            )
+        )
+        val service = SubscriptionService(
+            repository = repository,
+            clock = clock,
+            entitlementCacheTtl = Duration.ofSeconds(30),
+            playStorePurchaseVerifier = FakePlayStorePurchaseVerifier(
+                PlayStorePurchaseVerificationResult.Invalid("REVOKED_BY_PUBLISHER")
+            )
+        )
+
+        assertEquals(SubscriptionTier.SOCIAL, service.getEntitlement(user).tier)
+        assertEquals(1, repository.lookupCount)
+
+        service.handlePlayStoreRealTimeDeveloperNotification(
+            subscriptionRtdnEnvelope(
+                messageId = "rtdn-message-revoke-51",
+                purchaseToken = "purchase-token-00000000000000000051"
+            )
+        )
+        assertEquals(SubscriptionTier.FREE, service.getEntitlement(user).tier)
+        assertEquals(2, repository.lookupCount)
+    }
+
+    @Test
+    fun rtdnVoidedPurchaseInvalidatesEntitlementCache() = runBlocking {
+        // Voided-purchase RTDN (refund) is the third entrypoint that flips a stored
+        // subscription to revoked. Cache must drop or the refunded user keeps paid
+        // features until the TTL expires.
+        val user = uuid(52)
+        val repository = MutableEntitlementRepository(
+            user = user,
+            initialEntitlement = activeEntitlement(user, SubscriptionTier.SELECT),
+            linkedPurchase = PlayStoreSubscriptionVerificationCandidate(
+                userId = user,
+                productId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
+                purchaseToken = "purchase-token-00000000000000000052",
+                tier = SubscriptionTier.SELECT,
+                status = "active",
+                currentPeriodStart = Instant.parse("2026-05-01T00:00:00Z"),
+                currentPeriodEnd = Instant.parse("2026-06-01T00:00:00Z")
+            )
+        )
+        val service = SubscriptionService(
+            repository = repository,
+            clock = clock,
+            entitlementCacheTtl = Duration.ofSeconds(30)
+        )
+
+        assertEquals(SubscriptionTier.SELECT, service.getEntitlement(user).tier)
+        assertEquals(1, repository.lookupCount)
+
+        service.handlePlayStoreRealTimeDeveloperNotification(
+            voidedPurchaseRtdnEnvelope(
+                messageId = "rtdn-message-void-52",
+                purchaseToken = "purchase-token-00000000000000000052"
+            )
+        )
+        assertEquals(SubscriptionTier.FREE, service.getEntitlement(user).tier)
+        assertEquals(2, repository.lookupCount)
+    }
+
+    @Test
     fun rtdnDuplicateMessageDoesNotReprocessPurchase() = runBlocking {
         val repository = InMemorySubscriptionRepository(
             duplicateMessageIds = setOf("rtdn-message-duplicate")
@@ -633,6 +750,122 @@ private fun subscriptionRtdnEnvelope(
             )
         )
     )
+
+private fun voidedPurchaseRtdnEnvelope(
+    messageId: String,
+    purchaseToken: String
+): PlayStoreRtdnEnvelope =
+    PlayStoreRtdnEnvelope(
+        messageId = messageId,
+        rawPayload = "{}",
+        notification = PlayStoreDeveloperNotificationDto(
+            packageName = "com.pynapli.app",
+            voidedPurchaseNotification = PlayStoreVoidedPurchaseNotificationDto(
+                purchaseToken = purchaseToken,
+                orderId = "GPA.0000-0000-0000-9999",
+                productType = 1,
+                refundType = 1
+            )
+        )
+    )
+
+private fun activeEntitlement(userId: UUID, tier: String): ActiveEntitlementRecord =
+    ActiveEntitlementRecord(
+        tier = tier,
+        source = EntitlementSource.OWN_SUBSCRIPTION,
+        sourceSubscriptionId = UUID.randomUUID(),
+        sourceUserId = userId,
+        linkedPartnerUserId = null,
+        startsAt = Instant.parse("2026-05-01T00:00:00Z"),
+        endsAt = Instant.parse("2026-06-01T00:00:00Z")
+    )
+
+private class MutableEntitlementRepository(
+    private val user: UUID,
+    private val initialEntitlement: ActiveEntitlementRecord,
+    private val dueCandidates: List<PlayStoreSubscriptionVerificationCandidate> = emptyList(),
+    private val linkedPurchase: PlayStoreSubscriptionVerificationCandidate? = null
+) : SubscriptionRepository {
+    var lookupCount: Int = 0
+        private set
+    private var revoked: Boolean = false
+
+    override suspend fun findBestActiveEntitlement(userId: UUID, now: Instant): ActiveEntitlementRecord? {
+        lookupCount += 1
+        if (revoked) return null
+        return initialEntitlement.takeIf { it.sourceUserId == userId }
+    }
+
+    override suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? = null
+    override suspend fun findBestActiveLinkedPartnerSubscription(
+        userId: UUID,
+        now: Instant
+    ): LinkedPartnerSubscriptionRecord? = null
+    override suspend fun findBestActiveStoredEntitlement(userId: UUID, now: Instant): StoredEntitlementRecord? = null
+
+    override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean = false
+
+    override suspend fun listPlayStoreSubscriptionsDueForVerification(
+        staleBefore: Instant,
+        renewalWindowEnd: Instant,
+        limit: Int
+    ): List<PlayStoreSubscriptionVerificationCandidate> = dueCandidates.take(limit)
+
+    override suspend fun findPlayStoreSubscriptionByPurchaseToken(
+        purchaseToken: String
+    ): PlayStoreSubscriptionVerificationCandidate? =
+        linkedPurchase?.takeIf { it.purchaseToken == purchaseToken }
+
+    override suspend fun insertPlayStoreRtdnEvent(event: PlayStoreRtdnEventInsert): Boolean = true
+
+    override suspend fun updatePlayStoreRtdnEventStatus(
+        messageId: String,
+        processingStatus: String,
+        errorCode: String?
+    ) = Unit
+
+    override suspend fun upsertVerifiedPlayStoreSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        purchaseToken: String,
+        orderId: String?,
+        tier: String,
+        status: String,
+        externalStatus: String,
+        acknowledgementState: String?,
+        acknowledgedAt: Instant?,
+        currentPeriodStart: Instant,
+        currentPeriodEnd: Instant,
+        verifiedAt: Instant
+    ): SubscriptionRecord {
+        // Mirror the production DB semantics: an "revoked" upsert removes the
+        // record from the user's active-entitlement view.
+        if (status == "revoked" && userId == user) revoked = true
+        return SubscriptionRecord(
+            subscriptionId = UUID.randomUUID(),
+            userId = userId,
+            tier = tier,
+            status = status,
+            currentPeriodStart = currentPeriodStart,
+            currentPeriodEnd = currentPeriodEnd
+        )
+    }
+
+    override suspend fun upsertPendingPlayStoreSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        purchaseToken: String,
+        tier: String,
+        now: Instant
+    ): SubscriptionRecord = SubscriptionRecord(
+        subscriptionId = UUID.randomUUID(),
+        userId = userId,
+        tier = tier,
+        status = "pending",
+        currentPeriodStart = now,
+        currentPeriodEnd = now.plusSeconds(3_600)
+    )
+}
 
 private fun uuid(value: Int): UUID =
     UUID.fromString("00000000-0000-0000-0000-${value.toString().padStart(12, '0')}")

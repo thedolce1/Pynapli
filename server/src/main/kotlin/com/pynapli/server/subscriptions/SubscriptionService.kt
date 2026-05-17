@@ -242,6 +242,7 @@ class SubscriptionService(
                         currentPeriodEnd = candidate.currentPeriodEnd,
                         verifiedAt = now
                     )
+                    invalidateEntitlement(candidate.userId)
                 }
                 PlayStorePurchaseVerificationResult.VerificationUnavailable -> unavailable++
                 is PlayStorePurchaseVerificationResult.Verified -> {
@@ -526,6 +527,7 @@ class SubscriptionService(
                         currentPeriodEnd = stored.currentPeriodEnd,
                         verifiedAt = clock.instant()
                     )
+                    invalidateEntitlement(stored.userId)
                     repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "processed", verification.code)
                     PlayStoreRtdnProcessingResult(
                         status = "processed",
@@ -645,6 +647,7 @@ class SubscriptionService(
             currentPeriodEnd = stored.currentPeriodEnd,
             verifiedAt = clock.instant()
         )
+        invalidateEntitlement(stored.userId)
         repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "processed")
         return PlayStoreRtdnProcessingResult(
             status = "processed",
