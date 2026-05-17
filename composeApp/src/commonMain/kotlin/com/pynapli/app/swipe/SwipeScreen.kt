@@ -104,10 +104,13 @@ fun SwipeScreen(
     matchNotificationsEnabled: Boolean = true,
     notificationDetail: String = AppSettings.NOTIFICATION_DISCREET,
     onOpenStore: () -> Unit = {},
+    savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
     modifier: Modifier = Modifier
 ) {
     val state by stateHolder.state.collectAsState()
     val profileState by profileDetailStateHolder.state.collectAsState()
+    val savedSwipeFiltersState by savedSwipeFilterStateHolder?.state?.collectAsState()
+        ?: remember { mutableStateOf(SavedSwipeFiltersUiState()) }
     val scope = rememberCoroutineScope()
     var requestedAction by remember { mutableStateOf<String?>(null) }
     var selectedProfileCard by remember { mutableStateOf<SwipeCardDto?>(null) }
@@ -363,6 +366,9 @@ fun SwipeScreen(
     }
 
     if (filtersSheetVisible) {
+        LaunchedEffect(savedSwipeFilterStateHolder) {
+            savedSwipeFilterStateHolder?.load()
+        }
         SwipeFiltersSheet(
             initial = state.swipeFilters,
             onDismiss = { filtersSheetVisible = false },
@@ -374,7 +380,19 @@ fun SwipeScreen(
                 filtersSheetVisible = false
                 scope.launch { stateHolder.applyFilters(SwipeFilters.defaults) }
             },
-            onOpenStore = onOpenStore
+            onOpenStore = onOpenStore,
+            savedState = savedSwipeFiltersState,
+            onSavePreset = { name, filters ->
+                scope.launch { savedSwipeFilterStateHolder?.save(name, filters) }
+            },
+            onApplySavedPreset = { dto ->
+                filtersSheetVisible = false
+                val filters = SwipeFilters.fromSwipeDeckRequest(dto.payload)
+                scope.launch { stateHolder.applyFilters(filters) }
+            },
+            onDeleteSavedPreset = { id ->
+                scope.launch { savedSwipeFilterStateHolder?.delete(id) }
+            }
         )
     }
 

@@ -24,6 +24,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -44,6 +45,7 @@ import com.pynapli.app.grid.DiscoveryStyle
 import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleTag
 import com.pynapli.app.grid.LogisticsTag
+import com.pynapli.shared.network.dto.SavedSwipeFilterDto
 import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 
 /**
@@ -66,7 +68,11 @@ internal fun SwipeFiltersSheet(
     onDismiss: () -> Unit,
     onApply: (SwipeFilters) -> Unit,
     onClearAll: () -> Unit,
-    onOpenStore: () -> Unit = {}
+    onOpenStore: () -> Unit = {},
+    savedState: SavedSwipeFiltersUiState = SavedSwipeFiltersUiState(),
+    onSavePreset: (name: String, SwipeFilters) -> Unit = { _, _ -> },
+    onApplySavedPreset: (SavedSwipeFilterDto) -> Unit = {},
+    onDeleteSavedPreset: (id: String) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -82,7 +88,11 @@ internal fun SwipeFiltersSheet(
             onDismiss = onDismiss,
             onApply = onApply,
             onClearAll = onClearAll,
-            onOpenStore = onOpenStore
+            onOpenStore = onOpenStore,
+            savedState = savedState,
+            onSavePreset = onSavePreset,
+            onApplySavedPreset = onApplySavedPreset,
+            onDeleteSavedPreset = onDeleteSavedPreset
         )
     }
 }
@@ -93,9 +103,14 @@ internal fun SwipeFiltersSheetBody(
     onDismiss: () -> Unit,
     onApply: (SwipeFilters) -> Unit,
     onClearAll: () -> Unit,
-    onOpenStore: () -> Unit = {}
+    onOpenStore: () -> Unit = {},
+    savedState: SavedSwipeFiltersUiState = SavedSwipeFiltersUiState(),
+    onSavePreset: (name: String, SwipeFilters) -> Unit = { _, _ -> },
+    onApplySavedPreset: (SavedSwipeFilterDto) -> Unit = {},
+    onDeleteSavedPreset: (id: String) -> Unit = {}
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
+    var saveName by remember { mutableStateOf("") }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -111,6 +126,18 @@ internal fun SwipeFiltersSheetBody(
                 "These shape who shows up in your deck. Most filters are flexible; lock the " +
                     "ones that must apply. Locked filters may shrink your deck."
             )
+
+            // FILTERS_SPEC L463-477: saved presets. Free-tier viewers get a paywall
+            // copy in place of the chip row; paid viewers see their presets and can
+            // tap to recall (apply immediately + close sheet).
+            if (savedState.items.isNotEmpty() || savedState.entitlementRequired) {
+                SectionTitle("Saved filters")
+                SavedSwipePresetsSection(
+                    state = savedState,
+                    onApply = { dto -> onApplySavedPreset(dto) },
+                    onDelete = onDeleteSavedPreset
+                )
+            }
 
             SectionHeader(
                 title = "Who",
@@ -325,6 +352,24 @@ internal fun SwipeFiltersSheetBody(
                 onChange = { draft = draft.copy(logisticsTags = it) }
             )
 
+            // FILTERS_SPEC L463-477: save-current-preset row, hidden behind the same
+            // entitlement gate as the saved-filters section (free-tier viewers see the
+            // paywall copy there instead).
+            if (!savedState.entitlementRequired) {
+                SectionTitle("Save current filters")
+                SaveSwipePresetRow(
+                    name = saveName,
+                    onNameChange = { saveName = it },
+                    isSaving = savedState.isSaving,
+                    onSave = {
+                        if (saveName.isNotBlank()) {
+                            onSavePreset(saveName, draft)
+                            saveName = ""
+                        }
+                    }
+                )
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -457,6 +502,74 @@ private fun DealbreakerLockChip(
 
 private fun toggleDealbreaker(current: Set<String>, key: String, locked: Boolean): Set<String> =
     if (locked) current + key else current - key
+
+/**
+ * Saved-preset chip row (FILTERS_SPEC L463-477). One AssistChip per saved preset;
+ * tap to apply (the host closes the sheet and routes the payload through
+ * `stateHolder.applyFilters`). Free-tier viewers see `ComingSoonSection` copy
+ * instead — the entitlement gate is server-authoritative but the client respects
+ * it for UX so a free-tier viewer never sees an empty "no presets" state.
+ */
+@Composable
+private fun SavedSwipePresetsSection(
+    state: SavedSwipeFiltersUiState,
+    onApply: (SavedSwipeFilterDto) -> Unit,
+    @Suppress("UNUSED_PARAMETER") onDelete: (id: String) -> Unit
+) {
+    if (state.entitlementRequired) {
+        ComingSoonSection(message = "Saved swipe filter presets unlock with Social or Select.")
+        return
+    }
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(SwipeFilterTags.SAVED_PRESETS),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        state.items.forEach { dto ->
+            SwipeSheetChip(label = dto.name, active = false) { onApply(dto) }
+        }
+    }
+}
+
+@Composable
+private fun SaveSwipePresetRow(
+    name: String,
+    onNameChange: (String) -> Unit,
+    isSaving: Boolean,
+    onSave: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = name,
+            onValueChange = onNameChange,
+            modifier = Modifier
+                .weight(1f)
+                .testTag(SwipeFilterTags.SAVE_PRESET_NAME),
+            singleLine = true,
+            placeholder = { Text(text = "Name this filter") }
+        )
+        Button(
+            onClick = onSave,
+            enabled = !isSaving && name.isNotBlank(),
+            modifier = Modifier.testTag(SwipeFilterTags.SAVE_PRESET_SUBMIT)
+        ) { Text(text = if (isSaving) "Saving" else "Save") }
+    }
+}
+
+@Composable
+private fun ComingSoonSection(message: String) {
+    Text(
+        text = message,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
 
 /**
  * Pre-emptive paywall hint surfaced in-sheet when the draft selects any gated
@@ -704,6 +817,9 @@ internal object SwipeFilterTags {
     const val OPEN_SHEET = "swipe-filters-open-sheet"
     const val ADVANCED_PAYWALL = "swipe-filters-advanced-paywall"
     const val ADVANCED_PAYWALL_SUBSCRIBE = "swipe-filters-advanced-paywall-subscribe"
+    const val SAVED_PRESETS = "swipe-filters-saved-presets"
+    const val SAVE_PRESET_NAME = "swipe-filters-save-preset-name"
+    const val SAVE_PRESET_SUBMIT = "swipe-filters-save-preset-submit"
 
     fun dealbreakerTag(key: String): String = "swipe-filters-dealbreaker-$key"
 }

@@ -41,8 +41,10 @@ import com.pynapli.app.profilelink.ApiProfileLinksRepository
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
 import com.pynapli.app.store.ApiStoreRepository
 import com.pynapli.app.store.StoreStateHolder
+import com.pynapli.app.swipe.ApiSavedSwipeFilterRepository
 import com.pynapli.app.swipe.ApiSwipeRepository
 import com.pynapli.app.swipe.DebugFaultInjectingSwipeRepository
+import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.auth.AuthRepository
@@ -112,6 +114,10 @@ class AndroidAppGraph(context: Context) {
 
     val savedGridFilterStateHolder = SavedGridFilterStateHolder(
         repository = ApiSavedGridFilterRepository(apiClient)
+    )
+
+    val savedSwipeFilterStateHolder = SavedSwipeFilterStateHolder(
+        repository = ApiSavedSwipeFilterRepository(apiClient)
     )
 
     val tonightAvailabilityStateHolder = TonightAvailabilityStateHolder(
