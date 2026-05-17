@@ -476,6 +476,8 @@ Saved filters can be premium, but basic manually applied filters should remain u
 
 Implementation status: server-side CRUD lives at `/v1/me/grid-filters` (GET/POST/DELETE) backed by `saved_grid_filters` (V39) and gated by `EntitlementPolicy.advancedFiltersAllowed` so free-tier users get an `ENTITLEMENT_REQUIRED` response. The client `SavedGridFilterStateHolder` loads on grid open, surfaces a "Saved" chip row at the top of the filter sheet, and exposes a name+save row. Free-tier users see a "Saved filter presets unlock with Social or Select." copy in the same slot. Manual filtering remains free. Cap is 12 presets/user, name length ≤ 60, names case-insensitive unique per user.
 
+Swipe equivalent (shipped 2026-05-16): `/v1/me/swipe-filters` (GET/POST/DELETE) backed by `saved_swipe_filters` (V47). Same caps, same entitlement gate, payload is `SwipeDeckRequestDto` re-validated through the same `discoveryFiltersFrom` + `SwipeDealbreakerKey.ALL` checks the live `SwipeService.queryDeck` uses (so a stale preset whose dealbreaker keys or taxonomy tokens are later removed is rejected on save). Client `SavedSwipeFilterStateHolder` + `SwipeFiltersSheet` "Saved filters" chip row and save-current row mirror the Grid surface; free-tier copy reads "Saved swipe filter presets unlock with Social or Select."
+
 ## Empty States
 
 Grid empty state:
