@@ -810,6 +810,23 @@ private fun GridProfileTile(
                 modifier = Modifier.weight(1f, fill = false)
             )
 
+            if (card.visiting) {
+                // SWIPE_IMPLEMENTATION_SPEC L348: target is here via passport,
+                // not physically local. Same wording + tone as the Swipe pill.
+                Text(
+                    text = "Visiting",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .testTag(GridCardTags.visitingTag(card.id))
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xCC4E342E))
+                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+            }
+
             distanceLabel?.let { distance ->
                 Text(
                     text = distance,
@@ -821,6 +838,10 @@ private fun GridProfileTile(
             }
         }
     }
+}
+
+internal object GridCardTags {
+    fun visitingTag(cardId: String): String = "grid-card-visiting-$cardId"
 }
 
 @Composable

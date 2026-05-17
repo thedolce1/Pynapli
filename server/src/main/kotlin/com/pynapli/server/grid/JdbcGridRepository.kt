@@ -62,8 +62,13 @@ class JdbcGridRepository(
                              AND ba.status = 'active'
                              AND ba.ends_at > now()
                        ) THEN 0 ELSE 1 END AS boost_bucket,
-                       GREATEST(0, FLOOR(ST_Distance(v.geom, ul.geom))::integer) AS distance_bucket_meters,
-                       ST_Distance(v.geom, ul.geom) AS distance_meters,
+                       -- Distance + bucket reflect where the target *appears* to be,
+                       -- so travel-mode targets sort into their virtual radius.
+                       GREATEST(0, FLOOR(ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)))::integer) AS distance_bucket_meters,
+                       ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
+                       -- SWIPE_IMPLEMENTATION_SPEC L348: target with an active
+                       -- travel row is marked "visiting" in the grid too.
+                       target_travel.id IS NOT NULL AS visiting,
                        EXISTS (
                            SELECT 1
                            FROM user_profile_links upl
@@ -97,6 +102,13 @@ class JdbcGridRepository(
                 JOIN profiles p ON p.user_id = u.id
                 JOIN discovery_settings ds ON ds.user_id = u.id
                 LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+                -- SWIPE_IMPLEMENTATION_SPEC L344-348: target-side travel
+                -- override. Travel-mode targets appear in destination grids
+                -- the same way they appear in their own home city.
+                LEFT JOIN travel_locations target_travel
+                  ON target_travel.user_id = u.id
+                 AND target_travel.status = 'active'
+                 AND target_travel.active_until IS NULL
                 WHERE u.id <> ?
                   AND u.status = 'active'
                   AND u.deleted_at IS NULL
@@ -104,7 +116,13 @@ class JdbcGridRepository(
                   AND ds.grid_visible = true
                   AND ds.incognito = false
                   AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
-                  AND ST_DWithin(v.geom, ul.geom, ?)
+                  -- OR keeps both ST_DWithin halves index-eligible. First uses
+                  -- the GiST on user_locations.geom; second uses the GiST on
+                  -- travel_locations.geom for active-travel candidates only.
+                  AND (
+                      ST_DWithin(v.geom, ul.geom, ?)
+                      OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
+                  )
                   AND (?::integer IS NULL OR p.display_age >= ?::integer)
                   AND (?::integer IS NULL OR p.display_age <= ?::integer)
                   AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
@@ -159,7 +177,8 @@ class JdbcGridRepository(
                        pc.show_distance,
                        pc.boost_bucket,
                        pc.distance_bucket_meters,
-                       pc.distance_meters
+                       pc.distance_meters,
+                       pc.visiting
                 FROM paged_candidates pc
                 LEFT JOIN LATERAL (
                     SELECT mai.media_asset_id
@@ -241,44 +260,47 @@ class JdbcGridRepository(
                     statement.setObject(2, viewerUserId)
                     statement.setObject(3, viewerUserId)
                     statement.setObject(4, viewerUserId)
+                    // $5 + $6: ST_DWithin radius bound twice — once against
+                    // target's real GPS, once against target's travel point.
                     statement.setDouble(5, radiusMeters.toDouble())
-                    statement.setObject(6, filters.minimumAge)
+                    statement.setDouble(6, radiusMeters.toDouble())
                     statement.setObject(7, filters.minimumAge)
-                    statement.setObject(8, filters.maximumAge)
+                    statement.setObject(8, filters.minimumAge)
                     statement.setObject(9, filters.maximumAge)
-                    statement.setArray(10, contexts)
+                    statement.setObject(10, filters.maximumAge)
                     statement.setArray(11, contexts)
-                    statement.setBoolean(12, filters.verifiedOnly)
-                    statement.setBoolean(13, filters.facePhotoVerifiedOnly)
-                    statement.setBoolean(14, filters.ageVerifiedOnly)
+                    statement.setArray(12, contexts)
+                    statement.setBoolean(13, filters.verifiedOnly)
+                    statement.setBoolean(14, filters.facePhotoVerifiedOnly)
+                    statement.setBoolean(15, filters.ageVerifiedOnly)
                     val styles = connection.createArrayOf("text", filters.discoveryStyles.toTypedArray())
-                    statement.setArray(15, styles)
                     statement.setArray(16, styles)
+                    statement.setArray(17, styles)
                     val lifestyleTags = connection.createArrayOf("text", filters.lifestyleTags.toTypedArray())
-                    statement.setArray(17, lifestyleTags)
                     statement.setArray(18, lifestyleTags)
+                    statement.setArray(19, lifestyleTags)
                     val logisticsTags = connection.createArrayOf("text", filters.logisticsTags.toTypedArray())
-                    statement.setArray(19, logisticsTags)
                     statement.setArray(20, logisticsTags)
-                    statement.setBoolean(21, filters.tonightAvailableOnly)
+                    statement.setArray(21, logisticsTags)
+                    statement.setBoolean(22, filters.tonightAvailableOnly)
                     val intents = connection.createArrayOf("text", filters.intents.toTypedArray())
-                    statement.setArray(22, intents)
                     statement.setArray(23, intents)
-                    statement.setObject(24, viewerUserId)
+                    statement.setArray(24, intents)
                     statement.setObject(25, viewerUserId)
-                    statement.setObject(26, filters.linkedOnly)
+                    statement.setObject(26, viewerUserId)
                     statement.setObject(27, filters.linkedOnly)
                     statement.setObject(28, filters.linkedOnly)
-                    statement.setBoolean(29, cursor != null)
-                    statement.setObject(30, cursor?.boostBucket)
+                    statement.setObject(29, filters.linkedOnly)
+                    statement.setBoolean(30, cursor != null)
                     statement.setObject(31, cursor?.boostBucket)
-                    statement.setObject(32, cursor?.distanceBucketMeters)
-                    statement.setObject(33, cursor?.boostBucket)
-                    statement.setObject(34, cursor?.distanceBucketMeters)
-                    statement.setObject(35, cursor?.userId)
-                    statement.setInt(36, limit + 1)
-                    statement.setObject(37, viewerUserId)
+                    statement.setObject(32, cursor?.boostBucket)
+                    statement.setObject(33, cursor?.distanceBucketMeters)
+                    statement.setObject(34, cursor?.boostBucket)
+                    statement.setObject(35, cursor?.distanceBucketMeters)
+                    statement.setObject(36, cursor?.userId)
+                    statement.setInt(37, limit + 1)
                     statement.setObject(38, viewerUserId)
+                    statement.setObject(39, viewerUserId)
                     statement.executeQuery().use { rs ->
                         buildList {
                             while (rs.next()) {
@@ -299,7 +321,8 @@ class JdbcGridRepository(
                                         linkedPartnerThumbnailMediaAssetId = rs.getObject(
                                             "linked_partner_thumbnail_media_asset_id",
                                             UUID::class.java
-                                        )
+                                        ),
+                                        visiting = rs.getBoolean("visiting")
                                     )
                                 )
                             }

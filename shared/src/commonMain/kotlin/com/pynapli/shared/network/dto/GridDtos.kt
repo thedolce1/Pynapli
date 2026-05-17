@@ -41,7 +41,10 @@ data class GridCardDto(
     val distanceLabel: String?,
     val distanceMeters: Int? = null,
     val linkedPartner: LinkedPartnerMiniDto? = null,
-    val rankToken: String
+    val rankToken: String,
+    // SWIPE_IMPLEMENTATION_SPEC L348: target has an active travel mode row, so
+    // they're virtually in the viewer's area rather than physically there.
+    val visiting: Boolean = false
 )
 
 @Serializable

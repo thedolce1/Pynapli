@@ -216,7 +216,10 @@ data class GridProfileCardUi(
     val tone: GridCardTone,
     val linkedPartner: GridLinkedPartnerUi? = null,
     val linkedPartnerTone: LinkedPartnerTone? = null,
-    val distanceMeters: Int? = null
+    val distanceMeters: Int? = null,
+    // SWIPE_IMPLEMENTATION_SPEC L348: target is virtually in the viewer's area
+    // via passport/travel mode.
+    val visiting: Boolean = false
 )
 
 @Immutable
@@ -258,7 +261,8 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi = Gr
     tone = GridCardTone.entries[index % GridCardTone.entries.size],
     linkedPartner = linkedPartner?.toUi(),
     linkedPartnerTone = linkedPartner?.let { LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size] },
-    distanceMeters = distanceMeters
+    distanceMeters = distanceMeters,
+    visiting = visiting
 )
 
 internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi = GridLinkedPartnerUi(

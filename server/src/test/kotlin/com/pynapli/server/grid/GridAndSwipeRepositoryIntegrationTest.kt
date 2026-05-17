@@ -350,6 +350,33 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "grid cards expose visiting flag and surface travel-mode targets in destination grids" {
+        // SWIPE_IMPLEMENTATION_SPEC L348 + L344-348: Grid mirrors the Swipe
+        // deck — a target physically in SF with travel mode set to NYC should
+        // appear in a NYC viewer's grid AND be marked visiting.
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000a00")
+            val localTarget = UUID.fromString("00000000-0000-0000-0000-000000000a01")
+            val visitingTarget = UUID.fromString("00000000-0000-0000-0000-000000000a02")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -74.0060, latitude = 40.7128)
+            dataSource.insertDiscoverableUser(localTarget, "Sage", age = 32, longitude = -74.0055, latitude = 40.7130)
+            dataSource.insertDiscoverableUser(visitingTarget, "Maya", age = 34, longitude = -122.4194, latitude = 37.7749)
+            dataSource.insertActiveTravelLocation(
+                userId = visitingTarget,
+                city = "New York",
+                latitude = 40.7128,
+                longitude = -74.0060
+            )
+
+            val gridRepo = JdbcGridRepository(dataSource)
+            val result = gridRepo.queryNearby(viewer, radiusMeters = 5_000, limit = 10, filters = DiscoveryFilters())
+
+            val byUser = result.cards.associateBy { it.userId }
+            assertEquals(false, byUser.getValue(localTarget).visiting, "Local target must not be marked visiting")
+            assertEquals(true, byUser.getValue(visitingTarget).visiting, "Travel-mode target must be marked visiting")
+        }
+    }
+
     "deck cards expose visiting flag when target has active travel_locations row" {
         // SWIPE_IMPLEMENTATION_SPEC L348: target with an active travel row is
         // marked "visiting" in the deck so the viewer knows they're virtually

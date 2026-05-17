@@ -173,7 +173,8 @@ class GridService(
                     ?.let { mediaAssetUrlResolver?.publicContentUrl(it) }
             )
         },
-        rankToken = "grid:v1:$userId"
+        rankToken = "grid:v1:$userId",
+        visiting = visiting
     )
 
     companion object {

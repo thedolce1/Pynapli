@@ -33,7 +33,13 @@ data class GridCardRecord(
     val distanceBucketMeters: Int = distanceMeters.toInt(),
     val linkedPartnerUserId: UUID? = null,
     val linkedPartnerDisplayName: String? = null,
-    val linkedPartnerThumbnailMediaAssetId: UUID? = null
+    val linkedPartnerThumbnailMediaAssetId: UUID? = null,
+    /**
+     * Target has an active travel_locations row. Surfaced as a "Visiting" pill
+     * on the Grid card (SWIPE_IMPLEMENTATION_SPEC L348) so the viewer knows
+     * the person is browsing their area in passport mode, not local.
+     */
+    val visiting: Boolean = false
 )
 
 data class GridCursorAnchor(
