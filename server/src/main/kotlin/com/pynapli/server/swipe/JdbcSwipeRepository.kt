@@ -108,9 +108,15 @@ class JdbcSwipeRepository(
         //     defeats the KNN index scan.
         val sql = """
             WITH viewer_location AS (
-                SELECT geom
-                FROM user_locations
-                WHERE user_id = ?
+                -- Passport/travel mode (SWIPE_IMPLEMENTATION_SPEC L339-354): an
+                -- active travel_locations row overrides GPS for deck ranking.
+                SELECT COALESCE(tl.geom, ul.geom) AS geom
+                FROM user_locations ul
+                LEFT JOIN travel_locations tl
+                  ON tl.user_id = ul.user_id
+                 AND tl.status = 'active'
+                 AND tl.active_until IS NULL
+                WHERE ul.user_id = ?
             )
             SELECT u.id AS user_id,
                    COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
@@ -557,9 +563,15 @@ class JdbcSwipeRepository(
             connection.prepareStatement(
                 """
                 WITH viewer_location AS (
-                    SELECT geom
-                    FROM user_locations
-                    WHERE user_id = ?
+                    -- Travel-mode override for viewer side; targets are still
+                    -- ranged against their own real GPS row.
+                    SELECT COALESCE(tl.geom, ul.geom) AS geom
+                    FROM user_locations ul
+                    LEFT JOIN travel_locations tl
+                      ON tl.user_id = ul.user_id
+                     AND tl.status = 'active'
+                     AND tl.active_until IS NULL
+                    WHERE ul.user_id = ?
                 )
                 SELECT EXISTS (
                     SELECT 1
@@ -622,9 +634,17 @@ class JdbcSwipeRepository(
             connection.prepareStatement(
                 """
                 WITH viewer_location AS (
-                    SELECT geom
-                    FROM user_locations
-                    WHERE user_id = ?
+                    -- Travel-mode override for the action-precondition radius
+                    -- check; if the viewer Liked someone in their travel city
+                    -- then jumped home, this query still uses the travel point
+                    -- so the action remains within-radius for the original deck.
+                    SELECT COALESCE(tl.geom, ul.geom) AS geom
+                    FROM user_locations ul
+                    LEFT JOIN travel_locations tl
+                      ON tl.user_id = ul.user_id
+                     AND tl.status = 'active'
+                     AND tl.active_until IS NULL
+                    WHERE ul.user_id = ?
                 )
                 SELECT
                     EXISTS (
@@ -709,9 +729,16 @@ class JdbcSwipeRepository(
             connection.prepareStatement(
                 """
                 WITH viewer_location AS (
-                    SELECT geom
-                    FROM user_locations
-                    WHERE user_id = ?
+                    -- Travel-mode override for rewindable-action discovery; an
+                    -- action recorded in travel mode is still rewindable while
+                    -- the user is in that travel city.
+                    SELECT COALESCE(tl.geom, ul.geom) AS geom
+                    FROM user_locations ul
+                    LEFT JOIN travel_locations tl
+                      ON tl.user_id = ul.user_id
+                     AND tl.status = 'active'
+                     AND tl.active_until IS NULL
+                    WHERE ul.user_id = ?
                 )
                 SELECT sa.id AS action_id,
                        sa.target_user_id,

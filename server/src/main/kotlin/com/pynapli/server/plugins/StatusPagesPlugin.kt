@@ -5,6 +5,7 @@ import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.authStatusFor
 import com.pynapli.server.grid.GridException
 import com.pynapli.server.grid.SavedGridFilterException
+import com.pynapli.server.location.TravelLocationException
 import com.pynapli.server.swipe.SavedSwipeFilterException
 import com.pynapli.server.swipe.TopPicksException
 import com.pynapli.server.profile.TonightAvailabilityException
@@ -114,6 +115,17 @@ fun Application.configureStatusPages() {
         exception<TopPicksException> { call, cause ->
             call.respond(
                 status = topPicksStatusFor(cause.code),
+                message = ApiErrorDto(
+                    code = cause.code,
+                    message = userSafeMessage(cause.code),
+                    requestId = call.request.headers["X-Request-Id"] ?: "unknown"
+                )
+            )
+        }
+
+        exception<TravelLocationException> { call, cause ->
+            call.respond(
+                status = travelLocationStatusFor(cause.code),
                 message = ApiErrorDto(
                     code = cause.code,
                     message = userSafeMessage(cause.code),
@@ -422,6 +434,15 @@ private fun savedGridFilterStatusFor(code: String): HttpStatusCode = when (code)
 private fun topPicksStatusFor(code: String): HttpStatusCode = when (code) {
     "LOCATION_REQUIRED" -> HttpStatusCode.UnprocessableEntity
     "STALE_TOP_PICK_SESSION" -> HttpStatusCode.Conflict
+    else -> HttpStatusCode.BadRequest
+}
+
+private fun travelLocationStatusFor(code: String): HttpStatusCode = when (code) {
+    "ENTITLEMENT_REQUIRED" -> HttpStatusCode.Forbidden
+    "INVALID_TRAVEL_CITY",
+    "INVALID_TRAVEL_REGION",
+    "INVALID_TRAVEL_COUNTRY",
+    "INVALID_TRAVEL_COORDINATES" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest
 }
 

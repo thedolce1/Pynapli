@@ -238,6 +238,17 @@ private class FakeApiClient(
     override suspend fun getTopPicks(): AppResult<com.pynapli.shared.network.dto.TopPicksResponseDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun getTravelLocation(): AppResult<com.pynapli.shared.network.dto.TravelLocationDto?> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun setTravelLocation(
+        request: com.pynapli.shared.network.dto.SetTravelLocationRequestDto
+    ): AppResult<com.pynapli.shared.network.dto.TravelLocationDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun clearTravelLocation(): AppResult<Unit> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun getTonightAvailability(): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 

@@ -309,6 +309,47 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "grid and swipe discovery follows active travel_locations row when present" {
+        // SWIPE_IMPLEMENTATION_SPEC L339-354: an active travel_locations row
+        // overrides the viewer's GPS for the deck. Viewer physically in SF,
+        // travel mode set to NYC — discovery returns the NYC profile (within
+        // NYC radius) and excludes the SF-local profile.
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000961")
+            val sfLocal = UUID.fromString("00000000-0000-0000-0000-000000000962")
+            val nycLocal = UUID.fromString("00000000-0000-0000-0000-000000000963")
+            // Viewer is physically in SF.
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.4194, latitude = 37.7749)
+            // SF-local target should disappear when travel mode is active to NYC.
+            dataSource.insertDiscoverableUser(sfLocal, "Sage", age = 32, longitude = -122.4180, latitude = 37.7740)
+            // NYC-local target should appear when travel mode is set to NYC.
+            dataSource.insertDiscoverableUser(nycLocal, "Maya", age = 34, longitude = -74.0060, latitude = 40.7128)
+
+            // Sanity: with no travel mode the SF target shows up, NYC does not (5km radius around SF).
+            val swipeRepo = JdbcSwipeRepository(dataSource)
+            val gridRepo = JdbcGridRepository(dataSource)
+            val localFilters = DiscoveryFilters()
+            val localSwipeBefore = swipeRepo.queryDeck(viewer, radiusMeters = 5_000, limit = 10, filters = localFilters)
+            val localGridBefore = gridRepo.queryNearby(viewer, radiusMeters = 5_000, limit = 10, filters = localFilters)
+            assertEquals(listOf(sfLocal), localSwipeBefore.cards.map { it.userId })
+            assertEquals(listOf(sfLocal), localGridBefore.cards.map { it.userId })
+
+            // Activate travel mode to NYC.
+            dataSource.insertActiveTravelLocation(
+                userId = viewer,
+                city = "New York",
+                latitude = 40.7128,
+                longitude = -74.0060
+            )
+
+            // Same 5km radius now centered on NYC — NYC target shows up, SF does not.
+            val travelSwipe = swipeRepo.queryDeck(viewer, radiusMeters = 5_000, limit = 10, filters = localFilters)
+            val travelGrid = gridRepo.queryNearby(viewer, radiusMeters = 5_000, limit = 10, filters = localFilters)
+            assertEquals(listOf(nycLocal), travelSwipe.cards.map { it.userId })
+            assertEquals(listOf(nycLocal), travelGrid.cards.map { it.userId })
+        }
+    }
+
     "grid and swipe queries apply advanced discovery filters" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000931")
@@ -1324,6 +1365,29 @@ private fun DataSource.selectPremiumInventoryQuantity(inventoryId: UUID): Int =
             }
         }
     }
+
+private fun DataSource.insertActiveTravelLocation(
+    userId: UUID,
+    city: String,
+    latitude: Double,
+    longitude: Double
+) {
+    connection.use { connection ->
+        connection.prepareStatement(
+            """
+            INSERT INTO travel_locations (id, user_id, city, geom, status)
+            VALUES (?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, 'active')
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, userId)
+            statement.setString(3, city)
+            statement.setDouble(4, longitude)
+            statement.setDouble(5, latitude)
+            statement.executeUpdate()
+        }
+    }
+}
 
 private fun DataSource.selectActionConsumedInventoryId(actionId: UUID): UUID? =
     connection.use { connection ->

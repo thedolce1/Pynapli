@@ -8,6 +8,7 @@ import com.pynapli.server.dependencies.closeDependenciesOnStop
 import com.pynapli.server.grid.configureGridRoutes
 import com.pynapli.server.grid.configureSavedGridFilterRoutes
 import com.pynapli.server.location.configureLocationRoutes
+import com.pynapli.server.location.configureTravelLocationRoutes
 import com.pynapli.server.media.configureMediaRoutes
 import com.pynapli.server.messaging.configureMessagingRoutes
 import com.pynapli.server.moderation.configureAdminReportRoutes
@@ -71,6 +72,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)
     configureProfileLinkRoutes(dependencies.authService, dependencies.profileLinkService)
     configureLocationRoutes(dependencies.authService, dependencies.locationService)
+    configureTravelLocationRoutes(dependencies.authService, dependencies.travelLocationService)
     configurePresenceRoutes(dependencies.authService, dependencies.presenceService, dependencies.requestProfilerFactory)
     configurePresenceStreamRoutes(
         authService = dependencies.authService,

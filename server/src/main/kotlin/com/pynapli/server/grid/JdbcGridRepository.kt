@@ -38,9 +38,18 @@ class JdbcGridRepository(
                 connection.prepareStatement(
                     """
                 WITH viewer_location AS (
-                    SELECT geom
-                    FROM user_locations
-                    WHERE user_id = ?
+                    -- Passport/travel mode (SWIPE_IMPLEMENTATION_SPEC L339-354):
+                    -- when the viewer has an active travel_locations row, its
+                    -- geom overrides the real GPS location for discovery. The
+                    -- LEFT JOIN keeps single-? bind ergonomics; travel requires
+                    -- the viewer to also have a base user_locations row.
+                    SELECT COALESCE(tl.geom, ul.geom) AS geom
+                    FROM user_locations ul
+                    LEFT JOIN travel_locations tl
+                      ON tl.user_id = ul.user_id
+                     AND tl.status = 'active'
+                     AND tl.active_until IS NULL
+                    WHERE ul.user_id = ?
                 ),
                 base_candidates AS (
                 SELECT u.id AS user_id,

@@ -12,7 +12,9 @@ import com.pynapli.server.grid.JdbcGridViewerTrustRepository
 import com.pynapli.server.grid.JdbcSavedGridFilterRepository
 import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.location.JdbcLocationRepository
+import com.pynapli.server.location.JdbcTravelLocationRepository
 import com.pynapli.server.location.LocationService
+import com.pynapli.server.location.TravelLocationService
 import com.pynapli.server.media.JdbcMediaRepository
 import com.pynapli.server.media.LocalDevMediaUploadSigner
 import com.pynapli.server.media.LocalMediaAssetUrlResolver
@@ -87,6 +89,7 @@ class ServerDependencies(
     val profileService: ProfileService?,
     val profileLinkService: ProfileLinkService?,
     val locationService: LocationService?,
+    val travelLocationService: TravelLocationService?,
     val presenceService: PresenceService?,
     val gridService: GridService?,
     val messagingService: MessagingService?,
@@ -144,6 +147,7 @@ class ServerDependencies(
             val profileActivityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             val authService = AuthService(JdbcAuthRepository(database.dataSource))
             val locationService = LocationService(JdbcLocationRepository(database.dataSource))
+            val travelLocationRepository = JdbcTravelLocationRepository(database.dataSource)
             val presenceRepository = RedisPresenceRepository(redisCache)
             val presenceBroadcaster = PresenceBroadcaster()
             val onlinePresenceTracker = OnlinePresenceTracker()
@@ -226,6 +230,10 @@ class ServerDependencies(
                 },
                 playStoreSyncStaleAfter = Duration.ofHours(config.playStoreSubscriptionSyncStaleAfterHours),
                 playStoreSyncRenewalLookahead = Duration.ofHours(config.playStoreSubscriptionSyncRenewalLookaheadHours)
+            )
+            val travelLocationService = TravelLocationService(
+                repository = travelLocationRepository,
+                subscriptionService = subscriptionService
             )
             val playStoreSubscriptionSyncWorker =
                 if (config.playStoreVerificationEnabled && config.playStoreSubscriptionSyncEnabled) {
@@ -332,6 +340,7 @@ class ServerDependencies(
                 profileService = profileService,
                 profileLinkService = profileLinkService,
                 locationService = locationService,
+                travelLocationService = travelLocationService,
                 presenceService = presenceService,
                 gridService = gridService,
                 messagingService = messagingService,
@@ -380,6 +389,7 @@ class ServerDependencies(
                 profileService = null,
                 profileLinkService = null,
                 locationService = null,
+                travelLocationService = null,
                 presenceService = null,
                 gridService = null,
                 messagingService = null,

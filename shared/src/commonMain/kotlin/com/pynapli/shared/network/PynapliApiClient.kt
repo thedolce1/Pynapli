@@ -70,6 +70,8 @@ import com.pynapli.shared.network.dto.SwipeDeckResponseDto
 import com.pynapli.shared.network.dto.SwipeRewindResponseDto
 import com.pynapli.shared.network.dto.MatchesListResponseDto
 import com.pynapli.shared.network.dto.CurrentLocationDto
+import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
+import com.pynapli.shared.network.dto.TravelLocationDto
 import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateNotificationPreferencesRequestDto
@@ -118,6 +120,12 @@ interface PynapliApiClient {
     suspend fun deleteSavedSwipeFilter(id: String): AppResult<Unit>
 
     suspend fun getTopPicks(): AppResult<TopPicksResponseDto>
+
+    suspend fun getTravelLocation(): AppResult<TravelLocationDto?>
+
+    suspend fun setTravelLocation(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto>
+
+    suspend fun clearTravelLocation(): AppResult<Unit>
 
     suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto>
 
@@ -345,6 +353,42 @@ class KtorPynapliApiClient(
             httpClient.get(config.endpoint("/v1/swipe/picks")) {
                 bearerAuth(token)
             }.toAppResult(json)
+        }
+
+    override suspend fun getTravelLocation(): AppResult<TravelLocationDto?> =
+        authenticatedPost { token ->
+            val response = httpClient.get(config.endpoint("/v1/location/travel")) {
+                bearerAuth(token)
+            }
+            // 204 No Content means no active travel row — fold to Success(null)
+            // so callers don't have to special-case the empty state.
+            if (response.status.value == 204) {
+                AppResult.Success(null)
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                response.toAppResult<TravelLocationDto>(json) as AppResult<TravelLocationDto?>
+            }
+        }
+
+    override suspend fun setTravelLocation(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/location/travel")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun clearTravelLocation(): AppResult<Unit> =
+        authenticatedPost { token ->
+            val response = httpClient.delete(config.endpoint("/v1/location/travel")) {
+                bearerAuth(token)
+            }
+            if (response.status.value in 200..299) {
+                AppResult.Success(Unit)
+            } else {
+                response.toAppResult<Unit>(json)
+            }
         }
 
     override suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto> =
