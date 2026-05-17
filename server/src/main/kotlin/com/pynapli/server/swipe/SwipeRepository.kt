@@ -168,7 +168,13 @@ data class SwipeCardRecord(
     val bio: String? = null,
     val tags: List<String> = emptyList(),
     val thumbnailMediaAssetIds: List<UUID> = emptyList(),
-    val verified: Boolean = false
+    val verified: Boolean = false,
+    /**
+     * Target has an active travel_locations row. Surfaced as a "Visiting" pill
+     * on the swipe card (SWIPE_IMPLEMENTATION_SPEC L348) so the viewer knows
+     * the person is browsing their area in passport mode, not local.
+     */
+    val visiting: Boolean = false
 )
 
 data class SwipeActionResult(

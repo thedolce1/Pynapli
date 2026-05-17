@@ -61,7 +61,10 @@ data class SwipeCardDto(
     val online: Boolean = false,
     val shortBio: String? = null,
     val tags: List<String> = emptyList(),
-    val verified: Boolean = false
+    val verified: Boolean = false,
+    // SWIPE_IMPLEMENTATION_SPEC L348: target has an active travel mode row, so
+    // they're virtually in the viewer's area rather than physically there.
+    val visiting: Boolean = false
 )
 
 @Serializable

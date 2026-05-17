@@ -79,7 +79,8 @@ class JdbcSwipeRepository(
                     bio = row.bio,
                     tags = row.tags,
                     thumbnailMediaAssetIds = h?.thumbnailMediaAssetIds.orEmpty(),
-                    verified = row.verified
+                    verified = row.verified,
+                    visiting = row.visiting
                 )
             }
 
@@ -125,7 +126,9 @@ class JdbcSwipeRepository(
                    COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
                    p.verified_at IS NOT NULL AS verified,
                    ds.show_distance,
-                   ST_Distance(v.geom, ul.geom) AS distance_meters,
+                   -- Distance shown to the viewer reflects where the target *appears*
+                   -- to be — their travel point if active, else their real GPS.
+                   ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
                    EXISTS (
                        SELECT 1
                        FROM boost_activations ba
@@ -133,6 +136,11 @@ class JdbcSwipeRepository(
                          AND ba.status = 'active'
                          AND ba.ends_at > now()
                    ) AS is_boosted,
+                   -- SWIPE_IMPLEMENTATION_SPEC L348: target is "visiting" when
+                   -- they have an active travel_locations row. The LEFT JOIN
+                   -- below brings in `target_travel.id` only for rows in that
+                   -- state — null means physically local.
+                   target_travel.id IS NOT NULL AS visiting,
                    -- FILTERS_SPEC L406-417 ranking inputs (B4 v1):
                    -- +1 when verifiedPreferred is on AND the target is verified.
                    -- Intent/style scoring is deferred; they would lose signal on the
@@ -146,6 +154,14 @@ class JdbcSwipeRepository(
             JOIN profiles p ON p.user_id = u.id
             JOIN discovery_settings ds ON ds.user_id = u.id
             LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+            -- SWIPE_IMPLEMENTATION_SPEC L344-348: target-side travel override.
+            -- When a target has an active travel_locations row they appear in
+            -- decks centered on that destination (matches Tinder Passport's
+            -- "place yourself elsewhere" semantics), and the visiting flag fires.
+            LEFT JOIN travel_locations target_travel
+              ON target_travel.user_id = u.id
+             AND target_travel.status = 'active'
+             AND target_travel.active_until IS NULL
             WHERE u.id <> ?
               AND u.status = 'active'
               AND u.deleted_at IS NULL
@@ -153,7 +169,14 @@ class JdbcSwipeRepository(
               AND ds.swipe_visible = true
               AND ds.incognito = false
               AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
-              AND ST_DWithin(v.geom, ul.geom, ?)
+              -- OR keeps both ST_DWithin calls index-eligible. The first uses
+              -- the GiST index on user_locations.geom for the bulk of (non-
+              -- travelling) candidates; the second uses the GiST on
+              -- travel_locations.geom for the (much smaller) active-travel set.
+              AND (
+                  ST_DWithin(v.geom, ul.geom, ?)
+                  OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
+              )
               AND (?::integer IS NULL OR p.display_age >= ?::integer)
               AND (?::integer IS NULL OR p.display_age <= ?::integer)
               AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
@@ -203,7 +226,11 @@ class JdbcSwipeRepository(
                   cardinality(?::uuid[]) = 0
                   OR u.id <> ALL(?::uuid[])
               )
-            ORDER BY soft_score DESC, v.geom <-> ul.geom
+            -- KNN ORDER on a COALESCE'd expression can't use the GiST index
+            -- directly, so we accept a small in-memory sort over the (already
+            -- filtered) candidate set. The candidate set is bounded by the
+            -- ST_DWithin filter above, which IS index-driven.
+            ORDER BY soft_score DESC, v.geom <-> COALESCE(target_travel.geom, ul.geom)
             LIMIT ?
         """.trimIndent()
 
@@ -219,32 +246,35 @@ class JdbcSwipeRepository(
             // text so the SELECT param appears before the WHERE/ORDER BY params.
             statement.setBoolean(2, filters.verifiedPreferred)
             statement.setObject(3, viewerUserId)
+            // $4 + $5: ST_DWithin radius bound twice — once against target's
+            // real GPS, once against target's travel point.
             statement.setDouble(4, radiusMeters.toDouble())
-            statement.setObject(5, filters.minimumAge)
+            statement.setDouble(5, radiusMeters.toDouble())
             statement.setObject(6, filters.minimumAge)
-            statement.setObject(7, filters.maximumAge)
+            statement.setObject(7, filters.minimumAge)
             statement.setObject(8, filters.maximumAge)
-            statement.setArray(9, contexts)
+            statement.setObject(9, filters.maximumAge)
             statement.setArray(10, contexts)
-            statement.setBoolean(11, filters.verifiedOnly)
-            statement.setBoolean(12, filters.facePhotoVerifiedOnly)
-            statement.setBoolean(13, filters.ageVerifiedOnly)
-            statement.setArray(14, styles)
+            statement.setArray(11, contexts)
+            statement.setBoolean(12, filters.verifiedOnly)
+            statement.setBoolean(13, filters.facePhotoVerifiedOnly)
+            statement.setBoolean(14, filters.ageVerifiedOnly)
             statement.setArray(15, styles)
-            statement.setArray(16, intents)
+            statement.setArray(16, styles)
             statement.setArray(17, intents)
-            statement.setArray(18, lifestyleTags)
+            statement.setArray(18, intents)
             statement.setArray(19, lifestyleTags)
-            statement.setArray(20, logisticsTags)
+            statement.setArray(20, lifestyleTags)
             statement.setArray(21, logisticsTags)
-            statement.setObject(22, filters.linkedOnly)
+            statement.setArray(22, logisticsTags)
             statement.setObject(23, filters.linkedOnly)
-            statement.setObject(24, viewerUserId)
+            statement.setObject(24, filters.linkedOnly)
             statement.setObject(25, viewerUserId)
             statement.setObject(26, viewerUserId)
-            statement.setArray(27, excludedIds)
+            statement.setObject(27, viewerUserId)
             statement.setArray(28, excludedIds)
-            statement.setInt(29, limit)
+            statement.setArray(29, excludedIds)
+            statement.setInt(30, limit)
             statement.executeQuery().use { rs ->
                 buildList {
                     while (rs.next()) {
@@ -256,6 +286,7 @@ class JdbcSwipeRepository(
                                 bio = rs.getString("bio"),
                                 tags = rs.readStringArray("profile_tags"),
                                 verified = rs.getBoolean("verified"),
+                                visiting = rs.getBoolean("visiting"),
                                 showDistance = rs.getBoolean("show_distance"),
                                 distanceMeters = rs.getDouble("distance_meters"),
                                 isBoosted = rs.getBoolean("is_boosted"),
@@ -399,6 +430,7 @@ class JdbcSwipeRepository(
         val bio: String?,
         val tags: List<String>,
         val verified: Boolean,
+        val visiting: Boolean,
         val showDistance: Boolean,
         val distanceMeters: Double,
         val isBoosted: Boolean,
@@ -749,6 +781,12 @@ class JdbcSwipeRepository(
                        p.bio,
                        COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
                        p.verified_at IS NOT NULL AS verified,
+                       EXISTS (
+                           SELECT 1 FROM travel_locations tlt
+                           WHERE tlt.user_id = u.id
+                             AND tlt.status = 'active'
+                             AND tlt.active_until IS NULL
+                       ) AS visiting,
                        profile_photos.thumbnail_media_asset_id,
                        profile_photos.media_asset_ids AS profile_photo_ids,
                        linked_partner.linked_partner_user_id,
@@ -906,7 +944,9 @@ class JdbcSwipeRepository(
                                     UUID::class.java
                                 ),
                                 bio = rs.getString("bio"),
-                                tags = rs.readStringArray("profile_tags")
+                                tags = rs.readStringArray("profile_tags"),
+                                verified = rs.getBoolean("verified"),
+                                visiting = rs.getBoolean("visiting")
                             )
                         )
                     }

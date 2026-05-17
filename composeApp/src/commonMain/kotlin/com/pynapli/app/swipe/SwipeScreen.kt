@@ -726,13 +726,23 @@ private fun TopPickThumbCard(
                     )
                 }
             }
-            card.distanceLabel?.let { label ->
-                Text(
-                    text = label,
-                    color = Color.White.copy(alpha = 0.8f),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                card.distanceLabel?.let { label ->
+                    Text(
+                        text = label,
+                        color = Color.White.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1
+                    )
+                }
+                if (card.visiting) {
+                    Text(
+                        text = "Visiting",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -1074,6 +1084,9 @@ private fun SwipeCard(
                 if (card.verified) {
                     SwipeVerifiedBadge()
                 }
+                if (card.visiting) {
+                    SwipeVisitingPill()
+                }
                 card.displayAge?.let { age ->
                     Text(
                         text = "$age",
@@ -1182,6 +1195,24 @@ private fun SwipeVerifiedBadge(modifier: Modifier = Modifier) {
         modifier = modifier
             .testTag(SwipeTestTags.VERIFIED_BADGE)
             .size(18.dp)
+    )
+}
+
+@Composable
+private fun SwipeVisitingPill(modifier: Modifier = Modifier) {
+    // SWIPE_IMPLEMENTATION_SPEC L348: marks targets who are in the viewer's
+    // area via travel mode, not physically local. Subtle pill rather than a
+    // hard badge so it reads as context, not a tier signal.
+    Text(
+        text = "Visiting",
+        color = Color.White,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        modifier = modifier
+            .testTag(SwipeTestTags.VISITING_PILL)
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color(0xCC4E342E))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
     )
 }
 
@@ -1650,6 +1681,7 @@ internal object SwipeTestTags {
     const val CARD_PREFIX = "swipe-card-"
     const val ONLINE_DOT = "swipe-card-online-dot"
     const val VERIFIED_BADGE = "swipe-card-verified-badge"
+    const val VISITING_PILL = "swipe-card-visiting-pill"
     const val LINKED_PARTNER_BADGE = "swipe-card-linked-partner-badge"
     const val LINKED_PARTNER_PREVIEW_DIALOG = "swipe-linked-partner-preview-dialog"
     const val LINKED_PARTNER_PREVIEW_VIEW_PROFILE = "swipe-linked-partner-preview-view-profile"

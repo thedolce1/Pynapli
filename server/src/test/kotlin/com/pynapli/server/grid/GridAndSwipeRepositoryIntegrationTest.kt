@@ -350,6 +350,35 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "deck cards expose visiting flag when target has active travel_locations row" {
+        // SWIPE_IMPLEMENTATION_SPEC L348: target with an active travel row is
+        // marked "visiting" in the deck so the viewer knows they're virtually
+        // in the area rather than physically.
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000990")
+            val localTarget = UUID.fromString("00000000-0000-0000-0000-000000000991")
+            val visitingTarget = UUID.fromString("00000000-0000-0000-0000-000000000992")
+            // Viewer + localTarget physically in NYC.
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -74.0060, latitude = 40.7128)
+            dataSource.insertDiscoverableUser(localTarget, "Sage", age = 32, longitude = -74.0055, latitude = 40.7130)
+            // visitingTarget physically in SF but virtually in NYC via travel.
+            dataSource.insertDiscoverableUser(visitingTarget, "Maya", age = 34, longitude = -122.4194, latitude = 37.7749)
+            dataSource.insertActiveTravelLocation(
+                userId = visitingTarget,
+                city = "New York",
+                latitude = 40.7128,
+                longitude = -74.0060
+            )
+
+            val swipeRepo = JdbcSwipeRepository(dataSource)
+            val deck = swipeRepo.queryDeck(viewer, radiusMeters = 5_000, limit = 10, filters = DiscoveryFilters())
+
+            val byUser = deck.cards.associateBy { it.userId }
+            assertEquals(false, byUser.getValue(localTarget).visiting, "Local target must not be marked visiting")
+            assertEquals(true, byUser.getValue(visitingTarget).visiting, "Travel-mode target must be marked visiting")
+        }
+    }
+
     "travel-mode Like still creates a match when reciprocated within the 24h tail" {
         // SWIPE_IMPLEMENTATION_SPEC L347, L353: a Like sent in travel mode
         // remains matchable while the session is active. Active session =

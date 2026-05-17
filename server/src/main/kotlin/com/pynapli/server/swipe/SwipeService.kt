@@ -587,7 +587,8 @@ class SwipeService(
             online = online,
             shortBio = bio.toShortBio(),
             tags = tags.toVisibleTags(),
-            verified = verified
+            verified = verified,
+            visiting = visiting
         )
     }
 

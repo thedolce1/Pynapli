@@ -284,7 +284,8 @@ class TopPicksService(
             online = userId in onlineIds,
             shortBio = bio?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_SHORT_BIO_CHARS),
             tags = tags.take(MAX_VISIBLE_TAGS),
-            verified = verified
+            verified = verified,
+            visiting = visiting
         )
     }
 
