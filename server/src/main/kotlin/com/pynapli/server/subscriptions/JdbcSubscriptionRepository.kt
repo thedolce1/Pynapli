@@ -170,7 +170,21 @@ class JdbcSubscriptionRepository(
         consumePremiumInventory(userId = userId, inventoryType = "intro_note", now = now)
 
     override suspend fun consumePineappleLikeInventory(userId: UUID, now: Instant): Boolean =
-        consumePremiumInventory(userId = userId, inventoryType = "pineapple_like", now = now)
+        consumePineappleLikeInventoryReturningId(userId, now) != null
+
+    override suspend fun consumePineappleLikeInventoryReturningId(userId: UUID, now: Instant): UUID? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.consumePremiumInventoryRecordReturningId(userId, "pineapple_like", now)
+            }
+        }
+
+    override suspend fun refundInventoryById(inventoryId: UUID, now: Instant): Boolean =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.refundPremiumInventoryRecord(inventoryId, now)
+            }
+        }
 
     private suspend fun consumePremiumInventory(userId: UUID, inventoryType: String, now: Instant): Boolean =
         withContext(Dispatchers.IO) {
@@ -408,11 +422,27 @@ class JdbcSubscriptionRepository(
         )
 
     private fun Connection.consumePremiumInventoryRecord(userId: UUID, inventoryType: String, now: Instant): Boolean =
+        consumePremiumInventoryRecordReturningId(userId, inventoryType, now) != null
+
+    private fun Connection.consumePremiumInventoryRecordReturningId(
+        userId: UUID,
+        inventoryType: String,
+        now: Instant
+    ): UUID? =
         prepareStatement(CONSUME_PREMIUM_INVENTORY_QUERY).use { statement ->
             statement.setObject(1, userId)
             statement.setString(2, inventoryType)
             statement.setTimestamp(3, Timestamp.from(now))
-            statement.executeQuery().use { rs -> rs.next() }
+            statement.executeQuery().use { rs ->
+                if (rs.next()) rs.getObject("id", UUID::class.java) else null
+            }
+        }
+
+    private fun Connection.refundPremiumInventoryRecord(inventoryId: UUID, now: Instant): Boolean =
+        prepareStatement(REFUND_PREMIUM_INVENTORY_QUERY).use { statement ->
+            statement.setTimestamp(1, Timestamp.from(now))
+            statement.setObject(2, inventoryId)
+            statement.executeUpdate() > 0
         }
 
     private fun Connection.findActiveBoostActivation(userId: UUID, now: Instant): BoostActivationRecord? =
@@ -774,6 +804,16 @@ class JdbcSubscriptionRepository(
             FROM candidate
             WHERE inventory.id = candidate.id
             RETURNING inventory.id
+        """.trimIndent()
+
+        // Refund a Pineapple Like inventory row by incrementing its quantity. Used
+        // by the rewind path to atomically return the credit. Locks the row first
+        // to avoid double-refund races if a rewind is somehow processed twice.
+        private val REFUND_PREMIUM_INVENTORY_QUERY = """
+            UPDATE premium_inventory
+            SET quantity = quantity + 1,
+                updated_at = ?
+            WHERE id = ?
         """.trimIndent()
 
         private val FIND_ACTIVE_BOOST_ACTIVATION_QUERY = """

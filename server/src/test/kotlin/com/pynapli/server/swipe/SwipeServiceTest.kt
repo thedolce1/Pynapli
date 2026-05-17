@@ -1259,6 +1259,62 @@ class SwipeServiceTest {
     }
 
     @Test
+    fun paidRewindOfPineappleLikeRefundsConsumedInventoryRow() = runBlocking {
+        // SWIPE_IMPLEMENTATION_SPEC L716: Pineapple Like inventory-safe rewind. The
+        // submit consumes one `premium_inventory` row and the rewind must refund the
+        // exact row atomically — otherwise the user pays for a Pineapple Like they
+        // chose to take back.
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000301")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000302")
+        val repository = InMemorySwipeRepository(
+            seededCards = listOf(
+                SwipeCardRecord(
+                    userId = target,
+                    displayName = "Maya",
+                    displayAge = 31,
+                    thumbnailMediaAssetId = null,
+                    showDistance = true,
+                    distanceMeters = 850.0
+                )
+            )
+        )
+        val service = SwipeService(
+            repository = repository,
+            subscriptionService = paidSubscriptionService(
+                viewer,
+                SubscriptionTier.SELECT,
+                introNotes = 0,
+                pineappleLikes = 1
+            )
+        )
+        val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
+        service.submitAction(
+            viewer,
+            SwipeActionRequestDto(
+                actionId = UUID.randomUUID().toString(),
+                deckSessionId = deck.deckSessionId,
+                cardToken = deck.items.single().rankToken,
+                targetUserId = target.toString(),
+                action = SwipeAction.PINEAPPLE_LIKE
+            )
+        )
+        // After consume the action carries the inventory id that backed it.
+        val consumedInventoryId = repository.consumedInventoryIds.values.single()
+        assertTrue(repository.refundedInventoryIds.isEmpty(), "Refund must not fire on submit")
+
+        val rewind = service.rewind(viewer)
+
+        assertTrue(rewind.rewound, "Pineapple Like must be rewindable post-D-phase")
+        val restoredCard = assertNotNull(rewind.card)
+        assertEquals(target.toString(), restoredCard.userId)
+        assertEquals(
+            listOf(consumedInventoryId),
+            repository.refundedInventoryIds,
+            "Rewind must refund the exact premium_inventory row decremented at submit"
+        )
+    }
+
+    @Test
     fun rewoundActionIdRetryDoesNotReapplyDecision() = runBlocking {
         val viewer = UUID.fromString("00000000-0000-0000-0000-000000000277")
         val target = UUID.fromString("00000000-0000-0000-0000-000000000278")
@@ -1459,6 +1515,8 @@ private class InMemorySwipeRepository(
     private val actions = mutableMapOf<Pair<UUID, UUID>, String>()
     private val actionRecords = mutableMapOf<UUID, SwipeActionRecord>()
     private val actionOrder = mutableListOf<UUID>()
+    val consumedInventoryIds = mutableMapOf<UUID, UUID>()
+    val refundedInventoryIds = mutableListOf<UUID>()
     private val matches = seededMatches.toMutableList()
     private val now = Instant.parse("2026-04-28T18:00:00Z")
     val recordedQueryDeckFilters = mutableListOf<DiscoveryFilters>()
@@ -1579,7 +1637,8 @@ private class InMemorySwipeRepository(
             actionId = record.actionId,
             targetUserId = record.targetUserId,
             action = record.action,
-            card = card
+            card = card,
+            consumedInventoryId = consumedInventoryIds[record.actionId]
         )
     }
 
@@ -1589,6 +1648,7 @@ private class InMemorySwipeRepository(
         targetUserId: UUID,
         action: String,
         noteText: String?,
+        consumedInventoryId: UUID?,
         matchIdFactory: () -> UUID
     ): SwipeActionResult {
         actionRecords[actionId]?.takeIf { it.actorUserId == actorUserId }?.let { existing ->
@@ -1619,6 +1679,9 @@ private class InMemorySwipeRepository(
             rewoundAt = null,
             match = match
         )
+        if (consumedInventoryId != null) {
+            consumedInventoryIds[actionId] = consumedInventoryId
+        }
         actionOrder += actionId
         return SwipeActionResult(recorded = true, match = match)
     }
@@ -1638,6 +1701,9 @@ private class InMemorySwipeRepository(
         if (findMatch(actorUserId, targetUserId) != null) return false
         actionRecords[actionId] = record.copy(rewoundAt = rewoundAt)
         actions.remove(actorUserId to targetUserId)
+        // Mirror the production path: refund the consumed inventory row atomically
+        // with the action rollback. Tests assert on `refundedInventoryIds`.
+        consumedInventoryIds[actionId]?.let { refundedInventoryIds += it }
         upsertDeckSession(session, listOf(card))
         return true
     }
@@ -1662,7 +1728,11 @@ private class InMemorySwipeRepository(
 
     companion object {
         private val POSITIVE_ACTIONS = setOf(SwipeAction.LIKE, SwipeAction.PINEAPPLE_LIKE)
-        private val REWINDABLE_ACTIONS = setOf(SwipeAction.LIKE, SwipeAction.PASS)
+        private val REWINDABLE_ACTIONS = setOf(
+            SwipeAction.LIKE,
+            SwipeAction.PASS,
+            SwipeAction.PINEAPPLE_LIKE
+        )
     }
 }
 

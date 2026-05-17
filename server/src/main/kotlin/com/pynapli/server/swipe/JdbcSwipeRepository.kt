@@ -716,6 +716,7 @@ class JdbcSwipeRepository(
                 SELECT sa.id AS action_id,
                        sa.target_user_id,
                        sa.action,
+                       sa.consumed_inventory_id,
                        COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
                        p.display_age,
                        p.bio,
@@ -818,7 +819,7 @@ class JdbcSwipeRepository(
                 ) linked_partner ON true
                 WHERE sa.actor_user_id = ?
                   AND sa.rewound_at IS NULL
-                  AND sa.action IN ('like', 'pass')
+                  AND sa.action IN ('like', 'pass', 'pineapple_like')
                   AND u.status = 'active'
                   AND u.deleted_at IS NULL
                   AND p.visibility_status = 'visible'
@@ -863,6 +864,7 @@ class JdbcSwipeRepository(
                             actionId = rs.getObject("action_id", UUID::class.java),
                             targetUserId = rs.getObject("target_user_id", UUID::class.java),
                             action = rs.getString("action"),
+                            consumedInventoryId = rs.getObject("consumed_inventory_id", UUID::class.java),
                             card = SwipeCardRecord(
                                 userId = rs.getObject("target_user_id", UUID::class.java),
                                 displayName = rs.getString("display_name"),
@@ -892,6 +894,7 @@ class JdbcSwipeRepository(
         targetUserId: UUID,
         action: String,
         noteText: String?,
+        consumedInventoryId: UUID?,
         matchIdFactory: () -> UUID
     ): SwipeActionResult = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
@@ -900,8 +903,8 @@ class JdbcSwipeRepository(
             try {
                 connection.prepareStatement(
                     """
-                    INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, note_text)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, note_text, consumed_inventory_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     ON CONFLICT DO NOTHING
                     """.trimIndent()
                 ).use { statement ->
@@ -910,6 +913,7 @@ class JdbcSwipeRepository(
                     statement.setObject(3, targetUserId)
                     statement.setString(4, action)
                     statement.setString(5, noteText)
+                    statement.setObject(6, consumedInventoryId)
                     if (statement.executeUpdate() == 0) {
                         val existing = connection.findSwipeActionById(actionId, actorUserId)
                         connection.rollback()
@@ -973,7 +977,10 @@ class JdbcSwipeRepository(
             val previousAutoCommit = connection.autoCommit
             connection.autoCommit = false
             try {
-                val updated = connection.prepareStatement(
+                // RETURNING consumed_inventory_id so we can refund the exact Pineapple
+                // Like premium_inventory row in the same transaction. Likes/Passes have
+                // a NULL inventory id and the refund step is a no-op for them.
+                val refundedInventoryId: UUID? = connection.prepareStatement(
                     """
                     UPDATE swipe_actions sa
                     SET rewound_at = ?
@@ -981,7 +988,7 @@ class JdbcSwipeRepository(
                       AND sa.actor_user_id = ?
                       AND sa.target_user_id = ?
                       AND sa.rewound_at IS NULL
-                      AND sa.action IN ('like', 'pass')
+                      AND sa.action IN ('like', 'pass', 'pineapple_like')
                       AND NOT EXISTS (
                           SELECT 1
                           FROM matches m
@@ -994,17 +1001,39 @@ class JdbcSwipeRepository(
                           WHERE sr.reporter_user_id = sa.actor_user_id
                             AND sr.reported_user_id = sa.target_user_id
                       )
+                    RETURNING sa.consumed_inventory_id
                     """.trimIndent()
                 ).use { statement ->
                     statement.setTimestamp(1, Timestamp.from(rewoundAt))
                     statement.setObject(2, actionId)
                     statement.setObject(3, actorUserId)
                     statement.setObject(4, targetUserId)
-                    statement.executeUpdate()
+                    statement.executeQuery().use { rs ->
+                        if (!rs.next()) {
+                            connection.rollback()
+                            return@withContext false
+                        }
+                        rs.getObject("consumed_inventory_id", UUID::class.java)
+                    }
                 }
-                if (updated == 0) {
-                    connection.rollback()
-                    return@withContext false
+
+                if (refundedInventoryId != null) {
+                    // Atomic refund in the same TX as the rewound_at update. If the
+                    // referenced row was deleted (ON DELETE SET NULL nulled out the
+                    // pointer by then), the update touches 0 rows and we proceed —
+                    // the credit is effectively forfeited rather than rolled back.
+                    connection.prepareStatement(
+                        """
+                        UPDATE premium_inventory
+                        SET quantity = quantity + 1,
+                            updated_at = ?
+                        WHERE id = ?
+                        """.trimIndent()
+                    ).use { statement ->
+                        statement.setTimestamp(1, Timestamp.from(rewoundAt))
+                        statement.setObject(2, refundedInventoryId)
+                        statement.executeUpdate()
+                    }
                 }
 
                 connection.insertDeckSession(session)

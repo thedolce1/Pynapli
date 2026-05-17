@@ -359,6 +359,18 @@ class SubscriptionService(
     suspend fun consumePineappleLikeInventory(userId: UUID): Boolean =
         repository.consumePineappleLikeInventory(userId, clock.instant())
 
+    /**
+     * Variant of `consumePineappleLikeInventory` that returns the consumed
+     * `premium_inventory.id`, so the caller (Swipe action recorder) can persist it
+     * on the action row and the rewind path can refund the exact row via
+     * `refundPineappleLikeInventory`.
+     */
+    suspend fun consumePineappleLikeInventoryReturningId(userId: UUID): UUID? =
+        repository.consumePineappleLikeInventoryReturningId(userId, clock.instant())
+
+    suspend fun refundPineappleLikeInventory(inventoryId: UUID): Boolean =
+        repository.refundInventoryById(inventoryId, clock.instant())
+
     suspend fun activateBoost(userId: UUID): BoostActivationDto {
         val result = repository.activateBoost(
             userId = userId,

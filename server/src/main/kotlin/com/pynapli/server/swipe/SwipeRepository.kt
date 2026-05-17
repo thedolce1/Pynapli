@@ -90,9 +90,17 @@ interface SwipeRepository {
         targetUserId: UUID,
         action: String,
         noteText: String? = null,
+        consumedInventoryId: UUID? = null,
         matchIdFactory: () -> UUID = UUID::randomUUID
     ): SwipeActionResult
 
+    /**
+     * Reverses a previously-recorded swipe action. If the action consumed a
+     * Pineapple Like (`consumed_inventory_id IS NOT NULL`) the implementation
+     * MUST refund the matching `premium_inventory` row atomically inside the
+     * same transaction as the action's rewound_at update — `SwipeService.rewind`
+     * relies on this to keep inventory accounting consistent.
+     */
     suspend fun rewindSwipeAction(
         actionId: UUID,
         actorUserId: UUID,
@@ -174,7 +182,13 @@ data class SwipeRewindCandidateRecord(
     val actionId: UUID,
     val targetUserId: UUID,
     val action: String,
-    val card: SwipeCardRecord
+    val card: SwipeCardRecord,
+    /**
+     * `premium_inventory.id` decremented when this action was recorded, or null
+     * if no inventory was consumed (Likes/Passes never consume). When non-null,
+     * the rewind must refund this row atomically with the action rollback.
+     */
+    val consumedInventoryId: UUID? = null
 )
 
 data class MatchRecord(

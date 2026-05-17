@@ -41,6 +41,22 @@ interface SubscriptionRepository {
 
     suspend fun consumePineappleLikeInventory(userId: UUID, now: Instant): Boolean = false
 
+    /**
+     * Variant of `consumePineappleLikeInventory` that returns the `premium_inventory.id`
+     * of the row decremented (or null if none was available). Lets the Pineapple Like
+     * rewind path refund the exact row atomically (`refundInventoryById`). Default
+     * impl falls back to the Boolean method so unrelated test stubs keep compiling.
+     */
+    suspend fun consumePineappleLikeInventoryReturningId(userId: UUID, now: Instant): UUID? =
+        if (consumePineappleLikeInventory(userId, now)) UUID.randomUUID() else null
+
+    /**
+     * Increment a specific `premium_inventory` row's quantity by 1. Used by the
+     * Pineapple Like rewind path to refund the exact row that was decremented when
+     * the action was originally recorded. Returns true if the row was updated.
+     */
+    suspend fun refundInventoryById(inventoryId: UUID, now: Instant): Boolean = false
+
     suspend fun activateBoost(
         userId: UUID,
         now: Instant,

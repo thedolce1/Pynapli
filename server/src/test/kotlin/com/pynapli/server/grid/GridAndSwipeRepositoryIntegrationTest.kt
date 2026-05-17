@@ -235,6 +235,52 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "swipe rewind atomically refunds the consumed Pineapple Like inventory row" {
+        // Drives JdbcSwipeRepository directly so we can prove the SQL: the action
+        // row is marked rewound AND the linked premium_inventory.quantity is
+        // incremented in the same transaction. Mirrors the production path for
+        // a Pineapple Like after the consume step has already decremented the row.
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000940")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000941")
+            val inventoryId = UUID.fromString("00000000-0000-0000-0000-0000000009f0")
+            val actionId = UUID.fromString("00000000-0000-0000-0000-0000000009f1")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+            // Seed an already-consumed inventory row (quantity=0) so the refund
+            // step has a target. Production sets quantity = 1 and decrements via
+            // the CONSUME_PREMIUM_INVENTORY_QUERY before recordSwipeAction runs.
+            dataSource.insertConsumedPineappleLikeInventory(inventoryId, viewer)
+            val repository = JdbcSwipeRepository(dataSource)
+
+            val service = SwipeService(repository)
+            val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 2))
+            repository.recordSwipeAction(
+                actionId = actionId,
+                actorUserId = viewer,
+                targetUserId = target,
+                action = SwipeAction.PINEAPPLE_LIKE,
+                consumedInventoryId = inventoryId
+            )
+            // Sanity: action recorded with the inventory id and quantity still 0.
+            assertEquals(0, dataSource.selectPremiumInventoryQuantity(inventoryId))
+            assertEquals(inventoryId, dataSource.selectActionConsumedInventoryId(actionId))
+
+            // Rewind via the public service so the rewindable filter + refund SQL
+            // both execute under the same transaction the production path uses.
+            val rewind = service.rewind(viewer)
+
+            assertTrue(rewind.rewound, "Pineapple Like must be rewindable")
+            assertEquals(target.toString(), assertNotNull(rewind.card).userId)
+            assertEquals(
+                1,
+                dataSource.selectPremiumInventoryQuantity(inventoryId),
+                "Rewind must increment the originally-consumed premium_inventory row"
+            )
+            assertTrue(deck.deckSessionId.isNotBlank())
+        }
+    }
+
     "grid and swipe queries apply advanced discovery filters" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000931")
@@ -1224,3 +1270,41 @@ private fun DataSource.insertBlock(blockerUserId: UUID, blockedUserId: UUID) {
         }
     }
 }
+
+private fun DataSource.insertConsumedPineappleLikeInventory(inventoryId: UUID, userId: UUID) {
+    connection.use { connection ->
+        connection.prepareStatement(
+            """
+            INSERT INTO premium_inventory (id, user_id, inventory_type, quantity, source)
+            VALUES (?, ?, 'pineapple_like', 0, 'subscription')
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, inventoryId)
+            statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+    }
+}
+
+private fun DataSource.selectPremiumInventoryQuantity(inventoryId: UUID): Int =
+    connection.use { connection ->
+        connection.prepareStatement("SELECT quantity FROM premium_inventory WHERE id = ?").use { statement ->
+            statement.setObject(1, inventoryId)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getInt(1)
+            }
+        }
+    }
+
+private fun DataSource.selectActionConsumedInventoryId(actionId: UUID): UUID? =
+    connection.use { connection ->
+        connection.prepareStatement(
+            "SELECT consumed_inventory_id FROM swipe_actions WHERE id = ?"
+        ).use { statement ->
+            statement.setObject(1, actionId)
+            statement.executeQuery().use { rs ->
+                if (rs.next()) rs.getObject("consumed_inventory_id", UUID::class.java) else null
+            }
+        }
+    }

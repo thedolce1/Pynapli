@@ -334,11 +334,20 @@ class SwipeService(
             }
             if (!consumed) throw SwipeException("INTRO_NOTE_INVENTORY_REQUIRED")
         }
-        if (action == SwipeAction.PINEAPPLE_LIKE) {
-            val consumed = profile("swipe.action.inventory.pineapple") {
-                subscriptionService?.consumePineappleLikeInventory(viewerUserId) ?: true
+        // For Pineapple Like the consume call returns the `premium_inventory.id`
+        // that was decremented. We thread that id into `recordSwipeAction` so the
+        // rewind path can later refund the exact row atomically. If no subscription
+        // service is wired (test seam), we treat the action as consumed but leave
+        // the inventory id null — refund-on-rewind becomes a no-op.
+        val pineappleInventoryId: UUID? = if (action == SwipeAction.PINEAPPLE_LIKE) {
+            val consumedInventoryId = profile("swipe.action.inventory.pineapple") {
+                if (subscriptionService == null) null
+                else subscriptionService.consumePineappleLikeInventoryReturningId(viewerUserId)
+                    ?: throw SwipeException("PINEAPPLE_LIKE_INVENTORY_REQUIRED")
             }
-            if (!consumed) throw SwipeException("PINEAPPLE_LIKE_INVENTORY_REQUIRED")
+            consumedInventoryId
+        } else {
+            null
         }
 
         val result = profile("swipe.action.record") {
@@ -347,7 +356,8 @@ class SwipeService(
                 actorUserId = viewerUserId,
                 targetUserId = targetUserId,
                 action = action,
-                noteText = noteText
+                noteText = noteText,
+                consumedInventoryId = pineappleInventoryId
             )
         }
         if (result.recorded) {

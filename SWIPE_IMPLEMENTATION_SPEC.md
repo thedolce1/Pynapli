@@ -713,7 +713,7 @@ Network:
 - [x] Like/pass/Pineapple Like/Intro Note action endpoint exists.
 - [x] Match creation is server-authoritative.
 - [x] Cursor pagination continues a persisted deck session without duplicate returned cards. Client auto-loads the next page when the visible stack drops below the threshold, deduping against current cards and pending action targets.
-- [ ] Partial: Rewind is server-aware for the latest eligible Like/Pass and local queued actions; Pineapple Like inventory-safe rewind is not complete.
+- [x] Rewind is server-aware for the latest eligible Like/Pass/Pineapple Like and local queued actions. Pineapple Like inventory is refunded atomically with the rewind: `swipe_actions.consumed_inventory_id` (V48) records the `premium_inventory.id` decremented when the action was submitted, and `JdbcSwipeRepository.rewindSwipeAction` increments that exact row's quantity in the same transaction as the `rewound_at` update. Coverage in `SwipeServiceTest.paidRewindOfPineappleLikeRefundsConsumedInventoryRow` and `GridAndSwipeRepositoryIntegrationTest` "swipe rewind atomically refunds the consumed Pineapple Like inventory row".
 - [x] Intro Note inventory and delivery rules exist.
 - [x] Likes You is represented in Activity.
 - [ ] Top Picks/Picks daily refresh exists.
