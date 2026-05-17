@@ -91,6 +91,15 @@ interface SwipeRepository {
         action: String,
         noteText: String? = null,
         consumedInventoryId: UUID? = null,
+        /**
+         * `travel_locations.id` of the actor's active travel row at the moment
+         * this action was recorded, or null if the action was taken outside
+         * travel mode. Persisted so the match-creation query can enforce the
+         * 24h Like tail (SWIPE_IMPLEMENTATION_SPEC L353): a travel-mode Like
+         * only counts for matching while the session is active or within 24h
+         * after it ends.
+         */
+        travelLocationId: UUID? = null,
         matchIdFactory: () -> UUID = UUID::randomUUID
     ): SwipeActionResult
 

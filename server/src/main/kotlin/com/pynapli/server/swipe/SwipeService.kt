@@ -41,6 +41,7 @@ class SwipeService(
     private val riskPolicyService: RiskPolicyService? = null,
     private val subscriptionService: SubscriptionService? = null,
     private val presenceService: PresenceService? = null,
+    private val travelLocationRepository: com.pynapli.server.location.TravelLocationRepository? = null,
     private val deckTokenCodec: SwipeDeckTokenCodec = SwipeDeckTokenCodec(),
     private val clock: Clock = Clock.systemUTC()
 ) {
@@ -350,6 +351,14 @@ class SwipeService(
             null
         }
 
+        // SWIPE_IMPLEMENTATION_SPEC L347, L353: record which travel session this
+        // action was taken in (if any). The match-creation query enforces the
+        // 24h tail by joining on this id. Cheap lookup — the partial unique
+        // index on travel_locations makes the active-row read O(log n) per user.
+        val travelLocationId = profile("swipe.action.travelContext") {
+            travelLocationRepository?.findActive(viewerUserId)?.id
+        }
+
         val result = profile("swipe.action.record") {
             repository.recordSwipeAction(
                 actionId = actionId,
@@ -357,7 +366,8 @@ class SwipeService(
                 targetUserId = targetUserId,
                 action = action,
                 noteText = noteText,
-                consumedInventoryId = pineappleInventoryId
+                consumedInventoryId = pineappleInventoryId,
+                travelLocationId = travelLocationId
             )
         }
         if (result.recorded) {

@@ -1517,6 +1517,7 @@ private class InMemorySwipeRepository(
     private val actionOrder = mutableListOf<UUID>()
     val consumedInventoryIds = mutableMapOf<UUID, UUID>()
     val refundedInventoryIds = mutableListOf<UUID>()
+    val travelLocationIds = mutableMapOf<UUID, UUID>()
     private val matches = seededMatches.toMutableList()
     private val now = Instant.parse("2026-04-28T18:00:00Z")
     val recordedQueryDeckFilters = mutableListOf<DiscoveryFilters>()
@@ -1649,6 +1650,7 @@ private class InMemorySwipeRepository(
         action: String,
         noteText: String?,
         consumedInventoryId: UUID?,
+        travelLocationId: UUID?,
         matchIdFactory: () -> UUID
     ): SwipeActionResult {
         actionRecords[actionId]?.takeIf { it.actorUserId == actorUserId }?.let { existing ->
@@ -1681,6 +1683,9 @@ private class InMemorySwipeRepository(
         )
         if (consumedInventoryId != null) {
             consumedInventoryIds[actionId] = consumedInventoryId
+        }
+        if (travelLocationId != null) {
+            travelLocationIds[actionId] = travelLocationId
         }
         actionOrder += actionId
         return SwipeActionResult(recorded = true, match = match)

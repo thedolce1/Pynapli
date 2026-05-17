@@ -922,6 +922,7 @@ class JdbcSwipeRepository(
         action: String,
         noteText: String?,
         consumedInventoryId: UUID?,
+        travelLocationId: UUID?,
         matchIdFactory: () -> UUID
     ): SwipeActionResult = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
@@ -930,8 +931,11 @@ class JdbcSwipeRepository(
             try {
                 connection.prepareStatement(
                     """
-                    INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, note_text, consumed_inventory_id)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO swipe_actions (
+                        id, actor_user_id, target_user_id, action,
+                        note_text, consumed_inventory_id, travel_location_id
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT DO NOTHING
                     """.trimIndent()
                 ).use { statement ->
@@ -941,6 +945,7 @@ class JdbcSwipeRepository(
                     statement.setString(4, action)
                     statement.setString(5, noteText)
                     statement.setObject(6, consumedInventoryId)
+                    statement.setObject(7, travelLocationId)
                     if (statement.executeUpdate() == 0) {
                         val existing = connection.findSwipeActionById(actionId, actorUserId)
                         connection.rollback()
@@ -955,12 +960,23 @@ class JdbcSwipeRepository(
                 val match: MatchRecord? = if (action in POSITIVE_ACTIONS) {
                     val targetLikedActor = connection.prepareStatement(
                         """
+                        -- 24h Like tail (SWIPE_IMPLEMENTATION_SPEC L353): a Like
+                        -- sent in travel mode only counts for matching while the
+                        -- session is active OR within 24h after it ended. Likes
+                        -- without a travel_location_id are always valid.
                         SELECT EXISTS (
-                            SELECT 1 FROM swipe_actions
-                            WHERE actor_user_id = ?
-                              AND target_user_id = ?
-                              AND action IN ('like', 'pineapple_like')
-                              AND rewound_at IS NULL
+                            SELECT 1 FROM swipe_actions sa
+                            LEFT JOIN travel_locations tl
+                              ON tl.id = sa.travel_location_id
+                            WHERE sa.actor_user_id = ?
+                              AND sa.target_user_id = ?
+                              AND sa.action IN ('like', 'pineapple_like')
+                              AND sa.rewound_at IS NULL
+                              AND (
+                                  sa.travel_location_id IS NULL
+                                  OR tl.active_until IS NULL
+                                  OR tl.active_until > now() - INTERVAL '24 hours'
+                              )
                         )
                         """.trimIndent()
                     ).use { statement ->

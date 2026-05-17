@@ -322,6 +322,7 @@ class ServerDependencies(
                 riskPolicyService = riskPolicyService,
                 subscriptionService = subscriptionService,
                 presenceService = presenceService,
+                travelLocationRepository = travelLocationRepository,
                 deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret)
             )
             val topPicksService = TopPicksService(

@@ -350,6 +350,88 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "travel-mode Like still creates a match when reciprocated within the 24h tail" {
+        // SWIPE_IMPLEMENTATION_SPEC L347, L353: a Like sent in travel mode
+        // remains matchable while the session is active. Active session =
+        // travel_locations.active_until IS NULL.
+        runBlocking {
+            val sender = UUID.fromString("00000000-0000-0000-0000-000000000970")
+            val recipient = UUID.fromString("00000000-0000-0000-0000-000000000971")
+            dataSource.insertDiscoverableUser(sender, "Sender", age = 30, longitude = -74.0060, latitude = 40.7128)
+            dataSource.insertDiscoverableUser(recipient, "Maya", age = 31, longitude = -74.0055, latitude = 40.7130)
+            val travelRowId = dataSource.insertActiveTravelLocationReturningId(
+                userId = sender, city = "New York", latitude = 40.7128, longitude = -74.0060
+            )
+            // Sender Likes recipient from inside the (still-active) travel session.
+            dataSource.insertSwipeAction(
+                actorUserId = sender,
+                targetUserId = recipient,
+                action = "like",
+                travelLocationId = travelRowId
+            )
+
+            // Recipient Likes back via the repo. Match SHOULD be created.
+            val swipeRepo = JdbcSwipeRepository(dataSource)
+            val service = SwipeService(swipeRepo)
+            val deck = service.queryDeck(recipient, SwipeDeckRequestDto(limit = 5))
+            val rankToken = deck.items.single { it.userId == sender.toString() }.rankToken
+            val response = service.submitAction(
+                recipient,
+                SwipeActionRequestDto(
+                    actionId = UUID.randomUUID().toString(),
+                    deckSessionId = deck.deckSessionId,
+                    cardToken = rankToken,
+                    targetUserId = sender.toString(),
+                    action = SwipeAction.LIKE
+                )
+            )
+
+            assertNotNull(response.match, "Active travel-mode Like must still create a match")
+        }
+    }
+
+    "travel-mode Like becomes inert when reciprocated outside the 24h tail" {
+        // Spec L353: after 24h post-leave the Like stops creating matches. We
+        // simulate by inserting a cleared travel_locations row whose
+        // active_until is older than 24h. The reciprocal Like should NOT match.
+        runBlocking {
+            val sender = UUID.fromString("00000000-0000-0000-0000-000000000980")
+            val recipient = UUID.fromString("00000000-0000-0000-0000-000000000981")
+            dataSource.insertDiscoverableUser(sender, "Sender", age = 30, longitude = -74.0060, latitude = 40.7128)
+            dataSource.insertDiscoverableUser(recipient, "Maya", age = 31, longitude = -74.0055, latitude = 40.7130)
+            val travelRowId = dataSource.insertClearedTravelLocation(
+                userId = sender,
+                city = "New York",
+                latitude = 40.7128,
+                longitude = -74.0060,
+                clearedHoursAgo = 36
+            )
+            dataSource.insertSwipeAction(
+                actorUserId = sender,
+                targetUserId = recipient,
+                action = "like",
+                travelLocationId = travelRowId
+            )
+
+            val swipeRepo = JdbcSwipeRepository(dataSource)
+            val service = SwipeService(swipeRepo)
+            val deck = service.queryDeck(recipient, SwipeDeckRequestDto(limit = 5))
+            val rankToken = deck.items.single { it.userId == sender.toString() }.rankToken
+            val response = service.submitAction(
+                recipient,
+                SwipeActionRequestDto(
+                    actionId = UUID.randomUUID().toString(),
+                    deckSessionId = deck.deckSessionId,
+                    cardToken = rankToken,
+                    targetUserId = sender.toString(),
+                    action = SwipeAction.LIKE
+                )
+            )
+
+            assertEquals(null, response.match, "Travel-mode Like outside the 24h tail must NOT create a match")
+        }
+    }
+
     "grid and swipe queries apply advanced discovery filters" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000931")
@@ -1372,6 +1454,16 @@ private fun DataSource.insertActiveTravelLocation(
     latitude: Double,
     longitude: Double
 ) {
+    insertActiveTravelLocationReturningId(userId, city, latitude, longitude)
+}
+
+private fun DataSource.insertActiveTravelLocationReturningId(
+    userId: UUID,
+    city: String,
+    latitude: Double,
+    longitude: Double
+): UUID {
+    val id = UUID.randomUUID()
     connection.use { connection ->
         connection.prepareStatement(
             """
@@ -1379,11 +1471,72 @@ private fun DataSource.insertActiveTravelLocation(
             VALUES (?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, 'active')
             """.trimIndent()
         ).use { statement ->
-            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(1, id)
             statement.setObject(2, userId)
             statement.setString(3, city)
             statement.setDouble(4, longitude)
             statement.setDouble(5, latitude)
+            statement.executeUpdate()
+        }
+    }
+    return id
+}
+
+private fun DataSource.insertClearedTravelLocation(
+    userId: UUID,
+    city: String,
+    latitude: Double,
+    longitude: Double,
+    clearedHoursAgo: Long
+): UUID {
+    val id = UUID.randomUUID()
+    connection.use { connection ->
+        connection.prepareStatement(
+            """
+            INSERT INTO travel_locations (
+                id, user_id, city, geom, status, active_from, active_until
+            )
+            VALUES (
+                ?, ?, ?,
+                ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
+                'cleared',
+                now() - (? * INTERVAL '1 hour'),
+                now() - (? * INTERVAL '1 hour')
+            )
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, id)
+            statement.setObject(2, userId)
+            statement.setString(3, city)
+            statement.setDouble(4, longitude)
+            statement.setDouble(5, latitude)
+            // active_from must be < active_until, so offset start by an extra hour.
+            statement.setLong(6, clearedHoursAgo + 1)
+            statement.setLong(7, clearedHoursAgo)
+            statement.executeUpdate()
+        }
+    }
+    return id
+}
+
+private fun DataSource.insertSwipeAction(
+    actorUserId: UUID,
+    targetUserId: UUID,
+    action: String,
+    travelLocationId: UUID? = null
+) {
+    connection.use { connection ->
+        connection.prepareStatement(
+            """
+            INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, travel_location_id)
+            VALUES (?, ?, ?, ?, ?)
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, actorUserId)
+            statement.setObject(3, targetUserId)
+            statement.setString(4, action)
+            statement.setObject(5, travelLocationId)
             statement.executeUpdate()
         }
     }

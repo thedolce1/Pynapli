@@ -247,6 +247,7 @@ private class StubSwipeRepository(
         action: String,
         noteText: String?,
         consumedInventoryId: UUID?,
+        travelLocationId: UUID?,
         matchIdFactory: () -> UUID
     ): SwipeActionResult = SwipeActionResult(recorded = false, match = null)
     override suspend fun rewindSwipeAction(
