@@ -440,6 +440,7 @@ private fun topPicksStatusFor(code: String): HttpStatusCode = when (code) {
 private fun travelLocationStatusFor(code: String): HttpStatusCode = when (code) {
     "ENTITLEMENT_REQUIRED",
     "AGE_VERIFICATION_REQUIRED" -> HttpStatusCode.Forbidden
+    "TRAVEL_PREVIEW_RATE_LIMITED" -> HttpStatusCode.TooManyRequests
     "INVALID_TRAVEL_CITY",
     "INVALID_TRAVEL_REGION",
     "INVALID_TRAVEL_COUNTRY",

@@ -7,6 +7,7 @@ import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.TravelLocationDto
 import java.time.Clock
+import java.time.Duration
 import java.util.UUID
 
 /**
@@ -44,7 +45,7 @@ class TravelLocationService(
         viewerUserId: UUID,
         request: SetTravelLocationRequestDto
     ): TravelLocationDto {
-        requireSelectTier(viewerUserId)
+        requireTravelTier(viewerUserId, applyRateLimit = true)
         val city = request.city.trim()
         if (city.isEmpty() || city.length > MAX_CITY_LENGTH) {
             throw TravelLocationException("INVALID_TRAVEL_CITY")
@@ -91,14 +92,38 @@ class TravelLocationService(
      * state.
      */
     suspend fun clear(viewerUserId: UUID): Boolean {
-        requireSelectTier(viewerUserId)
+        requireTravelTier(viewerUserId, applyRateLimit = false)
         return repository.clearActive(viewerUserId, clock.instant())
     }
 
-    private suspend fun requireSelectTier(viewerUserId: UUID) {
+    /**
+     * Per-call entitlement gate for set/clear (MONETIZATION_SPEC L152, L186, L222):
+     * - **Free**: no travel mode → `ENTITLEMENT_REQUIRED`
+     * - **Social**: "basic travel preview" — full feature but rate-limited to
+     *   [SOCIAL_PREVIEW_ACTIVATIONS_PER_WINDOW] activations per
+     *   [SOCIAL_PREVIEW_WINDOW]. Second activation inside the window returns
+     *   `TRAVEL_PREVIEW_RATE_LIMITED` so the client routes to the Select paywall
+     *   with a try-again-in-Nd hint.
+     * - **Select**: unlimited (no rate-limit check).
+     *
+     * `clear()` only applies the tier gate, not the rate limit — Social users
+     * who are mid-preview should always be able to exit travel mode.
+     */
+    private suspend fun requireTravelTier(viewerUserId: UUID, applyRateLimit: Boolean) {
         val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
-        if (policy.tier != SubscriptionTier.SELECT) {
-            throw TravelLocationException("ENTITLEMENT_REQUIRED")
+        when (policy.tier) {
+            SubscriptionTier.SELECT -> Unit
+            SubscriptionTier.SOCIAL -> {
+                if (!applyRateLimit) return
+                val recent = repository.countActivationsSince(
+                    userId = viewerUserId,
+                    since = clock.instant().minus(SOCIAL_PREVIEW_WINDOW)
+                )
+                if (recent >= SOCIAL_PREVIEW_ACTIVATIONS_PER_WINDOW) {
+                    throw TravelLocationException("TRAVEL_PREVIEW_RATE_LIMITED")
+                }
+            }
+            else -> throw TravelLocationException("ENTITLEMENT_REQUIRED")
         }
     }
 
@@ -114,6 +139,14 @@ class TravelLocationService(
     )
 
     companion object {
+        /**
+         * Social-tier rate limit window (MONETIZATION_SPEC L186 "basic travel
+         * preview"). Picked to mirror typical free-trial cadences: long enough
+         * that the preview feels like a real try, short enough that frequent
+         * travellers feel the Select upgrade tug.
+         */
+        val SOCIAL_PREVIEW_WINDOW: Duration = Duration.ofDays(30)
+        const val SOCIAL_PREVIEW_ACTIVATIONS_PER_WINDOW: Int = 1
         const val MAX_CITY_LENGTH = 120
         const val MAX_REGION_LENGTH = 120
         const val MAX_COUNTRY_LENGTH = 120

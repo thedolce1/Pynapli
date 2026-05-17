@@ -44,21 +44,77 @@ class TravelLocationServiceTest {
     }
 
     @Test
-    fun socialTierGetsEntitlementRequiredInThisSlice() = runBlocking {
-        // MONETIZATION_SPEC L186 promises Social tier a "basic travel preview"
-        // but this MVP slice gates everything behind Select. The preview path
-        // lands in a later slice that only has to widen requireSelectTier().
+    fun socialTierCanActivateTravelOnceWithinThePreviewWindow() = runBlocking {
+        // MONETIZATION_SPEC L186 "basic travel preview": Social tier gets full
+        // travel mode capped at 1 activation per 30 days. First activation
+        // succeeds; the row persists like a Select activation would.
+        val viewer = UUID.randomUUID()
+        val repository = InMemoryTravelLocationRepository()
+        val service = TravelLocationService(
+            repository = repository,
+            subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SOCIAL),
+            clock = clock
+        )
+
+        val response = service.set(viewer, validRequest("Tokyo", 35.6762, 139.6503))
+
+        assertEquals("Tokyo", response.city)
+        assertEquals(35.6762, response.latitude)
+    }
+
+    @Test
+    fun socialTierSecondActivationWithinWindowGetsRateLimited() = runBlocking {
+        // Second set() inside the 30-day window must return
+        // TRAVEL_PREVIEW_RATE_LIMITED so the client routes to the Select paywall
+        // rather than silently failing or letting the user keep activating.
+        val viewer = UUID.randomUUID()
+        val repository = InMemoryTravelLocationRepository()
+        val service = TravelLocationService(
+            repository = repository,
+            subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SOCIAL),
+            clock = clock
+        )
+
+        service.set(viewer, validRequest("Tokyo", 35.6762, 139.6503))
+        val error = assertFailsWith<TravelLocationException> {
+            service.set(viewer, validRequest("New York", 40.7128, -74.0060))
+        }
+        assertEquals("TRAVEL_PREVIEW_RATE_LIMITED", error.code)
+    }
+
+    @Test
+    fun socialTierCanClearWithoutHittingRateLimit() = runBlocking {
+        // Clearing mid-preview must always work — otherwise a Social user who
+        // exited travel mode would be stuck looking like they're still there
+        // to other viewers.
         val viewer = UUID.randomUUID()
         val service = TravelLocationService(
             repository = InMemoryTravelLocationRepository(),
             subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SOCIAL),
             clock = clock
         )
+        service.set(viewer, validRequest("Tokyo", 35.6762, 139.6503))
 
-        val error = assertFailsWith<TravelLocationException> {
-            service.set(viewer, validRequest("Tokyo", 35.6762, 139.6503))
-        }
-        assertEquals("ENTITLEMENT_REQUIRED", error.code)
+        val cleared = service.clear(viewer)
+
+        assertTrue(cleared)
+    }
+
+    @Test
+    fun selectTierBypassesPreviewRateLimit() = runBlocking {
+        // Sanity check: Select can activate as many times as they want; the
+        // count query result is irrelevant for the Select branch.
+        val viewer = UUID.randomUUID()
+        val service = TravelLocationService(
+            repository = InMemoryTravelLocationRepository(),
+            subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SELECT),
+            clock = clock
+        )
+
+        service.set(viewer, validRequest("Tokyo", 35.6762, 139.6503))
+        val second = service.set(viewer, validRequest("New York", 40.7128, -74.0060))
+
+        assertEquals("New York", second.city)
     }
 
     @Test
@@ -332,6 +388,9 @@ private class InMemoryTravelLocationRepository : TravelLocationRepository {
         }
         return cleared
     }
+
+    override suspend fun countActivationsSince(userId: UUID, since: Instant): Int =
+        rows.count { it.userId == userId && !it.activeFrom.isBefore(since) }
 
     fun activeRowCount(userId: UUID): Int =
         rows.count { it.userId == userId && it.status == "active" && it.activeUntil == null }

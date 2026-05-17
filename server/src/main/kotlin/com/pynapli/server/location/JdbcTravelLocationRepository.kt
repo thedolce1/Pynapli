@@ -76,6 +76,29 @@ class JdbcTravelLocationRepository(
         }
     }
 
+    override suspend fun countActivationsSince(userId: UUID, since: Instant): Int =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                // Uses idx_travel_locations_user_active_from (V50) for an
+                // index-only count over the recent window.
+                connection.prepareStatement(
+                    """
+                    SELECT count(*)::integer
+                    FROM travel_locations
+                    WHERE user_id = ?
+                      AND active_from >= ?
+                    """.trimIndent()
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.setTimestamp(2, Timestamp.from(since))
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getInt(1)
+                    }
+                }
+            }
+        }
+
     private fun Connection.clearActiveRow(userId: UUID, now: Instant): Int =
         prepareStatement(
             """

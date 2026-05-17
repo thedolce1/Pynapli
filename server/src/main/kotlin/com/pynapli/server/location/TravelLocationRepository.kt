@@ -23,6 +23,14 @@ interface TravelLocationRepository {
      * a row was cleared, false if there was nothing active.
      */
     suspend fun clearActive(userId: UUID, now: Instant): Boolean
+
+    /**
+     * Count of travel_locations rows the user has created on or after [since].
+     * Used by the Social-tier preview rate limit (MONETIZATION_SPEC L186):
+     * Social viewers are limited to N activations per 30 days; Select viewers
+     * skip this check.
+     */
+    suspend fun countActivationsSince(userId: UUID, since: Instant): Int
 }
 
 data class TravelLocationUpsert(
