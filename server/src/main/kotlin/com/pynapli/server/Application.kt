@@ -28,6 +28,7 @@ import com.pynapli.server.safety.configureSafetyRoutes
 import com.pynapli.server.subscriptions.configurePlayStoreRtdnRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionAdminRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionRoutes
+import com.pynapli.server.swipe.configureSavedSwipeFilterRoutes
 import com.pynapli.server.swipe.configureSwipeRoutes
 import com.pynapli.server.verification.configureAgeVerificationAdminRoutes
 import com.pynapli.server.verification.configureAgeVerificationRoutes
@@ -97,4 +98,5 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         swipeService = dependencies.swipeService,
         requestProfilerFactory = dependencies.requestProfilerFactory
     )
+    configureSavedSwipeFilterRoutes(dependencies.authService, dependencies.savedSwipeFilterService)
 }

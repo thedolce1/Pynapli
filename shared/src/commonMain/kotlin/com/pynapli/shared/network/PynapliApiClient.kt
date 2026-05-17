@@ -20,10 +20,13 @@ import com.pynapli.shared.network.dto.CreateProfileLinkInvitationRequestDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
+import com.pynapli.shared.network.dto.CreateSavedSwipeFilterRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.SavedGridFilterDto
 import com.pynapli.shared.network.dto.SavedGridFiltersListDto
+import com.pynapli.shared.network.dto.SavedSwipeFilterDto
+import com.pynapli.shared.network.dto.SavedSwipeFiltersListDto
 import com.pynapli.shared.network.dto.SetTonightAvailableRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.TonightAvailabilityDto
@@ -106,6 +109,12 @@ interface PynapliApiClient {
     suspend fun createSavedGridFilter(request: CreateSavedGridFilterRequestDto): AppResult<SavedGridFilterDto>
 
     suspend fun deleteSavedGridFilter(id: String): AppResult<Unit>
+
+    suspend fun listSavedSwipeFilters(): AppResult<SavedSwipeFiltersListDto>
+
+    suspend fun createSavedSwipeFilter(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto>
+
+    suspend fun deleteSavedSwipeFilter(id: String): AppResult<Unit>
 
     suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto>
 
@@ -291,6 +300,34 @@ class KtorPynapliApiClient(
     override suspend fun deleteSavedGridFilter(id: String): AppResult<Unit> =
         authenticatedPost { token ->
             val response = httpClient.delete(config.endpoint("/v1/me/grid-filters/$id")) {
+                bearerAuth(token)
+            }
+            if (response.status.value in 200..299) {
+                AppResult.Success(Unit)
+            } else {
+                response.toAppResult<Unit>(json)
+            }
+        }
+
+    override suspend fun listSavedSwipeFilters(): AppResult<SavedSwipeFiltersListDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/me/swipe-filters")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun createSavedSwipeFilter(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/me/swipe-filters")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun deleteSavedSwipeFilter(id: String): AppResult<Unit> =
+        authenticatedPost { token ->
+            val response = httpClient.delete(config.endpoint("/v1/me/swipe-filters/$id")) {
                 bearerAuth(token)
             }
             if (response.status.value in 200..299) {

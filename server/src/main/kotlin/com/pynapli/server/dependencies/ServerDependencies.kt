@@ -61,7 +61,9 @@ import com.pynapli.server.subscriptions.DisabledPlayStorePurchaseVerifier
 import com.pynapli.server.subscriptions.GooglePlayStorePurchaseVerifier
 import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.server.swipe.JdbcSavedSwipeFilterRepository
 import com.pynapli.server.swipe.JdbcSwipeRepository
+import com.pynapli.server.swipe.SavedSwipeFilterService
 import com.pynapli.server.swipe.SwipeDeckTokenCodec
 import com.pynapli.server.swipe.SwipeService
 import com.pynapli.server.verification.AgeVerificationService
@@ -103,6 +105,7 @@ class ServerDependencies(
     val presenceOfflineScanner: PresenceOfflineScanner?,
     val blockRepository: BlockRepository?,
     val savedGridFilterService: SavedGridFilterService?,
+    val savedSwipeFilterService: SavedSwipeFilterService?,
     val tonightAvailabilityService: TonightAvailabilityService?,
     val ageVerificationService: AgeVerificationService?,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
@@ -271,6 +274,11 @@ class ServerDependencies(
                 subscriptionService = subscriptionService,
                 viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource)
             )
+            val savedSwipeFilterService = SavedSwipeFilterService(
+                repository = JdbcSavedSwipeFilterRepository(database.dataSource),
+                subscriptionService = subscriptionService,
+                viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource)
+            )
             val tonightAvailabilityService = TonightAvailabilityService(database.dataSource)
             val ageVerificationService = AgeVerificationService(
                 JdbcAgeVerificationRepository(database.dataSource)
@@ -332,6 +340,7 @@ class ServerDependencies(
                 presenceOfflineScanner = presenceOfflineScanner,
                 blockRepository = blockRepository,
                 savedGridFilterService = savedGridFilterService,
+                savedSwipeFilterService = savedSwipeFilterService,
                 tonightAvailabilityService = tonightAvailabilityService,
                 ageVerificationService = ageVerificationService,
                 requestProfilerFactory = requestProfilerFactory,
@@ -378,6 +387,7 @@ class ServerDependencies(
                 presenceOfflineScanner = null,
                 blockRepository = null,
                 savedGridFilterService = null,
+                savedSwipeFilterService = null,
                 tonightAvailabilityService = null,
                 ageVerificationService = null,
                 requestProfilerFactory = RequestProfilerFactory.disabled(),

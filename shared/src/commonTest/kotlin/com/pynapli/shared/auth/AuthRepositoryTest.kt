@@ -224,6 +224,17 @@ private class FakeApiClient(
     override suspend fun deleteSavedGridFilter(id: String): AppResult<Unit> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun listSavedSwipeFilters(): AppResult<com.pynapli.shared.network.dto.SavedSwipeFiltersListDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun createSavedSwipeFilter(
+        request: com.pynapli.shared.network.dto.CreateSavedSwipeFilterRequestDto
+    ): AppResult<com.pynapli.shared.network.dto.SavedSwipeFilterDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun deleteSavedSwipeFilter(id: String): AppResult<Unit> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun getTonightAvailability(): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
