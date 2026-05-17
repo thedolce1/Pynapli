@@ -49,7 +49,10 @@ data class ProfileEditDraft(
 data class PrivacySettingsDraft(
     val gridVisible: Boolean = true,
     val swipeVisible: Boolean = true,
-    val showDistance: Boolean = true
+    val showDistance: Boolean = true,
+    // PROFILE_SETTINGS_SPEC L221-245: when false, the viewer is hidden from
+    // every discovery surface while they have an active travel_locations row.
+    val visibleWhileTraveling: Boolean = true
 )
 
 @Immutable
@@ -272,6 +275,8 @@ class ProfileHubStateHolder(
     fun updateSwipeVisible(value: Boolean) = updatePrivacyDraft { it.copy(swipeVisible = value) }
 
     fun updateShowDistance(value: Boolean) = updatePrivacyDraft { it.copy(showDistance = value) }
+
+    fun updateVisibleWhileTraveling(value: Boolean) = updatePrivacyDraft { it.copy(visibleWhileTraveling = value) }
 
     fun updateShowInViewedLists(value: Boolean) = updateActivityDraft { it.copy(showInViewedLists = value) }
 
@@ -561,7 +566,8 @@ private fun ProfileEditDraft.toRequest(): UpdateProfileRequestDto = UpdateProfil
 private fun DiscoverySettingsDto.toPrivacyDraft(): PrivacySettingsDraft = PrivacySettingsDraft(
     gridVisible = gridVisible,
     swipeVisible = swipeVisible,
-    showDistance = showDistance
+    showDistance = showDistance,
+    visibleWhileTraveling = visibleWhileTraveling
 )
 
 private fun DiscoverySettingsDto.toActivityDraft(): ActivitySettingsDraft = ActivitySettingsDraft(
@@ -576,7 +582,8 @@ private fun DiscoverySettingsDto.toActivityDraft(): ActivitySettingsDraft = Acti
 private fun PrivacySettingsDraft.toRequest(): UpdateDiscoverySettingsRequestDto = UpdateDiscoverySettingsRequestDto(
     gridVisible = gridVisible,
     swipeVisible = swipeVisible,
-    showDistance = showDistance
+    showDistance = showDistance,
+    visibleWhileTraveling = visibleWhileTraveling
 )
 
 private fun ActivitySettingsDraft.toRequest(): UpdateDiscoverySettingsRequestDto = UpdateDiscoverySettingsRequestDto(

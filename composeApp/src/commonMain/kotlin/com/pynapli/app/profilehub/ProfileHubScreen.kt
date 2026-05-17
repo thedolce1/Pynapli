@@ -130,6 +130,7 @@ fun ProfileHubScreen(
             onGridVisibleChanged = stateHolder::updateGridVisible,
             onSwipeVisibleChanged = stateHolder::updateSwipeVisible,
             onShowDistanceChanged = stateHolder::updateShowDistance,
+            onVisibleWhileTravelingChanged = stateHolder::updateVisibleWhileTraveling,
             onSave = { scope.launch { stateHolder.savePrivacySettings() } },
             modifier = modifier
         )
@@ -998,6 +999,7 @@ private fun PrivacyDiscoveryContent(
     onGridVisibleChanged: (Boolean) -> Unit,
     onSwipeVisibleChanged: (Boolean) -> Unit,
     onShowDistanceChanged: (Boolean) -> Unit,
+    onVisibleWhileTravelingChanged: (Boolean) -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1042,6 +1044,15 @@ private fun PrivacyDiscoveryContent(
                         value = if (state.privacyDraft.swipeVisible) "On" else "Off",
                         checked = state.privacyDraft.swipeVisible,
                         onCheckedChange = onSwipeVisibleChanged
+                    )
+                    // PROFILE_SETTINGS_SPEC L221-245: opting out hides the user
+                    // from every discovery surface whenever their travel session
+                    // is active. Off → invisible while traveling.
+                    PrivacyToggleRow(
+                        label = "Visible while traveling",
+                        value = if (state.privacyDraft.visibleWhileTraveling) "On" else "Off",
+                        checked = state.privacyDraft.visibleWhileTraveling,
+                        onCheckedChange = onVisibleWhileTravelingChanged
                     )
                 }
             }
