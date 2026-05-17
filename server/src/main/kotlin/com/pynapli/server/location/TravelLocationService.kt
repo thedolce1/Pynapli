@@ -1,5 +1,6 @@
 package com.pynapli.server.location
 
+import com.pynapli.server.grid.GridViewerTrustRepository
 import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
@@ -23,6 +24,8 @@ import java.util.UUID
 class TravelLocationService(
     private val repository: TravelLocationRepository,
     private val subscriptionService: SubscriptionService? = null,
+    private val regionPolicy: TravelRegionPolicy = EmptyTravelRegionPolicy,
+    private val viewerTrustRepository: GridViewerTrustRepository? = null,
     private val clock: Clock = Clock.systemUTC()
 ) {
 
@@ -55,6 +58,18 @@ class TravelLocationService(
         }
         if (request.longitude !in MIN_LONGITUDE..MAX_LONGITUDE) {
             throw TravelLocationException("INVALID_TRAVEL_COORDINATES")
+        }
+        // SWIPE_IMPLEMENTATION_SPEC L349: some regions require additional
+        // verification before travel-mode can engage. Reuses the same
+        // age_verified_at signal the lifestyle filter gate uses
+        // (SavedGridFilterService) so the client routes through the existing
+        // verification flow on AGE_VERIFICATION_REQUIRED.
+        when (regionPolicy.requirementFor(TravelRegionRef(city, region, country))) {
+            TravelRegionRequirement.None -> Unit
+            TravelRegionRequirement.AgeVerified -> {
+                val verified = viewerTrustRepository?.isAgeVerified(viewerUserId) ?: true
+                if (!verified) throw TravelLocationException("AGE_VERIFICATION_REQUIRED")
+            }
         }
         val record = repository.setActive(
             userId = viewerUserId,

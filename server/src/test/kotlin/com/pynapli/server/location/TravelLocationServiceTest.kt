@@ -167,6 +167,97 @@ class TravelLocationServiceTest {
         assertEquals("INVALID_TRAVEL_CITY", error.code)
     }
 
+    @Test
+    fun regionGatedDestinationRequiresAgeVerifiedViewer() = runBlocking {
+        // SWIPE_IMPLEMENTATION_SPEC L349: a flagged region returns
+        // AGE_VERIFICATION_REQUIRED when the viewer hasn't completed age
+        // verification. Reuses the existing error code so the client routes
+        // through the same verification UI as the lifestyle filter gate.
+        val viewer = UUID.randomUUID()
+        val service = TravelLocationService(
+            repository = InMemoryTravelLocationRepository(),
+            subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SELECT),
+            regionPolicy = StaticTravelRegionPolicy(
+                ageVerifiedCountries = setOf("Sensitiveland")
+            ),
+            viewerTrustRepository = StaticViewerTrustRepository(ageVerifiedUserIds = emptySet()),
+            clock = clock
+        )
+
+        val error = assertFailsWith<TravelLocationException> {
+            service.set(
+                viewer,
+                SetTravelLocationRequestDto(
+                    latitude = 0.0,
+                    longitude = 0.0,
+                    city = "Capital",
+                    region = null,
+                    country = "Sensitiveland"
+                )
+            )
+        }
+        assertEquals("AGE_VERIFICATION_REQUIRED", error.code)
+    }
+
+    @Test
+    fun regionGatedDestinationAcceptsAgeVerifiedViewer() = runBlocking {
+        // Same flagged region, but the viewer has age_verified_at set; the
+        // gate passes and the row is persisted.
+        val viewer = UUID.randomUUID()
+        val service = TravelLocationService(
+            repository = InMemoryTravelLocationRepository(),
+            subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SELECT),
+            regionPolicy = StaticTravelRegionPolicy(
+                ageVerifiedCountries = setOf("Sensitiveland")
+            ),
+            viewerTrustRepository = StaticViewerTrustRepository(ageVerifiedUserIds = setOf(viewer)),
+            clock = clock
+        )
+
+        val response = service.set(
+            viewer,
+            SetTravelLocationRequestDto(
+                latitude = 0.0,
+                longitude = 0.0,
+                city = "Capital",
+                region = null,
+                country = "Sensitiveland"
+            )
+        )
+
+        assertEquals("Capital", response.city)
+        assertEquals("Sensitiveland", response.country)
+    }
+
+    @Test
+    fun unflaggedRegionDoesNotRequireVerification() = runBlocking {
+        // Default empty policy + an unflagged country still works for an
+        // unverified viewer — the gate is opt-in per region.
+        val viewer = UUID.randomUUID()
+        val service = TravelLocationService(
+            repository = InMemoryTravelLocationRepository(),
+            subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SELECT),
+            regionPolicy = StaticTravelRegionPolicy(
+                ageVerifiedCountries = setOf("Sensitiveland")
+            ),
+            viewerTrustRepository = StaticViewerTrustRepository(ageVerifiedUserIds = emptySet()),
+            clock = clock
+        )
+
+        val response = service.set(
+            viewer,
+            SetTravelLocationRequestDto(
+                latitude = 35.6762,
+                longitude = 139.6503,
+                city = "Tokyo",
+                region = null,
+                country = "Japan"
+            )
+        )
+
+        assertEquals("Tokyo", response.city)
+    }
+
     private fun validRequest(city: String, latitude: Double, longitude: Double): SetTravelLocationRequestDto =
         SetTravelLocationRequestDto(
             latitude = latitude,
@@ -259,4 +350,24 @@ private class StubSubscriptionRepository(
     ): LinkedPartnerSubscriptionRecord? = null
     override suspend fun findBestActiveStoredEntitlement(userId: UUID, now: Instant): StoredEntitlementRecord? = null
     override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean = false
+}
+
+private class StaticTravelRegionPolicy(
+    private val ageVerifiedCountries: Set<String>
+) : TravelRegionPolicy {
+    override fun requirementFor(destination: TravelRegionRef): TravelRegionRequirement =
+        if (destination.country != null && destination.country.equals(any = ageVerifiedCountries)) {
+            TravelRegionRequirement.AgeVerified
+        } else {
+            TravelRegionRequirement.None
+        }
+
+    private fun String.equals(any: Set<String>): Boolean =
+        any.any { it.equals(this, ignoreCase = true) }
+}
+
+private class StaticViewerTrustRepository(
+    private val ageVerifiedUserIds: Set<UUID>
+) : com.pynapli.server.grid.GridViewerTrustRepository {
+    override suspend fun isAgeVerified(userId: UUID): Boolean = userId in ageVerifiedUserIds
 }

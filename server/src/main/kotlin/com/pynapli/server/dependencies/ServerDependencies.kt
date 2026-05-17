@@ -233,7 +233,11 @@ class ServerDependencies(
             )
             val travelLocationService = TravelLocationService(
                 repository = travelLocationRepository,
-                subscriptionService = subscriptionService
+                subscriptionService = subscriptionService,
+                // Production default is EmptyTravelRegionPolicy (no destinations
+                // require extra verification). Ops swaps via DI when the region
+                // safety review is in place — see TravelRegionPolicy.
+                viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource)
             )
             val playStoreSubscriptionSyncWorker =
                 if (config.playStoreVerificationEnabled && config.playStoreSubscriptionSyncEnabled) {
