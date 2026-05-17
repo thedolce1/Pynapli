@@ -108,6 +108,7 @@ fun SwipeScreen(
     onOpenStore: () -> Unit = {},
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
     topPicksStateHolder: TopPicksStateHolder? = null,
+    travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
     modifier: Modifier = Modifier
 ) {
     val state by stateHolder.state.collectAsState()
@@ -116,6 +117,8 @@ fun SwipeScreen(
         ?: remember { mutableStateOf(SavedSwipeFiltersUiState()) }
     val topPicksState by topPicksStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf(TopPicksUiState()) }
+    val travelLocationState by travelLocationStateHolder?.state?.collectAsState()
+        ?: remember { mutableStateOf(com.pynapli.app.location.TravelLocationUiState()) }
     val scope = rememberCoroutineScope()
     var requestedAction by remember { mutableStateOf<String?>(null) }
     var selectedProfileCard by remember { mutableStateOf<SwipeCardDto?>(null) }
@@ -124,6 +127,7 @@ fun SwipeScreen(
     var introNoteText by remember { mutableStateOf("") }
     var linkedPartnerPreviewCard by remember { mutableStateOf<SwipeCardDto?>(null) }
     var filtersSheetVisible by remember { mutableStateOf(false) }
+    var travelSheetVisible by remember { mutableStateOf(false) }
     val platformContext = LocalPlatformContext.current
     val swipeImagePrefetchUrls = remember(state.cards) { planSwipeImagePrefetch(state.cards) }
 
@@ -137,6 +141,10 @@ fun SwipeScreen(
 
     LaunchedEffect(topPicksStateHolder, viewerUserId) {
         topPicksStateHolder?.load()
+    }
+
+    LaunchedEffect(travelLocationStateHolder, viewerUserId) {
+        travelLocationStateHolder?.load()
     }
 
     LaunchedEffect(swipeImagePrefetchUrls) {
@@ -175,7 +183,9 @@ fun SwipeScreen(
     ) {
         SwipeHeader(
             activeFilterCount = state.swipeFilters.activeCount,
-            onOpenFilters = { filtersSheetVisible = true }
+            travelCityName = travelLocationState.current?.city,
+            onOpenFilters = { filtersSheetVisible = true },
+            onOpenTravel = { travelSheetVisible = true }
         )
         Spacer(Modifier.height(10.dp))
         SwipeFilterRow(
@@ -413,6 +423,35 @@ fun SwipeScreen(
         )
     }
 
+    if (travelSheetVisible) {
+        TravelModeSheet(
+            state = travelLocationState,
+            onDismiss = { travelSheetVisible = false },
+            onPickCity = { preset ->
+                scope.launch {
+                    travelLocationStateHolder?.setActive(preset)
+                    // Refresh the deck so the new travel location takes effect
+                    // immediately rather than waiting for the next manual reload.
+                    stateHolder.load(ownerUserId = viewerUserId)
+                    topPicksStateHolder?.load()
+                }
+                travelSheetVisible = false
+            },
+            onClear = {
+                scope.launch {
+                    travelLocationStateHolder?.clear()
+                    stateHolder.load(ownerUserId = viewerUserId)
+                    topPicksStateHolder?.load()
+                }
+                travelSheetVisible = false
+            },
+            onOpenStore = {
+                travelSheetVisible = false
+                onOpenStore()
+            }
+        )
+    }
+
     introNoteCard?.let { card ->
         IntroNoteDialog(
             displayName = card.displayName,
@@ -439,7 +478,9 @@ fun SwipeScreen(
 @Composable
 private fun SwipeHeader(
     activeFilterCount: Int,
-    onOpenFilters: () -> Unit
+    travelCityName: String?,
+    onOpenFilters: () -> Unit,
+    onOpenTravel: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -460,9 +501,18 @@ private fun SwipeHeader(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "Pass or like nearby profiles",
+                text = if (travelCityName != null) "Travel: $travelCityName" else "Pass or like nearby profiles",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall
+            )
+        }
+        TextButton(
+            onClick = onOpenTravel,
+            modifier = Modifier.testTag(TravelModeTags.OPEN_SHEET)
+        ) {
+            Text(
+                text = travelCityName ?: "Travel",
+                maxLines = 1
             )
         }
         TextButton(

@@ -126,6 +126,10 @@ class AndroidAppGraph(context: Context) {
         repository = ApiTopPicksRepository(apiClient)
     )
 
+    val travelLocationStateHolder = com.pynapli.app.location.TravelLocationStateHolder(
+        repository = com.pynapli.app.location.ApiTravelLocationRepository(apiClient)
+    )
+
     val tonightAvailabilityStateHolder = TonightAvailabilityStateHolder(
         repository = ApiTonightAvailabilityRepository(apiClient)
     )

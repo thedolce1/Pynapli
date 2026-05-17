@@ -82,6 +82,7 @@ class MainActivity : ComponentActivity() {
                 savedGridFilterStateHolder = appGraph.savedGridFilterStateHolder,
                 savedSwipeFilterStateHolder = appGraph.savedSwipeFilterStateHolder,
                 topPicksStateHolder = appGraph.topPicksStateHolder,
+                travelLocationStateHolder = appGraph.travelLocationStateHolder,
                 tonightAvailabilityStateHolder = appGraph.tonightAvailabilityStateHolder,
                 onUseCurrentLocation = ::requestCurrentLocation,
                 onPickMediaForAlbum = ::pickMediaForAlbum,
