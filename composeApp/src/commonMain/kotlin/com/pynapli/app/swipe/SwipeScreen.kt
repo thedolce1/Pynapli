@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -105,12 +107,15 @@ fun SwipeScreen(
     notificationDetail: String = AppSettings.NOTIFICATION_DISCREET,
     onOpenStore: () -> Unit = {},
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
+    topPicksStateHolder: TopPicksStateHolder? = null,
     modifier: Modifier = Modifier
 ) {
     val state by stateHolder.state.collectAsState()
     val profileState by profileDetailStateHolder.state.collectAsState()
     val savedSwipeFiltersState by savedSwipeFilterStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf(SavedSwipeFiltersUiState()) }
+    val topPicksState by topPicksStateHolder?.state?.collectAsState()
+        ?: remember { mutableStateOf(TopPicksUiState()) }
     val scope = rememberCoroutineScope()
     var requestedAction by remember { mutableStateOf<String?>(null) }
     var selectedProfileCard by remember { mutableStateOf<SwipeCardDto?>(null) }
@@ -128,6 +133,10 @@ fun SwipeScreen(
 
     LaunchedEffect(stateHolder, state.cards.size, state.nextCursor) {
         stateHolder.loadMoreIfNeeded()
+    }
+
+    LaunchedEffect(topPicksStateHolder, viewerUserId) {
+        topPicksStateHolder?.load()
     }
 
     LaunchedEffect(swipeImagePrefetchUrls) {
@@ -181,6 +190,14 @@ fun SwipeScreen(
         }
         if (AdPlacementPolicy.canShowAds(state.adSupported, AdPlacement.SwipeBetweenBatches)) {
             SwipeAdSlot()
+        }
+        if (topPicksState.items.isNotEmpty()) {
+            TopPicksRow(
+                state = topPicksState,
+                onPickSelected = { pickCard ->
+                    scope.launch { profileDetailStateHolder.open(pickCard.toProfileCardUi()) }
+                }
+            )
         }
         Spacer(Modifier.height(10.dp))
 
@@ -552,6 +569,128 @@ private fun SwipePaywallRow(
             Text(text = "Social", maxLines = 1)
         }
     }
+}
+
+/**
+ * Horizontal Top Picks row pinned above the swipe deck (SWIPE_IMPLEMENTATION_SPEC
+ * L293-313). Each pick is a small card; tap opens profile detail. Verified targets
+ * get a small accent dot. Row is hidden when the picks list is empty so the deck
+ * stays primary — Picks are a shortcut, not a replacement (spec L313).
+ */
+@Composable
+private fun TopPicksRow(
+    state: TopPicksUiState,
+    onPickSelected: (com.pynapli.shared.network.dto.SwipeCardDto) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TopPicksTags.ROW)
+            .padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (state.tierLimit > 1) "Today's Top Picks" else "Today's Top Pick",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "Refreshes daily",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+        androidx.compose.foundation.lazy.LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(items = state.items, key = { it.position }) { pick ->
+                TopPickThumbCard(
+                    card = pick.card,
+                    onClick = { onPickSelected(pick.card) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopPickThumbCard(
+    card: com.pynapli.shared.network.dto.SwipeCardDto,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(width = 96.dp, height = 128.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .testTag(TopPicksTags.cardTag(card.userId))
+    ) {
+        card.photoUrl?.let { url ->
+            AsyncImage(
+                model = url,
+                contentDescription = card.displayName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Transparent,
+                            Color(0xCC000000)
+                        )
+                    )
+                )
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    text = card.displayName,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (card.verified) {
+                    Icon(
+                        imageVector = Icons.Filled.Verified,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+            card.distanceLabel?.let { label ->
+                Text(
+                    text = label,
+                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+internal object TopPicksTags {
+    const val ROW: String = "top-picks-row"
+    fun cardTag(userId: String): String = "top-picks-card-$userId"
 }
 
 @Composable

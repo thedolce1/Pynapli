@@ -92,6 +92,7 @@ fun PynapliApp(
     storeStateHolder: StoreStateHolder,
     savedGridFilterStateHolder: com.pynapli.app.grid.SavedGridFilterStateHolder? = null,
     savedSwipeFilterStateHolder: com.pynapli.app.swipe.SavedSwipeFilterStateHolder? = null,
+    topPicksStateHolder: com.pynapli.app.swipe.TopPicksStateHolder? = null,
     tonightAvailabilityStateHolder: com.pynapli.app.grid.TonightAvailabilityStateHolder? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
@@ -404,7 +405,8 @@ fun PynapliApp(
                         matchNotificationsEnabled = appSettingsState.settings.matchNotifications,
                         notificationDetail = appSettingsState.settings.notificationDetail,
                         onOpenStore = { selectedTab = PynapliTab.Store },
-                        savedSwipeFilterStateHolder = savedSwipeFilterStateHolder
+                        savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
+                        topPicksStateHolder = topPicksStateHolder
                     )
 
                     PynapliTab.Store -> StoreScreen(
