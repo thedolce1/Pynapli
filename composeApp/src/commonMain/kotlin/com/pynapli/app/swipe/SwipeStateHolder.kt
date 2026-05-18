@@ -64,8 +64,9 @@ class SwipeStateHolder(
     private var isFlushingActions = false
     private var restoredQueueOwnerUserId: String? = null
 
-    suspend fun load(ownerUserId: String? = null) {
-        restorePendingActions(ownerUserId)
+    suspend fun load(ownerUserId: String? = restoredQueueOwnerUserId) {
+        val effectiveOwnerUserId = ownerUserId.normalizedOwnerUserId() ?: restoredQueueOwnerUserId
+        restorePendingActions(effectiveOwnerUserId)
         val swipeFilters = _state.value.swipeFilters
         _state.update {
             it.copy(
@@ -395,10 +396,23 @@ class SwipeStateHolder(
     }
 
     private suspend fun restorePendingActions(ownerUserId: String?) {
-        if (restoredQueueOwnerUserId == ownerUserId) return
-        restoredQueueOwnerUserId = ownerUserId
+        val normalizedOwnerUserId = ownerUserId.normalizedOwnerUserId()
+        if (restoredQueueOwnerUserId == normalizedOwnerUserId) return
+        val ownerActions = queueStore.load(normalizedOwnerUserId)
+        val anonymousActions = if (normalizedOwnerUserId != null) {
+            queueStore.load(null)
+        } else {
+            emptyList()
+        }
+        restoredQueueOwnerUserId = normalizedOwnerUserId
         pendingActions.clear()
-        pendingActions += queueStore.load(ownerUserId).take(MAX_PENDING_ACTIONS)
+        pendingActions += (ownerActions + anonymousActions)
+            .distinctBy { it.actionId }
+            .take(MAX_PENDING_ACTIONS)
+        if (normalizedOwnerUserId != null && anonymousActions.isNotEmpty()) {
+            queueStore.clear(null)
+            queueStore.save(normalizedOwnerUserId, pendingActions)
+        }
         _state.update {
             it.copy(
                 pendingActionCount = pendingActions.size,
@@ -423,6 +437,9 @@ class SwipeStateHolder(
         val pendingTargetIds = pendingActions.mapTo(mutableSetOf()) { it.card.userId }
         return filterNot { it.userId in pendingTargetIds }
     }
+
+    private fun String?.normalizedOwnerUserId(): String? =
+        this?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 interface SwipeRepository {

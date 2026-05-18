@@ -184,9 +184,84 @@ function Get-Bounds {
     }
 
     return [pscustomobject]@{
+        Left = [int]$Matches[1]
+        Top = [int]$Matches[2]
+        Right = [int]$Matches[3]
+        Bottom = [int]$Matches[4]
         CenterX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
         CenterY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
     }
+}
+
+function Get-ScreenHeight {
+    param([xml]$Xml)
+
+    $root = $Xml.SelectSingleNode("/hierarchy/node")
+    if ($null -ne $root) {
+        return (Get-Bounds $root).Bottom
+    }
+
+    $bottom = 0
+    foreach ($node in $Xml.SelectNodes("//*[@bounds]")) {
+        $bounds = Get-Bounds $node
+        if ($bounds.Bottom -gt $bottom) {
+            $bottom = $bounds.Bottom
+        }
+    }
+
+    if ($bottom -le 0) {
+        throw "Unable to determine Android screen height from UI hierarchy."
+    }
+    return $bottom
+}
+
+function Find-BottomNavNodeByText {
+    param(
+        [xml]$Xml,
+        [string]$Text
+    )
+
+    $screenHeight = Get-ScreenHeight $Xml
+    $navTop = [int]($screenHeight * 0.82)
+    $matches = @()
+
+    foreach ($node in Get-UiTextNodes $Xml) {
+        $nodeText = $node.GetAttribute("text")
+        if ([string]::IsNullOrWhiteSpace($nodeText)) {
+            $nodeText = $node.GetAttribute("content-desc")
+        }
+
+        if ($nodeText -eq $Text) {
+            $bounds = Get-Bounds $node
+            if ($bounds.CenterY -ge $navTop) {
+                $matches += [pscustomobject]@{
+                    Node = $node
+                    Bounds = $bounds
+                }
+            }
+        }
+    }
+
+    if ($matches.Count -eq 0) {
+        return $null
+    }
+
+    return ($matches | Sort-Object { $_.Bounds.CenterY } -Descending | Select-Object -First 1).Node
+}
+
+function Find-NodeByExactContentDescription {
+    param(
+        [xml]$Xml,
+        [string]$Description
+    )
+
+    foreach ($node in Get-UiTextNodes $Xml) {
+        if ($node.GetAttribute("content-desc") -eq $Description) {
+            return $node
+        }
+    }
+
+    return $null
 }
 
 function Wait-ForAnyText {
@@ -242,6 +317,52 @@ function Tap-Text {
     $bounds = Get-Bounds $node
     Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
     Write-Host "[tap] '$Text' at $($bounds.CenterX),$($bounds.CenterY)"
+}
+
+function Tap-BottomNavText {
+    param(
+        [string]$Text,
+        [int]$TimeoutSeconds = $script:WaitSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $xml = Dump-Ui "wait_bottom_nav"
+        $node = Find-BottomNavNodeByText $xml $Text
+        if ($null -ne $node) {
+            $bounds = Get-Bounds $node
+            Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+            Write-Host "[tap-nav] '$Text' at $($bounds.CenterX),$($bounds.CenterY)"
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    $visible = (Get-VisibleTexts $xml) -join " | "
+    throw "Timed out waiting for bottom navigation item '$Text'. Visible text: $visible"
+}
+
+function Tap-ContentDescription {
+    param(
+        [string]$Description,
+        [int]$TimeoutSeconds = $script:WaitSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $xml = Dump-Ui "wait_content_desc"
+        $node = Find-NodeByExactContentDescription $xml $Description
+        if ($null -ne $node) {
+            $bounds = Get-Bounds $node
+            Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+            Write-Host "[tap-desc] '$Description' at $($bounds.CenterX),$($bounds.CenterY)"
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    $visible = (Get-VisibleTexts $xml) -join " | "
+    throw "Timed out waiting for content description '$Description'. Visible text: $visible"
 }
 
 function Assert-TextPresent {
@@ -320,6 +441,19 @@ function Set-DebugSwipeFailures {
     return ($output | Out-String).Trim()
 }
 
+function Get-Sha256Base64Url {
+    param([string]$Value)
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value.Trim().ToLowerInvariant())
+        $hash = $sha.ComputeHash($bytes)
+        return [Convert]::ToBase64String($hash).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    } finally {
+        $sha.Dispose()
+    }
+}
+
 function Reset-DevSwipeState {
     $docker = Get-Command docker -ErrorAction SilentlyContinue
     if ($null -eq $docker) {
@@ -327,12 +461,13 @@ function Reset-DevSwipeState {
         return
     }
 
+    $emailHash = Get-Sha256Base64Url "dev@pynapli.local"
     $sql = @'
 DO $$
 DECLARE
     viewer_id uuid;
 BEGIN
-    SELECT id INTO viewer_id FROM users WHERE email = 'dev@pynapli.local';
+    SELECT id INTO viewer_id FROM users WHERE email_hash = '__EMAIL_HASH__';
     IF viewer_id IS NULL THEN
         RETURN;
     END IF;
@@ -346,7 +481,7 @@ BEGIN
     DELETE FROM swipe_deck_sessions
     WHERE viewer_user_id = viewer_id;
 END $$;
-'@
+'@.Replace("__EMAIL_HASH__", $emailHash)
 
     $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 -c $sql 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -382,7 +517,7 @@ function Complete-LoginIfNeeded {
 }
 
 function Open-SwipeTab {
-    Tap-Text "Swipe"
+    Tap-BottomNavText "Swipe"
     Wait-ForAnyText @("For You", "No more profiles nearby") 45 | Out-Null
     Start-Sleep -Milliseconds 900
     $xml = Dump-Ui "swipe_ready"
@@ -392,6 +527,20 @@ function Open-SwipeTab {
     Assert-TextPresent $xml "Pass" "Swipe ready"
     Assert-TextAbsent $xml "No more profiles nearby" "Swipe ready"
     return $xml
+}
+
+function Open-LinkedSwipeCards {
+    Tap-Text "Linked"
+    $linkedWait = Wait-ForAnyText @("Maya", "Alex", "Jules", "Rae") 45
+    Start-Sleep -Milliseconds 900
+    $xml = Dump-Ui "03b_swipe_linked_images" -Keep
+    Assert-NoAppErrorText $xml "Linked Swipe image card"
+    Assert-TextPresent $xml "Linked" "Linked Swipe image card"
+    Assert-TextPresent $xml $linkedWait.Text "Linked Swipe image card"
+    return [pscustomobject]@{
+        Xml = $xml
+        DisplayName = $linkedWait.Text
+    }
 }
 
 function Write-Summary {
@@ -484,8 +633,11 @@ $script:Screenshots.gridAfterLogin = Save-Screen "02_grid_after_login"
 $swipeXml = Open-SwipeTab
 $script:Screenshots.swipeReady = Save-Screen "03_swipe_ready"
 
+$linkedProof = Open-LinkedSwipeCards
+$script:Screenshots.linkedImages = Save-Screen "03b_swipe_linked_images"
+
 Set-DebugSwipeFailures 1 | Out-Null
-Tap-Text "Like"
+Tap-ContentDescription "Like"
 Wait-ForAnyText @("1 pending", "Swipe saved") 20 | Out-Null
 Start-Sleep -Milliseconds 500
 $pendingXml = Dump-Ui "04_swipe_pending_before_force_stop" -Keep
@@ -525,6 +677,8 @@ Write-Summary @{
         pendingVisibleBeforeForceStop = $true
         pendingRestoredAfterRelaunch = $true
         retryClearedQueue = $true
+        linkedImageCard = $true
+        linkedImageCardName = $linkedProof.DisplayName
     }
     screenshots = $script:Screenshots
 }

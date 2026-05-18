@@ -188,6 +188,58 @@ class SwipeStateHolderTest {
     }
 
     @Test
+    fun internalReloadKeepsKnownViewerQueueScope() = runBlocking {
+        val card = swipeCard(userId = "target-1")
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = listOf(card), deckSessionId = "deck-1"),
+            actionResult = AppResult.Failure(AppError("NETWORK_ERROR", "Offline", recoverable = true))
+        )
+        val queueStore = FakeSwipeActionQueueStore()
+        val stateHolder = SwipeStateHolder(
+            repository = repository,
+            actionIdFactory = { "action-viewer-scoped" },
+            queueStore = queueStore
+        )
+
+        stateHolder.load(ownerUserId = "viewer-1")
+        stateHolder.selectFilter(SwipeFilterType.Linked)
+        stateHolder.submitAction(stateHolder.state.value.topCard!!, SwipeAction.LIKE)
+
+        assertEquals("action-viewer-scoped", queueStore.savedActions("viewer-1").single().actionId)
+        assertEquals(emptyList(), queueStore.savedActions())
+    }
+
+    @Test
+    fun anonymousPendingQueueMigratesWhenViewerIdBecomesAvailable() = runBlocking {
+        val card = swipeCard(userId = "target-1")
+        val queued = QueuedSwipeAction(
+            actionId = "action-anonymous",
+            deckSessionId = "deck-old",
+            card = card,
+            action = SwipeAction.LIKE
+        )
+        val queueStore = FakeSwipeActionQueueStore(
+            initialActions = mapOf("anonymous" to listOf(queued))
+        )
+        val repository = FakeSwipeRepository(
+            deck = SwipeDeckUi(cards = listOf(card), deckSessionId = "deck-new"),
+            actionResult = AppResult.Failure(AppError("NETWORK_ERROR", "Offline", recoverable = true))
+        )
+        val stateHolder = SwipeStateHolder(
+            repository = repository,
+            queueStore = queueStore
+        )
+
+        stateHolder.load(ownerUserId = "viewer-1")
+
+        assertEquals(1, repository.submitCount)
+        assertEquals("action-anonymous", repository.submittedActions.single().actionId)
+        assertEquals("action-anonymous", queueStore.savedActions("viewer-1").single().actionId)
+        assertEquals(emptyList(), queueStore.savedActions())
+        assertEquals(1, stateHolder.state.value.pendingActionCount)
+    }
+
+    @Test
     fun rewindRestoresRecoverableQueuedActionWithoutServerCall() = runBlocking {
         val card = swipeCard(userId = "target-1")
         val repository = FakeSwipeRepository(
