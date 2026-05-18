@@ -19,6 +19,10 @@ import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
@@ -309,6 +313,42 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "top picks backing deck session remains actionable inside daily window" {
+        runBlocking {
+            val now = Instant.parse("2026-05-17T12:00:00Z")
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000001950")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000001951")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+            val swipeRepository = JdbcSwipeRepository(dataSource)
+            val topPicksService = com.pynapli.server.swipe.TopPicksService(
+                topPicksRepository = com.pynapli.server.swipe.JdbcTopPicksRepository(dataSource),
+                swipeRepository = swipeRepository,
+                clock = Clock.fixed(now, ZoneOffset.UTC)
+            )
+
+            val picks = topPicksService.getCurrentPicks(viewer)
+            val pick = assertNotNull(picks.picks.singleOrNull())
+            val laterSwipeService = SwipeService(
+                repository = swipeRepository,
+                clock = Clock.fixed(now.plus(Duration.ofMinutes(31)), ZoneOffset.UTC)
+            )
+            val response = laterSwipeService.submitAction(
+                viewer,
+                SwipeActionRequestDto(
+                    actionId = UUID.randomUUID().toString(),
+                    deckSessionId = picks.deckSessionId,
+                    cardToken = pick.card.rankToken,
+                    targetUserId = target.toString(),
+                    action = SwipeAction.LIKE
+                )
+            )
+
+            assertTrue(picks.deckSessionId.isNotBlank())
+            assertTrue(response.recorded)
+        }
+    }
+
     "grid and swipe discovery follows active travel_locations row when present" {
         // SWIPE_IMPLEMENTATION_SPEC L339-354: an active travel_locations row
         // overrides the viewer's GPS for the deck. Viewer physically in SF,
@@ -432,6 +472,38 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
             val byUser = deck.cards.associateBy { it.userId }
             assertEquals(false, byUser.getValue(localTarget).visiting, "Local target must not be marked visiting")
             assertEquals(true, byUser.getValue(visitingTarget).visiting, "Travel-mode target must be marked visiting")
+        }
+    }
+
+    "travel-mode target dealt in destination deck remains actionable" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000993")
+            val visitingTarget = UUID.fromString("00000000-0000-0000-0000-000000000994")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -74.0060, latitude = 40.7128)
+            dataSource.insertDiscoverableUser(visitingTarget, "Maya", age = 34, longitude = -122.4194, latitude = 37.7749)
+            dataSource.insertActiveTravelLocation(
+                userId = visitingTarget,
+                city = "New York",
+                latitude = 40.7128,
+                longitude = -74.0060
+            )
+            val service = SwipeService(JdbcSwipeRepository(dataSource))
+
+            val deck = service.queryDeck(viewer, SwipeDeckRequestDto(radiusMeters = 5_000, limit = 5))
+            val card = assertNotNull(deck.items.singleOrNull { it.userId == visitingTarget.toString() })
+            val response = service.submitAction(
+                viewer,
+                SwipeActionRequestDto(
+                    actionId = UUID.randomUUID().toString(),
+                    deckSessionId = deck.deckSessionId,
+                    cardToken = card.rankToken,
+                    targetUserId = visitingTarget.toString(),
+                    action = SwipeAction.LIKE
+                )
+            )
+
+            assertTrue(card.visiting)
+            assertTrue(response.recorded)
         }
     }
 

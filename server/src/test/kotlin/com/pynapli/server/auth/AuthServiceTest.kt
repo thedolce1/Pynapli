@@ -48,6 +48,34 @@ class AuthServiceTest {
     }
 
     @Test
+    fun refreshInvalidatesCachedOldAccessToken() = runBlocking {
+        val service = AuthService(InMemoryAuthRepository())
+        val session = signup(service)
+        service.authenticate(session.accessToken)
+
+        service.refresh(session.refreshToken)
+
+        val error = assertFailsWith<AuthException> {
+            service.authenticate(session.accessToken)
+        }
+        assertEquals("UNAUTHENTICATED", error.code)
+    }
+
+    @Test
+    fun logoutInvalidatesCachedAccessToken() = runBlocking {
+        val service = AuthService(InMemoryAuthRepository())
+        val session = signup(service)
+        service.authenticate(session.accessToken)
+
+        assertEquals(true, service.logout(session.accessToken))
+
+        val error = assertFailsWith<AuthException> {
+            service.authenticate(session.accessToken)
+        }
+        assertEquals("UNAUTHENTICATED", error.code)
+    }
+
+    @Test
     fun suspendedCurrentUserCannotAuthenticateExistingSession() = runBlocking {
         val repository = InMemoryAuthRepository()
         val service = AuthService(repository)

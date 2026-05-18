@@ -19,6 +19,14 @@ interface SwipeRepository {
 
     suspend fun listDeckSessionTargetIds(sessionId: UUID): Set<UUID>
 
+    suspend fun findDeckSessionState(sessionId: UUID, viewerUserId: UUID): SwipeDeckSessionState? =
+        findDeckSession(sessionId, viewerUserId)?.let { session ->
+            SwipeDeckSessionState(
+                session = session,
+                targetUserIds = listDeckSessionTargetIds(session.sessionId)
+            )
+        }
+
     suspend fun isDeckCardActionable(
         sessionId: UUID,
         cardTokenHash: String,
@@ -45,6 +53,7 @@ interface SwipeRepository {
     /**
      * One-shot precondition gate for action submit. Combines the deck-card actionability
      * check and the target eligibility check that submitAction used to call separately.
+     * Implementations should include block/privacy/visibility exclusions in targetEligible.
      * The default impl delegates to the existing two methods so test fakes do not have
      * to change; JdbcSwipeRepository overrides with a single SQL round-trip.
      */
@@ -103,6 +112,41 @@ interface SwipeRepository {
         matchIdFactory: () -> UUID = UUID::randomUUID
     ): SwipeActionResult
 
+    suspend fun recordSwipeActionAndMarkCard(
+        actionId: UUID,
+        actorUserId: UUID,
+        targetUserId: UUID,
+        action: String,
+        sessionId: UUID,
+        cardTokenHash: String,
+        now: Instant,
+        noteText: String? = null,
+        consumedInventoryId: UUID? = null,
+        travelLocationId: UUID? = null,
+        matchIdFactory: () -> UUID = UUID::randomUUID
+    ): SwipeActionResult {
+        val result = recordSwipeAction(
+            actionId = actionId,
+            actorUserId = actorUserId,
+            targetUserId = targetUserId,
+            action = action,
+            noteText = noteText,
+            consumedInventoryId = consumedInventoryId,
+            travelLocationId = travelLocationId,
+            matchIdFactory = matchIdFactory
+        )
+        if (result.recorded) {
+            markDeckCardActionRecorded(
+                sessionId = sessionId,
+                cardTokenHash = cardTokenHash,
+                targetUserId = targetUserId,
+                action = action,
+                now = now
+            )
+        }
+        return result
+    }
+
     /**
      * Reverses a previously-recorded swipe action. If the action consumed a
      * Pineapple Like (`consumed_inventory_id IS NOT NULL`) the implementation
@@ -129,7 +173,13 @@ data class SwipeDeckResult(
 
 data class SwipeActionPreconditionCheck(
     val deckCardActionable: Boolean,
-    val targetEligible: Boolean
+    val targetEligible: Boolean,
+    val viewerTravelLocationId: UUID? = null
+)
+
+data class SwipeDeckSessionState(
+    val session: SwipeDeckSessionRecord,
+    val targetUserIds: Set<UUID>
 )
 
 data class SwipeDeckSessionRecord(

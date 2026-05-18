@@ -5,15 +5,27 @@ import com.pynapli.server.profiling.profile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
+import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.Timestamp
+import java.sql.Types
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ExecutionException
 import javax.sql.DataSource
 
 class JdbcSwipeRepository(
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
+    private val rankCacheTtl: Duration = Duration.ofSeconds(5),
+    private val rankCacheMaxEntries: Int = 128,
+    private val rankCacheWindow: Int = 128
 ) : SwipeRepository {
+    private val rankCache = ConcurrentHashMap<DeckRankCacheKey, CachedDeckRankRows>()
+    private val rankCacheInFlight = ConcurrentHashMap<DeckRankCacheKey, CompletableFuture<CachedDeckRankRows>>()
+
     override suspend fun queryDeck(
         viewerUserId: UUID,
         radiusMeters: Int,
@@ -22,19 +34,11 @@ class JdbcSwipeRepository(
         excludedTargetUserIds: Set<UUID>
     ): SwipeDeckResult = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            val viewerHasLocation = profile("swipe.deck.repo.viewerLocation") {
-                connection.prepareStatement(
-                    "SELECT EXISTS (SELECT 1 FROM user_locations WHERE user_id = ?)"
-                ).use { statement ->
-                    statement.setObject(1, viewerUserId)
-                    statement.executeQuery().use { rs ->
-                        rs.next()
-                        rs.getBoolean(1)
-                    }
-                }
+            val viewerLocationKey = profile("swipe.deck.repo.viewerLocation") {
+                connection.findViewerLocationCacheKey(viewerUserId)
             }
 
-            if (!viewerHasLocation) {
+            if (viewerLocationKey == null) {
                 return@withContext SwipeDeckResult(viewerHadLocation = false, cards = emptyList())
             }
 
@@ -44,7 +48,8 @@ class JdbcSwipeRepository(
             //   are deferred to Phase 2 so we evaluate them for the LIMIT N rows we will
             //   actually return, not every candidate inside ST_DWithin.
             val rankedRows = profile("swipe.deck.repo.rank") {
-                connection.queryDeckRank(
+                connection.queryDeckRankCached(
+                    viewerLocationKey = viewerLocationKey,
                     viewerUserId = viewerUserId,
                     radiusMeters = radiusMeters,
                     limit = limit,
@@ -88,13 +93,739 @@ class JdbcSwipeRepository(
         }
     }
 
-    private fun Connection.queryDeckRank(
+    private fun Connection.findViewerLocationCacheKey(viewerUserId: UUID): DeckLocationCacheKey? =
+        prepareStatement(
+            """
+            SELECT ST_X(geom::geometry) AS longitude,
+                   ST_Y(geom::geometry) AS latitude
+            FROM user_locations
+            WHERE user_id = ?
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, viewerUserId)
+            statement.executeQuery().use { rs ->
+                if (!rs.next()) {
+                    null
+                } else {
+                    // Swipe is a recommendation deck, not the exact immediacy grid.
+                    // Bucket rank-cache centers to ~100m so nearby viewers share the
+                    // expensive spatial rank window while card distances stay close
+                    // enough for the swipe UI's coarse labels.
+                    DeckLocationCacheKey(
+                        longitudeE3 = Math.round(rs.getDouble("longitude") * 1_000.0).toInt(),
+                        latitudeE3 = Math.round(rs.getDouble("latitude") * 1_000.0).toInt()
+                    )
+                }
+            }
+        }
+
+    private fun Connection.queryDeckRankCached(
+        viewerLocationKey: DeckLocationCacheKey,
         viewerUserId: UUID,
         radiusMeters: Int,
         limit: Int,
         filters: DiscoveryFilters,
         excludedTargetUserIds: Set<UUID>
     ): List<DeckRankRow> {
+        val activeTravelLocationsPresent = hasActiveTravelLocations()
+        if (filters.linkedOnly == true) {
+            val linkedTargetIds = listLinkedCandidateUserIdsNear(viewerUserId, radiusMeters)
+            if (linkedTargetIds.isEmpty()) return emptyList()
+            return queryDeckRank(
+                viewerUserId = viewerUserId,
+                radiusMeters = radiusMeters,
+                limit = limit,
+                filters = filters.copy(linkedOnly = null),
+                excludedTargetUserIds = excludedTargetUserIds,
+                userSpecificViewerId = viewerUserId,
+                forcedTargetUserIds = linkedTargetIds,
+                includeTravelLocations = activeTravelLocationsPresent
+            )
+        }
+
+        if (
+            !filters.isRankCacheEligible() ||
+            rankCacheTtl.isZero ||
+            rankCacheTtl.isNegative ||
+            rankCacheMaxEntries <= 0 ||
+            activeTravelLocationsPresent
+        ) {
+            return queryDeckRank(
+                viewerUserId = viewerUserId,
+                radiusMeters = radiusMeters,
+                limit = limit,
+                filters = filters,
+                excludedTargetUserIds = excludedTargetUserIds,
+                userSpecificViewerId = viewerUserId,
+                useNearestCandidateWindow = !activeTravelLocationsPresent
+            )
+        }
+
+        val cacheWindow = rankCacheWindow.coerceAtLeast(limit)
+        val cacheKey = DeckRankCacheKey(
+            location = viewerLocationKey,
+            radiusMeters = radiusMeters,
+            filterKey = filters.rankCacheKey(),
+            window = cacheWindow
+        )
+        val cachedRows = loadRankCacheRows(cacheKey) {
+            queryDeckRank(
+                viewerUserId = viewerUserId,
+                radiusMeters = radiusMeters,
+                limit = cacheWindow,
+                filters = filters,
+                excludedTargetUserIds = emptySet(),
+                userSpecificViewerId = null,
+                useNearestCandidateWindow = true
+            )
+        }
+        val cachedTargetIds = cachedRows.mapTo(mutableSetOf()) { it.userId }
+        val swipedTargetIds = listActiveSwipedTargetIds(viewerUserId, cachedTargetIds)
+        val excluded = excludedTargetUserIds + swipedTargetIds + viewerUserId
+        val page = cachedRows.asSequence()
+            .filterNot { it.userId in excluded }
+            .take(limit)
+            .toList()
+
+        if (page.size >= limit || cachedRows.size < cacheWindow) {
+            return page
+        }
+
+        return queryDeckRank(
+            viewerUserId = viewerUserId,
+            radiusMeters = radiusMeters,
+            limit = limit,
+            filters = filters,
+            excludedTargetUserIds = excludedTargetUserIds,
+            userSpecificViewerId = viewerUserId,
+            useNearestCandidateWindow = false
+        )
+    }
+
+    private fun Connection.hasAnyActiveProfileLinksNear(viewerUserId: UUID, radiusMeters: Int): Boolean =
+        listLinkedCandidateUserIdsNear(viewerUserId, radiusMeters, limit = 1).isNotEmpty()
+
+    private fun Connection.listLinkedCandidateUserIdsNear(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int = 2_000
+    ): Set<UUID> =
+        prepareStatement(
+            """
+            WITH viewer_location AS (
+                SELECT COALESCE(tl.geom, ul.geom) AS geom
+                FROM user_locations ul
+                LEFT JOIN travel_locations tl
+                  ON tl.user_id = ul.user_id
+                 AND tl.status = 'active'
+                 AND tl.active_until IS NULL
+                WHERE ul.user_id = ?
+            )
+            SELECT upl.user_id
+            FROM viewer_location v
+            JOIN user_profile_links upl
+              ON upl.status = 'active'
+             AND upl.unlinked_at IS NULL
+            JOIN users target
+              ON target.id = upl.user_id
+            JOIN profiles target_profile
+              ON target_profile.user_id = target.id
+            JOIN discovery_settings target_settings
+              ON target_settings.user_id = target.id
+            JOIN user_locations ul
+              ON ul.user_id = target.id
+            JOIN users linked_user
+              ON linked_user.id = upl.linked_user_id
+            JOIN profiles linked_profile
+              ON linked_profile.user_id = linked_user.id
+            JOIN discovery_settings linked_settings
+              ON linked_settings.user_id = linked_user.id
+            LEFT JOIN account_risk_states target_risk
+              ON target_risk.user_id = target.id
+            LEFT JOIN account_risk_states linked_risk
+              ON linked_risk.user_id = linked_user.id
+            LEFT JOIN travel_locations target_travel
+              ON target_travel.user_id = target.id
+             AND target_travel.status = 'active'
+             AND target_travel.active_until IS NULL
+            WHERE target.status = 'active'
+              AND target.deleted_at IS NULL
+              AND target_profile.visibility_status = 'visible'
+              AND target_settings.swipe_visible = true
+              AND target_settings.incognito = false
+              AND (target_travel.id IS NULL OR target_settings.visible_while_traveling = true)
+              AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+              AND linked_user.status = 'active'
+              AND linked_user.deleted_at IS NULL
+              AND linked_profile.visibility_status = 'visible'
+              AND linked_settings.incognito = false
+              AND COALESCE(linked_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM user_blocks ub
+                  WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
+                     OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
+              )
+              AND ST_DWithin(v.geom, COALESCE(target_travel.geom, ul.geom), ?)
+            LIMIT ?
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, viewerUserId)
+            statement.setObject(2, viewerUserId)
+            statement.setObject(3, viewerUserId)
+            statement.setDouble(4, radiusMeters.toDouble())
+            statement.setInt(5, limit)
+            statement.executeQuery().use { rs ->
+                buildSet {
+                    while (rs.next()) {
+                        add(rs.getObject("user_id", UUID::class.java))
+                    }
+                }
+            }
+        }
+
+    private fun Connection.hasActiveTravelLocations(): Boolean =
+        prepareStatement(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM travel_locations
+                WHERE status = 'active'
+                  AND active_until IS NULL
+            )
+            """.trimIndent()
+        ).use { statement ->
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getBoolean(1)
+            }
+        }
+
+    private fun loadRankCacheRows(
+        cacheKey: DeckRankCacheKey,
+        loader: () -> List<DeckRankRow>
+    ): List<DeckRankRow> {
+        val now = Instant.now()
+        rankCache[cacheKey]?.let { cached ->
+            if (cached.expiresAt.isAfter(now)) return cached.rows
+            rankCache.remove(cacheKey, cached)
+        }
+
+        val newFuture = CompletableFuture<CachedDeckRankRows>()
+        val existingFuture = rankCacheInFlight.putIfAbsent(cacheKey, newFuture)
+        if (existingFuture != null) {
+            return try {
+                existingFuture.get().rows
+            } catch (error: ExecutionException) {
+                throw (error.cause ?: error)
+            }
+        }
+
+        try {
+            val loaded = CachedDeckRankRows(
+                rows = loader(),
+                expiresAt = now.plus(rankCacheTtl)
+            )
+            rankCache[cacheKey] = loaded
+            evictRankCache(now)
+            newFuture.complete(loaded)
+            return loaded.rows
+        } catch (error: Throwable) {
+            newFuture.completeExceptionally(error)
+            throw error
+        } finally {
+            rankCacheInFlight.remove(cacheKey, newFuture)
+        }
+    }
+
+    private fun evictRankCache(now: Instant) {
+        if (rankCache.size < rankCacheMaxEntries) return
+        rankCache.entries.removeIf { (_, cached) -> !cached.expiresAt.isAfter(now) }
+        if (rankCache.size >= rankCacheMaxEntries) {
+            rankCache.clear()
+        }
+    }
+
+    private fun Connection.listActiveSwipedTargetIds(actorUserId: UUID, targetUserIds: Set<UUID>): Set<UUID> {
+        if (targetUserIds.isEmpty()) return emptySet()
+        return prepareStatement(
+            """
+            SELECT target_user_id
+            FROM swipe_actions
+            WHERE actor_user_id = ?
+              AND rewound_at IS NULL
+              AND target_user_id = ANY(?::uuid[])
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, actorUserId)
+            statement.setArray(2, createArrayOf("uuid", targetUserIds.toTypedArray()))
+            statement.executeQuery().use { rs ->
+                buildSet {
+                    while (rs.next()) {
+                        add(rs.getObject("target_user_id", UUID::class.java))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun Connection.queryDeckRankNearestWindow(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        excludedTargetUserIds: Set<UUID>,
+        userSpecificViewerId: UUID?
+    ): List<DeckRankRow> {
+        val candidateLimit = nearestCandidateWindowLimit(limit, filters)
+        val sql = """
+            WITH viewer_location AS (
+                SELECT ul.geom AS geom
+                FROM user_locations ul
+                WHERE ul.user_id = ?
+            ),
+            nearest_locations AS MATERIALIZED (
+                SELECT near.user_id,
+                       near.geom,
+                       ST_Distance(v.geom, near.geom) AS distance_meters,
+                       v.geom <-> near.geom AS distance_order
+                FROM viewer_location v
+                JOIN LATERAL (
+                    SELECT user_id, geom
+                    FROM user_locations
+                    WHERE ST_DWithin(v.geom, geom, ?)
+                    ORDER BY geom <-> v.geom
+                    LIMIT ?
+                ) near ON true
+            )
+            SELECT u.id AS user_id,
+                   COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+                   p.display_age,
+                   p.bio,
+                   COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
+                   p.verified_at IS NOT NULL AS verified,
+                   ds.show_distance,
+                   nl.distance_meters,
+                   EXISTS (
+                       SELECT 1
+                       FROM boost_activations ba
+                       WHERE ba.user_id = u.id
+                         AND ba.status = 'active'
+                         AND ba.ends_at > now()
+                   ) AS is_boosted,
+                   false AS visiting,
+                   (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+            FROM nearest_locations nl
+            JOIN users u ON u.id = nl.user_id
+            JOIN profiles p ON p.user_id = u.id
+            JOIN discovery_settings ds ON ds.user_id = u.id
+            LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+            WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
+              AND u.status = 'active'
+              AND u.deleted_at IS NULL
+              AND p.visibility_status = 'visible'
+              AND ds.swipe_visible = true
+              AND ds.incognito = false
+              AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
+              AND (?::integer IS NULL OR p.display_age >= ?::integer)
+              AND (?::integer IS NULL OR p.display_age <= ?::integer)
+              AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
+              AND (?::boolean = false OR p.verified_at IS NOT NULL)
+              AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
+              AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
+              AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
+              AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
+              AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
+              AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+              AND (
+                  ?::boolean IS NULL
+                  OR ?::boolean = EXISTS (
+                      SELECT 1
+                      FROM user_profile_links upl
+                      JOIN users linked_user
+                        ON linked_user.id = upl.linked_user_id
+                      JOIN profiles linked_profile
+                        ON linked_profile.user_id = linked_user.id
+                      JOIN discovery_settings linked_ds
+                        ON linked_ds.user_id = linked_user.id
+                      LEFT JOIN account_risk_states linked_risk
+                        ON linked_risk.user_id = linked_user.id
+                      WHERE upl.user_id = u.id
+                        AND upl.status = 'active'
+                        AND upl.unlinked_at IS NULL
+                        AND linked_user.status = 'active'
+                        AND linked_user.deleted_at IS NULL
+                        AND linked_profile.visibility_status = 'visible'
+                        AND linked_ds.incognito = false
+                        AND COALESCE(linked_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM user_blocks ub
+                            WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
+                               OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
+                        )
+                  )
+              )
+              AND (
+                  ?::uuid IS NULL
+                  OR NOT EXISTS (
+                      SELECT 1 FROM swipe_actions sa
+                      WHERE sa.actor_user_id = ?::uuid
+                        AND sa.target_user_id = u.id
+                        AND sa.rewound_at IS NULL
+                  )
+              )
+              AND (
+                  ?::boolean = false
+                  OR u.id <> ALL(?::uuid[])
+              )
+            ORDER BY soft_score DESC, nl.distance_order
+            LIMIT ?
+        """.trimIndent()
+
+        return prepareStatement(sql).use { statement ->
+            val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
+            val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
+            val intents = createArrayOf("text", filters.intents.toTypedArray())
+            val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
+            val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+            val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
+            statement.setObject(1, viewerUserId)
+            statement.setDouble(2, radiusMeters.toDouble())
+            statement.setInt(3, candidateLimit)
+            statement.setBoolean(4, filters.verifiedPreferred)
+            statement.setNullableUuid(5, userSpecificViewerId)
+            statement.setNullableUuid(6, userSpecificViewerId)
+            statement.setObject(7, filters.minimumAge)
+            statement.setObject(8, filters.minimumAge)
+            statement.setObject(9, filters.maximumAge)
+            statement.setObject(10, filters.maximumAge)
+            statement.setArray(11, contexts)
+            statement.setArray(12, contexts)
+            statement.setBoolean(13, filters.verifiedOnly)
+            statement.setBoolean(14, filters.facePhotoVerifiedOnly)
+            statement.setBoolean(15, filters.ageVerifiedOnly)
+            statement.setArray(16, styles)
+            statement.setArray(17, styles)
+            statement.setArray(18, intents)
+            statement.setArray(19, intents)
+            statement.setArray(20, lifestyleTags)
+            statement.setArray(21, lifestyleTags)
+            statement.setArray(22, logisticsTags)
+            statement.setArray(23, logisticsTags)
+            statement.setObject(24, filters.linkedOnly)
+            statement.setObject(25, filters.linkedOnly)
+            statement.setObject(26, viewerUserId)
+            statement.setObject(27, viewerUserId)
+            statement.setNullableUuid(28, userSpecificViewerId)
+            statement.setNullableUuid(29, userSpecificViewerId)
+            statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(31, excludedIds)
+            statement.setInt(32, limit)
+            statement.executeDeckRankRows()
+        }.sortedByDescending { it.isBoosted }
+    }
+
+    private fun Connection.queryDeckRankForcedTargetsLocal(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        excludedTargetUserIds: Set<UUID>,
+        userSpecificViewerId: UUID?,
+        forcedTargetUserIds: Set<UUID>
+    ): List<DeckRankRow> {
+        val sql = """
+            WITH viewer_location AS (
+                SELECT geom
+                FROM user_locations
+                WHERE user_id = ?
+            ),
+            forced_locations AS MATERIALIZED (
+                SELECT ul.user_id,
+                       ul.geom,
+                       ST_Distance(v.geom, ul.geom) AS distance_meters,
+                       v.geom <-> ul.geom AS distance_order
+                FROM viewer_location v
+                JOIN user_locations ul
+                  ON ul.user_id = ANY(?::uuid[])
+                 AND ST_DWithin(v.geom, ul.geom, ?)
+            )
+            SELECT u.id AS user_id,
+                   COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+                   p.display_age,
+                   p.bio,
+                   COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
+                   p.verified_at IS NOT NULL AS verified,
+                   ds.show_distance,
+                   fl.distance_meters,
+                   EXISTS (
+                       SELECT 1
+                       FROM boost_activations ba
+                       WHERE ba.user_id = u.id
+                         AND ba.status = 'active'
+                         AND ba.ends_at > now()
+                   ) AS is_boosted,
+                   false AS visiting,
+                   (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+            FROM forced_locations fl
+            JOIN users u ON u.id = fl.user_id
+            JOIN profiles p ON p.user_id = u.id
+            JOIN discovery_settings ds ON ds.user_id = u.id
+            LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+            WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
+              AND u.status = 'active'
+              AND u.deleted_at IS NULL
+              AND p.visibility_status = 'visible'
+              AND ds.swipe_visible = true
+              AND ds.incognito = false
+              AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
+              AND (?::integer IS NULL OR p.display_age >= ?::integer)
+              AND (?::integer IS NULL OR p.display_age <= ?::integer)
+              AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
+              AND (?::boolean = false OR p.verified_at IS NOT NULL)
+              AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
+              AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
+              AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
+              AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
+              AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
+              AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+              AND (
+                  ?::uuid IS NULL
+                  OR NOT EXISTS (
+                      SELECT 1 FROM swipe_actions sa
+                      WHERE sa.actor_user_id = ?::uuid
+                        AND sa.target_user_id = u.id
+                        AND sa.rewound_at IS NULL
+                  )
+              )
+              AND (
+                  ?::boolean = false
+                  OR u.id <> ALL(?::uuid[])
+              )
+            ORDER BY soft_score DESC, fl.distance_order
+            LIMIT ?
+        """.trimIndent()
+
+        return prepareStatement(sql).use { statement ->
+            val forcedIds = createArrayOf("uuid", forcedTargetUserIds.toTypedArray())
+            val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
+            val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
+            val intents = createArrayOf("text", filters.intents.toTypedArray())
+            val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
+            val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+            val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
+            statement.setObject(1, viewerUserId)
+            statement.setArray(2, forcedIds)
+            statement.setDouble(3, radiusMeters.toDouble())
+            statement.setBoolean(4, filters.verifiedPreferred)
+            statement.setNullableUuid(5, userSpecificViewerId)
+            statement.setNullableUuid(6, userSpecificViewerId)
+            statement.setObject(7, filters.minimumAge)
+            statement.setObject(8, filters.minimumAge)
+            statement.setObject(9, filters.maximumAge)
+            statement.setObject(10, filters.maximumAge)
+            statement.setArray(11, contexts)
+            statement.setArray(12, contexts)
+            statement.setBoolean(13, filters.verifiedOnly)
+            statement.setBoolean(14, filters.facePhotoVerifiedOnly)
+            statement.setBoolean(15, filters.ageVerifiedOnly)
+            statement.setArray(16, styles)
+            statement.setArray(17, styles)
+            statement.setArray(18, intents)
+            statement.setArray(19, intents)
+            statement.setArray(20, lifestyleTags)
+            statement.setArray(21, lifestyleTags)
+            statement.setArray(22, logisticsTags)
+            statement.setArray(23, logisticsTags)
+            statement.setNullableUuid(24, userSpecificViewerId)
+            statement.setNullableUuid(25, userSpecificViewerId)
+            statement.setBoolean(26, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(27, excludedIds)
+            statement.setInt(28, limit)
+            statement.executeDeckRankRows()
+        }.sortedByDescending { it.isBoosted }
+    }
+
+    private fun Connection.queryDeckRankForcedTargets(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        excludedTargetUserIds: Set<UUID>,
+        userSpecificViewerId: UUID?,
+        forcedTargetUserIds: Set<UUID>,
+        includeTravelLocations: Boolean
+    ): List<DeckRankRow> {
+        if (!includeTravelLocations) {
+            return queryDeckRankForcedTargetsLocal(
+                viewerUserId = viewerUserId,
+                radiusMeters = radiusMeters,
+                limit = limit,
+                filters = filters,
+                excludedTargetUserIds = excludedTargetUserIds,
+                userSpecificViewerId = userSpecificViewerId,
+                forcedTargetUserIds = forcedTargetUserIds
+            )
+        }
+        val sql = """
+            WITH viewer_location AS (
+                SELECT COALESCE(tl.geom, ul.geom) AS geom
+                FROM user_locations ul
+                LEFT JOIN travel_locations tl
+                  ON tl.user_id = ul.user_id
+                 AND tl.status = 'active'
+                 AND tl.active_until IS NULL
+                WHERE ul.user_id = ?
+            ),
+            forced_targets AS (
+                SELECT unnest(?::uuid[]) AS user_id
+            )
+            SELECT u.id AS user_id,
+                   COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+                   p.display_age,
+                   p.bio,
+                   COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
+                   p.verified_at IS NOT NULL AS verified,
+                   ds.show_distance,
+                   ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
+                   EXISTS (
+                       SELECT 1
+                       FROM boost_activations ba
+                       WHERE ba.user_id = u.id
+                         AND ba.status = 'active'
+                         AND ba.ends_at > now()
+                   ) AS is_boosted,
+                   target_travel.id IS NOT NULL AS visiting,
+                   (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+            FROM viewer_location v
+            JOIN forced_targets ft ON true
+            JOIN users u ON u.id = ft.user_id
+            JOIN user_locations ul ON ul.user_id = u.id
+            JOIN profiles p ON p.user_id = u.id
+            JOIN discovery_settings ds ON ds.user_id = u.id
+            LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+            LEFT JOIN travel_locations target_travel
+              ON target_travel.user_id = u.id
+             AND target_travel.status = 'active'
+             AND target_travel.active_until IS NULL
+            WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
+              AND u.status = 'active'
+              AND u.deleted_at IS NULL
+              AND p.visibility_status = 'visible'
+              AND ds.swipe_visible = true
+              AND ds.incognito = false
+              AND (target_travel.id IS NULL OR ds.visible_while_traveling = true)
+              AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
+              AND (
+                  ST_DWithin(v.geom, ul.geom, ?)
+                  OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
+              )
+              AND (?::integer IS NULL OR p.display_age >= ?::integer)
+              AND (?::integer IS NULL OR p.display_age <= ?::integer)
+              AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
+              AND (?::boolean = false OR p.verified_at IS NOT NULL)
+              AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
+              AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
+              AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
+              AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
+              AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
+              AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+              AND (
+                  ?::uuid IS NULL
+                  OR NOT EXISTS (
+                      SELECT 1 FROM swipe_actions sa
+                      WHERE sa.actor_user_id = ?::uuid
+                        AND sa.target_user_id = u.id
+                        AND sa.rewound_at IS NULL
+                  )
+              )
+              AND (
+                  ?::boolean = false
+                  OR u.id <> ALL(?::uuid[])
+              )
+            ORDER BY soft_score DESC, v.geom <-> COALESCE(target_travel.geom, ul.geom)
+            LIMIT ?
+        """.trimIndent()
+
+        return prepareStatement(sql).use { statement ->
+            val forcedIds = createArrayOf("uuid", forcedTargetUserIds.toTypedArray())
+            val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
+            val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
+            val intents = createArrayOf("text", filters.intents.toTypedArray())
+            val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
+            val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+            val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
+            statement.setObject(1, viewerUserId)
+            statement.setArray(2, forcedIds)
+            statement.setBoolean(3, filters.verifiedPreferred)
+            statement.setNullableUuid(4, userSpecificViewerId)
+            statement.setNullableUuid(5, userSpecificViewerId)
+            statement.setDouble(6, radiusMeters.toDouble())
+            statement.setDouble(7, radiusMeters.toDouble())
+            statement.setObject(8, filters.minimumAge)
+            statement.setObject(9, filters.minimumAge)
+            statement.setObject(10, filters.maximumAge)
+            statement.setObject(11, filters.maximumAge)
+            statement.setArray(12, contexts)
+            statement.setArray(13, contexts)
+            statement.setBoolean(14, filters.verifiedOnly)
+            statement.setBoolean(15, filters.facePhotoVerifiedOnly)
+            statement.setBoolean(16, filters.ageVerifiedOnly)
+            statement.setArray(17, styles)
+            statement.setArray(18, styles)
+            statement.setArray(19, intents)
+            statement.setArray(20, intents)
+            statement.setArray(21, lifestyleTags)
+            statement.setArray(22, lifestyleTags)
+            statement.setArray(23, logisticsTags)
+            statement.setArray(24, logisticsTags)
+            statement.setNullableUuid(25, userSpecificViewerId)
+            statement.setNullableUuid(26, userSpecificViewerId)
+            statement.setBoolean(27, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(28, excludedIds)
+            statement.setInt(29, limit)
+            statement.executeDeckRankRows()
+        }.sortedByDescending { it.isBoosted }
+    }
+
+    private fun Connection.queryDeckRank(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        excludedTargetUserIds: Set<UUID>,
+        userSpecificViewerId: UUID?,
+        forcedTargetUserIds: Set<UUID> = emptySet(),
+        useNearestCandidateWindow: Boolean = false,
+        includeTravelLocations: Boolean = true
+    ): List<DeckRankRow> {
+        if (forcedTargetUserIds.isNotEmpty()) {
+            return queryDeckRankForcedTargets(
+                viewerUserId = viewerUserId,
+                radiusMeters = radiusMeters,
+                limit = limit,
+                filters = filters,
+                excludedTargetUserIds = excludedTargetUserIds,
+                userSpecificViewerId = userSpecificViewerId,
+                forcedTargetUserIds = forcedTargetUserIds,
+                includeTravelLocations = includeTravelLocations
+            )
+        }
+        if (useNearestCandidateWindow) {
+            val nearestRows = queryDeckRankNearestWindow(
+                viewerUserId = viewerUserId,
+                radiusMeters = radiusMeters,
+                limit = limit,
+                filters = filters,
+                excludedTargetUserIds = excludedTargetUserIds,
+                userSpecificViewerId = userSpecificViewerId
+            )
+            if (nearestRows.size >= limit) {
+                return nearestRows
+            }
+        }
+
         // KNN spatial ordering via PostGIS `<->` operator. The GiST index on
         // user_locations.geom can serve the ordering directly when `<->` is the
         // sole ORDER BY clause — adding a CASE expression or a tiebreaker
@@ -162,7 +893,7 @@ class JdbcSwipeRepository(
               ON target_travel.user_id = u.id
              AND target_travel.status = 'active'
              AND target_travel.active_until IS NULL
-            WHERE u.id <> ?
+            WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
               AND u.status = 'active'
               AND u.deleted_at IS NULL
               AND p.visibility_status = 'visible'
@@ -220,15 +951,22 @@ class JdbcSwipeRepository(
                         )
                   )
               )
-              AND NOT EXISTS (
-                  SELECT 1 FROM swipe_actions sa
-                  WHERE sa.actor_user_id = ?
-                    AND sa.target_user_id = u.id
-                    AND sa.rewound_at IS NULL
+              AND (
+                  ?::uuid IS NULL
+                  OR NOT EXISTS (
+                      SELECT 1 FROM swipe_actions sa
+                      WHERE sa.actor_user_id = ?::uuid
+                        AND sa.target_user_id = u.id
+                        AND sa.rewound_at IS NULL
+                  )
               )
               AND (
-                  cardinality(?::uuid[]) = 0
+                  ?::boolean = false
                   OR u.id <> ALL(?::uuid[])
+              )
+              AND (
+                  ?::boolean = false
+                  OR u.id = ANY(?::uuid[])
               )
             -- KNN ORDER on a COALESCE'd expression can't use the GiST index
             -- directly, so we accept a small in-memory sort over the (already
@@ -245,40 +983,45 @@ class JdbcSwipeRepository(
             val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
             val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
             val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
+            val forcedIds = createArrayOf("uuid", forcedTargetUserIds.toTypedArray())
             statement.setObject(1, viewerUserId)
             // $2: verifiedPreferred soft_score signal (SELECT). Placed early in the SQL
             // text so the SELECT param appears before the WHERE/ORDER BY params.
             statement.setBoolean(2, filters.verifiedPreferred)
-            statement.setObject(3, viewerUserId)
-            // $4 + $5: ST_DWithin radius bound twice — once against target's
+            statement.setNullableUuid(3, userSpecificViewerId)
+            statement.setNullableUuid(4, userSpecificViewerId)
+            // $5 + $6: ST_DWithin radius bound twice — once against target's
             // real GPS, once against target's travel point.
-            statement.setDouble(4, radiusMeters.toDouble())
             statement.setDouble(5, radiusMeters.toDouble())
-            statement.setObject(6, filters.minimumAge)
+            statement.setDouble(6, radiusMeters.toDouble())
             statement.setObject(7, filters.minimumAge)
-            statement.setObject(8, filters.maximumAge)
+            statement.setObject(8, filters.minimumAge)
             statement.setObject(9, filters.maximumAge)
-            statement.setArray(10, contexts)
+            statement.setObject(10, filters.maximumAge)
             statement.setArray(11, contexts)
-            statement.setBoolean(12, filters.verifiedOnly)
-            statement.setBoolean(13, filters.facePhotoVerifiedOnly)
-            statement.setBoolean(14, filters.ageVerifiedOnly)
-            statement.setArray(15, styles)
+            statement.setArray(12, contexts)
+            statement.setBoolean(13, filters.verifiedOnly)
+            statement.setBoolean(14, filters.facePhotoVerifiedOnly)
+            statement.setBoolean(15, filters.ageVerifiedOnly)
             statement.setArray(16, styles)
-            statement.setArray(17, intents)
+            statement.setArray(17, styles)
             statement.setArray(18, intents)
-            statement.setArray(19, lifestyleTags)
+            statement.setArray(19, intents)
             statement.setArray(20, lifestyleTags)
-            statement.setArray(21, logisticsTags)
+            statement.setArray(21, lifestyleTags)
             statement.setArray(22, logisticsTags)
-            statement.setObject(23, filters.linkedOnly)
+            statement.setArray(23, logisticsTags)
             statement.setObject(24, filters.linkedOnly)
-            statement.setObject(25, viewerUserId)
+            statement.setObject(25, filters.linkedOnly)
             statement.setObject(26, viewerUserId)
             statement.setObject(27, viewerUserId)
-            statement.setArray(28, excludedIds)
-            statement.setArray(29, excludedIds)
-            statement.setInt(30, limit)
+            statement.setNullableUuid(28, userSpecificViewerId)
+            statement.setNullableUuid(29, userSpecificViewerId)
+            statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(31, excludedIds)
+            statement.setBoolean(32, forcedTargetUserIds.isNotEmpty())
+            statement.setArray(33, forcedIds)
+            statement.setInt(34, limit)
             statement.executeQuery().use { rs ->
                 buildList {
                     while (rs.next()) {
@@ -449,6 +1192,47 @@ class JdbcSwipeRepository(
         val linkedPartnerThumbnailMediaAssetId: UUID?
     )
 
+    private data class DeckLocationCacheKey(
+        val longitudeE3: Int,
+        val latitudeE3: Int
+    )
+
+    private data class DeckRankCacheKey(
+        val location: DeckLocationCacheKey,
+        val radiusMeters: Int,
+        val filterKey: String,
+        val window: Int
+    )
+
+    private data class CachedDeckRankRows(
+        val rows: List<DeckRankRow>,
+        val expiresAt: Instant
+    )
+
+    private fun PreparedStatement.executeDeckRankRows(): List<DeckRankRow> =
+        executeQuery().use { rs ->
+            buildList {
+                while (rs.next()) {
+                    add(rs.readDeckRankRow())
+                }
+            }
+        }
+
+    private fun ResultSet.readDeckRankRow(): DeckRankRow =
+        DeckRankRow(
+            userId = getObject("user_id", UUID::class.java),
+            displayName = getString("display_name"),
+            displayAge = getInt("display_age").takeUnless { wasNull() },
+            bio = getString("bio"),
+            tags = readStringArray("profile_tags"),
+            verified = getBoolean("verified"),
+            visiting = getBoolean("visiting"),
+            showDistance = getBoolean("show_distance"),
+            distanceMeters = getDouble("distance_meters"),
+            isBoosted = getBoolean("is_boosted"),
+            softScore = getInt("soft_score")
+        )
+
     override suspend fun upsertDeckSession(
         session: SwipeDeckSessionRecord,
         cards: List<SwipeDeckSessionCardRecord>
@@ -496,6 +1280,54 @@ class JdbcSwipeRepository(
                         if (!rs.next()) null else rs.toSwipeDeckSessionRecord()
                     }
                 }
+            }
+        }
+
+    override suspend fun findDeckSessionState(sessionId: UUID, viewerUserId: UUID): SwipeDeckSessionState? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val session = connection.prepareStatement(
+                    """
+                    SELECT id,
+                           deck_session_token,
+                           deck_session_token_hash,
+                           viewer_user_id,
+                           scope_hash,
+                           radius_meters,
+                           page_limit,
+                           filter_payload::text AS filter_payload,
+                           generated_at,
+                           expires_at
+                    FROM swipe_deck_sessions
+                    WHERE id = ?
+                      AND viewer_user_id = ?
+                    """.trimIndent()
+                ).use { statement ->
+                    statement.setObject(1, sessionId)
+                    statement.setObject(2, viewerUserId)
+                    statement.executeQuery().use { rs ->
+                        if (!rs.next()) null else rs.toSwipeDeckSessionRecord()
+                    }
+                } ?: return@withContext null
+
+                val targetIds = connection.prepareStatement(
+                    """
+                    SELECT target_user_id
+                    FROM swipe_deck_cards
+                    WHERE deck_session_id = ?
+                    """.trimIndent()
+                ).use { statement ->
+                    statement.setObject(1, sessionId)
+                    statement.executeQuery().use { rs ->
+                        buildSet {
+                            while (rs.next()) {
+                                add(rs.getObject("target_user_id", UUID::class.java))
+                            }
+                        }
+                    }
+                }
+
+                SwipeDeckSessionState(session = session, targetUserIds = targetIds)
             }
         }
 
@@ -567,24 +1399,7 @@ class JdbcSwipeRepository(
         now: Instant
     ): Unit = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            connection.prepareStatement(
-                """
-                UPDATE swipe_deck_cards
-                SET action = ?,
-                    action_recorded_at = ?
-                WHERE deck_session_id = ?
-                  AND target_user_id = ?
-                  AND card_token_hash = ?
-                  AND action_recorded_at IS NULL
-                """.trimIndent()
-            ).use { statement ->
-                statement.setString(1, action)
-                statement.setTimestamp(2, Timestamp.from(now))
-                statement.setObject(3, sessionId)
-                statement.setObject(4, targetUserId)
-                statement.setString(5, cardTokenHash)
-                statement.executeUpdate()
-            }
+            connection.markDeckCardActionRecorded(sessionId, cardTokenHash, targetUserId, action, now)
         }
     }
 
@@ -599,8 +1414,9 @@ class JdbcSwipeRepository(
             connection.prepareStatement(
                 """
                 WITH viewer_location AS (
-                    -- Travel-mode override for viewer side; targets are still
-                    -- ranged against their own real GPS row.
+                    -- Travel-mode override for viewer side; target-side travel
+                    -- must mirror queryDeck so dealt visiting cards remain
+                    -- actionable.
                     SELECT COALESCE(tl.geom, ul.geom) AS geom
                     FROM user_locations ul
                     LEFT JOIN travel_locations tl
@@ -620,6 +1436,10 @@ class JdbcSwipeRepository(
                       ON target_profile.user_id = target.id
                     JOIN discovery_settings target_settings
                       ON target_settings.user_id = target.id
+                    LEFT JOIN travel_locations target_travel
+                      ON target_travel.user_id = target.id
+                     AND target_travel.status = 'active'
+                     AND target_travel.active_until IS NULL
                     LEFT JOIN account_risk_states target_risk
                       ON target_risk.user_id = target.id
                     WHERE target.id = ?
@@ -628,9 +1448,13 @@ class JdbcSwipeRepository(
                       AND target_profile.visibility_status = 'visible'
                       AND target_settings.swipe_visible = true
                       AND target_settings.incognito = false
+                      AND (target_travel.id IS NULL OR target_settings.visible_while_traveling = true)
                       AND (?::boolean = false OR target_settings.allow_intro_notes = true)
                       AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-                      AND ST_DWithin(v.geom, target_location.geom, ?)
+                      AND (
+                          ST_DWithin(v.geom, target_location.geom, ?)
+                          OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
+                      )
                       AND NOT EXISTS (
                           SELECT 1 FROM swipe_actions sa
                           WHERE sa.actor_user_id = ?
@@ -645,7 +1469,8 @@ class JdbcSwipeRepository(
                 statement.setObject(3, targetUserId)
                 statement.setBoolean(4, requireIntroNotesAllowed)
                 statement.setDouble(5, radiusMeters.toDouble())
-                statement.setObject(6, viewerUserId)
+                statement.setDouble(6, radiusMeters.toDouble())
+                statement.setObject(7, viewerUserId)
                 statement.executeQuery().use { rs ->
                     rs.next()
                     rs.getBoolean(1)
@@ -674,7 +1499,8 @@ class JdbcSwipeRepository(
                     -- check; if the viewer Liked someone in their travel city
                     -- then jumped home, this query still uses the travel point
                     -- so the action remains within-radius for the original deck.
-                    SELECT COALESCE(tl.geom, ul.geom) AS geom
+                    SELECT COALESCE(tl.geom, ul.geom) AS geom,
+                           tl.id AS travel_location_id
                     FROM user_locations ul
                     LEFT JOIN travel_locations tl
                       ON tl.user_id = ul.user_id
@@ -693,9 +1519,14 @@ class JdbcSwipeRepository(
                           AND c.viewer_user_id = ?
                           AND c.target_user_id = ?
                           AND c.card_token_hash = ?
-                          AND s.expires_at > ?
-                          AND c.action_recorded_at IS NULL
+                            AND s.expires_at > ?
+                            AND c.action_recorded_at IS NULL
                     ) AS deck_card_actionable,
+                    (
+                        SELECT travel_location_id
+                        FROM viewer_location
+                        LIMIT 1
+                    ) AS viewer_travel_location_id,
                     EXISTS (
                         SELECT 1
                         FROM viewer_location v
@@ -707,6 +1538,10 @@ class JdbcSwipeRepository(
                           ON target_profile.user_id = target.id
                         JOIN discovery_settings target_settings
                           ON target_settings.user_id = target.id
+                        LEFT JOIN travel_locations target_travel
+                          ON target_travel.user_id = target.id
+                         AND target_travel.status = 'active'
+                         AND target_travel.active_until IS NULL
                         LEFT JOIN account_risk_states target_risk
                           ON target_risk.user_id = target.id
                         WHERE target.id = ?
@@ -715,14 +1550,24 @@ class JdbcSwipeRepository(
                           AND target_profile.visibility_status = 'visible'
                           AND target_settings.swipe_visible = true
                           AND target_settings.incognito = false
+                          AND (target_travel.id IS NULL OR target_settings.visible_while_traveling = true)
                           AND (?::boolean = false OR target_settings.allow_intro_notes = true)
                           AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-                          AND ST_DWithin(v.geom, target_location.geom, ?)
+                          AND (
+                              ST_DWithin(v.geom, target_location.geom, ?)
+                              OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
+                          )
                           AND NOT EXISTS (
                               SELECT 1 FROM swipe_actions sa
                               WHERE sa.actor_user_id = ?
                                 AND sa.target_user_id = target.id
                                 AND sa.rewound_at IS NULL
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM user_blocks ub
+                              WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = target.id)
+                                 OR (ub.blocker_user_id = target.id AND ub.blocked_user_id = ?)
                           )
                     ) AS target_eligible
                 """.trimIndent()
@@ -738,12 +1583,16 @@ class JdbcSwipeRepository(
                 statement.setObject(9, targetUserId)
                 statement.setBoolean(10, requireIntroNotesAllowed)
                 statement.setDouble(11, radiusMeters.toDouble())
-                statement.setObject(12, viewerUserId)
+                statement.setDouble(12, radiusMeters.toDouble())
+                statement.setObject(13, viewerUserId)
+                statement.setObject(14, viewerUserId)
+                statement.setObject(15, viewerUserId)
                 statement.executeQuery().use { rs ->
                     rs.next()
                     SwipeActionPreconditionCheck(
                         deckCardActionable = rs.getBoolean("deck_card_actionable"),
-                        targetEligible = rs.getBoolean("target_eligible")
+                        targetEligible = rs.getBoolean("target_eligible"),
+                        viewerTravelLocationId = rs.getObject("viewer_travel_location_id", UUID::class.java)
                     )
                 }
             }
@@ -1052,6 +1901,106 @@ class JdbcSwipeRepository(
         }
     }
 
+    override suspend fun recordSwipeActionAndMarkCard(
+        actionId: UUID,
+        actorUserId: UUID,
+        targetUserId: UUID,
+        action: String,
+        sessionId: UUID,
+        cardTokenHash: String,
+        now: Instant,
+        noteText: String?,
+        consumedInventoryId: UUID?,
+        travelLocationId: UUID?,
+        matchIdFactory: () -> UUID
+    ): SwipeActionResult = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            val previousAutoCommit = connection.autoCommit
+            connection.autoCommit = false
+            try {
+                connection.prepareStatement(
+                    """
+                    INSERT INTO swipe_actions (
+                        id, actor_user_id, target_user_id, action,
+                        note_text, consumed_inventory_id, travel_location_id
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT DO NOTHING
+                    """.trimIndent()
+                ).use { statement ->
+                    statement.setObject(1, actionId)
+                    statement.setObject(2, actorUserId)
+                    statement.setObject(3, targetUserId)
+                    statement.setString(4, action)
+                    statement.setString(5, noteText)
+                    statement.setObject(6, consumedInventoryId)
+                    statement.setObject(7, travelLocationId)
+                    if (statement.executeUpdate() == 0) {
+                        val existing = connection.findSwipeActionById(actionId, actorUserId)
+                        connection.rollback()
+                        return@withContext SwipeActionResult(recorded = existing != null, match = existing?.match)
+                    }
+                }
+
+                if (action == "pineapple_like") {
+                    connection.recordPineappleLikeActivity(actorUserId, targetUserId)
+                }
+
+                val match: MatchRecord? = if (action in POSITIVE_ACTIONS) {
+                    val targetLikedActor = connection.prepareStatement(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1 FROM swipe_actions sa
+                            LEFT JOIN travel_locations tl
+                              ON tl.id = sa.travel_location_id
+                            WHERE sa.actor_user_id = ?
+                              AND sa.target_user_id = ?
+                              AND sa.action IN ('like', 'pineapple_like')
+                              AND sa.rewound_at IS NULL
+                              AND (
+                                  sa.travel_location_id IS NULL
+                                  OR tl.active_until IS NULL
+                                  OR tl.active_until > now() - INTERVAL '24 hours'
+                              )
+                        )
+                        """.trimIndent()
+                    ).use { statement ->
+                        statement.setObject(1, targetUserId)
+                        statement.setObject(2, actorUserId)
+                        statement.executeQuery().use { rs ->
+                            rs.next()
+                            rs.getBoolean(1)
+                        }
+                    }
+
+                    if (targetLikedActor) {
+                        connection.upsertMatch(actorUserId, targetUserId, matchIdFactory)
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
+
+                connection.markDeckCardActionRecorded(
+                    sessionId = sessionId,
+                    cardTokenHash = cardTokenHash,
+                    targetUserId = targetUserId,
+                    action = action,
+                    now = now
+                )
+
+                connection.commit()
+                SwipeActionResult(recorded = true, match = match)
+            } catch (error: Throwable) {
+                connection.rollback()
+                throw error
+            } finally {
+                connection.autoCommit = previousAutoCommit
+            }
+        }
+    }
+
     override suspend fun rewindSwipeAction(
         actionId: UUID,
         actorUserId: UUID,
@@ -1246,8 +2195,7 @@ class JdbcSwipeRepository(
                 expires_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)
-            ON CONFLICT (id) DO UPDATE
-            SET updated_at = now()
+            ON CONFLICT (id) DO NOTHING
             """.trimIndent()
         ).use { statement ->
             statement.setObject(1, session.sessionId)
@@ -1292,6 +2240,33 @@ class JdbcSwipeRepository(
                 statement.addBatch()
             }
             statement.executeBatch()
+        }
+    }
+
+    private fun Connection.markDeckCardActionRecorded(
+        sessionId: UUID,
+        cardTokenHash: String,
+        targetUserId: UUID,
+        action: String,
+        now: Instant
+    ) {
+        prepareStatement(
+            """
+            UPDATE swipe_deck_cards
+            SET action = ?,
+                action_recorded_at = ?
+            WHERE deck_session_id = ?
+              AND target_user_id = ?
+              AND card_token_hash = ?
+              AND action_recorded_at IS NULL
+            """.trimIndent()
+        ).use { statement ->
+            statement.setString(1, action)
+            statement.setTimestamp(2, Timestamp.from(now))
+            statement.setObject(3, sessionId)
+            statement.setObject(4, targetUserId)
+            statement.setString(5, cardTokenHash)
+            statement.executeUpdate()
         }
     }
 
@@ -1397,7 +2372,52 @@ class JdbcSwipeRepository(
 }
 
 internal fun canonicalPair(a: UUID, b: UUID): Pair<UUID, UUID> =
-    if (a.compareTo(b) < 0) a to b else b to a
+    if (a.toString() < b.toString()) a to b else b to a
+
+private fun PreparedStatement.setNullableUuid(index: Int, value: UUID?) {
+    if (value == null) {
+        setNull(index, Types.OTHER)
+    } else {
+        setObject(index, value)
+    }
+}
+
+private fun DiscoveryFilters.isRankCacheEligible(): Boolean =
+    linkedOnly == null
+
+private fun DiscoveryFilters.rankCacheKey(): String =
+    buildString {
+        append(minimumAge ?: "")
+        append(';')
+        append(maximumAge ?: "")
+        append(';')
+        append(relationshipContexts.sorted().joinToString("|"))
+        append(';')
+        append(linkedOnly ?: "")
+        append(';')
+        append(verifiedOnly)
+        append(';')
+        append(facePhotoVerifiedOnly)
+        append(';')
+        append(ageVerifiedOnly)
+        append(';')
+        append(discoveryStyles.sorted().joinToString("|"))
+        append(';')
+        append(lifestyleTags.sorted().joinToString("|"))
+        append(';')
+        append(logisticsTags.sorted().joinToString("|"))
+        append(';')
+        append(tonightAvailableOnly)
+        append(';')
+        append(intents.sorted().joinToString("|"))
+        append(';')
+        append(verifiedPreferred)
+    }
+
+private fun nearestCandidateWindowLimit(limit: Int, filters: DiscoveryFilters): Int {
+    val multiplier = if (filters.hasAdvancedFilters || filters.verifiedPreferred) 20 else 8
+    return (limit * multiplier).coerceIn(limit, 1_500)
+}
 
 private fun ResultSet.readStringArray(column: String): List<String> {
     val sqlArray = getArray(column) ?: return emptyList()

@@ -438,12 +438,14 @@ function Seed-OnlineCandidates {
     param([int]$Count)
 
     $max = [Math]::Min($Count, $CandidateCount)
-    for ($i = 1; $i -le $max; $i++) {
-        $id = "00000000-0000-0000-1000-{0:d12}" -f $i
-        docker exec pynapli-redis redis-cli SETEX "presence:user:$id" 300 "load-test" | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to seed Redis presence for $id"
-        }
+    if ($max -le 0) {
+        return
+    }
+
+    $seedScript = "for i in `$(seq 1 $max); do id=`$(printf '00000000-0000-0000-1000-%012d' `$i); redis-cli SETEX `"presence:user:`$id`" 300 load-test >/dev/null || exit 1; done"
+    docker exec pynapli-redis sh -c $seedScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to seed Redis presence for $max candidates"
     }
 }
 

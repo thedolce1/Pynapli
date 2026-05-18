@@ -88,7 +88,8 @@ class TopPicksService(
         val deckSession = deckTokenCodec.issueDeckSession(
             viewerUserId = viewerUserId,
             scopeHash = scopeHash,
-            now = now
+            now = now,
+            ttl = refreshInterval
         )
         val expiresAt = now.plus(refreshInterval)
 
@@ -157,6 +158,7 @@ class TopPicksService(
         val onlineIds = onlineFor(candidates.map { it.userId }.toSet())
         return TopPicksResponseDto(
             sessionId = saved.session.sessionId.toString(),
+            deckSessionId = deckSession.deckSessionId,
             generatedAt = saved.session.generatedAt.toString(),
             expiresAt = saved.session.expiresAt.toString(),
             tierLimit = tierLimit,
@@ -179,6 +181,7 @@ class TopPicksService(
         if (cards.isEmpty()) {
             return TopPicksResponseDto(
                 sessionId = session.sessionId.toString(),
+                deckSessionId = "",
                 generatedAt = session.generatedAt.toString(),
                 expiresAt = session.expiresAt.toString(),
                 picks = emptyList(),
@@ -211,6 +214,7 @@ class TopPicksService(
 
         return TopPicksResponseDto(
             sessionId = session.sessionId.toString(),
+            deckSessionId = backingSession.deckSessionToken,
             generatedAt = session.generatedAt.toString(),
             expiresAt = session.expiresAt.toString(),
             tierLimit = tierLimit,

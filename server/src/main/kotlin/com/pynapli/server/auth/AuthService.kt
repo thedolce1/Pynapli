@@ -13,12 +13,17 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class AuthService(
     private val repository: AuthRepository,
     private val passwordHasher: PasswordHasher = PasswordHasher(),
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
+    private val accessSessionCacheTtl: Duration = Duration.ofSeconds(5),
+    private val accessSessionCacheMaxSize: Int = 20_000
 ) {
+    private val accessSessionCache = ConcurrentHashMap<String, CachedAccessSession>()
+
     suspend fun signupEmail(
         email: String,
         password: String,
@@ -88,6 +93,7 @@ class AuthService(
             throw AuthException("INVALID_REFRESH_TOKEN")
         }
         if (session.userStatus != "active") throw AuthException("ACCOUNT_NOT_ACTIVE")
+        accessSessionCache.remove(session.accessTokenHash)
 
         val newAccessToken = TokenGenerator.newToken()
         val newRefreshToken = TokenGenerator.newToken()
@@ -110,17 +116,34 @@ class AuthService(
 
     suspend fun authenticate(accessToken: String): UserRecord {
         val now = clock.instant()
-        val session = repository.findSessionByAccessTokenHash(Sha256.hash(accessToken))
+        val accessTokenHash = Sha256.hash(accessToken)
+        accessSessionCache[accessTokenHash]?.let { cached ->
+            if (cached.expiresAt.isAfter(now)) {
+                return cached.user
+            }
+            accessSessionCache.remove(accessTokenHash, cached)
+        }
+
+        val session = repository.findSessionByAccessTokenHash(accessTokenHash)
             ?: throw AuthException("UNAUTHENTICATED")
 
         if (session.revokedAt != null || session.accessExpiresAt <= now) throw AuthException("UNAUTHENTICATED")
         if (session.userStatus != "active") throw AuthException("ACCOUNT_NOT_ACTIVE")
 
-        return UserRecord(id = session.userId, status = session.userStatus)
+        val user = UserRecord(id = session.userId, status = session.userStatus)
+        cacheAccessSession(
+            accessTokenHash = accessTokenHash,
+            user = user,
+            sessionExpiresAt = session.accessExpiresAt,
+            now = now
+        )
+        return user
     }
 
     suspend fun logout(accessToken: String): Boolean {
-        val session = repository.findSessionByAccessTokenHash(Sha256.hash(accessToken))
+        val accessTokenHash = Sha256.hash(accessToken)
+        accessSessionCache.remove(accessTokenHash)
+        val session = repository.findSessionByAccessTokenHash(accessTokenHash)
             ?: return false
         return repository.revokeSession(session.id)
     }
@@ -184,6 +207,27 @@ class AuthService(
         )
     }
 
+    private fun cacheAccessSession(
+        accessTokenHash: String,
+        user: UserRecord,
+        sessionExpiresAt: Instant,
+        now: Instant
+    ) {
+        if (accessSessionCacheTtl.isZero || accessSessionCacheTtl.isNegative || accessSessionCacheMaxSize <= 0) {
+            return
+        }
+        if (accessSessionCache.size >= accessSessionCacheMaxSize) {
+            accessSessionCache.entries.removeIf { (_, value) -> !value.expiresAt.isAfter(now) }
+            if (accessSessionCache.size >= accessSessionCacheMaxSize) {
+                accessSessionCache.clear()
+            }
+        }
+        val cacheExpiresAt = minOf(now.plus(accessSessionCacheTtl), sessionExpiresAt)
+        if (cacheExpiresAt.isAfter(now)) {
+            accessSessionCache[accessTokenHash] = CachedAccessSession(user = user, expiresAt = cacheExpiresAt)
+        }
+    }
+
     companion object {
         private val ACCESS_TOKEN_TTL: Duration = Duration.ofMinutes(15)
         private val REFRESH_TOKEN_TTL: Duration = Duration.ofDays(30)
@@ -198,4 +242,9 @@ private data class SignupAgeGate(
     val birthdate: LocalDate,
     val displayAge: Int,
     val acceptedAt: Instant
+)
+
+private data class CachedAccessSession(
+    val user: UserRecord,
+    val expiresAt: Instant
 )

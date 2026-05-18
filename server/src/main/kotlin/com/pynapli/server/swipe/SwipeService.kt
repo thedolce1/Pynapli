@@ -96,17 +96,18 @@ class SwipeService(
         if (cursor != null && cursor.scopeHash != scopeHash) {
             throw SwipeException(SwipeDeckTokenCodec.INVALID_CURSOR)
         }
-        val existingSession = cursor?.let { decoded ->
+        val existingSessionState = cursor?.let { decoded ->
             val stored = profile("swipe.deck.session.find") {
-                repository.findDeckSession(decoded.sessionId, viewerUserId)
+                repository.findDeckSessionState(decoded.sessionId, viewerUserId)
             } ?: throw SwipeException(SwipeDeckTokenCodec.INVALID_CURSOR)
+            val session = stored.session
             if (
-                stored.deckSessionTokenHash != decoded.deckSessionTokenHash ||
-                stored.scopeHash != decoded.scopeHash ||
-                !stored.expiresAt.isAfter(now)
+                session.deckSessionTokenHash != decoded.deckSessionTokenHash ||
+                session.scopeHash != decoded.scopeHash ||
+                !session.expiresAt.isAfter(now)
             ) {
                 throw SwipeException(
-                    if (!stored.expiresAt.isAfter(now)) {
+                    if (!session.expiresAt.isAfter(now)) {
                         SwipeDeckTokenCodec.STALE_DECK_SESSION
                     } else {
                         SwipeDeckTokenCodec.INVALID_CURSOR
@@ -115,14 +116,13 @@ class SwipeService(
             }
             stored
         }
+        val existingSession = existingSessionState?.session
         val deckSession = existingSession?.toIssuedDeckSession() ?: deckTokenCodec.issueDeckSession(
             viewerUserId = viewerUserId,
             scopeHash = scopeHash,
             now = now
         )
-        val excludedTargetUserIds = profile("swipe.deck.session.targets") {
-            existingSession?.let { repository.listDeckSessionTargetIds(it.sessionId) }.orEmpty()
-        }
+        val excludedTargetUserIds = existingSessionState?.targetUserIds.orEmpty()
         val startPosition = cursor?.nextPosition ?: 0
 
         val firstPass = profile("swipe.deck.repo.queryDeck") {
@@ -316,9 +316,6 @@ class SwipeService(
             }
         }
 
-        if (profile("swipe.action.blocks") { blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) == true }) {
-            throw SwipeException("INVALID_SWIPE_TARGET")
-        }
         if (profile("swipe.action.rateLimit") {
                 rateLimitService?.check(viewerUserId, RateLimitedAction.SWIPE_ACTION)?.allowed == false
             }) {
@@ -351,35 +348,19 @@ class SwipeService(
             null
         }
 
-        // SWIPE_IMPLEMENTATION_SPEC L347, L353: record which travel session this
-        // action was taken in (if any). The match-creation query enforces the
-        // 24h tail by joining on this id. Cheap lookup — the partial unique
-        // index on travel_locations makes the active-row read O(log n) per user.
-        val travelLocationId = profile("swipe.action.travelContext") {
-            travelLocationRepository?.findActive(viewerUserId)?.id
-        }
-
         val result = profile("swipe.action.record") {
-            repository.recordSwipeAction(
+            repository.recordSwipeActionAndMarkCard(
                 actionId = actionId,
                 actorUserId = viewerUserId,
                 targetUserId = targetUserId,
                 action = action,
+                sessionId = actionTokens.sessionId,
+                cardTokenHash = actionTokens.cardTokenHash,
+                now = clock.instant(),
                 noteText = noteText,
                 consumedInventoryId = pineappleInventoryId,
-                travelLocationId = travelLocationId
+                travelLocationId = preconditions.viewerTravelLocationId
             )
-        }
-        if (result.recorded) {
-            profile("swipe.action.markCard") {
-                repository.markDeckCardActionRecorded(
-                    sessionId = actionTokens.sessionId,
-                    cardTokenHash = actionTokens.cardTokenHash,
-                    targetUserId = targetUserId,
-                    action = action,
-                    now = clock.instant()
-                )
-            }
         }
         val match = result.match
         if (match != null) {

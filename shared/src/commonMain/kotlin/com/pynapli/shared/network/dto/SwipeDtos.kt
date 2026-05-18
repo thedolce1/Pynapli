@@ -150,6 +150,7 @@ data class TopPickCardDto(
 @Serializable
 data class TopPicksResponseDto(
     val sessionId: String,
+    val deckSessionId: String = "",
     val generatedAt: String,
     val expiresAt: String,
     val picks: List<TopPickCardDto>,
