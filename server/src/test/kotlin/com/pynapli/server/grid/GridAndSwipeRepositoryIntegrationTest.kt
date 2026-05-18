@@ -198,6 +198,93 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "swipe action rejects a stale dealt card after either user blocks" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000002001")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000002002")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+            val service = SwipeService(JdbcSwipeRepository(dataSource))
+
+            val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 2))
+            val card = deck.items.single()
+            dataSource.insertBlock(target, viewer)
+            val error = assertFailsWith<SwipeException> {
+                service.submitAction(
+                    viewer,
+                    SwipeActionRequestDto(
+                        actionId = UUID.randomUUID().toString(),
+                        deckSessionId = deck.deckSessionId,
+                        cardToken = card.rankToken,
+                        targetUserId = target.toString(),
+                        action = SwipeAction.LIKE
+                    )
+                )
+            }
+
+            assertEquals("INVALID_SWIPE_TARGET", error.code)
+            assertEquals(0, dataSource.countSwipeActions(viewer, target))
+        }
+    }
+
+    "swipe action rejects a stale dealt card after target leaves swipe discovery" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000002011")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000002012")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+            val service = SwipeService(JdbcSwipeRepository(dataSource))
+
+            val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 2))
+            val card = deck.items.single()
+            dataSource.setSwipeVisible(target, false)
+            val error = assertFailsWith<SwipeException> {
+                service.submitAction(
+                    viewer,
+                    SwipeActionRequestDto(
+                        actionId = UUID.randomUUID().toString(),
+                        deckSessionId = deck.deckSessionId,
+                        cardToken = card.rankToken,
+                        targetUserId = target.toString(),
+                        action = SwipeAction.LIKE
+                    )
+                )
+            }
+
+            assertEquals("INVALID_SWIPE_TARGET", error.code)
+            assertEquals(0, dataSource.countSwipeActions(viewer, target))
+        }
+    }
+
+    "swipe action rejects a stale dealt card after target is quarantined" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000002021")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000002022")
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+            val service = SwipeService(JdbcSwipeRepository(dataSource))
+
+            val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 2))
+            val card = deck.items.single()
+            dataSource.setRiskState(target, score = 75, tier = "quarantine")
+            val error = assertFailsWith<SwipeException> {
+                service.submitAction(
+                    viewer,
+                    SwipeActionRequestDto(
+                        actionId = UUID.randomUUID().toString(),
+                        deckSessionId = deck.deckSessionId,
+                        cardToken = card.rankToken,
+                        targetUserId = target.toString(),
+                        action = SwipeAction.LIKE
+                    )
+                )
+            }
+
+            assertEquals("INVALID_SWIPE_TARGET", error.code)
+            assertEquals(0, dataSource.countSwipeActions(viewer, target))
+        }
+    }
+
     "swipe rewind soft-rewinds action and restores a fresh actionable card" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000929")
@@ -1688,6 +1775,18 @@ private fun DataSource.setVisibleWhileTraveling(userId: UUID, value: Boolean) {
     }
 }
 
+private fun DataSource.setSwipeVisible(userId: UUID, value: Boolean) {
+    connection.use { connection ->
+        connection.prepareStatement(
+            "UPDATE discovery_settings SET swipe_visible = ? WHERE user_id = ?"
+        ).use { statement ->
+            statement.setBoolean(1, value)
+            statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+    }
+}
+
 private fun DataSource.insertSwipeAction(
     actorUserId: UUID,
     targetUserId: UUID,
@@ -1710,6 +1809,20 @@ private fun DataSource.insertSwipeAction(
         }
     }
 }
+
+private fun DataSource.countSwipeActions(actorUserId: UUID, targetUserId: UUID): Int =
+    connection.use { connection ->
+        connection.prepareStatement(
+            "SELECT COUNT(*) FROM swipe_actions WHERE actor_user_id = ? AND target_user_id = ?"
+        ).use { statement ->
+            statement.setObject(1, actorUserId)
+            statement.setObject(2, targetUserId)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getInt(1)
+            }
+        }
+    }
 
 private fun DataSource.selectActionConsumedInventoryId(actionId: UUID): UUID? =
     connection.use { connection ->

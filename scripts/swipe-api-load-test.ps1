@@ -15,6 +15,7 @@ param(
     [switch]$ColdCache,
     [switch]$ServerProfile,
     [switch]$SkipSwipeStateReset,
+    [switch]$SkipSafetyProbes,
     [switch]$FailOnBudget
 )
 
@@ -36,6 +37,7 @@ $script:ScenarioBudgetFailed = $false
 $script:ProfileSummaryRows = @()
 $script:SlowProfileRows = @()
 $script:PoolSummaryRows = @()
+$script:SafetyProbeRows = @()
 
 function Invoke-PynapliJson {
     param(
@@ -515,6 +517,23 @@ function Convert-MetricHeader {
     return $metrics
 }
 
+function Get-LoadRecordAccepted {
+    param([pscustomobject]$Record)
+
+    if ($Record.StatusCode -ge 200 -and $Record.StatusCode -lt 300) {
+        return $true
+    }
+    if (
+        -not [string]::IsNullOrWhiteSpace($Record.ExpectedErrorCode) -and
+        $Record.StatusCode -ge 400 -and
+        $Record.StatusCode -lt 500 -and
+        $Record.ErrorCode -eq $Record.ExpectedErrorCode
+    ) {
+        return $true
+    }
+    return $false
+}
+
 function Write-ScenarioSummary {
     param([array]$Results)
 
@@ -535,9 +554,13 @@ function Write-ScenarioSummary {
     Write-Host "------------------------"
     $summaryRows = New-Object System.Collections.Generic.List[object]
     foreach ($group in ($Results | Group-Object Scenario | Sort-Object Name)) {
-        $successful = @($group.Group | Where-Object { $_.StatusCode -ge 200 -and $_.StatusCode -lt 300 })
-        $errors = @($group.Group | Where-Object { $_.StatusCode -lt 200 -or $_.StatusCode -ge 300 })
-        $latencies = @($successful | ForEach-Object { [double]$_.Millis })
+        $accepted = @($group.Group | Where-Object { Get-LoadRecordAccepted -Record $_ })
+        $errors = @($group.Group | Where-Object { -not (Get-LoadRecordAccepted -Record $_) })
+        $expectedFailures = @($group.Group | Where-Object {
+                (-not [string]::IsNullOrWhiteSpace($_.ExpectedErrorCode)) -and
+                (Get-LoadRecordAccepted -Record $_)
+            })
+        $latencies = @($accepted | ForEach-Object { [double]$_.Millis })
         $p50 = Get-Percentile -Values $latencies -Percentile 50
         $p95 = Get-Percentile -Values $latencies -Percentile 95
         $max = if ($latencies.Count -gt 0) { [Math]::Round(($latencies | Measure-Object -Maximum).Maximum, 1) } else { $null }
@@ -557,6 +580,7 @@ function Write-ScenarioSummary {
             Scenario = $group.Name
             Count = $group.Count
             Errors = $errors.Count
+            ExpectedFailures = $expectedFailures.Count
             P50Ms = $p50
             P95Ms = $p95
             MaxMs = $max
@@ -568,13 +592,13 @@ function Write-ScenarioSummary {
     $script:ScenarioSummaryRows = @($summaryRows.ToArray())
     $script:ScenarioBudgetFailed = $failedBudget
 
-    if ($Results.StatusCode -contains 0 -or @($Results | Where-Object { $_.StatusCode -ge 400 }).Count -gt 0) {
+    $unexpectedFailures = @($Results | Where-Object { -not (Get-LoadRecordAccepted -Record $_) })
+    if ($unexpectedFailures.Count -gt 0) {
         Write-Host ""
-        Write-Host "Failures"
-        Write-Host "--------"
-        $Results |
-            Where-Object { $_.StatusCode -lt 200 -or $_.StatusCode -ge 300 } |
-            Select-Object -First 20 Scenario, Tier, UserIndex, StatusCode, Error |
+        Write-Host "Unexpected failures"
+        Write-Host "-------------------"
+        $unexpectedFailures |
+            Select-Object -First 20 Scenario, Tier, UserIndex, StatusCode, ErrorCode, ExpectedErrorCode, Error |
             Format-Table -AutoSize
     }
 
@@ -705,6 +729,173 @@ function Write-PoolSummary {
     $script:PoolSummaryRows = @($summaryRows.ToArray())
 }
 
+function Get-PynapliErrorCode {
+    param([pscustomobject]$Response)
+
+    if ($null -eq $Response -or $null -eq $Response.Body) {
+        return $null
+    }
+    $propertyNames = @($Response.Body.PSObject.Properties.Name)
+    if ($propertyNames -contains "code") {
+        return [string]$Response.Body.code
+    }
+    if ($propertyNames -contains "error") {
+        return [string]$Response.Body.error
+    }
+    return $null
+}
+
+function Add-SafetyProbeResult {
+    param(
+        [System.Collections.Generic.List[object]]$Rows,
+        [string]$Probe,
+        [pscustomobject]$Response,
+        [string]$ExpectedCode,
+        [bool]$ExpectedSuccess
+    )
+
+    $actualCode = Get-PynapliErrorCode -Response $Response
+    $passed = if ($ExpectedSuccess) {
+        $Response.StatusCode -ge 200 -and $Response.StatusCode -lt 300
+    } else {
+        $Response.StatusCode -ge 400 -and $actualCode -eq $ExpectedCode
+    }
+    $Rows.Add([pscustomobject]@{
+        Probe = $Probe
+        StatusCode = $Response.StatusCode
+        ExpectedCode = $ExpectedCode
+        ActualCode = $actualCode
+        Passed = $passed
+    })
+    if (-not $passed) {
+        $body = if ($null -ne $Response.Body) { $Response.Body | ConvertTo-Json -Depth 12 -Compress } else { $Response.RawError }
+        throw "Swipe safety probe '$Probe' failed. HTTP $($Response.StatusCode), expected=$ExpectedCode, actual=$actualCode, body=$body"
+    }
+}
+
+function Invoke-SwipeSafetyProbes {
+    param([pscustomobject]$Session)
+
+    Write-Host ""
+    Write-Host "Swipe safety probes"
+    Write-Host "-------------------"
+
+    $rows = New-Object System.Collections.Generic.List[object]
+    $deck = Invoke-PynapliJson `
+        -Method POST `
+        -Path "/v1/swipe/deck/query" `
+        -AccessToken $Session.AccessToken `
+        -Body @{
+            radiusMeters = 50000
+            limit = 5
+        }
+    Assert-Success -Response $deck -Action "Safety probe deck query"
+
+    $cards = if ($null -ne $deck.Body -and $null -ne $deck.Body.items) { @($deck.Body.items) } else { @() }
+    if ($cards.Count -lt 3 -or [string]::IsNullOrWhiteSpace($deck.Body.deckSessionId)) {
+        throw "Safety probe deck query returned fewer than 3 cards; cannot prove token/idempotency invariants."
+    }
+
+    $deckSessionId = $deck.Body.deckSessionId
+    $first = $cards[0]
+    $second = $cards[1]
+    $third = $cards[2]
+
+    $mismatchedTarget = Invoke-PynapliJson `
+        -Method POST `
+        -Path "/v1/swipe/actions" `
+        -AccessToken $Session.AccessToken `
+        -Body @{
+            actionId = [guid]::NewGuid().ToString()
+            deckSessionId = $deckSessionId
+            cardToken = $first.rankToken
+            targetUserId = $second.userId
+            action = "like"
+        }
+    Add-SafetyProbeResult `
+        -Rows $rows `
+        -Probe "mismatched_card_target_rejected" `
+        -Response $mismatchedTarget `
+        -ExpectedCode "INVALID_SWIPE_CARD_TOKEN" `
+        -ExpectedSuccess $false
+
+    $actionId = [guid]::NewGuid().ToString()
+    $validLike = Invoke-PynapliJson `
+        -Method POST `
+        -Path "/v1/swipe/actions" `
+        -AccessToken $Session.AccessToken `
+        -Body @{
+            actionId = $actionId
+            deckSessionId = $deckSessionId
+            cardToken = $first.rankToken
+            targetUserId = $first.userId
+            action = "like"
+        }
+    Add-SafetyProbeResult `
+        -Rows $rows `
+        -Probe "valid_like_records" `
+        -Response $validLike `
+        -ExpectedCode "2xx" `
+        -ExpectedSuccess $true
+
+    $idempotentRetry = Invoke-PynapliJson `
+        -Method POST `
+        -Path "/v1/swipe/actions" `
+        -AccessToken $Session.AccessToken `
+        -Body @{
+            actionId = $actionId
+            deckSessionId = $deckSessionId
+            cardToken = $first.rankToken
+            targetUserId = $first.userId
+            action = "like"
+        }
+    Add-SafetyProbeResult `
+        -Rows $rows `
+        -Probe "same_action_id_same_payload_idempotent" `
+        -Response $idempotentRetry `
+        -ExpectedCode "2xx" `
+        -ExpectedSuccess $true
+
+    $actionIdConflict = Invoke-PynapliJson `
+        -Method POST `
+        -Path "/v1/swipe/actions" `
+        -AccessToken $Session.AccessToken `
+        -Body @{
+            actionId = $actionId
+            deckSessionId = $deckSessionId
+            cardToken = $third.rankToken
+            targetUserId = $third.userId
+            action = "pass"
+        }
+    Add-SafetyProbeResult `
+        -Rows $rows `
+        -Probe "same_action_id_different_payload_rejected" `
+        -Response $actionIdConflict `
+        -ExpectedCode "INVALID_SWIPE_ACTION_ID" `
+        -ExpectedSuccess $false
+
+    $alreadyActionedCard = Invoke-PynapliJson `
+        -Method POST `
+        -Path "/v1/swipe/actions" `
+        -AccessToken $Session.AccessToken `
+        -Body @{
+            actionId = [guid]::NewGuid().ToString()
+            deckSessionId = $deckSessionId
+            cardToken = $first.rankToken
+            targetUserId = $first.userId
+            action = "like"
+        }
+    Add-SafetyProbeResult `
+        -Rows $rows `
+        -Probe "already_actioned_card_token_rejected" `
+        -Response $alreadyActionedCard `
+        -ExpectedCode "INVALID_SWIPE_CARD_TOKEN" `
+        -ExpectedSuccess $false
+
+    $script:SafetyProbeRows = @($rows.ToArray())
+    $script:SafetyProbeRows | Format-Table -AutoSize
+}
+
 $health = Invoke-PynapliJson -Method GET -Path "/health/deep" -TimeoutSec 5
 Assert-Success -Response $health -Action "Ktor deep health"
 
@@ -812,12 +1003,27 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
             if ([string]::IsNullOrWhiteSpace($errorText)) {
                 $errorText = $_.Exception.Message
             }
+            if (-not [string]::IsNullOrWhiteSpace($errorText)) {
+                try {
+                    $bodyObject = $errorText | ConvertFrom-Json
+                } catch {
+                    $bodyObject = $null
+                }
+            }
         } finally {
             $stopwatch.Stop()
         }
 
         $itemCount = if ($null -ne $bodyObject -and $null -ne $bodyObject.items) {
             @($bodyObject.items).Count
+        } else {
+            $null
+        }
+        $errorCode = if (
+            $null -ne $bodyObject -and
+            @($bodyObject.PSObject.Properties.Name) -contains "code"
+        ) {
+            [string]$bodyObject.code
         } else {
             $null
         }
@@ -835,6 +1041,8 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
                 Profile = $profileHeader
                 SlowProfile = $slowProfileHeader
                 Pool = $poolHeader
+                ErrorCode = $errorCode
+                ExpectedErrorCode = $null
                 Error = $errorText
             }
             Body = $bodyObject
@@ -936,6 +1144,8 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
             Profile = $null
             SlowProfile = $null
             Pool = $null
+            ErrorCode = $null
+            ExpectedErrorCode = $null
             Error = "No card available for like."
         })
     }
@@ -967,6 +1177,8 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
             Profile = $null
             SlowProfile = $null
             Pool = $null
+            ErrorCode = $null
+            ExpectedErrorCode = $null
             Error = "No card available for pass."
         })
     }
@@ -977,6 +1189,9 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
         -Scenario "swipe_rewind" `
         -Method POST `
         -Path "/v1/swipe/rewind"
+    if ($session.Tier -eq "free") {
+        $rewind.Record.ExpectedErrorCode = "ENTITLEMENT_REQUIRED"
+    }
     $records.Add($rewind.Record)
 
     return $records
@@ -986,6 +1201,10 @@ Write-ScenarioSummary -Results @($results)
 Write-ProfileSummary -Results @($results)
 Write-SlowProfileSummary -Results @($results)
 Write-PoolSummary -Results @($results)
+
+if (-not $SkipSafetyProbes) {
+    Invoke-SwipeSafetyProbes -Session $sessions[0]
+}
 
 Write-Host ""
 Write-Host "Tier mix"
@@ -1009,6 +1228,7 @@ $parameters = [pscustomobject]@{
     coldCache = [bool]$ColdCache
     serverProfile = [bool]$ServerProfile
     skipSwipeStateReset = [bool]$SkipSwipeStateReset
+    skipSafetyProbes = [bool]$SkipSafetyProbes
     failOnBudget = [bool]$FailOnBudget
     budgets = [pscustomobject]@{
         deckInitialP95Ms = $DeckInitialBudgetP95Ms
@@ -1030,20 +1250,28 @@ $summary = [pscustomobject]@{
     profileSummary = @($script:ProfileSummaryRows)
     slowProfile = @($script:SlowProfileRows)
     poolSummary = @($script:PoolSummaryRows)
+    safetyProbes = @($script:SafetyProbeRows)
     tierMix = $tierMix
-    errorCount = @($results | Where-Object { $_.StatusCode -lt 200 -or $_.StatusCode -ge 300 }).Count
+    errorCount = @($results | Where-Object { -not (Get-LoadRecordAccepted -Record $_) }).Count
     budgetFailed = [bool]$script:ScenarioBudgetFailed
 }
 
 $summaryPath = Join-Path $artifactDir "summary.json"
 $resultsPath = Join-Path $artifactDir "results.csv"
+$safetyProbePath = Join-Path $artifactDir "safety-probes.json"
 $summary | ConvertTo-Json -Depth 12 | Set-Content -Path $summaryPath -Encoding UTF8
 $results | Export-Csv -NoTypeInformation -Path $resultsPath
+if ($script:SafetyProbeRows.Count -gt 0) {
+    $script:SafetyProbeRows | ConvertTo-Json -Depth 12 | Set-Content -Path $safetyProbePath -Encoding UTF8
+}
 
 Write-Host ""
 Write-Host "Swipe API load artifacts written:"
 Write-Host "  Summary: $summaryPath"
 Write-Host "  Results: $resultsPath"
+if ($script:SafetyProbeRows.Count -gt 0) {
+    Write-Host "  Safety probes: $safetyProbePath"
+}
 Write-Host "Swipe API load test complete."
 
 if ($FailOnBudget -and $script:ScenarioBudgetFailed) {
