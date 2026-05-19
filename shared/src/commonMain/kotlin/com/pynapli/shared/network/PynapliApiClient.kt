@@ -17,6 +17,7 @@ import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateProfileLinkInvitationRequestDto
+import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
@@ -183,7 +184,13 @@ interface PynapliApiClient {
 
     suspend fun activateBoost(): AppResult<BoostActivationDto>
 
-    suspend fun listActivity(limit: Int? = null): AppResult<ActivityFeedResponseDto>
+    suspend fun listActivity(
+        limit: Int? = null,
+        tab: String? = null,
+        cursor: String? = null
+    ): AppResult<ActivityFeedResponseDto>
+
+    suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto>
 
     suspend fun sendFlirt(request: SendFlirtRequestDto): AppResult<SendFlirtResponseDto>
 
@@ -585,11 +592,24 @@ class KtorPynapliApiClient(
             }.toAppResult(json)
         }
 
-    override suspend fun listActivity(limit: Int?): AppResult<ActivityFeedResponseDto> =
+    override suspend fun listActivity(
+        limit: Int?,
+        tab: String?,
+        cursor: String?
+    ): AppResult<ActivityFeedResponseDto> =
         authenticatedPost { token ->
             httpClient.get(config.endpoint("/v1/activity")) {
                 bearerAuth(token)
                 limit?.let { parameter("limit", it) }
+                tab?.let { parameter("tab", it) }
+                cursor?.let { parameter("cursor", it) }
+            }.toAppResult(json)
+        }
+
+    override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/activity/$eventId/dismiss")) {
+                bearerAuth(token)
             }.toAppResult(json)
         }
 

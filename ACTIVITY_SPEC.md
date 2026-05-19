@@ -1,6 +1,6 @@
 # Pynapli Activity Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-19
 
 ## Purpose
 
@@ -374,7 +374,7 @@ Rules:
 - Avoid spammy frequency.
 - Do not use explicit language.
 
-## Free / Plus / Premium Gating
+## Free / Social / Select Gating
 
 Activity is a natural premium surface.
 
@@ -396,7 +396,7 @@ Free users cannot fully access:
 - Full repeat viewers
 - Full historical Activity filters
 
-### Plus
+### Social
 
 Plus users can see:
 
@@ -406,7 +406,7 @@ Plus users can see:
 - Limited Likes You previews
 - Open flirts from Activity
 
-### Premium
+### Select
 
 Premium users can see:
 
@@ -630,6 +630,17 @@ If socket is unavailable:
 - Fetch Activity on tab open.
 - Fetch badge counts periodically with conservative interval.
 
+## Current Backend Implementation
+
+Implemented and verified as of 2026-05-19:
+
+- `GET /v1/activity` returns newest-first Activity with `limit`, `tab`, and signed `cursor` query params.
+- Feed tabs are server-authoritative: `all`, `views`, `flirts`, `likes`, `matches`, `albums`, and `invites`.
+- Cursor tokens are HMAC-signed and scoped to the authenticated viewer plus selected tab, so a cursor from one tab cannot page another tab.
+- Free/Social/Select reveal depth is enforced across pages by the cursor's seen-count state.
+- `POST /v1/activity/{eventId}/dismiss` soft-deletes the recipient's own Activity item without allowing cross-user dismissal.
+- Repository and service coverage proves tab filtering, cursor paging, entitlement reveal depth, invalid cursor rejection, block/risk filtering, and dismiss behavior.
+
 ## Badge Counts
 
 Bottom nav Activity badge should show meaningful new activity, not noise.
@@ -725,6 +736,8 @@ Avoid:
 - [x] Activity event model exists.
 - [x] Activity tabs exist.
 - [x] Newest-to-oldest ordering exists.
+- [x] Signed cursor pagination exists for Activity.
+- [x] Activity dismiss exists.
 - [x] Views require full profile opening.
 - [x] Grid impressions do not count as views.
 - [x] Swipe card appearances do not count as views.
@@ -734,8 +747,8 @@ Avoid:
 - [x] Partner chat invites require explicit action.
 - [x] Album requests can be granted/denied/ignored.
 - [x] Free/Social/Select gating is implemented.
-- [ ] Viewed opt-out disables own Viewed list.
-- [ ] Incognito suppresses view events.
+- [ ] Partial: Viewed opt-out suppresses outgoing view events; own Viewed-list disabling still needs user-facing review.
+- [x] Incognito suppresses view events.
 - [x] Blocks remove Activity visibility.
 - [x] Linked partner Activity remains separate.
 - [x] Notification detail settings exist.

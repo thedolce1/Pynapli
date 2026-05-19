@@ -26,7 +26,23 @@ fun Application.configureActivityRoutes(
         get("/v1/activity") {
             val user = authService.authenticate(call.requiredBearerToken())
             val limit = call.request.queryParameters["limit"]?.toIntOrNull()
-            call.respond(activityService.listActivity(user.id, limit ?: 50))
+            val tab = call.request.queryParameters["tab"]
+            val cursor = call.request.queryParameters["cursor"]
+            call.respond(
+                activityService.listActivity(
+                    recipientUserId = user.id,
+                    limit = limit ?: 50,
+                    tabText = tab,
+                    cursorText = cursor
+                )
+            )
+        }
+
+        post("/v1/activity/{eventId}/dismiss") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val eventId = call.parameters["eventId"]?.toUuidOrNull()
+                ?: throw ActivityException("ACTIVITY_EVENT_NOT_FOUND")
+            call.respond(activityService.dismissActivityEvent(user.id, eventId))
         }
 
         post("/v1/activity/flirts") {

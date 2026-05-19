@@ -2,6 +2,7 @@ package com.pynapli.server.profile
 
 import com.pynapli.server.activity.AlbumRequestEventRecord
 import com.pynapli.server.activity.ActivityEventRecord
+import com.pynapli.server.activity.ActivityFeedQuery
 import com.pynapli.server.activity.ActivityRepository
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.media.MediaAssetUrlResolver
@@ -245,7 +246,9 @@ private class InMemoryActivityRepository : ActivityRepository {
 
     override suspend fun getAlbumRequestEvent(recipientUserId: UUID, eventId: UUID): AlbumRequestEventRecord? = null
 
-    override suspend fun listActivity(recipientUserId: UUID, limit: Int): List<ActivityEventRecord> = emptyList()
+    override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> = emptyList()
+
+    override suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean = false
 }
 
 private class InMemoryProfileRepository(

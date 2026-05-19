@@ -3,6 +3,7 @@ package com.pynapli.server.activity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.ResultSet
+import java.sql.Timestamp
 import java.time.Duration
 import java.util.UUID
 import javax.sql.DataSource
@@ -84,13 +85,20 @@ class JdbcActivityRepository(
             }
         }
 
-    override suspend fun listActivity(recipientUserId: UUID, limit: Int): List<ActivityEventRecord> =
+    override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
                 connection.prepareStatement(ACTIVITY_FEED_QUERY).use { statement ->
-                    statement.setObject(1, recipientUserId)
-                    statement.setObject(2, recipientUserId)
-                    statement.setInt(3, limit)
+                    val eventTypeArray = connection.createArrayOf("text", query.eventTypes.toTypedArray())
+                    statement.setObject(1, query.recipientUserId)
+                    statement.setObject(2, query.recipientUserId)
+                    statement.setBoolean(3, query.eventTypes.isEmpty())
+                    statement.setArray(4, eventTypeArray)
+                    statement.setBoolean(5, query.cursor != null)
+                    statement.setTimestamp(6, query.cursor?.occurredAt?.let { Timestamp.from(it) })
+                    statement.setTimestamp(7, query.cursor?.occurredAt?.let { Timestamp.from(it) })
+                    statement.setObject(8, query.cursor?.eventId)
+                    statement.setInt(9, query.limit)
                     statement.executeQuery().use { rs ->
                         buildList {
                             while (rs.next()) {
@@ -98,6 +106,17 @@ class JdbcActivityRepository(
                             }
                         }
                     }
+                }
+            }
+        }
+
+    override suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(DISMISS_ACTIVITY_EVENT_QUERY).use { statement ->
+                    statement.setObject(1, eventId)
+                    statement.setObject(2, recipientUserId)
+                    statement.executeUpdate() > 0
                 }
             }
         }
@@ -392,7 +411,25 @@ class JdbcActivityRepository(
             WHERE ae.recipient_user_id = ?
               AND ae.visibility_status = 'visible'
               AND ae.deleted_at IS NULL
+              AND (? = true OR ae.event_type = ANY (?::text[]))
+              AND (
+                  ? = false
+                  OR ae.occurred_at < ?
+                  OR (ae.occurred_at = ? AND ae.id < ?)
+              )
               AND COALESCE(actor_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM user_blocks block
+                  WHERE (
+                      block.blocker_user_id = ae.recipient_user_id
+                      AND block.blocked_user_id = ae.actor_user_id
+                  )
+                  OR (
+                      block.blocker_user_id = ae.actor_user_id
+                      AND block.blocked_user_id = ae.recipient_user_id
+                  )
+              )
               AND (
                   ae.event_type <> 'profile_view'
                   OR (
@@ -402,6 +439,15 @@ class JdbcActivityRepository(
               )
             ORDER BY ae.occurred_at DESC, ae.id DESC
             LIMIT ?
+        """.trimIndent()
+
+        private val DISMISS_ACTIVITY_EVENT_QUERY = """
+            UPDATE activity_events
+            SET deleted_at = now(),
+                updated_at = now()
+            WHERE id = ?
+              AND recipient_user_id = ?
+              AND deleted_at IS NULL
         """.trimIndent()
     }
 }

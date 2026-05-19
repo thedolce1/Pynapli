@@ -41,6 +41,7 @@ data class ServerConfig(
     val playStoreRtdnOidcServiceAccountEmail: String? = null,
     val adminApiToken: String? = null,
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
+    val activityCursorSecret: String = "pynapli-local-dev-activity-cursor-secret",
     val swipeDeckTokenSecret: String = "pynapli-local-dev-swipe-deck-token-secret"
 ) {
     companion object {
@@ -169,6 +170,10 @@ data class ServerConfig(
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }
                     ?: "pynapli-local-dev-discovery-cursor-secret",
+                activityCursorSecret = System.getenv("PYNAPLI_ACTIVITY_CURSOR_SECRET")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: "pynapli-local-dev-activity-cursor-secret",
                 swipeDeckTokenSecret = System.getenv("PYNAPLI_SWIPE_DECK_TOKEN_SECRET")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }

@@ -44,6 +44,12 @@ data class RespondAlbumAccessResponseDto(
 )
 
 @Serializable
+data class DismissActivityEventResponseDto(
+    val eventId: String,
+    val dismissed: Boolean
+)
+
+@Serializable
 data class ActivityEventDto(
     val eventId: String,
     val type: String,

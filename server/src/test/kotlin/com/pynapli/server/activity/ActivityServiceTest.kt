@@ -24,6 +24,7 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class ActivityServiceTest {
@@ -402,6 +403,110 @@ class ActivityServiceTest {
         assertEquals(SubscriptionTier.SELECT, response.entitlementTier)
         assertEquals(false, response.adSupported)
     }
+
+    @Test
+    fun listActivityFiltersByRequestedTab() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000901")
+        val viewActor = UUID.fromString("00000000-0000-0000-0000-000000000902")
+        val flirtActor = UUID.fromString("00000000-0000-0000-0000-000000000903")
+        val service = ActivityService(
+            repository = InMemoryActivityRepository(
+                seededEvents = listOf(
+                    sampleEvent(viewActor, "profile_view", "Maya"),
+                    sampleEvent(flirtActor, "flirt", "Alex")
+                )
+            )
+        )
+
+        val response = service.listActivity(viewer, tabText = "flirts")
+
+        assertEquals(listOf("flirt"), response.items.map { it.type })
+        assertEquals(listOf(flirtActor.toString()), response.items.map { it.actorUserId })
+    }
+
+    @Test
+    fun listActivityRejectsUnknownTabs() = runBlocking {
+        val service = ActivityService(InMemoryActivityRepository())
+
+        val error = assertFailsWith<ActivityException> {
+            service.listActivity(UUID.randomUUID(), tabText = "surveillance")
+        }
+
+        assertEquals("INVALID_ACTIVITY_TAB", error.code)
+    }
+
+    @Test
+    fun listActivityReturnsCursorAndContinuesNewestFirst() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000911")
+        val firstActor = UUID.fromString("00000000-0000-0000-0000-000000000912")
+        val secondActor = UUID.fromString("00000000-0000-0000-0000-000000000913")
+        val thirdActor = UUID.fromString("00000000-0000-0000-0000-000000000914")
+        val cursorCodec = ActivityCursorCodec("test-activity-cursor-secret")
+        val service = ActivityService(
+            repository = InMemoryActivityRepository(
+                seededEvents = listOf(
+                    sampleEvent(firstActor, "flirt", "Maya").copy(occurredAt = Instant.parse("2026-04-28T12:03:00Z")),
+                    sampleEvent(secondActor, "flirt", "Alex").copy(occurredAt = Instant.parse("2026-04-28T12:02:00Z")),
+                    sampleEvent(thirdActor, "flirt", "Sam").copy(occurredAt = Instant.parse("2026-04-28T12:01:00Z"))
+                )
+            ),
+            cursorCodec = cursorCodec
+        )
+
+        val firstPage = service.listActivity(viewer, limit = 1, tabText = "flirts")
+        val cursor = assertNotNull(firstPage.nextCursor)
+        val secondPage = service.listActivity(viewer, limit = 2, tabText = "flirts", cursorText = cursor)
+
+        assertEquals(listOf(firstActor.toString()), firstPage.items.map { it.actorUserId })
+        assertEquals(listOf(secondActor.toString(), thirdActor.toString()), secondPage.items.map { it.actorUserId })
+        assertEquals(null, secondPage.nextCursor)
+    }
+
+    @Test
+    fun listActivityRejectsCursorForDifferentTabScope() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000921")
+        val actor = UUID.fromString("00000000-0000-0000-0000-000000000922")
+        val cursorCodec = ActivityCursorCodec("test-activity-cursor-secret")
+        val cursor = cursorCodec.encode(
+            ActivityCursorCodec.scopeHash(viewer, ActivityFeedTab.FLIRTS),
+            ActivityCursorAnchor(
+                occurredAt = Instant.parse("2026-04-28T12:00:00Z"),
+                eventId = UUID.randomUUID(),
+                seenCount = 1
+            )
+        )
+        val service = ActivityService(
+            repository = InMemoryActivityRepository(
+                seededEvents = listOf(sampleEvent(actor, "profile_view", "Maya"))
+            ),
+            cursorCodec = cursorCodec
+        )
+
+        val error = assertFailsWith<ActivityException> {
+            service.listActivity(viewer, tabText = "views", cursorText = cursor)
+        }
+
+        assertEquals("INVALID_ACTIVITY_CURSOR", error.code)
+    }
+
+    @Test
+    fun dismissActivityEventSoftDeletesOwnedItem() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000931")
+        val eventId = UUID.fromString("00000000-0000-0000-0000-000000000932")
+        val repository = InMemoryActivityRepository(
+            seededEvents = listOf(
+                sampleEvent(UUID.randomUUID(), "flirt", "Maya").copy(eventId = eventId)
+            )
+        )
+        val service = ActivityService(repository)
+
+        val response = service.dismissActivityEvent(viewer, eventId)
+        val feed = service.listActivity(viewer)
+
+        assertEquals(true, response.dismissed)
+        assertEquals(eventId.toString(), response.eventId)
+        assertEquals(emptyList(), feed.items)
+    }
 }
 
 private fun sampleEvent(actorUserId: UUID, type: String, displayName: String): ActivityEventRecord =
@@ -490,8 +595,28 @@ private class InMemoryActivityRepository(
 
     override suspend fun getAlbumRequestEvent(recipientUserId: UUID, eventId: UUID): AlbumRequestEventRecord? = null
 
-    override suspend fun listActivity(recipientUserId: UUID, limit: Int): List<ActivityEventRecord> =
-        seededEvents.take(limit)
+    override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> {
+        val cursor = query.cursor
+        return seededEvents
+            .asSequence()
+            .filter { query.eventTypes.isEmpty() || it.type in query.eventTypes }
+            .filter {
+                cursor == null ||
+                    it.occurredAt < cursor.occurredAt ||
+                    (it.occurredAt == cursor.occurredAt && it.eventId < cursor.eventId)
+            }
+            .filterNot { it.eventId in dismissedEventIds }
+            .take(query.limit)
+            .toList()
+    }
+
+    override suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean {
+        val exists = seededEvents.any { it.eventId == eventId }
+        if (exists) dismissedEventIds += eventId
+        return exists
+    }
+
+    private val dismissedEventIds = mutableSetOf<UUID>()
 }
 
 private class RecordingNotificationPublisher : NotificationPublisher {

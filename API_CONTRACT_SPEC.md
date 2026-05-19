@@ -1,6 +1,6 @@
 # Pynapli API Contract Spec
 
-Last updated: 2026-05-14
+Last updated: 2026-05-19
 
 ## Purpose
 
@@ -335,13 +335,16 @@ POST /v1/activity/{eventId}/dismiss
 
 Query params:
 
-- `tab`
-- `cursor`
+- `limit`
+- `tab`: `all`, `views`, `flirts`, `likes`, `matches`, `albums`, or `invites`
+- `cursor`: signed, viewer/tab-scoped cursor token
 
 Rules:
 
 - Ktor applies tier gating.
 - Ktor applies viewed-list opt-out/incognito/block rules.
+- Cursors carry seen-count state so reveal-depth gates apply consistently across pages.
+- Dismiss only affects an Activity event owned by the authenticated recipient.
 - Activity is not Messages.
 
 ## Messages API
@@ -530,7 +533,7 @@ Rules:
 
 - [x] `/v1` versioning.
 - [x] Shared DTO conventions.
-- [ ] Partial: signed cursor pagination is implemented for Grid and Swipe decks, but activity and other live cursor behavior is incomplete.
+- [ ] Partial: signed cursor pagination is implemented for Grid, Swipe decks, and Activity, but other live cursor behavior is incomplete.
 - [ ] Partial: idempotency keys exist for notification/outbox, swipe actions, and some workflows, but purchases and all mutations are not consistently idempotent.
 - [x] Server-side entitlement checks.
 - [x] Server-side block/privacy/risk checks.

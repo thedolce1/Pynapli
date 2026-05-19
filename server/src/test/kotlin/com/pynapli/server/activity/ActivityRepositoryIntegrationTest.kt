@@ -11,6 +11,8 @@ import org.junit.BeforeClass
 import org.junit.Test
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
+import java.sql.Timestamp
+import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
@@ -91,11 +93,125 @@ class ActivityRepositoryIntegrationTest {
         assertEquals(0, dataSource.profileViewEventCount())
     }
 
+    @Test
+    fun listActivityAppliesTabFilterAndCursorPagination() = runBlocking {
+        val recipient = UUID.fromString("00000000-0000-0000-0000-000000001201")
+        val newestFlirtActor = UUID.fromString("00000000-0000-0000-0000-000000001202")
+        val olderFlirtActor = UUID.fromString("00000000-0000-0000-0000-000000001203")
+        val viewActor = UUID.fromString("00000000-0000-0000-0000-000000001204")
+        dataSource.insertUserWithDiscovery(recipient, displayName = "Recipient")
+        dataSource.insertUserWithDiscovery(newestFlirtActor, displayName = "Newest Flirt")
+        dataSource.insertUserWithDiscovery(olderFlirtActor, displayName = "Older Flirt")
+        dataSource.insertUserWithDiscovery(viewActor, displayName = "Viewer")
+        val newestFlirtId = UUID.fromString("00000000-0000-0000-0000-000000001301")
+        val olderFlirtId = UUID.fromString("00000000-0000-0000-0000-000000001302")
+        dataSource.insertActivityEvent(
+            eventId = olderFlirtId,
+            recipientUserId = recipient,
+            actorUserId = olderFlirtActor,
+            eventType = "flirt",
+            occurredAt = Instant.parse("2026-05-18T10:00:00Z")
+        )
+        dataSource.insertActivityEvent(
+            eventId = UUID.fromString("00000000-0000-0000-0000-000000001303"),
+            recipientUserId = recipient,
+            actorUserId = viewActor,
+            eventType = "profile_view",
+            occurredAt = Instant.parse("2026-05-18T10:30:00Z")
+        )
+        dataSource.insertActivityEvent(
+            eventId = newestFlirtId,
+            recipientUserId = recipient,
+            actorUserId = newestFlirtActor,
+            eventType = "flirt",
+            occurredAt = Instant.parse("2026-05-18T11:00:00Z")
+        )
+        val repository = JdbcActivityRepository(dataSource)
+
+        val firstPage = repository.listActivity(
+            ActivityFeedQuery(
+                recipientUserId = recipient,
+                eventTypes = setOf("flirt"),
+                limit = 1,
+                cursor = null
+            )
+        )
+        assertEquals(listOf(newestFlirtId), firstPage.map { it.eventId })
+        assertEquals(listOf("flirt"), firstPage.map { it.type })
+
+        val secondPage = repository.listActivity(
+            ActivityFeedQuery(
+                recipientUserId = recipient,
+                eventTypes = setOf("flirt"),
+                limit = 2,
+                cursor = firstPage.single().toCursorAnchor(seenCount = 1)
+            )
+        )
+        assertEquals(listOf(olderFlirtId), secondPage.map { it.eventId })
+    }
+
+    @Test
+    fun dismissActivityEventSoftDeletesOnlyOwnedEvent() = runBlocking {
+        val recipient = UUID.fromString("00000000-0000-0000-0000-000000001401")
+        val otherRecipient = UUID.fromString("00000000-0000-0000-0000-000000001402")
+        val actor = UUID.fromString("00000000-0000-0000-0000-000000001403")
+        val eventId = UUID.fromString("00000000-0000-0000-0000-000000001501")
+        dataSource.insertUserWithDiscovery(recipient, displayName = "Recipient")
+        dataSource.insertUserWithDiscovery(otherRecipient, displayName = "Other Recipient")
+        dataSource.insertUserWithDiscovery(actor, displayName = "Actor")
+        dataSource.insertActivityEvent(
+            eventId = eventId,
+            recipientUserId = recipient,
+            actorUserId = actor,
+            eventType = "flirt",
+            occurredAt = Instant.parse("2026-05-18T12:00:00Z")
+        )
+        val repository = JdbcActivityRepository(dataSource)
+
+        assertFalse(repository.dismissActivityEvent(otherRecipient, eventId))
+        assertEquals(1, repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null)).size)
+
+        assertTrue(repository.dismissActivityEvent(recipient, eventId))
+        assertEquals(0, repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null)).size)
+    }
+
+    @Test
+    fun listActivityExcludesBlockedRelationshipsInSqlFeed() = runBlocking {
+        val recipient = UUID.fromString("00000000-0000-0000-0000-000000001601")
+        val blockedActor = UUID.fromString("00000000-0000-0000-0000-000000001602")
+        val visibleActor = UUID.fromString("00000000-0000-0000-0000-000000001603")
+        dataSource.insertUserWithDiscovery(recipient, displayName = "Recipient")
+        dataSource.insertUserWithDiscovery(blockedActor, displayName = "Blocked Actor")
+        dataSource.insertUserWithDiscovery(visibleActor, displayName = "Visible Actor")
+        dataSource.insertActivityEvent(
+            eventId = UUID.fromString("00000000-0000-0000-0000-000000001701"),
+            recipientUserId = recipient,
+            actorUserId = blockedActor,
+            eventType = "flirt",
+            occurredAt = Instant.parse("2026-05-18T13:00:00Z")
+        )
+        val visibleEventId = UUID.fromString("00000000-0000-0000-0000-000000001702")
+        dataSource.insertActivityEvent(
+            eventId = visibleEventId,
+            recipientUserId = recipient,
+            actorUserId = visibleActor,
+            eventType = "flirt",
+            occurredAt = Instant.parse("2026-05-18T12:00:00Z")
+        )
+        dataSource.insertBlock(recipient, blockedActor)
+        val repository = JdbcActivityRepository(dataSource)
+
+        val feed = repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null))
+
+        assertEquals(listOf(visibleEventId), feed.map { it.eventId })
+    }
+
     private fun DataSource.insertUserWithDiscovery(
         userId: UUID,
         status: String = "active",
         showInViewedLists: Boolean = true,
-        incognito: Boolean = false
+        incognito: Boolean = false,
+        displayName: String = "User ${userId.toString().takeLast(4)}"
     ) {
         connection.use { connection ->
             connection.prepareStatement(
@@ -121,6 +237,89 @@ class ActivityRepositoryIntegrationTest {
                 statement.setObject(1, userId)
                 statement.setBoolean(2, incognito)
                 statement.setBoolean(3, showInViewedLists)
+                statement.executeUpdate()
+            }
+            connection.prepareStatement(
+                """
+                INSERT INTO profiles (
+                    user_id,
+                    display_name,
+                    moderation_status,
+                    visibility_status,
+                    profile_completeness_score
+                )
+                VALUES (?, ?, 'approved', 'visible', 80)
+                ON CONFLICT (user_id) DO UPDATE
+                SET display_name = EXCLUDED.display_name,
+                    moderation_status = EXCLUDED.moderation_status,
+                    visibility_status = EXCLUDED.visibility_status,
+                    profile_completeness_score = EXCLUDED.profile_completeness_score,
+                    updated_at = now()
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.setString(2, displayName)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    private fun DataSource.insertActivityEvent(
+        eventId: UUID,
+        recipientUserId: UUID,
+        actorUserId: UUID,
+        eventType: String,
+        occurredAt: Instant
+    ) {
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                INSERT INTO activity_events (
+                    id,
+                    recipient_user_id,
+                    actor_user_id,
+                    event_type,
+                    target_user_id,
+                    aggregate_count,
+                    first_occurred_at,
+                    last_counted_at,
+                    occurred_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+                """.trimIndent()
+            ).use { statement ->
+                val occurredAtTimestamp = Timestamp.from(occurredAt)
+                statement.setObject(1, eventId)
+                statement.setObject(2, recipientUserId)
+                statement.setObject(3, actorUserId)
+                statement.setString(4, eventType)
+                statement.setObject(5, recipientUserId)
+                statement.setTimestamp(6, occurredAtTimestamp)
+                statement.setTimestamp(7, occurredAtTimestamp)
+                statement.setTimestamp(8, occurredAtTimestamp)
+                statement.setTimestamp(9, occurredAtTimestamp)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    private fun DataSource.insertBlock(blockerUserId: UUID, blockedUserId: UUID) {
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                INSERT INTO user_blocks (
+                    id,
+                    blocker_user_id,
+                    blocked_user_id,
+                    created_at
+                )
+                VALUES (?, ?, ?, now())
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, blockerUserId)
+                statement.setObject(3, blockedUserId)
                 statement.executeUpdate()
             }
         }

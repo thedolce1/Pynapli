@@ -1,6 +1,7 @@
 package com.pynapli.server.dependencies
 
 import com.pynapli.server.activity.ActivityService
+import com.pynapli.server.activity.ActivityCursorCodec
 import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
@@ -257,7 +258,8 @@ class ServerDependencies(
                 notificationPublisher = notificationService,
                 rateLimitService = rateLimitService,
                 riskPolicyService = riskPolicyService,
-                subscriptionService = subscriptionService
+                subscriptionService = subscriptionService,
+                cursorCodec = ActivityCursorCodec(config.activityCursorSecret)
             )
             val profileService = ProfileService(
                 repository = JdbcProfileRepository(database.dataSource),

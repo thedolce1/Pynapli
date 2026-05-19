@@ -17,6 +17,7 @@ import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateProfileLinkInvitationRequestDto
+import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
@@ -329,7 +330,14 @@ private class FakeApiClient(
     override suspend fun activateBoost(): AppResult<BoostActivationDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
-    override suspend fun listActivity(limit: Int?): AppResult<ActivityFeedResponseDto> =
+    override suspend fun listActivity(
+        limit: Int?,
+        tab: String?,
+        cursor: String?
+    ): AppResult<ActivityFeedResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun sendFlirt(request: SendFlirtRequestDto): AppResult<SendFlirtResponseDto> =

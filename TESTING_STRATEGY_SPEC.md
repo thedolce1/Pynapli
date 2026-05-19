@@ -1,6 +1,6 @@
 # Pynapli Testing Strategy Spec
 
-Last updated: 2026-05-18
+Last updated: 2026-05-19
 
 ## Purpose
 
@@ -58,6 +58,12 @@ Current Swipe coverage:
 - `scripts/swipe-api-load-test.ps1` now exercises the Ktor Swipe API against a dense local dataset, including core deck/action/rewind flows and optional Boost, Top Picks, and Travel scenarios.
 - `scripts/android-swipe-qa.ps1` runs the installed Android app against local Ktor, captures Swipe screenshots/XML, verifies structural golden signatures, opens filters and travel mode, opens the linked-partner preview, opens the Intro Note dialog, and proves left/right Swipe gestures advance the visible deck. Latest emulator proof: `artifacts/android-swipe-qa/20260518-214507`.
 - `scripts/android-swipe-queue-qa.ps1` runs the installed Android app against local Ktor, verifies Swipe opens with real seeded data, checks a linked Swipe card, injects a recoverable Swipe action failure, force-stops/relaunches the app, verifies the pending action survives process death, then retries and clears the queue. Latest emulator proof: `artifacts/android-swipe-queue-qa/20260518-212037`.
+
+Current Activity backend coverage:
+
+- `ActivityServiceTest` covers profile-view/flirt/album request recording rules, block/risk filtering, entitlement reveal depth, tab filtering, signed cursor continuation, cursor scope rejection, and Activity dismiss behavior.
+- `ActivityRepositoryIntegrationTest` runs against PostgreSQL/PostGIS through Testcontainers and covers profile-view writes, eligibility suppression, feed tab filtering, keyset cursor pagination, and owned soft-dismiss.
+- Latest local proof on 2026-05-19: targeted Activity service/repository tests, full `:server:test`, and `:shared:jvmTest` passed.
 
 Still open before beta:
 

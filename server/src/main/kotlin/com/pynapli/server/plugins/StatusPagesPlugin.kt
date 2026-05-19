@@ -314,6 +314,8 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_ALBUM_REQUEST_TARGET" -> "Album request could not be sent."
     "ALBUM_REQUEST_NOT_ALLOWED" -> "This profile is not accepting album requests."
     "ALBUM_REQUEST_NOT_FOUND" -> "Album request was not found."
+    "INVALID_ACTIVITY_TAB", "INVALID_ACTIVITY_CURSOR" -> "Activity could not be loaded."
+    "ACTIVITY_EVENT_NOT_FOUND" -> "Activity item was not found."
     "INVALID_ID", "INVALID_CONVERSATION_TARGET", "INVALID_CONVERSATION_ORIGIN" -> "Request could not be completed."
     "MESSAGING_NOT_ALLOWED" -> "This profile is not accepting grid messages."
     "CONVERSATION_NOT_FOUND" -> "Conversation was not found."
@@ -471,11 +473,14 @@ private fun tonightAvailabilityStatusFor(code: String): HttpStatusCode = when (c
 private fun activityStatusFor(code: String): HttpStatusCode = when (code) {
     "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
     "RISK_RESTRICTED" -> HttpStatusCode.Forbidden
-    "ALBUM_REQUEST_NOT_FOUND" -> HttpStatusCode.NotFound
+    "ALBUM_REQUEST_NOT_FOUND",
+    "ACTIVITY_EVENT_NOT_FOUND" -> HttpStatusCode.NotFound
     "FLIRT_NOT_ALLOWED",
     "ALBUM_REQUEST_NOT_ALLOWED" -> HttpStatusCode.Forbidden
     "INVALID_FLIRT_TARGET",
-    "INVALID_ALBUM_REQUEST_TARGET" -> HttpStatusCode.BadRequest
+    "INVALID_ALBUM_REQUEST_TARGET",
+    "INVALID_ACTIVITY_TAB",
+    "INVALID_ACTIVITY_CURSOR" -> HttpStatusCode.BadRequest
     else -> HttpStatusCode.BadRequest
 }
 

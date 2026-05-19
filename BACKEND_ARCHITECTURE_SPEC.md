@@ -1,6 +1,6 @@
 # Pynapli Backend Architecture Spec
 
-Last updated: 2026-05-13
+Last updated: 2026-05-19
 
 ## Purpose
 
@@ -270,12 +270,14 @@ Ktor owns Activity event generation and visibility.
 Endpoint:
 
 ```http
-GET /v1/activity
+GET  /v1/activity
+POST /v1/activity/{eventId}/dismiss
 ```
 
 Ktor applies:
 
 - Tier gating
+- Signed viewer/tab-scoped cursor pagination
 - Privacy settings
 - Incognito effects
 - Block exclusions

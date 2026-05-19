@@ -12,8 +12,23 @@ interface ActivityRepository {
 
     suspend fun getAlbumRequestEvent(recipientUserId: UUID, eventId: UUID): AlbumRequestEventRecord?
 
-    suspend fun listActivity(recipientUserId: UUID, limit: Int): List<ActivityEventRecord>
+    suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord>
+
+    suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean
 }
+
+data class ActivityFeedQuery(
+    val recipientUserId: UUID,
+    val eventTypes: Set<String>,
+    val limit: Int,
+    val cursor: ActivityCursorAnchor?
+)
+
+data class ActivityCursorAnchor(
+    val occurredAt: Instant,
+    val eventId: UUID,
+    val seenCount: Int
+)
 
 data class ActivityEventRecord(
     val eventId: UUID,
@@ -27,6 +42,13 @@ data class ActivityEventRecord(
     val distanceMeters: Double?,
     val albumRequestStatus: String?
 )
+
+fun ActivityEventRecord.toCursorAnchor(seenCount: Int): ActivityCursorAnchor =
+    ActivityCursorAnchor(
+        occurredAt = occurredAt,
+        eventId = eventId,
+        seenCount = seenCount
+    )
 
 data class AlbumRequestEventRecord(
     val eventId: UUID,
