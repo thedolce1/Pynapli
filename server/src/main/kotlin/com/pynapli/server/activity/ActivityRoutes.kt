@@ -38,6 +38,11 @@ fun Application.configureActivityRoutes(
             )
         }
 
+        get("/v1/activity/summary") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(activityService.getActivitySummary(user.id))
+        }
+
         post("/v1/activity/{eventId}/dismiss") {
             val user = authService.authenticate(call.requiredBearerToken())
             val eventId = call.parameters["eventId"]?.toUuidOrNull()

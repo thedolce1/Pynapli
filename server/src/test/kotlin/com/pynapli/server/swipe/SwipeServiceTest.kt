@@ -4,6 +4,7 @@ import com.pynapli.server.activity.ActivityEventRecord
 import com.pynapli.server.activity.ActivityFeedQuery
 import com.pynapli.server.activity.ActivityRepository
 import com.pynapli.server.activity.ActivityService
+import com.pynapli.server.activity.ActivitySummaryRecord
 import com.pynapli.server.activity.AlbumRequestEventRecord
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.shared.network.dto.SwipeAction
@@ -1884,6 +1885,17 @@ private class RecordingActivityRepository : ActivityRepository {
     override suspend fun getAlbumRequestEvent(recipientUserId: UUID, eventId: UUID): AlbumRequestEventRecord? = null
 
     override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> = emptyList()
+
+    override suspend fun getActivitySummary(recipientUserId: UUID): ActivitySummaryRecord =
+        ActivitySummaryRecord(
+            profileViewCount = 0,
+            flirtCount = 0,
+            likeCount = 0,
+            matchCount = 0,
+            albumRequestCount = 0,
+            partnerInviteCount = 0,
+            latestBadgeOccurredAt = null
+        )
 
     override suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean = false
 }

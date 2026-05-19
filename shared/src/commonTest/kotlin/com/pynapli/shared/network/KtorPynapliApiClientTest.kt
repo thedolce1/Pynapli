@@ -3,6 +3,7 @@ package com.pynapli.shared.network
 import com.pynapli.shared.core.config.PynapliConfig
 import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.ActivitySummaryDto
 import com.pynapli.shared.network.dto.BoostActivationDto
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
@@ -521,6 +522,46 @@ class KtorPynapliApiClientTest {
         val activation = success.value as BoostActivationDto
         assertEquals("boost", activation.boostType)
         assertEquals(false, activation.alreadyActive)
+    }
+
+    @Test
+    fun getActivitySummarySendsBearerTokenAndMapsCounts() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = """
+                    {
+                      "badgeCount": 5,
+                      "profileViewCount": 12,
+                      "flirtCount": 1,
+                      "likeCount": 2,
+                      "matchCount": 1,
+                      "albumRequestCount": 1,
+                      "partnerInviteCount": 0,
+                      "latestBadgeOccurredAt": "2026-05-19T12:30:00Z"
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.getActivitySummary()
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/activity/summary", requestPath)
+        assertEquals(HttpMethod.Get, requestMethod)
+        val summary = success.value as ActivitySummaryDto
+        assertEquals(5, summary.badgeCount)
+        assertEquals(12, summary.profileViewCount)
+        assertEquals(2, summary.likeCount)
     }
 
     @Test

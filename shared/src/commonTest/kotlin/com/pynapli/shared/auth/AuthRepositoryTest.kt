@@ -4,6 +4,7 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.ActivityFeedResponseDto
+import com.pynapli.shared.network.dto.ActivitySummaryDto
 import com.pynapli.shared.network.dto.AgeVerificationRequirementsDto
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.AuthSessionDto
@@ -335,6 +336,9 @@ private class FakeApiClient(
         tab: String?,
         cursor: String?
     ): AppResult<ActivityFeedResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun getActivitySummary(): AppResult<ActivitySummaryDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> =

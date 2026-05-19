@@ -569,6 +569,35 @@ class ActivityServiceTest {
         assertEquals(eventId.toString(), response.eventId)
         assertEquals(emptyList(), feed.items)
     }
+
+    @Test
+    fun getActivitySummaryMapsMeaningfulBadgeCountsWithoutViews() = runBlocking {
+        val latest = Instant.parse("2026-05-19T12:30:00Z")
+        val service = ActivityService(
+            InMemoryActivityRepository(
+                summaryRecord = ActivitySummaryRecord(
+                    profileViewCount = 12,
+                    flirtCount = 2,
+                    likeCount = 3,
+                    matchCount = 1,
+                    albumRequestCount = 1,
+                    partnerInviteCount = 1,
+                    latestBadgeOccurredAt = latest
+                )
+            )
+        )
+
+        val response = service.getActivitySummary(UUID.randomUUID())
+
+        assertEquals(8, response.badgeCount)
+        assertEquals(12, response.profileViewCount)
+        assertEquals(2, response.flirtCount)
+        assertEquals(3, response.likeCount)
+        assertEquals(1, response.matchCount)
+        assertEquals(1, response.albumRequestCount)
+        assertEquals(1, response.partnerInviteCount)
+        assertEquals(latest.toString(), response.latestBadgeOccurredAt)
+    }
 }
 
 private fun sampleEvent(actorUserId: UUID, type: String, displayName: String): ActivityEventRecord =
@@ -633,7 +662,16 @@ private class InMemoryActivityRepository(
     private val allowProfileViews: Boolean = true,
     private val allowFlirts: Boolean = true,
     private val allowAlbumRequests: Boolean = true,
-    private val seededEvents: List<ActivityEventRecord> = emptyList()
+    private val seededEvents: List<ActivityEventRecord> = emptyList(),
+    private val summaryRecord: ActivitySummaryRecord = ActivitySummaryRecord(
+        profileViewCount = 0,
+        flirtCount = 0,
+        likeCount = 0,
+        matchCount = 0,
+        albumRequestCount = 0,
+        partnerInviteCount = 0,
+        latestBadgeOccurredAt = null
+    )
 ) : ActivityRepository {
     val profileViews = mutableListOf<Pair<UUID, UUID>>()
     val flirts = mutableListOf<Pair<UUID, UUID>>()
@@ -691,6 +729,8 @@ private class InMemoryActivityRepository(
             .take(query.limit)
             .toList()
     }
+
+    override suspend fun getActivitySummary(recipientUserId: UUID): ActivitySummaryRecord = summaryRecord
 
     override suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean {
         val exists = seededEvents.any { it.eventId == eventId }

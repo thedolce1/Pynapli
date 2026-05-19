@@ -13,6 +13,18 @@ data class ActivityFeedResponseDto(
 )
 
 @Serializable
+data class ActivitySummaryDto(
+    val badgeCount: Int,
+    val profileViewCount: Int = 0,
+    val flirtCount: Int = 0,
+    val likeCount: Int = 0,
+    val matchCount: Int = 0,
+    val albumRequestCount: Int = 0,
+    val partnerInviteCount: Int = 0,
+    val latestBadgeOccurredAt: String? = null
+)
+
+@Serializable
 data class SendFlirtRequestDto(
     val targetUserId: String
 )

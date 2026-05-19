@@ -16,6 +16,7 @@ import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.network.dto.ActivityFeedResponseDto
+import com.pynapli.shared.network.dto.ActivitySummaryDto
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
@@ -160,6 +161,20 @@ class ActivityService(
             throw ActivityException("ACTIVITY_EVENT_NOT_FOUND")
         }
         return DismissActivityEventResponseDto(eventId = eventId.toString(), dismissed = true)
+    }
+
+    suspend fun getActivitySummary(recipientUserId: UUID): ActivitySummaryDto {
+        val summary = repository.getActivitySummary(recipientUserId)
+        return ActivitySummaryDto(
+            badgeCount = summary.badgeCount,
+            profileViewCount = summary.profileViewCount,
+            flirtCount = summary.flirtCount,
+            likeCount = summary.likeCount,
+            matchCount = summary.matchCount,
+            albumRequestCount = summary.albumRequestCount,
+            partnerInviteCount = summary.partnerInviteCount,
+            latestBadgeOccurredAt = summary.latestBadgeOccurredAt?.toString()
+        )
     }
 
     suspend fun listActivity(

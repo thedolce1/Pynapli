@@ -4,6 +4,7 @@ import com.pynapli.shared.core.config.PynapliConfig
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ActivityFeedResponseDto
+import com.pynapli.shared.network.dto.ActivitySummaryDto
 import com.pynapli.shared.network.dto.AgeVerificationRequirementsDto
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.ApiErrorDto
@@ -189,6 +190,8 @@ interface PynapliApiClient {
         tab: String? = null,
         cursor: String? = null
     ): AppResult<ActivityFeedResponseDto>
+
+    suspend fun getActivitySummary(): AppResult<ActivitySummaryDto>
 
     suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto>
 
@@ -603,6 +606,13 @@ class KtorPynapliApiClient(
                 limit?.let { parameter("limit", it) }
                 tab?.let { parameter("tab", it) }
                 cursor?.let { parameter("cursor", it) }
+            }.toAppResult(json)
+        }
+
+    override suspend fun getActivitySummary(): AppResult<ActivitySummaryDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/activity/summary")) {
+                bearerAuth(token)
             }.toAppResult(json)
         }
 

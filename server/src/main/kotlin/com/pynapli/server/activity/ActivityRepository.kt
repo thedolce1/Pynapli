@@ -20,6 +20,8 @@ interface ActivityRepository {
 
     suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord>
 
+    suspend fun getActivitySummary(recipientUserId: UUID): ActivitySummaryRecord
+
     suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean
 }
 
@@ -63,3 +65,16 @@ data class AlbumRequestEventRecord(
     val ownerUserId: UUID,
     val requesterUserId: UUID
 )
+
+data class ActivitySummaryRecord(
+    val profileViewCount: Int,
+    val flirtCount: Int,
+    val likeCount: Int,
+    val matchCount: Int,
+    val albumRequestCount: Int,
+    val partnerInviteCount: Int,
+    val latestBadgeOccurredAt: Instant?
+) {
+    val badgeCount: Int
+        get() = flirtCount + likeCount + matchCount + albumRequestCount + partnerInviteCount
+}

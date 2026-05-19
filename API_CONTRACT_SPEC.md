@@ -330,6 +330,7 @@ Rules:
 
 ```http
 GET  /v1/activity
+GET  /v1/activity/summary
 POST /v1/activity/album-requests/{eventId}/respond
 POST /v1/activity/{eventId}/dismiss
 ```
@@ -346,11 +347,21 @@ Feed item fields used for row CTAs:
 - `matchId`: present on match rows so the client can open the match conversation path.
 - `conversationId`: present on partner-chat invite rows so the client can open the invite conversation context.
 
+Summary response fields:
+
+- `badgeCount`: meaningful Activity badge count; excludes profile views.
+- `profileViewCount`: separate Viewed-list count for in-screen use.
+- `flirtCount`, `likeCount`, `matchCount`, `albumRequestCount`, `partnerInviteCount`.
+- `latestBadgeOccurredAt`: latest visible badge-worthy Activity timestamp.
+
 Rules:
 
 - Ktor applies tier gating.
 - Ktor applies viewed-list opt-out/incognito/block rules.
 - Cursors carry seen-count state so reveal-depth gates apply consistently across pages.
+- Summary applies the same visibility/block/risk filters as the feed.
+- Summary excludes profile views from the bottom-nav badge; views are counted separately.
+- If the recipient disables Viewed lists, profile-view rows are hidden from their Activity feed and summary count.
 - Album request respond is owner-scoped and only applies to the recipient's own pending request row.
 - Match and partner-invite CTAs must use the server-provided identifiers; clients cannot invent a conversation from an Activity row.
 - Dismiss only affects an Activity event owned by the authenticated recipient.

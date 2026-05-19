@@ -76,12 +76,14 @@ class ActivityRepositoryIntegrationTest {
         val quarantinedViewer = UUID.fromString("00000000-0000-0000-0000-000000001104")
         val inactiveTarget = UUID.fromString("00000000-0000-0000-0000-000000001105")
         val activeViewer = UUID.fromString("00000000-0000-0000-0000-000000001106")
+        val optedOutTarget = UUID.fromString("00000000-0000-0000-0000-000000001107")
         dataSource.insertUserWithDiscovery(target)
         dataSource.insertUserWithDiscovery(incognitoViewer, incognito = true)
         dataSource.insertUserWithDiscovery(hiddenFromViewedLists, showInViewedLists = false)
         dataSource.insertUserWithDiscovery(quarantinedViewer)
         dataSource.insertUserWithDiscovery(inactiveTarget, status = "paused")
         dataSource.insertUserWithDiscovery(activeViewer)
+        dataSource.insertUserWithDiscovery(optedOutTarget, showInViewedLists = false)
         dataSource.setRiskState(quarantinedViewer, score = 75, tier = "quarantine")
         val repository = JdbcActivityRepository(dataSource)
 
@@ -89,6 +91,7 @@ class ActivityRepositoryIntegrationTest {
         assertFalse(repository.recordProfileView(hiddenFromViewedLists, target))
         assertFalse(repository.recordProfileView(quarantinedViewer, target))
         assertFalse(repository.recordProfileView(activeViewer, inactiveTarget))
+        assertFalse(repository.recordProfileView(activeViewer, optedOutTarget))
 
         assertEquals(0, dataSource.profileViewEventCount())
     }
@@ -204,6 +207,107 @@ class ActivityRepositoryIntegrationTest {
         val feed = repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null))
 
         assertEquals(listOf(visibleEventId), feed.map { it.eventId })
+    }
+
+    @Test
+    fun listActivityDisablesOwnViewedListWhenRecipientOptsOut() = runBlocking {
+        val recipient = UUID.fromString("00000000-0000-0000-0000-000000001611")
+        val viewActor = UUID.fromString("00000000-0000-0000-0000-000000001612")
+        val flirtActor = UUID.fromString("00000000-0000-0000-0000-000000001613")
+        dataSource.insertUserWithDiscovery(recipient, displayName = "Recipient", showInViewedLists = false)
+        dataSource.insertUserWithDiscovery(viewActor, displayName = "Viewer")
+        dataSource.insertUserWithDiscovery(flirtActor, displayName = "Flirt")
+        val viewEventId = UUID.fromString("00000000-0000-0000-0000-000000001614")
+        val flirtEventId = UUID.fromString("00000000-0000-0000-0000-000000001615")
+        dataSource.insertActivityEvent(
+            eventId = viewEventId,
+            recipientUserId = recipient,
+            actorUserId = viewActor,
+            eventType = "profile_view",
+            occurredAt = Instant.parse("2026-05-18T13:30:00Z")
+        )
+        dataSource.insertActivityEvent(
+            eventId = flirtEventId,
+            recipientUserId = recipient,
+            actorUserId = flirtActor,
+            eventType = "flirt",
+            occurredAt = Instant.parse("2026-05-18T13:31:00Z")
+        )
+        val repository = JdbcActivityRepository(dataSource)
+
+        val allFeed = repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null))
+        val viewsFeed = repository.listActivity(ActivityFeedQuery(recipient, setOf("profile_view"), 10, null))
+        val summary = repository.getActivitySummary(recipient)
+
+        assertEquals(listOf(flirtEventId), allFeed.map { it.eventId })
+        assertEquals(emptyList(), viewsFeed)
+        assertEquals(0, summary.profileViewCount)
+        assertEquals(1, summary.badgeCount)
+    }
+
+    @Test
+    fun getActivitySummaryCountsMeaningfulBadgeEventsAndFiltersNoise() = runBlocking {
+        val recipient = UUID.fromString("00000000-0000-0000-0000-000000001621")
+        val viewActor = UUID.fromString("00000000-0000-0000-0000-000000001622")
+        val flirtActor = UUID.fromString("00000000-0000-0000-0000-000000001623")
+        val likeActor = UUID.fromString("00000000-0000-0000-0000-000000001624")
+        val introActor = UUID.fromString("00000000-0000-0000-0000-000000001625")
+        val matchActor = UUID.fromString("00000000-0000-0000-0000-000000001626")
+        val pendingAlbumActor = UUID.fromString("00000000-0000-0000-0000-000000001627")
+        val approvedAlbumActor = UUID.fromString("00000000-0000-0000-0000-000000001628")
+        val inviteActor = UUID.fromString("00000000-0000-0000-0000-000000001629")
+        val blockedActor = UUID.fromString("00000000-0000-0000-0000-000000001630")
+        val quarantinedActor = UUID.fromString("00000000-0000-0000-0000-000000001631")
+        listOf(
+            recipient,
+            viewActor,
+            flirtActor,
+            likeActor,
+            introActor,
+            matchActor,
+            pendingAlbumActor,
+            approvedAlbumActor,
+            inviteActor,
+            blockedActor,
+            quarantinedActor
+        ).forEach { userId -> dataSource.insertUserWithDiscovery(userId) }
+        dataSource.insertBlock(recipient, blockedActor)
+        dataSource.setRiskState(quarantinedActor, score = 75, tier = "quarantine")
+        dataSource.insertPrivateAlbumAccessRequest(recipient, pendingAlbumActor, "pending")
+        dataSource.insertPrivateAlbumAccessRequest(recipient, approvedAlbumActor, "approved")
+        val eventRows = listOf(
+            Triple(viewActor, "profile_view", Instant.parse("2026-05-18T14:00:00Z")),
+            Triple(flirtActor, "flirt", Instant.parse("2026-05-18T14:01:00Z")),
+            Triple(likeActor, "swipe_like", Instant.parse("2026-05-18T14:02:00Z")),
+            Triple(introActor, "intro_note", Instant.parse("2026-05-18T14:03:00Z")),
+            Triple(matchActor, "match", Instant.parse("2026-05-18T14:04:00Z")),
+            Triple(pendingAlbumActor, "album_request", Instant.parse("2026-05-18T14:05:00Z")),
+            Triple(inviteActor, "partner_chat_invite", Instant.parse("2026-05-18T14:06:00Z")),
+            Triple(approvedAlbumActor, "album_request", Instant.parse("2026-05-18T14:07:00Z")),
+            Triple(blockedActor, "flirt", Instant.parse("2026-05-18T14:08:00Z")),
+            Triple(quarantinedActor, "match", Instant.parse("2026-05-18T14:09:00Z"))
+        )
+        eventRows.forEachIndexed { index, row ->
+            dataSource.insertActivityEvent(
+                eventId = UUID.fromString("00000000-0000-0000-0000-0000000017${index.toString().padStart(2, '0')}"),
+                recipientUserId = recipient,
+                actorUserId = row.first,
+                eventType = row.second,
+                occurredAt = row.third
+            )
+        }
+        val repository = JdbcActivityRepository(dataSource)
+
+        val summary = repository.getActivitySummary(recipient)
+
+        assertEquals(1, summary.profileViewCount)
+        assertEquals(1, summary.flirtCount)
+        assertEquals(2, summary.likeCount)
+        assertEquals(1, summary.matchCount)
+        assertEquals(1, summary.albumRequestCount)
+        assertEquals(1, summary.partnerInviteCount)
+        assertEquals(6, summary.badgeCount)
+        assertEquals(Instant.parse("2026-05-18T14:06:00Z"), summary.latestBadgeOccurredAt)
     }
 
     @Test
@@ -327,6 +431,63 @@ class ActivityRepositoryIntegrationTest {
                 statement.setTimestamp(7, occurredAtTimestamp)
                 statement.setTimestamp(8, occurredAtTimestamp)
                 statement.setTimestamp(9, occurredAtTimestamp)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    private fun DataSource.insertPrivateAlbumAccessRequest(ownerUserId: UUID, requesterUserId: UUID, status: String) {
+        val albumId = UUID.nameUUIDFromBytes("activity-summary-private-album:$ownerUserId".toByteArray())
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                INSERT INTO media_albums (
+                    id,
+                    owner_user_id,
+                    kind,
+                    title,
+                    visibility_status
+                )
+                VALUES (?, ?, 'private', 'Private album', 'visible')
+                ON CONFLICT (id) DO NOTHING
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, albumId)
+                statement.setObject(2, ownerUserId)
+                statement.executeUpdate()
+            }
+            connection.prepareStatement(
+                """
+                INSERT INTO media_album_access_requests (
+                    id,
+                    album_id,
+                    owner_user_id,
+                    requester_user_id,
+                    status,
+                    requested_at,
+                    decided_at,
+                    decided_by_user_id
+                )
+                VALUES (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    now(),
+                    CASE WHEN ? = 'pending' THEN NULL ELSE now() END,
+                    CASE WHEN ? = 'pending' THEN NULL ELSE ? END
+                )
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, albumId)
+                statement.setObject(3, ownerUserId)
+                statement.setObject(4, requesterUserId)
+                statement.setString(5, status)
+                statement.setString(6, status)
+                statement.setString(7, status)
+                statement.setObject(8, ownerUserId)
                 statement.executeUpdate()
             }
         }
