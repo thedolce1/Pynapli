@@ -1,6 +1,6 @@
 # Pynapli Swipe Implementation Spec
 
-Last updated: 2026-05-18 (Swipe API load proof extended for Boost, Top Picks, Travel, and 500-concurrent core runs)
+Last updated: 2026-05-18 (Swipe API load proof extended for Boost, Top Picks, Travel, 500-concurrent core runs, and Android queue QA)
 
 ## Purpose
 
@@ -712,6 +712,7 @@ Current API proof:
 - 2026-05-18 extended run passed 100 concurrent users with Boost, Top Picks, Travel activation, Travel deck, filtered deck, relaxed deck, page two, Like/Pass, Rewind, and presence inside local p95 budgets: `artifacts/swipe-api-load/20260518-210752`.
 - 2026-05-18 500-concurrent warm core run passed local p95 budgets: `artifacts/swipe-api-load/20260518-210836`.
 - 2026-05-18 Ktor-restarted true-cold 500-concurrent core run passed local p95 budgets: `artifacts/swipe-api-load/20260518-211103`.
+- 2026-05-18 connected Android queue QA passed on emulator: `artifacts/android-swipe-queue-qa/20260518-212037`.
 
 ## Implementation Checklist
 
@@ -731,7 +732,7 @@ Current API proof:
 - [x] Swipe gestures use physics/thresholds.
 - [x] Card image preloading exists for the active/near-next Swipe stack.
 - [x] Swipe API load proof exists for the current MVP backend shape. The harness validates deck/session authority, filtered and relaxed decks, page-two cursor path, Like/Pass, Rewind, presence, and optional Boost/Top Picks/Travel scenarios; 100-concurrent extended and 500-concurrent core runs passed on 2026-05-18.
-- [ ] Partial: offline action cap exists with stable action IDs and SQLDelight persistence on both mobile platforms. `SqlDelightSwipeActionQueueStore` in `composeApp` commonMain runs against `PynapliDatabase` on Android (via `AndroidPynapliDatabaseFactory`) and iOS (via `IosPynapliDatabaseFactory`). `composeApp:iosMain` exposes `IosSwipeFactory.createSwipeActionQueueStore(database)` / `createSwipeStateHolder(repository, database)` so the Swift shell wires the queue with one call once it exists. Process-death device QA on a real iPhone is still pending — Windows CI cross-compiles via Kotlin/Native but can't drive an iOS simulator.
+- [ ] Partial: offline action cap exists with stable action IDs and SQLDelight persistence on both mobile platforms. `SqlDelightSwipeActionQueueStore` in `composeApp` commonMain runs against `PynapliDatabase` on Android (via `AndroidPynapliDatabaseFactory`) and iOS (via `IosPynapliDatabaseFactory`). `composeApp:iosMain` exposes `IosSwipeFactory.createSwipeActionQueueStore(database)` / `createSwipeStateHolder(repository, database)` so the Swift shell wires the queue with one call once it exists. Android connected QA now proves a recoverable failed Like stays pending across force-stop/relaunch and clears on retry (`scripts/android-swipe-queue-qa.ps1`, latest artifact `artifacts/android-swipe-queue-qa/20260518-212037`). Process-death device QA on a real iPhone is still pending — Windows CI cross-compiles via Kotlin/Native but can't drive an iOS simulator.
 - [x] Block/report available from card.
 - [x] Linked partner preview does not turn into couple card.
 
