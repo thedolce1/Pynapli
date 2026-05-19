@@ -98,8 +98,15 @@ class JdbcSwipeRepository(
             """
             SELECT ST_X(geom::geometry) AS longitude,
                    ST_Y(geom::geometry) AS latitude
-            FROM user_locations
-            WHERE user_id = ?
+            FROM (
+                SELECT COALESCE(tl.geom, ul.geom) AS geom
+                FROM user_locations ul
+                LEFT JOIN travel_locations tl
+                  ON tl.user_id = ul.user_id
+                 AND tl.status = 'active'
+                 AND tl.active_until IS NULL
+                WHERE ul.user_id = ?
+            ) viewer_location
             """.trimIndent()
         ).use { statement ->
             statement.setObject(1, viewerUserId)
@@ -147,8 +154,7 @@ class JdbcSwipeRepository(
             !filters.isRankCacheEligible() ||
             rankCacheTtl.isZero ||
             rankCacheTtl.isNegative ||
-            rankCacheMaxEntries <= 0 ||
-            activeTravelLocationsPresent
+            rankCacheMaxEntries <= 0
         ) {
             return queryDeckRank(
                 viewerUserId = viewerUserId,
@@ -161,6 +167,11 @@ class JdbcSwipeRepository(
             )
         }
 
+        val activeTravelTargetIds = if (activeTravelLocationsPresent) {
+            listActiveTravelCandidateUserIdsNear(viewerUserId, radiusMeters)
+        } else {
+            emptySet()
+        }
         val cacheWindow = rankCacheWindow.coerceAtLeast(limit)
         val cacheKey = DeckRankCacheKey(
             location = viewerLocationKey,
@@ -180,12 +191,39 @@ class JdbcSwipeRepository(
             )
         }
         val cachedTargetIds = cachedRows.mapTo(mutableSetOf()) { it.userId }
-        val swipedTargetIds = listActiveSwipedTargetIds(viewerUserId, cachedTargetIds)
+        val targetIdsForSwipeExclusion = cachedTargetIds + activeTravelTargetIds
+        val swipedTargetIds = listActiveSwipedTargetIds(viewerUserId, targetIdsForSwipeExclusion)
         val excluded = excludedTargetUserIds + swipedTargetIds + viewerUserId
-        val page = cachedRows.asSequence()
+        val localPage = cachedRows.asSequence()
             .filterNot { it.userId in excluded }
             .take(limit)
             .toList()
+        val travelRows = if (activeTravelTargetIds.isNotEmpty()) {
+            queryDeckRankForcedTargets(
+                viewerUserId = viewerUserId,
+                radiusMeters = radiusMeters,
+                limit = limit,
+                filters = filters,
+                excludedTargetUserIds = excluded + localPage.map { it.userId },
+                userSpecificViewerId = viewerUserId,
+                forcedTargetUserIds = activeTravelTargetIds - excluded,
+                includeTravelLocations = true
+            )
+        } else {
+            emptyList()
+        }
+        val page = if (travelRows.isEmpty()) {
+            localPage
+        } else {
+            (localPage + travelRows)
+                .distinctBy { it.userId }
+                .sortedWith(
+                    compareByDescending<DeckRankRow> { it.isBoosted }
+                        .thenByDescending { it.softScore }
+                        .thenBy { it.distanceMeters }
+                )
+                .take(limit)
+        }
 
         if (page.size >= limit || cachedRows.size < cacheWindow) {
             return page
@@ -201,6 +239,57 @@ class JdbcSwipeRepository(
             useNearestCandidateWindow = false
         )
     }
+
+    private fun Connection.listActiveTravelCandidateUserIdsNear(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int = 2_000
+    ): Set<UUID> =
+        prepareStatement(
+            """
+            WITH viewer_location AS (
+                SELECT COALESCE(viewer_travel.geom, ul.geom) AS geom
+                FROM user_locations ul
+                LEFT JOIN travel_locations viewer_travel
+                  ON viewer_travel.user_id = ul.user_id
+                 AND viewer_travel.status = 'active'
+                 AND viewer_travel.active_until IS NULL
+                WHERE ul.user_id = ?
+            )
+            SELECT tl.user_id
+            FROM viewer_location v
+            JOIN travel_locations tl
+              ON tl.status = 'active'
+             AND tl.active_until IS NULL
+             AND ST_DWithin(v.geom, tl.geom, ?)
+            JOIN users u ON u.id = tl.user_id
+            JOIN profiles p ON p.user_id = u.id
+            JOIN discovery_settings ds ON ds.user_id = u.id
+            LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+            WHERE u.id <> ?
+              AND u.status = 'active'
+              AND u.deleted_at IS NULL
+              AND p.visibility_status = 'visible'
+              AND ds.swipe_visible = true
+              AND ds.incognito = false
+              AND ds.visible_while_traveling = true
+              AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
+            ORDER BY v.geom <-> tl.geom
+            LIMIT ?
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, viewerUserId)
+            statement.setDouble(2, radiusMeters.toDouble())
+            statement.setObject(3, viewerUserId)
+            statement.setInt(4, limit)
+            statement.executeQuery().use { rs ->
+                buildSet {
+                    while (rs.next()) {
+                        add(rs.getObject("user_id", UUID::class.java))
+                    }
+                }
+            }
+        }
 
     private fun Connection.hasAnyActiveProfileLinksNear(viewerUserId: UUID, radiusMeters: Int): Boolean =
         listLinkedCandidateUserIdsNear(viewerUserId, radiusMeters, limit = 1).isNotEmpty()

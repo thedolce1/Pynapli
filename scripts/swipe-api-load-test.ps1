@@ -9,12 +9,18 @@ param(
     [int]$DeckFilterBudgetP95Ms = 500,
     [int]$DeckFilterRelaxedBudgetP95Ms = 1500,
     [int]$DeckPageBudgetP95Ms = 800,
+    [int]$TopPicksBudgetP95Ms = 1000,
+    [int]$BoostDeckBudgetP95Ms = 800,
+    [int]$TravelSetBudgetP95Ms = 500,
+    [int]$TravelDeckBudgetP95Ms = 1000,
     [int]$ActionBudgetP95Ms = 400,
     [int]$RewindBudgetP95Ms = 600,
+    [int]$BoostedCandidateCount = 100,
     [string]$OutputRoot = "artifacts\swipe-api-load",
     [switch]$ColdCache,
     [switch]$ServerProfile,
     [switch]$SkipSwipeStateReset,
+    [switch]$SkipExtendedScenarios,
     [switch]$SkipSafetyProbes,
     [switch]$FailOnBudget
 )
@@ -34,6 +40,7 @@ $artifactDir = Join-Path $repoRoot (Join-Path $OutputRoot $artifactStamp)
 New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
 $script:ScenarioSummaryRows = @()
 $script:ScenarioBudgetFailed = $false
+$script:ScenarioUnexpectedFailureCount = 0
 $script:ProfileSummaryRows = @()
 $script:SlowProfileRows = @()
 $script:PoolSummaryRows = @()
@@ -135,23 +142,68 @@ function Clear-SwipeRuntimeCaches {
     }
 }
 
+function ConvertTo-Sha256Base64Url {
+    param([string]$Value)
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value.Trim().ToLowerInvariant())
+        return [Convert]::ToBase64String($sha.ComputeHash($bytes)).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    } finally {
+        $sha.Dispose()
+    }
+}
+
 function Reset-SwipeRunState {
     # Wipe per-run swipe state so consecutive runs do not poison query plans or
-    # exhaust dealt cards. Uses load-tester id ranges to avoid touching real data.
+    # exhaust dealt cards. Load viewers are found by their deterministic email
+    # identity hashes; dense seeded candidates use the 1000 UUID range.
+    $emailHashes = for ($i = 1; $i -le $ViewerCount; $i++) {
+        ConvertTo-Sha256Base64Url "swipe-load-$i@pynapli.local"
+    }
+    $quotedEmailHashes = ($emailHashes | ForEach-Object { "'$_'" }) -join ","
     $sql = @"
+DROP TABLE IF EXISTS load_run_users;
+
+CREATE TEMP TABLE load_run_users AS
+SELECT user_id
+FROM auth_identities
+WHERE provider = 'email'
+  AND provider_subject IN ($quotedEmailHashes);
+
 DELETE FROM matches
-WHERE user_a IN (SELECT id FROM users WHERE id::text LIKE '00000000-0000-0000-2000-%')
-   OR user_b IN (SELECT id FROM users WHERE id::text LIKE '00000000-0000-0000-2000-%');
+WHERE user_a IN (SELECT user_id FROM load_run_users)
+   OR user_b IN (SELECT user_id FROM load_run_users);
 
 DELETE FROM swipe_actions
-WHERE actor_user_id IN (SELECT id FROM users WHERE id::text LIKE '00000000-0000-0000-2000-%')
-   OR target_user_id IN (SELECT id FROM users WHERE id::text LIKE '00000000-0000-0000-2000-%');
+WHERE actor_user_id IN (SELECT user_id FROM load_run_users)
+   OR target_user_id IN (SELECT user_id FROM load_run_users);
+
+DELETE FROM top_pick_session_cards
+WHERE session_id IN (
+    SELECT id FROM top_pick_sessions
+    WHERE user_id IN (SELECT user_id FROM load_run_users)
+);
+
+DELETE FROM top_pick_sessions
+WHERE user_id IN (SELECT user_id FROM load_run_users);
 
 DELETE FROM swipe_deck_cards
-WHERE viewer_user_id IN (SELECT id FROM users WHERE id::text LIKE '00000000-0000-0000-2000-%');
+WHERE viewer_user_id IN (SELECT user_id FROM load_run_users);
 
 DELETE FROM swipe_deck_sessions
-WHERE viewer_user_id IN (SELECT id FROM users WHERE id::text LIKE '00000000-0000-0000-2000-%');
+WHERE viewer_user_id IN (SELECT user_id FROM load_run_users);
+
+DELETE FROM travel_locations
+WHERE user_id IN (SELECT user_id FROM load_run_users);
+
+DELETE FROM user_sessions
+WHERE user_id IN (SELECT user_id FROM load_run_users);
+
+DELETE FROM boost_activations
+WHERE user_id IN (SELECT id FROM users WHERE id::text LIKE '00000000-0000-0000-1000-%');
+
+DROP TABLE IF EXISTS load_run_users;
 "@
 
     Invoke-DockerPsql -Sql $sql | Out-Null
@@ -451,6 +503,49 @@ function Seed-OnlineCandidates {
     }
 }
 
+function Seed-BoostedCandidates {
+    param([int]$Count)
+
+    $max = [Math]::Min($Count, $CandidateCount)
+    if ($max -le 0) {
+        return
+    }
+
+    $sql = @"
+WITH boosted AS (
+    SELECT
+        i,
+        ('00000000-0000-0000-1000-' || lpad(i::text, 12, '0'))::uuid AS user_id,
+        ('00000000-0000-0000-2400-' || lpad(i::text, 12, '0'))::uuid AS activation_id
+    FROM generate_series(1, $max) AS i
+)
+INSERT INTO boost_activations (
+    id,
+    user_id,
+    boost_type,
+    source,
+    starts_at,
+    ends_at,
+    status
+)
+SELECT
+    activation_id,
+    user_id,
+    'boost',
+    'dev',
+    now() - interval '1 minute',
+    now() + interval '29 minutes',
+    'active'
+FROM boosted
+ON CONFLICT (id) DO UPDATE
+SET starts_at = EXCLUDED.starts_at,
+    ends_at = EXCLUDED.ends_at,
+    status = EXCLUDED.status;
+"@
+
+    Invoke-DockerPsql -Sql $sql | Out-Null
+}
+
 function Update-SwipePlannerStats {
     $sql = @"
 ANALYZE users;
@@ -466,7 +561,10 @@ ANALYZE media_assets;
 ANALYZE swipe_actions;
 ANALYZE swipe_deck_sessions;
 ANALYZE swipe_deck_cards;
+ANALYZE top_pick_sessions;
+ANALYZE top_pick_session_cards;
 ANALYZE matches;
+ANALYZE travel_locations;
 "@
 
     Invoke-DockerPsql -Sql $sql | Out-Null
@@ -543,6 +641,10 @@ function Write-ScenarioSummary {
         swipe_deck_filtered = $DeckFilterBudgetP95Ms
         swipe_deck_filtered_relaxed = $DeckFilterRelaxedBudgetP95Ms
         swipe_deck_page2 = $DeckPageBudgetP95Ms
+        swipe_top_picks = $TopPicksBudgetP95Ms
+        swipe_deck_boosted = $BoostDeckBudgetP95Ms
+        travel_set = $TravelSetBudgetP95Ms
+        swipe_deck_travel = $TravelDeckBudgetP95Ms
         swipe_action_like = $ActionBudgetP95Ms
         swipe_action_pass = $ActionBudgetP95Ms
         swipe_rewind = $RewindBudgetP95Ms
@@ -593,6 +695,7 @@ function Write-ScenarioSummary {
     $script:ScenarioBudgetFailed = $failedBudget
 
     $unexpectedFailures = @($Results | Where-Object { -not (Get-LoadRecordAccepted -Record $_) })
+    $script:ScenarioUnexpectedFailureCount = $unexpectedFailures.Count
     if ($unexpectedFailures.Count -gt 0) {
         Write-Host ""
         Write-Host "Unexpected failures"
@@ -913,6 +1016,11 @@ if (-not $SkipSwipeStateReset) {
 Write-Host "Seeding $CandidateCount dense Swipe candidates..."
 Seed-DenseCandidates -Count $CandidateCount
 
+if (-not $SkipExtendedScenarios) {
+    Write-Host "Seeding $BoostedCandidateCount active boosted candidates..."
+    Seed-BoostedCandidates -Count $BoostedCandidateCount
+}
+
 Write-Host "Seeding $OnlineCandidateCount online candidate presence keys..."
 Seed-OnlineCandidates -Count $OnlineCandidateCount
 
@@ -1016,6 +1124,8 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
 
         $itemCount = if ($null -ne $bodyObject -and $null -ne $bodyObject.items) {
             @($bodyObject.items).Count
+        } elseif ($null -ne $bodyObject -and $null -ne $bodyObject.picks) {
+            @($bodyObject.picks).Count
         } else {
             $null
         }
@@ -1070,7 +1180,7 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
     # Branches 4 and 5 exercise the B1 expanded filter surface (verifiedPreferred, intents).
     $filterBody = switch ($session.Index % 6) {
         0 { @{ radiusMeters = 50000; limit = 30; relationshipContexts = @("single") } }
-        1 { @{ radiusMeters = 50000; limit = 30; linkedOnly = $true } }
+        1 { @{ radiusMeters = 50000; limit = 30; linkedOnly = $true; dealbreakers = @("linkedOnly") } }
         2 { @{ radiusMeters = 50000; limit = 30; minimumAge = 30; maximumAge = 45 } }
         3 { @{ radiusMeters = 50000; limit = 30; relationshipContexts = @("linked"); minimumAge = 30; maximumAge = 50 } }
         4 { @{ radiusMeters = 50000; limit = 30; verifiedPreferred = $true; intents = @("dating") } }
@@ -1110,6 +1220,27 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
                 cursor = $initial.Body.nextCursor
             }
         $records.Add($page2.Record)
+    }
+
+    if (-not $using:SkipExtendedScenarios) {
+        # Boosted candidates are seeded globally for the load run. This scenario
+        # keeps a separate budget row for the boosted-ranking deck shape.
+        $boosted = Invoke-LoadRequest `
+            -Scenario "swipe_deck_boosted" `
+            -Method POST `
+            -Path "/v1/swipe/deck/query" `
+            -Body @{
+                radiusMeters = 50000
+                limit = 30
+                verifiedPreferred = $true
+            }
+        $records.Add($boosted.Record)
+
+        $topPicks = Invoke-LoadRequest `
+            -Scenario "swipe_top_picks" `
+            -Method GET `
+            -Path "/v1/swipe/picks"
+        $records.Add($topPicks.Record)
     }
 
     # Submit one Like + one Pass against the first two cards from the initial deck.
@@ -1194,6 +1325,36 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
     }
     $records.Add($rewind.Record)
 
+    if (-not $using:SkipExtendedScenarios) {
+        # Exercise travel-mode activation and the active-travel deck path after the
+        # local deck/action/rewind scenarios so the baseline deck timings stay local.
+        $travelSet = Invoke-LoadRequest `
+            -Scenario "travel_set" `
+            -Method POST `
+            -Path "/v1/location/travel" `
+            -Body @{
+                latitude = 37.4220 + (($session.Index % 10) - 5) * 0.00005
+                longitude = -122.0841 + (($session.Index % 10) - 5) * 0.00005
+                city = "Mountain View"
+                region = "CA"
+                country = "US"
+            }
+        if ($session.Tier -eq "free") {
+            $travelSet.Record.ExpectedErrorCode = "ENTITLEMENT_REQUIRED"
+        }
+        $records.Add($travelSet.Record)
+
+        $travelDeck = Invoke-LoadRequest `
+            -Scenario "swipe_deck_travel" `
+            -Method POST `
+            -Path "/v1/swipe/deck/query" `
+            -Body @{
+                radiusMeters = 50000
+                limit = 30
+            }
+        $records.Add($travelDeck.Record)
+    }
+
     return $records
 }
 
@@ -1225,9 +1386,11 @@ $parameters = [pscustomobject]@{
     viewerCount = $ViewerCount
     concurrentUsers = $ConcurrentUsers
     onlineCandidateCount = $OnlineCandidateCount
+    boostedCandidateCount = $BoostedCandidateCount
     coldCache = [bool]$ColdCache
     serverProfile = [bool]$ServerProfile
     skipSwipeStateReset = [bool]$SkipSwipeStateReset
+    skipExtendedScenarios = [bool]$SkipExtendedScenarios
     skipSafetyProbes = [bool]$SkipSafetyProbes
     failOnBudget = [bool]$FailOnBudget
     budgets = [pscustomobject]@{
@@ -1235,6 +1398,10 @@ $parameters = [pscustomobject]@{
         deckFilterP95Ms = $DeckFilterBudgetP95Ms
         deckFilterRelaxedP95Ms = $DeckFilterRelaxedBudgetP95Ms
         deckPageP95Ms = $DeckPageBudgetP95Ms
+        topPicksP95Ms = $TopPicksBudgetP95Ms
+        boostDeckP95Ms = $BoostDeckBudgetP95Ms
+        travelSetP95Ms = $TravelSetBudgetP95Ms
+        travelDeckP95Ms = $TravelDeckBudgetP95Ms
         actionP95Ms = $ActionBudgetP95Ms
         rewindP95Ms = $RewindBudgetP95Ms
         presenceHeartbeatP95Ms = 300
@@ -1273,6 +1440,10 @@ if ($script:SafetyProbeRows.Count -gt 0) {
     Write-Host "  Safety probes: $safetyProbePath"
 }
 Write-Host "Swipe API load test complete."
+
+if ($script:ScenarioUnexpectedFailureCount -gt 0) {
+    throw "$($script:ScenarioUnexpectedFailureCount) unexpected scenario failure(s). Artifacts were written to $artifactDir"
+}
 
 if ($FailOnBudget -and $script:ScenarioBudgetFailed) {
     throw "One or more scenarios exceeded the configured p95 budget. Artifacts were written to $artifactDir"

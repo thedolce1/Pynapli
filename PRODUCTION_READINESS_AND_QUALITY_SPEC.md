@@ -1,6 +1,6 @@
 # Pynapli Production Readiness And Quality Spec
 
-Last updated: 2026-05-14
+Last updated: 2026-05-18
 
 ## Purpose
 
@@ -212,6 +212,26 @@ Latest warm profiled follow-up after migration `V43__add_grid_query_covering_ind
 Decision after the index pass and first 500-concurrent proofs: do not add Redis candidate caching yet just because it is in the architecture plan. The current 500-concurrent API path is stable with zero HTTP errors, but warm-run p95 variance means the next step should be repeat 500-concurrent runs with server profiling enabled. Revisit Redis/H3-style candidate caching if repeated 500-concurrent profiled runs show candidate SQL/page-two scans cannot reliably meet budget, or when larger dense metro datasets increase p95.
 
 Connected Android rendering QA now exists through `scripts/android-grid-qa.ps1` and structural golden assertions in `scripts/android-grid-qa-goldens.json`. It verifies Grid load, filter sheet, Online empty state, profile open, filter-clear stability, profile-return stability, screenshot signatures, and visible card order/position. Denied-location QA now exists through `scripts/android-grid-denied-location-qa.ps1`; it removes the dev viewer's server location, exercises Android permission denial, verifies the denied state, and restores dev data. Android location policy QA now exists through `scripts/android-location-policy-check.ps1`; it rejects background location, foreground location services, continuous location updates, and missing one-shot cancellation on app stop. Battery/location profile artifact capture now exists through `scripts/android-grid-battery-profile.ps1`, but real-device profiling remains open until a physical Android device is connected and reviewed.
+
+## Swipe Scale Requirements
+
+Swipe must stay server-authoritative without feeling network-bound. The server owns deck eligibility, card tokens, action idempotency, match creation, premium inventory, Top Picks, Boost, and Travel semantics; the client can animate optimistically but reconciles with the API.
+
+Current status: `scripts/swipe-api-load-test.ps1` exercises real Ktor endpoints with mixed Free/Social/Select users and a 5,000-candidate dense dataset. The harness now supports extended Boost, Top Picks, and Travel scenarios, writes artifacts, fails on unexpected scenario failures, and can run core-only at higher concurrency.
+
+Latest 2026-05-18 proof:
+
+| Run | Shape | Errors | Initial Deck P95 | Page Two P95 | Filtered P95 | Like P95 | Status |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Extended | 100 concurrent, 5,000 candidates, 1,000 online, 200 boosted | 0 | 284.1ms | 267.7ms | 349.8ms | 184.5ms | Inside budgets; includes Boost, Top Picks, Travel set/deck |
+| Warm core | 500 concurrent, 5,000 candidates, 1,000 online | 0 | 158.9ms | 170.9ms | 259.1ms | 141.7ms | Inside budgets |
+| True-cold core | Ktor restarted, 500 concurrent, 5,000 candidates, 1,000 online | 0 | 322.2ms | 348.3ms | 431.6ms | 250.9ms | Inside budgets |
+
+Artifacts: `artifacts/swipe-api-load/20260518-210752`, `artifacts/swipe-api-load/20260518-210836`, and `artifacts/swipe-api-load/20260518-211103`.
+
+The key backend fix from this pass is the active-travel rank-cache path: viewer travel location participates in the rank-cache key, active travel targets are gathered through a bounded supplement query, and cached local candidates are merged with visiting candidates before final sort. This keeps destination visibility correct without letting one active traveler globally disable the fast rank-cache path.
+
+Remaining Swipe readiness work is mostly client/device proof: connected Android Swipe screenshot and gesture QA, process-death action queue validation, iOS queue/device validation, and real-user telemetry once beta testing begins.
 
 Expected behavior:
 
@@ -513,6 +533,20 @@ Current local Grid API harness:
 Use `-FailOnBudget` when the harness should fail the shell on p95 budget regressions.
 
 Use `-ServerProfile` only when Ktor was started with `PYNAPLI_API_PROFILING_ENABLED=true`; it requests per-response timing headers and prints route/service/DB/Redis/Hikari summaries.
+
+Current local Swipe API harness:
+
+```powershell
+.\scripts\swipe-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000 -BoostedCandidateCount 200 -ServerProfile -FailOnBudget
+```
+
+For core-only high-concurrency proof:
+
+```powershell
+.\scripts\swipe-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 500 -ConcurrentUsers 500 -OnlineCandidateCount 1000 -ServerProfile -SkipExtendedScenarios -FailOnBudget
+```
+
+Use a Ktor restart before `-ColdCache` when the goal is true-cold Swipe evidence; Redis clearing alone does not clear the in-process rank cache.
 
 Minimum beta load targets:
 

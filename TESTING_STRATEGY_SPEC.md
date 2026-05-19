@@ -1,6 +1,6 @@
 # Pynapli Testing Strategy Spec
 
-Last updated: 2026-05-14
+Last updated: 2026-05-18
 
 ## Purpose
 
@@ -55,6 +55,7 @@ Current Swipe coverage:
 - The test captures pixels and checks for the intended visual signature: subdued dark surface, tonal card body, readable text/icons, Pynapli gold accent, and Like action accent.
 - The test also clicks Like and Pass through the real action buttons and verifies the deck advances, then verifies the Intro Note dialog opens.
 - `SwipeImagePrefetchPlannerTest` verifies the active/near-next Swipe image prefetch window, URL ordering, and deduplication.
+- `scripts/swipe-api-load-test.ps1` now exercises the Ktor Swipe API against a dense local dataset, including core deck/action/rewind flows and optional Boost, Top Picks, and Travel scenarios.
 
 Still open before beta:
 
@@ -126,6 +127,24 @@ Latest 500-concurrent local proof runs on 2026-05-14 used 5,000 candidates, 1,00
 | Cold Redis cache | 0 | 638.2ms | 492.0ms | 709.8ms | 144.4ms | 167.9ms | `artifacts/grid-api-load-500-cold/20260514-084048` |
 
 Decision: the 500-concurrent API path is stable with zero HTTP errors. One warm local run exceeded the current p95 budgets for Grid initial/filter/page two, while the cold Redis-cleared repeat was inside budget. Do not hide this variance; repeat 500-concurrent runs with server profiling before deciding whether Redis candidate caching is justified.
+
+Current local Swipe API harness:
+
+```powershell
+.\scripts\swipe-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000 -BoostedCandidateCount 200 -ServerProfile -FailOnBudget
+```
+
+The harness uses real Ktor endpoints with mixed Free/Social/Select viewers. Core scenarios cover first deck, filtered deck, relaxed filtered deck, page two, Like, Pass, Rewind, and presence. Extended scenarios add Boosted deck ranking, Top Picks, Travel activation, and Travel deck reads; use `-SkipExtendedScenarios` for a high-concurrency core proof.
+
+Latest 2026-05-18 Swipe API proof runs:
+
+| Run | Errors | Initial P95 | Page Two P95 | Filtered P95 | Relaxed P95 | Like P95 | Top Picks P95 | Travel Deck P95 | Artifact |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 100-concurrent extended | 0 | 284.1ms | 267.7ms | 349.8ms | 302.6ms | 184.5ms | 296.5ms | 256.2ms | `artifacts/swipe-api-load/20260518-210752` |
+| 500-concurrent warm core | 0 | 158.9ms | 170.9ms | 259.1ms | 183.8ms | 141.7ms | n/a | n/a | `artifacts/swipe-api-load/20260518-210836` |
+| 500-concurrent true-cold core | 0 | 322.2ms | 348.3ms | 431.6ms | 343.3ms | 250.9ms | n/a | n/a | `artifacts/swipe-api-load/20260518-211103` |
+
+For a true-cold Swipe proof, restart Ktor before running `-ColdCache`; the flag clears Redis, while the restart clears the in-process rank cache. The current 500-concurrent core and 100-concurrent extended runs are inside the local p95 budgets with zero unexpected failures.
 
 ## Connected Android Grid QA
 
