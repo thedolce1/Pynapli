@@ -220,6 +220,7 @@ Rules:
 
 - Match appears in Activity and creates/updates Messages.
 - Activity row CTA can be `Message`.
+- Message CTA opens the existing match conversation path using server-provided match metadata.
 - Match animation happens in Swipe, but the historical record lives in Activity.
 
 ### Private Album Request
@@ -230,6 +231,7 @@ Rules:
 
 - Appears in Albums/All.
 - Recipient can Grant, Deny, or Ignore.
+- Activity row first shows `Review`, then reveals Grant/Deny so accidental album decisions are less likely.
 - Album requests should be rate-limited.
 - Users can restrict album requests:
   - Everyone
@@ -273,6 +275,7 @@ Rules:
 
 - Invitee receives Activity item.
 - Invitee can Accept, Deny, or Ignore.
+- Activity row CTA can open the invite conversation context using the server-provided conversation id.
 - No silent partner adds.
 - Denying should not send drama-heavy notifications.
 - Invite context should show who is in the chat.
@@ -641,10 +644,11 @@ Implemented and verified as of 2026-05-19:
 - `POST /v1/activity/{eventId}/dismiss` soft-deletes the recipient's own Activity item without allowing cross-user dismissal.
 - Swipe actions now create Activity events for `swipe_like`, `pineapple_like`, `intro_note`, and two-sided `match` rows after the server-authoritative action succeeds. Idempotent action retries do not duplicate Activity rows.
 - Linked-partner chat invites now create `partner_chat_invite` Activity rows for the invited partner after the invite is accepted by the messaging engine.
+- Activity feed rows expose deep-link metadata where needed: `matchId` for match rows and `conversationId` for partner-chat invites.
 - Database-level partial unique indexes protect Swipe interest, match, and partner-chat invite Activity rows from duplicate writes.
 - Repository and service coverage proves tab filtering, cursor paging, entitlement reveal depth, invalid cursor rejection, block/risk filtering, and dismiss behavior.
-- Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, exposes per-row dismiss, and keeps album request grant/deny actions.
-- Desktop UI interaction coverage proves Activity tab selection, cursor load-more, and dismiss through the rendered screen.
+- Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, exposes per-row dismiss, and has row CTAs for match messaging, partner-chat invite opening, and album request review/grant/deny.
+- Desktop UI interaction coverage proves Activity tab selection, cursor load-more, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the rendered screen.
 
 ## Badge Counts
 
@@ -755,9 +759,12 @@ Avoid:
 - [x] Pineapple Likes appear in Activity.
 - [x] Intro Notes appear in Activity, not Messages.
 - [x] Matches appear in Activity for both matched users.
+- [x] Match Activity rows can open the message path.
 - [x] Partner chat invites appear in invited partner Activity.
 - [x] Partner chat invites require explicit action.
+- [x] Partner chat invite Activity rows can open the invite conversation context.
 - [x] Album requests can be granted/denied/ignored.
+- [x] Album request rows use Review before grant/deny actions.
 - [x] Free/Social/Select gating is implemented.
 - [ ] Partial: Viewed opt-out suppresses outgoing view events; own Viewed-list disabling still needs user-facing review.
 - [x] Incognito suppresses view events.

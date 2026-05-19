@@ -330,6 +330,7 @@ Rules:
 
 ```http
 GET  /v1/activity
+POST /v1/activity/album-requests/{eventId}/respond
 POST /v1/activity/{eventId}/dismiss
 ```
 
@@ -339,11 +340,19 @@ Query params:
 - `tab`: `all`, `views`, `flirts`, `likes`, `matches`, `albums`, or `invites`
 - `cursor`: signed, viewer/tab-scoped cursor token
 
+Feed item fields used for row CTAs:
+
+- `albumRequestStatus`: drives pending/approved/denied album request review state.
+- `matchId`: present on match rows so the client can open the match conversation path.
+- `conversationId`: present on partner-chat invite rows so the client can open the invite conversation context.
+
 Rules:
 
 - Ktor applies tier gating.
 - Ktor applies viewed-list opt-out/incognito/block rules.
 - Cursors carry seen-count state so reveal-depth gates apply consistently across pages.
+- Album request respond is owner-scoped and only applies to the recipient's own pending request row.
+- Match and partner-invite CTAs must use the server-provided identifiers; clients cannot invent a conversation from an Activity row.
 - Dismiss only affects an Activity event owned by the authenticated recipient.
 - Activity is not Messages.
 

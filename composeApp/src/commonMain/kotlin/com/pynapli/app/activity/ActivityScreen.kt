@@ -37,8 +37,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,10 +61,13 @@ fun ActivityScreen(
     modifier: Modifier = Modifier,
     stateHolder: ActivityStateHolder = rememberActivityStateHolder(),
     distanceUnit: String = AppSettings.UNIT_METRIC,
-    onOpenStore: () -> Unit = {}
+    onOpenStore: () -> Unit = {},
+    onOpenMatch: (ActivityEventDto) -> Unit = {},
+    onOpenPartnerChatInvite: (String) -> Unit = {}
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
+    var expandedAlbumReviewEventId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(stateHolder) {
         stateHolder.load()
@@ -72,9 +77,14 @@ fun ActivityScreen(
         state = state,
         onTabSelected = { tab -> scope.launch { stateHolder.selectTab(tab) } },
         onAlbumRequestDecision = { eventId, approve ->
+            expandedAlbumReviewEventId = null
             scope.launch { stateHolder.respondToAlbumRequest(eventId, approve) }
         },
+        expandedAlbumReviewEventId = expandedAlbumReviewEventId,
+        onReviewAlbumRequest = { eventId -> expandedAlbumReviewEventId = eventId },
         onDismissEvent = { eventId -> scope.launch { stateHolder.dismissActivityEvent(eventId) } },
+        onOpenMatch = onOpenMatch,
+        onOpenPartnerChatInvite = onOpenPartnerChatInvite,
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onRefresh = { scope.launch { stateHolder.load() } },
         onOpenStore = onOpenStore,
@@ -97,7 +107,11 @@ private fun ActivityScreenContent(
     state: ActivityUiState,
     onTabSelected: (ActivityTabUi) -> Unit,
     onAlbumRequestDecision: (String, Boolean) -> Unit,
+    expandedAlbumReviewEventId: String?,
+    onReviewAlbumRequest: (String) -> Unit,
     onDismissEvent: (String) -> Unit,
+    onOpenMatch: (ActivityEventDto) -> Unit,
+    onOpenPartnerChatInvite: (String) -> Unit,
     onLoadMore: () -> Unit,
     onRefresh: () -> Unit,
     onOpenStore: () -> Unit,
@@ -176,9 +190,13 @@ private fun ActivityScreenContent(
                         ActivityRow(
                             item = item,
                             pendingAction = state.pendingAlbumActionEventId == item.eventId,
+                            albumReviewExpanded = expandedAlbumReviewEventId == item.eventId,
                             pendingDismiss = state.pendingDismissEventId == item.eventId,
                             distanceUnit = distanceUnit,
+                            onReviewAlbumRequest = onReviewAlbumRequest,
                             onAlbumRequestDecision = onAlbumRequestDecision,
+                            onOpenMatch = onOpenMatch,
+                            onOpenPartnerChatInvite = onOpenPartnerChatInvite,
                             onDismissEvent = onDismissEvent
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
@@ -355,9 +373,13 @@ private fun ActivityHeader(
 private fun ActivityRow(
     item: ActivityEventDto,
     pendingAction: Boolean,
+    albumReviewExpanded: Boolean,
     pendingDismiss: Boolean,
     distanceUnit: String,
+    onReviewAlbumRequest: (String) -> Unit,
     onAlbumRequestDecision: (String, Boolean) -> Unit,
+    onOpenMatch: (ActivityEventDto) -> Unit,
+    onOpenPartnerChatInvite: (String) -> Unit,
     onDismissEvent: (String) -> Unit
 ) {
     val distanceLabel = formatDistanceForUnit(
@@ -421,7 +443,14 @@ private fun ActivityRow(
             AlbumRequestActions(
                 item = item,
                 pendingAction = pendingAction,
+                expanded = albumReviewExpanded,
+                onReviewAlbumRequest = onReviewAlbumRequest,
                 onAlbumRequestDecision = onAlbumRequestDecision
+            )
+            ActivityPrimaryAction(
+                item = item,
+                onOpenMatch = onOpenMatch,
+                onOpenPartnerChatInvite = onOpenPartnerChatInvite
             )
         }
         IconButton(
@@ -482,12 +511,29 @@ private fun ActivityLoadMoreRow(
 private fun AlbumRequestActions(
     item: ActivityEventDto,
     pendingAction: Boolean,
+    expanded: Boolean,
+    onReviewAlbumRequest: (String) -> Unit,
     onAlbumRequestDecision: (String, Boolean) -> Unit
 ) {
     if (item.type != "album_request") return
 
     when (item.albumRequestStatus) {
         "pending" -> {
+            if (!expanded) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { onReviewAlbumRequest(item.eventId) },
+                        enabled = !pendingAction
+                    ) {
+                        Text(text = "Review", maxLines = 1)
+                    }
+                }
+                return
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -520,6 +566,43 @@ private fun AlbumRequestActions(
                 modifier = Modifier.padding(top = 6.dp),
                 maxLines = 1
             )
+        }
+    }
+}
+
+@Composable
+private fun ActivityPrimaryAction(
+    item: ActivityEventDto,
+    onOpenMatch: (ActivityEventDto) -> Unit,
+    onOpenPartnerChatInvite: (String) -> Unit
+) {
+    when (item.type) {
+        "match" -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            ) {
+                Button(onClick = { onOpenMatch(item) }) {
+                    Text(text = "Message", maxLines = 1)
+                }
+            }
+        }
+
+        "partner_chat_invite" -> {
+            val conversationId = item.conversationId
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            ) {
+                Button(
+                    onClick = { if (conversationId != null) onOpenPartnerChatInvite(conversationId) },
+                    enabled = conversationId != null
+                ) {
+                    Text(text = "Open invite", maxLines = 1)
+                }
+            }
         }
     }
 }

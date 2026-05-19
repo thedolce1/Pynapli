@@ -176,6 +176,44 @@ class ConversationStateHolder(
         }
     }
 
+    suspend fun openConversationById(
+        conversationId: String,
+        viewerUserId: String?,
+        title: String = "Conversation"
+    ) {
+        _state.update {
+            ConversationUiState(
+                titleOverride = title,
+                viewerUserId = viewerUserId,
+                isOpening = true
+            )
+        }
+
+        when (val result = repository.getConversationDetail(conversationId)) {
+            is AppResult.Success -> {
+                val detail = result.value.withReadConversation()
+                _state.update { current ->
+                    current.copy(
+                        detail = detail,
+                        titleOverride = detail.conversation.titleFor(viewerUserId),
+                        isOpening = false,
+                        partnerInviteFeedback = null,
+                        errorMessage = null
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update { current ->
+                    current.copy(
+                        isOpening = false,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
     suspend fun refreshOpenConversation(silent: Boolean = true) {
         val current = state.value
         if (!current.visible || current.isOpening || current.isSending || current.isLoadingOlder) return

@@ -75,6 +75,62 @@ class ActivityScreenInteractionTest {
             repository.loadCalls
         )
     }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun activityRowCtasOpenExpectedActions() = runComposeUiTest {
+        val repository = StaticActivityScreenRepository(
+            responses = mutableMapOf(
+                ActivityRequest(ActivityTabUi.All, null) to ActivityFeedUi(
+                    items = listOf(
+                        activityEvent(
+                            eventId = "match-1",
+                            type = "match",
+                            displayName = "Taylor",
+                            matchId = "match-id-1"
+                        ),
+                        activityEvent(
+                            eventId = "album-1",
+                            type = "album_request",
+                            displayName = "Sam",
+                            albumRequestStatus = "pending"
+                        ),
+                        activityEvent(
+                            eventId = "invite-1",
+                            type = "partner_chat_invite",
+                            displayName = "Noa",
+                            conversationId = "conversation-1"
+                        )
+                    )
+                )
+            )
+        )
+        val stateHolder = ActivityStateHolder(repository)
+        val openedMatches = mutableListOf<ActivityEventDto>()
+        val openedInvites = mutableListOf<String>()
+
+        setContent {
+            PynapliTheme(themeMode = "dark") {
+                Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                    ActivityScreen(
+                        stateHolder = stateHolder,
+                        onOpenMatch = { openedMatches += it },
+                        onOpenPartnerChatInvite = { openedInvites += it }
+                    )
+                }
+            }
+        }
+
+        waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.All, null)) }
+        onNodeWithText("Message").performClick()
+        onNodeWithText("Open invite").performClick()
+        onNodeWithText("Review").performClick()
+        onNodeWithText("Grant").performClick()
+
+        waitUntil(timeoutMillis = 5_000) { repository.respondCalls == listOf("album-1" to true) }
+        assertEquals(listOf("match-1"), openedMatches.map { it.eventId })
+        assertEquals(listOf("conversation-1"), openedInvites)
+    }
 }
 
 private class StaticActivityScreenRepository(
@@ -82,6 +138,7 @@ private class StaticActivityScreenRepository(
 ) : ActivityFeedRepository {
     val loadCalls = mutableListOf<ActivityRequest>()
     val dismissCalls = mutableListOf<String>()
+    val respondCalls = mutableListOf<Pair<String, Boolean>>()
 
     override suspend fun loadActivity(
         tab: ActivityTabUi,
@@ -101,13 +158,15 @@ private class StaticActivityScreenRepository(
     override suspend fun respondToAlbumRequest(
         eventId: String,
         approve: Boolean
-    ): AppResult<RespondAlbumAccessResponseDto> =
-        AppResult.Success(
+    ): AppResult<RespondAlbumAccessResponseDto> {
+        respondCalls += eventId to approve
+        return AppResult.Success(
             RespondAlbumAccessResponseDto(
                 eventId = eventId,
                 status = if (approve) "approved" else "denied"
             )
         )
+    }
 }
 
 private data class ActivityRequest(
@@ -118,12 +177,18 @@ private data class ActivityRequest(
 private fun activityEvent(
     eventId: String,
     type: String,
-    displayName: String
+    displayName: String,
+    albumRequestStatus: String? = null,
+    matchId: String? = null,
+    conversationId: String? = null
 ): ActivityEventDto =
     ActivityEventDto(
         eventId = eventId,
         type = type,
         actorUserId = "$eventId-actor",
         actorDisplayName = displayName,
-        occurredAt = "2026-05-19T17:30:00Z"
+        occurredAt = "2026-05-19T17:30:00Z",
+        albumRequestStatus = albumRequestStatus,
+        matchId = matchId,
+        conversationId = conversationId
     )

@@ -60,5 +60,7 @@ data class ActivityEventDto(
     val occurredAt: String,
     val distanceLabel: String? = null,
     val distanceMeters: Int? = null,
-    val albumRequestStatus: String? = null
+    val albumRequestStatus: String? = null,
+    val matchId: String? = null,
+    val conversationId: String? = null
 )

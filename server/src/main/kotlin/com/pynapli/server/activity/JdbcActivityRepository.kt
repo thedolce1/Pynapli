@@ -224,7 +224,9 @@ class JdbcActivityRepository(
             occurredAt = getTimestamp("occurred_at").toInstant(),
             showDistance = getBoolean("actor_show_distance"),
             distanceMeters = distanceMeters,
-            albumRequestStatus = getString("album_request_status")
+            albumRequestStatus = getString("album_request_status"),
+            matchId = getString("match_id"),
+            conversationId = getString("conversation_id")
         )
     }
 
@@ -515,6 +517,8 @@ class JdbcActivityRepository(
                    actor_photo.media_asset_id AS actor_profile_photo_media_asset_id,
                    ae.aggregate_count,
                    ae.occurred_at,
+                   ae.metadata->>'matchId' AS match_id,
+                   ae.metadata->>'conversationId' AS conversation_id,
                    album_request.status AS album_request_status,
                    actor_settings.show_distance AS actor_show_distance,
                    CASE

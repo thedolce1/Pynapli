@@ -46,7 +46,9 @@ data class ActivityEventRecord(
     val occurredAt: Instant,
     val showDistance: Boolean,
     val distanceMeters: Double?,
-    val albumRequestStatus: String?
+    val albumRequestStatus: String?,
+    val matchId: String?,
+    val conversationId: String?
 )
 
 fun ActivityEventRecord.toCursorAnchor(seenCount: Int): ActivityCursorAnchor =

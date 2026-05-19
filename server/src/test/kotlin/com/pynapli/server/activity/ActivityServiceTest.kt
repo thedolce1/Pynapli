@@ -582,7 +582,9 @@ private fun sampleEvent(actorUserId: UUID, type: String, displayName: String): A
         occurredAt = Instant.parse("2026-04-28T12:00:00Z"),
         showDistance = false,
         distanceMeters = null,
-        albumRequestStatus = null
+        albumRequestStatus = null,
+        matchId = null,
+        conversationId = null
     )
 
 private fun denyingRateLimitService(): RateLimitService =

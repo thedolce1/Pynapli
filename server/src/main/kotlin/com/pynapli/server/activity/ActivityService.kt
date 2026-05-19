@@ -258,7 +258,9 @@ class ActivityService(
         occurredAt = occurredAt.toString(),
         distanceLabel = if (showDistance) distanceMeters?.toPublicDistanceLabel() else null,
         distanceMeters = if (showDistance) distanceMeters?.toPublicDistanceMeters() else null,
-        albumRequestStatus = albumRequestStatus
+        albumRequestStatus = albumRequestStatus,
+        matchId = matchId,
+        conversationId = conversationId
     )
 
     companion object {

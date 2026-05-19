@@ -328,7 +328,16 @@ class SampleActivityFeedRepository : ActivityFeedRepository {
                 type = "match",
                 actorUserId = "4",
                 actorDisplayName = "Taylor",
-                occurredAt = "2026-04-25T16:40:00Z"
+                occurredAt = "2026-04-25T16:40:00Z",
+                matchId = "sample-match"
+            ),
+            ActivityEventDto(
+                eventId = "sample-5",
+                type = "partner_chat_invite",
+                actorUserId = "5",
+                actorDisplayName = "Noa",
+                occurredAt = "2026-04-25T16:20:00Z",
+                conversationId = "sample-conversation"
             )
         )
         val filteredItems = allItems.filter { item -> tab.matches(item.type) }

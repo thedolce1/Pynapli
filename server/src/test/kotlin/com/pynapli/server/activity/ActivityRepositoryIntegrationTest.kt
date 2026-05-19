@@ -228,6 +228,10 @@ class ActivityRepositoryIntegrationTest {
         assertEquals(1, dataSource.eventCount("intro_note"))
         assertEquals(1, dataSource.eventCount("match"))
         assertEquals(1, dataSource.eventCount("partner_chat_invite"))
+        val matchEvent = repository.listActivity(ActivityFeedQuery(viewer, setOf("match"), 10, null)).single()
+        val inviteEvent = repository.listActivity(ActivityFeedQuery(target, setOf("partner_chat_invite"), 10, null)).single()
+        assertEquals(matchId.toString(), matchEvent.matchId)
+        assertEquals(conversationId.toString(), inviteEvent.conversationId)
     }
 
     private fun DataSource.insertUserWithDiscovery(

@@ -71,6 +71,7 @@ import com.pynapli.app.swipe.SwipeScreen
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.network.dto.ConversationDto
+import com.pynapli.shared.network.dto.MatchDto
 import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -393,7 +394,32 @@ fun PynapliApp(
                         modifier = Modifier.weight(1f),
                         stateHolder = activityStateHolder,
                         distanceUnit = distanceUnit,
-                        onOpenStore = { selectedTab = PynapliTab.Store }
+                        onOpenStore = { selectedTab = PynapliTab.Store },
+                        onOpenMatch = { event ->
+                            scope.launch {
+                                conversationStateHolder.openSwipeMatch(
+                                    match = MatchDto(
+                                        matchId = event.matchId ?: event.eventId,
+                                        matchedUserId = event.actorUserId,
+                                        matchedDisplayName = event.actorDisplayName,
+                                        matchedPhotoUrl = event.actorPhotoUrl,
+                                        createdAt = event.occurredAt
+                                    ),
+                                    viewerUserId = authState.session?.userId
+                                )
+                                messagesStateHolder.refreshSilently()
+                            }
+                        },
+                        onOpenPartnerChatInvite = { conversationId ->
+                            scope.launch {
+                                conversationStateHolder.openConversationById(
+                                    conversationId = conversationId,
+                                    viewerUserId = authState.session?.userId,
+                                    title = "Chat invite"
+                                )
+                                messagesStateHolder.refreshSilently()
+                            }
+                        }
                     )
 
                     PynapliTab.Swipe -> SwipeScreen(
