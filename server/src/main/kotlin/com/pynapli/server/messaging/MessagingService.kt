@@ -1,5 +1,6 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationPublisher
@@ -33,7 +34,8 @@ class MessagingService(
     private val messageSafetyPolicy: MessageSafetyPolicy = MessageSafetyPolicy(),
     private val messageReviewRiskSignalPublisher: MessageReviewRiskSignalPublisher? = null,
     private val riskPolicyService: RiskPolicyService? = null,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
+    private val activityService: ActivityService? = null
 ) {
     suspend fun listConversations(userId: UUID): ConversationListResponseDto {
         val conversations = repository.listConversations(userId, THREAD_LIMIT)
@@ -215,6 +217,11 @@ class MessagingService(
             )
         ) {
             is PartnerInviteResult.Invited -> {
+                activityService?.recordPartnerChatInvite(
+                    inviterUserId = userId,
+                    inviteeUserId = partnerUserId,
+                    conversationId = conversationId
+                )
                 notificationPublisher?.enqueue(
                     NotificationEventDraft(
                         recipientUserId = partnerUserId,

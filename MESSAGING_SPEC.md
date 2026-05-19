@@ -143,12 +143,17 @@ Do not paywall:
 - Blocking/reporting.
 - Revoking album access.
 
+Current implementation note:
+
+- Linked-partner chat invites now emit `partner_chat_invite` Activity rows for the invited partner after the messaging repository accepts the invite. The partner still must explicitly accept before sending messages.
+
 ## Implementation Checklist
 
 - [x] Open grid messaging respects recipient settings.
 - [x] Swipe messaging requires mutual match.
 - [x] Intro Notes remain outside chat until accepted/matched.
 - [x] Partner invite requires linked partner and third-party consent.
+- [x] Partner invite appears in invited partner Activity.
 - [x] Album access is separate from chat membership.
 - [ ] Media reveal is per-recipient.
 - [x] Block archives/disables thread.

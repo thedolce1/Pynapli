@@ -206,6 +206,30 @@ class ActivityRepositoryIntegrationTest {
         assertEquals(listOf(visibleEventId), feed.map { it.eventId })
     }
 
+    @Test
+    fun recordsSwipeMatchAndPartnerInviteEventsIdempotently() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000001801")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000001802")
+        val matchId = UUID.fromString("00000000-0000-0000-0000-000000001803")
+        val conversationId = UUID.fromString("00000000-0000-0000-0000-000000001804")
+        dataSource.insertUserWithDiscovery(viewer, displayName = "Viewer")
+        dataSource.insertUserWithDiscovery(target, displayName = "Target")
+        val repository = JdbcActivityRepository(dataSource)
+
+        assertTrue(repository.recordSwipeInterest(viewer, target, "swipe_like"))
+        assertFalse(repository.recordSwipeInterest(viewer, target, "swipe_like"))
+        assertTrue(repository.recordSwipeInterest(viewer, target, "intro_note"))
+        assertTrue(repository.recordMatch(recipientUserId = viewer, actorUserId = target, matchId = matchId))
+        assertFalse(repository.recordMatch(recipientUserId = viewer, actorUserId = target, matchId = matchId))
+        assertTrue(repository.recordPartnerChatInvite(viewer, target, conversationId))
+        assertFalse(repository.recordPartnerChatInvite(viewer, target, conversationId))
+
+        assertEquals(1, dataSource.eventCount("swipe_like"))
+        assertEquals(1, dataSource.eventCount("intro_note"))
+        assertEquals(1, dataSource.eventCount("match"))
+        assertEquals(1, dataSource.eventCount("partner_chat_invite"))
+    }
+
     private fun DataSource.insertUserWithDiscovery(
         userId: UUID,
         status: String = "active",
@@ -384,6 +408,24 @@ class ActivityRepositoryIntegrationTest {
                 WHERE event_type = 'profile_view'
                 """.trimIndent()
             ).use { statement ->
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt(1)
+                }
+            }
+        }
+
+    private fun DataSource.eventCount(eventType: String): Int =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT count(*)
+                FROM activity_events
+                WHERE event_type = ?
+                  AND deleted_at IS NULL
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, eventType)
                 statement.executeQuery().use { rs ->
                     rs.next()
                     rs.getInt(1)

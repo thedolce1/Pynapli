@@ -85,6 +85,63 @@ class JdbcActivityRepository(
             }
         }
 
+    override suspend fun recordSwipeInterest(actorUserId: UUID, targetUserId: UUID, eventType: String): Boolean =
+        withContext(Dispatchers.IO) {
+            if (actorUserId == targetUserId || eventType !in SWIPE_INTEREST_EVENT_TYPES) return@withContext false
+
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(UPSERT_SWIPE_INTEREST_QUERY).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, targetUserId)
+                    statement.setObject(3, actorUserId)
+                    statement.setString(4, eventType)
+                    statement.setObject(5, targetUserId)
+                    statement.setObject(6, actorUserId)
+                    statement.setObject(7, targetUserId)
+                    statement.executeQuery().use { rs -> rs.next() }
+                }
+            }
+        }
+
+    override suspend fun recordMatch(recipientUserId: UUID, actorUserId: UUID, matchId: UUID): Boolean =
+        withContext(Dispatchers.IO) {
+            if (recipientUserId == actorUserId) return@withContext false
+
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(UPSERT_MATCH_ACTIVITY_QUERY).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, recipientUserId)
+                    statement.setObject(3, actorUserId)
+                    statement.setObject(4, recipientUserId)
+                    statement.setString(5, """{"matchId":"$matchId"}""")
+                    statement.setObject(6, actorUserId)
+                    statement.setObject(7, recipientUserId)
+                    statement.executeQuery().use { rs -> rs.next() }
+                }
+            }
+        }
+
+    override suspend fun recordPartnerChatInvite(
+        inviterUserId: UUID,
+        inviteeUserId: UUID,
+        conversationId: UUID
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (inviterUserId == inviteeUserId) return@withContext false
+
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(UPSERT_PARTNER_CHAT_INVITE_QUERY).use { statement ->
+                statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, inviteeUserId)
+                statement.setObject(3, inviterUserId)
+                statement.setObject(4, inviteeUserId)
+                statement.setString(5, """{"conversationId":"$conversationId"}""")
+                statement.setObject(6, inviterUserId)
+                statement.setObject(7, inviteeUserId)
+                statement.executeQuery().use { rs -> rs.next() }
+            }
+        }
+    }
+
     override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
@@ -338,6 +395,113 @@ class JdbcActivityRepository(
                 visibility_status = 'visible'
         """.trimIndent()
 
+        private val UPSERT_SWIPE_INTEREST_QUERY = """
+            INSERT INTO activity_events (
+                id,
+                recipient_user_id,
+                actor_user_id,
+                event_type,
+                target_user_id,
+                aggregate_count,
+                first_occurred_at,
+                last_counted_at,
+                occurred_at,
+                updated_at
+            )
+            SELECT ?, ?, ?, ?, ?, 1, now(), now(), now(), now()
+            WHERE EXISTS (
+                SELECT 1
+                FROM users actor
+                WHERE actor.id = ?
+                  AND actor.status = 'active'
+                  AND actor.deleted_at IS NULL
+            )
+            AND EXISTS (
+                SELECT 1
+                FROM users target
+                JOIN profiles target_profile
+                  ON target_profile.user_id = target.id
+                 AND target_profile.visibility_status = 'visible'
+                WHERE target.id = ?
+                  AND target.status = 'active'
+                  AND target.deleted_at IS NULL
+            )
+            ON CONFLICT (recipient_user_id, actor_user_id, event_type, target_user_id)
+            WHERE event_type IN ('swipe_like', 'pineapple_like', 'intro_note') AND deleted_at IS NULL
+            DO NOTHING
+            RETURNING id
+        """.trimIndent()
+
+        private val UPSERT_MATCH_ACTIVITY_QUERY = """
+            INSERT INTO activity_events (
+                id,
+                recipient_user_id,
+                actor_user_id,
+                event_type,
+                target_user_id,
+                aggregate_count,
+                first_occurred_at,
+                last_counted_at,
+                occurred_at,
+                updated_at,
+                metadata
+            )
+            SELECT ?, ?, ?, 'match', ?, 1, now(), now(), now(), now(), ?::jsonb
+            WHERE EXISTS (
+                SELECT 1
+                FROM users actor
+                WHERE actor.id = ?
+                  AND actor.status = 'active'
+                  AND actor.deleted_at IS NULL
+            )
+            AND EXISTS (
+                SELECT 1
+                FROM users recipient
+                WHERE recipient.id = ?
+                  AND recipient.status = 'active'
+                  AND recipient.deleted_at IS NULL
+            )
+            ON CONFLICT (recipient_user_id, actor_user_id, event_type, target_user_id)
+            WHERE event_type = 'match' AND deleted_at IS NULL
+            DO NOTHING
+            RETURNING id
+        """.trimIndent()
+
+        private val UPSERT_PARTNER_CHAT_INVITE_QUERY = """
+            INSERT INTO activity_events (
+                id,
+                recipient_user_id,
+                actor_user_id,
+                event_type,
+                target_user_id,
+                aggregate_count,
+                first_occurred_at,
+                last_counted_at,
+                occurred_at,
+                updated_at,
+                metadata
+            )
+            SELECT ?, ?, ?, 'partner_chat_invite', ?, 1, now(), now(), now(), now(), ?::jsonb
+            WHERE EXISTS (
+                SELECT 1
+                FROM users inviter
+                WHERE inviter.id = ?
+                  AND inviter.status = 'active'
+                  AND inviter.deleted_at IS NULL
+            )
+            AND EXISTS (
+                SELECT 1
+                FROM users invitee
+                WHERE invitee.id = ?
+                  AND invitee.status = 'active'
+                  AND invitee.deleted_at IS NULL
+            )
+            ON CONFLICT (recipient_user_id, actor_user_id, event_type, ((metadata->>'conversationId')))
+            WHERE event_type = 'partner_chat_invite' AND deleted_at IS NULL
+            DO NOTHING
+            RETURNING id
+        """.trimIndent()
+
         private val ACTIVITY_FEED_QUERY = """
             WITH recipient_location AS (
                 SELECT geom
@@ -449,5 +613,7 @@ class JdbcActivityRepository(
               AND recipient_user_id = ?
               AND deleted_at IS NULL
         """.trimIndent()
+
+        private val SWIPE_INTEREST_EVENT_TYPES = setOf("swipe_like", "pineapple_like", "intro_note")
     }
 }

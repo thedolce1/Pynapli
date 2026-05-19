@@ -1,5 +1,10 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.activity.ActivityEventRecord
+import com.pynapli.server.activity.ActivityFeedQuery
+import com.pynapli.server.activity.ActivityRepository
+import com.pynapli.server.activity.ActivityService
+import com.pynapli.server.activity.AlbumRequestEventRecord
 import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationOutboxRecord
@@ -226,7 +231,12 @@ class MessagingServiceTest {
             linkedPartnerByUser = mapOf(viewerId to partnerId)
         )
         val notifications = RecordingNotificationPublisher()
-        val service = MessagingService(repository, notificationPublisher = notifications)
+        val activityRepository = RecordingActivityRepository()
+        val service = MessagingService(
+            repository = repository,
+            notificationPublisher = notifications,
+            activityService = ActivityService(activityRepository)
+        )
         val detail = service.createDirectConversation(
             viewerId,
             CreateDirectConversationRequestDto(targetUserId = targetId.toString())
@@ -239,6 +249,7 @@ class MessagingServiceTest {
         assertEquals(ConversationParticipantStatus.INVITED, invitedPartner.status)
         assertEquals(NotificationKind.PARTNER_CHAT_INVITE, notifications.events.single().kind)
         assertEquals(partnerId, notifications.events.single().recipientUserId)
+        assertEquals(listOf(Triple(viewerId, partnerId, UUID.fromString(detail.conversation.conversationId))), activityRepository.partnerInvites)
         val sendBeforeAcceptError = assertFailsWith<MessagingException> {
             service.sendMessage(partnerId, detail.conversation.conversationId, SendMessageRequestDto("Joining"))
         }
@@ -811,4 +822,33 @@ private class RecordingNotificationPublisher : NotificationPublisher {
         events += notification
         return null
     }
+}
+
+private class RecordingActivityRepository : ActivityRepository {
+    val partnerInvites = mutableListOf<Triple<UUID, UUID, UUID>>()
+
+    override suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID): Boolean = true
+
+    override suspend fun recordFlirt(senderUserId: UUID, targetUserId: UUID): Boolean = true
+
+    override suspend fun recordAlbumRequest(requesterUserId: UUID, targetUserId: UUID): Boolean = true
+
+    override suspend fun recordSwipeInterest(actorUserId: UUID, targetUserId: UUID, eventType: String): Boolean = true
+
+    override suspend fun recordMatch(recipientUserId: UUID, actorUserId: UUID, matchId: UUID): Boolean = true
+
+    override suspend fun recordPartnerChatInvite(
+        inviterUserId: UUID,
+        inviteeUserId: UUID,
+        conversationId: UUID
+    ): Boolean {
+        partnerInvites += Triple(inviterUserId, inviteeUserId, conversationId)
+        return true
+    }
+
+    override suspend fun getAlbumRequestEvent(recipientUserId: UUID, eventId: UUID): AlbumRequestEventRecord? = null
+
+    override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> = emptyList()
+
+    override suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean = false
 }

@@ -639,6 +639,9 @@ Implemented and verified as of 2026-05-19:
 - Cursor tokens are HMAC-signed and scoped to the authenticated viewer plus selected tab, so a cursor from one tab cannot page another tab.
 - Free/Social/Select reveal depth is enforced across pages by the cursor's seen-count state.
 - `POST /v1/activity/{eventId}/dismiss` soft-deletes the recipient's own Activity item without allowing cross-user dismissal.
+- Swipe actions now create Activity events for `swipe_like`, `pineapple_like`, `intro_note`, and two-sided `match` rows after the server-authoritative action succeeds. Idempotent action retries do not duplicate Activity rows.
+- Linked-partner chat invites now create `partner_chat_invite` Activity rows for the invited partner after the invite is accepted by the messaging engine.
+- Database-level partial unique indexes protect Swipe interest, match, and partner-chat invite Activity rows from duplicate writes.
 - Repository and service coverage proves tab filtering, cursor paging, entitlement reveal depth, invalid cursor rejection, block/risk filtering, and dismiss behavior.
 - Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, exposes per-row dismiss, and keeps album request grant/deny actions.
 - Desktop UI interaction coverage proves Activity tab selection, cursor load-more, and dismiss through the rendered screen.
@@ -749,6 +752,10 @@ Avoid:
 - [x] Repeat views aggregate with cooldown.
 - [x] Flirts appear in Activity, not Messages.
 - [x] Likes You appears in Activity.
+- [x] Pineapple Likes appear in Activity.
+- [x] Intro Notes appear in Activity, not Messages.
+- [x] Matches appear in Activity for both matched users.
+- [x] Partner chat invites appear in invited partner Activity.
 - [x] Partner chat invites require explicit action.
 - [x] Album requests can be granted/denied/ignored.
 - [x] Free/Social/Select gating is implemented.

@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.discoveryFiltersFrom
 import com.pynapli.server.distance.toPublicDistanceLabel
@@ -43,7 +44,8 @@ class SwipeService(
     private val presenceService: PresenceService? = null,
     private val travelLocationRepository: com.pynapli.server.location.TravelLocationRepository? = null,
     private val deckTokenCodec: SwipeDeckTokenCodec = SwipeDeckTokenCodec(),
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
+    private val activityService: ActivityService? = null
 ) {
     suspend fun queryDeck(viewerUserId: UUID, request: SwipeDeckRequestDto): SwipeDeckResponseDto {
         val radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
@@ -362,6 +364,16 @@ class SwipeService(
                 travelLocationId = preconditions.viewerTravelLocationId
             )
         }
+        if (result.newlyRecorded) {
+            profile("swipe.action.activity") {
+                recordActivityForAction(
+                    viewerUserId = viewerUserId,
+                    targetUserId = targetUserId,
+                    action = action,
+                    match = result.match
+                )
+            }
+        }
         val match = result.match
         if (match != null) {
             profile("swipe.action.notify") {
@@ -393,6 +405,22 @@ class SwipeService(
                 )
             }
         )
+    }
+
+    private suspend fun recordActivityForAction(
+        viewerUserId: UUID,
+        targetUserId: UUID,
+        action: String,
+        match: MatchRecord?
+    ) {
+        val activity = activityService ?: return
+        when (action) {
+            SwipeAction.LIKE -> activity.recordSwipeInterest(viewerUserId, targetUserId, "swipe_like")
+            SwipeAction.PINEAPPLE_LIKE -> activity.recordSwipeInterest(viewerUserId, targetUserId, "pineapple_like")
+            SwipeAction.INTRO_NOTE -> activity.recordSwipeInterest(viewerUserId, targetUserId, "intro_note")
+            else -> Unit
+        }
+        match?.let { activity.recordMatch(it.userA, it.userB, it.matchId) }
     }
 
     suspend fun rewind(viewerUserId: UUID): SwipeRewindResponseDto {

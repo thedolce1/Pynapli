@@ -629,6 +629,12 @@ Swipe should feed Activity:
 
 Activity handles FOMO. Swipe should stay focused on decisions.
 
+Current implementation note:
+
+- Server-authoritative Swipe actions now emit Activity rows for normal Likes, Pineapple Likes, Intro Notes, and mutual matches after action validation/recording succeeds.
+- Match Activity is written for both matched users.
+- Idempotent Swipe action retries do not create duplicate Activity rows.
+
 ## Subscription Gating
 
 Free:

@@ -1,5 +1,10 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.activity.ActivityEventRecord
+import com.pynapli.server.activity.ActivityFeedQuery
+import com.pynapli.server.activity.ActivityRepository
+import com.pynapli.server.activity.ActivityService
+import com.pynapli.server.activity.AlbumRequestEventRecord
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
@@ -79,6 +84,56 @@ class SwipeServiceTest {
         assertEquals(target.toString(), match.matchedUserId)
         assertEquals(NotificationKind.MATCH, notifications.events.single().kind)
         assertEquals(target, notifications.events.single().recipientUserId)
+    }
+
+    @Test
+    fun likeRecordsLikesYouActivityOnce() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000012")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000013")
+        val actionId = UUID.fromString("00000000-0000-0000-0000-000000000014")
+        val repository = InMemorySwipeRepository()
+        val activityRepository = RecordingActivityRepository()
+        val service = SwipeService(
+            repository = repository,
+            activityService = ActivityService(activityRepository)
+        )
+        val request = swipeActionRequest(viewer, target, SwipeAction.LIKE, actionId = actionId)
+
+        service.submitAction(viewer, request)
+        service.submitAction(viewer, request)
+
+        assertEquals(listOf(Triple(viewer, target, "swipe_like")), activityRepository.swipeInterests)
+    }
+
+    @Test
+    fun mutualLikeRecordsMatchActivityForBothUsers() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000015")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000016")
+        val repository = InMemorySwipeRepository()
+        val activityRepository = RecordingActivityRepository()
+        val service = SwipeService(
+            repository = repository,
+            activityService = ActivityService(activityRepository)
+        )
+
+        service.submitAction(target, swipeActionRequest(target, viewer, SwipeAction.LIKE))
+        val response = service.submitAction(viewer, swipeActionRequest(viewer, target, SwipeAction.LIKE))
+
+        val matchId = UUID.fromString(assertNotNull(response.match).matchId)
+        assertEquals(
+            setOf(
+                Triple(target, viewer, "swipe_like"),
+                Triple(viewer, target, "swipe_like")
+            ),
+            activityRepository.swipeInterests.toSet()
+        )
+        assertEquals(
+            setOf(
+                Triple(viewer, target, matchId),
+                Triple(target, viewer, matchId)
+            ),
+            activityRepository.matches.toSet()
+        )
     }
 
     @Test
@@ -1654,10 +1709,14 @@ private class InMemorySwipeRepository(
         matchIdFactory: () -> UUID
     ): SwipeActionResult {
         actionRecords[actionId]?.takeIf { it.actorUserId == actorUserId }?.let { existing ->
-            return SwipeActionResult(recorded = true, match = findMatch(existing.actorUserId, existing.targetUserId))
+            return SwipeActionResult(
+                recorded = true,
+                match = findMatch(existing.actorUserId, existing.targetUserId),
+                newlyRecorded = false
+            )
         }
         if (actorUserId to targetUserId in actions) {
-            return SwipeActionResult(recorded = false, match = null)
+            return SwipeActionResult(recorded = false, match = null, newlyRecorded = false)
         }
         actions[actorUserId to targetUserId] = action
         val match = if (action in POSITIVE_ACTIONS && actions[targetUserId to actorUserId] in POSITIVE_ACTIONS) {
@@ -1794,6 +1853,39 @@ private class RecordingNotificationPublisher : NotificationPublisher {
         events += notification
         return null
     }
+}
+
+private class RecordingActivityRepository : ActivityRepository {
+    val swipeInterests = mutableListOf<Triple<UUID, UUID, String>>()
+    val matches = mutableListOf<Triple<UUID, UUID, UUID>>()
+
+    override suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID): Boolean = true
+
+    override suspend fun recordFlirt(senderUserId: UUID, targetUserId: UUID): Boolean = true
+
+    override suspend fun recordAlbumRequest(requesterUserId: UUID, targetUserId: UUID): Boolean = true
+
+    override suspend fun recordSwipeInterest(actorUserId: UUID, targetUserId: UUID, eventType: String): Boolean {
+        swipeInterests += Triple(actorUserId, targetUserId, eventType)
+        return true
+    }
+
+    override suspend fun recordMatch(recipientUserId: UUID, actorUserId: UUID, matchId: UUID): Boolean {
+        matches += Triple(recipientUserId, actorUserId, matchId)
+        return true
+    }
+
+    override suspend fun recordPartnerChatInvite(
+        inviterUserId: UUID,
+        inviteeUserId: UUID,
+        conversationId: UUID
+    ): Boolean = true
+
+    override suspend fun getAlbumRequestEvent(recipientUserId: UUID, eventId: UUID): AlbumRequestEventRecord? = null
+
+    override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> = emptyList()
+
+    override suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean = false
 }
 
 private fun freeSubscriptionService(): SubscriptionService =

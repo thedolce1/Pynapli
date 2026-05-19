@@ -307,7 +307,8 @@ class ServerDependencies(
                 notificationPublisher = notificationService,
                 rateLimitService = rateLimitService,
                 messageReviewRiskSignalPublisher = riskService,
-                riskPolicyService = riskPolicyService
+                riskPolicyService = riskPolicyService,
+                activityService = activityService
             )
             val messageModerationService = MessageModerationService(
                 JdbcMessageModerationRepository(database.dataSource)
@@ -329,7 +330,8 @@ class ServerDependencies(
                 subscriptionService = subscriptionService,
                 presenceService = presenceService,
                 travelLocationRepository = travelLocationRepository,
-                deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret)
+                deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret),
+                activityService = activityService
             )
             val topPicksService = TopPicksService(
                 topPicksRepository = JdbcTopPicksRepository(database.dataSource),

@@ -229,7 +229,8 @@ data class SwipeCardRecord(
 
 data class SwipeActionResult(
     val recorded: Boolean,
-    val match: MatchRecord?
+    val match: MatchRecord?,
+    val newlyRecorded: Boolean = recorded
 )
 
 data class SwipeActionRecord(

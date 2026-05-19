@@ -10,6 +10,12 @@ interface ActivityRepository {
 
     suspend fun recordAlbumRequest(requesterUserId: UUID, targetUserId: UUID): Boolean
 
+    suspend fun recordSwipeInterest(actorUserId: UUID, targetUserId: UUID, eventType: String): Boolean
+
+    suspend fun recordMatch(recipientUserId: UUID, actorUserId: UUID, matchId: UUID): Boolean
+
+    suspend fun recordPartnerChatInvite(inviterUserId: UUID, inviteeUserId: UUID, conversationId: UUID): Boolean
+
     suspend fun getAlbumRequestEvent(recipientUserId: UUID, eventId: UUID): AlbumRequestEventRecord?
 
     suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord>

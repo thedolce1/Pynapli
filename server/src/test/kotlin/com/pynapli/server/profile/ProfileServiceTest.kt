@@ -244,6 +244,16 @@ private class InMemoryActivityRepository : ActivityRepository {
 
     override suspend fun recordAlbumRequest(requesterUserId: UUID, targetUserId: UUID): Boolean = true
 
+    override suspend fun recordSwipeInterest(actorUserId: UUID, targetUserId: UUID, eventType: String): Boolean = true
+
+    override suspend fun recordMatch(recipientUserId: UUID, actorUserId: UUID, matchId: UUID): Boolean = true
+
+    override suspend fun recordPartnerChatInvite(
+        inviterUserId: UUID,
+        inviteeUserId: UUID,
+        conversationId: UUID
+    ): Boolean = true
+
     override suspend fun getAlbumRequestEvent(recipientUserId: UUID, eventId: UUID): AlbumRequestEventRecord? = null
 
     override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> = emptyList()

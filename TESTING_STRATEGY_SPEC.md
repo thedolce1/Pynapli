@@ -61,9 +61,11 @@ Current Swipe coverage:
 
 Current Activity backend coverage:
 
-- `ActivityServiceTest` covers profile-view/flirt/album request recording rules, block/risk filtering, entitlement reveal depth, tab filtering, signed cursor continuation, cursor scope rejection, and Activity dismiss behavior.
-- `ActivityRepositoryIntegrationTest` runs against PostgreSQL/PostGIS through Testcontainers and covers profile-view writes, eligibility suppression, feed tab filtering, keyset cursor pagination, and owned soft-dismiss.
-- Latest local proof on 2026-05-19: targeted Activity service/repository tests, full `:server:test`, and `:shared:jvmTest` passed.
+- `ActivityServiceTest` covers profile-view/flirt/album request recording rules, Swipe interest event validation, match two-sided Activity writes, partner-chat invite Activity writes, block/risk filtering, entitlement reveal depth, tab filtering, signed cursor continuation, cursor scope rejection, and Activity dismiss behavior.
+- `ActivityRepositoryIntegrationTest` runs against PostgreSQL/PostGIS through Testcontainers and covers profile-view writes, eligibility suppression, feed tab filtering, keyset cursor pagination, owned soft-dismiss, and idempotent database writes for Swipe likes, Intro Notes, matches, and partner-chat invites.
+- `SwipeServiceTest` covers Likes You Activity creation and duplicate retry suppression, plus two-sided match Activity generation.
+- `MessagingServiceTest` covers partner chat invite Activity generation alongside the existing invite notification.
+- Latest local proof on 2026-05-19: targeted Activity/Swipe/Messaging producer tests passed; full `scripts/verify.ps1` also passed after stopping stale Gradle daemons from an earlier timed-out run.
 
 Current Activity client coverage:
 

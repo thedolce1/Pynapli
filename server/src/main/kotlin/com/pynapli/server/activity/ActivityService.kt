@@ -115,6 +115,28 @@ class ActivityService(
         return RequestAlbumAccessResponseDto(requested = true)
     }
 
+    suspend fun recordSwipeInterest(actorUserId: UUID, targetUserId: UUID, eventType: String) {
+        if (actorUserId == targetUserId) return
+        if (eventType !in SWIPE_INTEREST_EVENT_TYPES) throw ActivityException("INVALID_ACTIVITY_EVENT_TYPE")
+        if (blockRepository?.isBlockedEitherWay(actorUserId, targetUserId) == true) return
+        if (riskPolicyService?.isSocialActionRestricted(actorUserId) == true) return
+        repository.recordSwipeInterest(actorUserId, targetUserId, eventType)
+    }
+
+    suspend fun recordMatch(userA: UUID, userB: UUID, matchId: UUID) {
+        if (userA == userB) return
+        if (blockRepository?.isBlockedEitherWay(userA, userB) == true) return
+        repository.recordMatch(recipientUserId = userA, actorUserId = userB, matchId = matchId)
+        repository.recordMatch(recipientUserId = userB, actorUserId = userA, matchId = matchId)
+    }
+
+    suspend fun recordPartnerChatInvite(inviterUserId: UUID, inviteeUserId: UUID, conversationId: UUID) {
+        if (inviterUserId == inviteeUserId) return
+        if (blockRepository?.isBlockedEitherWay(inviterUserId, inviteeUserId) == true) return
+        if (riskPolicyService?.isSocialActionRestricted(inviterUserId) == true) return
+        repository.recordPartnerChatInvite(inviterUserId, inviteeUserId, conversationId)
+    }
+
     suspend fun respondToAlbumAccessRequest(
         ownerUserId: UUID,
         eventId: UUID,
@@ -242,6 +264,7 @@ class ActivityService(
     companion object {
         private const val DEFAULT_LIMIT = 50
         private const val MAX_LIMIT = 100
+        private val SWIPE_INTEREST_EVENT_TYPES = setOf("swipe_like", "pineapple_like", "intro_note")
     }
 }
 

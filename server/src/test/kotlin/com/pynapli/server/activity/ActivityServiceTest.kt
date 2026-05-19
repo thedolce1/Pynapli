@@ -279,6 +279,68 @@ class ActivityServiceTest {
     }
 
     @Test
+    fun recordSwipeInterestWritesLikesAndIntroNotesForActivityTabs() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000002001")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000002002")
+        val repository = InMemoryActivityRepository()
+        val service = ActivityService(repository)
+
+        service.recordSwipeInterest(viewer, target, "swipe_like")
+        service.recordSwipeInterest(viewer, target, "intro_note")
+
+        assertEquals(
+            listOf(
+                Triple(viewer, target, "swipe_like"),
+                Triple(viewer, target, "intro_note")
+            ),
+            repository.swipeInterests
+        )
+    }
+
+    @Test
+    fun recordSwipeInterestRejectsUnknownEventType() = runBlocking {
+        val service = ActivityService(InMemoryActivityRepository())
+
+        val error = assertFailsWith<ActivityException> {
+            service.recordSwipeInterest(UUID.randomUUID(), UUID.randomUUID(), "super_like")
+        }
+
+        assertEquals("INVALID_ACTIVITY_EVENT_TYPE", error.code)
+    }
+
+    @Test
+    fun recordMatchWritesBothActivityDirections() = runBlocking {
+        val userA = UUID.fromString("00000000-0000-0000-0000-000000002011")
+        val userB = UUID.fromString("00000000-0000-0000-0000-000000002012")
+        val matchId = UUID.fromString("00000000-0000-0000-0000-000000002013")
+        val repository = InMemoryActivityRepository()
+        val service = ActivityService(repository)
+
+        service.recordMatch(userA, userB, matchId)
+
+        assertEquals(
+            listOf(
+                Triple(userA, userB, matchId),
+                Triple(userB, userA, matchId)
+            ),
+            repository.matches
+        )
+    }
+
+    @Test
+    fun recordPartnerChatInviteWritesInviteeActivity() = runBlocking {
+        val inviter = UUID.fromString("00000000-0000-0000-0000-000000002021")
+        val invitee = UUID.fromString("00000000-0000-0000-0000-000000002022")
+        val conversationId = UUID.fromString("00000000-0000-0000-0000-000000002023")
+        val repository = InMemoryActivityRepository()
+        val service = ActivityService(repository)
+
+        service.recordPartnerChatInvite(inviter, invitee, conversationId)
+
+        assertEquals(listOf(Triple(inviter, invitee, conversationId)), repository.partnerChatInvites)
+    }
+
+    @Test
     fun listActivityFiltersOutEventsFromBlockedRelatedUsers() = runBlocking {
         val viewer = UUID.fromString("00000000-0000-0000-0000-000000000501")
         val blockedActor = UUID.fromString("00000000-0000-0000-0000-000000000502")
@@ -574,6 +636,9 @@ private class InMemoryActivityRepository(
     val profileViews = mutableListOf<Pair<UUID, UUID>>()
     val flirts = mutableListOf<Pair<UUID, UUID>>()
     val albumRequests = mutableListOf<Pair<UUID, UUID>>()
+    val swipeInterests = mutableListOf<Triple<UUID, UUID, String>>()
+    val matches = mutableListOf<Triple<UUID, UUID, UUID>>()
+    val partnerChatInvites = mutableListOf<Triple<UUID, UUID, UUID>>()
 
     override suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID): Boolean {
         if (!allowProfileViews) return false
@@ -590,6 +655,21 @@ private class InMemoryActivityRepository(
     override suspend fun recordAlbumRequest(requesterUserId: UUID, targetUserId: UUID): Boolean {
         if (!allowAlbumRequests) return false
         albumRequests += requesterUserId to targetUserId
+        return true
+    }
+
+    override suspend fun recordSwipeInterest(actorUserId: UUID, targetUserId: UUID, eventType: String): Boolean {
+        swipeInterests += Triple(actorUserId, targetUserId, eventType)
+        return true
+    }
+
+    override suspend fun recordMatch(recipientUserId: UUID, actorUserId: UUID, matchId: UUID): Boolean {
+        matches += Triple(recipientUserId, actorUserId, matchId)
+        return true
+    }
+
+    override suspend fun recordPartnerChatInvite(inviterUserId: UUID, inviteeUserId: UUID, conversationId: UUID): Boolean {
+        partnerChatInvites += Triple(inviterUserId, inviteeUserId, conversationId)
         return true
     }
 

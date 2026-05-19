@@ -1931,12 +1931,12 @@ class JdbcSwipeRepository(
                     if (statement.executeUpdate() == 0) {
                         val existing = connection.findSwipeActionById(actionId, actorUserId)
                         connection.rollback()
-                        return@withContext SwipeActionResult(recorded = existing != null, match = existing?.match)
+                        return@withContext SwipeActionResult(
+                            recorded = existing != null,
+                            match = existing?.match,
+                            newlyRecorded = false
+                        )
                     }
-                }
-
-                if (action == "pineapple_like") {
-                    connection.recordPineappleLikeActivity(actorUserId, targetUserId)
                 }
 
                 val match: MatchRecord? = if (action in POSITIVE_ACTIONS) {
@@ -2027,12 +2027,12 @@ class JdbcSwipeRepository(
                     if (statement.executeUpdate() == 0) {
                         val existing = connection.findSwipeActionById(actionId, actorUserId)
                         connection.rollback()
-                        return@withContext SwipeActionResult(recorded = existing != null, match = existing?.match)
+                        return@withContext SwipeActionResult(
+                            recorded = existing != null,
+                            match = existing?.match,
+                            newlyRecorded = false
+                        )
                     }
-                }
-
-                if (action == "pineapple_like") {
-                    connection.recordPineappleLikeActivity(actorUserId, targetUserId)
                 }
 
                 val match: MatchRecord? = if (action in POSITIVE_ACTIONS) {
@@ -2239,32 +2239,6 @@ class JdbcSwipeRepository(
                     }
                 }
             }
-        }
-    }
-
-    private fun Connection.recordPineappleLikeActivity(actorUserId: UUID, targetUserId: UUID) {
-        prepareStatement(
-            """
-            INSERT INTO activity_events (
-                id,
-                recipient_user_id,
-                actor_user_id,
-                event_type,
-                target_user_id,
-                aggregate_count,
-                first_occurred_at,
-                last_counted_at,
-                occurred_at,
-                updated_at
-            )
-            VALUES (?, ?, ?, 'pineapple_like', ?, 1, now(), now(), now(), now())
-            """.trimIndent()
-        ).use { statement ->
-            statement.setObject(1, UUID.randomUUID())
-            statement.setObject(2, targetUserId)
-            statement.setObject(3, actorUserId)
-            statement.setObject(4, targetUserId)
-            statement.executeUpdate()
         }
     }
 

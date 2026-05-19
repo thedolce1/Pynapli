@@ -579,6 +579,7 @@ private fun ActivityEventDto.activityText(): String = when (type) {
     "album_request" -> if (count > 1) "requested album access ${count}x" else "requested album access"
     "swipe_like" -> "liked you"
     "pineapple_like" -> "sent a Pineapple"
+    "intro_note" -> "sent an Intro Note"
     "match" -> "matched with you"
     "partner_chat_invite" -> "sent a chat invite"
     else -> "interacted with you"
