@@ -56,6 +56,7 @@ Current Swipe coverage:
 - The test also clicks Like and Pass through the real action buttons and verifies the deck advances, then verifies the Intro Note dialog opens.
 - `SwipeImagePrefetchPlannerTest` verifies the active/near-next Swipe image prefetch window, URL ordering, and deduplication.
 - `scripts/swipe-api-load-test.ps1` now exercises the Ktor Swipe API against a dense local dataset, including core deck/action/rewind flows and optional Boost, Top Picks, and Travel scenarios.
+- `scripts/android-swipe-qa.ps1` runs the installed Android app against local Ktor, captures Swipe screenshots/XML, verifies structural golden signatures, opens filters and travel mode, opens the linked-partner preview, opens the Intro Note dialog, and proves left/right Swipe gestures advance the visible deck. Latest emulator proof: `artifacts/android-swipe-qa/20260518-214507`.
 - `scripts/android-swipe-queue-qa.ps1` runs the installed Android app against local Ktor, verifies Swipe opens with real seeded data, checks a linked Swipe card, injects a recoverable Swipe action failure, force-stops/relaunches the app, verifies the pending action survives process death, then retries and clears the queue. Latest emulator proof: `artifacts/android-swipe-queue-qa/20260518-212037`.
 
 Still open before beta:
@@ -63,7 +64,7 @@ Still open before beta:
 - Exact-image golden comparisons are still optional future work; current connected Android golden coverage uses structural UI and screenshot-signature checks to avoid status-bar/time false positives.
 - Manual device pass on mid-range and low-end Android hardware.
 - Visual checks with empty Grid outside the Online-filter empty state and more real-device thumbnail loading still need coverage.
-- Broader connected Android Swipe screenshot/gesture/golden QA is still needed; the current Android Swipe script specifically covers linked-card rendering and offline/process-death queue behavior.
+- Broader connected Android Swipe screenshot/gesture/golden QA now has a repeatable emulator path; expand it with real-device runs, slower network profiles, and match-overlay/profile-detail variants before beta.
 - Real battery profiling with movement/background/foreground scenarios still needs a device pass.
 
 ## Performance Benchmarks

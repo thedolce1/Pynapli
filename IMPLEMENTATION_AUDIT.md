@@ -88,6 +88,7 @@ Current Swipe scale/proof additions:
 - `scripts/swipe-api-load-test.ps1` now covers core deck/action/rewind paths plus optional extended Boost, Top Picks, and Travel scenarios. It writes `summary.json`/`results.csv`, fails on unexpected scenario errors, supports core-only runs through `-SkipExtendedScenarios`, and cleans deterministic load users by the same hashed email identity format the server uses.
 - `JdbcSwipeRepository` keeps the rank cache usable when travel mode exists: viewer travel location is part of the cache key, active travel targets are fetched through a bounded supplement query, and local cached candidates are merged with visiting candidates before final ordering.
 - 2026-05-18 proof artifacts: 100-concurrent extended run passed all budgets at `artifacts/swipe-api-load/20260518-210752`; 500-concurrent warm core run passed all budgets at `artifacts/swipe-api-load/20260518-210836`; Ktor-restarted true-cold 500-concurrent core run passed all budgets at `artifacts/swipe-api-load/20260518-211103`.
+- Connected Android Swipe screenshot/gesture/golden QA passed on emulator `emulator-5554` at `artifacts/android-swipe-qa/20260518-214507`: the script built/installed debug APK, logged in, opened Swipe, captured structural golden screenshots/XML, opened filters and travel mode, opened linked-partner preview, opened the Intro Note dialog, and proved left/right gestures advance the deck.
 - Connected Android Swipe queue QA passed on emulator `emulator-5554` at `artifacts/android-swipe-queue-qa/20260518-212037`: the script built/installed debug APK, logged in, opened Swipe, verified linked-card rendering, queued a recoverable Like failure, force-stopped/relaunched, verified the pending action survived, retried, and cleared the queue.
 
 ## Alignment Matrix
@@ -192,7 +193,7 @@ A checked box should not mean "final production-ready" unless the surrounding sp
 2. Keep Grid and Swipe proof-driven.
    - Grid: physical-device battery/location QA with `scripts/android-grid-battery-profile.ps1` remains the main open proof item; denied-location Android QA is covered.
    - Grid later: reconsider Redis candidate caching only from repeat evidence on larger dense metros or if page-two p95 regresses.
-   - Swipe: backend API proof is now strong for the current MVP load shape, and Android queue/process-death QA is covered on emulator. Next work should be broader connected Android Swipe screenshot/gesture/golden QA, iOS device/simulator queue QA, and remaining premium discovery polish.
+   - Swipe: backend API proof is now strong for the current MVP load shape, Android screenshot/gesture/golden QA is covered on emulator, and Android queue/process-death QA is covered on emulator. Next work should be iOS device/simulator queue QA, real-device Android Swipe runs, and remaining premium discovery polish.
 
 3. Finish the profile/settings safety surface.
    - Safety center, block list, hidden users if retained, report history/support contact, data export/delete, notification settings, and production age-verification provider/market wiring.

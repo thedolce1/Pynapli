@@ -1,0 +1,1013 @@
+param(
+    [string]$BaseUrl = "http://127.0.0.1:8080",
+    [string]$PackageName = "com.pynapli.app",
+    [string]$LaunchActivity = ".MainActivity",
+    [string]$DeviceId = "",
+    [string]$OutputRoot = "artifacts\android-swipe-qa",
+    [switch]$SkipSeed,
+    [switch]$SkipBuild,
+    [switch]$SkipInstall,
+    [switch]$KeepAppData,
+    [switch]$SkipSwipeStateReset,
+    [string]$GoldenSpec = "scripts\android-swipe-qa-goldens.json",
+    [switch]$SkipGoldenAssertions,
+    [int]$WaitSeconds = 35
+)
+
+$ErrorActionPreference = "Stop"
+
+try {
+    Add-Type -AssemblyName System.Drawing
+} catch {
+    throw "System.Drawing is required for Android Swipe screenshot signatures. Run this script on Windows with the local desktop tooling."
+}
+
+function Find-Adb {
+    $command = Get-Command "adb" -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    $sdkCandidates = @(
+        $env:ANDROID_HOME,
+        $env:ANDROID_SDK_ROOT,
+        (Join-Path $env:LOCALAPPDATA "Android\Sdk")
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    foreach ($sdk in $sdkCandidates) {
+        $candidate = Join-Path $sdk "platform-tools\adb.exe"
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw "adb was not found. Start Android Studio once or install Android SDK Platform Tools."
+}
+
+function Invoke-Adb {
+    param([string[]]$Arguments)
+
+    $output = $null
+    if ([string]::IsNullOrWhiteSpace($script:DeviceId)) {
+        $output = & $script:Adb @Arguments 2>&1
+    } else {
+        $output = & $script:Adb -s $script:DeviceId @Arguments 2>&1
+    }
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "adb failed: $($Arguments -join ' '). Output: $(($output | Out-String).Trim())"
+    }
+
+    return $output
+}
+
+function Select-AdbDevice {
+    $lines = & $script:Adb devices
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to list adb devices."
+    }
+
+    $devices = @(
+        $lines |
+            Where-Object { $_ -match "^\S+\s+device$" } |
+            ForEach-Object { ($_ -split "\s+")[0] }
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($script:DeviceId)) {
+        if ($devices -notcontains $script:DeviceId) {
+            throw "Requested adb device '$script:DeviceId' is not connected. Connected devices: $($devices -join ', ')"
+        }
+        return
+    }
+
+    if ($devices.Count -eq 0) {
+        throw "No connected Android emulator/device found. Start an emulator and retry."
+    }
+
+    if ($devices.Count -gt 1) {
+        throw "Multiple Android devices are connected. Rerun with -DeviceId. Connected devices: $($devices -join ', ')"
+    }
+
+    $script:DeviceId = $devices[0]
+}
+
+function Save-Screen {
+    param([string]$Name)
+
+    $remote = "/sdcard/$Name.png"
+    $local = Join-Path $script:ArtifactDir "$Name.png"
+    Invoke-Adb @("shell", "screencap", "-p", $remote) | Out-Null
+    Invoke-Adb @("pull", $remote, $local) | Out-Null
+    Invoke-Adb @("shell", "rm", $remote) | Out-Null
+    return (Resolve-Path $local).Path
+}
+
+function Dump-Ui {
+    param(
+        [string]$Name,
+        [switch]$Keep
+    )
+
+    $remote = "/sdcard/window.xml"
+    $fileName = if ($Keep) { "$Name.xml" } else { "_latest.xml" }
+    $local = Join-Path $script:ArtifactDir $fileName
+    $lastDumpOutput = ""
+
+    for ($attempt = 1; $attempt -le 12; $attempt++) {
+        $dumpOutput = & $script:Adb -s $script:DeviceId shell uiautomator dump $remote 2>&1
+        $dumpExit = $LASTEXITCODE
+        $lastDumpOutput = ($dumpOutput | Out-String).Trim()
+
+        if ($dumpExit -eq 0 -and $lastDumpOutput -notmatch "ERROR:\s+null root") {
+            & $script:Adb -s $script:DeviceId pull $remote $local 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $local)) {
+                throw "Unable to pull Android UI hierarchy."
+            }
+
+            try {
+                return [xml](Get-Content -Raw -Path $local)
+            } catch {
+                if ($attempt -eq 12) {
+                    throw "Unable to parse Android UI hierarchy at $local"
+                }
+            }
+        }
+
+        Start-Sleep -Milliseconds 500
+    }
+
+    throw "Unable to dump Android UI hierarchy after retries. Last output: $lastDumpOutput"
+}
+
+function Get-UiTextNodes {
+    param([xml]$Xml)
+
+    @($Xml.SelectNodes("//*[@text or @content-desc]"))
+}
+
+function Get-VisibleTexts {
+    param([xml]$Xml)
+
+    Get-UiTextNodes $Xml |
+        ForEach-Object {
+            $text = $_.GetAttribute("text")
+            if ([string]::IsNullOrWhiteSpace($text)) {
+                $text = $_.GetAttribute("content-desc")
+            }
+            $text
+        } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+}
+
+function Find-NodeByText {
+    param(
+        [xml]$Xml,
+        [string]$Text
+    )
+
+    foreach ($node in Get-UiTextNodes $Xml) {
+        $nodeText = $node.GetAttribute("text")
+        if ($nodeText.Contains($Text)) {
+            return $node
+        }
+    }
+
+    foreach ($node in Get-UiTextNodes $Xml) {
+        $nodeDescription = $node.GetAttribute("content-desc")
+        if ($nodeDescription.Contains($Text)) {
+            return $node
+        }
+    }
+
+    return $null
+}
+
+function Get-Bounds {
+    param($Node)
+
+    $bounds = $Node.GetAttribute("bounds")
+    if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
+        throw "Invalid node bounds: $bounds"
+    }
+
+    return [pscustomobject]@{
+        Left = [int]$Matches[1]
+        Top = [int]$Matches[2]
+        Right = [int]$Matches[3]
+        Bottom = [int]$Matches[4]
+        CenterX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
+        CenterY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
+    }
+}
+
+function Get-ScreenSize {
+    param([xml]$Xml)
+
+    $root = $Xml.SelectSingleNode("/hierarchy/node")
+    if ($null -ne $root) {
+        $bounds = Get-Bounds $root
+        return [pscustomobject]@{
+            Width = $bounds.Right
+            Height = $bounds.Bottom
+        }
+    }
+
+    $right = 0
+    $bottom = 0
+    foreach ($node in $Xml.SelectNodes("//*[@bounds]")) {
+        $bounds = Get-Bounds $node
+        if ($bounds.Right -gt $right) { $right = $bounds.Right }
+        if ($bounds.Bottom -gt $bottom) { $bottom = $bounds.Bottom }
+    }
+
+    if ($right -le 0 -or $bottom -le 0) {
+        throw "Unable to determine Android screen size from UI hierarchy."
+    }
+
+    return [pscustomobject]@{
+        Width = $right
+        Height = $bottom
+    }
+}
+
+function Find-BottomNavNodeByText {
+    param(
+        [xml]$Xml,
+        [string]$Text
+    )
+
+    $screen = Get-ScreenSize $Xml
+    $navTop = [int]($screen.Height * 0.82)
+    $matches = @()
+
+    foreach ($node in Get-UiTextNodes $Xml) {
+        $nodeText = $node.GetAttribute("text")
+        if ([string]::IsNullOrWhiteSpace($nodeText)) {
+            $nodeText = $node.GetAttribute("content-desc")
+        }
+
+        if ($nodeText -eq $Text) {
+            $bounds = Get-Bounds $node
+            if ($bounds.CenterY -ge $navTop) {
+                $matches += [pscustomobject]@{
+                    Node = $node
+                    Bounds = $bounds
+                }
+            }
+        }
+    }
+
+    if ($matches.Count -eq 0) {
+        return $null
+    }
+
+    return ($matches | Sort-Object { $_.Bounds.CenterY } -Descending | Select-Object -First 1).Node
+}
+
+function Find-ContentDescriptionNodes {
+    param(
+        [xml]$Xml,
+        [string]$Description,
+        [int]$MinTop = 0,
+        [int]$MaxTop = 0,
+        [double]$MinLeftRatio = 0
+    )
+
+    $screen = Get-ScreenSize $Xml
+    @(
+        foreach ($node in Get-UiTextNodes $Xml) {
+            if ($node.GetAttribute("content-desc") -ne $Description) {
+                continue
+            }
+
+            $bounds = Get-Bounds $node
+            if ($MinTop -gt 0 -and $bounds.Top -lt $MinTop) {
+                continue
+            }
+            if ($MaxTop -gt 0 -and $bounds.Top -gt $MaxTop) {
+                continue
+            }
+            if ($MinLeftRatio -gt 0 -and $bounds.Left -lt [int]($screen.Width * $MinLeftRatio)) {
+                continue
+            }
+
+            [pscustomobject]@{
+                Node = $node
+                Bounds = $bounds
+            }
+        }
+    )
+}
+
+function Wait-ForAnyText {
+    param(
+        [string[]]$Texts,
+        [int]$TimeoutSeconds = $script:WaitSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $xml = Dump-Ui "wait"
+        foreach ($text in $Texts) {
+            if ($null -ne (Find-NodeByText $xml $text)) {
+                return [pscustomobject]@{
+                    Text = $text
+                    Xml = $xml
+                }
+            }
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    throw "Timed out waiting for one of: $($Texts -join ', ')"
+}
+
+function Wait-ForNoText {
+    param(
+        [string]$Text,
+        [int]$TimeoutSeconds = $script:WaitSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $xml = Dump-Ui "wait_absent"
+        if ($null -eq (Find-NodeByText $xml $Text)) {
+            return $xml
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    $visible = (Get-VisibleTexts $xml) -join " | "
+    throw "Timed out waiting for '$Text' to disappear. Visible text: $visible"
+}
+
+function Tap-Text {
+    param(
+        [string]$Text,
+        [int]$TimeoutSeconds = $script:WaitSeconds
+    )
+
+    $wait = Wait-ForAnyText @($Text) $TimeoutSeconds
+    $node = Find-NodeByText $wait.Xml $Text
+    $bounds = Get-Bounds $node
+    Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+    Write-Host "[tap] '$Text' at $($bounds.CenterX),$($bounds.CenterY)"
+}
+
+function Tap-BottomNavText {
+    param(
+        [string]$Text,
+        [int]$TimeoutSeconds = $script:WaitSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $xml = Dump-Ui "wait_bottom_nav"
+        $node = Find-BottomNavNodeByText $xml $Text
+        if ($null -ne $node) {
+            $bounds = Get-Bounds $node
+            Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+            Write-Host "[tap-nav] '$Text' at $($bounds.CenterX),$($bounds.CenterY)"
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    $visible = (Get-VisibleTexts $xml) -join " | "
+    throw "Timed out waiting for bottom navigation item '$Text'. Visible text: $visible"
+}
+
+function Tap-ContentDescription {
+    param(
+        [string]$Description,
+        [int]$TimeoutSeconds = $script:WaitSeconds,
+        [int]$MinTop = 0,
+        [int]$MaxTop = 0,
+        [double]$MinLeftRatio = 0
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $xml = Dump-Ui "wait_content_desc"
+        $matches = @(Find-ContentDescriptionNodes $xml $Description $MinTop $MaxTop $MinLeftRatio)
+        if ($matches.Count -gt 0) {
+            $selected = $matches | Sort-Object { $_.Bounds.Top }, { $_.Bounds.Left } | Select-Object -First 1
+            $bounds = $selected.Bounds
+            Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+            Write-Host "[tap-desc] '$Description' at $($bounds.CenterX),$($bounds.CenterY)"
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    $visible = (Get-VisibleTexts $xml) -join " | "
+    throw "Timed out waiting for content description '$Description'. Visible text: $visible"
+}
+
+function Assert-TextPresent {
+    param(
+        [xml]$Xml,
+        [string]$Text,
+        [string]$Stage
+    )
+
+    if ($null -eq (Find-NodeByText $Xml $Text)) {
+        $visible = (Get-VisibleTexts $Xml) -join " | "
+        throw "$Stage did not show expected text '$Text'. Visible text: $visible"
+    }
+}
+
+function Assert-TextAbsent {
+    param(
+        [xml]$Xml,
+        [string]$Text,
+        [string]$Stage
+    )
+
+    if ($null -ne (Find-NodeByText $Xml $Text)) {
+        $visible = (Get-VisibleTexts $Xml) -join " | "
+        throw "$Stage showed forbidden text '$Text'. Visible text: $visible"
+    }
+}
+
+function Assert-NoAppErrorText {
+    param(
+        [xml]$Xml,
+        [string]$Stage
+    )
+
+    $allText = (Get-VisibleTexts $Xml) -join "`n"
+    $errorPatterns = @(
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Network request failed",
+        "Request failed",
+        "UNAUTHENTICATED",
+        "HTTP_",
+        "Exception"
+    )
+
+    foreach ($pattern in $errorPatterns) {
+        if ($allText.Contains($pattern)) {
+            throw "$Stage displayed app error text matching '$pattern'. Visible text: $allText"
+        }
+    }
+}
+
+function Get-ImageSignature {
+    param([string]$Path)
+
+    $bitmap = [System.Drawing.Bitmap]::new($Path)
+    $buckets = @{}
+    try {
+        $stepX = [Math]::Max(1, [int][Math]::Floor($bitmap.Width / 96))
+        $stepY = [Math]::Max(1, [int][Math]::Floor($bitmap.Height / 160))
+        $sampleCount = 0
+        $dark = 0
+        $bright = 0
+        $nonBlack = 0
+        $accentYellow = 0
+
+        for ($y = 0; $y -lt $bitmap.Height; $y += $stepY) {
+            for ($x = 0; $x -lt $bitmap.Width; $x += $stepX) {
+                $color = $bitmap.GetPixel($x, $y)
+                $sampleCount += 1
+                $luma = (0.2126 * $color.R) + (0.7152 * $color.G) + (0.0722 * $color.B)
+                if ($luma -lt 45) { $dark += 1 }
+                if ($luma -gt 210) { $bright += 1 }
+                if ($luma -gt 15) { $nonBlack += 1 }
+                if ($color.R -gt 200 -and $color.G -gt 150 -and $color.B -lt 90) { $accentYellow += 1 }
+
+                $bucket = "$([int]($color.R / 32)):$([int]($color.G / 32)):$([int]($color.B / 32))"
+                $buckets[$bucket] = $true
+            }
+        }
+
+        return [pscustomobject]@{
+            width = $bitmap.Width
+            height = $bitmap.Height
+            sampleCount = $sampleCount
+            darkRatio = [Math]::Round($dark / [double]$sampleCount, 4)
+            brightRatio = [Math]::Round($bright / [double]$sampleCount, 4)
+            nonBlackRatio = [Math]::Round($nonBlack / [double]$sampleCount, 4)
+            accentYellowRatio = [Math]::Round($accentYellow / [double]$sampleCount, 4)
+            colorBucketCount = $buckets.Count
+        }
+    } finally {
+        $bitmap.Dispose()
+    }
+}
+
+function Assert-ImageSignature {
+    param(
+        [string]$StageName,
+        [string]$ScreenshotPath,
+        $StageSpec
+    )
+
+    if ($null -eq $StageSpec.image) {
+        return $null
+    }
+
+    $signature = Get-ImageSignature $ScreenshotPath
+    $checks = @{
+        minWidth = "width"
+        minHeight = "height"
+        minDarkRatio = "darkRatio"
+        maxBrightRatio = "brightRatio"
+        minNonBlackRatio = "nonBlackRatio"
+        minAccentYellowRatio = "accentYellowRatio"
+        minColorBucketCount = "colorBucketCount"
+    }
+
+    foreach ($check in $checks.GetEnumerator()) {
+        $expected = $StageSpec.image.($check.Key)
+        if ($null -eq $expected) {
+            continue
+        }
+
+        $actual = $signature.($check.Value)
+        if ($check.Key.StartsWith("max")) {
+            if ([double]$actual -gt [double]$expected) {
+                throw "$StageName screenshot signature exceeded $($check.Key): actual=$actual expectedMax=$expected path=$ScreenshotPath"
+            }
+        } else {
+            if ([double]$actual -lt [double]$expected) {
+                throw "$StageName screenshot signature missed $($check.Key): actual=$actual expectedMin=$expected path=$ScreenshotPath"
+            }
+        }
+    }
+
+    return $signature
+}
+
+function Assert-GoldenStage {
+    param(
+        [string]$StageName,
+        [xml]$Xml,
+        [string]$ScreenshotPath = $null
+    )
+
+    if ($SkipGoldenAssertions -or $null -eq $script:GoldenSpecData) {
+        return $null
+    }
+
+    $stageSpec = $script:GoldenSpecData.stages.$StageName
+    if ($null -eq $stageSpec) {
+        throw "Golden stage '$StageName' is missing from $GoldenSpec"
+    }
+
+    foreach ($text in @($stageSpec.requiredTexts)) {
+        Assert-TextPresent $Xml $text "$StageName golden"
+    }
+
+    $visibleText = (Get-VisibleTexts $Xml) -join "`n"
+    foreach ($text in @($stageSpec.forbiddenTexts)) {
+        if (-not [string]::IsNullOrWhiteSpace($text) -and $visibleText.Contains($text)) {
+            throw "$StageName golden displayed forbidden text '$text'. Visible text: $visibleText"
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ScreenshotPath)) {
+        return Assert-ImageSignature $StageName $ScreenshotPath $stageSpec
+    }
+
+    return $null
+}
+
+function Get-Sha256Base64Url {
+    param([string]$Value)
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value.Trim().ToLowerInvariant())
+        $hash = $sha.ComputeHash($bytes)
+        return [Convert]::ToBase64String($hash).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    } finally {
+        $sha.Dispose()
+    }
+}
+
+function Reset-DevSwipeState {
+    $docker = Get-Command docker -ErrorAction SilentlyContinue
+    if ($null -eq $docker) {
+        Write-Host "[warn] Docker was not found; server-side dev Swipe state was not reset."
+        return
+    }
+
+    $emailHash = Get-Sha256Base64Url "dev@pynapli.local"
+    $sql = @'
+DO $$
+DECLARE
+    viewer_id uuid;
+BEGIN
+    SELECT id INTO viewer_id FROM users WHERE email_hash = '__EMAIL_HASH__';
+    IF viewer_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    DELETE FROM top_pick_sessions
+    WHERE user_id = viewer_id;
+
+    DELETE FROM matches
+    WHERE user_a = viewer_id OR user_b = viewer_id;
+
+    DELETE FROM swipe_actions
+    WHERE actor_user_id = viewer_id OR target_user_id = viewer_id;
+
+    DELETE FROM swipe_deck_sessions
+    WHERE viewer_user_id = viewer_id;
+
+    UPDATE travel_locations
+    SET status = 'cleared'
+    WHERE user_id = viewer_id AND status = 'active';
+END $$;
+'@.Replace("__EMAIL_HASH__", $emailHash)
+
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 -c $sql 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dev Swipe state reset failed: $output"
+    }
+    Write-Host "[ok] Reset dev Swipe decisions, matches, deck sessions, Top Picks, and travel state for dev@pynapli.local"
+}
+
+function Start-App {
+    $component = "$PackageName/$LaunchActivity"
+    Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
+    Write-Host "[step] Launched $component"
+}
+
+function Complete-LoginIfNeeded {
+    $landing = Wait-ForAnyText @("Dev login", "Grid Load", "Dense", "Filters") 45
+    if ($landing.Text -eq "Dev login") {
+        $loginXml = Dump-Ui "00_login" -Keep
+        Assert-NoAppErrorText $loginXml "Login"
+        $script:Screenshots.login = Save-Screen "00_login"
+        Tap-Text "Dev login"
+
+        Wait-ForAnyText @("Allow Pynapli", "Don", "Current location", "Filters", "Grid Load", "Dense") 45 | Out-Null
+        Start-Sleep -Milliseconds 1200
+        $afterLoginXml = Dump-Ui "after_login"
+        if ($null -ne (Find-NodeByText $afterLoginXml "Don")) {
+            $promptXml = Dump-Ui "01_notification_prompt" -Keep
+            Assert-NoAppErrorText $promptXml "Notification prompt"
+            $script:Screenshots.notificationPrompt = Save-Screen "01_notification_prompt"
+            Tap-Text "Don"
+        }
+    }
+}
+
+function Open-SwipeTab {
+    Tap-BottomNavText "Swipe"
+    Wait-ForAnyText @("For You", "No more profiles nearby") 45 | Out-Null
+    Start-Sleep -Milliseconds 1000
+    $xml = Dump-Ui "swipe_ready"
+    Assert-NoAppErrorText $xml "Swipe ready"
+    Assert-TextPresent $xml "For You" "Swipe ready"
+    Assert-TextPresent $xml "Like" "Swipe ready"
+    Assert-TextPresent $xml "Pass" "Swipe ready"
+    Assert-TextAbsent $xml "No more profiles nearby" "Swipe ready"
+    Assert-TextAbsent $xml "No more recommendations match your filters" "Swipe ready"
+    return $xml
+}
+
+function Get-MainSwipeSnapshot {
+    param([xml]$Xml)
+
+    $chromeTexts = @(
+        "Swipe",
+        "Pass or like nearby profiles",
+        "Travel",
+        "Filters",
+        "For You",
+        "Linked",
+        "Age",
+        "Today's Top Picks",
+        "Today's Top Pick",
+        "Refreshes daily",
+        "Rewind",
+        "Pass",
+        "Intro Note",
+        "Pineapple Like",
+        "Like",
+        "Grid",
+        "Activity",
+        "Messages",
+        "Store",
+        "Linked partner",
+        "Verified"
+    )
+
+    $screen = Get-ScreenSize $Xml
+    $minTop = [int]($screen.Height * 0.58)
+    $maxTop = [int]($screen.Height * 0.82)
+
+    $candidates = @(
+        foreach ($node in Get-UiTextNodes $Xml) {
+            $text = $node.GetAttribute("text")
+            if ([string]::IsNullOrWhiteSpace($text)) {
+                continue
+            }
+
+            if ($chromeTexts -contains $text) {
+                continue
+            }
+            if ($text -match "^\s*(<=|<|>|>=)?\s*\d+(\.\d+)?\s*(m|km)\s*$") {
+                continue
+            }
+            if ($text -match "^\d{2}$") {
+                continue
+            }
+            if ($text -match "^\d+\s+pending$") {
+                continue
+            }
+            if ($text -match "Swipe saved|Retry|No more|Illegal input|Request failed") {
+                continue
+            }
+
+            $bounds = Get-Bounds $node
+            if ($bounds.Top -lt $minTop -or $bounds.Top -gt $maxTop) {
+                continue
+            }
+
+            [pscustomobject]@{
+                Text = $text
+                Top = $bounds.Top
+                Left = $bounds.Left
+                Right = $bounds.Right
+                Bottom = $bounds.Bottom
+            }
+        }
+    )
+
+    @($candidates | Sort-Object Top, Left | Select-Object -First 8)
+}
+
+function Get-SnapshotTexts {
+    param([object[]]$Snapshot)
+
+    @($Snapshot | ForEach-Object { $_.Text })
+}
+
+function Assert-MainSwipeSnapshotPresent {
+    param(
+        [object[]]$Snapshot,
+        [string]$Stage
+    )
+
+    if ($Snapshot.Count -eq 0) {
+        throw "$Stage did not expose a detectable main Swipe card name. The card may be hidden, blank, or outside the expected deck area."
+    }
+}
+
+function Wait-ForMainSwipeSnapshotChanged {
+    param(
+        [object[]]$Before,
+        [string]$Stage,
+        [int]$TimeoutSeconds = 10
+    )
+
+    $beforeText = (Get-SnapshotTexts $Before) -join "|"
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        Start-Sleep -Milliseconds 600
+        $xml = Dump-Ui "wait_card_changed"
+        Dismiss-MatchIfPresent $xml | Out-Null
+        $xml = Dump-Ui "wait_card_changed_after_match"
+        Assert-NoAppErrorText $xml $Stage
+        $after = @(Get-MainSwipeSnapshot $xml)
+        if ($after.Count -gt 0) {
+            $afterText = (Get-SnapshotTexts $after) -join "|"
+            if ($afterText -ne $beforeText) {
+                return [pscustomobject]@{
+                    Xml = $xml
+                    Snapshot = $after
+                }
+            }
+        }
+    } while ((Get-Date) -lt $deadline)
+
+    $visible = (Get-VisibleTexts $xml) -join " | "
+    throw "$Stage did not advance the visible Swipe card after gesture. Before='$beforeText'. Visible text: $visible"
+}
+
+function Invoke-SwipeGesture {
+    param(
+        [ValidateSet("left", "right")]
+        [string]$Direction,
+        [xml]$Xml
+    )
+
+    $screen = Get-ScreenSize $Xml
+    $startX = if ($Direction -eq "left") { [int]($screen.Width * 0.82) } else { [int]($screen.Width * 0.18) }
+    $endX = if ($Direction -eq "left") { [int]($screen.Width * 0.16) } else { [int]($screen.Width * 0.84) }
+    $y = [int]($screen.Height * 0.60)
+    Invoke-Adb @("shell", "input", "swipe", "$startX", "$y", "$endX", "$y", "320") | Out-Null
+    Write-Host "[gesture] $Direction swipe from $startX,$y to $endX,$y"
+}
+
+function Dismiss-MatchIfPresent {
+    param([xml]$Xml)
+
+    if ($null -eq (Find-NodeByText $Xml "Keep swiping")) {
+        return $false
+    }
+
+    Tap-Text "Keep swiping" 5
+    Start-Sleep -Milliseconds 800
+    return $true
+}
+
+function Write-Summary {
+    param([hashtable]$Summary)
+
+    $path = Join-Path $script:ArtifactDir "qa-summary.json"
+    $Summary | ConvertTo-Json -Depth 8 | Set-Content -Path $path -Encoding UTF8
+    Write-Host ""
+    Write-Host "Android Swipe visual QA passed."
+    Write-Host "Artifact directory: $script:ArtifactDir"
+    Write-Host "Summary: $path"
+}
+
+if (-not (Test-Path ".\gradlew.bat")) {
+    throw "Run this script from the Pynapli repo root."
+}
+
+$script:GoldenSpecData = $null
+if (-not $SkipGoldenAssertions) {
+    if (-not (Test-Path $GoldenSpec)) {
+        throw "Golden spec not found at $GoldenSpec. Pass -SkipGoldenAssertions to run without screenshot golden checks."
+    }
+    $script:GoldenSpecData = Get-Content -Raw -Path $GoldenSpec | ConvertFrom-Json
+}
+
+$script:Adb = Find-Adb
+$script:DeviceId = $DeviceId
+Select-AdbDevice
+
+$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$script:ArtifactDir = Join-Path (Get-Location) (Join-Path $OutputRoot $timestamp)
+New-Item -ItemType Directory -Force -Path $script:ArtifactDir | Out-Null
+$script:Screenshots = @{}
+$script:VisualSignatures = @{}
+
+Write-Host "Pynapli Android Swipe Visual QA"
+Write-Host "------------------------------"
+Write-Host "Device: $script:DeviceId"
+Write-Host "ADB: $script:Adb"
+Write-Host "Artifacts: $script:ArtifactDir"
+
+try {
+    $health = Invoke-RestMethod -Uri "$BaseUrl/health/deep" -TimeoutSec 5
+    if ($health.status -ne "ok") {
+        throw "Unexpected health status: $($health | ConvertTo-Json -Compress)"
+    }
+    Write-Host "[ok] Ktor health: $BaseUrl/health/deep"
+} catch {
+    throw "Ktor is not healthy at $BaseUrl/health/deep. Start the local server before running Android Swipe QA. $($_.Exception.Message)"
+}
+
+if (-not $SkipSeed) {
+    Write-Host "[step] Seeding dev data and emulator location"
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File ".\scripts\seed-dev-data.ps1" -BaseUrl $BaseUrl -SetAndroidEmulatorLocation
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dev data seed failed."
+    }
+}
+
+if (-not $SkipSwipeStateReset) {
+    Write-Host "[step] Resetting server-side dev Swipe state"
+    Reset-DevSwipeState
+}
+
+if (-not $SkipBuild) {
+    Write-Host "[step] Building androidApp debug APK"
+    .\gradlew.bat :androidApp:assembleDebug --console=plain
+    if ($LASTEXITCODE -ne 0) {
+        throw "Android debug build failed."
+    }
+}
+
+$apk = Get-ChildItem -Path ".\androidApp\build\outputs\apk\debug" -Filter "*.apk" |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+if ($null -eq $apk) {
+    throw "No debug APK found. Run without -SkipBuild first."
+}
+
+if (-not $SkipInstall) {
+    Write-Host "[step] Installing $($apk.FullName)"
+    Invoke-Adb @("install", "-r", $apk.FullName) | Out-Null
+}
+
+if (-not $KeepAppData) {
+    Write-Host "[step] Clearing app data for fresh login"
+    Invoke-Adb @("shell", "pm", "clear", $PackageName) | Out-Null
+}
+
+Start-App
+Complete-LoginIfNeeded
+
+Wait-ForAnyText @("Grid Load", "Dense", "Filters") 45 | Out-Null
+$gridXml = Dump-Ui "02_grid_after_login" -Keep
+Assert-NoAppErrorText $gridXml "Grid after login"
+$script:Screenshots.gridAfterLogin = Save-Screen "02_grid_after_login"
+
+$swipeXml = Open-SwipeTab
+$initialXml = Dump-Ui "03_swipe_initial" -Keep
+Assert-NoAppErrorText $initialXml "Initial Swipe"
+$initialSnapshot = @(Get-MainSwipeSnapshot $initialXml)
+Assert-MainSwipeSnapshotPresent $initialSnapshot "Initial Swipe"
+$script:Screenshots.swipeInitial = Save-Screen "03_swipe_initial"
+$script:VisualSignatures.swipeInitial = Assert-GoldenStage "swipeInitial" $initialXml $script:Screenshots.swipeInitial
+Write-Host "[ok] Initial main Swipe card: $((Get-SnapshotTexts $initialSnapshot) -join ', ')"
+
+Tap-Text "Filters"
+Wait-ForAnyText @("These shape who shows up in your deck.", "Distance") | Out-Null
+Start-Sleep -Milliseconds 600
+$filtersXml = Dump-Ui "04_swipe_filters_sheet" -Keep
+Assert-NoAppErrorText $filtersXml "Swipe filters sheet"
+$script:Screenshots.filtersSheet = Save-Screen "04_swipe_filters_sheet"
+$script:VisualSignatures.filtersSheet = Assert-GoldenStage "filtersSheet" $filtersXml $script:Screenshots.filtersSheet
+Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_BACK") | Out-Null
+Wait-ForAnyText @("For You", "Like") 20 | Out-Null
+
+Tap-Text "Travel"
+Wait-ForAnyText @("Travel mode", "Set a city") | Out-Null
+Start-Sleep -Milliseconds 600
+$travelXml = Dump-Ui "05_swipe_travel_sheet" -Keep
+Assert-NoAppErrorText $travelXml "Travel sheet"
+$script:Screenshots.travelSheet = Save-Screen "05_swipe_travel_sheet"
+$script:VisualSignatures.travelSheet = Assert-GoldenStage "travelSheet" $travelXml $script:Screenshots.travelSheet
+Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_BACK") | Out-Null
+Wait-ForAnyText @("For You", "Like") 20 | Out-Null
+
+Tap-Text "Linked"
+Wait-ForAnyText @("Maya", "Alex", "Jules", "Rae") 45 | Out-Null
+Start-Sleep -Milliseconds 1000
+$linkedXml = Dump-Ui "06_swipe_linked_deck" -Keep
+Assert-NoAppErrorText $linkedXml "Linked Swipe deck"
+$linkedSnapshot = @(Get-MainSwipeSnapshot $linkedXml)
+Assert-MainSwipeSnapshotPresent $linkedSnapshot "Linked Swipe deck"
+$script:Screenshots.linkedDeck = Save-Screen "06_swipe_linked_deck"
+$script:VisualSignatures.linkedDeck = Assert-GoldenStage "linkedDeck" $linkedXml $script:Screenshots.linkedDeck
+Write-Host "[ok] Linked main Swipe card: $((Get-SnapshotTexts $linkedSnapshot) -join ', ')"
+
+Tap-ContentDescription "Linked partner" -MinTop 650 -MaxTop 1300 -MinLeftRatio 0.55
+Wait-ForAnyText @("Linked with") 20 | Out-Null
+Start-Sleep -Milliseconds 600
+$partnerXml = Dump-Ui "07_swipe_linked_partner_preview" -Keep
+Assert-NoAppErrorText $partnerXml "Linked partner preview"
+$script:Screenshots.linkedPartnerPreview = Save-Screen "07_swipe_linked_partner_preview"
+$script:VisualSignatures.linkedPartnerPreview = Assert-GoldenStage "linkedPartnerPreview" $partnerXml $script:Screenshots.linkedPartnerPreview
+Tap-Text "Close"
+Wait-ForAnyText @("Linked", "Like") 20 | Out-Null
+
+Tap-ContentDescription "Intro Note"
+Wait-ForAnyText @("Intro Note", "Send a short note") 20 | Out-Null
+Start-Sleep -Milliseconds 600
+$introXml = Dump-Ui "08_swipe_intro_note_dialog" -Keep
+Assert-NoAppErrorText $introXml "Intro Note dialog"
+$script:Screenshots.introNoteDialog = Save-Screen "08_swipe_intro_note_dialog"
+$script:VisualSignatures.introNoteDialog = Assert-GoldenStage "introNoteDialog" $introXml $script:Screenshots.introNoteDialog
+Tap-Text "Cancel"
+Wait-ForAnyText @("Linked", "Like") 20 | Out-Null
+
+$beforePassXml = Dump-Ui "before_pass_gesture"
+$beforePass = @(Get-MainSwipeSnapshot $beforePassXml)
+Assert-MainSwipeSnapshotPresent $beforePass "Pass gesture pre-state"
+Invoke-SwipeGesture "left" $beforePassXml
+$passResult = Wait-ForMainSwipeSnapshotChanged $beforePass "Pass gesture"
+$script:Screenshots.afterPassGesture = Save-Screen "09_swipe_after_pass_gesture"
+$script:VisualSignatures.afterPassGesture = Assert-GoldenStage "afterPassGesture" $passResult.Xml $script:Screenshots.afterPassGesture
+Write-Host "[ok] Pass gesture advanced card to: $((Get-SnapshotTexts $passResult.Snapshot) -join ', ')"
+
+$beforeLikeXml = Dump-Ui "before_like_gesture"
+$beforeLike = @(Get-MainSwipeSnapshot $beforeLikeXml)
+Assert-MainSwipeSnapshotPresent $beforeLike "Like gesture pre-state"
+Invoke-SwipeGesture "right" $beforeLikeXml
+$likeResult = Wait-ForMainSwipeSnapshotChanged $beforeLike "Like gesture"
+$script:Screenshots.afterLikeGesture = Save-Screen "10_swipe_after_like_gesture"
+$script:VisualSignatures.afterLikeGesture = Assert-GoldenStage "afterLikeGesture" $likeResult.Xml $script:Screenshots.afterLikeGesture
+Write-Host "[ok] Like gesture advanced card to: $((Get-SnapshotTexts $likeResult.Snapshot) -join ', ')"
+
+Write-Summary @{
+    passed = $true
+    baseUrl = $BaseUrl
+    deviceId = $script:DeviceId
+    packageName = $PackageName
+    apk = $apk.FullName
+    proof = @{
+        initialMainCard = @(Get-SnapshotTexts $initialSnapshot)
+        linkedMainCard = @(Get-SnapshotTexts $linkedSnapshot)
+        passGestureAdvancedTo = @(Get-SnapshotTexts $passResult.Snapshot)
+        likeGestureAdvancedTo = @(Get-SnapshotTexts $likeResult.Snapshot)
+        filtersSheetCaptured = $true
+        travelSheetCaptured = $true
+        linkedPartnerPreviewCaptured = $true
+        introNoteDialogCaptured = $true
+    }
+    visualSignatures = $script:VisualSignatures
+    screenshots = $script:Screenshots
+}

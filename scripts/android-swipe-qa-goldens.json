@@ -1,0 +1,220 @@
+{
+  "version": 1,
+  "description": "Connected Android Swipe QA golden assertions. These use structural text and screenshot signatures instead of exact pixels because emulator time, density, and seeded thumbnails can vary.",
+  "stages": {
+    "swipeInitial": {
+      "requiredTexts": [
+        "Swipe",
+        "Pass or like nearby profiles",
+        "Travel",
+        "Filters",
+        "For You",
+        "Linked",
+        "Age",
+        "Today's Top Pick",
+        "Refreshes daily",
+        "Rewind",
+        "Pass",
+        "Intro Note",
+        "Pineapple Like",
+        "Like",
+        "Grid",
+        "Activity",
+        "Messages",
+        "Store"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed",
+        "No more profiles nearby",
+        "No more recommendations match your filters",
+        "1 pending"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.35,
+        "maxBrightRatio": 0.24,
+        "minNonBlackRatio": 0.25,
+        "minAccentYellowRatio": 0.0005,
+        "minColorBucketCount": 12
+      }
+    },
+    "filtersSheet": {
+      "requiredTexts": [
+        "These shape who shows up in your deck.",
+        "Who",
+        "Age",
+        "Distance",
+        "Intent",
+        "Style",
+        "Looking for",
+        "Dating",
+        "Chat first",
+        "Events"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.45,
+        "maxBrightRatio": 0.20,
+        "minNonBlackRatio": 0.18,
+        "minAccentYellowRatio": 0.001,
+        "minColorBucketCount": 8
+      }
+    },
+    "travelSheet": {
+      "requiredTexts": [
+        "Travel mode",
+        "Set a city",
+        "One location at a time",
+        "Clear it to go back to local"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.45,
+        "maxBrightRatio": 0.20,
+        "minNonBlackRatio": 0.18,
+        "minAccentYellowRatio": 0,
+        "minColorBucketCount": 8
+      }
+    },
+    "linkedDeck": {
+      "requiredTexts": [
+        "Swipe",
+        "Pass or like nearby profiles",
+        "Linked",
+        "Today's Top Pick",
+        "Rewind",
+        "Pass",
+        "Intro Note",
+        "Pineapple Like",
+        "Like"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed",
+        "No more profiles nearby",
+        "No more recommendations match your filters",
+        "1 pending"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.35,
+        "maxBrightRatio": 0.24,
+        "minNonBlackRatio": 0.25,
+        "minAccentYellowRatio": 0.0005,
+        "minColorBucketCount": 12
+      }
+    },
+    "linkedPartnerPreview": {
+      "requiredTexts": [
+        "Linked with",
+        "Swipe stays on",
+        "View profile",
+        "Close"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.35,
+        "maxBrightRatio": 0.28,
+        "minNonBlackRatio": 0.20,
+        "minAccentYellowRatio": 0.0005,
+        "minColorBucketCount": 8
+      }
+    },
+    "introNoteDialog": {
+      "requiredTexts": [
+        "Intro Note",
+        "Send a short note",
+        "0/140",
+        "Send",
+        "Cancel"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.35,
+        "maxBrightRatio": 0.28,
+        "minNonBlackRatio": 0.20,
+        "minAccentYellowRatio": 0.0002,
+        "minColorBucketCount": 8
+      }
+    },
+    "afterPassGesture": {
+      "requiredTexts": [
+        "Swipe",
+        "Rewind",
+        "Pass",
+        "Intro Note",
+        "Pineapple Like",
+        "Like"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed",
+        "1 pending"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.35,
+        "maxBrightRatio": 0.24,
+        "minNonBlackRatio": 0.25,
+        "minAccentYellowRatio": 0.0005,
+        "minColorBucketCount": 12
+      }
+    },
+    "afterLikeGesture": {
+      "requiredTexts": [
+        "Swipe",
+        "Rewind",
+        "Pass",
+        "Intro Note",
+        "Pineapple Like",
+        "Like"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed",
+        "1 pending"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.35,
+        "maxBrightRatio": 0.24,
+        "minNonBlackRatio": 0.25,
+        "minAccentYellowRatio": 0.0005,
+        "minColorBucketCount": 12
+      }
+    }
+  }
+}

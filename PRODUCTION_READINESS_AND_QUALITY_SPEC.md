@@ -231,7 +231,7 @@ Artifacts: `artifacts/swipe-api-load/20260518-210752`, `artifacts/swipe-api-load
 
 The key backend fix from this pass is the active-travel rank-cache path: viewer travel location participates in the rank-cache key, active travel targets are gathered through a bounded supplement query, and cached local candidates are merged with visiting candidates before final sort. This keeps destination visibility correct without letting one active traveler globally disable the fast rank-cache path.
 
-Remaining Swipe readiness work is mostly client/device proof: broader connected Android Swipe screenshot/gesture/golden QA, iOS queue/device validation, and real-user telemetry once beta testing begins. Android queue/process-death proof exists through `scripts/android-swipe-queue-qa.ps1`; latest emulator pass is `artifacts/android-swipe-queue-qa/20260518-212037`.
+Remaining Swipe readiness work is mostly broader device proof: iOS queue/device validation, real-device Android runs, slower network profiles, match-overlay/profile-detail variants, and real-user telemetry once beta testing begins. Android screenshot/gesture/golden proof exists through `scripts/android-swipe-qa.ps1`; latest emulator pass is `artifacts/android-swipe-qa/20260518-214507`. Android queue/process-death proof exists through `scripts/android-swipe-queue-qa.ps1`; latest emulator pass is `artifacts/android-swipe-queue-qa/20260518-212037`.
 
 Expected behavior:
 
@@ -468,7 +468,7 @@ Location rules:
 - Database migration tests.
 - Contract tests for API DTOs.
 - Mobile ViewModel/state tests.
-- Compose screenshot/regression tests for core components. Current Grid coverage includes a shared-UI visual-signature pixel test in `GridScreenVisualRegressionTest`, connected Android screenshot/golden assertions in `scripts/android-grid-qa.ps1`, denied-location screenshots/assertions in `scripts/android-grid-denied-location-qa.ps1`, Android location policy checks in `scripts/android-location-policy-check.ps1`, and physical-device battery/profile capture in `scripts/android-grid-battery-profile.ps1`. Current Swipe coverage includes `SwipeScreenVisualInteractionTest` for shared-UI visual signature plus Like/Pass/Intro Note interaction checks and `scripts/android-swipe-queue-qa.ps1` for installed-app linked-card rendering plus offline/process-death action queue proof.
+- Compose screenshot/regression tests for core components. Current Grid coverage includes a shared-UI visual-signature pixel test in `GridScreenVisualRegressionTest`, connected Android screenshot/golden assertions in `scripts/android-grid-qa.ps1`, denied-location screenshots/assertions in `scripts/android-grid-denied-location-qa.ps1`, Android location policy checks in `scripts/android-location-policy-check.ps1`, and physical-device battery/profile capture in `scripts/android-grid-battery-profile.ps1`. Current Swipe coverage includes `SwipeScreenVisualInteractionTest` for shared-UI visual signature plus Like/Pass/Intro Note interaction checks, `scripts/android-swipe-qa.ps1` for installed-app screenshot/gesture/golden proof, and `scripts/android-swipe-queue-qa.ps1` for installed-app linked-card rendering plus offline/process-death action queue proof.
 - E2E tests for critical journeys.
 - Load tests for grid, swipe, messages, activity, and auth.
 - Abuse tests for spam, scraping, and rate limits.
