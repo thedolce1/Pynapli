@@ -630,7 +630,7 @@ If socket is unavailable:
 - Fetch Activity on tab open.
 - Fetch badge counts periodically with conservative interval.
 
-## Current Backend Implementation
+## Current Implementation
 
 Implemented and verified as of 2026-05-19:
 
@@ -640,6 +640,8 @@ Implemented and verified as of 2026-05-19:
 - Free/Social/Select reveal depth is enforced across pages by the cursor's seen-count state.
 - `POST /v1/activity/{eventId}/dismiss` soft-deletes the recipient's own Activity item without allowing cross-user dismissal.
 - Repository and service coverage proves tab filtering, cursor paging, entitlement reveal depth, invalid cursor rejection, block/risk filtering, and dismiss behavior.
+- Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, exposes per-row dismiss, and keeps album request grant/deny actions.
+- Desktop UI interaction coverage proves Activity tab selection, cursor load-more, and dismiss through the rendered screen.
 
 ## Badge Counts
 
@@ -735,9 +737,12 @@ Avoid:
 
 - [x] Activity event model exists.
 - [x] Activity tabs exist.
+- [x] Activity screen uses server-backed tabs.
 - [x] Newest-to-oldest ordering exists.
 - [x] Signed cursor pagination exists for Activity.
+- [x] Activity screen supports cursor load-more.
 - [x] Activity dismiss exists.
+- [x] Activity screen supports row dismiss.
 - [x] Views require full profile opening.
 - [x] Grid impressions do not count as views.
 - [x] Swipe card appearances do not count as views.

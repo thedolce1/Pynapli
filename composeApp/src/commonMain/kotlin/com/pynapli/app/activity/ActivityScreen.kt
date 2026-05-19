@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
@@ -69,10 +70,12 @@ fun ActivityScreen(
 
     ActivityScreenContent(
         state = state,
-        onFilterSelected = stateHolder::selectFilter,
+        onTabSelected = { tab -> scope.launch { stateHolder.selectTab(tab) } },
         onAlbumRequestDecision = { eventId, approve ->
             scope.launch { stateHolder.respondToAlbumRequest(eventId, approve) }
         },
+        onDismissEvent = { eventId -> scope.launch { stateHolder.dismissActivityEvent(eventId) } },
+        onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onRefresh = { scope.launch { stateHolder.load() } },
         onOpenStore = onOpenStore,
         distanceUnit = distanceUnit,
@@ -92,8 +95,10 @@ private fun rememberActivityStateHolder(): ActivityStateHolder {
 @Composable
 private fun ActivityScreenContent(
     state: ActivityUiState,
-    onFilterSelected: (ActivityFilterUi) -> Unit,
+    onTabSelected: (ActivityTabUi) -> Unit,
     onAlbumRequestDecision: (String, Boolean) -> Unit,
+    onDismissEvent: (String) -> Unit,
+    onLoadMore: () -> Unit,
     onRefresh: () -> Unit,
     onOpenStore: () -> Unit,
     distanceUnit: String,
@@ -108,9 +113,13 @@ private fun ActivityScreenContent(
             loading = state.isLoading,
             onRefresh = onRefresh
         )
-        ActivityFilterRow(
-            selectedFilter = state.selectedFilter,
-            onFilterSelected = onFilterSelected
+        ActivityTabRow(
+            selectedTab = state.selectedTab,
+            onTabSelected = onTabSelected
+        )
+        ActivityInlineMessage(
+            message = state.actionFeedback ?: state.errorMessage?.takeIf { state.items.isNotEmpty() },
+            isError = state.actionFeedback == null && state.errorMessage != null
         )
 
         when {
@@ -144,7 +153,7 @@ private fun ActivityScreenContent(
             )
 
             state.visibleItems.isEmpty() -> EmptyActivityState(
-                label = state.selectedFilter.emptyLabel(),
+                label = state.selectedTab.emptyLabel(),
                 modifier = Modifier.fillMaxSize()
             )
 
@@ -167,10 +176,20 @@ private fun ActivityScreenContent(
                         ActivityRow(
                             item = item,
                             pendingAction = state.pendingAlbumActionEventId == item.eventId,
+                            pendingDismiss = state.pendingDismissEventId == item.eventId,
                             distanceUnit = distanceUnit,
-                            onAlbumRequestDecision = onAlbumRequestDecision
+                            onAlbumRequestDecision = onAlbumRequestDecision,
+                            onDismissEvent = onDismissEvent
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                    }
+                    if (state.nextCursor != null) {
+                        item(key = "activity-load-more") {
+                            ActivityLoadMoreRow(
+                                loading = state.isLoadingMore,
+                                onLoadMore = onLoadMore
+                            )
+                        }
                     }
                     if (state.adSupported) {
                         item(key = "activity-ad-slot") {
@@ -235,33 +254,51 @@ private fun ActivityAdSlot() {
 }
 
 @Composable
-private fun ActivityFilterRow(
-    selectedFilter: ActivityFilterUi,
-    onFilterSelected: (ActivityFilterUi) -> Unit
+private fun ActivityInlineMessage(
+    message: String?,
+    isError: Boolean
+) {
+    if (message == null) return
+    Text(
+        text = message,
+        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodySmall,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+    )
+}
+
+@Composable
+private fun ActivityTabRow(
+    selectedTab: ActivityTabUi,
+    onTabSelected: (ActivityTabUi) -> Unit
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ActivityFilterUi.entries.forEach { filter ->
-            item(key = filter.name) {
+        ActivityTabUi.entries.forEach { tab ->
+            item(key = tab.name) {
                 AssistChip(
-                    onClick = { onFilterSelected(filter) },
+                    onClick = { onTabSelected(tab) },
                     label = {
                         Text(
-                            text = filter.label,
+                            text = tab.label,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     },
                     colors = AssistChipDefaults.assistChipColors(
-                        containerColor = if (filter == selectedFilter) {
+                        containerColor = if (tab == selectedTab) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.surfaceVariant
                         },
-                        labelColor = if (filter == selectedFilter) {
+                        labelColor = if (tab == selectedTab) {
                             MaterialTheme.colorScheme.onPrimary
                         } else {
                             MaterialTheme.colorScheme.onSurface
@@ -318,8 +355,10 @@ private fun ActivityHeader(
 private fun ActivityRow(
     item: ActivityEventDto,
     pendingAction: Boolean,
+    pendingDismiss: Boolean,
     distanceUnit: String,
-    onAlbumRequestDecision: (String, Boolean) -> Unit
+    onAlbumRequestDecision: (String, Boolean) -> Unit,
+    onDismissEvent: (String) -> Unit
 ) {
     val distanceLabel = formatDistanceForUnit(
         distanceMeters = item.distanceMeters,
@@ -384,6 +423,57 @@ private fun ActivityRow(
                 pendingAction = pendingAction,
                 onAlbumRequestDecision = onAlbumRequestDecision
             )
+        }
+        IconButton(
+            onClick = { onDismissEvent(item.eventId) },
+            enabled = !pendingDismiss,
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+        ) {
+            if (pendingDismiss) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Dismiss activity",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityLoadMoreRow(
+    loading: Boolean,
+    onLoadMore: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        OutlinedButton(
+            onClick = onLoadMore,
+            enabled = !loading
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .size(16.dp)
+                )
+            }
+            Text(text = if (loading) "Loading" else "Load more", maxLines = 1)
         }
     }
 }
@@ -497,9 +587,12 @@ private fun ActivityEventDto.activityText(): String = when (type) {
 private fun String.compactTimeLabel(): String =
     if (length >= 16 && this[10] == 'T') substring(11, 16) else ""
 
-private fun ActivityFilterUi.emptyLabel(): String = when (this) {
-    ActivityFilterUi.All -> "No activity yet."
-    ActivityFilterUi.Views -> "No views yet."
-    ActivityFilterUi.Sparks -> "No Sparks yet."
-    ActivityFilterUi.Albums -> "No album requests yet."
+private fun ActivityTabUi.emptyLabel(): String = when (this) {
+    ActivityTabUi.All -> "No activity yet."
+    ActivityTabUi.Views -> "No views yet."
+    ActivityTabUi.Flirts -> "No flirts yet."
+    ActivityTabUi.Likes -> "No likes yet."
+    ActivityTabUi.Matches -> "No matches yet."
+    ActivityTabUi.Albums -> "No album requests yet."
+    ActivityTabUi.Invites -> "No invites yet."
 }

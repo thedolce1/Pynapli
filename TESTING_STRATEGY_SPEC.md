@@ -65,6 +65,11 @@ Current Activity backend coverage:
 - `ActivityRepositoryIntegrationTest` runs against PostgreSQL/PostGIS through Testcontainers and covers profile-view writes, eligibility suppression, feed tab filtering, keyset cursor pagination, and owned soft-dismiss.
 - Latest local proof on 2026-05-19: targeted Activity service/repository tests, full `:server:test`, and `:shared:jvmTest` passed.
 
+Current Activity client coverage:
+
+- `ActivityStateHolderTest` covers silent refresh behavior, entitlement metadata, server-backed tab selection, cursor load-more, deduped append, and local removal after dismiss.
+- `ActivityScreenInteractionTest` renders the real Compose `ActivityScreen` and verifies tab click -> backend tab load, cursor `Load more`, and row dismiss through the UI.
+
 Still open before beta:
 
 - Exact-image golden comparisons are still optional future work; current connected Android golden coverage uses structural UI and screenshot-signature checks to avoid status-bar/time false positives.
