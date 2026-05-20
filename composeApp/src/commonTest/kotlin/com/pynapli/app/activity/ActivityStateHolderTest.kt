@@ -59,6 +59,87 @@ class ActivityStateHolderTest {
     }
 
     @Test
+    fun loadStoresServerBackedActivitySummary() = runBlocking {
+        val repository = FakeActivityFeedRepository(
+            result = AppResult.Success(ActivityFeedUi(items = emptyList())),
+            summaryResult = AppResult.Success(
+                ActivitySummaryUi(
+                    badgeCount = 5,
+                    profileViewCount = 12,
+                    flirtCount = 1,
+                    likeCount = 2,
+                    matchCount = 1,
+                    albumRequestCount = 1,
+                    partnerInviteCount = 0,
+                    latestBadgeOccurredAt = "2026-05-19T12:30:00Z"
+                )
+            )
+        )
+        val stateHolder = ActivityStateHolder(repository)
+
+        stateHolder.load()
+
+        val state = stateHolder.state.value
+        assertEquals(1, repository.summaryCalls)
+        assertEquals(5, state.activityBadgeCount)
+        assertEquals(12, state.summary.profileViewCount)
+        assertEquals("2026-05-19T12:30:00Z", state.summary.latestBadgeOccurredAt)
+    }
+
+    @Test
+    fun silentSummaryRefreshKeepsExistingBadgeWhenSummaryFails() = runBlocking {
+        val repository = FakeActivityFeedRepository(
+            summaryResult = AppResult.Success(
+                ActivitySummaryUi(
+                    badgeCount = 3,
+                    profileViewCount = 4,
+                    flirtCount = 1,
+                    likeCount = 1,
+                    matchCount = 1,
+                    albumRequestCount = 0,
+                    partnerInviteCount = 0,
+                    latestBadgeOccurredAt = null
+                )
+            )
+        )
+        val stateHolder = ActivityStateHolder(repository)
+
+        stateHolder.refreshSummarySilently()
+        repository.summaryResult = AppResult.Failure(AppError(code = "network_error", message = "Offline"))
+        stateHolder.refreshSummarySilently()
+
+        assertEquals(3, stateHolder.state.value.activityBadgeCount)
+        assertNull(stateHolder.state.value.errorMessage)
+    }
+
+    @Test
+    fun resetClearsServerBackedSummaryAndFeed() = runBlocking {
+        val event = activityEvent(eventId = "event-1")
+        val repository = FakeActivityFeedRepository(
+            result = AppResult.Success(ActivityFeedUi(items = listOf(event))),
+            summaryResult = AppResult.Success(
+                ActivitySummaryUi(
+                    badgeCount = 4,
+                    profileViewCount = 1,
+                    flirtCount = 1,
+                    likeCount = 1,
+                    matchCount = 1,
+                    albumRequestCount = 1,
+                    partnerInviteCount = 0,
+                    latestBadgeOccurredAt = null
+                )
+            )
+        )
+        val stateHolder = ActivityStateHolder(repository)
+
+        stateHolder.load()
+        stateHolder.reset()
+
+        assertEquals(emptyList(), stateHolder.state.value.items)
+        assertEquals(0, stateHolder.state.value.activityBadgeCount)
+    }
+
+    @Test
     fun selectingTabQueriesBackendTabAndReplacesFeed() = runBlocking {
         val flirtEvent = activityEvent(eventId = "flirt-1", type = "flirt")
         val repository = FakeActivityFeedRepository(
@@ -118,10 +199,12 @@ class ActivityStateHolderTest {
 
 private class FakeActivityFeedRepository(
     var result: AppResult<ActivityFeedUi> = AppResult.Success(ActivityFeedUi(items = emptyList())),
+    var summaryResult: AppResult<ActivitySummaryUi> = AppResult.Success(ActivitySummaryUi.Empty),
     private val results: MutableList<AppResult<ActivityFeedUi>> = mutableListOf()
 ) : ActivityFeedRepository {
     val loadCalls = mutableListOf<ActivityLoadCall>()
     val dismissCalls = mutableListOf<String>()
+    var summaryCalls = 0
 
     override suspend fun loadActivity(
         tab: ActivityTabUi,
@@ -134,6 +217,11 @@ private class FakeActivityFeedRepository(
         } else {
             result
         }
+    }
+
+    override suspend fun loadSummary(): AppResult<ActivitySummaryUi> {
+        summaryCalls += 1
+        return summaryResult
     }
 
     override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> {

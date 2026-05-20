@@ -649,7 +649,7 @@ Implemented and verified as of 2026-05-19:
 - Activity feed rows expose deep-link metadata where needed: `matchId` for match rows and `conversationId` for partner-chat invites.
 - Database-level partial unique indexes protect Swipe interest, match, and partner-chat invite Activity rows from duplicate writes.
 - Repository and service coverage proves tab filtering, cursor paging, entitlement reveal depth, invalid cursor rejection, block/risk filtering, and dismiss behavior.
-- Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, exposes per-row dismiss, and has row CTAs for match messaging, partner-chat invite opening, and album request review/grant/deny.
+- Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, consumes the real summary API for the bottom-nav Activity badge, exposes per-row dismiss, and has row CTAs for match messaging, partner-chat invite opening, and album request review/grant/deny.
 - Desktop UI interaction coverage proves Activity tab selection, cursor load-more, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the rendered screen.
 
 ## Badge Counts
@@ -670,6 +670,12 @@ Current backend behavior:
 - Profile views are not included in `badgeCount`.
 - `profileViewCount` is returned separately for in-screen Viewed-list copy.
 - Badge counts honor dismiss, block, actor risk, actor visibility, incognito, and Viewed-list opt-out rules.
+
+Current client behavior:
+
+- Bottom-nav Activity badge uses the server `badgeCount`.
+- Summary refresh runs independently of full feed refresh so badge behavior does not depend on the currently selected Activity tab or revealed feed page.
+- Logout resets local Activity feed and summary state.
 
 Do not necessarily count:
 
@@ -782,6 +788,7 @@ Avoid:
 - [x] Notification detail settings exist.
 - [x] Activity badge avoids noisy view spam.
 - [x] Activity summary/badge endpoint exists.
+- [x] Bottom-nav Activity badge consumes the server summary endpoint.
 - [x] Activity is not a message inbox.
 
 ## Do Not Implement

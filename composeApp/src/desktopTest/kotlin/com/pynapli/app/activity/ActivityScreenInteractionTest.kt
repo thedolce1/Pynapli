@@ -150,6 +150,9 @@ private class StaticActivityScreenRepository(
         return AppResult.Success(responses[request] ?: ActivityFeedUi(items = emptyList()))
     }
 
+    override suspend fun loadSummary(): AppResult<ActivitySummaryUi> =
+        AppResult.Success(ActivitySummaryUi.Empty)
+
     override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> {
         dismissCalls += eventId
         return AppResult.Success(DismissActivityEventResponseDto(eventId = eventId, dismissed = true))

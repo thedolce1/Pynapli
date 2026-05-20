@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.update
 data class ActivityUiState(
     val items: List<ActivityEventDto> = emptyList(),
     val selectedTab: ActivityTabUi = ActivityTabUi.All,
+    val summary: ActivitySummaryUi = ActivitySummaryUi.Empty,
     val nextCursor: String? = null,
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
@@ -30,6 +31,34 @@ data class ActivityUiState(
 ) {
     val visibleItems: List<ActivityEventDto>
         get() = items
+
+    val activityBadgeCount: Int
+        get() = summary.badgeCount
+}
+
+@Immutable
+data class ActivitySummaryUi(
+    val badgeCount: Int,
+    val profileViewCount: Int,
+    val flirtCount: Int,
+    val likeCount: Int,
+    val matchCount: Int,
+    val albumRequestCount: Int,
+    val partnerInviteCount: Int,
+    val latestBadgeOccurredAt: String?
+) {
+    companion object {
+        val Empty = ActivitySummaryUi(
+            badgeCount = 0,
+            profileViewCount = 0,
+            flirtCount = 0,
+            likeCount = 0,
+            matchCount = 0,
+            albumRequestCount = 0,
+            partnerInviteCount = 0,
+            latestBadgeOccurredAt = null
+        )
+    }
 }
 
 enum class ActivityTabUi(
@@ -53,9 +82,22 @@ class ActivityStateHolder(
     private var loadMoreInFlight = false
     private var refreshGeneration = 0
 
-    suspend fun load() = refresh(showLoading = true, surfaceErrors = true)
+    suspend fun load() {
+        refresh(showLoading = true, surfaceErrors = true)
+        refreshSummary(surfaceErrors = false)
+    }
 
-    suspend fun refreshSilently() = refresh(showLoading = false, surfaceErrors = false)
+    suspend fun refreshSilently() {
+        refresh(showLoading = false, surfaceErrors = false)
+    }
+
+    suspend fun refreshSummarySilently() = refreshSummary(surfaceErrors = false)
+
+    fun reset() {
+        loadMoreInFlight = false
+        refreshGeneration += 1
+        _state.value = ActivityUiState()
+    }
 
     suspend fun selectTab(tab: ActivityTabUi) {
         if (_state.value.selectedTab == tab && _state.value.items.isNotEmpty()) return
@@ -196,6 +238,7 @@ class ActivityStateHolder(
                         }
                     )
                 }
+                refreshSummary(surfaceErrors = false)
             }
 
             is AppResult.Failure -> {
@@ -227,6 +270,7 @@ class ActivityStateHolder(
                         actionFeedback = "Activity dismissed"
                     )
                 }
+                refreshSummary(surfaceErrors = false)
             }
 
             is AppResult.Failure -> {
@@ -239,6 +283,27 @@ class ActivityStateHolder(
             }
         }
     }
+
+    private suspend fun refreshSummary(surfaceErrors: Boolean) {
+        when (val result = repository.loadSummary()) {
+            is AppResult.Success -> {
+                _state.update { current ->
+                    current.copy(
+                        summary = result.value,
+                        errorMessage = if (surfaceErrors) null else current.errorMessage
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                if (surfaceErrors) {
+                    _state.update { current ->
+                        current.copy(errorMessage = result.error.message)
+                    }
+                }
+            }
+        }
+    }
 }
 
 interface ActivityFeedRepository {
@@ -247,6 +312,8 @@ interface ActivityFeedRepository {
         cursor: String? = null,
         limit: Int = ActivityFeedUi.DEFAULT_PAGE_SIZE
     ): AppResult<ActivityFeedUi>
+
+    suspend fun loadSummary(): AppResult<ActivitySummaryUi>
 
     suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto>
 
@@ -275,6 +342,24 @@ class ApiActivityFeedRepository(
                     gatedCount = result.value.gatedCount
                 )
             )
+            is AppResult.Failure -> result
+        }
+
+    override suspend fun loadSummary(): AppResult<ActivitySummaryUi> =
+        when (val result = apiClient.getActivitySummary()) {
+            is AppResult.Success -> AppResult.Success(
+                ActivitySummaryUi(
+                    badgeCount = result.value.badgeCount,
+                    profileViewCount = result.value.profileViewCount,
+                    flirtCount = result.value.flirtCount,
+                    likeCount = result.value.likeCount,
+                    matchCount = result.value.matchCount,
+                    albumRequestCount = result.value.albumRequestCount,
+                    partnerInviteCount = result.value.partnerInviteCount,
+                    latestBadgeOccurredAt = result.value.latestBadgeOccurredAt
+                )
+            )
+
             is AppResult.Failure -> result
         }
 
@@ -348,6 +433,20 @@ class SampleActivityFeedRepository : ActivityFeedRepository {
             )
         )
     }
+
+    override suspend fun loadSummary(): AppResult<ActivitySummaryUi> =
+        AppResult.Success(
+            ActivitySummaryUi(
+                badgeCount = 4,
+                profileViewCount = 3,
+                flirtCount = 1,
+                likeCount = 0,
+                matchCount = 1,
+                albumRequestCount = 1,
+                partnerInviteCount = 1,
+                latestBadgeOccurredAt = "2026-04-25T17:45:00Z"
+            )
+        )
 
     override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> =
         AppResult.Success(

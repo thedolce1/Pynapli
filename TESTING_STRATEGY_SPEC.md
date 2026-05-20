@@ -66,11 +66,11 @@ Current Activity backend coverage:
 - `SwipeServiceTest` covers Likes You Activity creation and duplicate retry suppression, plus two-sided match Activity generation.
 - `MessagingServiceTest` covers partner chat invite Activity generation alongside the existing invite notification.
 - `KtorPynapliApiClientTest` covers the shared client contract for `GET /v1/activity/summary`.
-- Latest local proof on 2026-05-19: targeted Activity summary/privacy tests passed; full `scripts/verify.ps1` passed.
+- Latest local proof on 2026-05-19: targeted Activity summary client tests passed; full `scripts/verify.ps1` passed.
 
 Current Activity client coverage:
 
-- `ActivityStateHolderTest` covers silent refresh behavior, entitlement metadata, server-backed tab selection, cursor load-more, deduped append, and local removal after dismiss.
+- `ActivityStateHolderTest` covers silent refresh behavior, entitlement metadata, server-backed tab selection, cursor load-more, deduped append, server-backed summary/badge state, summary failure resilience, logout reset, and local removal after dismiss.
 - `ActivityScreenInteractionTest` renders the real Compose `ActivityScreen` and verifies tab click -> backend tab load, cursor `Load more`, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the UI.
 
 Still open before beta:

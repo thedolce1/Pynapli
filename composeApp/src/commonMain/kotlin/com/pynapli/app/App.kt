@@ -138,6 +138,7 @@ fun PynapliApp(
                 activeNotification = null
                 messageUnreadSnapshot = null
                 activityEventSnapshot = null
+                activityStateHolder.reset()
                 profileHubStateHolder.reset()
                 profileLinksStateHolder.reset()
             }
@@ -172,6 +173,16 @@ fun PynapliApp(
                 while (true) {
                     delay(INBOX_REFRESH_INTERVAL_MS)
                     messagesStateHolder.refreshSilently()
+                }
+            }
+        }
+
+        LaunchedEffect(authState.authenticated, activityStateHolder) {
+            if (authState.authenticated) {
+                activityStateHolder.refreshSummarySilently()
+                while (true) {
+                    delay(ACTIVITY_SUMMARY_REFRESH_INTERVAL_MS)
+                    activityStateHolder.refreshSummarySilently()
                 }
             }
         }
@@ -446,6 +457,7 @@ fun PynapliApp(
                 PynapliBottomNavigation(
                     selectedTab = selectedTab,
                     unreadMessages = messagesState.unreadCount,
+                    activityBadgeCount = activityState.activityBadgeCount,
                     onTabSelected = {
                         profileSurface = ProfileSurface.None
                         selectedTab = it
@@ -510,6 +522,7 @@ fun PynapliApp(
 private const val INBOX_REFRESH_INTERVAL_MS = 15_000L
 private const val OPEN_CONVERSATION_REFRESH_INTERVAL_MS = 7_500L
 private const val ACTIVITY_REFRESH_INTERVAL_MS = 45_000L
+private const val ACTIVITY_SUMMARY_REFRESH_INTERVAL_MS = 45_000L
 private const val IN_APP_NOTIFICATION_DURATION_MS = 4_000L
 
 private data class InAppNotificationUi(
@@ -623,6 +636,7 @@ private const val NOTIFICATION_BODY_MAX_LENGTH = 96
 private fun PynapliBottomNavigation(
     selectedTab: PynapliTab,
     unreadMessages: Int,
+    activityBadgeCount: Int,
     onTabSelected: (PynapliTab) -> Unit
 ) {
     NavigationBar(
@@ -642,11 +656,16 @@ private fun PynapliBottomNavigation(
                 selected = selectedTab == tab,
                 onClick = { if (enabled) onTabSelected(tab) },
                 icon = {
-                    if (tab == PynapliTab.Messages && unreadMessages > 0) {
+                    val badgeCount = when (tab) {
+                        PynapliTab.Messages -> unreadMessages
+                        PynapliTab.Activity -> activityBadgeCount
+                        else -> 0
+                    }
+                    if (badgeCount > 0) {
                         BadgedBox(
                             badge = {
                                 Badge {
-                                    Text(text = if (unreadMessages > 9) "9+" else unreadMessages.toString())
+                                    Text(text = badgeCount.toBadgeText())
                                 }
                             }
                         ) {
@@ -674,6 +693,8 @@ private fun PynapliBottomNavigation(
         }
     }
 }
+
+private fun Int.toBadgeText(): String = if (this > 9) "9+" else toString()
 
 private enum class PynapliTab(
     val label: String,
