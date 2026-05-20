@@ -1,6 +1,6 @@
 # Pynapli Activity Spec
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 ## Purpose
 
@@ -651,8 +651,11 @@ Implemented and verified as of 2026-05-19:
 - Activity feed rows expose deep-link metadata where needed: `matchId` for match rows and `conversationId` for partner-chat invites.
 - Database-level partial unique indexes protect Swipe interest, match, and partner-chat invite Activity rows from duplicate writes.
 - Repository and service coverage proves tab filtering, cursor paging, entitlement reveal depth, invalid cursor rejection, block/risk filtering, and dismiss behavior.
-- Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, consumes the real summary API for the bottom-nav Activity badge, marks only loaded visible Activity rows as seen, exposes per-row dismiss, and has row CTAs for match messaging, partner-chat invite opening, and album request review/grant/deny.
-- Desktop UI interaction coverage proves Activity tab selection, cursor load-more, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the rendered screen.
+- Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, consumes the real summary API for the bottom-nav Activity badge, marks only loaded visible Activity rows as seen, exposes per-row dismiss, visually distinguishes unseen badge-worthy rows with a restrained `New` state, and has row CTAs for match messaging, partner-chat invite opening, and album request review/grant/deny.
+- Activity premium reveal now has an intentional Select upgrade row instead of a plain gated-count strip.
+- In-app Activity notification banners route to the matching Activity tab when tapped. OS push notification-to-row deep links remain future work.
+- Desktop UI interaction coverage proves Activity tab selection, cursor load-more, premium reveal row, unread row state, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the rendered screen.
+- Connected Android Activity QA exists at `scripts/android-activity-qa.ps1`. It seeds deterministic Activity rows, runs the installed Android app through login -> Grid -> Activity, captures screenshots/XML for All and each Activity tab, asserts structural golden text/signatures, and verifies loaded badge rows are marked seen in the backend.
 
 ## Badge Counts
 
@@ -797,7 +800,11 @@ Avoid:
 - [x] Bottom-nav Activity badge consumes the server summary endpoint.
 - [x] Activity read/seen endpoint exists.
 - [x] Activity badge clears only for loaded visible rows.
+- [x] Activity rows visually distinguish unseen badge-worthy rows.
+- [x] Activity has a connected Android QA harness for the real installed app path.
 - [x] Activity is not a message inbox.
+- [ ] Realtime Activity deltas.
+- [ ] OS notification-to-Activity row deep links.
 
 ## Do Not Implement
 

@@ -228,10 +228,13 @@ private fun ActivityGateRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.42f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Icon(
             imageVector = Icons.Filled.Lock,
@@ -239,13 +242,23 @@ private fun ActivityGateRow(
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp)
         )
-        Text(
-            text = "$gatedCount more hidden",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "$gatedCount more waiting",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "Select unlocks the full Activity feed.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         TextButton(onClick = onOpenStore) {
             Text(text = "Select", maxLines = 1)
         }
@@ -387,10 +400,18 @@ private fun ActivityRow(
         fallbackLabel = item.distanceLabel,
         distanceUnit = distanceUnit
     )
+    val isNew = item.isUnreadBadgeActivity()
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .background(
+                if (isNew) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
+                } else {
+                    Color.Transparent
+                }
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -411,6 +432,9 @@ private fun ActivityRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                if (isNew) {
+                    ActivityNewPill()
+                }
                 Text(
                     text = item.occurredAt.compactTimeLabel(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -476,6 +500,21 @@ private fun ActivityRow(
             }
         }
     }
+}
+
+@Composable
+private fun ActivityNewPill() {
+    Text(
+        text = "New",
+        color = MaterialTheme.colorScheme.onPrimary,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(MaterialTheme.colorScheme.primary)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    )
 }
 
 @Composable
@@ -667,6 +706,18 @@ private fun ActivityEventDto.activityText(): String = when (type) {
     "partner_chat_invite" -> "sent a chat invite"
     else -> "interacted with you"
 }
+
+private fun ActivityEventDto.isUnreadBadgeActivity(): Boolean =
+    !seen && when (type) {
+        "flirt",
+        "swipe_like",
+        "pineapple_like",
+        "intro_note",
+        "match",
+        "partner_chat_invite" -> true
+        "album_request" -> albumRequestStatus == null || albumRequestStatus == "pending"
+        else -> false
+    }
 
 private fun String.compactTimeLabel(): String =
     if (length >= 16 && this[10] == 'T') substring(11, 16) else ""

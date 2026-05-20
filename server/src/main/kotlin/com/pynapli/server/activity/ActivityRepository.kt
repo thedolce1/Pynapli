@@ -48,6 +48,7 @@ data class ActivityEventRecord(
     val actorProfilePhotoMediaAssetId: UUID?,
     val count: Int,
     val occurredAt: Instant,
+    val seen: Boolean,
     val showDistance: Boolean,
     val distanceMeters: Double?,
     val albumRequestStatus: String?,

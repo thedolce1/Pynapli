@@ -1,0 +1,71 @@
+{
+  "description": "Connected Android Activity QA golden assertions. These are structural text and coarse screenshot checks because emulator density, clock, and seeded media can vary.",
+  "stages": {
+    "activityInitial": {
+      "requiredTexts": ["Activity", "All", "Views", "Flirts", "Likes", "Matches", "Albums", "New"],
+      "forbiddenTexts": ["Request failed", "Illegal input", "Exception"],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.18,
+        "maxBrightRatio": 0.32,
+        "minColorBucketCount": 12
+      }
+    },
+    "flirtsTab": {
+      "requiredTexts": ["Flirts", "Alex", "sent a Spark"],
+      "forbiddenTexts": ["No flirts yet.", "Request failed", "Exception"],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.04,
+        "maxBrightRatio": 0.32,
+        "minColorBucketCount": 10
+      }
+    },
+    "likesTab": {
+      "requiredTexts": ["Likes", "Nico", "liked you"],
+      "forbiddenTexts": ["No likes yet.", "Request failed", "Exception"],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.04,
+        "maxBrightRatio": 0.32,
+        "minColorBucketCount": 10
+      }
+    },
+    "matchesTab": {
+      "requiredTexts": ["Matches", "Jules", "matched with you", "Message"],
+      "forbiddenTexts": ["No matches yet.", "Request failed", "Exception"],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.04,
+        "maxBrightRatio": 0.32,
+        "minColorBucketCount": 10
+      }
+    },
+    "albumsTab": {
+      "requiredTexts": ["Albums", "Rae", "requested album access", "Review"],
+      "forbiddenTexts": ["No album requests yet.", "Request failed", "Exception"],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.04,
+        "maxBrightRatio": 0.32,
+        "minColorBucketCount": 10
+      }
+    },
+    "invitesTab": {
+      "requiredTexts": ["Invites", "Noa", "sent a chat invite", "Open invite"],
+      "forbiddenTexts": ["No invites yet.", "Request failed", "Exception"],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.04,
+        "maxBrightRatio": 0.32,
+        "minColorBucketCount": 10
+      }
+    }
+  }
+}

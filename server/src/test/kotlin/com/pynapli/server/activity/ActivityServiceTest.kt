@@ -642,6 +642,7 @@ private fun sampleEvent(actorUserId: UUID, type: String, displayName: String): A
         actorProfilePhotoMediaAssetId = null,
         count = 1,
         occurredAt = Instant.parse("2026-04-28T12:00:00Z"),
+        seen = false,
         showDistance = false,
         distanceMeters = null,
         albumRequestStatus = null,

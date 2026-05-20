@@ -1,6 +1,6 @@
 # Pynapli Testing Strategy Spec
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 ## Purpose
 
@@ -71,7 +71,9 @@ Current Activity backend coverage:
 Current Activity client coverage:
 
 - `ActivityStateHolderTest` covers silent refresh behavior, entitlement metadata, server-backed tab selection, cursor load-more, deduped append, server-backed summary/badge state, marking loaded visible rows seen, avoiding background seen marking, summary failure resilience, logout reset, and local removal after dismiss.
-- `ActivityScreenInteractionTest` renders the real Compose `ActivityScreen` and verifies tab click -> backend tab load, cursor `Load more`, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the UI.
+- `ActivityScreenInteractionTest` renders the real Compose `ActivityScreen` and verifies tab click -> backend tab load, cursor `Load more`, premium reveal row, unseen row state, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the UI.
+- `scripts/android-activity-qa.ps1` runs the installed Android app against local Ktor, logs in through the real app path, opens Activity from the bottom nav, captures All/Flirts/Likes/Matches/Albums/Invites screenshots and XML, checks structural golden assertions, and verifies loaded badge rows are marked seen in the backend.
+- Latest emulator proof: `artifacts/android-activity-qa/20260520-161224`.
 
 Still open before beta:
 
@@ -79,6 +81,7 @@ Still open before beta:
 - Manual device pass on mid-range and low-end Android hardware.
 - Visual checks with empty Grid outside the Online-filter empty state and more real-device thumbnail loading still need coverage.
 - Broader connected Android Swipe screenshot/gesture/golden QA now has a repeatable emulator path; expand it with real-device runs, slower network profiles, and match-overlay/profile-detail variants before beta.
+- Connected Android Activity QA now has a repeatable emulator/device path; expand it with real-device runs and OS notification deep-link coverage before beta.
 - Real battery profiling with movement/background/foreground scenarios still needs a device pass.
 
 ## Performance Benchmarks
@@ -185,6 +188,29 @@ Requirements:
 
 The script writes PNG screenshots, UI hierarchy XML, screenshot signatures, visible card sequence, and `qa-summary.json` under `artifacts/android-grid-qa/<timestamp>`. A passing run proves the installed app can complete the current critical Grid loop and preserve visible card order/position through filter clear and profile close, but it is not a replacement for real-device battery/location testing.
 
+## Connected Android Activity QA
+
+Run this before and after meaningful Activity feed, tab, badge, or CTA changes:
+
+```powershell
+.\scripts\android-activity-qa.ps1
+```
+
+Useful faster rerun after the APK is already built:
+
+```powershell
+.\scripts\android-activity-qa.ps1 -SkipBuild
+```
+
+Requirements:
+
+- Local Ktor must be healthy at `http://127.0.0.1:8080/health/deep`.
+- Docker Postgres/Redis must be running for the local server and deterministic Activity seed.
+- One Android emulator/device must be connected through `adb`, or pass `-DeviceId`.
+- Debug builds must expose the `Dev login` button.
+
+The script writes PNG screenshots, UI hierarchy XML, screenshot signatures, and `qa-summary.json` under `artifacts/android-activity-qa/<timestamp>`. A passing run proves the installed app can complete login -> Grid -> Activity, render each Activity tab with seeded rows, avoid app error text, and clear loaded unread badge rows through the backend `seen_at` path.
+
 ## Connected Android Denied-Location QA
 
 Run this before beta and after any Grid/location permission changes:
@@ -247,6 +273,7 @@ Current local proof:
 - [x] Grid API load harness exists and runs zero-error locally for the current 5,000-candidate / 100-concurrent warm workload.
 - [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, entitlement/rate-limit/profile-view side-query pressure has been reduced, V43 covering indexes are in place, and 500-concurrent proof artifacts exist; remaining hot-path work is repeat server-profiled 500-concurrent runs and larger dense metro datasets.
 - [ ] Partial: Grid shared-UI visual-signature regression, connected Android Grid structural golden QA, denied-location QA, battery-profile harness, and Android location policy checks exist and run locally; real-device screenshot and battery coverage is still open.
+- [ ] Partial: connected Android Activity structural golden QA exists; OS notification deep-link and real-device Activity passes remain open.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [x] Location denied path tested on connected Android emulator/device through `scripts/android-grid-denied-location-qa.ps1`.

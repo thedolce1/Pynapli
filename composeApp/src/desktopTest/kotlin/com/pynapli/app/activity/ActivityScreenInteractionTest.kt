@@ -132,6 +132,46 @@ class ActivityScreenInteractionTest {
         assertEquals(listOf("match-1"), openedMatches.map { it.eventId })
         assertEquals(listOf("conversation-1"), openedInvites)
     }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun activityRowsShowUnreadStateAndPremiumGate() = runComposeUiTest {
+        var openedStore = false
+        val repository = StaticActivityScreenRepository(
+            responses = mutableMapOf(
+                ActivityRequest(ActivityTabUi.All, null) to ActivityFeedUi(
+                    items = listOf(
+                        activityEvent("flirt-new", "flirt", "Alex", seen = false),
+                        activityEvent("match-seen", "match", "Taylor", seen = true)
+                    ),
+                    entitlementTier = "free",
+                    revealLimit = 1,
+                    gatedCount = 4
+                )
+            )
+        )
+        val stateHolder = ActivityStateHolder(repository)
+
+        setContent {
+            PynapliTheme(themeMode = "dark") {
+                Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                    ActivityScreen(
+                        stateHolder = stateHolder,
+                        onOpenStore = { openedStore = true }
+                    )
+                }
+            }
+        }
+
+        waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.All, null)) }
+        onNodeWithText("4 more waiting").assertExists()
+        onNodeWithText("Select unlocks the full Activity feed.").assertExists()
+        onNodeWithText("New").assertExists()
+
+        onNodeWithText("Select").performClick()
+
+        assertEquals(true, openedStore)
+    }
 }
 
 private class StaticActivityScreenRepository(
@@ -187,7 +227,8 @@ private fun activityEvent(
     displayName: String,
     albumRequestStatus: String? = null,
     matchId: String? = null,
-    conversationId: String? = null
+    conversationId: String? = null,
+    seen: Boolean = false
 ): ActivityEventDto =
     ActivityEventDto(
         eventId = eventId,
@@ -195,6 +236,7 @@ private fun activityEvent(
         actorUserId = "$eventId-actor",
         actorDisplayName = displayName,
         occurredAt = "2026-05-19T17:30:00Z",
+        seen = seen,
         albumRequestStatus = albumRequestStatus,
         matchId = matchId,
         conversationId = conversationId

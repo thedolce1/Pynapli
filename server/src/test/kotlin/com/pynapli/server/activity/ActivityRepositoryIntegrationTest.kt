@@ -346,10 +346,13 @@ class ActivityRepositoryIntegrationTest {
         val repository = JdbcActivityRepository(dataSource)
 
         val markedCount = repository.markActivityEventsSeen(recipient, setOf(firstEventId, otherEventId))
+        val feed = repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null))
         val recipientSummary = repository.getActivitySummary(recipient)
         val otherSummary = repository.getActivitySummary(otherRecipient)
 
         assertEquals(1, markedCount)
+        assertEquals(true, feed.single { it.eventId == firstEventId }.seen)
+        assertEquals(false, feed.single { it.eventId == secondEventId }.seen)
         assertEquals(0, recipientSummary.flirtCount)
         assertEquals(1, recipientSummary.matchCount)
         assertEquals(1, recipientSummary.badgeCount)

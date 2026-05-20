@@ -80,6 +80,7 @@ data class ActivityEventDto(
     val actorPhotoUrl: String? = null,
     val count: Int = 1,
     val occurredAt: String,
+    val seen: Boolean = false,
     val distanceLabel: String? = null,
     val distanceMeters: Int? = null,
     val albumRequestStatus: String? = null,

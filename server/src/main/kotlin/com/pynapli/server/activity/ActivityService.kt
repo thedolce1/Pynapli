@@ -292,6 +292,7 @@ class ActivityService(
         actorPhotoUrl = actorProfilePhotoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
         count = count,
         occurredAt = occurredAt.toString(),
+        seen = seen,
         distanceLabel = if (showDistance) distanceMeters?.toPublicDistanceLabel() else null,
         distanceMeters = if (showDistance) distanceMeters?.toPublicDistanceMeters() else null,
         albumRequestStatus = albumRequestStatus,

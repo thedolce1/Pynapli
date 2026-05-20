@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.activity.ActivityScreen
 import com.pynapli.app.activity.ActivityStateHolder
+import com.pynapli.app.activity.ActivityTabUi
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthScreen
 import com.pynapli.app.auth.AuthStateHolder
@@ -471,6 +472,9 @@ fun PynapliApp(
                     onClick = {
                         profileSurface = ProfileSurface.None
                         selectedTab = notification.targetTab
+                        notification.activityTab?.let { tab ->
+                            scope.launch { activityStateHolder.selectTab(tab) }
+                        }
                         activeNotification = null
                     },
                     modifier = Modifier.align(Alignment.TopCenter)
@@ -530,7 +534,8 @@ private data class InAppNotificationUi(
     val kind: InAppNotificationKind,
     val title: String,
     val body: String,
-    val targetTab: PynapliTab
+    val targetTab: PynapliTab,
+    val activityTab: ActivityTabUi? = null
 )
 
 private enum class InAppNotificationKind(
@@ -609,7 +614,8 @@ private fun ActivityEventDto.toActivityNotification(settings: AppSettings): InAp
         kind = InAppNotificationKind.Activity,
         title = if (standardDetail) actorDisplayName else "New activity",
         body = if (standardDetail) activityNotificationBody() else "Open Activity",
-        targetTab = PynapliTab.Activity
+        targetTab = PynapliTab.Activity,
+        activityTab = activityTab()
     )
 }
 
@@ -617,8 +623,24 @@ private fun ActivityEventDto.activityNotificationBody(): String =
     when (type) {
         "profile_view", "viewed_profile" -> if (count > 1) "viewed you $count times" else "viewed you"
         "flirt" -> "sent a spark"
+        "swipe_like" -> "liked you"
+        "pineapple_like" -> "sent a Pineapple"
+        "intro_note" -> "sent an Intro Note"
+        "match" -> "matched with you"
         "album_request" -> "requested album access"
+        "partner_chat_invite" -> "sent a chat invite"
         else -> "new activity"
+    }
+
+private fun ActivityEventDto.activityTab(): ActivityTabUi =
+    when (type) {
+        "profile_view", "viewed_profile" -> ActivityTabUi.Views
+        "flirt" -> ActivityTabUi.Flirts
+        "swipe_like", "pineapple_like", "intro_note" -> ActivityTabUi.Likes
+        "match" -> ActivityTabUi.Matches
+        "album_request" -> ActivityTabUi.Albums
+        "partner_chat_invite", "psync_invite", "playing_tonight" -> ActivityTabUi.Invites
+        else -> ActivityTabUi.All
     }
 
 private fun String.cleanNotificationText(): String {
