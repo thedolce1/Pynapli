@@ -13,6 +13,7 @@ import com.pynapli.app.design.PynapliTheme
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
+import com.pynapli.shared.network.dto.MarkActivitySeenResponseDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -152,6 +153,9 @@ private class StaticActivityScreenRepository(
 
     override suspend fun loadSummary(): AppResult<ActivitySummaryUi> =
         AppResult.Success(ActivitySummaryUi.Empty)
+
+    override suspend fun markActivitySeen(eventIds: List<String>): AppResult<MarkActivitySeenResponseDto> =
+        AppResult.Success(MarkActivitySeenResponseDto(markedCount = eventIds.distinct().size))
 
     override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> {
         dismissCalls += eventId

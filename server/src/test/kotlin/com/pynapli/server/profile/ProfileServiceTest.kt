@@ -270,6 +270,8 @@ private class InMemoryActivityRepository : ActivityRepository {
             latestBadgeOccurredAt = null
         )
 
+    override suspend fun markActivityEventsSeen(recipientUserId: UUID, eventIds: Set<UUID>): Int = 0
+
     override suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean = false
 }
 

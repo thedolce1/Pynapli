@@ -311,6 +311,53 @@ class ActivityRepositoryIntegrationTest {
     }
 
     @Test
+    fun markActivityEventsSeenClearsOnlyOwnedUnreadBadgeRows() = runBlocking {
+        val recipient = UUID.fromString("00000000-0000-0000-0000-000000001641")
+        val otherRecipient = UUID.fromString("00000000-0000-0000-0000-000000001642")
+        val firstActor = UUID.fromString("00000000-0000-0000-0000-000000001643")
+        val secondActor = UUID.fromString("00000000-0000-0000-0000-000000001644")
+        val otherActor = UUID.fromString("00000000-0000-0000-0000-000000001645")
+        listOf(recipient, otherRecipient, firstActor, secondActor, otherActor)
+            .forEach { userId -> dataSource.insertUserWithDiscovery(userId) }
+        val firstEventId = UUID.fromString("00000000-0000-0000-0000-000000001646")
+        val secondEventId = UUID.fromString("00000000-0000-0000-0000-000000001647")
+        val otherEventId = UUID.fromString("00000000-0000-0000-0000-000000001648")
+        dataSource.insertActivityEvent(
+            eventId = firstEventId,
+            recipientUserId = recipient,
+            actorUserId = firstActor,
+            eventType = "flirt",
+            occurredAt = Instant.parse("2026-05-18T15:00:00Z")
+        )
+        dataSource.insertActivityEvent(
+            eventId = secondEventId,
+            recipientUserId = recipient,
+            actorUserId = secondActor,
+            eventType = "match",
+            occurredAt = Instant.parse("2026-05-18T15:01:00Z")
+        )
+        dataSource.insertActivityEvent(
+            eventId = otherEventId,
+            recipientUserId = otherRecipient,
+            actorUserId = otherActor,
+            eventType = "flirt",
+            occurredAt = Instant.parse("2026-05-18T15:02:00Z")
+        )
+        val repository = JdbcActivityRepository(dataSource)
+
+        val markedCount = repository.markActivityEventsSeen(recipient, setOf(firstEventId, otherEventId))
+        val recipientSummary = repository.getActivitySummary(recipient)
+        val otherSummary = repository.getActivitySummary(otherRecipient)
+
+        assertEquals(1, markedCount)
+        assertEquals(0, recipientSummary.flirtCount)
+        assertEquals(1, recipientSummary.matchCount)
+        assertEquals(1, recipientSummary.badgeCount)
+        assertEquals(1, otherSummary.flirtCount)
+        assertEquals(1, otherSummary.badgeCount)
+    }
+
+    @Test
     fun recordsSwipeMatchAndPartnerInviteEventsIdempotently() = runBlocking {
         val viewer = UUID.fromString("00000000-0000-0000-0000-000000001801")
         val target = UUID.fromString("00000000-0000-0000-0000-000000001802")

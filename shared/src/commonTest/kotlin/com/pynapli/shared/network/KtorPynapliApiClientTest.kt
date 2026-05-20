@@ -16,6 +16,8 @@ import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
+import com.pynapli.shared.network.dto.MarkActivitySeenRequestDto
+import com.pynapli.shared.network.dto.MarkActivitySeenResponseDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PublicProfileDto
@@ -562,6 +564,38 @@ class KtorPynapliApiClientTest {
         assertEquals(5, summary.badgeCount)
         assertEquals(12, summary.profileViewCount)
         assertEquals(2, summary.likeCount)
+    }
+
+    @Test
+    fun markActivitySeenSendsBearerTokenAndMapsCount() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = """
+                    {
+                      "markedCount": 2
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.markActivitySeen(
+            MarkActivitySeenRequestDto(eventIds = listOf("event-1", "event-2"))
+        )
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/activity/seen", requestPath)
+        assertEquals(HttpMethod.Post, requestMethod)
+        assertEquals(2, (success.value as MarkActivitySeenResponseDto).markedCount)
     }
 
     @Test

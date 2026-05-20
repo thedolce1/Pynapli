@@ -639,17 +639,19 @@ Implemented and verified as of 2026-05-19:
 
 - `GET /v1/activity` returns newest-first Activity with `limit`, `tab`, and signed `cursor` query params.
 - `GET /v1/activity/summary` returns meaningful badge counts, separate profile-view counts, per-category counts, and the latest badge-worthy timestamp.
+- `POST /v1/activity/seen` marks only the authenticated user's requested Activity event IDs as seen.
 - Feed tabs are server-authoritative: `all`, `views`, `flirts`, `likes`, `matches`, `albums`, and `invites`.
 - Cursor tokens are HMAC-signed and scoped to the authenticated viewer plus selected tab, so a cursor from one tab cannot page another tab.
 - Free/Social/Select reveal depth is enforced across pages by the cursor's seen-count state.
 - `POST /v1/activity/{eventId}/dismiss` soft-deletes the recipient's own Activity item without allowing cross-user dismissal.
+- Badge summary counts now use unread semantics for badge-worthy events: seen flirts, likes, matches, pending album requests, and partner invites no longer count in `badgeCount`, while profile views remain separate in-screen Viewed-list counts.
 - SQL recording, feed, and summary filtering now enforce Viewed-list privacy in both directions: incognito/hidden actors do not appear in others' Viewed lists, and users who disable Viewed lists do not receive new product-visible profile-view rows, notifications, or counts.
 - Swipe actions now create Activity events for `swipe_like`, `pineapple_like`, `intro_note`, and two-sided `match` rows after the server-authoritative action succeeds. Idempotent action retries do not duplicate Activity rows.
 - Linked-partner chat invites now create `partner_chat_invite` Activity rows for the invited partner after the invite is accepted by the messaging engine.
 - Activity feed rows expose deep-link metadata where needed: `matchId` for match rows and `conversationId` for partner-chat invites.
 - Database-level partial unique indexes protect Swipe interest, match, and partner-chat invite Activity rows from duplicate writes.
 - Repository and service coverage proves tab filtering, cursor paging, entitlement reveal depth, invalid cursor rejection, block/risk filtering, and dismiss behavior.
-- Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, consumes the real summary API for the bottom-nav Activity badge, exposes per-row dismiss, and has row CTAs for match messaging, partner-chat invite opening, and album request review/grant/deny.
+- Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, consumes the real summary API for the bottom-nav Activity badge, marks only loaded visible Activity rows as seen, exposes per-row dismiss, and has row CTAs for match messaging, partner-chat invite opening, and album request review/grant/deny.
 - Desktop UI interaction coverage proves Activity tab selection, cursor load-more, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the rendered screen.
 
 ## Badge Counts
@@ -666,14 +668,18 @@ Count:
 
 Current backend behavior:
 
-- `badgeCount` includes flirts, likes, matches, pending album requests, and partner chat invites.
+- `badgeCount` includes unseen flirts, likes, matches, pending album requests, and partner chat invites.
 - Profile views are not included in `badgeCount`.
 - `profileViewCount` is returned separately for in-screen Viewed-list copy.
 - Badge counts honor dismiss, block, actor risk, actor visibility, incognito, and Viewed-list opt-out rules.
+- `seen_at` is set only through the seen endpoint for event IDs owned by the authenticated user; cross-user IDs are ignored.
+- Re-aggregated flirts/profile views/album requests become unread again only when the cooldown allows a meaningful new count.
 
 Current client behavior:
 
 - Bottom-nav Activity badge uses the server `badgeCount`.
+- Opening Activity, switching Activity tabs, or loading another visible page marks only those loaded rows as seen, then refreshes the summary badge.
+- Background Activity feed refresh does not mark rows seen.
 - Summary refresh runs independently of full feed refresh so badge behavior does not depend on the currently selected Activity tab or revealed feed page.
 - Logout resets local Activity feed and summary state.
 
@@ -789,6 +795,8 @@ Avoid:
 - [x] Activity badge avoids noisy view spam.
 - [x] Activity summary/badge endpoint exists.
 - [x] Bottom-nav Activity badge consumes the server summary endpoint.
+- [x] Activity read/seen endpoint exists.
+- [x] Activity badge clears only for loaded visible rows.
 - [x] Activity is not a message inbox.
 
 ## Do Not Implement

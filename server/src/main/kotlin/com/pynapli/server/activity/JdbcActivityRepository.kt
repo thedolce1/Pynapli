@@ -27,6 +27,7 @@ class JdbcActivityRepository(
                 statement.setObject(6, targetUserId)
                 statement.setString(7, "${profileViewCooldown.toMinutes()} minutes")
                 statement.setString(8, "${profileViewCooldown.toMinutes()} minutes")
+                statement.setString(9, "${profileViewCooldown.toMinutes()} minutes")
                 statement.executeQuery().use { rs -> rs.next() }
             }
         }
@@ -53,6 +54,7 @@ class JdbcActivityRepository(
                 statement.setObject(4, targetUserId)
                 statement.setString(5, "${flirtCooldown.toMinutes()} minutes")
                 statement.setString(6, "${flirtCooldown.toMinutes()} minutes")
+                statement.setString(7, "${flirtCooldown.toMinutes()} minutes")
                 statement.executeUpdate() > 0
             }
         }
@@ -80,6 +82,7 @@ class JdbcActivityRepository(
                     statement.setObject(4, targetUserId)
                     statement.setString(5, "${albumRequestCooldown.toHours()} hours")
                     statement.setString(6, "${albumRequestCooldown.toHours()} hours")
+                    statement.setString(7, "${albumRequestCooldown.toHours()} hours")
                     statement.executeUpdate() > 0
                 }
             }
@@ -184,6 +187,20 @@ class JdbcActivityRepository(
                             latestBadgeOccurredAt = rs.getTimestamp("latest_badge_occurred_at")?.toInstant()
                         )
                     }
+                }
+            }
+        }
+
+    override suspend fun markActivityEventsSeen(recipientUserId: UUID, eventIds: Set<UUID>): Int =
+        withContext(Dispatchers.IO) {
+            if (eventIds.isEmpty()) return@withContext 0
+
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(MARK_ACTIVITY_EVENTS_SEEN_QUERY).use { statement ->
+                    val eventIdArray = connection.createArrayOf("uuid", eventIds.toTypedArray())
+                    statement.setObject(1, recipientUserId)
+                    statement.setArray(2, eventIdArray)
+                    statement.executeUpdate()
                 }
             }
         }
@@ -302,6 +319,11 @@ class JdbcActivityRepository(
                 END,
                 occurred_at = now(),
                 updated_at = now(),
+                seen_at = CASE
+                    WHEN activity_events.last_counted_at <= now() - (?::interval)
+                    THEN NULL
+                    ELSE activity_events.seen_at
+                END,
                 visibility_status = 'visible'
             RETURNING id
         """.trimIndent()
@@ -360,6 +382,11 @@ class JdbcActivityRepository(
                 END,
                 occurred_at = now(),
                 updated_at = now(),
+                seen_at = CASE
+                    WHEN activity_events.last_counted_at <= now() - (?::interval)
+                    THEN NULL
+                    ELSE activity_events.seen_at
+                END,
                 visibility_status = 'visible'
         """.trimIndent()
 
@@ -417,6 +444,11 @@ class JdbcActivityRepository(
                 END,
                 occurred_at = now(),
                 updated_at = now(),
+                seen_at = CASE
+                    WHEN activity_events.last_counted_at <= now() - (?::interval)
+                    THEN NULL
+                    ELSE activity_events.seen_at
+                END,
                 visibility_status = 'visible'
         """.trimIndent()
 
@@ -640,6 +672,7 @@ class JdbcActivityRepository(
             WITH visible_events AS (
                 SELECT ae.event_type,
                        ae.occurred_at,
+                       ae.seen_at,
                        album_request.status AS album_request_status
                 FROM activity_events ae
                 JOIN users actor
@@ -695,31 +728,50 @@ class JdbcActivityRepository(
                   )
             )
             SELECT COUNT(*) FILTER (WHERE event_type = 'profile_view')::integer AS profile_view_count,
-                   COUNT(*) FILTER (WHERE event_type = 'flirt')::integer AS flirt_count,
+                   COUNT(*) FILTER (WHERE event_type = 'flirt' AND seen_at IS NULL)::integer AS flirt_count,
                    COUNT(*) FILTER (
                        WHERE event_type IN ('swipe_like', 'pineapple_like', 'intro_note')
+                         AND seen_at IS NULL
                    )::integer AS like_count,
-                   COUNT(*) FILTER (WHERE event_type = 'match')::integer AS match_count,
+                   COUNT(*) FILTER (WHERE event_type = 'match' AND seen_at IS NULL)::integer AS match_count,
                    COUNT(*) FILTER (
                        WHERE event_type = 'album_request'
+                         AND seen_at IS NULL
                          AND COALESCE(album_request_status, 'pending') = 'pending'
                    )::integer AS album_request_count,
-                   COUNT(*) FILTER (WHERE event_type = 'partner_chat_invite')::integer AS partner_invite_count,
+                   COUNT(*) FILTER (
+                       WHERE event_type = 'partner_chat_invite'
+                         AND seen_at IS NULL
+                   )::integer AS partner_invite_count,
                    MAX(occurred_at) FILTER (
-                       WHERE event_type IN (
-                           'flirt',
-                           'swipe_like',
-                           'pineapple_like',
-                           'intro_note',
-                           'match',
-                           'partner_chat_invite'
-                       )
-                       OR (
-                           event_type = 'album_request'
-                           AND COALESCE(album_request_status, 'pending') = 'pending'
+                       WHERE seen_at IS NULL
+                         AND (
+                           event_type IN (
+                               'flirt',
+                               'swipe_like',
+                               'pineapple_like',
+                               'intro_note',
+                               'match',
+                               'partner_chat_invite'
+                           )
+                           OR (
+                               event_type = 'album_request'
+                               AND COALESCE(album_request_status, 'pending') = 'pending'
+                           )
                        )
                    ) AS latest_badge_occurred_at
             FROM visible_events
+        """.trimIndent()
+
+        private val MARK_ACTIVITY_EVENTS_SEEN_QUERY = """
+            UPDATE activity_events
+            SET seen_at = now(),
+                updated_at = now()
+            WHERE recipient_user_id = ?
+              AND id = ANY (?::uuid[])
+              AND visibility_status = 'visible'
+              AND deleted_at IS NULL
+              AND seen_at IS NULL
         """.trimIndent()
 
         private val DISMISS_ACTIVITY_EVENT_QUERY = """

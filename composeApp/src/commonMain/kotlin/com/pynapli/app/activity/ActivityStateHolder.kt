@@ -5,6 +5,8 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
+import com.pynapli.shared.network.dto.MarkActivitySeenRequestDto
+import com.pynapli.shared.network.dto.MarkActivitySeenResponseDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessRequestDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,12 +85,11 @@ class ActivityStateHolder(
     private var refreshGeneration = 0
 
     suspend fun load() {
-        refresh(showLoading = true, surfaceErrors = true)
-        refreshSummary(surfaceErrors = false)
+        refresh(showLoading = true, surfaceErrors = true, markLoadedItemsSeen = true)
     }
 
     suspend fun refreshSilently() {
-        refresh(showLoading = false, surfaceErrors = false)
+        refresh(showLoading = false, surfaceErrors = false, markLoadedItemsSeen = false)
     }
 
     suspend fun refreshSummarySilently() = refreshSummary(surfaceErrors = false)
@@ -111,10 +112,14 @@ class ActivityStateHolder(
                 errorMessage = null
             )
         }
-        refresh(showLoading = true, surfaceErrors = true)
+        refresh(showLoading = true, surfaceErrors = true, markLoadedItemsSeen = true)
     }
 
-    private suspend fun refresh(showLoading: Boolean, surfaceErrors: Boolean) {
+    private suspend fun refresh(
+        showLoading: Boolean,
+        surfaceErrors: Boolean,
+        markLoadedItemsSeen: Boolean
+    ) {
         val generation = ++refreshGeneration
         if (showLoading) {
             _state.update { current ->
@@ -129,10 +134,12 @@ class ActivityStateHolder(
 
         when (val result = repository.loadActivity(tab = selectedTab)) {
             is AppResult.Success -> {
+                var accepted = false
                 _state.update { current ->
                     if (generation != refreshGeneration || current.selectedTab != selectedTab) {
                         current
                     } else {
+                        accepted = true
                         current.copy(
                             items = result.value.items,
                             nextCursor = result.value.nextCursor,
@@ -144,6 +151,11 @@ class ActivityStateHolder(
                             isLoadingMore = false,
                             errorMessage = null
                         )
+                    }
+                }
+                if (accepted) {
+                    if (markLoadedItemsSeen) {
+                        markEventsSeen(result.value.items.map { it.eventId })
                     }
                 }
             }
@@ -164,6 +176,9 @@ class ActivityStateHolder(
                         )
                     }
                 }
+                if (markLoadedItemsSeen) {
+                    refreshSummary(surfaceErrors = false)
+                }
             }
         }
     }
@@ -178,10 +193,12 @@ class ActivityStateHolder(
         try {
             when (val result = repository.loadActivity(tab = current.selectedTab, cursor = cursor)) {
                 is AppResult.Success -> {
+                    var appendedEventIds = emptyList<String>()
                     _state.update { existing ->
                         if (existing.selectedTab != current.selectedTab) return@update existing
                         val existingIds = existing.items.mapTo(mutableSetOf()) { it.eventId }
                         val appended = result.value.items.filterNot { it.eventId in existingIds }
+                        appendedEventIds = appended.map { it.eventId }
                         existing.copy(
                             items = existing.items + appended,
                             nextCursor = result.value.nextCursor,
@@ -193,6 +210,7 @@ class ActivityStateHolder(
                             errorMessage = null
                         )
                     }
+                    markEventsSeen(appendedEventIds)
                 }
 
                 is AppResult.Failure -> {
@@ -284,6 +302,18 @@ class ActivityStateHolder(
         }
     }
 
+    private suspend fun markEventsSeen(eventIds: List<String>) {
+        val uniqueEventIds = eventIds.distinct()
+        if (uniqueEventIds.isEmpty()) {
+            refreshSummary(surfaceErrors = false)
+            return
+        }
+        when (repository.markActivitySeen(uniqueEventIds)) {
+            is AppResult.Success,
+            is AppResult.Failure -> refreshSummary(surfaceErrors = false)
+        }
+    }
+
     private suspend fun refreshSummary(surfaceErrors: Boolean) {
         when (val result = repository.loadSummary()) {
             is AppResult.Success -> {
@@ -314,6 +344,8 @@ interface ActivityFeedRepository {
     ): AppResult<ActivityFeedUi>
 
     suspend fun loadSummary(): AppResult<ActivitySummaryUi>
+
+    suspend fun markActivitySeen(eventIds: List<String>): AppResult<MarkActivitySeenResponseDto>
 
     suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto>
 
@@ -362,6 +394,9 @@ class ApiActivityFeedRepository(
 
             is AppResult.Failure -> result
         }
+
+    override suspend fun markActivitySeen(eventIds: List<String>): AppResult<MarkActivitySeenResponseDto> =
+        apiClient.markActivitySeen(MarkActivitySeenRequestDto(eventIds = eventIds))
 
     override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> =
         apiClient.dismissActivityEvent(eventId)
@@ -447,6 +482,9 @@ class SampleActivityFeedRepository : ActivityFeedRepository {
                 latestBadgeOccurredAt = "2026-04-25T17:45:00Z"
             )
         )
+
+    override suspend fun markActivitySeen(eventIds: List<String>): AppResult<MarkActivitySeenResponseDto> =
+        AppResult.Success(MarkActivitySeenResponseDto(markedCount = eventIds.distinct().size))
 
     override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> =
         AppResult.Success(

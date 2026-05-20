@@ -25,6 +25,16 @@ data class ActivitySummaryDto(
 )
 
 @Serializable
+data class MarkActivitySeenRequestDto(
+    val eventIds: List<String>
+)
+
+@Serializable
+data class MarkActivitySeenResponseDto(
+    val markedCount: Int
+)
+
+@Serializable
 data class SendFlirtRequestDto(
     val targetUserId: String
 )

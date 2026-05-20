@@ -4,6 +4,7 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
+import com.pynapli.shared.network.dto.MarkActivitySeenResponseDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -84,6 +85,49 @@ class ActivityStateHolderTest {
         assertEquals(5, state.activityBadgeCount)
         assertEquals(12, state.summary.profileViewCount)
         assertEquals("2026-05-19T12:30:00Z", state.summary.latestBadgeOccurredAt)
+    }
+
+    @Test
+    fun visibleActivityLoadMarksLoadedEventsSeenBeforeRefreshingSummary() = runBlocking {
+        val first = activityEvent(eventId = "event-1", type = "flirt")
+        val second = activityEvent(eventId = "event-2", type = "match")
+        val repository = FakeActivityFeedRepository(
+            result = AppResult.Success(ActivityFeedUi(items = listOf(first, second))),
+            summaryResult = AppResult.Success(
+                ActivitySummaryUi(
+                    badgeCount = 0,
+                    profileViewCount = 0,
+                    flirtCount = 0,
+                    likeCount = 0,
+                    matchCount = 0,
+                    albumRequestCount = 0,
+                    partnerInviteCount = 0,
+                    latestBadgeOccurredAt = null
+                )
+            )
+        )
+        val stateHolder = ActivityStateHolder(repository)
+
+        stateHolder.load()
+
+        assertEquals(listOf(listOf("event-1", "event-2")), repository.markSeenCalls)
+        assertEquals(1, repository.summaryCalls)
+        assertEquals(0, stateHolder.state.value.activityBadgeCount)
+    }
+
+    @Test
+    fun silentFeedRefreshDoesNotMarkEventsSeen() = runBlocking {
+        val first = activityEvent(eventId = "event-1", type = "flirt")
+        val repository = FakeActivityFeedRepository(
+            result = AppResult.Success(ActivityFeedUi(items = listOf(first)))
+        )
+        val stateHolder = ActivityStateHolder(repository)
+
+        stateHolder.refreshSilently()
+
+        assertEquals(emptyList(), repository.markSeenCalls)
+        assertEquals(0, repository.summaryCalls)
+        assertEquals(listOf(first), stateHolder.state.value.items)
     }
 
     @Test
@@ -173,6 +217,7 @@ class ActivityStateHolderTest {
         stateHolder.loadMore()
 
         assertEquals(listOf(null, "cursor-2"), repository.loadCalls.map { it.cursor })
+        assertEquals(listOf(listOf("event-1"), listOf("event-2")), repository.markSeenCalls)
         assertEquals(listOf(first, second), stateHolder.state.value.items)
         assertEquals(null, stateHolder.state.value.nextCursor)
         assertFalse(stateHolder.state.value.isLoadingMore)
@@ -200,10 +245,14 @@ class ActivityStateHolderTest {
 private class FakeActivityFeedRepository(
     var result: AppResult<ActivityFeedUi> = AppResult.Success(ActivityFeedUi(items = emptyList())),
     var summaryResult: AppResult<ActivitySummaryUi> = AppResult.Success(ActivitySummaryUi.Empty),
+    var markSeenResult: AppResult<MarkActivitySeenResponseDto> = AppResult.Success(
+        MarkActivitySeenResponseDto(markedCount = 0)
+    ),
     private val results: MutableList<AppResult<ActivityFeedUi>> = mutableListOf()
 ) : ActivityFeedRepository {
     val loadCalls = mutableListOf<ActivityLoadCall>()
     val dismissCalls = mutableListOf<String>()
+    val markSeenCalls = mutableListOf<List<String>>()
     var summaryCalls = 0
 
     override suspend fun loadActivity(
@@ -222,6 +271,11 @@ private class FakeActivityFeedRepository(
     override suspend fun loadSummary(): AppResult<ActivitySummaryUi> {
         summaryCalls += 1
         return summaryResult
+    }
+
+    override suspend fun markActivitySeen(eventIds: List<String>): AppResult<MarkActivitySeenResponseDto> {
+        markSeenCalls += eventIds
+        return markSeenResult
     }
 
     override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> {

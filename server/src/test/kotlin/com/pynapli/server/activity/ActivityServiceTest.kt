@@ -598,6 +598,39 @@ class ActivityServiceTest {
         assertEquals(1, response.partnerInviteCount)
         assertEquals(latest.toString(), response.latestBadgeOccurredAt)
     }
+
+    @Test
+    fun markActivityEventsSeenMarksOnlyRequestedOwnedEvents() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000941")
+        val firstEventId = UUID.fromString("00000000-0000-0000-0000-000000000942")
+        val secondEventId = UUID.fromString("00000000-0000-0000-0000-000000000943")
+        val repository = InMemoryActivityRepository(
+            seededEvents = listOf(
+                sampleEvent(UUID.randomUUID(), "flirt", "Maya").copy(eventId = firstEventId),
+                sampleEvent(UUID.randomUUID(), "match", "Alex").copy(eventId = secondEventId)
+            )
+        )
+        val service = ActivityService(repository)
+
+        val response = service.markActivityEventsSeen(
+            recipientUserId = viewer,
+            eventIdTexts = listOf(firstEventId.toString(), secondEventId.toString(), firstEventId.toString())
+        )
+
+        assertEquals(2, response.markedCount)
+        assertEquals(setOf(firstEventId, secondEventId), repository.seenEventIds)
+    }
+
+    @Test
+    fun markActivityEventsSeenRejectsInvalidEventId() = runBlocking {
+        val service = ActivityService(InMemoryActivityRepository())
+
+        val error = assertFailsWith<ActivityException> {
+            service.markActivityEventsSeen(UUID.randomUUID(), listOf("not-a-uuid"))
+        }
+
+        assertEquals("INVALID_ACTIVITY_EVENT", error.code)
+    }
 }
 
 private fun sampleEvent(actorUserId: UUID, type: String, displayName: String): ActivityEventRecord =
@@ -679,6 +712,7 @@ private class InMemoryActivityRepository(
     val swipeInterests = mutableListOf<Triple<UUID, UUID, String>>()
     val matches = mutableListOf<Triple<UUID, UUID, UUID>>()
     val partnerChatInvites = mutableListOf<Triple<UUID, UUID, UUID>>()
+    val seenEventIds = mutableSetOf<UUID>()
 
     override suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID): Boolean {
         if (!allowProfileViews) return false
@@ -731,6 +765,13 @@ private class InMemoryActivityRepository(
     }
 
     override suspend fun getActivitySummary(recipientUserId: UUID): ActivitySummaryRecord = summaryRecord
+
+    override suspend fun markActivityEventsSeen(recipientUserId: UUID, eventIds: Set<UUID>): Int {
+        val ownedEventIds = seededEvents.mapTo(mutableSetOf()) { it.eventId }
+        val newlySeen = eventIds.filter { it in ownedEventIds && it !in dismissedEventIds && it !in seenEventIds }
+        seenEventIds += newlySeen
+        return newlySeen.size
+    }
 
     override suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean {
         val exists = seededEvents.any { it.eventId == eventId }

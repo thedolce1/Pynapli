@@ -43,6 +43,8 @@ import com.pynapli.shared.network.dto.MediaAlbumGrantsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
+import com.pynapli.shared.network.dto.MarkActivitySeenRequestDto
+import com.pynapli.shared.network.dto.MarkActivitySeenResponseDto
 import com.pynapli.shared.network.dto.NotificationPreferencesDto
 import com.pynapli.shared.network.dto.ReportDto
 import com.pynapli.shared.network.dto.MeDto
@@ -192,6 +194,8 @@ interface PynapliApiClient {
     ): AppResult<ActivityFeedResponseDto>
 
     suspend fun getActivitySummary(): AppResult<ActivitySummaryDto>
+
+    suspend fun markActivitySeen(request: MarkActivitySeenRequestDto): AppResult<MarkActivitySeenResponseDto>
 
     suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto>
 
@@ -613,6 +617,17 @@ class KtorPynapliApiClient(
         authenticatedPost { token ->
             httpClient.get(config.endpoint("/v1/activity/summary")) {
                 bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun markActivitySeen(
+        request: MarkActivitySeenRequestDto
+    ): AppResult<MarkActivitySeenResponseDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/activity/seen")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
             }.toAppResult(json)
         }
 

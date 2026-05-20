@@ -2,6 +2,7 @@ package com.pynapli.server.activity
 
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.shared.network.dto.MarkActivitySeenRequestDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessRequestDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessRequestDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
@@ -41,6 +42,12 @@ fun Application.configureActivityRoutes(
         get("/v1/activity/summary") {
             val user = authService.authenticate(call.requiredBearerToken())
             call.respond(activityService.getActivitySummary(user.id))
+        }
+
+        post("/v1/activity/seen") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val request = call.receive<MarkActivitySeenRequestDto>()
+            call.respond(activityService.markActivityEventsSeen(user.id, request.eventIds))
         }
 
         post("/v1/activity/{eventId}/dismiss") {

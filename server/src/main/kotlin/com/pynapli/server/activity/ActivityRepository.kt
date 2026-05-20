@@ -22,6 +22,8 @@ interface ActivityRepository {
 
     suspend fun getActivitySummary(recipientUserId: UUID): ActivitySummaryRecord
 
+    suspend fun markActivityEventsSeen(recipientUserId: UUID, eventIds: Set<UUID>): Int
+
     suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean
 }
 

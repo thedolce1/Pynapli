@@ -33,6 +33,8 @@ import com.pynapli.shared.network.dto.MediaAlbumGrantsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
+import com.pynapli.shared.network.dto.MarkActivitySeenRequestDto
+import com.pynapli.shared.network.dto.MarkActivitySeenResponseDto
 import com.pynapli.shared.network.dto.ReportDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.MessageDto
@@ -339,6 +341,11 @@ private class FakeApiClient(
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun getActivitySummary(): AppResult<ActivitySummaryDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun markActivitySeen(
+        request: MarkActivitySeenRequestDto
+    ): AppResult<MarkActivitySeenResponseDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> =

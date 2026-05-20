@@ -18,6 +18,7 @@ import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.network.dto.ActivityFeedResponseDto
 import com.pynapli.shared.network.dto.ActivitySummaryDto
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
+import com.pynapli.shared.network.dto.MarkActivitySeenResponseDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
@@ -177,6 +178,26 @@ class ActivityService(
         )
     }
 
+    suspend fun markActivityEventsSeen(
+        recipientUserId: UUID,
+        eventIdTexts: List<String>
+    ): MarkActivitySeenResponseDto {
+        if (eventIdTexts.size > MAX_MARK_SEEN_IDS) {
+            throw ActivityException("TOO_MANY_ACTIVITY_EVENTS")
+        }
+        val eventIds = eventIdTexts
+            .map { value ->
+                runCatching { UUID.fromString(value) }
+                    .getOrElse { throw ActivityException("INVALID_ACTIVITY_EVENT") }
+            }
+            .toSet()
+        if (eventIds.isEmpty()) return MarkActivitySeenResponseDto(markedCount = 0)
+
+        return MarkActivitySeenResponseDto(
+            markedCount = repository.markActivityEventsSeen(recipientUserId, eventIds)
+        )
+    }
+
     suspend fun listActivity(
         recipientUserId: UUID,
         limit: Int = DEFAULT_LIMIT,
@@ -281,6 +302,7 @@ class ActivityService(
     companion object {
         private const val DEFAULT_LIMIT = 50
         private const val MAX_LIMIT = 100
+        private const val MAX_MARK_SEEN_IDS = 100
         private val SWIPE_INTEREST_EVENT_TYPES = setOf("swipe_like", "pineapple_like", "intro_note")
     }
 }
