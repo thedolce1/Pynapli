@@ -1,6 +1,6 @@
 # Pynapli Implementation Audit
 
-Date: 2026-05-20
+Date: 2026-05-21
 
 ## Purpose
 
@@ -87,6 +87,7 @@ Latest known green baseline after restoring server JUnit 4 coverage:
 - Product-visible Activity retention now runs through a configurable Ktor worker and JDBC retention repository; it hides expired views/flirts/old interest rows while keeping matches persistent.
 - Activity API load proof now exists at `scripts/activity-api-load-test.ps1`; latest tiny harness smoke: `artifacts/activity-api-load/20260520-214813`.
 - Latest Activity slice verification on 2026-05-20: targeted Activity realtime/retention service, repository, shared client, and Compose state tests passed; full `scripts/verify.ps1` passed; connected Android Activity QA passed at `artifacts/android-activity-qa/20260520-220111`.
+- Store MVP path now includes the Free/Social/Select catalog, server-backed inventory balances, environment-gated local/dev Store purchases, Google Play subscription purchase gateway wiring for Android non-debug builds, debug Android dev-checkout wiring for emulator QA, and a Compose Store screen covering current plan, linked-partner benefit, plans, accelerator products, and inventory balances. Targeted Store verification on 2026-05-21 passed service, route, JDBC integration, shared client, Compose state, Compose desktop interaction, and Android debug Kotlin compile tasks. Connected Android Store QA now exists at `scripts/android-store-qa.ps1`; latest emulator proof `artifacts/android-store-qa/20260521-163009` covers login -> Grid -> Store, structural Store screenshots/XML, Restore, the local/dev Boost purchase, and inventory balance refresh.
 
 Current CI state:
 
@@ -107,7 +108,7 @@ Current Swipe scale/proof additions:
 | --- | --- | --- | --- |
 | Product model | Aligned | Individual autonomous accounts, optional linked partner, linked partner preview, partner chat invite flow, linked subscription benefit. | Keep avoiding couple-owned accounts or couple cards. |
 | Language and positioning | Mostly aligned | Specs define LS-aware, classy, non-cheesy language. | Needs continuous UI copy review as screens mature. |
-| Frontend design direction | Partially implemented | Subdued Compose surfaces, bottom nav, header profile entry, grid/swipe/messages/activity/store/settings surfaces, automated Grid and Swipe visual-signature regressions over the shared Compose UI, connected Android structural golden assertions for the installed app, and denied-location screenshot QA. | Needs real-device screenshot review and wider flow coverage before visual polish can be called complete. |
+| Frontend design direction | Partially implemented | Subdued Compose surfaces, bottom nav, header profile entry, grid/swipe/messages/activity/store/settings surfaces, automated Grid and Swipe visual-signature regressions over the shared Compose UI, connected Android structural golden assertions for Grid, Swipe, Activity, and Store, and denied-location screenshot QA. | Needs real-device screenshot review and wider flow coverage before visual polish can be called complete. |
 | Auth and onboarding | Partially implemented | Email signup/login/refresh/logout, dev login, session handling, signup DOB, explicit 18+ confirmation, Terms acceptance, Privacy acceptance. | Social auth parity, signup progress resume, and enhanced/provider age verification are not complete. |
 | Profile | Partially implemented | Profile edit, discovery settings, profile detail, linked partner display, age-verification entry. | Data export/delete, blocked/hidden management, and full safety center need completion. |
 | Location and presence | Partially implemented | Location current endpoint, PostGIS distance queries, Redis presence TTLs, client movement thresholds, Android while-in-use location policy guard, denied-location Android QA, and battery/location profile artifact capture. | Server-side location trust/spoofing checks and physical-device battery profiling remain. |
@@ -118,7 +119,7 @@ Current Swipe scale/proof additions:
 | Partner links | Strong MVP path | Invite, accept, decline, unlink, one active beneficiary, cooldown/abuse controls, linked partner subscription benefit. | Support/admin review and forced unlink workflow need moderation tooling. |
 | Private albums/media | Partially implemented | Upload contract, local-dev upload endpoint, albums, private grants, album request activity. | Production object storage signed URLs, CDN strategy, moderation/scanning policy, and secure media cleanup jobs remain. |
 | Notifications | Partially implemented | Preferences, device registration, FCM gateway, grouping/rate-limit logic. | Real device token lifecycle, APNs/iOS path, notification analytics without sensitive payloads, and denied-permission QA remain. |
-| Monetization | Partially implemented | Free/Social/Select tiers, server entitlements, linked partner benefit, activity/filters gates, intro notes, pineapple likes, boosts, ads policy, safety-free rule. | StoreKit 2 path is missing. Google Play path exists but needs real console credentials/config validation. Paywall copy needs final Social/Select review in app. |
+| Monetization | Partially implemented | Free/Social/Select tiers, server entitlements, linked partner benefit, activity/filters gates, intro notes, pineapple likes, boosts, ads policy, safety-free rule, Store tab, server-backed Store inventory balances, environment-gated local/dev Store purchases, Android debug dev-checkout wiring, and connected Android Store QA. | StoreKit 2 path is missing. Google Play path exists but needs real console credentials/config validation. Final paywall copy review remains. |
 | Trust and safety | Partially implemented | Risk model/events, Redis rate limits, duplicate message checks, held-message review, reports queue, risk queue, social action restrictions, severe action triggers, partner subscription abuse cooldown, age-verification status/start/admin review/callback path. | Risk middleware, device/account-farm signals, location spoofing signals, verification provider/market integration, appeals/support flow, false-positive metrics, and account notice workflow remain. |
 | Admin moderation | Partially implemented | Reports queue/actions/audit, risk review/actions/audit, held message review/release/remove/audit. | Roles/permissions, MFA, user lookup, appeals, subscription support, partner-link review, sensitive reveal reason flow outside held messages, and separated admin API need work. |
 | API contract | Partially implemented | `/v1` routes, shared DTOs, Ktor error handling, many server-side entitlement/block/risk checks, signed Grid cursor pagination, signed Swipe deck cursor pagination consumed end-to-end by the Compose client, signed Activity cursor pagination, age-verification endpoints, swipe action idempotency, the Grid presence WebSocket contract, and the authenticated Activity stream WebSocket contract. | Cursor pagination remains incomplete on other live surfaces, idempotency keys are not consistently implemented outside selected workflows, and realtime contracts for messages/production notification delivery remain incomplete. |
@@ -185,7 +186,7 @@ A checked box should not mean "final production-ready" unless the surrounding sp
    - Messages, activity, and notifications still depend on HTTP polling/refetch paths.
 
 8. StoreKit/iOS is not ready.
-   - Android billing has started.
+   - Android billing has Store UI, Google Play subscription gateway wiring, and local/dev checkout for emulator QA.
    - iOS purchase validation and StoreKit 2 integration remain future work.
 
 9. Analytics are not implemented.

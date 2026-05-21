@@ -87,7 +87,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureActivityRoutes(dependencies.authService, dependencies.activityService)
     configureActivityStreamRoutes(dependencies.authService, dependencies.activityBroadcaster)
     configureNotificationRoutes(dependencies.authService, dependencies.notificationService)
-    configureSubscriptionRoutes(dependencies.authService, dependencies.subscriptionService)
+    configureSubscriptionRoutes(dependencies.config, dependencies.authService, dependencies.subscriptionService)
     configureMessagingRoutes(dependencies.authService, dependencies.messagingService)
     configureMediaRoutes(
         authService = dependencies.authService,

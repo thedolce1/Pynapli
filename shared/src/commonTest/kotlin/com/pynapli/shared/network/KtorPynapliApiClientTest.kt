@@ -22,6 +22,8 @@ import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
+import com.pynapli.shared.network.dto.StorePurchaseResponseDto
+import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
@@ -488,6 +490,56 @@ class KtorPynapliApiClientTest {
         val response = success.value as SubscriptionPurchaseSyncResponseDto
         assertEquals("pending_verification", response.status)
         assertEquals("free", response.entitlement.tier)
+    }
+
+    @Test
+    fun submitDevStorePurchaseSendsBearerTokenAndMapsInventory() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = """
+                    {
+                      "status": "inventory_granted",
+                      "entitlement": {
+                        "tier": "select",
+                        "source": "own_subscription",
+                        "displayName": "Pynapli Select",
+                        "adSupported": false,
+                        "linkedPartnerIncluded": true
+                      },
+                      "inventory": {
+                        "tiers": [],
+                        "premiumProducts": [],
+                        "balances": [
+                          {
+                            "inventoryType": "boost",
+                            "quantity": 1,
+                            "nextExpiresAt": "2026-06-01T00:00:00Z"
+                          }
+                        ]
+                      }
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.submitDevStorePurchase(SubmitDevStorePurchaseRequestDto(productId = "pynapli_boost_1"))
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/subscriptions/dev/purchases", requestPath)
+        assertEquals(HttpMethod.Post, requestMethod)
+        val response = success.value as StorePurchaseResponseDto
+        assertEquals("inventory_granted", response.status)
+        assertEquals(1, response.inventory.balances.first().quantity)
     }
 
     @Test

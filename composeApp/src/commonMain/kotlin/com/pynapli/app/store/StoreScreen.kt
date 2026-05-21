@@ -38,10 +38,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.shared.network.dto.EntitlementSource
+import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
@@ -62,6 +64,7 @@ fun StoreScreen(
     StoreScreenContent(
         state = state,
         onPurchaseTier = { tier -> scope.launch { stateHolder.purchase(tier) } },
+        onPurchaseProduct = { product -> scope.launch { stateHolder.purchaseProduct(product) } },
         onRestorePurchases = { scope.launch { stateHolder.restorePurchases() } },
         modifier = modifier
     )
@@ -75,6 +78,7 @@ private fun rememberStoreStateHolder(): StoreStateHolder =
 private fun StoreScreenContent(
     state: StoreUiState,
     onPurchaseTier: (SubscriptionTierDto) -> Unit,
+    onPurchaseProduct: (PremiumProductDto) -> Unit,
     onRestorePurchases: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -89,7 +93,8 @@ private fun StoreScreenContent(
             restoreEnabled = state.tiers.any { it.playStoreProductId != null } &&
                 !state.isLoading &&
                 !state.isRestoringPurchases &&
-                state.pendingPurchaseTier == null,
+                state.pendingPurchaseTier == null &&
+                state.pendingPurchaseProductId == null,
             onRestorePurchases = onRestorePurchases
         )
         StoreMessageRow(
@@ -124,10 +129,23 @@ private fun StoreScreenContent(
 
             else -> {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag(StoreTestTags.LIST),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    item(key = "current-plan") {
+                        CurrentPlanRow(entitlement = state.entitlement)
+                    }
+
+                    item(key = "tiers-title") {
+                        StoreSectionTitle(
+                            title = "Plans",
+                            subtitle = "Safety stays free. Paid plans add reach, privacy, and insight."
+                        )
+                    }
+
                     items(
                         items = state.tiers,
                         key = { tier -> tier.tier }
@@ -136,8 +154,32 @@ private fun StoreScreenContent(
                             tier = tier,
                             currentTier = state.currentTier,
                             pendingPurchaseTier = state.pendingPurchaseTier,
+                            pendingPurchaseProductId = state.pendingPurchaseProductId,
                             isRestoringPurchases = state.isRestoringPurchases,
                             onPurchaseTier = onPurchaseTier
+                        )
+                    }
+
+                    if (state.premiumProducts.isNotEmpty()) {
+                        item(key = "products-title") {
+                            StoreSectionTitle(
+                                title = "Boosts & extras",
+                                subtitle = "Optional accelerators. Blocks, privacy, and recipient controls still apply."
+                            )
+                        }
+                    }
+
+                    items(
+                        items = state.premiumProducts,
+                        key = { product -> product.productId }
+                    ) { product ->
+                        StoreProductRow(
+                            product = product,
+                            balance = state.balanceFor(product.inventoryType),
+                            pendingPurchaseProductId = state.pendingPurchaseProductId,
+                            pendingPurchaseTier = state.pendingPurchaseTier,
+                            isRestoringPurchases = state.isRestoringPurchases,
+                            onPurchaseProduct = onPurchaseProduct
                         )
                     }
                 }
@@ -206,16 +248,91 @@ private fun StoreHeader(
 }
 
 @Composable
+private fun CurrentPlanRow(entitlement: SubscriptionEntitlementDto?) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = entitlement?.displayName ?: "Pynapli Free",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = if (entitlement?.linkedPartnerIncluded == true) {
+                    "Linked partner included"
+                } else {
+                    "Core discovery and safety included"
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Text(
+            text = (entitlement?.tier ?: SubscriptionTier.FREE).tierLabel(),
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun StoreSectionTitle(
+    title: String,
+    subtitle: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = title,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = subtitle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
 private fun StoreTierRow(
     tier: SubscriptionTierDto,
     currentTier: String,
     pendingPurchaseTier: String?,
+    pendingPurchaseProductId: String?,
     isRestoringPurchases: Boolean,
     onPurchaseTier: (SubscriptionTierDto) -> Unit
 ) {
     val isCurrent = tier.tier == currentTier
     val isFree = tier.tier == SubscriptionTier.FREE
-    val purchaseInFlight = pendingPurchaseTier != null || isRestoringPurchases
+    val purchaseInFlight = pendingPurchaseTier != null || pendingPurchaseProductId != null || isRestoringPurchases
     val isPurchasing = pendingPurchaseTier == tier.tier
     Column(
         modifier = Modifier
@@ -255,7 +372,7 @@ private fun StoreTierRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = tier.monthlyPriceUsdCents.priceLabel(),
+                    text = tier.monthlyPriceUsdCents.monthlyPriceLabel(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -296,6 +413,77 @@ private fun StoreTierRow(
         StoreFeatureRow(
             label = if (tier.adSupported) "Ad-supported" else "No ads"
         )
+    }
+}
+
+@Composable
+private fun StoreProductRow(
+    product: PremiumProductDto,
+    balance: Int,
+    pendingPurchaseProductId: String?,
+    pendingPurchaseTier: String?,
+    isRestoringPurchases: Boolean,
+    onPurchaseProduct: (PremiumProductDto) -> Unit
+) {
+    val purchaseInFlight = pendingPurchaseProductId != null || pendingPurchaseTier != null || isRestoringPurchases
+    val isPurchasing = pendingPurchaseProductId == product.productId
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = product.displayName,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = product.description,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Balance: $balance",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
+            Button(
+                onClick = { onPurchaseProduct(product) },
+                enabled = !purchaseInFlight,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Text(if (isPurchasing) "Adding" else product.priceUsdCents.storePriceLabel(product.quantity))
+            }
+        }
+
+        product.features.forEach { feature ->
+            StoreFeatureRow(label = feature)
+        }
     }
 }
 
@@ -348,11 +536,18 @@ private fun StoreFeatureRow(label: String) {
     }
 }
 
-private fun Int.priceLabel(): String {
+private fun Int.monthlyPriceLabel(): String {
     if (this <= 0) return "${'$'}0/mo"
     val dollars = this / 100
     val cents = (this % 100).toString().padStart(2, '0')
     return "${'$'}$dollars.$cents/mo"
+}
+
+private fun Int.storePriceLabel(quantity: Int): String {
+    val dollars = this / 100
+    val cents = (this % 100).toString().padStart(2, '0')
+    val price = "${'$'}$dollars.$cents"
+    return if (quantity > 1) "$quantity for $price" else price
 }
 
 private fun String?.sourceLabel(): String = when (this) {
@@ -363,10 +558,13 @@ private fun String?.sourceLabel(): String = when (this) {
     else -> "Free plan active"
 }
 
-@Suppress("unused")
 private fun String.tierLabel(): String = when (this) {
     SubscriptionTier.FREE -> "Free"
     SubscriptionTier.SOCIAL -> "Social"
     SubscriptionTier.SELECT -> "Select"
     else -> this
+}
+
+internal object StoreTestTags {
+    const val LIST = "store-list"
 }

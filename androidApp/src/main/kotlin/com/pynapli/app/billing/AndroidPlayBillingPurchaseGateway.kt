@@ -17,6 +17,7 @@ import com.pynapli.app.store.StorePurchaseResult
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncStatus
 import com.pynapli.shared.network.dto.SubscriptionTier
@@ -117,6 +118,9 @@ class AndroidPlayBillingPurchaseGateway(
 
         return deferred.await()
     }
+
+    override suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult> =
+        billingFailure("BILLING_PRODUCT_UNAVAILABLE", "This item is not available in Google Play yet.")
 
     override suspend fun restorePurchases(): AppResult<StorePurchaseResult> {
         if (pendingPurchase != null) {

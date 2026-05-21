@@ -2,7 +2,11 @@ package com.pynapli.app.store
 
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.EntitlementSource
+import com.pynapli.shared.network.dto.PremiumInventoryBalanceDto
+import com.pynapli.shared.network.dto.PremiumInventoryType
+import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
+import com.pynapli.shared.network.dto.SubscriptionProductId
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
 import kotlinx.coroutines.runBlocking
@@ -27,8 +31,29 @@ class StoreStateHolderTest {
         assertEquals(2, repository.loadCount)
         assertEquals(1, gateway.purchaseCount)
         assertNull(state.pendingPurchaseTier)
+        assertNull(state.pendingPurchaseProductId)
         assertEquals("Purchase sent for verification.", state.purchaseMessage)
         assertEquals(SubscriptionTier.SELECT, state.currentTier)
+    }
+
+    @Test
+    fun productPurchaseClearsPendingAndRefreshesBalances() = runBlocking {
+        val repository = FakeStoreRepository(
+            firstEntitlementTier = SubscriptionTier.SELECT,
+            refreshedEntitlementTier = SubscriptionTier.SELECT
+        )
+        val gateway = FakeStorePurchaseGateway()
+        val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
+
+        stateHolder.load()
+        stateHolder.purchaseProduct(boostProduct())
+
+        val state = stateHolder.state.value
+        assertEquals(2, repository.loadCount)
+        assertEquals(1, gateway.productPurchaseCount)
+        assertNull(state.pendingPurchaseProductId)
+        assertEquals("Inventory added.", state.purchaseMessage)
+        assertEquals(1, state.balanceFor(PremiumInventoryType.BOOST))
     }
 
     @Test
@@ -65,6 +90,12 @@ private class FakeStoreRepository(
         return AppResult.Success(
             StoreUi(
                 tiers = listOf(selectTier()),
+                premiumProducts = listOf(boostProduct()),
+                balances = if (loadCount == 1) {
+                    emptyList()
+                } else {
+                    listOf(PremiumInventoryBalanceDto(PremiumInventoryType.BOOST, quantity = 1))
+                },
                 entitlement = entitlement(tier)
             )
         )
@@ -74,12 +105,19 @@ private class FakeStoreRepository(
 private class FakeStorePurchaseGateway : StorePurchaseGateway {
     var purchaseCount = 0
         private set
+    var productPurchaseCount = 0
+        private set
     var restoreCount = 0
         private set
 
     override suspend fun purchase(tier: SubscriptionTierDto): AppResult<StorePurchaseResult> {
         purchaseCount += 1
         return AppResult.Success(StorePurchaseResult(message = "Purchase sent for verification."))
+    }
+
+    override suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult> {
+        productPurchaseCount += 1
+        return AppResult.Success(StorePurchaseResult(message = "Inventory added."))
     }
 
     override suspend fun restorePurchases(): AppResult<StorePurchaseResult> {
@@ -97,6 +135,17 @@ private fun selectTier(): SubscriptionTierDto =
         linkedPartnerIncluded = true,
         features = listOf("Intro Notes"),
         playStoreProductId = "pynapli_select_monthly"
+    )
+
+private fun boostProduct(): PremiumProductDto =
+    PremiumProductDto(
+        productId = SubscriptionProductId.BOOST_SINGLE,
+        inventoryType = PremiumInventoryType.BOOST,
+        displayName = "Boost",
+        description = "Increase visibility for 30 minutes.",
+        priceUsdCents = 299,
+        quantity = 1,
+        features = listOf("Visibility lift")
     )
 
 private fun entitlement(tier: String): SubscriptionEntitlementDto =

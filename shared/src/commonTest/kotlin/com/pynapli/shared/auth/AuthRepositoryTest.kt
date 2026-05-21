@@ -52,6 +52,8 @@ import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
+import com.pynapli.shared.network.dto.StorePurchaseResponseDto
+import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
@@ -328,6 +330,11 @@ private class FakeApiClient(
     override suspend fun submitPlayStoreSubscriptionPurchase(
         request: SubmitPlayStoreSubscriptionPurchaseRequestDto
     ): AppResult<SubscriptionPurchaseSyncResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun submitDevStorePurchase(
+        request: SubmitDevStorePurchaseRequestDto
+    ): AppResult<StorePurchaseResponseDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun activateBoost(): AppResult<BoostActivationDto> =

@@ -433,18 +433,22 @@ Rules:
 
 ```http
 GET  /v1/subscriptions/entitlement
-POST /v1/subscriptions/app-store/validate
-POST /v1/subscriptions/play-store/validate
-POST /v1/subscriptions/stripe/validate
-POST /v1/subscriptions/restore
 GET  /v1/subscriptions/inventory
+POST /v1/subscriptions/play-store/purchases
+POST /v1/subscriptions/dev/purchases // local/dev only
 POST /v1/boosts
+
+Planned production parity:
+POST /v1/subscriptions/app-store/validate
+POST /v1/subscriptions/restore
 ```
 
 Rules:
 
 - Never trust client premium flags.
 - Linked partner benefit is server-computed.
+- `GET /v1/subscriptions/inventory` returns tier catalog, premium product catalog, and the authenticated user's current premium inventory balances.
+- `POST /v1/subscriptions/dev/purchases` is only enabled in local/dev configuration for emulator QA and must return `403` in production-like environments.
 - Use idempotency keys.
 
 ## Reports / Safety API

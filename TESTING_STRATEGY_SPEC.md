@@ -1,6 +1,6 @@
 # Pynapli Testing Strategy Spec
 
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 ## Purpose
 
@@ -76,6 +76,17 @@ Current Activity client coverage:
 - `scripts/activity-api-load-test.ps1` seeds dense Activity feeds and reports summary/feed/tab p50/p95 latency budgets.
 - Latest emulator proof: `artifacts/android-activity-qa/20260520-220111`.
 
+Current Store coverage:
+
+- `SubscriptionServiceTest` covers the Free/Social/Select catalog, launch pricing, linked-partner tier flags, dev subscription purchases, and premium inventory product grants.
+- `SubscriptionRoutesTest` covers authenticated Store inventory balances and the environment gate for local/dev Store purchases.
+- `SubscriptionRepositoryIntegrationTest` covers JDBC premium inventory balance aggregation and dev subscription upsert behavior.
+- `KtorPynapliApiClientTest` covers the shared client contract for `POST /v1/subscriptions/dev/purchases`.
+- `StoreStateHolderTest` covers subscription purchase, restore, and premium product purchase state transitions.
+- `StoreScreenInteractionTest` renders the real Compose Store screen and verifies plan/product rendering plus inventory refresh after a product purchase.
+- `scripts/android-store-qa.ps1` runs the installed Android app against local Ktor, logs in through the real app path, opens Store from the bottom nav, captures Store plan/product screenshots and XML, checks structural golden assertions, exercises Restore, performs an environment-gated dev Boost purchase, and verifies the server-backed balance refreshes from 0 to 1.
+- Latest emulator proof: `artifacts/android-store-qa/20260521-163009`.
+
 Still open before beta:
 
 - Exact-image golden comparisons are still optional future work; current connected Android golden coverage uses structural UI and screenshot-signature checks to avoid status-bar/time false positives.
@@ -83,6 +94,7 @@ Still open before beta:
 - Visual checks with empty Grid outside the Online-filter empty state and more real-device thumbnail loading still need coverage.
 - Broader connected Android Swipe screenshot/gesture/golden QA now has a repeatable emulator path; expand it with real-device runs, slower network profiles, and match-overlay/profile-detail variants before beta.
 - Connected Android Activity QA now has a repeatable emulator/device path; expand it with real-device runs and OS notification deep-link coverage before beta.
+- Connected Android Store QA now has a repeatable emulator/device path; expand it with real-device runs and production Play Billing sandbox validation before beta.
 - Real battery profiling with movement/background/foreground scenarios still needs a device pass.
 
 ## Performance Benchmarks
@@ -212,6 +224,29 @@ Requirements:
 
 The script writes PNG screenshots, UI hierarchy XML, screenshot signatures, and `qa-summary.json` under `artifacts/android-activity-qa/<timestamp>`. A passing run proves the installed app can complete login -> Grid -> Activity, render each Activity tab with seeded rows, avoid app error text, and clear loaded unread badge rows through the backend `seen_at` path.
 
+## Connected Android Store QA
+
+Run this before and after meaningful Store, entitlement, subscription, or premium inventory changes:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\android-store-qa.ps1
+```
+
+Useful faster rerun after the APK is already built:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\android-store-qa.ps1 -SkipBuild
+```
+
+Requirements:
+
+- Local Ktor must be healthy at `http://127.0.0.1:8080/health/deep`.
+- Docker Postgres/Redis must be running for the local server and deterministic Store reset.
+- One Android emulator/device must be connected through `adb`, or pass `-DeviceId`.
+- Debug builds must expose the `Dev login` button and use the local/dev checkout gateway.
+
+The script writes PNG screenshots, UI hierarchy XML, screenshot signatures, and `qa-summary.json` under `artifacts/android-store-qa/<timestamp>`. A passing run proves the installed app can complete login -> Grid -> Store, render Free/Social/Select plus accelerator products, avoid app error text, exercise Restore, perform the local/dev Boost purchase, and refresh the Store inventory balance through Ktor.
+
 ## Activity API Load QA
 
 Run this after backend Activity feed, summary, tab, retention, or producer-query changes:
@@ -291,6 +326,7 @@ Current local proof:
 - [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, entitlement/rate-limit/profile-view side-query pressure has been reduced, V43 covering indexes are in place, and 500-concurrent proof artifacts exist; remaining hot-path work is repeat server-profiled 500-concurrent runs and larger dense metro datasets.
 - [ ] Partial: Grid shared-UI visual-signature regression, connected Android Grid structural golden QA, denied-location QA, battery-profile harness, and Android location policy checks exist and run locally; real-device screenshot and battery coverage is still open.
 - [ ] Partial: connected Android Activity structural golden QA, OS notification deep-link plumbing, Activity realtime stream tests, and Activity API load harness exist; real-device Activity notification and battery passes remain open.
+- [ ] Partial: connected Android Store structural golden QA exists and covers Restore plus local/dev purchase; production Play Billing sandbox validation and real-device Store passes remain open.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [x] Location denied path tested on connected Android emulator/device through `scripts/android-grid-denied-location-qa.ps1`.

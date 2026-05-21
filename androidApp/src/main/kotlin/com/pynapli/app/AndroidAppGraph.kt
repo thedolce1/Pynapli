@@ -17,6 +17,7 @@ import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
 import com.pynapli.app.conversation.ApiConversationRepository
 import com.pynapli.app.conversation.ConversationStateHolder
+import com.pynapli.app.debug.DebugQaFlags
 import com.pynapli.app.grid.ApiGridFeedRepository
 import com.pynapli.app.grid.ApiSavedGridFilterRepository
 import com.pynapli.app.grid.ApiTonightAvailabilityRepository
@@ -41,6 +42,8 @@ import com.pynapli.app.profilehub.ProfileHubStateHolder
 import com.pynapli.app.profilelink.ApiProfileLinksRepository
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
 import com.pynapli.app.store.ApiStoreRepository
+import com.pynapli.app.store.DevStorePurchaseGateway
+import com.pynapli.app.store.StorePurchaseGateway
 import com.pynapli.app.store.StoreStateHolder
 import com.pynapli.app.swipe.ApiSavedSwipeFilterRepository
 import com.pynapli.app.swipe.ApiSwipeRepository
@@ -79,6 +82,12 @@ class AndroidAppGraph(context: Context) {
         apiClient = apiClient,
         packageNameProvider = { appContext.packageName }
     )
+    private val storePurchaseGateway: StorePurchaseGateway =
+        if (DebugQaFlags.isDebuggable(appContext)) {
+            DevStorePurchaseGateway(apiClient)
+        } else {
+            playBillingPurchaseGateway
+        }
 
     val deepLinkStateHolder = AppDeepLinkStateHolder()
 
@@ -199,7 +208,7 @@ class AndroidAppGraph(context: Context) {
 
     val storeStateHolder = StoreStateHolder(
         repository = ApiStoreRepository(apiClient),
-        purchaseGateway = playBillingPurchaseGateway
+        purchaseGateway = storePurchaseGateway
     )
 
     fun attachBillingActivity(activity: Activity) {

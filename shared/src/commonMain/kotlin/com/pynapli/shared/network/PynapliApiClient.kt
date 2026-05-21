@@ -63,9 +63,11 @@ import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
+import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
 import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncResponseDto
+import com.pynapli.shared.network.dto.StorePurchaseResponseDto
 import com.pynapli.shared.network.dto.UnregisterPushDeviceRequestDto
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
@@ -184,6 +186,8 @@ interface PynapliApiClient {
     suspend fun submitPlayStoreSubscriptionPurchase(
         request: SubmitPlayStoreSubscriptionPurchaseRequestDto
     ): AppResult<SubscriptionPurchaseSyncResponseDto>
+
+    suspend fun submitDevStorePurchase(request: SubmitDevStorePurchaseRequestDto): AppResult<StorePurchaseResponseDto>
 
     suspend fun activateBoost(): AppResult<BoostActivationDto>
 
@@ -586,6 +590,15 @@ class KtorPynapliApiClient(
     ): AppResult<SubscriptionPurchaseSyncResponseDto> =
         authenticatedPost { token ->
             httpClient.post(config.endpoint("/v1/subscriptions/play-store/purchases")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun submitDevStorePurchase(request: SubmitDevStorePurchaseRequestDto): AppResult<StorePurchaseResponseDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/subscriptions/dev/purchases")) {
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)

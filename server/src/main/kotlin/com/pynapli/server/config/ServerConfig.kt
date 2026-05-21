@@ -41,6 +41,7 @@ data class ServerConfig(
     val playStoreRtdnWebhookToken: String? = null,
     val playStoreRtdnOidcAudience: String? = null,
     val playStoreRtdnOidcServiceAccountEmail: String? = null,
+    val devStorePurchasesEnabled: Boolean = false,
     val adminApiToken: String? = null,
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
     val activityCursorSecret: String = "pynapli-local-dev-activity-cursor-secret",
@@ -171,6 +172,9 @@ data class ServerConfig(
                 playStoreRtdnOidcServiceAccountEmail = System.getenv("PYNAPLI_PLAY_STORE_RTDN_OIDC_SERVICE_ACCOUNT_EMAIL")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() },
+                devStorePurchasesEnabled = System.getenv("PYNAPLI_DEV_STORE_PURCHASES_ENABLED")
+                    ?.toBooleanStrictOrNull()
+                    ?: (environment == "local"),
                 adminApiToken = System.getenv("PYNAPLI_ADMIN_API_TOKEN")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() },

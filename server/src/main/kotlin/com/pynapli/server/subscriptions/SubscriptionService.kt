@@ -2,6 +2,11 @@ package com.pynapli.server.subscriptions
 
 import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.BoostActivationDto
+import com.pynapli.shared.network.dto.PremiumInventoryBalanceDto
+import com.pynapli.shared.network.dto.PremiumInventoryType
+import com.pynapli.shared.network.dto.PremiumProductDto
+import com.pynapli.shared.network.dto.StorePurchaseResponseDto
+import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
@@ -125,7 +130,9 @@ class SubscriptionService(
                         "Expanded grid",
                         "More swipe likes",
                         "Rewind",
-                        "More activity reveal",
+                        "More Activity reveal",
+                        "Saved filters",
+                        "Travel preview",
                         "Linked partner included"
                     )
                 ),
@@ -142,12 +149,79 @@ class SubscriptionService(
                         "Incognito",
                         "Travel mode",
                         "Intro Notes",
+                        "Weekly Pineapple Likes",
                         "Monthly Boost",
+                        "Daily curated Picks",
                         "Linked partner included"
                     )
                 )
-            )
+            ),
+            premiumProducts = premiumProducts()
         )
+
+    suspend fun getInventory(userId: UUID): SubscriptionInventoryResponseDto {
+        val now = clock.instant()
+        return getInventory().copy(
+            balances = repository.listPremiumInventoryBalances(userId, now).map { it.toDto() }
+        )
+    }
+
+    suspend fun recordDevStorePurchase(
+        userId: UUID,
+        request: SubmitDevStorePurchaseRequestDto
+    ): StorePurchaseResponseDto {
+        val productId = request.productId.trim()
+        if (productId.isEmpty()) throw SubscriptionException("INVALID_STORE_PRODUCT")
+        val now = clock.instant()
+        val status = when (productId) {
+            SubscriptionProductId.PLAY_SOCIAL_MONTHLY -> {
+                repository.upsertDevSubscriptionPurchase(
+                    userId = userId,
+                    productId = productId,
+                    tier = SubscriptionTier.SOCIAL,
+                    startsAt = now,
+                    endsAt = now.plus(DEV_SUBSCRIPTION_PERIOD)
+                )
+                invalidateEntitlement(userId)
+                SubscriptionPurchaseSyncStatus.ACTIVE
+            }
+
+            SubscriptionProductId.PLAY_SELECT_MONTHLY -> {
+                repository.upsertDevSubscriptionPurchase(
+                    userId = userId,
+                    productId = productId,
+                    tier = SubscriptionTier.SELECT,
+                    startsAt = now,
+                    endsAt = now.plus(DEV_SUBSCRIPTION_PERIOD)
+                )
+                invalidateEntitlement(userId)
+                SubscriptionPurchaseSyncStatus.ACTIVE
+            }
+
+            SubscriptionProductId.BOOST_SINGLE -> {
+                grantDevPremiumProduct(userId, PremiumInventoryType.BOOST, quantity = 1, now = now)
+                DEV_INVENTORY_GRANTED
+            }
+
+            SubscriptionProductId.PINEAPPLE_LIKES_FIVE -> {
+                grantDevPremiumProduct(userId, PremiumInventoryType.PINEAPPLE_LIKE, quantity = 5, now = now)
+                DEV_INVENTORY_GRANTED
+            }
+
+            SubscriptionProductId.INTRO_NOTES_THREE -> {
+                grantDevPremiumProduct(userId, PremiumInventoryType.INTRO_NOTE, quantity = 3, now = now)
+                DEV_INVENTORY_GRANTED
+            }
+
+            else -> throw SubscriptionException("INVALID_STORE_PRODUCT")
+        }
+
+        return StorePurchaseResponseDto(
+            status = status,
+            entitlement = getEntitlement(userId),
+            inventory = getInventory(userId)
+        )
+    }
 
     suspend fun recordPlayStoreSubscriptionPurchase(
         userId: UUID,
@@ -483,6 +557,75 @@ class SubscriptionService(
             else -> null
         }
 
+    private suspend fun grantDevPremiumProduct(
+        userId: UUID,
+        inventoryType: String,
+        quantity: Int,
+        now: Instant
+    ) {
+        repository.grantPremiumInventory(
+            userId = userId,
+            inventoryType = inventoryType,
+            quantity = quantity,
+            source = "dev",
+            expiresAt = now.plus(DEV_INVENTORY_PERIOD),
+            now = now
+        ) ?: throw SubscriptionException("INVALID_STORE_PRODUCT")
+    }
+
+    private fun PremiumInventoryBalanceRecord.toDto(): PremiumInventoryBalanceDto =
+        PremiumInventoryBalanceDto(
+            inventoryType = inventoryType,
+            quantity = quantity,
+            nextExpiresAt = nextExpiresAt?.toString()
+        )
+
+    private fun premiumProducts(): List<PremiumProductDto> =
+        listOf(
+            PremiumProductDto(
+                productId = SubscriptionProductId.BOOST_SINGLE,
+                inventoryType = PremiumInventoryType.BOOST,
+                displayName = "Boost",
+                description = "Increase visibility for 30 minutes.",
+                priceUsdCents = 299,
+                quantity = 1,
+                playStoreProductId = SubscriptionProductId.BOOST_SINGLE,
+                features = listOf(
+                    "30-minute visibility lift",
+                    "Respects blocks, privacy, and filters",
+                    "No guaranteed matches"
+                )
+            ),
+            PremiumProductDto(
+                productId = SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
+                inventoryType = PremiumInventoryType.PINEAPPLE_LIKE,
+                displayName = "Pineapple Likes",
+                description = "Send a stronger swipe signal.",
+                priceUsdCents = 399,
+                quantity = 5,
+                playStoreProductId = SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
+                features = listOf(
+                    "High-intent swipe signal",
+                    "Prioritized in Activity",
+                    "Dismissible by recipient"
+                )
+            ),
+            PremiumProductDto(
+                productId = SubscriptionProductId.INTRO_NOTES_THREE,
+                inventoryType = PremiumInventoryType.INTRO_NOTE,
+                displayName = "Intro Notes",
+                description = "Send a short note before matching.",
+                priceUsdCents = 299,
+                quantity = 3,
+                playStoreProductId = SubscriptionProductId.INTRO_NOTES_THREE,
+                features = listOf(
+                    "140 characters max",
+                    "Does not open chat by itself",
+                    "Subject to recipient controls"
+                )
+            )
+        )
+
     private suspend fun pendingVerificationResponse(userId: UUID): SubscriptionPurchaseSyncResponseDto =
         SubscriptionPurchaseSyncResponseDto(
             status = SubscriptionPurchaseSyncStatus.PENDING_VERIFICATION,
@@ -743,6 +886,9 @@ class SubscriptionService(
         private val ADMIN_GRANTABLE_TIERS = setOf(SubscriptionTier.SOCIAL, SubscriptionTier.SELECT)
         private val ADMIN_GRANTABLE_SOURCES = setOf(EntitlementSource.ADMIN, EntitlementSource.PROMO)
         private val BOOST_DURATION: Duration = Duration.ofMinutes(30)
+        private val DEV_SUBSCRIPTION_PERIOD: Duration = Duration.ofDays(30)
+        private val DEV_INVENTORY_PERIOD: Duration = Duration.ofDays(90)
+        private const val DEV_INVENTORY_GRANTED = "inventory_granted"
         private const val PLAY_STORE_SYNC_DEFAULT_LIMIT = 100
         private const val PLAY_STORE_SYNC_MAX_LIMIT = 500
         private const val PLAY_STORE_PRODUCT_TYPE_SUBSCRIPTION = 1

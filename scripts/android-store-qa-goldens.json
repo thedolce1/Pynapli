@@ -1,0 +1,141 @@
+{
+  "description": "Connected Android Store QA golden assertions. These use structural text and coarse screenshot checks because emulator density, status bar chrome, and seeded data can vary.",
+  "stages": {
+    "storeInitial": {
+      "requiredTexts": [
+        "Store",
+        "Restore",
+        "Plans",
+        "Pynapli Free",
+        "Pynapli Social",
+        "Core discovery and safety included",
+        "Grid",
+        "Swipe",
+        "Activity",
+        "Messages"
+      ],
+      "forbiddenTexts": [
+        "Something went wrong",
+        "Request failed",
+        "Illegal input",
+        "Exception",
+        "UNAUTHENTICATED"
+      ],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.16,
+        "maxBrightRatio": 0.36,
+        "minColorBucketCount": 10
+      }
+    },
+    "productsVisible": {
+      "requiredTexts": [
+        "Boosts & extras",
+        "Boost",
+        "Balance: 0",
+        "$2.99"
+      ],
+      "forbiddenTexts": [
+        "Something went wrong",
+        "Request failed",
+        "Illegal input",
+        "Exception",
+        "UNAUTHENTICATED"
+      ],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.12,
+        "maxBrightRatio": 0.36,
+        "minColorBucketCount": 10
+      }
+    },
+    "restoreRefreshed": {
+      "requiredTexts": [
+        "Store refreshed.",
+        "Pynapli Free",
+        "Pynapli Social"
+      ],
+      "forbiddenTexts": [
+        "Something went wrong",
+        "Request failed",
+        "Illegal input",
+        "Exception",
+        "UNAUTHENTICATED",
+        "Restore is not available"
+      ],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.16,
+        "maxBrightRatio": 0.36,
+        "minColorBucketCount": 10
+      }
+    },
+    "otherProductsVisible": {
+      "requiredTexts": [
+        "Pineapple Likes",
+        "5 for $3.99",
+        "Balance: 0"
+      ],
+      "forbiddenTexts": [
+        "Something went wrong",
+        "Request failed",
+        "Illegal input",
+        "Exception",
+        "UNAUTHENTICATED"
+      ],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.12,
+        "maxBrightRatio": 0.36,
+        "minColorBucketCount": 10
+      }
+    },
+    "introProductVisible": {
+      "requiredTexts": [
+        "Intro Notes",
+        "3 for $2.99",
+        "140 characters max"
+      ],
+      "forbiddenTexts": [
+        "Something went wrong",
+        "Request failed",
+        "Illegal input",
+        "Exception",
+        "UNAUTHENTICATED"
+      ],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.12,
+        "maxBrightRatio": 0.36,
+        "minColorBucketCount": 10
+      }
+    },
+    "boostPurchased": {
+      "requiredTexts": [
+        "Boost added.",
+        "Boost",
+        "Balance: 1"
+      ],
+      "forbiddenTexts": [
+        "Something went wrong",
+        "Request failed",
+        "Illegal input",
+        "Exception",
+        "UNAUTHENTICATED",
+        "Purchases are not available"
+      ],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.12,
+        "maxBrightRatio": 0.36,
+        "minColorBucketCount": 10
+      }
+    }
+  }
+}

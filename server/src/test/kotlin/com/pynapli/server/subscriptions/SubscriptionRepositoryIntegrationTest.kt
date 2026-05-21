@@ -205,6 +205,53 @@ class SubscriptionRepositoryIntegrationTest {
     }
 
     @Test
+    fun premiumInventoryBalancesAggregateAvailableRowsOnly() = runBlocking {
+        val user = uuid(404)
+        val now = Instant.parse("2026-05-06T12:00:00Z")
+        dataSource.insertUser(user)
+        dataSource.insertPremiumInventory(
+            userId = user,
+            inventoryType = "boost",
+            quantity = 2,
+            expiresAt = Instant.parse("2026-06-01T00:00:00Z")
+        )
+        dataSource.insertPremiumInventory(
+            userId = user,
+            inventoryType = "boost",
+            quantity = 3,
+            expiresAt = null
+        )
+        dataSource.insertPremiumInventory(
+            userId = user,
+            inventoryType = "boost",
+            quantity = 7,
+            expiresAt = Instant.parse("2026-05-01T00:00:00Z")
+        )
+        val repository = JdbcSubscriptionRepository(dataSource)
+
+        val granted = repository.grantPremiumInventory(
+            userId = user,
+            inventoryType = "intro_note",
+            quantity = 3,
+            source = "dev",
+            expiresAt = Instant.parse("2026-07-01T00:00:00Z"),
+            now = now
+        )
+        val balances = repository.listPremiumInventoryBalances(user, now)
+
+        assertNotNull(granted)
+        assertEquals("intro_note", granted.inventoryType)
+        assertEquals(3, granted.quantity)
+        assertEquals(listOf("boost", "intro_note"), balances.map { it.inventoryType })
+        assertEquals(5, balances.first { it.inventoryType == "boost" }.quantity)
+        assertEquals(3, balances.first { it.inventoryType == "intro_note" }.quantity)
+        assertEquals(
+            Instant.parse("2026-06-01T00:00:00Z"),
+            balances.first { it.inventoryType == "boost" }.nextExpiresAt
+        )
+    }
+
+    @Test
     fun activateBoostConsumesInventoryAndKeepsExistingActiveBoost() = runBlocking {
         val user = uuid(403)
         val now = Instant.parse("2026-05-06T12:00:00Z")
@@ -228,6 +275,37 @@ class SubscriptionRepositoryIntegrationTest {
         assertEquals(false, second.consumedInventory)
         assertEquals(first.activation.activationId, second.activation.activationId)
         assertEquals(0, dataSource.inventoryQuantity(user, "boost"))
+    }
+
+    @Test
+    fun devSubscriptionPurchaseUpsertActivatesAndRefreshesExistingDevRecord() = runBlocking {
+        val user = uuid(405)
+        val now = Instant.parse("2026-05-06T12:00:00Z")
+        dataSource.insertUser(user)
+        val repository = JdbcSubscriptionRepository(dataSource)
+
+        val first = repository.upsertDevSubscriptionPurchase(
+            userId = user,
+            productId = "pynapli_select_monthly",
+            tier = SubscriptionTier.SELECT,
+            startsAt = now,
+            endsAt = Instant.parse("2026-06-06T12:00:00Z")
+        )
+        val refreshed = repository.upsertDevSubscriptionPurchase(
+            userId = user,
+            productId = "pynapli_select_monthly",
+            tier = SubscriptionTier.SELECT,
+            startsAt = now.plusSeconds(60),
+            endsAt = Instant.parse("2026-07-06T12:00:00Z")
+        )
+        val active = repository.findBestActiveOwnSubscription(user, now.plusSeconds(90))
+
+        assertEquals(first.subscriptionId, refreshed.subscriptionId)
+        assertEquals(SubscriptionTier.SELECT, refreshed.tier)
+        assertEquals("active", refreshed.status)
+        assertEquals(Instant.parse("2026-07-06T12:00:00Z"), refreshed.currentPeriodEnd)
+        assertNotNull(active)
+        assertEquals(refreshed.subscriptionId, active.subscriptionId)
     }
 
     @Test

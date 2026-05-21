@@ -1,6 +1,6 @@
 # Pynapli Monetization Spec
 
-Last updated: 2026-05-06
+Last updated: 2026-05-21
 
 ## Purpose
 
@@ -510,6 +510,7 @@ Server-authoritative entitlements:
 - Ktor stores normalized entitlement.
 - Client reads entitlement from Ktor.
 - Firebase/Remote Config may show paywall variants but cannot grant premium.
+- Local/debug builds may use a Ktor-only dev purchase endpoint for emulator QA. This must stay disabled outside local/dev environments and must not be treated as production billing.
 
 Requirements:
 
@@ -571,6 +572,9 @@ Do not experiment with:
 - [x] Subscription cooldown/abuse detection exists.
 - [ ] StoreKit validation exists.
 - [ ] Partial: Google Play validation path exists, but real Play Console credentials/config and end-to-end receipt validation remain.
+- [x] Store tab displays Free/Social/Select, current entitlement, linked-partner benefit, accelerator products, and server-backed inventory balances.
+- [x] Local/dev Store purchase endpoint exists for emulator QA and is environment-gated.
+- [x] Connected Android Store QA proves login -> Grid -> Store, structural Store screenshots, Restore, dev Boost purchase, balance refresh, and no app error text.
 - [x] Restore purchases exists.
 - [x] Activity gating is implemented.
 - [x] Advanced filters are gated.

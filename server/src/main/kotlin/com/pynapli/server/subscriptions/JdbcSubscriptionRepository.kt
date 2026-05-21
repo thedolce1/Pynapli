@@ -186,6 +186,48 @@ class JdbcSubscriptionRepository(
             }
         }
 
+    override suspend fun listPremiumInventoryBalances(
+        userId: UUID,
+        now: Instant
+    ): List<PremiumInventoryBalanceRecord> = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(LIST_PREMIUM_INVENTORY_BALANCES_QUERY).use { statement ->
+                statement.setObject(1, userId)
+                statement.setTimestamp(2, Timestamp.from(now))
+                statement.executeQuery().use { rs ->
+                    buildList {
+                        while (rs.next()) {
+                            add(rs.toPremiumInventoryBalanceRecord())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    override suspend fun grantPremiumInventory(
+        userId: UUID,
+        inventoryType: String,
+        quantity: Int,
+        source: String,
+        expiresAt: Instant?,
+        now: Instant
+    ): PremiumInventoryBalanceRecord? = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.runInTransaction {
+                grantPremiumInventoryRecord(
+                    userId = userId,
+                    inventoryType = inventoryType,
+                    quantity = quantity,
+                    source = source,
+                    expiresAt = expiresAt,
+                    now = now
+                )
+                listPremiumInventoryBalanceRecord(userId, inventoryType, now)
+            }
+        }
+    }
+
     private suspend fun consumePremiumInventory(userId: UUID, inventoryType: String, now: Instant): Boolean =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
@@ -213,6 +255,31 @@ class JdbcSubscriptionRepository(
                     activation = insertBoostActivation(userId, now, duration),
                     consumedInventory = true
                 )
+            }
+        }
+    }
+
+    override suspend fun upsertDevSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        tier: String,
+        startsAt: Instant,
+        endsAt: Instant
+    ): SubscriptionRecord = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(UPSERT_DEV_SUBSCRIPTION_PURCHASE_QUERY).use { statement ->
+                statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, userId)
+                statement.setString(3, "dev:$userId:$productId")
+                statement.setString(4, productId)
+                statement.setString(5, tier)
+                statement.setTimestamp(6, Timestamp.from(startsAt))
+                statement.setTimestamp(7, Timestamp.from(endsAt))
+                statement.setTimestamp(8, Timestamp.from(startsAt))
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.toSubscriptionRecord()
+                }
             }
         }
     }
@@ -421,6 +488,13 @@ class JdbcSubscriptionRepository(
             status = getString("status")
         )
 
+    private fun ResultSet.toPremiumInventoryBalanceRecord(): PremiumInventoryBalanceRecord =
+        PremiumInventoryBalanceRecord(
+            inventoryType = getString("inventory_type"),
+            quantity = getInt("quantity"),
+            nextExpiresAt = getTimestamp("next_expires_at")?.toInstant()
+        )
+
     private fun Connection.consumePremiumInventoryRecord(userId: UUID, inventoryType: String, now: Instant): Boolean =
         consumePremiumInventoryRecordReturningId(userId, inventoryType, now) != null
 
@@ -443,6 +517,44 @@ class JdbcSubscriptionRepository(
             statement.setTimestamp(1, Timestamp.from(now))
             statement.setObject(2, inventoryId)
             statement.executeUpdate() > 0
+        }
+
+    private fun Connection.grantPremiumInventoryRecord(
+        userId: UUID,
+        inventoryType: String,
+        quantity: Int,
+        source: String,
+        expiresAt: Instant?,
+        now: Instant
+    ) {
+        prepareStatement(GRANT_PREMIUM_INVENTORY_QUERY).use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, userId)
+            statement.setString(3, inventoryType)
+            statement.setInt(4, quantity)
+            statement.setString(5, source)
+            if (expiresAt == null) {
+                statement.setNull(6, Types.TIMESTAMP_WITH_TIMEZONE)
+            } else {
+                statement.setTimestamp(6, Timestamp.from(expiresAt))
+            }
+            statement.setTimestamp(7, Timestamp.from(now))
+            statement.executeUpdate()
+        }
+    }
+
+    private fun Connection.listPremiumInventoryBalanceRecord(
+        userId: UUID,
+        inventoryType: String,
+        now: Instant
+    ): PremiumInventoryBalanceRecord? =
+        prepareStatement(LIST_ONE_PREMIUM_INVENTORY_BALANCE_QUERY).use { statement ->
+            statement.setObject(1, userId)
+            statement.setString(2, inventoryType)
+            statement.setTimestamp(3, Timestamp.from(now))
+            statement.executeQuery().use { rs ->
+                if (rs.next()) rs.toPremiumInventoryBalanceRecord() else null
+            }
         }
 
     private fun Connection.findActiveBoostActivation(userId: UUID, now: Instant): BoostActivationRecord? =
@@ -816,6 +928,43 @@ class JdbcSubscriptionRepository(
             WHERE id = ?
         """.trimIndent()
 
+        private val LIST_PREMIUM_INVENTORY_BALANCES_QUERY = """
+            SELECT inventory_type,
+                   COALESCE(sum(quantity), 0)::integer AS quantity,
+                   min(expires_at) FILTER (WHERE expires_at IS NOT NULL) AS next_expires_at
+            FROM premium_inventory
+            WHERE user_id = ?
+              AND quantity > 0
+              AND (expires_at IS NULL OR expires_at > ?)
+            GROUP BY inventory_type
+            ORDER BY inventory_type ASC
+        """.trimIndent()
+
+        private val LIST_ONE_PREMIUM_INVENTORY_BALANCE_QUERY = """
+            SELECT inventory_type,
+                   COALESCE(sum(quantity), 0)::integer AS quantity,
+                   min(expires_at) FILTER (WHERE expires_at IS NOT NULL) AS next_expires_at
+            FROM premium_inventory
+            WHERE user_id = ?
+              AND inventory_type = ?
+              AND quantity > 0
+              AND (expires_at IS NULL OR expires_at > ?)
+            GROUP BY inventory_type
+        """.trimIndent()
+
+        private val GRANT_PREMIUM_INVENTORY_QUERY = """
+            INSERT INTO premium_inventory (
+                id,
+                user_id,
+                inventory_type,
+                quantity,
+                source,
+                expires_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """.trimIndent()
+
         private val FIND_ACTIVE_BOOST_ACTIVATION_QUERY = """
             SELECT id AS boost_activation_id,
                    user_id AS boost_user_id,
@@ -853,6 +1002,36 @@ class JdbcSubscriptionRepository(
                       starts_at,
                       ends_at,
                       status
+        """.trimIndent()
+
+        private val UPSERT_DEV_SUBSCRIPTION_PURCHASE_QUERY = """
+            INSERT INTO subscriptions (
+                id,
+                user_id,
+                platform,
+                external_subscription_id,
+                external_product_id,
+                tier,
+                status,
+                current_period_start,
+                current_period_end,
+                last_verified_at
+            )
+            VALUES (?, ?, 'dev', ?, ?, ?, 'active', ?, ?, ?)
+            ON CONFLICT (platform, external_subscription_id) DO UPDATE
+            SET tier = EXCLUDED.tier,
+                status = 'active',
+                current_period_start = EXCLUDED.current_period_start,
+                current_period_end = EXCLUDED.current_period_end,
+                external_product_id = EXCLUDED.external_product_id,
+                last_verified_at = EXCLUDED.last_verified_at,
+                updated_at = now()
+            RETURNING id AS subscription_id,
+                      user_id AS subscription_user_id,
+                      tier,
+                      status,
+                      current_period_start,
+                      current_period_end
         """.trimIndent()
 
         private val LIST_PLAY_STORE_SUBSCRIPTIONS_DUE_FOR_VERIFICATION_QUERY = """

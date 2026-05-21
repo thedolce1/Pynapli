@@ -1,6 +1,8 @@
 package com.pynapli.server.subscriptions
 
 import com.pynapli.shared.network.dto.EntitlementSource
+import com.pynapli.shared.network.dto.PremiumInventoryType
+import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionProductId
 import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncStatus
@@ -202,6 +204,49 @@ class SubscriptionServiceTest {
         assertTrue(tiers[2].linkedPartnerIncluded)
         assertEquals(SubscriptionProductId.PLAY_SOCIAL_MONTHLY, tiers[1].playStoreProductId)
         assertEquals(SubscriptionProductId.PLAY_SELECT_MONTHLY, tiers[2].playStoreProductId)
+        assertEquals(
+            listOf(
+                SubscriptionProductId.BOOST_SINGLE,
+                SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
+                SubscriptionProductId.INTRO_NOTES_THREE
+            ),
+            service.getInventory().premiumProducts.map { it.productId }
+        )
+    }
+
+    @Test
+    fun devStoreSubscriptionPurchaseGrantsEntitlementAndInvalidatesCache() = runBlocking {
+        val user = uuid(35)
+        val repository = InMemorySubscriptionRepository()
+        val service = SubscriptionService(repository, clock)
+
+        assertEquals(SubscriptionTier.FREE, service.getEntitlement(user).tier)
+        val response = service.recordDevStorePurchase(
+            userId = user,
+            request = SubmitDevStorePurchaseRequestDto(SubscriptionProductId.PLAY_SELECT_MONTHLY)
+        )
+
+        assertEquals(SubscriptionPurchaseSyncStatus.ACTIVE, response.status)
+        assertEquals(SubscriptionTier.SELECT, response.entitlement.tier)
+        assertEquals(EntitlementSource.OWN_SUBSCRIPTION, response.entitlement.source)
+        assertEquals(SubscriptionTier.SELECT, repository.verifiedPurchases.single().tier)
+    }
+
+    @Test
+    fun devStoreProductPurchaseGrantsInventoryBalance() = runBlocking {
+        val user = uuid(36)
+        val repository = InMemorySubscriptionRepository()
+        val service = SubscriptionService(repository, clock)
+
+        val response = service.recordDevStorePurchase(
+            userId = user,
+            request = SubmitDevStorePurchaseRequestDto(SubscriptionProductId.PINEAPPLE_LIKES_FIVE)
+        )
+
+        assertEquals("inventory_granted", response.status)
+        val balance = response.inventory.balances.single()
+        assertEquals(PremiumInventoryType.PINEAPPLE_LIKE, balance.inventoryType)
+        assertEquals(5, balance.quantity)
     }
 
     @Test
@@ -547,6 +592,7 @@ private class InMemorySubscriptionRepository(
 ) : SubscriptionRepository {
     val pendingPurchases = mutableListOf<SubscriptionRecord>()
     val verifiedPurchases = mutableListOf<SubscriptionRecord>()
+    private val inventoryEntries = mutableListOf<InventoryEntry>()
     private val storedEntitlements = stored.toMutableMap()
     val events = mutableListOf<PlayStoreRtdnEventInsert>()
     val eventStatuses = mutableMapOf<String, String>()
@@ -623,6 +669,63 @@ private class InMemorySubscriptionRepository(
 
     override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean = false
 
+    override suspend fun listPremiumInventoryBalances(
+        userId: UUID,
+        now: Instant
+    ): List<PremiumInventoryBalanceRecord> =
+        inventoryEntries
+            .filter { entry ->
+                entry.userId == userId &&
+                    entry.quantity > 0 &&
+                    (entry.expiresAt == null || entry.expiresAt > now)
+            }
+            .groupBy { it.inventoryType }
+            .map { (inventoryType, entries) ->
+                PremiumInventoryBalanceRecord(
+                    inventoryType = inventoryType,
+                    quantity = entries.sumOf { it.quantity },
+                    nextExpiresAt = entries.mapNotNull { it.expiresAt }.minOrNull()
+                )
+            }
+            .sortedBy { it.inventoryType }
+
+    override suspend fun grantPremiumInventory(
+        userId: UUID,
+        inventoryType: String,
+        quantity: Int,
+        source: String,
+        expiresAt: Instant?,
+        now: Instant
+    ): PremiumInventoryBalanceRecord? {
+        inventoryEntries += InventoryEntry(
+            userId = userId,
+            inventoryType = inventoryType,
+            quantity = quantity,
+            expiresAt = expiresAt
+        )
+        return listPremiumInventoryBalances(userId, now).firstOrNull { it.inventoryType == inventoryType }
+    }
+
+    override suspend fun upsertDevSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        tier: String,
+        startsAt: Instant,
+        endsAt: Instant
+    ): SubscriptionRecord {
+        verifiedPurchases.removeAll { it.userId == userId && it.status == "active" }
+        val record = SubscriptionRecord(
+            subscriptionId = UUID.randomUUID(),
+            userId = userId,
+            tier = tier,
+            status = "active",
+            currentPeriodStart = startsAt,
+            currentPeriodEnd = endsAt
+        )
+        verifiedPurchases += record
+        return record
+    }
+
     override suspend fun listPlayStoreSubscriptionsDueForVerification(
         staleBefore: Instant,
         renewalWindowEnd: Instant,
@@ -692,6 +795,13 @@ private class InMemorySubscriptionRepository(
         verifiedPurchases += record
         return record
     }
+
+    private data class InventoryEntry(
+        val userId: UUID,
+        val inventoryType: String,
+        val quantity: Int,
+        val expiresAt: Instant?
+    )
 }
 
 private class CountingActiveEntitlementRepository(

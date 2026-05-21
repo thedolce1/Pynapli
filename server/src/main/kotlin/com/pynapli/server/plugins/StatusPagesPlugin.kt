@@ -353,6 +353,8 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_PUSH_PLATFORM", "INVALID_PUSH_TOKEN" -> "Push device could not be registered."
     "NOTIFICATION_PREFERENCES_NOT_FOUND" -> "Notification settings were not found."
     "INVALID_SUBSCRIPTION_PRODUCT" -> "Choose a valid subscription."
+    "INVALID_STORE_PRODUCT" -> "Choose a valid Store item."
+    "DEV_STORE_PURCHASES_DISABLED" -> "Dev Store purchases are not enabled in this environment."
     "INVALID_PURCHASE_TOKEN", "INVALID_PURCHASE_PACKAGE" -> "Purchase could not be verified."
     "PURCHASE_ALREADY_LINKED" -> "This purchase is already linked to another account."
     "INVALID_ENTITLEMENT_USER" -> "User entitlement could not be updated."
@@ -544,10 +546,12 @@ private fun subscriptionStatusFor(code: String): HttpStatusCode = when (code) {
     "RTDN_VERIFICATION_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
     "ADMIN_UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
     "ADMIN_FORBIDDEN" -> HttpStatusCode.Forbidden
+    "DEV_STORE_PURCHASES_DISABLED" -> HttpStatusCode.Forbidden
     "ENTITLEMENT_NOT_FOUND" -> HttpStatusCode.NotFound
     "BOOST_INVENTORY_REQUIRED" -> HttpStatusCode.Forbidden
     "PURCHASE_ALREADY_LINKED" -> HttpStatusCode.Conflict
     "INVALID_SUBSCRIPTION_PRODUCT",
+    "INVALID_STORE_PRODUCT",
     "INVALID_PURCHASE_TOKEN",
     "INVALID_PURCHASE_PACKAGE",
     "INVALID_ENTITLEMENT_USER",

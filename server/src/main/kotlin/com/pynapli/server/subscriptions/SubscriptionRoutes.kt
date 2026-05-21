@@ -4,6 +4,7 @@ import com.google.auth.oauth2.TokenVerifier
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
@@ -22,6 +23,7 @@ import java.security.MessageDigest
 private val rtdnJson = Json { ignoreUnknownKeys = true }
 
 fun Application.configureSubscriptionRoutes(
+    config: ServerConfig,
     authService: AuthService?,
     subscriptionService: SubscriptionService?
 ) {
@@ -34,14 +36,21 @@ fun Application.configureSubscriptionRoutes(
         }
 
         get("/v1/subscriptions/inventory") {
-            authService.authenticate(call.requiredBearerToken())
-            call.respond(subscriptionService.getInventory())
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(subscriptionService.getInventory(user.id))
         }
 
         post("/v1/subscriptions/play-store/purchases") {
             val user = authService.authenticate(call.requiredBearerToken())
             val request = call.receive<SubmitPlayStoreSubscriptionPurchaseRequestDto>()
             call.respond(subscriptionService.recordPlayStoreSubscriptionPurchase(user.id, request))
+        }
+
+        post("/v1/subscriptions/dev/purchases") {
+            if (!config.devStorePurchasesEnabled) throw SubscriptionException("DEV_STORE_PURCHASES_DISABLED")
+            val user = authService.authenticate(call.requiredBearerToken())
+            val request = call.receive<SubmitDevStorePurchaseRequestDto>()
+            call.respond(subscriptionService.recordDevStorePurchase(user.id, request))
         }
 
         post("/v1/boosts") {

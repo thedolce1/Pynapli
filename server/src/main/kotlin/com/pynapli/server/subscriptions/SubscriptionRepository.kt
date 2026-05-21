@@ -57,11 +57,31 @@ interface SubscriptionRepository {
      */
     suspend fun refundInventoryById(inventoryId: UUID, now: Instant): Boolean = false
 
+    suspend fun listPremiumInventoryBalances(userId: UUID, now: Instant): List<PremiumInventoryBalanceRecord> =
+        emptyList()
+
+    suspend fun grantPremiumInventory(
+        userId: UUID,
+        inventoryType: String,
+        quantity: Int,
+        source: String,
+        expiresAt: Instant?,
+        now: Instant
+    ): PremiumInventoryBalanceRecord? = null
+
     suspend fun activateBoost(
         userId: UUID,
         now: Instant,
         duration: Duration
     ): BoostActivationResult? = null
+
+    suspend fun upsertDevSubscriptionPurchase(
+        userId: UUID,
+        productId: String,
+        tier: String,
+        startsAt: Instant,
+        endsAt: Instant
+    ): SubscriptionRecord = throw SubscriptionException("DEV_STORE_PURCHASE_UNAVAILABLE")
 
     suspend fun listPlayStoreSubscriptionsDueForVerification(
         staleBefore: Instant,
@@ -175,6 +195,12 @@ data class BoostActivationRecord(
 data class BoostActivationResult(
     val activation: BoostActivationRecord,
     val consumedInventory: Boolean
+)
+
+data class PremiumInventoryBalanceRecord(
+    val inventoryType: String,
+    val quantity: Int,
+    val nextExpiresAt: Instant?
 )
 
 private fun SubscriptionRecord.toActiveEntitlementRecord(): ActiveEntitlementRecord =

@@ -11,6 +11,17 @@ object SubscriptionTier {
 object SubscriptionProductId {
     const val PLAY_SOCIAL_MONTHLY = "pynapli_social_monthly"
     const val PLAY_SELECT_MONTHLY = "pynapli_select_monthly"
+    const val BOOST_SINGLE = "pynapli_boost_1"
+    const val PINEAPPLE_LIKES_FIVE = "pynapli_pineapple_likes_5"
+    const val INTRO_NOTES_THREE = "pynapli_intro_notes_3"
+}
+
+object PremiumInventoryType {
+    const val BOOST = "boost"
+    const val SUPER_BOOST = "super_boost"
+    const val PINEAPPLE_LIKE = "pineapple_like"
+    const val INTRO_NOTE = "intro_note"
+    const val EXTRA_PICK = "extra_pick"
 }
 
 object EntitlementSource {
@@ -37,7 +48,9 @@ data class SubscriptionEntitlementDto(
 
 @Serializable
 data class SubscriptionInventoryResponseDto(
-    val tiers: List<SubscriptionTierDto>
+    val tiers: List<SubscriptionTierDto>,
+    val premiumProducts: List<PremiumProductDto> = emptyList(),
+    val balances: List<PremiumInventoryBalanceDto> = emptyList()
 )
 
 @Serializable
@@ -52,6 +65,26 @@ data class SubscriptionTierDto(
     val appStoreProductId: String? = null
 )
 
+@Serializable
+data class PremiumProductDto(
+    val productId: String,
+    val inventoryType: String,
+    val displayName: String,
+    val description: String,
+    val priceUsdCents: Int,
+    val quantity: Int,
+    val features: List<String>,
+    val playStoreProductId: String? = null,
+    val appStoreProductId: String? = null
+)
+
+@Serializable
+data class PremiumInventoryBalanceDto(
+    val inventoryType: String,
+    val quantity: Int,
+    val nextExpiresAt: String? = null
+)
+
 object SubscriptionPurchaseSyncStatus {
     const val ACTIVE = "active"
     const val PENDING_VERIFICATION = "pending_verification"
@@ -63,6 +96,18 @@ data class SubmitPlayStoreSubscriptionPurchaseRequestDto(
     val productId: String,
     val purchaseToken: String,
     val packageName: String
+)
+
+@Serializable
+data class SubmitDevStorePurchaseRequestDto(
+    val productId: String
+)
+
+@Serializable
+data class StorePurchaseResponseDto(
+    val status: String,
+    val entitlement: SubscriptionEntitlementDto,
+    val inventory: SubscriptionInventoryResponseDto
 )
 
 @Serializable
