@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -118,6 +119,17 @@ private fun ActivityScreenContent(
     distanceUnit: String,
     modifier: Modifier = Modifier
 ) {
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(state.focusedEventId, state.visibleItems, state.gatedCount) {
+        val focusedEventId = state.focusedEventId ?: return@LaunchedEffect
+        val index = state.visibleItems.indexOfFirst { item -> item.eventId == focusedEventId }
+        if (index >= 0) {
+            val gateOffset = if (state.gatedCount > 0) 1 else 0
+            listState.animateScrollToItem(index + gateOffset)
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -173,6 +185,7 @@ private fun ActivityScreenContent(
 
             else -> {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize()
                 ) {
                     if (state.gatedCount > 0) {
@@ -189,6 +202,7 @@ private fun ActivityScreenContent(
                     ) { item ->
                         ActivityRow(
                             item = item,
+                            focused = state.focusedEventId == item.eventId,
                             pendingAction = state.pendingAlbumActionEventId == item.eventId,
                             albumReviewExpanded = expandedAlbumReviewEventId == item.eventId,
                             pendingDismiss = state.pendingDismissEventId == item.eventId,
@@ -385,6 +399,7 @@ private fun ActivityHeader(
 @Composable
 private fun ActivityRow(
     item: ActivityEventDto,
+    focused: Boolean,
     pendingAction: Boolean,
     albumReviewExpanded: Boolean,
     pendingDismiss: Boolean,
@@ -406,7 +421,9 @@ private fun ActivityRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                if (isNew) {
+                if (focused) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                } else if (isNew) {
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
                 } else {
                     Color.Transparent

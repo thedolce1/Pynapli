@@ -28,6 +28,7 @@ data class ActivityUiState(
     val gatedCount: Int = 0,
     val pendingAlbumActionEventId: String? = null,
     val pendingDismissEventId: String? = null,
+    val focusedEventId: String? = null,
     val actionFeedback: String? = null,
     val errorMessage: String? = null
 ) {
@@ -108,11 +109,16 @@ class ActivityStateHolder(
                 items = emptyList(),
                 nextCursor = null,
                 gatedCount = 0,
+                focusedEventId = null,
                 actionFeedback = null,
                 errorMessage = null
             )
         }
         refresh(showLoading = true, surfaceErrors = true, markLoadedItemsSeen = true)
+    }
+
+    fun focusEvent(eventId: String?) {
+        _state.update { current -> current.copy(focusedEventId = eventId) }
     }
 
     private suspend fun refresh(

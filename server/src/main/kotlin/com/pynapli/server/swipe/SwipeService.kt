@@ -385,6 +385,9 @@ class SwipeService(
                         subjectId = match.matchId,
                         idempotencyKey = "match:${match.matchId}:$targetUserId",
                         payload = mapOf(
+                            "target" to "activity",
+                            "activityTab" to "matches",
+                            "activityEventType" to "match",
                             "matchId" to match.matchId.toString(),
                             "matchedUserId" to viewerUserId.toString()
                         )

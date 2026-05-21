@@ -73,7 +73,8 @@ Current Activity client coverage:
 - `ActivityStateHolderTest` covers silent refresh behavior, entitlement metadata, server-backed tab selection, cursor load-more, deduped append, server-backed summary/badge state, marking loaded visible rows seen, avoiding background seen marking, summary failure resilience, logout reset, and local removal after dismiss.
 - `ActivityScreenInteractionTest` renders the real Compose `ActivityScreen` and verifies tab click -> backend tab load, cursor `Load more`, premium reveal row, unseen row state, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the UI.
 - `scripts/android-activity-qa.ps1` runs the installed Android app against local Ktor, logs in through the real app path, opens Activity from the bottom nav, captures All/Flirts/Likes/Matches/Albums/Invites screenshots and XML, checks structural golden assertions, and verifies loaded badge rows are marked seen in the backend.
-- Latest emulator proof: `artifacts/android-activity-qa/20260520-161224`.
+- `scripts/activity-api-load-test.ps1` seeds dense Activity feeds and reports summary/feed/tab p50/p95 latency budgets.
+- Latest emulator proof: `artifacts/android-activity-qa/20260520-220111`.
 
 Still open before beta:
 
@@ -211,6 +212,22 @@ Requirements:
 
 The script writes PNG screenshots, UI hierarchy XML, screenshot signatures, and `qa-summary.json` under `artifacts/android-activity-qa/<timestamp>`. A passing run proves the installed app can complete login -> Grid -> Activity, render each Activity tab with seeded rows, avoid app error text, and clear loaded unread badge rows through the backend `seen_at` path.
 
+## Activity API Load QA
+
+Run this after backend Activity feed, summary, tab, retention, or producer-query changes:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\activity-api-load-test.ps1
+```
+
+Useful tiny harness smoke:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\activity-api-load-test.ps1 -ViewerCount 1 -EventsPerViewer 3 -ActorCount 3 -ConcurrentUsers 1
+```
+
+The script writes request CSVs and `activity-load-summary.json` under `artifacts/activity-api-load/<timestamp>`. It proves the Ktor Activity summary, all-feed, likes, flirts, and invites endpoints can handle dense seeded feeds with explicit p95 budgets.
+
 ## Connected Android Denied-Location QA
 
 Run this before beta and after any Grid/location permission changes:
@@ -273,7 +290,7 @@ Current local proof:
 - [x] Grid API load harness exists and runs zero-error locally for the current 5,000-candidate / 100-concurrent warm workload.
 - [ ] Partial: Grid API profiling exists, the two-phase Grid SQL optimization is implemented, entitlement/rate-limit/profile-view side-query pressure has been reduced, V43 covering indexes are in place, and 500-concurrent proof artifacts exist; remaining hot-path work is repeat server-profiled 500-concurrent runs and larger dense metro datasets.
 - [ ] Partial: Grid shared-UI visual-signature regression, connected Android Grid structural golden QA, denied-location QA, battery-profile harness, and Android location policy checks exist and run locally; real-device screenshot and battery coverage is still open.
-- [ ] Partial: connected Android Activity structural golden QA exists; OS notification deep-link and real-device Activity passes remain open.
+- [ ] Partial: connected Android Activity structural golden QA, OS notification deep-link plumbing, Activity realtime stream tests, and Activity API load harness exist; real-device Activity notification and battery passes remain open.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [x] Location denied path tested on connected Android emulator/device through `scripts/android-grid-denied-location-qa.ps1`.

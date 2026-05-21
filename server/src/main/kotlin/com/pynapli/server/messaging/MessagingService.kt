@@ -182,6 +182,7 @@ class MessagingService(
                         subjectId = conversationId,
                         idempotencyKey = "message:${message.messageId}:${participant.userId}",
                         payload = mapOf(
+                            "target" to "messages",
                             "conversationId" to conversationId.toString(),
                             "messageId" to message.messageId
                         )
@@ -229,7 +230,12 @@ class MessagingService(
                         kind = NotificationKind.PARTNER_CHAT_INVITE,
                         subjectId = conversationId,
                         idempotencyKey = "partner_chat_invite:$conversationId:$partnerUserId",
-                        payload = mapOf("conversationId" to conversationId.toString())
+                        payload = mapOf(
+                            "target" to "activity",
+                            "activityTab" to "invites",
+                            "activityEventType" to "partner_chat_invite",
+                            "conversationId" to conversationId.toString()
+                        )
                     )
                 )
                 result.conversation.toDto()

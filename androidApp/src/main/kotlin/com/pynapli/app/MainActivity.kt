@@ -3,6 +3,7 @@ package com.pynapli.app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
@@ -20,6 +21,7 @@ import com.pynapli.app.location.DeviceLocation
 import com.pynapli.app.location.GridLocationRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.PickedMediaForUpload
+import com.pynapli.app.notifications.PynapliNotificationDeepLinks
 import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
@@ -36,6 +38,7 @@ class MainActivity : ComponentActivity() {
     private val activityScope = MainScope()
     private var pendingLocationSignal: CancellationSignal? = null
     private var presenceStreamJob: Job? = null
+    private var activityStreamJob: Job? = null
     private var pendingMediaAlbumKind: MediaAlbumKindUi? = null
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -84,18 +87,32 @@ class MainActivity : ComponentActivity() {
                 topPicksStateHolder = appGraph.topPicksStateHolder,
                 travelLocationStateHolder = appGraph.travelLocationStateHolder,
                 tonightAvailabilityStateHolder = appGraph.tonightAvailabilityStateHolder,
+                deepLinkStateHolder = appGraph.deepLinkStateHolder,
                 onUseCurrentLocation = ::requestCurrentLocation,
                 onPickMediaForAlbum = ::pickMediaForAlbum,
                 devLoginCredentials = appGraph.devLoginCredentials.takeIf { isDebuggable() }
             )
         }
+        handleNotificationDeepLink(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationDeepLink(intent)
     }
 
     override fun onStart() {
         super.onStart()
-        if (presenceStreamJob?.isActive == true) return
-        presenceStreamJob = activityScope.launch {
-            runCatching { appGraph.gridPresenceStreamCoordinator.run() }
+        if (presenceStreamJob?.isActive != true) {
+            presenceStreamJob = activityScope.launch {
+                runCatching { appGraph.gridPresenceStreamCoordinator.run() }
+            }
+        }
+        if (activityStreamJob?.isActive != true) {
+            activityStreamJob = activityScope.launch {
+                runCatching { appGraph.activityRealtimeCoordinator.run() }
+            }
         }
     }
 
@@ -104,6 +121,8 @@ class MainActivity : ComponentActivity() {
         pendingLocationSignal = null
         presenceStreamJob?.cancel()
         presenceStreamJob = null
+        activityStreamJob?.cancel()
+        activityStreamJob = null
         super.onStop()
     }
 
@@ -170,6 +189,24 @@ class MainActivity : ComponentActivity() {
             userId = authState.session?.userId,
             settings = settings
         )
+    }
+
+    private fun handleNotificationDeepLink(intent: Intent?) {
+        if (intent == null) return
+        when (PynapliNotificationDeepLinks.targetFromIntent(intent)) {
+            AppDeepLinkStateHolder.TARGET_ACTIVITY -> {
+                appGraph.deepLinkStateHolder.openActivity(
+                    tab = PynapliNotificationDeepLinks.activityTabFromIntent(intent),
+                    eventId = PynapliNotificationDeepLinks.activityEventIdFromIntent(intent)
+                )
+            }
+
+            AppDeepLinkStateHolder.TARGET_MESSAGES -> {
+                appGraph.deepLinkStateHolder.openMessages(
+                    conversationId = PynapliNotificationDeepLinks.conversationIdFromIntent(intent)
+                )
+            }
+        }
     }
 
     private fun pickMediaForAlbum(kind: MediaAlbumKindUi) {

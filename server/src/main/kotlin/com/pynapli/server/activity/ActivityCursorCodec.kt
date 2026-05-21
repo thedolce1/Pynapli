@@ -118,6 +118,9 @@ enum class ActivityFeedTab(
             val normalized = value?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: ALL.value
             return entries.firstOrNull { it.value == normalized } ?: throw ActivityException("INVALID_ACTIVITY_TAB")
         }
+
+        fun fromEventType(eventType: String): ActivityFeedTab =
+            entries.firstOrNull { tab -> eventType in tab.eventTypes } ?: ALL
     }
 }
 

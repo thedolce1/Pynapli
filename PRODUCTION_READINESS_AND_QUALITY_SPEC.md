@@ -107,6 +107,7 @@ The mobile app must preserve:
 - Swipe deck session.
 - Current swipe card.
 - Activity cursor/filter.
+- Activity realtime stream, notification deep-link routing, product-visible retention, and API load budgets.
 - Message list scroll.
 - Draft messages.
 

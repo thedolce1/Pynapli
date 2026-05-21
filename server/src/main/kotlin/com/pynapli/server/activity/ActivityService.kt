@@ -33,6 +33,7 @@ class ActivityService(
     private val rateLimitService: RateLimitService? = null,
     private val riskPolicyService: RiskPolicyService? = null,
     private val subscriptionService: SubscriptionService? = null,
+    private val activityBroadcaster: ActivityBroadcaster? = null,
     private val cursorCodec: ActivityCursorCodec = ActivityCursorCodec("pynapli-local-dev-activity-cursor-secret")
 ) {
     suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID) {
@@ -41,6 +42,7 @@ class ActivityService(
         if (riskPolicyService?.shouldSuppressPassiveActivity(viewerUserId) == true) return
         if (rateLimitService?.check(viewerUserId, RateLimitedAction.PROFILE_VIEW)?.allowed == false) return
         if (!repository.recordProfileView(viewerUserId, targetUserId)) return
+        publishActivityDelta(targetUserId, "profile_view")
         notificationPublisher?.enqueue(
             NotificationEventDraft(
                 recipientUserId = targetUserId,
@@ -48,7 +50,10 @@ class ActivityService(
                 kind = NotificationKind.PROFILE_VIEW,
                 subjectId = targetUserId,
                 idempotencyKey = "profile_view:$targetUserId:$viewerUserId",
-                payload = mapOf("viewerUserId" to viewerUserId.toString())
+                payload = activityNotificationPayload(
+                    eventType = "profile_view",
+                    extra = mapOf("viewerUserId" to viewerUserId.toString())
+                )
             )
         )
     }
@@ -67,6 +72,7 @@ class ActivityService(
         if (!repository.recordFlirt(senderUserId, targetUserId)) {
             throw ActivityException("FLIRT_NOT_ALLOWED")
         }
+        publishActivityDelta(targetUserId, "flirt")
         notificationPublisher?.enqueue(
             NotificationEventDraft(
                 recipientUserId = targetUserId,
@@ -74,7 +80,10 @@ class ActivityService(
                 kind = NotificationKind.FLIRT,
                 subjectId = senderUserId,
                 idempotencyKey = "flirt:$senderUserId:$targetUserId",
-                payload = mapOf("actorUserId" to senderUserId.toString())
+                payload = activityNotificationPayload(
+                    eventType = "flirt",
+                    extra = mapOf("actorUserId" to senderUserId.toString())
+                )
             )
         )
         return SendFlirtResponseDto(sent = true)
@@ -104,6 +113,7 @@ class ActivityService(
             throw error
         }
         if (!mediaRequested) throw ActivityException("ALBUM_REQUEST_NOT_ALLOWED")
+        publishActivityDelta(targetUserId, "album_request")
         notificationPublisher?.enqueue(
             NotificationEventDraft(
                 recipientUserId = targetUserId,
@@ -111,7 +121,10 @@ class ActivityService(
                 kind = NotificationKind.ALBUM_REQUEST,
                 subjectId = requesterUserId,
                 idempotencyKey = "album_request:$requesterUserId:$targetUserId",
-                payload = mapOf("requesterUserId" to requesterUserId.toString())
+                payload = activityNotificationPayload(
+                    eventType = "album_request",
+                    extra = mapOf("requesterUserId" to requesterUserId.toString())
+                )
             )
         )
         return RequestAlbumAccessResponseDto(requested = true)
@@ -122,21 +135,29 @@ class ActivityService(
         if (eventType !in SWIPE_INTEREST_EVENT_TYPES) throw ActivityException("INVALID_ACTIVITY_EVENT_TYPE")
         if (blockRepository?.isBlockedEitherWay(actorUserId, targetUserId) == true) return
         if (riskPolicyService?.isSocialActionRestricted(actorUserId) == true) return
-        repository.recordSwipeInterest(actorUserId, targetUserId, eventType)
+        if (repository.recordSwipeInterest(actorUserId, targetUserId, eventType)) {
+            publishActivityDelta(targetUserId, eventType)
+        }
     }
 
     suspend fun recordMatch(userA: UUID, userB: UUID, matchId: UUID) {
         if (userA == userB) return
         if (blockRepository?.isBlockedEitherWay(userA, userB) == true) return
-        repository.recordMatch(recipientUserId = userA, actorUserId = userB, matchId = matchId)
-        repository.recordMatch(recipientUserId = userB, actorUserId = userA, matchId = matchId)
+        if (repository.recordMatch(recipientUserId = userA, actorUserId = userB, matchId = matchId)) {
+            publishActivityDelta(userA, "match")
+        }
+        if (repository.recordMatch(recipientUserId = userB, actorUserId = userA, matchId = matchId)) {
+            publishActivityDelta(userB, "match")
+        }
     }
 
     suspend fun recordPartnerChatInvite(inviterUserId: UUID, inviteeUserId: UUID, conversationId: UUID) {
         if (inviterUserId == inviteeUserId) return
         if (blockRepository?.isBlockedEitherWay(inviterUserId, inviteeUserId) == true) return
         if (riskPolicyService?.isSocialActionRestricted(inviterUserId) == true) return
-        repository.recordPartnerChatInvite(inviterUserId, inviteeUserId, conversationId)
+        if (repository.recordPartnerChatInvite(inviterUserId, inviteeUserId, conversationId)) {
+            publishActivityDelta(inviteeUserId, "partner_chat_invite")
+        }
     }
 
     suspend fun respondToAlbumAccessRequest(
@@ -299,6 +320,25 @@ class ActivityService(
         matchId = matchId,
         conversationId = conversationId
     )
+
+    private suspend fun publishActivityDelta(recipientUserId: UUID, eventType: String) {
+        activityBroadcaster?.emit(
+            ActivityRealtimeDelta(
+                recipientUserId = recipientUserId,
+                type = eventType
+            )
+        )
+    }
+
+    private fun activityNotificationPayload(
+        eventType: String,
+        extra: Map<String, String> = emptyMap()
+    ): Map<String, String> =
+        extra + mapOf(
+            "target" to "activity",
+            "activityTab" to ActivityFeedTab.fromEventType(eventType).value,
+            "activityEventType" to eventType
+        )
 
     companion object {
         private const val DEFAULT_LIMIT = 50

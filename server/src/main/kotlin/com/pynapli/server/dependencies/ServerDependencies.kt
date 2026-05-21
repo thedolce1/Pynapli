@@ -1,7 +1,11 @@
 package com.pynapli.server.dependencies
 
+import com.pynapli.server.activity.ActivityBroadcaster
+import com.pynapli.server.activity.ActivityRetentionService
+import com.pynapli.server.activity.ActivityRetentionWorker
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.activity.ActivityCursorCodec
+import com.pynapli.server.activity.JdbcActivityRetentionRepository
 import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
@@ -99,6 +103,7 @@ class ServerDependencies(
     val adminReportService: AdminReportService?,
     val adminRiskService: AdminRiskService?,
     val activityService: ActivityService?,
+    val activityRetentionWorker: ActivityRetentionWorker?,
     val notificationService: NotificationService?,
     val notificationDispatchWorker: NotificationDispatchWorker?,
     val blockService: BlockService?,
@@ -107,6 +112,7 @@ class ServerDependencies(
     val subscriptionService: SubscriptionService?,
     val playStoreSubscriptionSyncWorker: PlayStoreSubscriptionSyncWorker?,
     val localMediaUploadStorage: LocalMediaUploadStorage?,
+    val activityBroadcaster: ActivityBroadcaster?,
     val presenceBroadcaster: PresenceBroadcaster?,
     val presenceOfflineScanner: PresenceOfflineScanner?,
     val blockRepository: BlockRepository?,
@@ -124,6 +130,7 @@ class ServerDependencies(
     override fun close() {
         runCatching { presenceOfflineScanner?.close() }
         runCatching { playStoreSubscriptionSyncWorker?.close() }
+        runCatching { activityRetentionWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
         runCatching { profileActivityScope?.cancel() }
         probes.asReversed().forEach { probe ->
@@ -200,6 +207,7 @@ class ServerDependencies(
             )
             val notificationRepository = JdbcNotificationRepository(database.dataSource)
             val notificationService = NotificationService(notificationRepository)
+            val activityBroadcaster = ActivityBroadcaster()
             val notificationDispatchWorker = if (config.notificationDispatchEnabled) {
                 val pushNotificationSender = createPushNotificationSender(config)
                 NotificationDispatchWorker(
@@ -259,8 +267,19 @@ class ServerDependencies(
                 rateLimitService = rateLimitService,
                 riskPolicyService = riskPolicyService,
                 subscriptionService = subscriptionService,
+                activityBroadcaster = activityBroadcaster,
                 cursorCodec = ActivityCursorCodec(config.activityCursorSecret)
             )
+            val activityRetentionWorker = if (config.activityRetentionEnabled) {
+                ActivityRetentionWorker(
+                    service = ActivityRetentionService(
+                        repository = JdbcActivityRetentionRepository(database.dataSource)
+                    ),
+                    intervalMillis = config.activityRetentionIntervalMillis
+                )
+            } else {
+                null
+            }
             val profileService = ProfileService(
                 repository = JdbcProfileRepository(database.dataSource),
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
@@ -358,6 +377,7 @@ class ServerDependencies(
                 adminReportService = adminReportService,
                 adminRiskService = adminRiskService,
                 activityService = activityService,
+                activityRetentionWorker = activityRetentionWorker,
                 notificationService = notificationService,
                 notificationDispatchWorker = notificationDispatchWorker,
                 blockService = blockService,
@@ -366,6 +386,7 @@ class ServerDependencies(
                 subscriptionService = subscriptionService,
                 playStoreSubscriptionSyncWorker = playStoreSubscriptionSyncWorker,
                 localMediaUploadStorage = localMediaUploadStorage,
+                activityBroadcaster = activityBroadcaster,
                 presenceBroadcaster = presenceBroadcaster,
                 presenceOfflineScanner = presenceOfflineScanner,
                 blockRepository = blockRepository,
@@ -407,6 +428,7 @@ class ServerDependencies(
                 adminReportService = null,
                 adminRiskService = null,
                 activityService = null,
+                activityRetentionWorker = null,
                 notificationService = null,
                 notificationDispatchWorker = null,
                 blockService = null,
@@ -415,6 +437,7 @@ class ServerDependencies(
                 subscriptionService = null,
                 playStoreSubscriptionSyncWorker = null,
                 localMediaUploadStorage = null,
+                activityBroadcaster = null,
                 presenceBroadcaster = null,
                 presenceOfflineScanner = null,
                 blockRepository = null,

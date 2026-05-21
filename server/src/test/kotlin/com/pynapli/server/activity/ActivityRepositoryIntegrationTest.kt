@@ -388,6 +388,38 @@ class ActivityRepositoryIntegrationTest {
         assertEquals(conversationId.toString(), inviteEvent.conversationId)
     }
 
+    @Test
+    fun retentionHidesExpiredProductVisibleActivityButKeepsMatches() = runBlocking {
+        val recipient = UUID.fromString("00000000-0000-0000-0000-000000001901")
+        val viewActor = UUID.fromString("00000000-0000-0000-0000-000000001902")
+        val likeActor = UUID.fromString("00000000-0000-0000-0000-000000001903")
+        val matchActor = UUID.fromString("00000000-0000-0000-0000-000000001904")
+        val flirtActor = UUID.fromString("00000000-0000-0000-0000-000000001905")
+        dataSource.insertUserWithDiscovery(recipient)
+        dataSource.insertUserWithDiscovery(viewActor)
+        dataSource.insertUserWithDiscovery(likeActor)
+        dataSource.insertUserWithDiscovery(matchActor)
+        dataSource.insertUserWithDiscovery(flirtActor)
+        val oldViewId = UUID.fromString("00000000-0000-0000-0000-000000001911")
+        val oldLikeId = UUID.fromString("00000000-0000-0000-0000-000000001912")
+        val oldMatchId = UUID.fromString("00000000-0000-0000-0000-000000001913")
+        val recentFlirtId = UUID.fromString("00000000-0000-0000-0000-000000001914")
+        dataSource.insertActivityEvent(oldViewId, recipient, viewActor, "profile_view", Instant.parse("2026-04-01T12:00:00Z"))
+        dataSource.insertActivityEvent(oldLikeId, recipient, likeActor, "swipe_like", Instant.parse("2026-01-01T12:00:00Z"))
+        dataSource.insertActivityEvent(oldMatchId, recipient, matchActor, "match", Instant.parse("2026-01-01T12:00:00Z"))
+        dataSource.insertActivityEvent(recentFlirtId, recipient, flirtActor, "flirt", Instant.parse("2026-05-10T12:00:00Z"))
+        val repository = JdbcActivityRetentionRepository(dataSource)
+
+        val summary = repository.hideExpiredProductVisibleEvents(Instant.parse("2026-05-20T12:00:00Z"))
+
+        assertEquals(2, summary.hiddenTotal)
+        assertEquals(mapOf("profile_view" to 1, "swipe_like" to 1), summary.hiddenByType)
+        assertEquals("hidden", dataSource.activityEventVisibility(oldViewId))
+        assertEquals("hidden", dataSource.activityEventVisibility(oldLikeId))
+        assertEquals("visible", dataSource.activityEventVisibility(oldMatchId))
+        assertEquals("visible", dataSource.activityEventVisibility(recentFlirtId))
+    }
+
     private fun DataSource.insertUserWithDiscovery(
         userId: UUID,
         status: String = "active",
@@ -644,6 +676,23 @@ class ActivityRepositoryIntegrationTest {
                 statement.executeQuery().use { rs ->
                     rs.next()
                     rs.getInt(1)
+                }
+            }
+        }
+
+    private fun DataSource.activityEventVisibility(eventId: UUID): String =
+        connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT visibility_status
+                FROM activity_events
+                WHERE id = ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, eventId)
+                statement.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    rs.getString("visibility_status")
                 }
             }
         }

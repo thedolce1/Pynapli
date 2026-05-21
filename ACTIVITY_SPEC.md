@@ -635,9 +635,10 @@ If socket is unavailable:
 
 ## Current Implementation
 
-Implemented and verified as of 2026-05-19:
+Implemented and verified as of 2026-05-20:
 
 - `GET /v1/activity` returns newest-first Activity with `limit`, `tab`, and signed `cursor` query params.
+- `/v1/activity/stream` emits authenticated Activity deltas for the connected recipient. The Android client consumes those deltas through a resilient WebSocket client and refreshes Activity summary/feed state without marking background-refreshed rows as seen.
 - `GET /v1/activity/summary` returns meaningful badge counts, separate profile-view counts, per-category counts, and the latest badge-worthy timestamp.
 - `POST /v1/activity/seen` marks only the authenticated user's requested Activity event IDs as seen.
 - Feed tabs are server-authoritative: `all`, `views`, `flirts`, `likes`, `matches`, `albums`, and `invites`.
@@ -653,7 +654,10 @@ Implemented and verified as of 2026-05-19:
 - Repository and service coverage proves tab filtering, cursor paging, entitlement reveal depth, invalid cursor rejection, block/risk filtering, and dismiss behavior.
 - Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, consumes the real summary API for the bottom-nav Activity badge, marks only loaded visible Activity rows as seen, exposes per-row dismiss, visually distinguishes unseen badge-worthy rows with a restrained `New` state, and has row CTAs for match messaging, partner-chat invite opening, and album request review/grant/deny.
 - Activity premium reveal now has an intentional Select upgrade row instead of a plain gated-count strip.
-- In-app Activity notification banners route to the matching Activity tab when tapped. OS push notification-to-row deep links remain future work.
+- In-app Activity notification banners route to the matching Activity tab when tapped.
+- OS push notifications carry app-level deep-link payloads for Activity or Messages. Activity notifications open the matching Activity tab and focus the row when an `activityEventId` is present; grouped/aggregated notifications fall back to the correct tab.
+- Product-visible Activity retention exists as a Ktor background worker: views/flirts expire from product-visible Activity after 30 days, old like/intro/album/invite rows after 90 days, and matches remain persistent unless removed by product state.
+- `scripts/activity-api-load-test.ps1` seeds dense Activity feeds and reports p50/p95 latency for summary, all-feed, likes, flirts, and invites scenarios.
 - Desktop UI interaction coverage proves Activity tab selection, cursor load-more, premium reveal row, unread row state, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the rendered screen.
 - Connected Android Activity QA exists at `scripts/android-activity-qa.ps1`. It seeds deterministic Activity rows, runs the installed Android app through login -> Grid -> Activity, captures screenshots/XML for All and each Activity tab, asserts structural golden text/signatures, and verifies loaded badge rows are marked seen in the backend.
 
@@ -803,8 +807,8 @@ Avoid:
 - [x] Activity rows visually distinguish unseen badge-worthy rows.
 - [x] Activity has a connected Android QA harness for the real installed app path.
 - [x] Activity is not a message inbox.
-- [ ] Realtime Activity deltas.
-- [ ] OS notification-to-Activity row deep links.
+- [x] Realtime Activity deltas.
+- [x] OS notification-to-Activity tab deep links with row focus support when the payload includes an Activity event id.
 
 ## Do Not Implement
 

@@ -1,6 +1,7 @@
 package com.pynapli.server
 
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.activity.configureActivityStreamRoutes
 import com.pynapli.server.activity.configureActivityRoutes
 import com.pynapli.server.auth.configureAuthRoutes
 import com.pynapli.server.dependencies.ServerDependencies
@@ -54,6 +55,7 @@ fun main() {
 fun Application.module(dependencies: ServerDependencies = ServerDependencies.fromEnvironment()) {
     closeDependenciesOnStop(dependencies)
     dependencies.notificationDispatchWorker?.start()
+    dependencies.activityRetentionWorker?.start()
     dependencies.playStoreSubscriptionSyncWorker?.start()
     dependencies.presenceOfflineScanner?.start()
     configureSerialization()
@@ -83,6 +85,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureSavedGridFilterRoutes(dependencies.authService, dependencies.savedGridFilterService)
     configureTonightAvailabilityRoutes(dependencies.authService, dependencies.tonightAvailabilityService)
     configureActivityRoutes(dependencies.authService, dependencies.activityService)
+    configureActivityStreamRoutes(dependencies.authService, dependencies.activityBroadcaster)
     configureNotificationRoutes(dependencies.authService, dependencies.notificationService)
     configureSubscriptionRoutes(dependencies.authService, dependencies.subscriptionService)
     configureMessagingRoutes(dependencies.authService, dependencies.messagingService)

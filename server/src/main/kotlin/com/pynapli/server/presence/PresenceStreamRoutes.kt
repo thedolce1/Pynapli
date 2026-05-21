@@ -2,16 +2,13 @@ package com.pynapli.server.presence
 
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.realtime.installRealtimeWebSocketsIfNeeded
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import com.pynapli.shared.network.dto.PresenceStreamSubscribeDto
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
 import io.ktor.server.routing.routing
-import io.ktor.server.websocket.WebSockets
-import io.ktor.server.websocket.pingPeriod
-import io.ktor.server.websocket.timeout
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
@@ -25,7 +22,6 @@ import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.time.Duration.Companion.seconds
 
 private val streamJson = Json {
     ignoreUnknownKeys = true
@@ -39,10 +35,7 @@ fun Application.configurePresenceStreamRoutes(
 ) {
     if (authService == null || broadcaster == null || blockRepository == null) return
 
-    install(WebSockets) {
-        pingPeriod = 30.seconds
-        timeout = 60.seconds
-    }
+    installRealtimeWebSocketsIfNeeded()
 
     val logger = LoggerFactory.getLogger("PresenceStreamRoutes")
 

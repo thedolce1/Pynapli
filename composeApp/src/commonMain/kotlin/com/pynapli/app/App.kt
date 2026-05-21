@@ -97,6 +97,7 @@ fun PynapliApp(
     topPicksStateHolder: com.pynapli.app.swipe.TopPicksStateHolder? = null,
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
     tonightAvailabilityStateHolder: com.pynapli.app.grid.TonightAvailabilityStateHolder? = null,
+    deepLinkStateHolder: AppDeepLinkStateHolder? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
     devLoginCredentials: DevLoginCredentials? = null
@@ -166,6 +167,40 @@ fun PynapliApp(
         LaunchedEffect(authState.authenticated, profileLinksStateHolder) {
             if (authState.authenticated) {
                 profileLinksStateHolder.load()
+            }
+        }
+
+        LaunchedEffect(authState.authenticated, deepLinkStateHolder) {
+            val holder = deepLinkStateHolder ?: return@LaunchedEffect
+            if (!authState.authenticated) return@LaunchedEffect
+            holder.state.collect { command ->
+                if (command == null) return@collect
+                profileSurface = ProfileSurface.None
+                when (command.target) {
+                    AppDeepLinkStateHolder.TARGET_ACTIVITY -> {
+                        selectedTab = PynapliTab.Activity
+                        val activityTab = command.activityTab
+                        if (activityTab != null) {
+                            activityStateHolder.selectTab(activityTab)
+                        } else {
+                            activityStateHolder.load()
+                        }
+                        activityStateHolder.focusEvent(command.activityEventId)
+                    }
+
+                    AppDeepLinkStateHolder.TARGET_MESSAGES -> {
+                        selectedTab = PynapliTab.Messages
+                        messagesStateHolder.refreshSilently()
+                        command.conversationId?.let { conversationId ->
+                            conversationStateHolder.openConversationById(
+                                conversationId = conversationId,
+                                viewerUserId = authState.session?.userId,
+                                title = "Conversation"
+                            )
+                        }
+                    }
+                }
+                holder.markHandled(command.commandId)
             }
         }
 

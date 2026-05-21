@@ -19,3 +19,14 @@ fun buildAndroidPresenceStreamClient(
     tokenProvider = tokenProvider,
     backoff = backoff
 )
+
+fun buildAndroidActivityStreamClient(
+    websocketBaseUrl: String,
+    tokenProvider: AccessTokenProvider,
+    backoff: ActivityStreamBackoff = ActivityStreamBackoff()
+): ActivityStreamClient = buildActivityStreamClient(
+    websocketHttpClient = HttpClient(OkHttp) { install(WebSockets) },
+    websocketBaseUrl = websocketBaseUrl,
+    tokenProvider = tokenProvider,
+    backoff = backoff
+)

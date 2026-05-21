@@ -23,6 +23,8 @@ data class ServerConfig(
     val notificationDispatchBatchSize: Int = 50,
     val notificationMaxAttempts: Int = 5,
     val notificationPushProvider: String = "local",
+    val activityRetentionEnabled: Boolean = false,
+    val activityRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
     val firebaseServiceAccountPath: String? = null,
     val firebaseServiceAccountJson: String? = null,
     val playStorePackageName: String = "com.pynapli.app",
@@ -108,6 +110,12 @@ data class ServerConfig(
                     ?.lowercase()
                     ?.takeIf { it.isNotEmpty() }
                     ?: "local",
+                activityRetentionEnabled = System.getenv("PYNAPLI_ACTIVITY_RETENTION_ENABLED")?.toBooleanStrictOrNull()
+                    ?: (environment == "local"),
+                activityRetentionIntervalMillis = System.getenv("PYNAPLI_ACTIVITY_RETENTION_INTERVAL_MS")
+                    ?.toLongOrNull()
+                    ?.coerceAtLeast(60_000L)
+                    ?: 60 * 60 * 1_000L,
                 firebaseServiceAccountPath = System.getenv("PYNAPLI_FIREBASE_SERVICE_ACCOUNT_PATH")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() },

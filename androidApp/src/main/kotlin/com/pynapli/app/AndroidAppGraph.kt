@@ -11,6 +11,7 @@ import com.pynapli.app.appsettings.ApiNotificationPreferencesGateway
 import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.activity.ApiActivityFeedRepository
+import com.pynapli.app.activity.ActivityRealtimeCoordinator
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
@@ -54,6 +55,7 @@ import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.core.config.PynapliConfigs
 import com.pynapli.shared.network.KtorMediaByteUploader
 import com.pynapli.shared.network.KtorPynapliApiClient
+import com.pynapli.shared.network.buildAndroidActivityStreamClient
 import com.pynapli.shared.network.buildAndroidPresenceStreamClient
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
@@ -77,6 +79,8 @@ class AndroidAppGraph(context: Context) {
         apiClient = apiClient,
         packageNameProvider = { appContext.packageName }
     )
+
+    val deepLinkStateHolder = AppDeepLinkStateHolder()
 
     val pushRegistrationCoordinator = PushRegistrationCoordinator(
         tokenProvider = AndroidFirebasePushTokenProvider(appContext),
@@ -156,6 +160,14 @@ class AndroidAppGraph(context: Context) {
 
     val activityStateHolder = ActivityStateHolder(
         repository = ApiActivityFeedRepository(apiClient)
+    )
+
+    val activityRealtimeCoordinator = ActivityRealtimeCoordinator(
+        client = buildAndroidActivityStreamClient(
+            websocketBaseUrl = PynapliConfigs.LocalAndroidEmulator.websocketBaseUrl,
+            tokenProvider = sessionStore
+        ),
+        activityStateHolder = activityStateHolder
     )
 
     val locationStateHolder = LocationStateHolder(

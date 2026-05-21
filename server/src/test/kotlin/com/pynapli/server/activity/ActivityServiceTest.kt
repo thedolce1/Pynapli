@@ -18,7 +18,11 @@ import com.pynapli.server.subscriptions.SubscriptionRecord
 import com.pynapli.server.subscriptions.SubscriptionRepository
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.SubscriptionTier
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import java.time.Instant
 import java.util.UUID
@@ -106,6 +110,26 @@ class ActivityServiceTest {
         assertEquals(listOf(senderUserId to targetUserId), repository.flirts)
         assertEquals(NotificationKind.FLIRT, notifications.events.single().kind)
         assertEquals(targetUserId, notifications.events.single().recipientUserId)
+    }
+
+    @Test
+    fun sendFlirtPublishesRealtimeDeltaWhenRecorded() = runBlocking {
+        val senderUserId = UUID.randomUUID()
+        val targetUserId = UUID.randomUUID()
+        val repository = InMemoryActivityRepository()
+        val broadcaster = ActivityBroadcaster()
+        val service = ActivityService(repository, activityBroadcaster = broadcaster)
+
+        val received = async(start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(1_000) { broadcaster.deltas.first() }
+        }
+
+        service.sendFlirt(senderUserId, targetUserId)
+
+        val delta = received.await()
+        assertEquals(targetUserId, delta.recipientUserId)
+        assertEquals("flirt", delta.type)
+        assertEquals("flirts", delta.tab)
     }
 
     @Test

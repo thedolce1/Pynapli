@@ -187,7 +187,7 @@ MVP implementation:
 - Partner chat invites use the conversation partner-invite accept/decline Ktor endpoints.
 - The bell composes pending action state from source-of-truth APIs; Activity remains the social-history feed.
 - In-app Activity banners route to the matching Activity tab when tapped.
-- OS push notification-to-Activity row deep links remain future work.
+- OS push notifications carry safe app deep-link payloads. Message notifications open Messages/conversation context, and Activity notifications open the relevant Activity tab with row focus when an `activityEventId` is supplied.
 
 ## Rate Limits
 
@@ -214,7 +214,7 @@ Server-side notification limits:
 - [x] Noisy social notifications have server-side throttle keys.
 - [x] Stale processing notification rows are recovered.
 - [x] In-app Activity notification banners route to the relevant Activity tab.
-- [ ] OS notification deep links open the relevant Activity tab/row.
+- [x] OS notification deep links open the relevant Activity tab/row fallback path.
 
 ## Do Not Implement
 

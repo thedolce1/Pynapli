@@ -61,6 +61,7 @@ $onStopBody = $onStopMatch.Groups["body"].Value
 Assert-Contains $onStopBody "pendingLocationSignal\?\.cancel\(\)" "MainActivity.onStop must cancel any pending one-shot location request."
 Assert-Contains $onStopBody "pendingLocationSignal\s*=\s*null" "MainActivity.onStop must clear pendingLocationSignal after canceling."
 Assert-Contains $onStopBody "presenceStreamJob\?\.cancel\(\)" "MainActivity.onStop must stop the Grid presence stream."
+Assert-Contains $onStopBody "activityStreamJob\?\.cancel\(\)" "MainActivity.onStop must stop the Activity realtime stream."
 
 if ($RunUnitTests) {
     .\gradlew.bat :composeApp:desktopTest --tests com.pynapli.app.location.LocationStateHolderTest --console=plain

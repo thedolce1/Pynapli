@@ -72,6 +72,14 @@ data class DismissActivityEventResponseDto(
 )
 
 @Serializable
+data class ActivityDeltaDto(
+    val type: String,
+    val tab: String,
+    val occurredAt: String,
+    val eventId: String? = null
+)
+
+@Serializable
 data class ActivityEventDto(
     val eventId: String,
     val type: String,

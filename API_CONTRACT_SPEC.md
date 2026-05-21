@@ -331,6 +331,7 @@ Rules:
 ```http
 GET  /v1/activity
 GET  /v1/activity/summary
+WS   /v1/activity/stream
 POST /v1/activity/album-requests/{eventId}/respond
 POST /v1/activity/{eventId}/dismiss
 ```
@@ -340,6 +341,12 @@ Query params:
 - `limit`
 - `tab`: `all`, `views`, `flirts`, `likes`, `matches`, `albums`, or `invites`
 - `cursor`: signed, viewer/tab-scoped cursor token
+
+Realtime:
+
+- `/v1/activity/stream` requires the same bearer token as HTTP routes.
+- Stream frames are `ActivityDeltaDto` invalidation hints for the authenticated recipient only: `type`, `tab`, `occurredAt`, and optional `eventId`.
+- Clients refresh summary/feed after deltas and must not mark background-refreshed rows seen.
 
 Feed item fields used for row CTAs:
 
