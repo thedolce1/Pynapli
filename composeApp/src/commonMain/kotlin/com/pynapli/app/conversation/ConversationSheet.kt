@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +59,7 @@ fun ConversationSheet(
     onAcceptInvite: () -> Unit = {},
     onDeclineInvite: () -> Unit = {},
     onLeaveConversation: () -> Unit = {},
+    onDeleteMessage: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (!state.visible) return
@@ -114,9 +117,14 @@ fun ConversationSheet(
                     MessageList(
                         messages = state.detail?.messages.orEmpty(),
                         viewerUserId = state.viewerUserId,
+                        senderDisplayNames = state.detail?.conversation?.participants
+                            ?.associate { participant -> participant.userId to participant.displayName }
+                            .orEmpty(),
                         hasOlderMessages = state.detail?.nextCursor != null,
                         isLoadingOlder = state.isLoadingOlder,
+                        isDeletingMessageIds = state.isDeletingMessageIds,
                         onLoadOlder = onLoadOlder,
+                        onDeleteMessage = onDeleteMessage,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 220.dp, max = 430.dp)
@@ -452,9 +460,12 @@ private fun ConversationHeader(
 private fun MessageList(
     messages: List<MessageDto>,
     viewerUserId: String?,
+    senderDisplayNames: Map<String, String>,
     hasOlderMessages: Boolean,
     isLoadingOlder: Boolean,
+    isDeletingMessageIds: Set<String>,
     onLoadOlder: () -> Unit,
+    onDeleteMessage: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -492,7 +503,10 @@ private fun MessageList(
                 MessageBubble(
                     message = message,
                     mine = mine,
-                    showDeliveryStatus = mine && message.messageId == lastOwnMessageId
+                    senderDisplayName = senderDisplayNames[message.senderUserId],
+                    showDeliveryStatus = mine && message.messageId == lastOwnMessageId,
+                    isDeleting = message.messageId in isDeletingMessageIds,
+                    onDeleteMessage = onDeleteMessage
                 )
             }
         }
@@ -503,8 +517,28 @@ private fun MessageList(
 private fun MessageBubble(
     message: MessageDto,
     mine: Boolean,
-    showDeliveryStatus: Boolean
+    senderDisplayName: String?,
+    showDeliveryStatus: Boolean,
+    isDeleting: Boolean,
+    onDeleteMessage: (String) -> Unit
 ) {
+    val deleted = message.deletedAt != null
+    val bubbleText = if (deleted) {
+        "${if (mine) "You" else senderDisplayName ?: "Someone"} deleted a message"
+    } else {
+        message.body
+    }
+    val bubbleColor = when {
+        deleted -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)
+        mine -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val textColor = when {
+        deleted -> MaterialTheme.colorScheme.onSurfaceVariant
+        mine -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start
@@ -514,23 +548,53 @@ private fun MessageBubble(
             horizontalAlignment = if (mine) Alignment.End else Alignment.Start
         ) {
             Text(
-                text = message.body,
-                color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                text = bubbleText,
+                color = textColor,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                    .background(bubbleColor)
                     .padding(horizontal = 12.dp, vertical = 10.dp)
             )
-            if (showDeliveryStatus) {
-                message.deliveryStatus.deliveryLabel()?.let { label ->
-                    Text(
-                        text = label,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(top = 3.dp, end = 2.dp)
-                    )
+            if (mine) {
+                Row(
+                    modifier = Modifier.padding(top = 2.dp, end = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (showDeliveryStatus) {
+                        message.deliveryStatus.deliveryLabel()?.let { label ->
+                            Text(
+                                text = label,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                    if (!deleted) {
+                        IconButton(
+                            onClick = { onDeleteMessage(message.messageId) },
+                            enabled = !isDeleting,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag(ConversationTestTags.deleteMessage(message.messageId))
+                        ) {
+                            if (isDeleting) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Filled.Delete,
+                                    contentDescription = "Delete message",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -637,4 +701,8 @@ private fun String.deliveryLabel(): String? = when (this) {
     "sent" -> "Sent"
     "read" -> "Read"
     else -> null
+}
+
+object ConversationTestTags {
+    fun deleteMessage(messageId: String): String = "conversation-delete-message-$messageId"
 }

@@ -22,6 +22,12 @@ fun Application.configureMessagingRoutes(
     if (authService == null || messagingService == null) return
 
     routing {
+        post("/v1/messages/{messageId}/delete") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val messageId = call.parameters["messageId"] ?: throw MessagingException("MESSAGE_NOT_FOUND")
+            call.respond(messagingService.deleteOwnMessage(user.id, messageId))
+        }
+
         route("/v1/messages/threads") {
             get {
                 val user = authService.authenticate(call.requiredBearerToken())

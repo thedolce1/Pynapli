@@ -714,6 +714,46 @@ class KtorPynapliApiClientTest {
     }
 
     @Test
+    fun deleteMessageSendsBearerTokenAndMapsDeletedPlaceholder() = runBlocking {
+        var authorizationHeader: String? = null
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            authorizationHeader = request.headers[HttpHeaders.Authorization]
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = """
+                    {
+                      "messageId": "message-1",
+                      "conversationId": "conversation-1",
+                      "senderUserId": "user-1",
+                      "body": "",
+                      "createdAt": "2026-04-24T18:00:00Z",
+                      "status": "visible",
+                      "deliveryStatus": "deleted",
+                      "deletedAt": "2026-04-24T18:01:00Z"
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.deleteMessage("message-1")
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("Bearer test-token", authorizationHeader)
+        assertEquals("/v1/messages/message-1/delete", requestPath)
+        assertEquals(HttpMethod.Post, requestMethod)
+        val message = success.value as MessageDto
+        assertEquals("", message.body)
+        assertEquals("deleted", message.deliveryStatus)
+        assertEquals("2026-04-24T18:01:00Z", message.deletedAt)
+    }
+
+    @Test
     fun getConversationDetailSendsPaginationQuery() = runBlocking {
         var authorizationHeader: String? = null
         var requestPath: String? = null

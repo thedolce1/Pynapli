@@ -226,6 +226,8 @@ interface PynapliApiClient {
 
     suspend fun sendMessage(conversationId: String, request: SendMessageRequestDto): AppResult<MessageDto>
 
+    suspend fun deleteMessage(messageId: String): AppResult<MessageDto>
+
     suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto>
 
     suspend fun acceptConversationPartnerInvite(conversationId: String): AppResult<ConversationDetailDto>
@@ -730,6 +732,13 @@ class KtorPynapliApiClient(
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/messages/$messageId/delete")) {
+                bearerAuth(token)
             }.toAppResult(json)
         }
 

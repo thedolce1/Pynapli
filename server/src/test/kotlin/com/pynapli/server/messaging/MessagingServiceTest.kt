@@ -387,6 +387,50 @@ class MessagingServiceTest {
     }
 
     @Test
+    fun deleteOwnMessageReturnsPlaceholderForEveryParticipant() = runBlocking {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000041")
+        val targetId = UUID.fromString("00000000-0000-0000-0000-000000000042")
+        val repository = InMemoryMessagingRepository(setOf(targetId))
+        val service = MessagingService(repository)
+        val detail = service.createDirectConversation(
+            viewerId,
+            CreateDirectConversationRequestDto(targetUserId = targetId.toString())
+        )
+        val sent = service.sendMessage(viewerId, detail.conversation.conversationId, SendMessageRequestDto("Mistake"))
+
+        val deleted = service.deleteOwnMessage(viewerId, sent.messageId)
+        val viewerMessages = service.getConversationDetail(viewerId, detail.conversation.conversationId).messages
+        val targetMessages = service.getConversationDetail(targetId, detail.conversation.conversationId).messages
+
+        assertEquals("", deleted.body)
+        assertEquals("deleted", deleted.deliveryStatus)
+        assertEquals(true, deleted.deletedAt != null)
+        assertEquals(listOf(""), viewerMessages.map { it.body })
+        assertEquals(listOf("deleted"), viewerMessages.map { it.deliveryStatus })
+        assertEquals(listOf(""), targetMessages.map { it.body })
+        assertEquals(listOf("deleted"), targetMessages.map { it.deliveryStatus })
+    }
+
+    @Test
+    fun deleteMessageRejectsNonSender() = runBlocking {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000043")
+        val targetId = UUID.fromString("00000000-0000-0000-0000-000000000044")
+        val repository = InMemoryMessagingRepository(setOf(targetId))
+        val service = MessagingService(repository)
+        val detail = service.createDirectConversation(
+            viewerId,
+            CreateDirectConversationRequestDto(targetUserId = targetId.toString())
+        )
+        val sent = service.sendMessage(viewerId, detail.conversation.conversationId, SendMessageRequestDto("Owned"))
+
+        val error = assertFailsWith<MessagingException> {
+            service.deleteOwnMessage(targetId, sent.messageId)
+        }
+
+        assertEquals("MESSAGE_NOT_FOUND", error.code)
+    }
+
+    @Test
     fun firstMessageWithExternalLinkIsHeldForReviewAndNotNotified() = runBlocking {
         val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000025")
         val targetId = UUID.fromString("00000000-0000-0000-0000-000000000026")
@@ -772,6 +816,33 @@ private class InMemoryMessagingRepository(
         return message
     }
 
+    override suspend fun deleteOwnMessage(userId: UUID, messageId: UUID): MessageRecord? {
+        val message = messagesByConversation.values
+            .flatten()
+            .firstOrNull { it.messageId == messageId && it.senderUserId == userId && it.deletedAt == null }
+            ?: return null
+        val conversation = conversationsByPair.values.firstOrNull {
+            it.conversationId == message.conversationId &&
+                it.participants.any { participant ->
+                    participant.userId == userId && participant.status in visibleParticipantStatuses
+                }
+        } ?: return null
+        val deletedAt = message.createdAt.plusSeconds(1)
+        messagesByConversation[message.conversationId] = messagesByConversation[message.conversationId]
+            .orEmpty()
+            .map { existing ->
+                if (existing.messageId == messageId) {
+                    existing.copy(body = "", deliveryStatus = "deleted", deletedAt = deletedAt)
+                } else {
+                    existing
+                }
+            }
+            .toMutableList()
+        return messagesByConversation[conversation.conversationId]
+            .orEmpty()
+            .first { it.messageId == messageId }
+    }
+
     override suspend fun hasSentMessageInConversation(userId: UUID, conversationId: UUID): Boolean =
         messagesByConversation[conversationId].orEmpty().any { message -> message.senderUserId == userId }
 
@@ -797,11 +868,13 @@ private class InMemoryMessagingRepository(
             .count { message ->
                 message.senderUserId != userId &&
                     message.status == MessageModerationStatus.VISIBLE &&
+                    message.deletedAt == null &&
                     message.createdAt > readAt
             }
     }
 
     private fun MessageRecord.withDeliveryStatus(viewerUserId: UUID): MessageRecord {
+        if (deletedAt != null) return copy(body = "", deliveryStatus = "deleted")
         if (status == MessageModerationStatus.HELD) return copy(deliveryStatus = "held_for_review")
         if (senderUserId != viewerUserId) return copy(deliveryStatus = "received")
         val conversation = conversationsByPair.values.firstOrNull { it.conversationId == conversationId }

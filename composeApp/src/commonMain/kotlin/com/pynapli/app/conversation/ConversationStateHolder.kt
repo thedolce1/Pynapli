@@ -32,6 +32,7 @@ data class ConversationUiState(
     val isRespondingToInvite: Boolean = false,
     val isLeaving: Boolean = false,
     val isLoadingOlder: Boolean = false,
+    val isDeletingMessageIds: Set<String> = emptySet(),
     val partnerInviteFeedback: String? = null,
     val errorMessage: String? = null
 ) {
@@ -78,7 +79,8 @@ data class ConversationUiState(
             !isOpening &&
             !isSending &&
             !isRespondingToInvite &&
-            !isLeaving
+            !isLeaving &&
+            isDeletingMessageIds.isEmpty()
 }
 
 class ConversationStateHolder(
@@ -517,6 +519,43 @@ class ConversationStateHolder(
         }
     }
 
+    suspend fun deleteMessage(messageId: String) {
+        val current = state.value
+        val detail = current.detail ?: return
+        val message = detail.messages.firstOrNull { it.messageId == messageId } ?: return
+        if (message.senderUserId != current.viewerUserId || message.deletedAt != null) return
+        if (messageId in current.isDeletingMessageIds) return
+
+        _state.update { existing ->
+            existing.copy(
+                isDeletingMessageIds = existing.isDeletingMessageIds + messageId,
+                partnerInviteFeedback = null,
+                errorMessage = null
+            )
+        }
+
+        when (val result = repository.deleteMessage(messageId)) {
+            is AppResult.Success -> {
+                _state.update { existing ->
+                    existing.copy(
+                        detail = existing.detail?.withUpdatedMessage(result.value),
+                        isDeletingMessageIds = existing.isDeletingMessageIds - messageId,
+                        errorMessage = null
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update { existing ->
+                    existing.copy(
+                        isDeletingMessageIds = existing.isDeletingMessageIds - messageId,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
     fun dismiss() {
         _state.value = ConversationUiState()
     }
@@ -529,6 +568,20 @@ class ConversationStateHolder(
                 updatedAt = message.createdAt
             ),
             messages = messages + message
+        )
+
+    private fun ConversationDetailDto.withUpdatedMessage(message: MessageDto): ConversationDetailDto =
+        copy(
+            conversation = conversation.copy(
+                lastMessage = if (conversation.lastMessage?.messageId == message.messageId) {
+                    message
+                } else {
+                    conversation.lastMessage
+                }
+            ),
+            messages = messages.map { existing ->
+                if (existing.messageId == message.messageId) message else existing
+            }
         )
 
     private suspend fun ConversationDetailDto.withReadConversation(): ConversationDetailDto =
@@ -572,6 +625,8 @@ interface ConversationRepository {
 
     suspend fun sendMessage(conversationId: String, body: String): AppResult<MessageDto>
 
+    suspend fun deleteMessage(messageId: String): AppResult<MessageDto>
+
     suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto>
 
     suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto>
@@ -606,6 +661,9 @@ class ApiConversationRepository(
 
     override suspend fun sendMessage(conversationId: String, body: String): AppResult<MessageDto> =
         apiClient.sendMessage(conversationId, SendMessageRequestDto(body = body))
+
+    override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
+        apiClient.deleteMessage(messageId)
 
     override suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto> =
         apiClient.inviteLinkedPartnerToConversation(conversationId)
@@ -708,6 +766,20 @@ class SampleConversationRepository : ConversationRepository {
                 createdAt = "2026-04-24T18:00:00Z",
                 status = "visible",
                 deliveryStatus = "sent"
+            )
+        )
+
+    override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
+        AppResult.Success(
+            MessageDto(
+                messageId = messageId,
+                conversationId = "sample-conversation",
+                senderUserId = "viewer",
+                body = "",
+                createdAt = "2026-04-24T18:00:00Z",
+                status = "visible",
+                deliveryStatus = "deleted",
+                deletedAt = "2026-04-24T18:01:00Z"
             )
         )
 

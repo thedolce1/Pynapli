@@ -32,6 +32,11 @@ interface MessagingRepository {
         messageIdFactory: () -> UUID = UUID::randomUUID
     ): MessageRecord?
 
+    suspend fun deleteOwnMessage(
+        userId: UUID,
+        messageId: UUID
+    ): MessageRecord?
+
     suspend fun hasSentMessageInConversation(
         userId: UUID,
         conversationId: UUID
@@ -109,7 +114,8 @@ data class MessageRecord(
     val body: String,
     val createdAt: Instant,
     val status: String,
-    val deliveryStatus: String
+    val deliveryStatus: String,
+    val deletedAt: Instant? = null
 )
 
 data class PartnerChatInviteRecord(

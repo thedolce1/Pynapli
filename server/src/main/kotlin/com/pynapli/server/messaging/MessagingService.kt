@@ -194,6 +194,12 @@ class MessagingService(
         return message
     }
 
+    suspend fun deleteOwnMessage(userId: UUID, messageIdText: String): MessageDto {
+        val messageId = messageIdText.toUuidOrThrow()
+        return repository.deleteOwnMessage(userId, messageId)?.toDto()
+            ?: throw MessagingException("MESSAGE_NOT_FOUND")
+    }
+
     suspend fun inviteLinkedPartnerToConversation(userId: UUID, conversationIdText: String): ConversationDto {
         val conversationId = conversationIdText.toUuidOrThrow()
         if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
@@ -329,7 +335,8 @@ class MessagingService(
         body = body,
         createdAt = createdAt.toString(),
         status = status,
-        deliveryStatus = deliveryStatus
+        deliveryStatus = deliveryStatus,
+        deletedAt = deletedAt?.toString()
     )
 
     private fun PartnerChatInviteRecord.toDto(): PartnerChatInviteDto = PartnerChatInviteDto(

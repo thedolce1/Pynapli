@@ -149,6 +149,7 @@ Current implementation note:
 - Partner invite consent is tracked in `partner_chat_invites`: the linked partner can accept first, but remains an invited participant until the existing third party also approves.
 - If the existing third party declines, the invited partner is removed from the thread context and a 24-hour cooldown blocks re-inviting that same partner to that same thread.
 - Messages inbox rows and the conversation sheet surface the correct state: Accept/Decline, waiting for chat approval, waiting for partner response, or pending.
+- Own-message deletion uses the existing retained message row: `deleted_at` is set, the original body is not returned to normal clients, and every participant sees a neutral deleted-message placeholder.
 
 ## Implementation Checklist
 
@@ -159,6 +160,7 @@ Current implementation note:
 - [x] Partner invite appears in invited partner Activity.
 - [x] Album access is separate from chat membership.
 - [ ] Media reveal is per-recipient.
+- [x] Own-message deletion returns a visible placeholder.
 - [x] Block archives/disables thread.
 - [x] Report is separate from block.
 - [ ] Message expiry exists only with clear system messaging.

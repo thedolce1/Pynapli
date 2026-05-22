@@ -133,7 +133,7 @@ class JdbcMessagingRepository(
                         safety_reason
                     )
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                    RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status
+                    RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at
                     """.trimIndent()
                 ).use { statement ->
                     statement.setObject(1, messageId)
@@ -203,6 +203,60 @@ class JdbcMessagingRepository(
         }
     }
 
+    override suspend fun deleteOwnMessage(userId: UUID, messageId: UUID): MessageRecord? = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.autoCommit = false
+            try {
+                val message = connection.prepareStatement(
+                    """
+                    UPDATE messages
+                    SET deleted_at = now()
+                    WHERE id = ?
+                      AND sender_user_id = ?
+                      AND deleted_at IS NULL
+                      AND moderation_status = 'visible'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM conversation_participants cp
+                          WHERE cp.conversation_id = messages.conversation_id
+                            AND cp.user_id = ?
+                            AND cp.left_at IS NULL
+                            AND cp.invitation_status IN ('active', 'invited')
+                      )
+                    RETURNING id,
+                              conversation_id,
+                              sender_user_id,
+                              '' AS body,
+                              created_at,
+                              moderation_status,
+                              deleted_at
+                    """.trimIndent()
+                ).use { statement ->
+                    statement.setObject(1, messageId)
+                    statement.setObject(2, userId)
+                    statement.setObject(3, userId)
+                    statement.executeQuery().use { rs ->
+                        if (rs.next()) rs.toMessageRecord(deliveryStatus = DELIVERY_DELETED) else null
+                    }
+                }
+
+                if (message == null) {
+                    connection.rollback()
+                    return@withContext null
+                }
+
+                connection.touchConversation(message.conversationId)
+                connection.commit()
+                message
+            } catch (error: Throwable) {
+                connection.rollback()
+                throw error
+            } finally {
+                connection.autoCommit = true
+            }
+        }
+    }
+
     override suspend fun countRecentMessagesByFingerprint(
         userId: UUID,
         bodyFingerprint: String,
@@ -216,7 +270,6 @@ class JdbcMessagingRepository(
                 WHERE sender_user_id = ?
                   AND body_fingerprint = ?
                   AND created_at >= ?
-                  AND deleted_at IS NULL
                 """.trimIndent()
             ).use { statement ->
                 statement.setObject(1, userId)
@@ -245,7 +298,6 @@ class JdbcMessagingRepository(
                          AND cp.invitation_status = 'active'
                         WHERE m.conversation_id = ?
                           AND m.sender_user_id = ?
-                          AND m.deleted_at IS NULL
                     )
                     """.trimIndent()
                 ).use { statement ->
@@ -523,10 +575,15 @@ class JdbcMessagingRepository(
                    SELECT 1
                    FROM messages m
                    WHERE m.conversation_id = c.id
-                     AND m.deleted_at IS NULL
                      AND (
-                         m.moderation_status = 'visible'
-                         OR (m.moderation_status = 'held' AND m.sender_user_id = ?)
+                         (m.deleted_at IS NOT NULL AND m.moderation_status = 'visible')
+                         OR (
+                             m.deleted_at IS NULL
+                             AND (
+                                 m.moderation_status = 'visible'
+                                 OR (m.moderation_status = 'held' AND m.sender_user_id = ?)
+                             )
+                         )
                      )
                )
             ORDER BY c.updated_at DESC, c.id DESC
@@ -652,10 +709,12 @@ class JdbcMessagingRepository(
             SELECT id,
                    conversation_id,
                    sender_user_id,
-                   body,
+                   CASE WHEN deleted_at IS NULL THEN body ELSE '' END AS body,
                    created_at,
                    moderation_status,
+                   deleted_at,
                    CASE
+                       WHEN deleted_at IS NOT NULL THEN 'deleted'
                        WHEN moderation_status = 'held' THEN 'held_for_review'
                        WHEN sender_user_id <> ? THEN 'received'
                        WHEN NOT EXISTS (
@@ -671,8 +730,22 @@ class JdbcMessagingRepository(
                    END AS delivery_status
             FROM messages
             WHERE conversation_id = ?
-              AND deleted_at IS NULL
-              AND (moderation_status = 'visible' OR (moderation_status = 'held' AND sender_user_id = ?))
+              AND (
+                  (
+                      deleted_at IS NOT NULL
+                      AND (
+                          moderation_status = 'visible'
+                          OR (moderation_status = 'held' AND sender_user_id = ?)
+                      )
+                  )
+                  OR (
+                      deleted_at IS NULL
+                      AND (
+                          moderation_status = 'visible'
+                          OR (moderation_status = 'held' AND sender_user_id = ?)
+                      )
+                  )
+              )
             ORDER BY created_at DESC, id DESC
             LIMIT 1
             """.trimIndent()
@@ -680,6 +753,7 @@ class JdbcMessagingRepository(
             statement.setObject(1, userId)
             statement.setObject(2, conversationId)
             statement.setObject(3, userId)
+            statement.setObject(4, userId)
             statement.executeQuery().use { rs ->
                 if (rs.next()) rs.toMessageRecord(deliveryStatus = rs.getString("delivery_status")) else null
             }
@@ -698,10 +772,12 @@ class JdbcMessagingRepository(
                 SELECT id,
                        conversation_id,
                        sender_user_id,
-                       body,
+                       CASE WHEN deleted_at IS NULL THEN body ELSE '' END AS body,
                        created_at,
                        moderation_status,
+                       deleted_at,
                        CASE
+                           WHEN deleted_at IS NOT NULL THEN 'deleted'
                            WHEN moderation_status = 'held' THEN 'held_for_review'
                            WHEN sender_user_id <> ? THEN 'received'
                            WHEN NOT EXISTS (
@@ -717,8 +793,22 @@ class JdbcMessagingRepository(
                        END AS delivery_status
                 FROM messages
                 WHERE conversation_id = ?
-                  AND deleted_at IS NULL
-                  AND (moderation_status = 'visible' OR (moderation_status = 'held' AND sender_user_id = ?))
+                  AND (
+                      (
+                          deleted_at IS NOT NULL
+                          AND (
+                              moderation_status = 'visible'
+                              OR (moderation_status = 'held' AND sender_user_id = ?)
+                          )
+                      )
+                      OR (
+                          deleted_at IS NULL
+                          AND (
+                              moderation_status = 'visible'
+                              OR (moderation_status = 'held' AND sender_user_id = ?)
+                          )
+                      )
+                  )
                 """.trimIndent()
             )
             append('\n')
@@ -745,6 +835,7 @@ class JdbcMessagingRepository(
             var index = 1
             statement.setObject(index++, userId)
             statement.setObject(index++, conversationId)
+            statement.setObject(index++, userId)
             statement.setObject(index++, userId)
             if (before != null) {
                 val beforeTimestamp = Timestamp.from(before.createdAt)
@@ -851,7 +942,8 @@ class JdbcMessagingRepository(
         body = getString("body"),
         createdAt = getTimestamp("created_at").toInstant(),
         status = getString("moderation_status"),
-        deliveryStatus = deliveryStatus
+        deliveryStatus = deliveryStatus,
+        deletedAt = getTimestamp("deleted_at")?.toInstant()
     )
 
     private fun Connection.insertMessageReviewQueue(
@@ -1197,6 +1289,7 @@ class JdbcMessagingRepository(
         private const val DEFAULT_MESSAGE_PAGE_LIMIT = 50
         private const val DELIVERY_SENT = "sent"
         private const val DELIVERY_HELD_FOR_REVIEW = "held_for_review"
+        private const val DELIVERY_DELETED = "deleted"
         private const val PARTNER_INVITE_PENDING = "pending"
         private const val PARTNER_INVITE_ACCEPTED = "accepted"
         private const val PARTNER_INVITE_DECLINED = "declined"

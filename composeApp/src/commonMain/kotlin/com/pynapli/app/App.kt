@@ -552,6 +552,12 @@ fun PynapliApp(
                         conversationStateHolder.leaveConversation()
                         messagesStateHolder.refreshSilently()
                     }
+                },
+                onDeleteMessage = { messageId ->
+                    scope.launch {
+                        conversationStateHolder.deleteMessage(messageId)
+                        messagesStateHolder.refreshSilently()
+                    }
                 }
             )
         }

@@ -65,7 +65,8 @@ data class MessageDto(
     val body: String,
     val createdAt: String,
     val status: String,
-    val deliveryStatus: String
+    val deliveryStatus: String,
+    val deletedAt: String? = null
 )
 
 @Serializable

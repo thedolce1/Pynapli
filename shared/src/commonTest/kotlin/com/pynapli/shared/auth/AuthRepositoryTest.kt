@@ -393,6 +393,9 @@ private class FakeApiClient(
     override suspend fun sendMessage(conversationId: String, request: SendMessageRequestDto): AppResult<MessageDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 

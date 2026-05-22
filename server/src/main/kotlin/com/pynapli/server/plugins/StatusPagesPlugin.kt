@@ -326,6 +326,7 @@ private fun userSafeMessage(code: String): String = when (code) {
     "INVALID_MESSAGE_CURSOR", "INVALID_MESSAGE_PAGE_LIMIT" -> "Message history could not be loaded."
     "MESSAGE_BODY_EMPTY" -> "Enter a message."
     "MESSAGE_BODY_TOO_LONG" -> "Message is too long."
+    "MESSAGE_NOT_FOUND" -> "Message was not found."
     "INVALID_MEDIA_ALBUM_KIND" -> "Choose a valid album."
     "INVALID_MEDIA_TYPE" -> "Choose a valid media type."
     "INVALID_MEDIA_CONTENT_TYPE" -> "This file type is not supported."
