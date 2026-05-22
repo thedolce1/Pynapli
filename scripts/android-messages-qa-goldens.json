@@ -24,8 +24,19 @@
       }
     },
     "messageSent": {
-      "requiredTexts": ["Kai", "See you tonight", "qa", "Sent"],
+      "requiredTexts": ["Kai", "See you tonight", "qa", "Sent", "Delete message"],
       "forbiddenTexts": ["Enter a message before sending.", "Request failed", "Illegal input", "Exception"],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.40,
+        "minColorBucketCount": 10
+      }
+    },
+    "messageDeleted": {
+      "requiredTexts": ["Kai", "See you tonight", "You deleted a message", "Message"],
+      "forbiddenTexts": ["qa", "Request failed", "Illegal input", "Exception"],
       "image": {
         "minWidth": 320,
         "minHeight": 600,

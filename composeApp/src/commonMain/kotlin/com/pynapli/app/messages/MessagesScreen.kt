@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.conversation.titleFor
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
+import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PartnerChatInviteStatus
 import kotlinx.coroutines.launch
 
@@ -223,7 +224,7 @@ private fun ConversationRow(
     val preview = when {
         inviteUi != null -> inviteUi.preview
         isInvite -> "Chat invite"
-        lastMessage != null -> lastMessage.body
+        lastMessage != null -> lastMessage.previewText(conversation, viewerUserId)
         else -> "No messages yet"
     }
     val unread = conversation.unreadCount > 0
@@ -517,6 +518,19 @@ private fun String.originLabel(): String = when (this) {
     "intro_note" -> "Intro"
     else -> "Grid"
 }
+
+private fun MessageDto.previewText(
+    conversation: ConversationDto,
+    viewerUserId: String?
+): String =
+    if (deletedAt == null) {
+        body
+    } else {
+        val senderName = conversation.participants.firstOrNull { participant ->
+            participant.userId == senderUserId
+        }?.displayName
+        "${if (senderUserId == viewerUserId) "You" else senderName ?: "Someone"} deleted a message"
+    }
 
 internal object MessagesTestTags {
     const val LIST = "messages-list"

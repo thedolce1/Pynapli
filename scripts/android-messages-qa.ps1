@@ -590,10 +590,23 @@ function Find-DebugApk {
 
 function Start-App {
     $component = "$PackageName/$LaunchActivity"
-    Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
-    Start-Sleep -Milliseconds 800
-    Invoke-Adb @("shell", "am", "start", "-S", "-n", $component) | Out-Null
-    Write-Host "[step] Launched $component"
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
+        Start-Sleep -Milliseconds 800
+        Invoke-Adb @("shell", "am", "start", "-S", "-n", $component) | Out-Null
+        Write-Host "[step] Launched $component (attempt $attempt)"
+
+        $deadline = (Get-Date).AddSeconds(30)
+        do {
+            $processIdText = (& $script:Adb -s $script:DeviceId shell pidof $PackageName 2>$null | Out-String).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($processIdText)) {
+                return
+            }
+            Start-Sleep -Milliseconds 500
+        } while ((Get-Date) -lt $deadline)
+    }
+
+    throw "Unable to launch $component; app process did not appear."
 }
 
 function Complete-LoginIfNeeded {
@@ -745,22 +758,27 @@ $messageSentXml = Capture-MessagesStage "messageSent" "05_messages_sent"
 Assert-TextPresent $messageSentXml "qa" "Message send"
 Assert-TextPresent $messageSentXml "Sent" "Message send"
 
+Tap-Text "Delete message"
+Wait-ForAnyText @("You deleted a message") 30 | Out-Null
+$messageDeletedXml = Capture-MessagesStage "messageDeleted" "06_messages_deleted"
+Assert-TextPresent $messageDeletedXml "You deleted a message" "Message delete"
+
 Tap-Text "Close conversation"
 Wait-ForAnyText @("Messages", "Noa, Rae") 30 | Out-Null
 
 Tap-Text "Accept"
 Wait-ForAnyText @("Rae wants to join us.") 30 | Out-Null
-$thirdPartyApprovedXml = Capture-MessagesStage "thirdPartyApproved" "06_messages_third_party_approved"
+$thirdPartyApprovedXml = Capture-MessagesStage "thirdPartyApproved" "07_messages_third_party_approved"
 Assert-TextPresent $thirdPartyApprovedXml "Maya, Alex" "Third-party approved Messages"
 
 Tap-Text "Maya, Alex"
 Wait-ForAnyText @("You were invited to join this chat.", "Join us when you are ready.") 30 | Out-Null
-$invitedPromptXml = Capture-MessagesStage "invitedPartnerPrompt" "07_messages_invited_partner_prompt"
+$invitedPromptXml = Capture-MessagesStage "invitedPartnerPrompt" "08_messages_invited_partner_prompt"
 Assert-TextPresent $invitedPromptXml "Decline" "Invited partner prompt"
 
 Tap-Text "Accept"
 Wait-ForAnyText @("Joined chat", "Message") 30 | Out-Null
-$invitedAcceptedXml = Capture-MessagesStage "invitedPartnerAccepted" "08_messages_invited_partner_accepted"
+$invitedAcceptedXml = Capture-MessagesStage "invitedPartnerAccepted" "09_messages_invited_partner_accepted"
 Assert-TextPresent $invitedAcceptedXml "Joined chat" "Invited partner accepted"
 
 Write-Summary @{
@@ -773,6 +791,7 @@ Write-Summary @{
         initialInbox = $true
         normalThreadOpened = $true
         composerSentMessage = $true
+        deletedMessagePlaceholder = $true
         thirdPartyApprovalCompleted = $true
         invitedPartnerAccepted = $true
     }
