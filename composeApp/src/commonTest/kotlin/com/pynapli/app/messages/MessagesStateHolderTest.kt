@@ -7,6 +7,8 @@ import com.pynapli.shared.network.dto.ConversationListResponseDto
 import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
+import com.pynapli.shared.network.dto.PartnerChatInviteDto
+import com.pynapli.shared.network.dto.PartnerChatInviteStatus
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -52,16 +54,45 @@ class MessagesStateHolderTest {
         val stateHolder = MessagesStateHolder(repository)
         stateHolder.load()
 
-        stateHolder.declinePartnerInvite("conversation-1")
+        stateHolder.declinePartnerInvite("conversation-1", viewerUserId = "viewer")
 
         assertEquals(emptyList(), stateHolder.state.value.conversations)
+        assertFalse("conversation-1" in stateHolder.state.value.mutatingPartnerInviteConversationIds)
+    }
+
+    @Test
+    fun declineThirdPartyApprovalRefreshesThreadInsteadOfRemovingIt() = runBlocking {
+        val pending = conversation(
+            conversationId = "conversation-1",
+            viewerStatus = ConversationParticipantStatus.ACTIVE,
+            partnerInvite = PartnerChatInviteDto(
+                inviteId = "invite-1",
+                inviterUserId = "partner-owner",
+                invitedPartnerUserId = "partner",
+                thirdPartyStatus = PartnerChatInviteStatus.PENDING,
+                partnerStatus = PartnerChatInviteStatus.ACCEPTED,
+                createdAt = "2026-05-01T17:30:00Z"
+            )
+        )
+        val afterDecline = pending.copy(partnerInvite = null)
+        val repository = FakeMessagesRepository(conversations = listOf(pending)).apply {
+            onDecline = { listResult = listOf(afterDecline) }
+        }
+        val stateHolder = MessagesStateHolder(repository)
+        stateHolder.load()
+
+        stateHolder.declinePartnerInvite("conversation-1", viewerUserId = "viewer")
+
+        assertEquals(listOf(afterDecline), stateHolder.state.value.conversations)
         assertFalse("conversation-1" in stateHolder.state.value.mutatingPartnerInviteConversationIds)
     }
 }
 
 private class FakeMessagesRepository(
-    private val conversations: List<ConversationDto>
+    conversations: List<ConversationDto>
 ) : MessagesRepository {
+    var listResult: List<ConversationDto> = conversations
+    var onDecline: () -> Unit = {}
     var acceptResult: AppResult<ConversationDetailDto> = AppResult.Success(
         ConversationDetailDto(conversation = conversations.first(), messages = emptyList())
     )
@@ -70,18 +101,21 @@ private class FakeMessagesRepository(
     )
 
     override suspend fun listConversations(): AppResult<ConversationListResponseDto> =
-        AppResult.Success(ConversationListResponseDto(items = conversations))
+        AppResult.Success(ConversationListResponseDto(items = listResult))
 
     override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> =
         acceptResult
 
-    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
-        declineResult
+    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> {
+        onDecline()
+        return declineResult
+    }
 }
 
 private fun conversation(
     conversationId: String,
-    viewerStatus: String
+    viewerStatus: String,
+    partnerInvite: PartnerChatInviteDto? = null
 ): ConversationDto =
     ConversationDto(
         conversationId = conversationId,
@@ -101,7 +135,8 @@ private fun conversation(
             )
         ),
         unreadCount = 0,
-        updatedAt = "2026-05-01T17:30:00Z"
+        updatedAt = "2026-05-01T17:30:00Z",
+        partnerInvite = partnerInvite
     )
 
 private fun ConversationDto.viewerStatus(): String? =

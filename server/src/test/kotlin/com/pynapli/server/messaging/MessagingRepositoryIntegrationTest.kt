@@ -3,6 +3,7 @@ package com.pynapli.server.messaging
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import com.pynapli.server.moderation.JdbcMessageModerationRepository
+import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
 import org.junit.After
@@ -265,6 +266,94 @@ class MessagingRepositoryIntegrationTest {
             repository.getConversationDetail(target, conversation.conversationId, limit = 10)?.messages
         )
         assertEquals(1, dataSource.countAdminAuditRows("message_review.remove"))
+    }
+
+    @Test
+    fun partnerChatInviteRequiresPartnerAndThirdPartyConsent() = runBlocking {
+        val inviter = UUID.fromString("00000000-0000-0000-0000-000000000881")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000882")
+        val partner = UUID.fromString("00000000-0000-0000-0000-000000000883")
+        dataSource.insertUserWithProfile(inviter, "Inviter")
+        dataSource.insertUserWithProfile(target, "Target")
+        dataSource.insertUserWithProfile(partner, "Partner")
+        val repository = JdbcMessagingRepository(dataSource)
+        val conversation = repository.getOrCreateDirectConversation(
+            viewerUserId = inviter,
+            targetUserId = target,
+            origin = "grid"
+        )!!
+
+        val invited = repository.inviteLinkedPartner(
+            inviterUserId = inviter,
+            conversationId = conversation.conversationId,
+            partnerUserId = partner
+        ) as PartnerInviteResult.Invited
+
+        assertEquals("pending", invited.conversation.partnerInvite?.partnerStatus)
+        assertEquals("pending", invited.conversation.partnerInvite?.thirdPartyStatus)
+
+        val partnerAccepted = repository.acceptPartnerInvite(partner, conversation.conversationId)!!
+        assertEquals("accepted", partnerAccepted.conversation.partnerInvite?.partnerStatus)
+        assertEquals("pending", partnerAccepted.conversation.partnerInvite?.thirdPartyStatus)
+        assertNull(
+            repository.sendMessage(
+                userId = partner,
+                conversationId = conversation.conversationId,
+                body = "Too soon",
+                moderationStatus = MessageModerationStatus.VISIBLE,
+                bodyFingerprint = null,
+                safetyReason = null
+            )
+        )
+
+        val targetApproved = repository.acceptPartnerInvite(target, conversation.conversationId)!!
+        assertEquals(null, targetApproved.conversation.partnerInvite)
+        assertEquals(
+            ConversationParticipantStatus.ACTIVE,
+            targetApproved.conversation.participants.first { it.userId == partner }.status
+        )
+        assertNotNull(
+            repository.sendMessage(
+                userId = partner,
+                conversationId = conversation.conversationId,
+                body = "Joining",
+                moderationStatus = MessageModerationStatus.VISIBLE,
+                bodyFingerprint = null,
+                safetyReason = null
+            )
+        )
+        Unit
+    }
+
+    @Test
+    fun thirdPartyDeclineStartsPartnerInviteCooldown() = runBlocking {
+        val inviter = UUID.fromString("00000000-0000-0000-0000-000000000891")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000892")
+        val partner = UUID.fromString("00000000-0000-0000-0000-000000000893")
+        dataSource.insertUserWithProfile(inviter, "Inviter")
+        dataSource.insertUserWithProfile(target, "Target")
+        dataSource.insertUserWithProfile(partner, "Partner")
+        val repository = JdbcMessagingRepository(dataSource)
+        val conversation = repository.getOrCreateDirectConversation(
+            viewerUserId = inviter,
+            targetUserId = target,
+            origin = "grid"
+        )!!
+        repository.inviteLinkedPartner(
+            inviterUserId = inviter,
+            conversationId = conversation.conversationId,
+            partnerUserId = partner
+        )
+
+        assertEquals(true, repository.declinePartnerInvite(target, conversation.conversationId))
+
+        val retry = repository.inviteLinkedPartner(
+            inviterUserId = inviter,
+            conversationId = conversation.conversationId,
+            partnerUserId = partner
+        )
+        assertEquals(PartnerInviteResult.CooldownActive, retry)
+        assertEquals(null, repository.getConversationDetail(partner, conversation.conversationId, limit = 10))
     }
 
     private fun DataSource.insertUserWithProfile(userId: UUID, displayName: String) {

@@ -256,11 +256,22 @@ class MessagingServiceTest {
         }
         assertEquals("CONVERSATION_NOT_FOUND", sendBeforeAcceptError.code)
 
-        val accepted = service.acceptPartnerInvite(partnerId, detail.conversation.conversationId)
-        val acceptedPartner = accepted.conversation.participants.first { it.userId == partnerId.toString() }
+        val partnerAccepted = service.acceptPartnerInvite(partnerId, detail.conversation.conversationId)
+        val waitingPartner = partnerAccepted.conversation.participants.first { it.userId == partnerId.toString() }
+        assertEquals(ConversationParticipantStatus.INVITED, waitingPartner.status)
+        assertEquals("accepted", partnerAccepted.conversation.partnerInvite?.partnerStatus)
+        assertEquals("pending", partnerAccepted.conversation.partnerInvite?.thirdPartyStatus)
+        val sendBeforeThirdPartyAcceptError = assertFailsWith<MessagingException> {
+            service.sendMessage(partnerId, detail.conversation.conversationId, SendMessageRequestDto("Still waiting"))
+        }
+        assertEquals("CONVERSATION_NOT_FOUND", sendBeforeThirdPartyAcceptError.code)
+
+        val thirdPartyAccepted = service.acceptPartnerInvite(targetId, detail.conversation.conversationId)
+        val acceptedPartner = thirdPartyAccepted.conversation.participants.first { it.userId == partnerId.toString() }
         val sent = service.sendMessage(partnerId, detail.conversation.conversationId, SendMessageRequestDto("Joining"))
 
         assertEquals(ConversationParticipantStatus.ACTIVE, acceptedPartner.status)
+        assertEquals(null, thirdPartyAccepted.conversation.partnerInvite)
         assertEquals("Joining", sent.body)
     }
 
@@ -477,8 +488,10 @@ private class InMemoryMessagingRepository(
     private val messagesByConversation = mutableMapOf<UUID, MutableList<MessageRecord>>()
     private val lastReadAtByParticipant = mutableMapOf<Pair<UUID, UUID>, Instant>()
     private val messageFingerprints = mutableMapOf<UUID, String?>()
+    private val partnerInvitesByConversation = mutableMapOf<UUID, PartnerChatInviteRecord>()
     private var nextConversationIndex = 1
     private var nextMessageIndex = 1
+    private var nextInviteIndex = 1
     val reviewQueue = mutableListOf<ReviewQueueItem>()
 
     override suspend fun listConversations(userId: UUID, limit: Int): List<ConversationRecord> =
@@ -553,6 +566,20 @@ private class InMemoryMessagingRepository(
             return PartnerInviteResult.AlreadyInvited
         }
 
+        if (conversationId in partnerInvitesByConversation) {
+            return PartnerInviteResult.AlreadyInvited
+        }
+
+        val invite = PartnerChatInviteRecord(
+            inviteId = UUID.fromString("30000000-0000-0000-0000-${nextInviteIndex++.toString().padStart(12, '0')}"),
+            threadId = conversationId,
+            inviterUserId = inviterUserId,
+            invitedPartnerUserId = partnerUserId,
+            thirdPartyStatus = "pending",
+            partnerStatus = "pending",
+            createdAt = Instant.parse("2026-04-24T18:00:00Z")
+        )
+        partnerInvitesByConversation[conversationId] = invite
         lastReadAtByParticipant[conversationId to partnerUserId] = Instant.parse("2026-04-24T18:00:00Z")
         val updatedParticipants = entry.value.participants
             .filterNot { it.userId == partnerUserId }
@@ -564,36 +591,75 @@ private class InMemoryMessagingRepository(
                     invitedByUserId = inviterUserId
                 )
             )
-        val updated = entry.value.copy(kind = "group", participants = updatedParticipants)
+        val updated = entry.value.copy(kind = "group", participants = updatedParticipants, partnerInvite = invite)
         conversationsByPair[entry.key] = updated
         return PartnerInviteResult.Invited(updated)
     }
 
     override suspend fun acceptPartnerInvite(userId: UUID, conversationId: UUID): ConversationDetailRecord? {
+        val invite = partnerInvitesByConversation[conversationId] ?: return null
         val entry = conversationsByPair.entries.firstOrNull { (_, conversation) ->
             conversation.conversationId == conversationId &&
-                conversation.participants.any {
-                    it.userId == userId && it.status == ConversationParticipantStatus.INVITED
-                }
+                conversation.participants.any { it.userId == userId && it.status in visibleParticipantStatuses }
         } ?: return null
 
+        val role = when {
+            userId == invite.invitedPartnerUserId -> PartnerInviteUserRole.InvitedPartner
+            userId != invite.inviterUserId &&
+                entry.value.participants.any {
+                    it.userId == userId && it.status == ConversationParticipantStatus.ACTIVE
+                } -> PartnerInviteUserRole.ThirdPartyApprover
+            else -> PartnerInviteUserRole.None
+        }
+        if (role == PartnerInviteUserRole.None) return null
+
+        val updatedInvite = invite.copy(
+            partnerStatus = if (role == PartnerInviteUserRole.InvitedPartner) "accepted" else invite.partnerStatus,
+            thirdPartyStatus = if (role == PartnerInviteUserRole.ThirdPartyApprover) "accepted" else invite.thirdPartyStatus
+        )
+        val fullyAccepted = updatedInvite.partnerStatus == "accepted" && updatedInvite.thirdPartyStatus == "accepted"
+        if (fullyAccepted) {
+            partnerInvitesByConversation.remove(conversationId)
+        } else {
+            partnerInvitesByConversation[conversationId] = updatedInvite
+        }
         val updated = entry.value.copy(
             kind = "group",
             participants = entry.value.participants.map { participant ->
-                if (participant.userId == userId) participant.copy(status = ConversationParticipantStatus.ACTIVE) else participant
-            }
+                if (fullyAccepted && participant.userId == invite.invitedPartnerUserId) {
+                    participant.copy(status = ConversationParticipantStatus.ACTIVE)
+                } else {
+                    participant
+                }
+            },
+            partnerInvite = if (fullyAccepted) null else updatedInvite
         )
         conversationsByPair[entry.key] = updated
         return getConversationDetail(userId, conversationId, limit = 50)
     }
 
-    override suspend fun declinePartnerInvite(userId: UUID, conversationId: UUID): Boolean =
-        updateParticipantStatus(
-            userId = userId,
+    override suspend fun declinePartnerInvite(userId: UUID, conversationId: UUID): Boolean {
+        val invite = partnerInvitesByConversation[conversationId] ?: return false
+        val entry = conversationsByPair.entries.firstOrNull { (_, conversation) ->
+            conversation.conversationId == conversationId &&
+                conversation.participants.any { it.userId == userId && it.status in visibleParticipantStatuses }
+        } ?: return false
+        val canDecline = userId == invite.invitedPartnerUserId ||
+            (
+                userId != invite.inviterUserId &&
+                    entry.value.participants.any {
+                        it.userId == userId && it.status == ConversationParticipantStatus.ACTIVE
+                    }
+                )
+        if (!canDecline) return false
+        partnerInvitesByConversation.remove(conversationId)
+        return updateParticipantStatus(
+            userId = invite.invitedPartnerUserId,
             conversationId = conversationId,
             from = ConversationParticipantStatus.INVITED,
             to = ConversationParticipantStatus.DECLINED
         )
+    }
 
     override suspend fun leaveConversation(userId: UUID, conversationId: UUID): Boolean {
         val entry = conversationsByPair.entries.firstOrNull { (_, conversation) ->
@@ -777,7 +843,8 @@ private class InMemoryMessagingRepository(
         conversationsByPair[entry.key] = entry.value.copy(
             participants = entry.value.participants.map { participant ->
                 if (participant.userId == userId) participant.copy(status = to) else participant
-            }
+            },
+            partnerInvite = partnerInvitesByConversation[conversationId]
         )
         return true
     }
@@ -793,6 +860,12 @@ private class InMemoryMessagingRepository(
     )
 
     private val messageSort = compareBy<MessageRecord> { it.createdAt }.thenBy { it.messageId }
+}
+
+private enum class PartnerInviteUserRole {
+    None,
+    InvitedPartner,
+    ThirdPartyApprover
 }
 
 private data class ReviewQueueItem(

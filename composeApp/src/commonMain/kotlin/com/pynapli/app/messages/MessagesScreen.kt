@@ -17,13 +17,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,12 +41,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.conversation.titleFor
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
+import com.pynapli.shared.network.dto.PartnerChatInviteStatus
 import kotlinx.coroutines.launch
 
 @Composable
@@ -63,6 +70,12 @@ fun MessagesScreen(
         viewerUserId = viewerUserId,
         onThreadSelected = onThreadSelected,
         onRefresh = { scope.launch { stateHolder.load() } },
+        onAcceptPartnerInvite = { conversationId ->
+            scope.launch { stateHolder.acceptPartnerInvite(conversationId) }
+        },
+        onDeclinePartnerInvite = { conversationId ->
+            scope.launch { stateHolder.declinePartnerInvite(conversationId, viewerUserId) }
+        },
         modifier = modifier
     )
 }
@@ -82,6 +95,8 @@ private fun MessagesScreenContent(
     viewerUserId: String?,
     onThreadSelected: (ConversationDto) -> Unit,
     onRefresh: () -> Unit,
+    onAcceptPartnerInvite: (String) -> Unit,
+    onDeclinePartnerInvite: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -125,7 +140,9 @@ private fun MessagesScreenContent(
 
             else -> {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag(MessagesTestTags.LIST)
                 ) {
                     items(
                         items = state.conversations,
@@ -134,7 +151,10 @@ private fun MessagesScreenContent(
                         ConversationRow(
                             conversation = conversation,
                             viewerUserId = viewerUserId,
-                            onClick = { onThreadSelected(conversation) }
+                            isMutatingInvite = conversation.conversationId in state.mutatingPartnerInviteConversationIds,
+                            onClick = { onThreadSelected(conversation) },
+                            onAcceptPartnerInvite = { onAcceptPartnerInvite(conversation.conversationId) },
+                            onDeclinePartnerInvite = { onDeclinePartnerInvite(conversation.conversationId) }
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                     }
@@ -185,6 +205,9 @@ private fun MessagesHeader(
 private fun ConversationRow(
     conversation: ConversationDto,
     viewerUserId: String?,
+    isMutatingInvite: Boolean,
+    onAcceptPartnerInvite: () -> Unit,
+    onDeclinePartnerInvite: () -> Unit,
     onClick: () -> Unit
 ) {
     val title = conversation.titleFor(viewerUserId)
@@ -195,8 +218,10 @@ private fun ConversationRow(
         viewerUserId != null && participant.userId == viewerUserId
     }
     val isInvite = viewerParticipant?.status == ConversationParticipantStatus.INVITED
+    val inviteUi = conversation.partnerInviteUiState(viewerUserId)
     val lastMessage = conversation.lastMessage
     val preview = when {
+        inviteUi != null -> inviteUi.preview
         isInvite -> "Chat invite"
         lastMessage != null -> lastMessage.body
         else -> "No messages yet"
@@ -207,6 +232,7 @@ private fun ConversationRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .testTag(MessagesTestTags.row(conversation.conversationId))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -237,14 +263,102 @@ private fun ConversationRow(
                     maxLines = 1
                 )
             }
+            Row(
+                modifier = Modifier.padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ConversationOriginPill(label = inviteUi?.label ?: conversation.origin.originLabel())
+                if (conversation.kind == "group") {
+                    ConversationOriginPill(label = "Group", muted = true)
+                }
+            }
             Text(
                 text = preview,
                 color = if (unread) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp)
             )
+            if (inviteUi?.showActions == true) {
+                InviteActionRow(
+                    isMutating = isMutatingInvite,
+                    onAcceptPartnerInvite = onAcceptPartnerInvite,
+                    onDeclinePartnerInvite = onDeclinePartnerInvite,
+                    conversationId = conversation.conversationId
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversationOriginPill(
+    label: String,
+    muted: Boolean = false
+) {
+    Surface(
+        shape = CircleShape,
+        color = if (muted) {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)
+        } else {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        }
+    ) {
+        Text(
+            text = label,
+            color = if (muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
+    }
+}
+
+@Composable
+private fun InviteActionRow(
+    isMutating: Boolean,
+    onAcceptPartnerInvite: () -> Unit,
+    onDeclinePartnerInvite: () -> Unit,
+    conversationId: String
+) {
+    Row(
+        modifier = Modifier.padding(top = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedButton(
+            onClick = onDeclinePartnerInvite,
+            enabled = !isMutating,
+            modifier = Modifier.testTag(MessagesTestTags.declineInvite(conversationId))
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(text = "Decline", modifier = Modifier.padding(start = 6.dp))
+        }
+        Button(
+            onClick = onAcceptPartnerInvite,
+            enabled = !isMutating,
+            modifier = Modifier.testTag(MessagesTestTags.acceptInvite(conversationId))
+        ) {
+            if (isMutating) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(16.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Text(text = "Accept", modifier = Modifier.padding(start = 6.dp))
         }
     }
 }
@@ -343,3 +457,70 @@ private fun EmptyMessagesState(modifier: Modifier = Modifier) {
 
 private fun String.compactTimeLabel(): String =
     if (length >= 16 && this[10] == 'T') substring(11, 16) else ""
+
+private data class PartnerInviteUiState(
+    val label: String,
+    val preview: String,
+    val showActions: Boolean
+)
+
+private fun ConversationDto.partnerInviteUiState(viewerUserId: String?): PartnerInviteUiState? {
+    val invite = partnerInvite ?: return null
+    if (viewerUserId == null) return null
+    val viewerParticipant = participants.firstOrNull { participant -> participant.userId == viewerUserId }
+    val viewerIsInvitedPartner = viewerUserId == invite.invitedPartnerUserId
+    val viewerCanApproveAsThirdParty = viewerParticipant?.status == ConversationParticipantStatus.ACTIVE &&
+        viewerUserId != invite.inviterUserId &&
+        viewerUserId != invite.invitedPartnerUserId
+
+    return when {
+        viewerIsInvitedPartner && invite.partnerStatus == PartnerChatInviteStatus.PENDING -> PartnerInviteUiState(
+            label = "Invite",
+            preview = "You were invited to join this chat",
+            showActions = true
+        )
+
+        viewerIsInvitedPartner && invite.partnerStatus == PartnerChatInviteStatus.ACCEPTED -> PartnerInviteUiState(
+            label = "Waiting",
+            preview = "Waiting for chat approval",
+            showActions = false
+        )
+
+        viewerCanApproveAsThirdParty && invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING -> PartnerInviteUiState(
+            label = "Approval",
+            preview = "Partner invite needs your approval",
+            showActions = true
+        )
+
+        viewerCanApproveAsThirdParty && invite.thirdPartyStatus == PartnerChatInviteStatus.ACCEPTED -> PartnerInviteUiState(
+            label = "Waiting",
+            preview = "Waiting for partner response",
+            showActions = false
+        )
+
+        viewerUserId == invite.inviterUserId -> PartnerInviteUiState(
+            label = "Pending",
+            preview = "Partner invite pending",
+            showActions = false
+        )
+
+        else -> PartnerInviteUiState(
+            label = "Invite",
+            preview = "Partner invite pending",
+            showActions = false
+        )
+    }
+}
+
+private fun String.originLabel(): String = when (this) {
+    "swipe" -> "Match"
+    "intro_note" -> "Intro"
+    else -> "Grid"
+}
+
+internal object MessagesTestTags {
+    const val LIST = "messages-list"
+    fun row(conversationId: String): String = "messages-row-$conversationId"
+    fun acceptInvite(conversationId: String): String = "messages-invite-accept-$conversationId"
+    fun declineInvite(conversationId: String): String = "messages-invite-decline-$conversationId"
+}

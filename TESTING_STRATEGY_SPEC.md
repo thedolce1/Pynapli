@@ -68,6 +68,13 @@ Current Activity backend coverage:
 - `KtorPynapliApiClientTest` covers the shared client contract for `GET /v1/activity/summary` and `POST /v1/activity/seen`.
 - Latest local proof on 2026-05-20: targeted Activity seen/summary service, repository, shared client, and Compose state tests passed; full `scripts/verify.ps1` passed.
 
+Current Messaging coverage:
+
+- `MessagingServiceTest` covers grid conversation creation, swipe match gating, message send/read/pagination, first-message rate limits, held-message review behavior, partner chat invite Activity generation, and partner invite consent ordering.
+- `MessagingRepositoryIntegrationTest` runs the messaging repository against PostgreSQL/Testcontainers and covers swipe-origin match enforcement, grid message policy gates, held-message visibility/moderation, partner invite partner+third-party consent, and third-party decline cooldown.
+- `MessagesStateHolderTest` covers invited-partner filtering, invite accept/decline local state, and third-party decline refresh behavior.
+- `MessagesScreenInteractionTest` renders the real Compose Messages screen and verifies a third-party partner-invite approval row can be accepted from the inbox.
+
 Current Activity client coverage:
 
 - `ActivityStateHolderTest` covers silent refresh behavior, entitlement metadata, server-backed tab selection, cursor load-more, deduped append, server-backed summary/badge state, marking loaded visible rows seen, avoiding background seen marking, summary failure resilience, logout reset, and local removal after dismiss.

@@ -74,7 +74,8 @@ data class ConversationRecord(
     val participants: List<ConversationParticipantRecord>,
     val lastMessage: MessageRecord?,
     val unreadCount: Int = 0,
-    val updatedAt: Instant
+    val updatedAt: Instant,
+    val partnerInvite: PartnerChatInviteRecord? = null
 )
 
 data class ConversationParticipantRecord(
@@ -111,9 +112,20 @@ data class MessageRecord(
     val deliveryStatus: String
 )
 
+data class PartnerChatInviteRecord(
+    val inviteId: UUID,
+    val threadId: UUID,
+    val inviterUserId: UUID,
+    val invitedPartnerUserId: UUID,
+    val thirdPartyStatus: String,
+    val partnerStatus: String,
+    val createdAt: Instant
+)
+
 sealed class PartnerInviteResult {
     data class Invited(val conversation: ConversationRecord) : PartnerInviteResult()
     data object ConversationNotFound : PartnerInviteResult()
     data object AlreadyInConversation : PartnerInviteResult()
     data object AlreadyInvited : PartnerInviteResult()
+    data object CooldownActive : PartnerInviteResult()
 }

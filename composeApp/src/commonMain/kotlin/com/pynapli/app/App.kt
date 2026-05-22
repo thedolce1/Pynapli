@@ -384,7 +384,7 @@ fun PynapliApp(
                         },
                         onDeclinePartnerChatInvite = { conversationId ->
                             scope.launch {
-                                messagesStateHolder.declinePartnerInvite(conversationId)
+                                messagesStateHolder.declinePartnerInvite(conversationId, authState.session?.userId)
                             }
                         },
                         onClearProfileLinkMessages = profileLinksStateHolder::clearMessages,

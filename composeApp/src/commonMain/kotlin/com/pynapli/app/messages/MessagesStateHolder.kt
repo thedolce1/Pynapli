@@ -118,16 +118,29 @@ class MessagesStateHolder(
         }
     }
 
-    suspend fun declinePartnerInvite(conversationId: String) {
+    suspend fun declinePartnerInvite(conversationId: String, viewerUserId: String? = null) {
+        val removeConversation = state.value.conversations.firstOrNull {
+            it.conversationId == conversationId
+        }?.viewerParticipantStatus(viewerUserId) == ConversationParticipantStatus.INVITED
         mutatePartnerInvite(conversationId) {
             when (val result = repository.declinePartnerInvite(conversationId)) {
                 is AppResult.Success -> {
-                    _state.update { current ->
-                        current.copy(
-                            conversations = current.conversations.filterNot { it.conversationId == conversationId },
-                            mutatingPartnerInviteConversationIds = current.mutatingPartnerInviteConversationIds - conversationId,
-                            errorMessage = null
-                        )
+                    if (removeConversation) {
+                        _state.update { current ->
+                            current.copy(
+                                conversations = current.conversations.filterNot { it.conversationId == conversationId },
+                                mutatingPartnerInviteConversationIds = current.mutatingPartnerInviteConversationIds - conversationId,
+                                errorMessage = null
+                            )
+                        }
+                    } else {
+                        _state.update { current ->
+                            current.copy(
+                                mutatingPartnerInviteConversationIds = current.mutatingPartnerInviteConversationIds - conversationId,
+                                errorMessage = null
+                            )
+                        }
+                        refreshSilently()
                     }
                 }
 

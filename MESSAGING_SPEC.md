@@ -1,6 +1,6 @@
 # Pynapli Messaging Spec
 
-Last updated: 2026-04-24
+Last updated: 2026-05-22
 
 ## Purpose
 
@@ -145,7 +145,10 @@ Do not paywall:
 
 Current implementation note:
 
-- Linked-partner chat invites now emit `partner_chat_invite` Activity rows for the invited partner after the messaging repository accepts the invite. The partner still must explicitly accept before sending messages.
+- Linked-partner chat invites emit `partner_chat_invite` Activity rows for the invited partner after the messaging repository creates the invite.
+- Partner invite consent is tracked in `partner_chat_invites`: the linked partner can accept first, but remains an invited participant until the existing third party also approves.
+- If the existing third party declines, the invited partner is removed from the thread context and a 24-hour cooldown blocks re-inviting that same partner to that same thread.
+- Messages inbox rows and the conversation sheet surface the correct state: Accept/Decline, waiting for chat approval, waiting for partner response, or pending.
 
 ## Implementation Checklist
 

@@ -41,6 +41,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
 import com.pynapli.shared.network.dto.MessageDto
+import com.pynapli.shared.network.dto.ConversationParticipantStatus
+import com.pynapli.shared.network.dto.PartnerChatInviteStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,6 +149,33 @@ private fun ConversationPartnerActions(
     onLeaveConversation: () -> Unit
 ) {
     val conversation = state.detail?.conversation ?: return
+    val viewerUserId = state.viewerUserId
+    val pendingInvite = conversation.partnerInvite
+    val viewerParticipant = conversation.participants.firstOrNull { participant -> participant.userId == viewerUserId }
+    val viewerIsInvitedPartner = viewerUserId != null &&
+        pendingInvite?.invitedPartnerUserId == viewerUserId
+    val viewerCanApproveAsThirdParty = viewerUserId != null &&
+        pendingInvite != null &&
+        viewerParticipant?.status == ConversationParticipantStatus.ACTIVE &&
+        viewerUserId != pendingInvite.inviterUserId &&
+        viewerUserId != pendingInvite.invitedPartnerUserId
+    val partnerAcceptedWaiting = pendingInvite?.let { invite ->
+        viewerIsInvitedPartner &&
+            invite.partnerStatus == PartnerChatInviteStatus.ACCEPTED &&
+            invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
+    } == true
+    val thirdPartyApprovalNeeded = pendingInvite?.let { invite ->
+        viewerCanApproveAsThirdParty &&
+            invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
+    } == true
+    val waitingForPartner = pendingInvite?.let { invite ->
+        viewerCanApproveAsThirdParty &&
+            invite.thirdPartyStatus == PartnerChatInviteStatus.ACCEPTED &&
+            invite.partnerStatus == PartnerChatInviteStatus.PENDING
+    } == true
+    val inviterWaiting = viewerUserId != null &&
+        pendingInvite != null &&
+        viewerUserId == pendingInvite.inviterUserId
     val partnerAlreadyInThread = linkedPartnerUserId != null &&
         conversation.participants.any { participant ->
             participant.userId == linkedPartnerUserId &&
@@ -161,12 +190,46 @@ private fun ConversationPartnerActions(
         !state.isInvitingPartner
 
     when {
+        partnerAcceptedWaiting -> {
+            PartnerInviteStatusNotice(
+                title = "Invite accepted",
+                body = "Waiting for the chat to approve your join."
+            )
+        }
+
         state.isViewerInvited -> {
             PartnerInvitePrompt(
+                title = "You were invited to join this chat.",
+                body = null,
                 isResponding = state.isRespondingToInvite,
                 errorMessage = state.errorMessage,
                 onAcceptInvite = onAcceptInvite,
                 onDeclineInvite = onDeclineInvite
+            )
+        }
+
+        thirdPartyApprovalNeeded -> {
+            PartnerInvitePrompt(
+                title = "Partner invite request",
+                body = "Approve before the partner can join this chat.",
+                isResponding = state.isRespondingToInvite,
+                errorMessage = state.errorMessage,
+                onAcceptInvite = onAcceptInvite,
+                onDeclineInvite = onDeclineInvite
+            )
+        }
+
+        waitingForPartner -> {
+            PartnerInviteStatusNotice(
+                title = "Invite approved",
+                body = "Waiting for the partner to accept."
+            )
+        }
+
+        inviterWaiting -> {
+            PartnerInviteStatusNotice(
+                title = "Partner invite pending",
+                body = "The partner and chat must both approve before they can join."
             )
         }
 
@@ -248,6 +311,8 @@ private fun ConversationPartnerActions(
 
 @Composable
 private fun PartnerInvitePrompt(
+    title: String,
+    body: String?,
     isResponding: Boolean,
     errorMessage: String?,
     onAcceptInvite: () -> Unit,
@@ -263,11 +328,18 @@ private fun PartnerInvitePrompt(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = "You were invited to join this chat.",
+                text = title,
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold
             )
+            body?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -315,6 +387,35 @@ private fun PartnerInvitePrompt(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun PartnerInviteStatusNotice(
+    title: String,
+    body: String
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = body,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }

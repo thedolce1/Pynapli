@@ -12,6 +12,7 @@ import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
 import com.pynapli.shared.network.dto.MatchDto
 import com.pynapli.shared.network.dto.MessageDto
+import com.pynapli.shared.network.dto.PartnerChatInviteStatus
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +54,21 @@ data class ConversationUiState(
 
     val isViewerInvited: Boolean
         get() = viewerParticipantStatus == ConversationParticipantStatus.INVITED
+
+    val canRespondToPartnerInvite: Boolean
+        get() {
+            val invite = detail?.conversation?.partnerInvite ?: return false
+            val viewer = viewerUserId ?: return false
+            if (viewer == invite.invitedPartnerUserId &&
+                invite.partnerStatus == PartnerChatInviteStatus.PENDING
+            ) {
+                return true
+            }
+            return viewerParticipantStatus == ConversationParticipantStatus.ACTIVE &&
+                viewer != invite.inviterUserId &&
+                viewer != invite.invitedPartnerUserId &&
+                invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
+        }
 
     val canSend: Boolean
         get() = detail != null &&
@@ -332,7 +348,7 @@ class ConversationStateHolder(
 
     suspend fun acceptPartnerInvite() {
         val current = state.value
-        if (current.isRespondingToInvite || !current.isViewerInvited) return
+        if (current.isRespondingToInvite || !current.canRespondToPartnerInvite) return
         val conversationId = current.detail?.conversation?.conversationId ?: return
 
         _state.update {
@@ -351,7 +367,7 @@ class ConversationStateHolder(
                         detail = detail,
                         titleOverride = detail.conversation.titleFor(existing.viewerUserId),
                         isRespondingToInvite = false,
-                        partnerInviteFeedback = "Joined chat",
+                        partnerInviteFeedback = current.partnerInviteAcceptedFeedback(detail),
                         errorMessage = null
                     )
                 }
@@ -371,7 +387,7 @@ class ConversationStateHolder(
 
     suspend fun declinePartnerInvite() {
         val current = state.value
-        if (current.isRespondingToInvite || !current.isViewerInvited) return
+        if (current.isRespondingToInvite || !current.canRespondToPartnerInvite) return
         val conversationId = current.detail?.conversation?.conversationId ?: return
 
         _state.update {
@@ -383,13 +399,45 @@ class ConversationStateHolder(
         }
 
         when (val result = repository.declinePartnerInvite(conversationId)) {
-            is AppResult.Success -> dismiss()
+            is AppResult.Success -> {
+                if (current.isViewerInvited) {
+                    dismiss()
+                } else {
+                    refreshOpenConversationAfterInviteDecline(conversationId)
+                }
+            }
             is AppResult.Failure -> {
                 _state.update { existing ->
                     existing.copy(
                         isRespondingToInvite = false,
                         partnerInviteFeedback = null,
                         errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun refreshOpenConversationAfterInviteDecline(conversationId: String) {
+        when (val detailResult = repository.getConversationDetail(conversationId)) {
+            is AppResult.Success -> {
+                _state.update { existing ->
+                    existing.copy(
+                        detail = detailResult.value.withReadConversation(),
+                        titleOverride = detailResult.value.conversation.titleFor(existing.viewerUserId),
+                        isRespondingToInvite = false,
+                        partnerInviteFeedback = "Invite declined",
+                        errorMessage = null
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update { existing ->
+                    existing.copy(
+                        isRespondingToInvite = false,
+                        partnerInviteFeedback = null,
+                        errorMessage = detailResult.error.message
                     )
                 }
             }
@@ -700,6 +748,13 @@ internal fun ConversationDto.titleFor(viewerUserId: String?): String =
         .filterNot { participant -> viewerUserId != null && participant.userId == viewerUserId }
         .joinToString(", ") { participant -> participant.displayName }
         .ifBlank { participants.firstOrNull()?.displayName ?: "Conversation" }
+
+private fun ConversationUiState.partnerInviteAcceptedFeedback(detail: ConversationDetailDto): String =
+    when {
+        isViewerInvited && detail.conversation.partnerInvite == null -> "Joined chat"
+        isViewerInvited -> "Invite accepted"
+        else -> "Invite approved"
+    }
 
 internal val visibleConversationParticipantStatuses = setOf(
     ConversationParticipantStatus.ACTIVE,

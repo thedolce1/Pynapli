@@ -11,6 +11,12 @@ object ConversationParticipantStatus {
     const val LEFT = "left"
 }
 
+object PartnerChatInviteStatus {
+    const val PENDING = "pending"
+    const val ACCEPTED = "accepted"
+    const val DECLINED = "declined"
+}
+
 @Serializable
 data class CreateDirectConversationRequestDto(
     val targetUserId: String,
@@ -25,7 +31,8 @@ data class ConversationDto(
     val participants: List<ConversationParticipantDto>,
     val lastMessage: MessageDto? = null,
     val unreadCount: Int,
-    val updatedAt: String
+    val updatedAt: String,
+    val partnerInvite: PartnerChatInviteDto? = null
 )
 
 @Serializable
@@ -59,6 +66,16 @@ data class MessageDto(
     val createdAt: String,
     val status: String,
     val deliveryStatus: String
+)
+
+@Serializable
+data class PartnerChatInviteDto(
+    val inviteId: String,
+    val inviterUserId: String,
+    val invitedPartnerUserId: String,
+    val thirdPartyStatus: String,
+    val partnerStatus: String,
+    val createdAt: String
 )
 
 @Serializable

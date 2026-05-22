@@ -19,6 +19,12 @@ class JdbcMessagingRepository(
         Inactive
     }
 
+    private enum class PartnerInviteUserRole {
+        None,
+        InvitedPartner,
+        ThirdPartyApprover
+    }
+
     private data class GridMessagePolicy(
         val allowGridMessages: Boolean,
         val gridMessagePolicy: String
@@ -305,6 +311,21 @@ class JdbcMessagingRepository(
                     ParticipantStatus.Inactive -> Unit
                 }
 
+                if (connection.partnerInviteCooldownActive(conversationId, partnerUserId)) {
+                    connection.rollback()
+                    return@withContext PartnerInviteResult.CooldownActive
+                }
+
+                val inviteInserted = connection.insertPartnerChatInvite(
+                    conversationId = conversationId,
+                    inviterUserId = inviterUserId,
+                    partnerUserId = partnerUserId
+                )
+                if (!inviteInserted) {
+                    connection.rollback()
+                    return@withContext PartnerInviteResult.AlreadyInvited
+                }
+
                 connection.upsertInvitedParticipant(
                     conversationId = conversationId,
                     partnerUserId = partnerUserId,
@@ -335,31 +356,18 @@ class JdbcMessagingRepository(
             val previousAutoCommit = connection.autoCommit
             connection.autoCommit = false
             try {
-                val updated = connection.prepareStatement(
-                    """
-                    UPDATE conversation_participants
-                    SET invitation_status = 'active',
-                        joined_at = now(),
-                        last_read_at = now(),
-                        invitation_responded_at = now(),
-                        left_at = NULL
-                    WHERE conversation_id = ?
-                      AND user_id = ?
-                      AND invitation_status = 'invited'
-                      AND left_at IS NULL
-                    """.trimIndent()
-                ).use { statement ->
-                    statement.setObject(1, conversationId)
-                    statement.setObject(2, userId)
-                    statement.executeUpdate()
-                }
-
-                if (updated == 0) {
+                val invite = connection.loadOpenPartnerInvite(conversationId, forUpdate = true)
+                    ?: run {
+                        connection.rollback()
+                        return@withContext null
+                    }
+                val userRole = connection.partnerInviteUserRole(userId, invite)
+                if (userRole == PartnerInviteUserRole.None) {
                     connection.rollback()
                     return@withContext null
                 }
 
-                connection.markConversationGroup(conversationId)
+                connection.acceptOpenPartnerInvite(conversationId, userId, invite, userRole)
                 val detail = connection.loadConversation(userId, conversationId)?.let { conversation ->
                     val page = connection.loadMessages(userId, conversationId, DEFAULT_MESSAGE_PAGE_LIMIT, before = null)
                     ConversationDetailRecord(
@@ -381,24 +389,29 @@ class JdbcMessagingRepository(
 
     override suspend fun declinePartnerInvite(userId: UUID, conversationId: UUID): Boolean = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            val updated = connection.prepareStatement(
-                """
-                UPDATE conversation_participants
-                SET invitation_status = 'declined',
-                    invitation_responded_at = now(),
-                    left_at = now()
-                WHERE conversation_id = ?
-                  AND user_id = ?
-                  AND invitation_status = 'invited'
-                  AND left_at IS NULL
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, conversationId)
-                statement.setObject(2, userId)
-                statement.executeUpdate()
+            val previousAutoCommit = connection.autoCommit
+            connection.autoCommit = false
+            try {
+                val invite = connection.loadOpenPartnerInvite(conversationId, forUpdate = true)
+                    ?: run {
+                        connection.rollback()
+                        return@withContext false
+                    }
+                val userRole = connection.partnerInviteUserRole(userId, invite)
+                if (userRole == PartnerInviteUserRole.None) {
+                    connection.rollback()
+                    return@withContext false
+                }
+
+                connection.declineOpenPartnerInvite(conversationId, invite, userRole)
+                connection.commit()
+                true
+            } catch (error: Throwable) {
+                connection.rollback()
+                throw error
+            } finally {
+                connection.autoCommit = previousAutoCommit
             }
-            if (updated > 0) connection.touchConversation(conversationId)
-            updated > 0
         }
     }
 
@@ -628,7 +641,8 @@ class JdbcMessagingRepository(
             participants = participants,
             lastMessage = loadLastMessage(userId, conversationId),
             unreadCount = loadUnreadCount(userId, conversationId),
-            updatedAt = updatedAt ?: return null
+            updatedAt = updatedAt ?: return null,
+            partnerInvite = loadOpenPartnerInvite(conversationId, forUpdate = false)
         )
     }
 
@@ -938,6 +952,220 @@ class JdbcMessagingRepository(
         }
     }
 
+    private fun Connection.partnerInviteCooldownActive(conversationId: UUID, partnerUserId: UUID): Boolean =
+        prepareStatement(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM partner_chat_invites
+                WHERE thread_id = ?
+                  AND invited_partner_user_id = ?
+                  AND third_party_status = ?
+                  AND resolved_at > now() - interval '24 hours'
+            )
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, conversationId)
+            statement.setObject(2, partnerUserId)
+            statement.setString(3, PARTNER_INVITE_DECLINED)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getBoolean(1)
+            }
+        }
+
+    private fun Connection.insertPartnerChatInvite(
+        conversationId: UUID,
+        inviterUserId: UUID,
+        partnerUserId: UUID
+    ): Boolean =
+        prepareStatement(
+            """
+            INSERT INTO partner_chat_invites (
+                id,
+                thread_id,
+                inviter_user_id,
+                invited_partner_user_id,
+                third_party_status,
+                partner_status
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT DO NOTHING
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, conversationId)
+            statement.setObject(3, inviterUserId)
+            statement.setObject(4, partnerUserId)
+            statement.setString(5, PARTNER_INVITE_PENDING)
+            statement.setString(6, PARTNER_INVITE_PENDING)
+            statement.executeUpdate() > 0
+        }
+
+    private fun Connection.loadOpenPartnerInvite(
+        conversationId: UUID,
+        forUpdate: Boolean
+    ): PartnerChatInviteRecord? {
+        val query = buildString {
+            append(
+                """
+                SELECT id,
+                       thread_id,
+                       inviter_user_id,
+                       invited_partner_user_id,
+                       third_party_status,
+                       partner_status,
+                       created_at
+                FROM partner_chat_invites
+                WHERE thread_id = ?
+                  AND resolved_at IS NULL
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """.trimIndent()
+            )
+            if (forUpdate) append("\nFOR UPDATE")
+        }
+        return prepareStatement(query).use { statement ->
+            statement.setObject(1, conversationId)
+            statement.executeQuery().use { rs ->
+                if (rs.next()) rs.toPartnerChatInviteRecord() else null
+            }
+        }
+    }
+
+    private fun Connection.partnerInviteUserRole(
+        userId: UUID,
+        invite: PartnerChatInviteRecord
+    ): PartnerInviteUserRole =
+        when {
+            userId == invite.invitedPartnerUserId -> PartnerInviteUserRole.InvitedPartner
+            userId != invite.inviterUserId && isActiveParticipant(userId, invite.threadId) ->
+                PartnerInviteUserRole.ThirdPartyApprover
+            else -> PartnerInviteUserRole.None
+        }
+
+    private fun Connection.acceptOpenPartnerInvite(
+        conversationId: UUID,
+        userId: UUID,
+        invite: PartnerChatInviteRecord,
+        role: PartnerInviteUserRole
+    ) {
+        val partnerAccepted = invite.partnerStatus == PARTNER_INVITE_ACCEPTED ||
+            role == PartnerInviteUserRole.InvitedPartner
+        val thirdPartyAccepted = invite.thirdPartyStatus == PARTNER_INVITE_ACCEPTED ||
+            role == PartnerInviteUserRole.ThirdPartyApprover
+        val fullyAccepted = partnerAccepted && thirdPartyAccepted
+
+        prepareStatement(
+            """
+            UPDATE partner_chat_invites
+            SET partner_status = CASE WHEN ? THEN ? ELSE partner_status END,
+                third_party_status = CASE WHEN ? THEN ? ELSE third_party_status END,
+                resolved_at = CASE WHEN ? THEN now() ELSE resolved_at END
+            WHERE id = ?
+              AND resolved_at IS NULL
+            """.trimIndent()
+        ).use { statement ->
+            statement.setBoolean(1, role == PartnerInviteUserRole.InvitedPartner)
+            statement.setString(2, PARTNER_INVITE_ACCEPTED)
+            statement.setBoolean(3, role == PartnerInviteUserRole.ThirdPartyApprover)
+            statement.setString(4, PARTNER_INVITE_ACCEPTED)
+            statement.setBoolean(5, fullyAccepted)
+            statement.setObject(6, invite.inviteId)
+            statement.executeUpdate()
+        }
+
+        if (fullyAccepted) {
+            prepareStatement(
+                """
+                UPDATE conversation_participants
+                SET invitation_status = 'active',
+                    joined_at = now(),
+                    last_read_at = now(),
+                    invitation_responded_at = now(),
+                    left_at = NULL
+                WHERE conversation_id = ?
+                  AND user_id = ?
+                  AND invitation_status = 'invited'
+                  AND left_at IS NULL
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, conversationId)
+                statement.setObject(2, invite.invitedPartnerUserId)
+                statement.executeUpdate()
+            }
+        } else if (role == PartnerInviteUserRole.InvitedPartner) {
+            prepareStatement(
+                """
+                UPDATE conversation_participants
+                SET invitation_responded_at = now()
+                WHERE conversation_id = ?
+                  AND user_id = ?
+                  AND invitation_status = 'invited'
+                  AND left_at IS NULL
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, conversationId)
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+        }
+
+        markConversationGroup(conversationId)
+    }
+
+    private fun Connection.declineOpenPartnerInvite(
+        conversationId: UUID,
+        invite: PartnerChatInviteRecord,
+        role: PartnerInviteUserRole
+    ) {
+        prepareStatement(
+            """
+            UPDATE partner_chat_invites
+            SET partner_status = CASE WHEN ? THEN ? ELSE partner_status END,
+                third_party_status = CASE WHEN ? THEN ? ELSE third_party_status END,
+                resolved_at = now()
+            WHERE id = ?
+              AND resolved_at IS NULL
+            """.trimIndent()
+        ).use { statement ->
+            statement.setBoolean(1, role == PartnerInviteUserRole.InvitedPartner)
+            statement.setString(2, PARTNER_INVITE_DECLINED)
+            statement.setBoolean(3, role == PartnerInviteUserRole.ThirdPartyApprover)
+            statement.setString(4, PARTNER_INVITE_DECLINED)
+            statement.setObject(5, invite.inviteId)
+            statement.executeUpdate()
+        }
+
+        prepareStatement(
+            """
+            UPDATE conversation_participants
+            SET invitation_status = 'declined',
+                invitation_responded_at = now(),
+                left_at = now()
+            WHERE conversation_id = ?
+              AND user_id = ?
+              AND invitation_status = 'invited'
+              AND left_at IS NULL
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, conversationId)
+            statement.setObject(2, invite.invitedPartnerUserId)
+            statement.executeUpdate()
+        }
+        touchConversation(conversationId)
+    }
+
+    private fun ResultSet.toPartnerChatInviteRecord(): PartnerChatInviteRecord = PartnerChatInviteRecord(
+        inviteId = getObject("id", UUID::class.java),
+        threadId = getObject("thread_id", UUID::class.java),
+        inviterUserId = getObject("inviter_user_id", UUID::class.java),
+        invitedPartnerUserId = getObject("invited_partner_user_id", UUID::class.java),
+        thirdPartyStatus = getString("third_party_status"),
+        partnerStatus = getString("partner_status"),
+        createdAt = getTimestamp("created_at").toInstant()
+    )
+
     private fun Connection.markConversationGroup(conversationId: UUID) {
         prepareStatement(
             """
@@ -969,6 +1197,9 @@ class JdbcMessagingRepository(
         private const val DEFAULT_MESSAGE_PAGE_LIMIT = 50
         private const val DELIVERY_SENT = "sent"
         private const val DELIVERY_HELD_FOR_REVIEW = "held_for_review"
+        private const val PARTNER_INVITE_PENDING = "pending"
+        private const val PARTNER_INVITE_ACCEPTED = "accepted"
+        private const val PARTNER_INVITE_DECLINED = "declined"
 
         private val CONVERSATION_QUERY = """
             SELECT c.kind,

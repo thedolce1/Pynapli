@@ -19,6 +19,7 @@ import com.pynapli.shared.network.dto.ConversationParticipantDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
 import com.pynapli.shared.network.dto.MessageDto
+import com.pynapli.shared.network.dto.PartnerChatInviteDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import java.nio.charset.StandardCharsets
 import java.time.Clock
@@ -243,6 +244,7 @@ class MessagingService(
             PartnerInviteResult.ConversationNotFound -> throw MessagingException("CONVERSATION_NOT_FOUND")
             PartnerInviteResult.AlreadyInConversation -> throw MessagingException("PARTNER_ALREADY_IN_CONVERSATION")
             PartnerInviteResult.AlreadyInvited -> throw MessagingException("PARTNER_INVITE_ALREADY_SENT")
+            PartnerInviteResult.CooldownActive -> throw MessagingException("PARTNER_INVITE_COOLDOWN")
         }
     }
 
@@ -250,8 +252,13 @@ class MessagingService(
         val conversationId = conversationIdText.toUuidOrThrow()
         val detail = repository.getConversationDetail(userId, conversationId, limit = 1)
             ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
+        val invite = detail.conversation.partnerInvite ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
         val viewerParticipant = detail.conversation.participants.firstOrNull { it.userId == userId }
-        if (viewerParticipant?.status != ConversationParticipantStatus.INVITED) {
+        val viewerIsInvitedPartner = invite.invitedPartnerUserId == userId
+        val viewerCanApproveAsThirdParty = viewerParticipant?.status == ConversationParticipantStatus.ACTIVE &&
+            userId != invite.inviterUserId &&
+            userId != invite.invitedPartnerUserId
+        if (!viewerIsInvitedPartner && !viewerCanApproveAsThirdParty) {
             throw MessagingException("PARTNER_INVITE_NOT_FOUND")
         }
         if (detail.conversation.hasBlockedOtherParticipant(userId)) {
@@ -303,7 +310,8 @@ class MessagingService(
         participants = participants.map { it.toDto() },
         lastMessage = lastMessage?.toDto(),
         unreadCount = unreadCount,
-        updatedAt = updatedAt.toString()
+        updatedAt = updatedAt.toString(),
+        partnerInvite = partnerInvite?.toDto()
     )
 
     private fun ConversationParticipantRecord.toDto(): ConversationParticipantDto = ConversationParticipantDto(
@@ -322,6 +330,15 @@ class MessagingService(
         createdAt = createdAt.toString(),
         status = status,
         deliveryStatus = deliveryStatus
+    )
+
+    private fun PartnerChatInviteRecord.toDto(): PartnerChatInviteDto = PartnerChatInviteDto(
+        inviteId = inviteId.toString(),
+        inviterUserId = inviterUserId.toString(),
+        invitedPartnerUserId = invitedPartnerUserId.toString(),
+        thirdPartyStatus = thirdPartyStatus,
+        partnerStatus = partnerStatus,
+        createdAt = createdAt.toString()
     )
 
     private fun String.toUuidOrThrow(): UUID =

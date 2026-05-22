@@ -382,9 +382,9 @@ POST /v1/messages/threads
 GET  /v1/messages/threads/{threadId}
 POST /v1/messages/threads/{threadId}/messages
 POST /v1/messages/{messageId}/delete
-POST /v1/messages/threads/{threadId}/invite-partner
-POST /v1/messages/partner-invites/{inviteId}/accept
-POST /v1/messages/partner-invites/{inviteId}/deny
+POST /v1/messages/threads/{threadId}/partner-invite
+POST /v1/messages/threads/{threadId}/partner-invite/accept
+POST /v1/messages/threads/{threadId}/partner-invite/decline
 POST /v1/messages/threads/{threadId}/leave
 ```
 
@@ -392,6 +392,7 @@ Rules:
 
 - Swipe chat requires match unless Intro Note accepted flow.
 - Partner invite requires linked partner and third-party consent.
+- `ConversationDto.partnerInvite` is present while an invite is unresolved, with partner and third-party consent status so the client can show the correct action/waiting state.
 - Risk policy can hold outbound first messages for review.
 
 ## Albums API
