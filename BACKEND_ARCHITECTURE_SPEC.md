@@ -590,12 +590,15 @@ Use consistent:
 Ktor WebSocket channel:
 
 ```http
-GET /v1/realtime
+GET /v1/presence/stream
+GET /v1/activity/stream
+GET /v1/messages/stream
 ```
 
 Realtime events:
 
-- Message received
+- Message created/deleted
+- Conversation updated
 - Typing status
 - Read receipt
 - Presence delta
@@ -796,7 +799,7 @@ Keep sensitive payloads out of logs.
 - [ ] Partial: Google Play subscription validation is server-side; StoreKit and real production credential validation remain.
 - [x] Linked partner entitlement is server-side.
 - [ ] Partial: private album upload destinations are signed/contracted for local-dev; production signed upload/download URLs remain.
-- [ ] WebSocket reconnect refetches canonical state.
+- [ ] Partial: Grid presence, Activity, and Messages have reconnecting WebSocket clients that keep HTTP state authoritative; remaining realtime surfaces still need implementation.
 - [x] Rate limits exist for messaging/flirts/album requests.
 - [x] Blocks are enforced across grid/swipe/activity/messages.
 - [ ] Location is not trusted from client for ranking without server validation.

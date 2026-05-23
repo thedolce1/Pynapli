@@ -30,6 +30,7 @@ import com.pynapli.app.location.LocationStateHolder
 import com.pynapli.app.media.ApiMediaAlbumsRepository
 import com.pynapli.app.media.MediaAlbumsStateHolder
 import com.pynapli.app.messages.ApiMessagesRepository
+import com.pynapli.app.messages.MessagesRealtimeCoordinator
 import com.pynapli.app.messages.MessagesStateHolder
 import com.pynapli.app.notifications.AndroidFirebasePushTokenProvider
 import com.pynapli.app.notifications.AndroidPushRegistrationStore
@@ -59,6 +60,7 @@ import com.pynapli.shared.core.config.PynapliConfigs
 import com.pynapli.shared.network.KtorMediaByteUploader
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.buildAndroidActivityStreamClient
+import com.pynapli.shared.network.buildAndroidMessageStreamClient
 import com.pynapli.shared.network.buildAndroidPresenceStreamClient
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
@@ -177,6 +179,15 @@ class AndroidAppGraph(context: Context) {
             tokenProvider = sessionStore
         ),
         activityStateHolder = activityStateHolder
+    )
+
+    val messagesRealtimeCoordinator = MessagesRealtimeCoordinator(
+        client = buildAndroidMessageStreamClient(
+            websocketBaseUrl = PynapliConfigs.LocalAndroidEmulator.websocketBaseUrl,
+            tokenProvider = sessionStore
+        ),
+        messagesStateHolder = messagesStateHolder,
+        conversationStateHolder = conversationStateHolder
     )
 
     val locationStateHolder = LocationStateHolder(

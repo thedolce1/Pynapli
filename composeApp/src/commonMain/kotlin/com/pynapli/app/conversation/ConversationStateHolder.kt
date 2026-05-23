@@ -248,7 +248,7 @@ class ConversationStateHolder(
                         existing.copy(
                             detail = detail.withMergedMessagesFrom(existingDetail),
                             titleOverride = detail.conversation.titleFor(existing.viewerUserId),
-                            partnerInviteFeedback = null,
+                            partnerInviteFeedback = if (silent) existing.partnerInviteFeedback else null,
                             errorMessage = null
                         )
                     }
@@ -262,6 +262,12 @@ class ConversationStateHolder(
                     }
                 }
             }
+        }
+    }
+
+    suspend fun refreshOpenConversationIfConversationId(conversationId: String) {
+        if (state.value.detail?.conversation?.conversationId == conversationId) {
+            refreshOpenConversation()
         }
     }
 

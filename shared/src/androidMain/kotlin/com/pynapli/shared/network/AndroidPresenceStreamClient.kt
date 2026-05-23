@@ -30,3 +30,14 @@ fun buildAndroidActivityStreamClient(
     tokenProvider = tokenProvider,
     backoff = backoff
 )
+
+fun buildAndroidMessageStreamClient(
+    websocketBaseUrl: String,
+    tokenProvider: AccessTokenProvider,
+    backoff: MessageStreamBackoff = MessageStreamBackoff()
+): MessageStreamClient = buildMessageStreamClient(
+    websocketHttpClient = HttpClient(OkHttp) { install(WebSockets) },
+    websocketBaseUrl = websocketBaseUrl,
+    tokenProvider = tokenProvider,
+    backoff = backoff
+)

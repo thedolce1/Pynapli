@@ -17,6 +17,12 @@ object PartnerChatInviteStatus {
     const val DECLINED = "declined"
 }
 
+object MessageDeltaType {
+    const val MESSAGE_CREATED = "message_created"
+    const val MESSAGE_DELETED = "message_deleted"
+    const val CONVERSATION_UPDATED = "conversation_updated"
+}
+
 @Serializable
 data class CreateDirectConversationRequestDto(
     val targetUserId: String,
@@ -88,4 +94,12 @@ data class SendMessageRequestDto(
 data class ConversationPartnerInviteResponseDto(
     val status: String,
     val conversation: ConversationDto? = null
+)
+
+@Serializable
+data class MessageDeltaDto(
+    val type: String,
+    val conversationId: String,
+    val occurredAt: String,
+    val messageId: String? = null
 )

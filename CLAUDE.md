@@ -69,7 +69,7 @@ Server rules: routes are thin, domain services enforce product rules, repositori
 ### Client conventions
 
 - State: `StateFlow` for screen state, `SharedFlow` for one-off events, immutable UI state objects (e.g. `GridUiState`).
-- Mobile uses lightweight polling for early realtime: inbox summaries refresh after sign-in; an open conversation refreshes while visible.
+- Mobile uses authenticated WebSocket convenience deltas for Messages; inbox summaries and an open conversation still refetch canonical HTTP state after each delta.
 - Conversation detail returns newest-first with opaque `nextCursor` tokens for older history.
 - Message payloads separate moderation `status` from delivery `deliveryStatus` (`sent`/`read`/`received`).
 - The composer validates blank/over-limit drafts locally before calling the message API.

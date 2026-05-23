@@ -506,7 +506,7 @@ Manual/device:
 
 - [ ] Partial: shared module has domain/network packages, but not every feature is factored into shared packages.
 - [x] Ktor Client configured in shared code.
-- [ ] WebSocket client reconnects and refetches.
+- [ ] Partial: Grid presence, Activity, and Messages WebSocket clients reconnect and refetch/apply canonical state for implemented streams; receipts, partner links, entitlement, Psync, Playing Tonight, and album grant streams remain future work.
 - [ ] Partial: session storage exists, but secure platform token storage expect/actual is not complete.
 - [ ] Partial: location update flow exists, but platform expect/actual location provider abstraction is not complete.
 - [ ] Partial: Android Play Billing bridge exists; iOS StoreKit bridge is missing.

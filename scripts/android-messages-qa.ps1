@@ -593,20 +593,31 @@ function Start-App {
     for ($attempt = 1; $attempt -le 3; $attempt++) {
         Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
         Start-Sleep -Milliseconds 800
-        Invoke-Adb @("shell", "am", "start", "-S", "-n", $component) | Out-Null
+        $startOutput = Invoke-Adb @("shell", "am", "start", "-W", "-S", "-n", $component)
+        $startText = ($startOutput | Out-String).Trim()
+        if ($startText -match "Status:\s+(\S+)" -and $Matches[1] -notin @("ok", "timeout")) {
+            throw "Unable to launch $component; Android returned $($Matches[1]). Output: $startText"
+        }
+        if ($startText -match "Status:\s+timeout") {
+            Write-Host "[warn] Android launch wait timed out; continuing until the focused app window is visible."
+        }
         Write-Host "[step] Launched $component (attempt $attempt)"
 
-        $deadline = (Get-Date).AddSeconds(30)
+        $deadline = (Get-Date).AddSeconds(60)
         do {
             $processIdText = (& $script:Adb -s $script:DeviceId shell pidof $PackageName 2>$null | Out-String).Trim()
-            if (-not [string]::IsNullOrWhiteSpace($processIdText)) {
+            $windowText = (& $script:Adb -s $script:DeviceId shell dumpsys window 2>$null | Select-String -Pattern "mCurrentFocus|mFocusedApp" | Out-String).Trim()
+            if (
+                -not [string]::IsNullOrWhiteSpace($processIdText) -and
+                $windowText.Contains($PackageName)
+            ) {
                 return
             }
             Start-Sleep -Milliseconds 500
         } while ((Get-Date) -lt $deadline)
     }
 
-    throw "Unable to launch $component; app process did not appear."
+    throw "Unable to launch $component; app process did not become the focused window."
 }
 
 function Complete-LoginIfNeeded {

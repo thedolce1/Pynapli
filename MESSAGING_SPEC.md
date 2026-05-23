@@ -150,6 +150,8 @@ Current implementation note:
 - If the existing third party declines, the invited partner is removed from the thread context and a 24-hour cooldown blocks re-inviting that same partner to that same thread.
 - Messages inbox rows and the conversation sheet surface the correct state: Accept/Decline, waiting for chat approval, waiting for partner response, or pending.
 - Own-message deletion uses the existing retained message row: `deleted_at` is set, the original body is not returned to normal clients, and every participant sees a neutral deleted-message placeholder.
+- Message/conversation realtime now uses authenticated `/v1/messages/stream` WebSocket deltas for `message_created`, `message_deleted`, and `conversation_updated`; the client treats these as convenience signals and refetches canonical thread/list state over HTTP.
+- Connected Android Messages QA covers login -> Messages -> open thread -> send -> delete placeholder -> third-party partner approval -> invited-partner acceptance with structural screenshot/golden checks.
 
 ## Implementation Checklist
 
@@ -165,6 +167,7 @@ Current implementation note:
 - [x] Report is separate from block.
 - [ ] Message expiry exists only with clear system messaging.
 - [x] Server owns message permissions.
+- [x] Message/conversation realtime refetches canonical HTTP state.
 
 ## Do Not Implement
 

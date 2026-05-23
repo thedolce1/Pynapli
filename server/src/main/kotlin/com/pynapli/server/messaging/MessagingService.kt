@@ -18,6 +18,7 @@ import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
+import com.pynapli.shared.network.dto.MessageDeltaType
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
@@ -31,6 +32,7 @@ class MessagingService(
     private val repository: MessagingRepository,
     private val blockRepository: BlockRepository? = null,
     private val notificationPublisher: NotificationPublisher? = null,
+    private val messageBroadcaster: MessageBroadcaster? = null,
     private val rateLimitService: RateLimitService? = null,
     private val messageSafetyPolicy: MessageSafetyPolicy = MessageSafetyPolicy(),
     private val messageReviewRiskSignalPublisher: MessageReviewRiskSignalPublisher? = null,
@@ -168,13 +170,22 @@ class MessagingService(
             return message
         }
 
-        repository.getConversationDetail(userId, conversationId, limit = 1)
+        val participants = repository.getConversationDetail(userId, conversationId, limit = 1)
             ?.conversation
             ?.participants
-            ?.filter { participant ->
+            .orEmpty()
+        publishMessageDelta(
+            type = MessageDeltaType.MESSAGE_CREATED,
+            conversationId = conversationId,
+            participants = participants,
+            messageId = UUID.fromString(message.messageId),
+            statuses = activeParticipantStatuses
+        )
+        participants
+            .filter { participant ->
                 participant.userId != userId && participant.status == ConversationParticipantStatus.ACTIVE
             }
-            ?.forEach { participant ->
+            .forEach { participant ->
                 notificationPublisher?.enqueue(
                     NotificationEventDraft(
                         recipientUserId = participant.userId,
@@ -196,8 +207,20 @@ class MessagingService(
 
     suspend fun deleteOwnMessage(userId: UUID, messageIdText: String): MessageDto {
         val messageId = messageIdText.toUuidOrThrow()
-        return repository.deleteOwnMessage(userId, messageId)?.toDto()
+        val deleted = repository.deleteOwnMessage(userId, messageId)
             ?: throw MessagingException("MESSAGE_NOT_FOUND")
+        val participants = repository.getConversationDetail(userId, deleted.conversationId, limit = 1)
+            ?.conversation
+            ?.participants
+            .orEmpty()
+        publishMessageDelta(
+            type = MessageDeltaType.MESSAGE_DELETED,
+            conversationId = deleted.conversationId,
+            participants = participants,
+            messageId = deleted.messageId,
+            statuses = activeParticipantStatuses
+        )
+        return deleted.toDto()
     }
 
     suspend fun inviteLinkedPartnerToConversation(userId: UUID, conversationIdText: String): ConversationDto {
@@ -225,6 +248,12 @@ class MessagingService(
             )
         ) {
             is PartnerInviteResult.Invited -> {
+                publishMessageDelta(
+                    type = MessageDeltaType.CONVERSATION_UPDATED,
+                    conversationId = conversationId,
+                    participants = result.conversation.participants,
+                    statuses = visibleParticipantStatuses
+                )
                 activityService?.recordPartnerChatInvite(
                     inviterUserId = userId,
                     inviteeUserId = partnerUserId,
@@ -271,24 +300,71 @@ class MessagingService(
             throw MessagingException("MESSAGING_NOT_ALLOWED")
         }
 
-        return repository.acceptPartnerInvite(userId, conversationId)?.toDto()
+        val accepted = repository.acceptPartnerInvite(userId, conversationId)
             ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
+        publishMessageDelta(
+            type = MessageDeltaType.CONVERSATION_UPDATED,
+            conversationId = conversationId,
+            participants = accepted.conversation.participants,
+            statuses = visibleParticipantStatuses
+        )
+        return accepted.toDto()
     }
 
     suspend fun declinePartnerInvite(userId: UUID, conversationIdText: String): ConversationPartnerInviteResponseDto {
         val conversationId = conversationIdText.toUuidOrThrow()
+        val detailBeforeDecline = repository.getConversationDetail(userId, conversationId, limit = 1)
+            ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
         if (!repository.declinePartnerInvite(userId, conversationId)) {
             throw MessagingException("PARTNER_INVITE_NOT_FOUND")
         }
+        publishMessageDelta(
+            type = MessageDeltaType.CONVERSATION_UPDATED,
+            conversationId = conversationId,
+            participants = detailBeforeDecline.conversation.participants,
+            statuses = visibleParticipantStatuses
+        )
         return ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED)
     }
 
     suspend fun leaveConversation(userId: UUID, conversationIdText: String): ConversationPartnerInviteResponseDto {
         val conversationId = conversationIdText.toUuidOrThrow()
+        val detailBeforeLeave = repository.getConversationDetail(userId, conversationId, limit = 1)
+            ?: throw MessagingException("CONVERSATION_NOT_FOUND")
         if (!repository.leaveConversation(userId, conversationId)) {
             throw MessagingException("CONVERSATION_NOT_FOUND")
         }
+        publishMessageDelta(
+            type = MessageDeltaType.CONVERSATION_UPDATED,
+            conversationId = conversationId,
+            participants = detailBeforeLeave.conversation.participants,
+            statuses = visibleParticipantStatuses
+        )
         return ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.LEFT)
+    }
+
+    private suspend fun publishMessageDelta(
+        type: String,
+        conversationId: UUID,
+        participants: List<ConversationParticipantRecord>,
+        messageId: UUID? = null,
+        statuses: Set<String>
+    ) {
+        val broadcaster = messageBroadcaster ?: return
+        participants
+            .asSequence()
+            .filter { participant -> participant.status in statuses }
+            .distinctBy { participant -> participant.userId }
+            .forEach { participant ->
+                broadcaster.emit(
+                    MessageRealtimeDelta(
+                        recipientUserId = participant.userId,
+                        type = type,
+                        conversationId = conversationId,
+                        messageId = messageId
+                    )
+                )
+            }
     }
 
     private suspend fun ConversationRecord.hasBlockedOtherParticipant(viewerUserId: UUID): Boolean {
@@ -381,6 +457,11 @@ class MessagingService(
         private const val MAX_MESSAGE_PAGE_LIMIT = 100
         private const val THREAD_LIMIT = 50
         private val ORIGINS = setOf("grid", "swipe", "intro_note")
+        private val activeParticipantStatuses = setOf(ConversationParticipantStatus.ACTIVE)
+        private val visibleParticipantStatuses = setOf(
+            ConversationParticipantStatus.ACTIVE,
+            ConversationParticipantStatus.INVITED
+        )
     }
 }
 

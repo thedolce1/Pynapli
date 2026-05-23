@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
     private var pendingLocationSignal: CancellationSignal? = null
     private var presenceStreamJob: Job? = null
     private var activityStreamJob: Job? = null
+    private var messageStreamJob: Job? = null
     private var pendingMediaAlbumKind: MediaAlbumKindUi? = null
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -114,6 +115,11 @@ class MainActivity : ComponentActivity() {
                 runCatching { appGraph.activityRealtimeCoordinator.run() }
             }
         }
+        if (messageStreamJob?.isActive != true) {
+            messageStreamJob = activityScope.launch {
+                runCatching { appGraph.messagesRealtimeCoordinator.run() }
+            }
+        }
     }
 
     override fun onStop() {
@@ -123,6 +129,8 @@ class MainActivity : ComponentActivity() {
         presenceStreamJob = null
         activityStreamJob?.cancel()
         activityStreamJob = null
+        messageStreamJob?.cancel()
+        messageStreamJob = null
         super.onStop()
     }
 

@@ -71,9 +71,13 @@ Current Activity backend coverage:
 Current Messaging coverage:
 
 - `MessagingServiceTest` covers grid conversation creation, swipe match gating, message send/read/pagination, first-message rate limits, held-message review behavior, partner chat invite Activity generation, and partner invite consent ordering.
+- `MessagingServiceTest` also covers realtime delta emission for visible message create/delete events, and `MessageStreamRouteTest` covers authenticated stream delivery plus recipient filtering.
+- `MessageStreamClientTest` covers the shared reconnect/backoff client and emitted message/conversation deltas.
+- `ConversationStateHolderTest` covers open-conversation realtime refresh and preserves invited-partner accepted feedback across silent realtime refreshes.
 - `MessagingRepositoryIntegrationTest` runs the messaging repository against PostgreSQL/Testcontainers and covers swipe-origin match enforcement, grid message policy gates, held-message visibility/moderation, partner invite partner+third-party consent, and third-party decline cooldown.
 - `MessagesStateHolderTest` covers invited-partner filtering, invite accept/decline local state, and third-party decline refresh behavior.
 - `MessagesScreenInteractionTest` renders the real Compose Messages screen and verifies a third-party partner-invite approval row can be accepted from the inbox.
+- `scripts/android-messages-qa.ps1` runs the installed Android app against local Ktor, logs in through the real app path, opens Messages from the bottom nav, captures structural screenshot/XML goldens, sends and deletes a message, approves a third-party partner invite, and accepts an invited-partner chat. Latest emulator proof: `artifacts/android-messages-qa/20260522-174121`.
 
 Current Activity client coverage:
 

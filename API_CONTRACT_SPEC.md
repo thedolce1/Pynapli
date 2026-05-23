@@ -386,6 +386,7 @@ POST /v1/messages/threads/{threadId}/partner-invite
 POST /v1/messages/threads/{threadId}/partner-invite/accept
 POST /v1/messages/threads/{threadId}/partner-invite/decline
 POST /v1/messages/threads/{threadId}/leave
+GET  /v1/messages/stream
 ```
 
 Rules:
@@ -394,6 +395,7 @@ Rules:
 - Partner invite requires linked partner and third-party consent.
 - `ConversationDto.partnerInvite` is present while an invite is unresolved, with partner and third-party consent status so the client can show the correct action/waiting state.
 - Risk policy can hold outbound first messages for review.
+- `/v1/messages/stream` emits authenticated recipient-scoped deltas only; clients refetch the inbox or open thread over HTTP because WebSocket events are not authoritative state.
 
 ## Albums API
 
@@ -505,7 +507,9 @@ Rules:
 Endpoint:
 
 ```http
-GET /v1/realtime
+GET /v1/presence/stream
+GET /v1/activity/stream
+GET /v1/messages/stream
 ```
 
 Event envelope:
@@ -524,8 +528,10 @@ Event types:
 
 - `presence.delta`
 - `message.created`
-- `message.receipt`
+- `message.deleted`
+- `conversation.updated`
 - `activity.created`
+- `activity.dismissed`
 - `match.created`
 - `partner_link.updated`
 - `partner_chat_invite.created`
@@ -570,7 +576,7 @@ Rules:
 - [x] Server-side entitlement checks.
 - [x] Server-side block/privacy/risk checks.
 - [x] Age-verification requirements/status/start plus admin review/provider callback contract exists.
-- [ ] WebSocket reconnect canonical refetch.
+- [ ] Partial: Grid presence, Activity, and Messages streams reconnect and keep HTTP/state fetch authoritative; remaining realtime event families are future work.
 - [ ] Partial: error codes are mapped centrally, but the full API error catalog is not complete.
 - [ ] Partial: admin routes are under `/v1/admin`, but production admin separation, roles, and MFA are not complete.
 

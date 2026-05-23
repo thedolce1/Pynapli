@@ -11,6 +11,7 @@ import com.pynapli.server.grid.configureSavedGridFilterRoutes
 import com.pynapli.server.location.configureLocationRoutes
 import com.pynapli.server.location.configureTravelLocationRoutes
 import com.pynapli.server.media.configureMediaRoutes
+import com.pynapli.server.messaging.configureMessageStreamRoutes
 import com.pynapli.server.messaging.configureMessagingRoutes
 import com.pynapli.server.moderation.configureAdminReportRoutes
 import com.pynapli.server.moderation.configureAdminRiskRoutes
@@ -89,6 +90,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureNotificationRoutes(dependencies.authService, dependencies.notificationService)
     configureSubscriptionRoutes(dependencies.config, dependencies.authService, dependencies.subscriptionService)
     configureMessagingRoutes(dependencies.authService, dependencies.messagingService)
+    configureMessageStreamRoutes(dependencies.authService, dependencies.messageBroadcaster)
     configureMediaRoutes(
         authService = dependencies.authService,
         mediaService = dependencies.mediaService,

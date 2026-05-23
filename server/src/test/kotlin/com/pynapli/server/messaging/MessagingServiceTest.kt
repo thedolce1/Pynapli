@@ -18,8 +18,14 @@ import com.pynapli.server.safety.AccountRiskStateRecord
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
+import com.pynapli.shared.network.dto.MessageDeltaType
 import com.pynapli.shared.network.dto.SendMessageRequestDto
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import java.time.Clock
 import java.time.Instant
@@ -120,6 +126,35 @@ class MessagingServiceTest {
         assertEquals("Hey there", refreshed.messages.first().body)
         assertEquals(NotificationKind.MESSAGE, notifications.events.single().kind)
         assertEquals(targetId, notifications.events.single().recipientUserId)
+    }
+
+    @Test
+    fun sendMessagePublishesRealtimeDeltaToActiveParticipants() = runBlocking {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000051")
+        val targetId = UUID.fromString("00000000-0000-0000-0000-000000000052")
+        val repository = InMemoryMessagingRepository(setOf(targetId))
+        val broadcaster = MessageBroadcaster()
+        val service = MessagingService(
+            repository = repository,
+            messageBroadcaster = broadcaster
+        )
+        val detail = service.createDirectConversation(
+            viewerId,
+            CreateDirectConversationRequestDto(targetUserId = targetId.toString())
+        )
+        val deltaJob = async { broadcaster.deltas.take(2).toList() }
+        delay(10)
+
+        val message = service.sendMessage(
+            viewerId,
+            detail.conversation.conversationId,
+            SendMessageRequestDto(body = "Hey there")
+        )
+
+        val deltas = withTimeout(1_000) { deltaJob.await() }
+        assertEquals(setOf(viewerId, targetId), deltas.map { it.recipientUserId }.toSet())
+        assertEquals(listOf(MessageDeltaType.MESSAGE_CREATED, MessageDeltaType.MESSAGE_CREATED), deltas.map { it.type })
+        assertEquals(setOf(UUID.fromString(message.messageId)), deltas.mapNotNull { it.messageId }.toSet())
     }
 
     @Test
@@ -409,6 +444,32 @@ class MessagingServiceTest {
         assertEquals(listOf("deleted"), viewerMessages.map { it.deliveryStatus })
         assertEquals(listOf(""), targetMessages.map { it.body })
         assertEquals(listOf("deleted"), targetMessages.map { it.deliveryStatus })
+    }
+
+    @Test
+    fun deleteOwnMessagePublishesRealtimeDeltaToActiveParticipants() = runBlocking {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000053")
+        val targetId = UUID.fromString("00000000-0000-0000-0000-000000000054")
+        val repository = InMemoryMessagingRepository(setOf(targetId))
+        val broadcaster = MessageBroadcaster()
+        val service = MessagingService(
+            repository = repository,
+            messageBroadcaster = broadcaster
+        )
+        val detail = service.createDirectConversation(
+            viewerId,
+            CreateDirectConversationRequestDto(targetUserId = targetId.toString())
+        )
+        val sent = service.sendMessage(viewerId, detail.conversation.conversationId, SendMessageRequestDto("Mistake"))
+        val deltaJob = async { broadcaster.deltas.take(2).toList() }
+        delay(10)
+
+        service.deleteOwnMessage(viewerId, sent.messageId)
+
+        val deltas = withTimeout(1_000) { deltaJob.await() }
+        assertEquals(setOf(viewerId, targetId), deltas.map { it.recipientUserId }.toSet())
+        assertEquals(listOf(MessageDeltaType.MESSAGE_DELETED, MessageDeltaType.MESSAGE_DELETED), deltas.map { it.type })
+        assertEquals(setOf(UUID.fromString(sent.messageId)), deltas.mapNotNull { it.messageId }.toSet())
     }
 
     @Test

@@ -139,7 +139,7 @@ Grid-origin direct messages create or reuse a one-to-one conversation, then appe
 Thread summaries include unread counts derived from per-participant read markers.
 Message payloads separate moderation `status` from delivery `deliveryStatus` (`sent`, `read`, or `received`).
 The mobile composer validates blank and over-limit drafts locally before calling the message API.
-The mobile app uses lightweight polling for early realtime behavior: inbox summaries refresh silently after sign-in, and an open conversation refreshes while visible.
+The mobile app uses authenticated WebSocket convenience deltas for Messages; inbox summaries and an open conversation still refetch canonical HTTP state after each delta.
 Conversation detail returns the newest message page first and uses opaque `nextCursor` tokens to load older history.
 Media foundation tables model profile/private albums, owned storage assets, album items, access requests, and revocable per-user private album grants.
 Media upload slots create pending owned assets and return a PUT contract that can later be backed by Firebase/GCS signed URLs.

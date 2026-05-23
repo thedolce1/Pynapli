@@ -28,6 +28,7 @@ import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.media.StaticMediaUploadSigner
 import com.pynapli.server.messaging.JdbcMessagingRepository
+import com.pynapli.server.messaging.MessageBroadcaster
 import com.pynapli.server.messaging.MessagingService
 import com.pynapli.server.moderation.AdminReportService
 import com.pynapli.server.moderation.AdminRiskService
@@ -113,6 +114,7 @@ class ServerDependencies(
     val playStoreSubscriptionSyncWorker: PlayStoreSubscriptionSyncWorker?,
     val localMediaUploadStorage: LocalMediaUploadStorage?,
     val activityBroadcaster: ActivityBroadcaster?,
+    val messageBroadcaster: MessageBroadcaster?,
     val presenceBroadcaster: PresenceBroadcaster?,
     val presenceOfflineScanner: PresenceOfflineScanner?,
     val blockRepository: BlockRepository?,
@@ -208,6 +210,7 @@ class ServerDependencies(
             val notificationRepository = JdbcNotificationRepository(database.dataSource)
             val notificationService = NotificationService(notificationRepository)
             val activityBroadcaster = ActivityBroadcaster()
+            val messageBroadcaster = MessageBroadcaster()
             val notificationDispatchWorker = if (config.notificationDispatchEnabled) {
                 val pushNotificationSender = createPushNotificationSender(config)
                 NotificationDispatchWorker(
@@ -324,6 +327,7 @@ class ServerDependencies(
                 repository = messagingRepository,
                 blockRepository = blockRepository,
                 notificationPublisher = notificationService,
+                messageBroadcaster = messageBroadcaster,
                 rateLimitService = rateLimitService,
                 messageReviewRiskSignalPublisher = riskService,
                 riskPolicyService = riskPolicyService,
@@ -387,6 +391,7 @@ class ServerDependencies(
                 playStoreSubscriptionSyncWorker = playStoreSubscriptionSyncWorker,
                 localMediaUploadStorage = localMediaUploadStorage,
                 activityBroadcaster = activityBroadcaster,
+                messageBroadcaster = messageBroadcaster,
                 presenceBroadcaster = presenceBroadcaster,
                 presenceOfflineScanner = presenceOfflineScanner,
                 blockRepository = blockRepository,
@@ -438,6 +443,7 @@ class ServerDependencies(
                 playStoreSubscriptionSyncWorker = null,
                 localMediaUploadStorage = null,
                 activityBroadcaster = null,
+                messageBroadcaster = null,
                 presenceBroadcaster = null,
                 presenceOfflineScanner = null,
                 blockRepository = null,
