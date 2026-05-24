@@ -129,6 +129,7 @@ fun ConversationSheet(
                             .fillMaxWidth()
                             .heightIn(min = 220.dp, max = 430.dp)
                     )
+                    TypingIndicator(participants = state.typingParticipants)
                     if (!state.isViewerInvited) {
                         Composer(
                             draft = state.draft,
@@ -143,6 +144,42 @@ fun ConversationSheet(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TypingIndicator(participants: List<TypingParticipantUi>) {
+    if (participants.isEmpty()) return
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(ConversationTestTags.typingIndicator),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                repeat(3) {
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
+            Text(
+                text = participants.typingLabel(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -703,6 +740,14 @@ private fun String.deliveryLabel(): String? = when (this) {
     else -> null
 }
 
+private fun List<TypingParticipantUi>.typingLabel(): String =
+    when (size) {
+        1 -> "${first().displayName} is typing"
+        2 -> "${this[0].displayName} and ${this[1].displayName} are typing"
+        else -> "${first().displayName} and ${size - 1} others are typing"
+    }
+
 object ConversationTestTags {
     fun deleteMessage(messageId: String): String = "conversation-delete-message-$messageId"
+    const val typingIndicator: String = "conversation-typing-indicator"
 }

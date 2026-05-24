@@ -39,6 +39,7 @@ class MessageStreamRouteTest {
     @Test
     fun authenticatedClientReceivesOwnMessageDelta() = testApplication {
         val viewerId = UUID.randomUUID()
+        val actorId = UUID.randomUUID()
         val conversationId = UUID.randomUUID()
         val messageId = UUID.randomUUID()
         val viewerToken = "viewer-token"
@@ -66,7 +67,10 @@ class MessageStreamRouteTest {
                         type = MessageDeltaType.MESSAGE_CREATED,
                         conversationId = conversationId,
                         occurredAt = Instant.parse("2026-05-22T16:00:00Z"),
-                        messageId = messageId
+                        messageId = messageId,
+                        actorUserId = actorId,
+                        actorDisplayName = "Maya",
+                        expiresAt = Instant.parse("2026-05-22T16:00:06Z")
                     )
                 )
 
@@ -76,6 +80,9 @@ class MessageStreamRouteTest {
                 assertEquals(MessageDeltaType.MESSAGE_CREATED, delta.type)
                 assertEquals(conversationId.toString(), delta.conversationId)
                 assertEquals(messageId.toString(), delta.messageId)
+                assertEquals(actorId.toString(), delta.actorUserId)
+                assertEquals("Maya", delta.actorDisplayName)
+                assertEquals("2026-05-22T16:00:06Z", delta.expiresAt)
                 assertEquals("2026-05-22T16:00:00Z", delta.occurredAt)
             }
         }

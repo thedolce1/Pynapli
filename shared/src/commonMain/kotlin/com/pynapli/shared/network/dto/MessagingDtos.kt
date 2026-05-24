@@ -20,7 +20,10 @@ object PartnerChatInviteStatus {
 object MessageDeltaType {
     const val MESSAGE_CREATED = "message_created"
     const val MESSAGE_DELETED = "message_deleted"
+    const val MESSAGE_READ = "message_read"
     const val CONVERSATION_UPDATED = "conversation_updated"
+    const val TYPING_STARTED = "typing_started"
+    const val TYPING_STOPPED = "typing_stopped"
 }
 
 @Serializable
@@ -91,6 +94,11 @@ data class SendMessageRequestDto(
 )
 
 @Serializable
+data class SendTypingIndicatorRequestDto(
+    val isTyping: Boolean
+)
+
+@Serializable
 data class ConversationPartnerInviteResponseDto(
     val status: String,
     val conversation: ConversationDto? = null
@@ -101,5 +109,8 @@ data class MessageDeltaDto(
     val type: String,
     val conversationId: String,
     val occurredAt: String,
-    val messageId: String? = null
+    val messageId: String? = null,
+    val actorUserId: String? = null,
+    val actorDisplayName: String? = null,
+    val expiresAt: String? = null
 )

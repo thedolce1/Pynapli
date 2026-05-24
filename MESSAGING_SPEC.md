@@ -1,6 +1,6 @@
 # Pynapli Messaging Spec
 
-Last updated: 2026-05-22
+Last updated: 2026-05-24
 
 ## Purpose
 
@@ -69,10 +69,10 @@ Base states:
 - Delivered
 - Failed
 
-Paid/Select states:
+Paid states:
 
-- Read receipts
-- Typing status
+- Social/Select: read receipts, visible only when both sender and active recipient participants are receipt-eligible.
+- Select: typing status, delivered as a short-lived realtime hint.
 
 Trust/safety internal states:
 
@@ -131,10 +131,13 @@ Free:
 Social/Select:
 
 - Read receipts.
-- Typing status.
 - Message expiry.
 - Expanded media controls.
 - Intro Notes, depending tier.
+
+Select:
+
+- Typing status.
 
 Do not paywall:
 
@@ -150,7 +153,10 @@ Current implementation note:
 - If the existing third party declines, the invited partner is removed from the thread context and a 24-hour cooldown blocks re-inviting that same partner to that same thread.
 - Messages inbox rows and the conversation sheet surface the correct state: Accept/Decline, waiting for chat approval, waiting for partner response, or pending.
 - Own-message deletion uses the existing retained message row: `deleted_at` is set, the original body is not returned to normal clients, and every participant sees a neutral deleted-message placeholder.
-- Message/conversation realtime now uses authenticated `/v1/messages/stream` WebSocket deltas for `message_created`, `message_deleted`, and `conversation_updated`; the client treats these as convenience signals and refetches canonical thread/list state over HTTP.
+- Message/conversation realtime now uses authenticated `/v1/messages/stream` WebSocket deltas for `message_created`, `message_deleted`, `message_read`, `conversation_updated`, `typing_started`, and `typing_stopped`.
+- Message create/delete/read/conversation-update deltas are convenience signals; clients refetch canonical thread/list state over HTTP.
+- Typing deltas are lightweight UI hints only: `POST /v1/messages/threads/{threadId}/typing` is Select-only, emits only to active Select recipients, includes actor display metadata, and expires client-side after a short TTL.
+- Read receipt visibility is server-masked. Free viewers never see `read`; paid senders see `read` only when every active recipient participant is Social/Select eligible.
 - Connected Android Messages QA covers login -> Messages -> open thread -> send -> delete placeholder -> third-party partner approval -> invited-partner acceptance with structural screenshot/golden checks.
 
 ## Implementation Checklist
@@ -163,6 +169,8 @@ Current implementation note:
 - [x] Album access is separate from chat membership.
 - [ ] Media reveal is per-recipient.
 - [x] Own-message deletion returns a visible placeholder.
+- [x] Social/Select read receipts are server-masked by entitlement and participant reciprocity.
+- [x] Select typing indicators use recipient-scoped realtime hints.
 - [x] Block archives/disables thread.
 - [x] Report is separate from block.
 - [ ] Message expiry exists only with clear system messaging.

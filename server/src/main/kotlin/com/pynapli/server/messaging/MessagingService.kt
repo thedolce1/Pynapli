@@ -9,6 +9,7 @@ import com.pynapli.server.safety.MessageReviewRiskSignalPublisher
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.server.safety.RiskPolicyService
+import com.pynapli.server.subscriptions.SubscriptionService
 import org.slf4j.LoggerFactory
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
@@ -22,6 +23,8 @@ import com.pynapli.shared.network.dto.MessageDeltaType
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
+import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
+import com.pynapli.shared.network.dto.SubscriptionTier
 import java.nio.charset.StandardCharsets
 import java.time.Clock
 import java.time.Instant
@@ -37,6 +40,7 @@ class MessagingService(
     private val messageSafetyPolicy: MessageSafetyPolicy = MessageSafetyPolicy(),
     private val messageReviewRiskSignalPublisher: MessageReviewRiskSignalPublisher? = null,
     private val riskPolicyService: RiskPolicyService? = null,
+    private val subscriptionService: SubscriptionService? = null,
     private val clock: Clock = Clock.systemUTC(),
     private val activityService: ActivityService? = null
 ) {
@@ -52,8 +56,9 @@ class MessagingService(
                 }
             }
         }
+        val readReceiptCache = mutableMapOf<UUID, Boolean>()
         return ConversationListResponseDto(
-            items = visible.map { it.toDto() },
+            items = visible.map { it.toDto(userId, readReceiptCache) },
             nextCursor = null
         )
     }
@@ -82,7 +87,8 @@ class MessagingService(
         ) ?: throw MessagingException("MESSAGING_NOT_ALLOWED")
 
         val detail = repository.getConversationDetail(viewerUserId, conversation.conversationId, MESSAGE_PAGE_LIMIT)
-        return detail?.toDto() ?: ConversationDetailDto(conversation = conversation.toDto(), messages = emptyList())
+        return detail?.toDto(viewerUserId)
+            ?: ConversationDetailDto(conversation = conversation.toDto(viewerUserId), messages = emptyList())
     }
 
     suspend fun getConversationDetail(
@@ -99,13 +105,22 @@ class MessagingService(
         if (detail.conversation.hasBlockedOtherParticipant(userId)) {
             throw MessagingException("CONVERSATION_NOT_FOUND")
         }
-        return detail.toDto()
+        return detail.toDto(userId)
     }
 
     suspend fun markConversationRead(userId: UUID, conversationIdText: String): ConversationDto {
         val conversationId = conversationIdText.toUuidOrThrow()
-        return repository.markConversationRead(userId, conversationId)?.toDto()
+        val conversation = repository.markConversationRead(userId, conversationId)
             ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+        if (readReceiptsAllowed(userId)) {
+            publishMessageDelta(
+                type = MessageDeltaType.MESSAGE_READ,
+                conversationId = conversationId,
+                participants = conversation.participants,
+                statuses = activeParticipantStatuses
+            )
+        }
+        return conversation.toDto(userId)
     }
 
     suspend fun sendMessage(userId: UUID, conversationIdText: String, request: SendMessageRequestDto): MessageDto {
@@ -146,14 +161,21 @@ class MessagingService(
             MessageSafetyDecision.visible(bodyFingerprint)
         }
 
-        val message = repository.sendMessage(
+        val messageRecord = repository.sendMessage(
             userId = userId,
             conversationId = conversationId,
             body = body,
             moderationStatus = safetyDecision.moderationStatus,
             bodyFingerprint = safetyDecision.bodyFingerprint,
             safetyReason = safetyDecision.safetyReason
-        )?.toDto() ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+        ) ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+        val conversation = repository.getConversationDetail(userId, conversationId, limit = 1)
+            ?.conversation
+        val message = messageRecord.toDto(
+            viewerUserId = userId,
+            conversation = conversation,
+            readReceiptCache = mutableMapOf()
+        )
 
         if (message.status == MessageModerationStatus.HELD) {
             safetyDecision.safetyReason?.let { reason ->
@@ -170,10 +192,7 @@ class MessagingService(
             return message
         }
 
-        val participants = repository.getConversationDetail(userId, conversationId, limit = 1)
-            ?.conversation
-            ?.participants
-            .orEmpty()
+        val participants = conversation?.participants.orEmpty()
         publishMessageDelta(
             type = MessageDeltaType.MESSAGE_CREATED,
             conversationId = conversationId,
@@ -220,7 +239,7 @@ class MessagingService(
             messageId = deleted.messageId,
             statuses = activeParticipantStatuses
         )
-        return deleted.toDto()
+        return deleted.toDto(userId)
     }
 
     suspend fun inviteLinkedPartnerToConversation(userId: UUID, conversationIdText: String): ConversationDto {
@@ -274,7 +293,7 @@ class MessagingService(
                         )
                     )
                 )
-                result.conversation.toDto()
+                result.conversation.toDto(userId)
             }
             PartnerInviteResult.ConversationNotFound -> throw MessagingException("CONVERSATION_NOT_FOUND")
             PartnerInviteResult.AlreadyInConversation -> throw MessagingException("PARTNER_ALREADY_IN_CONVERSATION")
@@ -308,7 +327,7 @@ class MessagingService(
             participants = accepted.conversation.participants,
             statuses = visibleParticipantStatuses
         )
-        return accepted.toDto()
+        return accepted.toDto(userId)
     }
 
     suspend fun declinePartnerInvite(userId: UUID, conversationIdText: String): ConversationPartnerInviteResponseDto {
@@ -341,6 +360,49 @@ class MessagingService(
             statuses = visibleParticipantStatuses
         )
         return ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.LEFT)
+    }
+
+    suspend fun sendTypingIndicator(
+        userId: UUID,
+        conversationIdText: String,
+        request: SendTypingIndicatorRequestDto
+    ) {
+        if (!typingIndicatorsAllowed(userId)) return
+        val conversationId = conversationIdText.toUuidOrThrow()
+        val detail = repository.getConversationDetail(userId, conversationId, limit = 1)
+            ?: return
+        if (detail.conversation.hasBlockedOtherParticipant(userId)) return
+
+        val actor = detail.conversation.participants.firstOrNull { participant ->
+            participant.userId == userId && participant.status == ConversationParticipantStatus.ACTIVE
+        } ?: return
+        val broadcaster = messageBroadcaster ?: return
+        val recipientIds = detail.conversation.participants
+            .filter { participant ->
+                participant.userId != userId &&
+                    participant.status == ConversationParticipantStatus.ACTIVE &&
+                    typingIndicatorsAllowed(participant.userId)
+            }
+            .map { it.userId }
+            .distinct()
+        if (recipientIds.isEmpty()) return
+
+        val occurredAt = clock.instant()
+        val type = if (request.isTyping) MessageDeltaType.TYPING_STARTED else MessageDeltaType.TYPING_STOPPED
+        val expiresAt = if (request.isTyping) occurredAt.plusSeconds(TYPING_INDICATOR_TTL_SECONDS) else null
+        recipientIds.forEach { recipientId ->
+            broadcaster.emit(
+                MessageRealtimeDelta(
+                    recipientUserId = recipientId,
+                    type = type,
+                    conversationId = conversationId,
+                    occurredAt = occurredAt,
+                    actorUserId = userId,
+                    actorDisplayName = actor.displayName,
+                    expiresAt = expiresAt
+                )
+            )
+        }
     }
 
     private suspend fun publishMessageDelta(
@@ -379,18 +441,34 @@ class MessagingService(
         }
     }
 
-    private fun ConversationDetailRecord.toDto(): ConversationDetailDto = ConversationDetailDto(
-        conversation = conversation.toDto(),
-        messages = messages.map { it.toDto() },
-        nextCursor = nextCursor?.toToken()
-    )
+    private suspend fun ConversationDetailRecord.toDto(viewerUserId: UUID): ConversationDetailDto {
+        val readReceiptCache = mutableMapOf<UUID, Boolean>()
+        return ConversationDetailDto(
+            conversation = conversation.toDto(viewerUserId, readReceiptCache),
+            messages = messages.map { message ->
+                message.toDto(
+                    viewerUserId = viewerUserId,
+                    conversation = conversation,
+                    readReceiptCache = readReceiptCache
+                )
+            },
+            nextCursor = nextCursor?.toToken()
+        )
+    }
 
-    private fun ConversationRecord.toDto(): ConversationDto = ConversationDto(
+    private suspend fun ConversationRecord.toDto(
+        viewerUserId: UUID,
+        readReceiptCache: MutableMap<UUID, Boolean> = mutableMapOf()
+    ): ConversationDto = ConversationDto(
         conversationId = conversationId.toString(),
         kind = kind,
         origin = origin,
         participants = participants.map { it.toDto() },
-        lastMessage = lastMessage?.toDto(),
+        lastMessage = lastMessage?.toDto(
+            viewerUserId = viewerUserId,
+            conversation = this,
+            readReceiptCache = readReceiptCache
+        ),
         unreadCount = unreadCount,
         updatedAt = updatedAt.toString(),
         partnerInvite = partnerInvite?.toDto()
@@ -404,16 +482,64 @@ class MessagingService(
         invitedByUserId = invitedByUserId?.toString()
     )
 
-    private fun MessageRecord.toDto(): MessageDto = MessageDto(
+    private suspend fun MessageRecord.toDto(
+        viewerUserId: UUID,
+        conversation: ConversationRecord?,
+        readReceiptCache: MutableMap<UUID, Boolean> = mutableMapOf()
+    ): MessageDto = MessageDto(
         messageId = messageId.toString(),
         conversationId = conversationId.toString(),
         senderUserId = senderUserId.toString(),
         body = body,
         createdAt = createdAt.toString(),
         status = status,
-        deliveryStatus = deliveryStatus,
+        deliveryStatus = deliveryStatus.visibleDeliveryStatus(
+            viewerUserId = viewerUserId,
+            senderUserId = senderUserId,
+            conversation = conversation,
+            readReceiptCache = readReceiptCache
+        ),
         deletedAt = deletedAt?.toString()
     )
+
+    private suspend fun MessageRecord.toDto(viewerUserId: UUID): MessageDto =
+        toDto(viewerUserId = viewerUserId, conversation = null)
+
+    private suspend fun String.visibleDeliveryStatus(
+        viewerUserId: UUID,
+        senderUserId: UUID,
+        conversation: ConversationRecord?,
+        readReceiptCache: MutableMap<UUID, Boolean>
+    ): String {
+        if (this != DELIVERY_READ || senderUserId != viewerUserId) return this
+        val activeRecipients = conversation
+            ?.participants
+            .orEmpty()
+            .filter { participant ->
+                participant.userId != senderUserId &&
+                    participant.status == ConversationParticipantStatus.ACTIVE
+            }
+        if (activeRecipients.isEmpty()) return DELIVERY_SENT
+        if (!readReceiptsAllowed(viewerUserId, readReceiptCache)) return DELIVERY_SENT
+        val allRecipientsAllowReceipts = activeRecipients.all { participant ->
+            readReceiptsAllowed(participant.userId, readReceiptCache)
+        }
+        return if (allRecipientsAllowReceipts) DELIVERY_READ else DELIVERY_SENT
+    }
+
+    private suspend fun readReceiptsAllowed(
+        userId: UUID,
+        cache: MutableMap<UUID, Boolean> = mutableMapOf()
+    ): Boolean =
+        cache.getOrPut(userId) {
+            val tier = subscriptionService?.getPolicy(userId)?.tier ?: SubscriptionTier.SELECT
+            tier == SubscriptionTier.SOCIAL || tier == SubscriptionTier.SELECT
+        }
+
+    private suspend fun typingIndicatorsAllowed(userId: UUID): Boolean {
+        val tier = subscriptionService?.getPolicy(userId)?.tier ?: SubscriptionTier.SELECT
+        return tier == SubscriptionTier.SELECT
+    }
 
     private fun PartnerChatInviteRecord.toDto(): PartnerChatInviteDto = PartnerChatInviteDto(
         inviteId = inviteId.toString(),
@@ -456,6 +582,9 @@ class MessagingService(
         private const val MESSAGE_PAGE_LIMIT = 50
         private const val MAX_MESSAGE_PAGE_LIMIT = 100
         private const val THREAD_LIMIT = 50
+        private const val TYPING_INDICATOR_TTL_SECONDS = 6L
+        private const val DELIVERY_READ = "read"
+        private const val DELIVERY_SENT = "sent"
         private val ORIGINS = setOf("grid", "swipe", "intro_note")
         private val activeParticipantStatuses = setOf(ConversationParticipantStatus.ACTIVE)
         private val visibleParticipantStatuses = setOf(

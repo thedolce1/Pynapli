@@ -16,16 +16,25 @@ import com.pynapli.server.safety.RateLimitRepository
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.AccountRiskStateRecord
 import com.pynapli.server.safety.RiskPolicyService
+import com.pynapli.server.subscriptions.LinkedPartnerSubscriptionRecord
+import com.pynapli.server.subscriptions.StoredEntitlementRecord
+import com.pynapli.server.subscriptions.SubscriptionRecord
+import com.pynapli.server.subscriptions.SubscriptionRepository
+import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.MessageDeltaType
 import com.pynapli.shared.network.dto.SendMessageRequestDto
+import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
+import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Test
 import java.time.Clock
 import java.time.Instant
@@ -33,6 +42,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class MessagingServiceTest {
     @Test
@@ -224,6 +234,163 @@ class MessagingServiceTest {
         val afterRead = service.getConversationDetail(viewerId, detail.conversation.conversationId)
 
         assertEquals("read", afterRead.messages.first().deliveryStatus)
+    }
+
+    @Test
+    fun readReceiptsAreMaskedForFreeSender() = runBlocking {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000061")
+        val targetId = UUID.fromString("00000000-0000-0000-0000-000000000062")
+        val repository = InMemoryMessagingRepository(setOf(targetId))
+        val service = MessagingService(
+            repository = repository,
+            subscriptionService = subscriptionService(
+                mapOf(targetId to SubscriptionTier.SELECT)
+            )
+        )
+        val detail = service.createDirectConversation(
+            viewerId,
+            CreateDirectConversationRequestDto(targetUserId = targetId.toString())
+        )
+        service.sendMessage(viewerId, detail.conversation.conversationId, SendMessageRequestDto("Hey there"))
+
+        service.markConversationRead(targetId, detail.conversation.conversationId)
+        val afterRead = service.getConversationDetail(viewerId, detail.conversation.conversationId)
+
+        assertEquals("sent", afterRead.messages.first().deliveryStatus)
+    }
+
+    @Test
+    fun readReceiptsRequireRecipientReceiptEntitlement() = runBlocking {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000063")
+        val targetId = UUID.fromString("00000000-0000-0000-0000-000000000064")
+        val repository = InMemoryMessagingRepository(setOf(targetId))
+        val service = MessagingService(
+            repository = repository,
+            subscriptionService = subscriptionService(
+                mapOf(viewerId to SubscriptionTier.SOCIAL)
+            )
+        )
+        val detail = service.createDirectConversation(
+            viewerId,
+            CreateDirectConversationRequestDto(targetUserId = targetId.toString())
+        )
+        service.sendMessage(viewerId, detail.conversation.conversationId, SendMessageRequestDto("Hey there"))
+
+        service.markConversationRead(targetId, detail.conversation.conversationId)
+        val afterRead = service.getConversationDetail(viewerId, detail.conversation.conversationId)
+
+        assertEquals("sent", afterRead.messages.first().deliveryStatus)
+    }
+
+    @Test
+    fun paidReaderPublishesReadDeltaButFreeReaderDoesNot() = runBlocking {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000065")
+        val targetId = UUID.fromString("00000000-0000-0000-0000-000000000066")
+        val paidRepository = InMemoryMessagingRepository(setOf(targetId))
+        val paidBroadcaster = MessageBroadcaster()
+        val paidService = MessagingService(
+            repository = paidRepository,
+            messageBroadcaster = paidBroadcaster,
+            subscriptionService = subscriptionService(
+                mapOf(viewerId to SubscriptionTier.SOCIAL, targetId to SubscriptionTier.SOCIAL)
+            )
+        )
+        val paidDetail = paidService.createDirectConversation(
+            viewerId,
+            CreateDirectConversationRequestDto(targetUserId = targetId.toString())
+        )
+        paidService.sendMessage(viewerId, paidDetail.conversation.conversationId, SendMessageRequestDto("Paid"))
+        val paidDeltaJob = async { paidBroadcaster.deltas.first { it.type == MessageDeltaType.MESSAGE_READ } }
+        delay(10)
+
+        paidService.markConversationRead(targetId, paidDetail.conversation.conversationId)
+
+        val paidDelta = withTimeout(1_000) { paidDeltaJob.await() }
+        assertEquals(MessageDeltaType.MESSAGE_READ, paidDelta.type)
+
+        val freeRepository = InMemoryMessagingRepository(setOf(targetId))
+        val freeBroadcaster = MessageBroadcaster()
+        val freeService = MessagingService(
+            repository = freeRepository,
+            messageBroadcaster = freeBroadcaster,
+            subscriptionService = subscriptionService(mapOf(viewerId to SubscriptionTier.SOCIAL))
+        )
+        val freeDetail = freeService.createDirectConversation(
+            viewerId,
+            CreateDirectConversationRequestDto(targetUserId = targetId.toString())
+        )
+        freeService.sendMessage(viewerId, freeDetail.conversation.conversationId, SendMessageRequestDto("Free"))
+        val freeDeltaJob = async { freeBroadcaster.deltas.first { it.type == MessageDeltaType.MESSAGE_READ } }
+        delay(10)
+
+        freeService.markConversationRead(targetId, freeDetail.conversation.conversationId)
+
+        assertNull(withTimeoutOrNull(150) { freeDeltaJob.await() })
+        freeDeltaJob.cancel()
+    }
+
+    @Test
+    fun selectTypingIndicatorPublishesOnlyToSelectRecipients() = runBlocking {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000067")
+        val targetId = UUID.fromString("00000000-0000-0000-0000-000000000068")
+        val repository = InMemoryMessagingRepository(setOf(targetId))
+        val broadcaster = MessageBroadcaster()
+        val service = MessagingService(
+            repository = repository,
+            messageBroadcaster = broadcaster,
+            subscriptionService = subscriptionService(
+                mapOf(viewerId to SubscriptionTier.SELECT, targetId to SubscriptionTier.SELECT)
+            )
+        )
+        val detail = service.createDirectConversation(
+            viewerId,
+            CreateDirectConversationRequestDto(targetUserId = targetId.toString())
+        )
+        val deltaJob = async { broadcaster.deltas.first { it.type == MessageDeltaType.TYPING_STARTED } }
+        delay(10)
+
+        service.sendTypingIndicator(
+            viewerId,
+            detail.conversation.conversationId,
+            SendTypingIndicatorRequestDto(isTyping = true)
+        )
+
+        val delta = withTimeout(1_000) { deltaJob.await() }
+        assertEquals(targetId, delta.recipientUserId)
+        assertEquals(MessageDeltaType.TYPING_STARTED, delta.type)
+        assertEquals(viewerId, delta.actorUserId)
+        assertEquals("Viewer", delta.actorDisplayName)
+        assertEquals(true, delta.expiresAt != null)
+    }
+
+    @Test
+    fun socialTypingIndicatorIsIgnored() = runBlocking {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000069")
+        val targetId = UUID.fromString("00000000-0000-0000-0000-000000000070")
+        val repository = InMemoryMessagingRepository(setOf(targetId))
+        val broadcaster = MessageBroadcaster()
+        val service = MessagingService(
+            repository = repository,
+            messageBroadcaster = broadcaster,
+            subscriptionService = subscriptionService(
+                mapOf(viewerId to SubscriptionTier.SOCIAL, targetId to SubscriptionTier.SELECT)
+            )
+        )
+        val detail = service.createDirectConversation(
+            viewerId,
+            CreateDirectConversationRequestDto(targetUserId = targetId.toString())
+        )
+        val deltaJob = async { broadcaster.deltas.first { it.type == MessageDeltaType.TYPING_STARTED } }
+        delay(10)
+
+        service.sendTypingIndicator(
+            viewerId,
+            detail.conversation.conversationId,
+            SendTypingIndicatorRequestDto(isTyping = true)
+        )
+
+        assertNull(withTimeoutOrNull(150) { deltaJob.await() })
+        deltaJob.cancel()
     }
 
     @Test
@@ -1022,6 +1189,37 @@ private data class HeldMessageRiskSignal(
     val messageId: UUID,
     val reason: String
 )
+
+private fun subscriptionService(tiersByUserId: Map<UUID, String>): SubscriptionService =
+    SubscriptionService(
+        StaticSubscriptionRepository(
+            own = tiersByUserId.mapValues { (userId, tier) ->
+                SubscriptionRecord(
+                    subscriptionId = UUID.randomUUID(),
+                    userId = userId,
+                    tier = tier,
+                    status = "active",
+                    currentPeriodStart = Instant.parse("2026-05-01T00:00:00Z"),
+                    currentPeriodEnd = Instant.parse("2026-06-01T00:00:00Z")
+                )
+            }
+        )
+    )
+
+private class StaticSubscriptionRepository(
+    private val own: Map<UUID, SubscriptionRecord> = emptyMap()
+) : SubscriptionRepository {
+    override suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? = own[userId]
+
+    override suspend fun findBestActiveLinkedPartnerSubscription(
+        userId: UUID,
+        now: Instant
+    ): LinkedPartnerSubscriptionRecord? = null
+
+    override suspend fun findBestActiveStoredEntitlement(userId: UUID, now: Instant): StoredEntitlementRecord? = null
+
+    override suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean = false
+}
 
 private class RecordingNotificationPublisher : NotificationPublisher {
     val events = mutableListOf<NotificationEventDraft>()

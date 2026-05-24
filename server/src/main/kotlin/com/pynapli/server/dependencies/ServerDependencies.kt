@@ -331,6 +331,7 @@ class ServerDependencies(
                 rateLimitService = rateLimitService,
                 messageReviewRiskSignalPublisher = riskService,
                 riskPolicyService = riskPolicyService,
+                subscriptionService = subscriptionService,
                 activityService = activityService
             )
             val messageModerationService = MessageModerationService(

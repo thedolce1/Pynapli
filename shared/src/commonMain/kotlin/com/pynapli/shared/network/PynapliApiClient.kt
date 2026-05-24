@@ -60,6 +60,7 @@ import com.pynapli.shared.network.dto.RequestAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessRequestDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
+import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
@@ -225,6 +226,11 @@ interface PynapliApiClient {
     suspend fun markConversationRead(conversationId: String): AppResult<ConversationDto>
 
     suspend fun sendMessage(conversationId: String, request: SendMessageRequestDto): AppResult<MessageDto>
+
+    suspend fun sendTypingIndicator(
+        conversationId: String,
+        request: SendTypingIndicatorRequestDto
+    ): AppResult<Unit>
 
     suspend fun deleteMessage(messageId: String): AppResult<MessageDto>
 
@@ -733,6 +739,23 @@ class KtorPynapliApiClient(
                 contentType(ContentType.Application.Json)
                 setBody(request)
             }.toAppResult(json)
+        }
+
+    override suspend fun sendTypingIndicator(
+        conversationId: String,
+        request: SendTypingIndicatorRequestDto
+    ): AppResult<Unit> =
+        authenticatedPost { token ->
+            val response = httpClient.post(config.endpoint("/v1/messages/threads/$conversationId/typing")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }
+            if (response.status.value in 200..299) {
+                AppResult.Success(Unit)
+            } else {
+                response.toAppResult<Unit>(json)
+            }
         }
 
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =

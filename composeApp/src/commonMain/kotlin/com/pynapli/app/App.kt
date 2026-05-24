@@ -520,8 +520,15 @@ fun PynapliApp(
         if (conversationState.visible) {
             ConversationSheet(
                 state = conversationState,
-                onDismiss = conversationStateHolder::dismiss,
-                onDraftChanged = conversationStateHolder::updateDraft,
+                onDismiss = {
+                    val conversationId = conversationState.detail?.conversation?.conversationId
+                    scope.launch { conversationStateHolder.sendTypingStopped(conversationId) }
+                    conversationStateHolder.dismiss()
+                },
+                onDraftChanged = { value ->
+                    conversationStateHolder.updateDraft(value)
+                    scope.launch { conversationStateHolder.sendTypingSignal(value.isNotBlank()) }
+                },
                 onSend = {
                     scope.launch { conversationStateHolder.sendDraft() }
                 },

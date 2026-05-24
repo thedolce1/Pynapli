@@ -30,13 +30,19 @@ data class MessageRealtimeDelta(
     val type: String,
     val conversationId: UUID,
     val occurredAt: Instant = Instant.now(),
-    val messageId: UUID? = null
+    val messageId: UUID? = null,
+    val actorUserId: UUID? = null,
+    val actorDisplayName: String? = null,
+    val expiresAt: Instant? = null
 ) {
     fun toDto(): MessageDeltaDto =
         MessageDeltaDto(
             type = type,
             conversationId = conversationId.toString(),
             occurredAt = occurredAt.toString(),
-            messageId = messageId?.toString()
+            messageId = messageId?.toString(),
+            actorUserId = actorUserId?.toString(),
+            actorDisplayName = actorDisplayName,
+            expiresAt = expiresAt?.toString()
         )
 }

@@ -82,6 +82,65 @@ class ConversationStateHolderTest {
 
         assertEquals("Joined chat", stateHolder.state.value.partnerInviteFeedback)
     }
+
+    @Test
+    fun typingStartedAddsAndExpiresParticipantForOpenConversation() = runBlocking {
+        val repository = FakeConversationRepository()
+        val stateHolder = ConversationStateHolder(repository)
+        stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+        stateHolder.applyTypingStarted(
+            conversationId = "conversation-1",
+            actorUserId = "target",
+            actorDisplayName = "Maya",
+            expiresAt = "2026-05-22T18:00:06Z"
+        )
+
+        assertEquals(listOf("Maya"), stateHolder.state.value.typingParticipants.map { it.displayName })
+
+        stateHolder.clearExpiredTypingIndicators(nowMillis = Long.MAX_VALUE)
+
+        assertEquals(emptyList(), stateHolder.state.value.typingParticipants)
+    }
+
+    @Test
+    fun typingStartedIgnoresOwnAndOtherConversationEvents() = runBlocking {
+        val repository = FakeConversationRepository()
+        val stateHolder = ConversationStateHolder(repository)
+        stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+        stateHolder.applyTypingStarted(
+            conversationId = "other-conversation",
+            actorUserId = "target",
+            actorDisplayName = "Maya",
+            expiresAt = null
+        )
+        stateHolder.applyTypingStarted(
+            conversationId = "conversation-1",
+            actorUserId = "viewer",
+            actorDisplayName = "You",
+            expiresAt = null
+        )
+
+        assertEquals(emptyList(), stateHolder.state.value.typingParticipants)
+    }
+
+    @Test
+    fun typingSignalIsThrottledAndStopIsSentOnce() = runBlocking {
+        val repository = FakeConversationRepository()
+        val stateHolder = ConversationStateHolder(repository)
+        stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+        stateHolder.sendTypingSignal(isTyping = true)
+        stateHolder.sendTypingSignal(isTyping = true)
+        stateHolder.sendTypingStopped("conversation-1")
+        stateHolder.sendTypingStopped("conversation-1")
+
+        assertEquals(
+            listOf("conversation-1" to true, "conversation-1" to false),
+            repository.typingCalls
+        )
+    }
 }
 
 private class FakeConversationRepository(
@@ -103,6 +162,7 @@ private class FakeConversationRepository(
     var detailMessage: MessageDto = initialMessage
     var detailConversation: ConversationDto = conversation
     var acceptResult: AppResult<ConversationDetailDto> = AppResult.Failure(AppError("UNUSED", "Unused."))
+    val typingCalls = mutableListOf<Pair<String, Boolean>>()
 
     override suspend fun createDirectConversation(targetUserId: String, origin: String): AppResult<ConversationDetailDto> =
         AppResult.Failure(AppError("UNUSED", "Unused."))
@@ -120,6 +180,11 @@ private class FakeConversationRepository(
 
     override suspend fun sendMessage(conversationId: String, body: String): AppResult<MessageDto> =
         AppResult.Failure(AppError("UNUSED", "Unused."))
+
+    override suspend fun sendTypingIndicator(conversationId: String, isTyping: Boolean): AppResult<Unit> {
+        typingCalls += conversationId to isTyping
+        return AppResult.Success(Unit)
+    }
 
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> {
         deletedMessageId = messageId

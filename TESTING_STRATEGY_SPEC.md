@@ -71,9 +71,9 @@ Current Activity backend coverage:
 Current Messaging coverage:
 
 - `MessagingServiceTest` covers grid conversation creation, swipe match gating, message send/read/pagination, first-message rate limits, held-message review behavior, partner chat invite Activity generation, and partner invite consent ordering.
-- `MessagingServiceTest` also covers realtime delta emission for visible message create/delete events, and `MessageStreamRouteTest` covers authenticated stream delivery plus recipient filtering.
+- `MessagingServiceTest` also covers realtime delta emission for visible message create/delete/read events, Social/Select read receipt entitlement masking, Select-only typing indicator delivery, and Social typing suppression; `MessageStreamRouteTest` covers authenticated stream delivery, recipient filtering, and actor/expiry metadata.
 - `MessageStreamClientTest` covers the shared reconnect/backoff client and emitted message/conversation deltas.
-- `ConversationStateHolderTest` covers open-conversation realtime refresh and preserves invited-partner accepted feedback across silent realtime refreshes.
+- `ConversationStateHolderTest` covers open-conversation realtime refresh, preserves invited-partner accepted feedback across silent realtime refreshes, and verifies typing indicator add/ignore/expiry plus throttled start/stop signal behavior.
 - `MessagingRepositoryIntegrationTest` runs the messaging repository against PostgreSQL/Testcontainers and covers swipe-origin match enforcement, grid message policy gates, held-message visibility/moderation, partner invite partner+third-party consent, and third-party decline cooldown.
 - `MessagesStateHolderTest` covers invited-partner filtering, invite accept/decline local state, and third-party decline refresh behavior.
 - `MessagesScreenInteractionTest` renders the real Compose Messages screen and verifies a third-party partner-invite approval row can be accepted from the inbox.

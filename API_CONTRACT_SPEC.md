@@ -381,6 +381,8 @@ GET  /v1/messages/threads
 POST /v1/messages/threads
 GET  /v1/messages/threads/{threadId}
 POST /v1/messages/threads/{threadId}/messages
+POST /v1/messages/threads/{threadId}/typing
+POST /v1/messages/threads/{threadId}/read
 POST /v1/messages/{messageId}/delete
 POST /v1/messages/threads/{threadId}/partner-invite
 POST /v1/messages/threads/{threadId}/partner-invite/accept
@@ -395,7 +397,9 @@ Rules:
 - Partner invite requires linked partner and third-party consent.
 - `ConversationDto.partnerInvite` is present while an invite is unresolved, with partner and third-party consent status so the client can show the correct action/waiting state.
 - Risk policy can hold outbound first messages for review.
-- `/v1/messages/stream` emits authenticated recipient-scoped deltas only; clients refetch the inbox or open thread over HTTP because WebSocket events are not authoritative state.
+- `/v1/messages/threads/{threadId}/typing` accepts `{ isTyping: Boolean }`, is Select-only, and silently no-ops for users/recipients without typing entitlement.
+- Read receipt status is server-masked. Social/Select senders can see `read` only when all active recipient participants are Social/Select eligible; Free viewers receive `sent`.
+- `/v1/messages/stream` emits authenticated recipient-scoped deltas only. Message create/delete/read/conversation-update deltas trigger HTTP refetch; typing deltas are short-lived UI hints with actor metadata and expiry.
 
 ## Albums API
 
@@ -529,6 +533,9 @@ Event types:
 - `presence.delta`
 - `message.created`
 - `message.deleted`
+- `message.read`
+- `typing.started`
+- `typing.stopped`
 - `conversation.updated`
 - `activity.created`
 - `activity.dismissed`

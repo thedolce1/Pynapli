@@ -4,6 +4,7 @@ import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
+import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -64,6 +65,14 @@ fun Application.configureMessagingRoutes(
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 val request = call.receive<SendMessageRequestDto>()
                 call.respond(messagingService.sendMessage(user.id, threadId, request))
+            }
+
+            post("/{threadId}/typing") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+                val request = call.receive<SendTypingIndicatorRequestDto>()
+                messagingService.sendTypingIndicator(user.id, threadId, request)
+                call.respond(mapOf("ok" to true))
             }
 
             post("/{threadId}/partner-invite") {

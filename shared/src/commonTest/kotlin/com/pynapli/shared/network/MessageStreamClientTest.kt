@@ -41,9 +41,12 @@ class MessageStreamClientTest {
                 json.encodeToString(
                     MessageDeltaDto.serializer(),
                     MessageDeltaDto(
-                        type = MessageDeltaType.CONVERSATION_UPDATED,
+                        type = MessageDeltaType.TYPING_STARTED,
                         conversationId = "conversation-1",
-                        occurredAt = "2026-05-22T16:00:01Z"
+                        occurredAt = "2026-05-22T16:00:01Z",
+                        actorUserId = "target",
+                        actorDisplayName = "Maya",
+                        expiresAt = "2026-05-22T16:00:07Z"
                     )
                 )
             )
@@ -59,8 +62,11 @@ class MessageStreamClientTest {
             client.connect().take(2).toList()
         }
 
-        assertEquals(listOf(MessageDeltaType.MESSAGE_CREATED, MessageDeltaType.CONVERSATION_UPDATED), deltas.map { it.type })
+        assertEquals(listOf(MessageDeltaType.MESSAGE_CREATED, MessageDeltaType.TYPING_STARTED), deltas.map { it.type })
         assertEquals(listOf("conversation-1", "conversation-1"), deltas.map { it.conversationId })
+        assertEquals("target", deltas.last().actorUserId)
+        assertEquals("Maya", deltas.last().actorDisplayName)
+        assertEquals("2026-05-22T16:00:07Z", deltas.last().expiresAt)
         assertEquals("test-token", factory.tokensSeen.first())
     }
 

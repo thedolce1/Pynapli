@@ -14,10 +14,21 @@ import com.pynapli.shared.network.dto.MatchDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PartnerChatInviteStatus
 import com.pynapli.shared.network.dto.SendMessageRequestDto
+import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+
+@Immutable
+data class TypingParticipantUi(
+    val userId: String,
+    val displayName: String,
+    val expiresAtMillis: Long
+)
 
 @Immutable
 data class ConversationUiState(
@@ -33,6 +44,7 @@ data class ConversationUiState(
     val isLeaving: Boolean = false,
     val isLoadingOlder: Boolean = false,
     val isDeletingMessageIds: Set<String> = emptySet(),
+    val typingParticipants: List<TypingParticipantUi> = emptyList(),
     val partnerInviteFeedback: String? = null,
     val errorMessage: String? = null
 ) {
@@ -88,6 +100,9 @@ class ConversationStateHolder(
 ) {
     private val _state = MutableStateFlow(ConversationUiState())
     val state: StateFlow<ConversationUiState> = _state.asStateFlow()
+    private var lastTypingConversationId: String? = null
+    private var lastTypingActive: Boolean = false
+    private var lastTypingSentAtMillis: Long = 0L
 
     suspend fun openDirect(card: GridProfileCardUi, viewerUserId: String?) {
         _state.update {
@@ -315,6 +330,77 @@ class ConversationStateHolder(
         }
     }
 
+    suspend fun sendTypingSignal(isTyping: Boolean, force: Boolean = false) {
+        val current = state.value
+        val conversationId = current.detail?.conversation?.conversationId ?: return
+        if (!current.visible || current.isOpening || current.isViewerInvited) return
+        val now = currentTimeMillis()
+        val sameState = lastTypingConversationId == conversationId && lastTypingActive == isTyping
+        if (!force && sameState && now - lastTypingSentAtMillis < TYPING_SIGNAL_THROTTLE_MS) return
+
+        when (repository.sendTypingIndicator(conversationId, isTyping)) {
+            is AppResult.Success -> {
+                lastTypingConversationId = conversationId
+                lastTypingActive = isTyping
+                lastTypingSentAtMillis = now
+            }
+            is AppResult.Failure -> Unit
+        }
+    }
+
+    suspend fun sendTypingStopped(conversationId: String?) {
+        val threadId = conversationId ?: return
+        if (lastTypingConversationId != threadId || !lastTypingActive) return
+        when (repository.sendTypingIndicator(threadId, isTyping = false)) {
+            is AppResult.Success -> {
+                lastTypingConversationId = null
+                lastTypingActive = false
+                lastTypingSentAtMillis = 0L
+            }
+            is AppResult.Failure -> Unit
+        }
+    }
+
+    fun applyTypingStarted(
+        conversationId: String,
+        actorUserId: String?,
+        actorDisplayName: String?,
+        expiresAt: String?
+    ) {
+        val userId = actorUserId ?: return
+        val current = state.value
+        if (current.detail?.conversation?.conversationId != conversationId || userId == current.viewerUserId) return
+        val expiresAtMillis = expiresAt?.let { parseInstantMillis(it) }
+            ?: (currentTimeMillis() + TYPING_INDICATOR_TTL_MS)
+        val displayName = actorDisplayName?.takeIf { it.isNotBlank() }
+            ?: current.detail.conversation.participants.firstOrNull { it.userId == userId }?.displayName
+            ?: "Someone"
+
+        _state.update { existing ->
+            existing.copy(
+                typingParticipants = (
+                    existing.typingParticipants.filterNot { it.userId == userId } +
+                        TypingParticipantUi(userId, displayName, expiresAtMillis)
+                    ).sortedBy { it.displayName }
+            )
+        }
+    }
+
+    fun applyTypingStopped(conversationId: String, actorUserId: String?) {
+        val userId = actorUserId ?: return
+        if (state.value.detail?.conversation?.conversationId != conversationId) return
+        _state.update { existing ->
+            existing.copy(typingParticipants = existing.typingParticipants.filterNot { it.userId == userId })
+        }
+    }
+
+    fun clearExpiredTypingIndicators(nowMillis: Long = currentTimeMillis()) {
+        _state.update { existing ->
+            val active = existing.typingParticipants.filter { it.expiresAtMillis > nowMillis }
+            if (active == existing.typingParticipants) existing else existing.copy(typingParticipants = active)
+        }
+    }
+
     suspend fun inviteLinkedPartner() {
         val current = state.value
         if (current.isInvitingPartner || current.isOpening || current.isViewerInvited) return
@@ -503,6 +589,7 @@ class ConversationStateHolder(
         _state.update { it.copy(isSending = true, partnerInviteFeedback = null, errorMessage = null) }
         when (val result = repository.sendMessage(conversationId, body)) {
             is AppResult.Success -> {
+                sendTypingStopped(conversationId)
                 _state.update { existing ->
                     val updatedDetail = existing.detail?.withAppendedMessage(result.value)
                     existing.copy(
@@ -563,6 +650,9 @@ class ConversationStateHolder(
     }
 
     fun dismiss() {
+        lastTypingConversationId = null
+        lastTypingActive = false
+        lastTypingSentAtMillis = 0L
         _state.value = ConversationUiState()
     }
 
@@ -631,6 +721,8 @@ interface ConversationRepository {
 
     suspend fun sendMessage(conversationId: String, body: String): AppResult<MessageDto>
 
+    suspend fun sendTypingIndicator(conversationId: String, isTyping: Boolean): AppResult<Unit>
+
     suspend fun deleteMessage(messageId: String): AppResult<MessageDto>
 
     suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto>
@@ -667,6 +759,9 @@ class ApiConversationRepository(
 
     override suspend fun sendMessage(conversationId: String, body: String): AppResult<MessageDto> =
         apiClient.sendMessage(conversationId, SendMessageRequestDto(body = body))
+
+    override suspend fun sendTypingIndicator(conversationId: String, isTyping: Boolean): AppResult<Unit> =
+        apiClient.sendTypingIndicator(conversationId, SendTypingIndicatorRequestDto(isTyping = isTyping))
 
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
         apiClient.deleteMessage(messageId)
@@ -775,6 +870,9 @@ class SampleConversationRepository : ConversationRepository {
             )
         )
 
+    override suspend fun sendTypingIndicator(conversationId: String, isTyping: Boolean): AppResult<Unit> =
+        AppResult.Success(Unit)
+
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
         AppResult.Success(
             MessageDto(
@@ -838,3 +936,13 @@ internal val visibleConversationParticipantStatuses = setOf(
     ConversationParticipantStatus.ACTIVE,
     ConversationParticipantStatus.INVITED
 )
+
+private const val TYPING_SIGNAL_THROTTLE_MS = 2_500L
+private const val TYPING_INDICATOR_TTL_MS = 6_000L
+
+@OptIn(ExperimentalTime::class)
+private fun currentTimeMillis(): Long = Clock.System.now().toEpochMilliseconds()
+
+@OptIn(ExperimentalTime::class)
+private fun parseInstantMillis(value: String): Long? =
+    runCatching { Instant.parse(value).toEpochMilliseconds() }.getOrNull()

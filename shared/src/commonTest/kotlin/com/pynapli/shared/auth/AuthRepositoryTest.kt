@@ -50,6 +50,7 @@ import com.pynapli.shared.network.dto.RequestAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessRequestDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
+import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
 import com.pynapli.shared.network.dto.StorePurchaseResponseDto
@@ -391,6 +392,12 @@ private class FakeApiClient(
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun sendMessage(conversationId: String, request: SendMessageRequestDto): AppResult<MessageDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun sendTypingIndicator(
+        conversationId: String,
+        request: SendTypingIndicatorRequestDto
+    ): AppResult<Unit> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
