@@ -40,6 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 
+internal val ProfileSurfaceBottomPadding = 118.dp
+
 @Composable
 internal fun ProfileHubTopBar(
     title: String = "Profile",
