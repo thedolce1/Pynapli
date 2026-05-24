@@ -757,6 +757,13 @@ Wait-ForAnyText @("Message") 30 | Out-Null
 $normalThreadXml = Capture-MessagesStage "normalThread" "04_messages_normal_thread"
 Assert-TextPresent $normalThreadXml "Kai" "Normal thread"
 
+Tap-Text "Open profile"
+Wait-ForAnyText @("Spark", "Open linked partner profile", "Private album") 30 | Out-Null
+$threadProfilePeekXml = Capture-MessagesStage "threadProfilePeek" "04b_messages_thread_profile_peek"
+Assert-TextPresent $threadProfilePeekXml "Kai" "Thread profile peek"
+Tap-Text "Close profile"
+Wait-ForAnyText @("FROM GRID", "Message") 30 | Out-Null
+
 Tap-Text "Message"
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_Q") | Out-Null
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_A") | Out-Null
@@ -774,7 +781,7 @@ Wait-ForAnyText @("You deleted a message") 30 | Out-Null
 $messageDeletedXml = Capture-MessagesStage "messageDeleted" "06_messages_deleted"
 Assert-TextPresent $messageDeletedXml "You deleted a message" "Message delete"
 
-Tap-Text "Close conversation"
+Tap-Text "Back"
 Wait-ForAnyText @("Messages", "Noa, Rae") 30 | Out-Null
 
 Tap-Text "Accept"
@@ -788,9 +795,9 @@ $invitedPromptXml = Capture-MessagesStage "invitedPartnerPrompt" "08_messages_in
 Assert-TextPresent $invitedPromptXml "Decline" "Invited partner prompt"
 
 Tap-Text "Accept"
-Wait-ForAnyText @("Joined chat", "Message") 30 | Out-Null
+Wait-ForAnyText @("Join us when you are ready.", "Message") 30 | Out-Null
 $invitedAcceptedXml = Capture-MessagesStage "invitedPartnerAccepted" "09_messages_invited_partner_accepted"
-Assert-TextPresent $invitedAcceptedXml "Joined chat" "Invited partner accepted"
+Assert-TextPresent $invitedAcceptedXml "Join us when you are ready." "Invited partner accepted"
 
 Write-Summary @{
     passed = $true
@@ -801,6 +808,7 @@ Write-Summary @{
     proof = @{
         initialInbox = $true
         normalThreadOpened = $true
+        threadProfilePeek = $true
         composerSentMessage = $true
         deletedMessagePlaceholder = $true
         thirdPartyApprovalCompleted = $true

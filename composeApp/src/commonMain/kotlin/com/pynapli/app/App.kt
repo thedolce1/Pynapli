@@ -1,31 +1,10 @@
 package com.pynapli.app
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material.icons.filled.Style
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,20 +16,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.pynapli.app.activity.ActivityScreen
 import com.pynapli.app.activity.ActivityStateHolder
-import com.pynapli.app.activity.ActivityTabUi
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthScreen
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.conversation.ConversationSheet
-import com.pynapli.app.conversation.titleFor
+import com.pynapli.app.conversation.ConversationScreen
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.design.PynapliTheme
 import com.pynapli.app.grid.GridScreen
@@ -60,6 +33,7 @@ import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.MediaAlbumsScreen
 import com.pynapli.app.media.MediaAlbumsStateHolder
 import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
+import com.pynapli.app.messages.MessageProfilePeekSheet
 import com.pynapli.app.messages.MessagesScreen
 import com.pynapli.app.messages.MessagesStateHolder
 import com.pynapli.app.profile.ProfileDetailStateHolder
@@ -70,10 +44,7 @@ import com.pynapli.app.store.StoreScreen
 import com.pynapli.app.store.StoreStateHolder
 import com.pynapli.app.swipe.SwipeScreen
 import com.pynapli.app.swipe.SwipeStateHolder
-import com.pynapli.shared.network.dto.ActivityEventDto
-import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.MatchDto
-import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -117,6 +88,7 @@ fun PynapliApp(
         val mediaAlbumsState by mediaAlbumsStateHolder.state.collectAsState()
         val profileLinksState by profileLinksStateHolder.state.collectAsState()
         val profileHubState by profileHubStateHolder.state.collectAsState()
+        val profileDetailState by profileDetailStateHolder.state.collectAsState()
         val scope = rememberCoroutineScope()
         var selectedTab by remember { mutableStateOf(PynapliTab.Grid) }
         var profileSurface by remember { mutableStateOf(ProfileSurface.None) }
@@ -346,6 +318,63 @@ fun PynapliApp(
             return@PynapliTheme
         }
 
+        val dismissConversation: () -> Unit = {
+            val conversationId = conversationState.detail?.conversation?.conversationId
+            scope.launch { conversationStateHolder.sendTypingStopped(conversationId) }
+            conversationStateHolder.dismiss()
+        }
+        val onConversationDraftChanged: (String) -> Unit = { value ->
+            conversationStateHolder.updateDraft(value)
+            scope.launch { conversationStateHolder.sendTypingSignal(value.isNotBlank()) }
+        }
+        val onConversationSend: () -> Unit = {
+            scope.launch { conversationStateHolder.sendDraft() }
+        }
+        val onConversationLoadOlder: () -> Unit = {
+            scope.launch { conversationStateHolder.loadOlderMessages() }
+        }
+        val onConversationInvitePartner: () -> Unit = {
+            scope.launch {
+                conversationStateHolder.inviteLinkedPartner()
+                messagesStateHolder.refreshSilently()
+            }
+        }
+        val onConversationAcceptInvite: () -> Unit = {
+            scope.launch {
+                conversationStateHolder.acceptPartnerInvite()
+                messagesStateHolder.refreshSilently()
+            }
+        }
+        val onConversationDeclineInvite: () -> Unit = {
+            scope.launch {
+                conversationStateHolder.declinePartnerInvite()
+                messagesStateHolder.refreshSilently()
+            }
+        }
+        val onConversationLeave: () -> Unit = {
+            scope.launch {
+                conversationStateHolder.leaveConversation()
+                messagesStateHolder.refreshSilently()
+            }
+        }
+        val onConversationDeleteMessage: (String) -> Unit = { messageId ->
+            scope.launch {
+                conversationStateHolder.deleteMessage(messageId)
+                messagesStateHolder.refreshSilently()
+            }
+        }
+        val conversationShownInline = selectedTab == PynapliTab.Messages && conversationState.visible
+
+        LaunchedEffect(selectedTab, profileDetailState.blockedTargetUserId) {
+            if (selectedTab != PynapliTab.Messages) return@LaunchedEffect
+            val blockedId = profileDetailStateHolder.consumeBlockedTargetUserId() ?: return@LaunchedEffect
+            profileDetailStateHolder.dismiss()
+            if (conversationState.detail?.conversation?.participants?.any { participant -> participant.userId == blockedId } == true) {
+                dismissConversation()
+            }
+            messagesStateHolder.refreshSilently()
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -422,20 +451,46 @@ fun PynapliApp(
                         onOpenStore = { selectedTab = PynapliTab.Store }
                     )
 
-                    PynapliTab.Messages -> MessagesScreen(
-                        modifier = Modifier.weight(1f),
-                        stateHolder = messagesStateHolder,
-                        viewerUserId = authState.session?.userId,
-                        onThreadSelected = { conversation ->
-                            messagesStateHolder.markConversationReadLocal(conversation.conversationId)
-                            scope.launch {
-                                conversationStateHolder.openConversation(
-                                    conversation = conversation,
-                                    viewerUserId = authState.session?.userId
-                                )
-                            }
+                    PynapliTab.Messages -> {
+                        if (conversationState.visible) {
+                            ConversationScreen(
+                                modifier = Modifier.weight(1f),
+                                state = conversationState,
+                                onBack = dismissConversation,
+                                onProfileIconClick = { profileSurface = ProfileSurface.Hub },
+                                onOpenParticipantProfile = { participant ->
+                                    scope.launch {
+                                        profileDetailStateHolder.open(participant.toConversationProfileCardUi())
+                                    }
+                                },
+                                onDraftChanged = onConversationDraftChanged,
+                                onSend = onConversationSend,
+                                onLoadOlder = onConversationLoadOlder,
+                                linkedPartnerUserId = profileLinksState.current?.otherUserId,
+                                onInvitePartner = onConversationInvitePartner,
+                                onAcceptInvite = onConversationAcceptInvite,
+                                onDeclineInvite = onConversationDeclineInvite,
+                                onLeaveConversation = onConversationLeave,
+                                onDeleteMessage = onConversationDeleteMessage
+                            )
+                        } else {
+                            MessagesScreen(
+                                modifier = Modifier.weight(1f),
+                                stateHolder = messagesStateHolder,
+                                viewerUserId = authState.session?.userId,
+                                onProfileIconClick = { profileSurface = ProfileSurface.Hub },
+                                onThreadSelected = { conversation ->
+                                    messagesStateHolder.markConversationReadLocal(conversation.conversationId)
+                                    scope.launch {
+                                        conversationStateHolder.openConversation(
+                                            conversation = conversation,
+                                            viewerUserId = authState.session?.userId
+                                        )
+                                    }
+                                }
+                            )
                         }
-                    )
+                    }
 
                     PynapliTab.Activity -> ActivityScreen(
                         modifier = Modifier.weight(1f),
@@ -495,6 +550,9 @@ fun PynapliApp(
                     unreadMessages = messagesState.unreadCount,
                     activityBadgeCount = activityState.activityBadgeCount,
                     onTabSelected = {
+                        if (selectedTab == PynapliTab.Messages && it != PynapliTab.Messages && conversationState.visible) {
+                            dismissConversation()
+                        }
                         profileSurface = ProfileSurface.None
                         selectedTab = it
                     }
@@ -517,55 +575,34 @@ fun PynapliApp(
             }
         }
 
-        if (conversationState.visible) {
+        if (selectedTab == PynapliTab.Messages && profileDetailState.visible) {
+            MessageProfilePeekSheet(
+                state = profileDetailState,
+                onDismiss = profileDetailStateHolder::dismiss,
+                onMessage = profileDetailStateHolder::dismiss,
+                onSpark = {
+                    scope.launch { profileDetailStateHolder.sendSpark() }
+                },
+                onRequestAlbum = {
+                    scope.launch { profileDetailStateHolder.requestAlbumAccess() }
+                },
+                distanceUnit = appSettingsState.settings.distanceUnit
+            )
+        }
+
+        if (conversationState.visible && !conversationShownInline) {
             ConversationSheet(
                 state = conversationState,
-                onDismiss = {
-                    val conversationId = conversationState.detail?.conversation?.conversationId
-                    scope.launch { conversationStateHolder.sendTypingStopped(conversationId) }
-                    conversationStateHolder.dismiss()
-                },
-                onDraftChanged = { value ->
-                    conversationStateHolder.updateDraft(value)
-                    scope.launch { conversationStateHolder.sendTypingSignal(value.isNotBlank()) }
-                },
-                onSend = {
-                    scope.launch { conversationStateHolder.sendDraft() }
-                },
-                onLoadOlder = {
-                    scope.launch { conversationStateHolder.loadOlderMessages() }
-                },
+                onDismiss = dismissConversation,
+                onDraftChanged = onConversationDraftChanged,
+                onSend = onConversationSend,
+                onLoadOlder = onConversationLoadOlder,
                 linkedPartnerUserId = profileLinksState.current?.otherUserId,
-                onInvitePartner = {
-                    scope.launch {
-                        conversationStateHolder.inviteLinkedPartner()
-                        messagesStateHolder.refreshSilently()
-                    }
-                },
-                onAcceptInvite = {
-                    scope.launch {
-                        conversationStateHolder.acceptPartnerInvite()
-                        messagesStateHolder.refreshSilently()
-                    }
-                },
-                onDeclineInvite = {
-                    scope.launch {
-                        conversationStateHolder.declinePartnerInvite()
-                        messagesStateHolder.refreshSilently()
-                    }
-                },
-                onLeaveConversation = {
-                    scope.launch {
-                        conversationStateHolder.leaveConversation()
-                        messagesStateHolder.refreshSilently()
-                    }
-                },
-                onDeleteMessage = { messageId ->
-                    scope.launch {
-                        conversationStateHolder.deleteMessage(messageId)
-                        messagesStateHolder.refreshSilently()
-                    }
-                }
+                onInvitePartner = onConversationInvitePartner,
+                onAcceptInvite = onConversationAcceptInvite,
+                onDeclineInvite = onConversationDeclineInvite,
+                onLeaveConversation = onConversationLeave,
+                onDeleteMessage = onConversationDeleteMessage
             )
         }
     }
@@ -576,206 +613,6 @@ private const val OPEN_CONVERSATION_REFRESH_INTERVAL_MS = 7_500L
 private const val ACTIVITY_REFRESH_INTERVAL_MS = 45_000L
 private const val ACTIVITY_SUMMARY_REFRESH_INTERVAL_MS = 45_000L
 private const val IN_APP_NOTIFICATION_DURATION_MS = 4_000L
-
-private data class InAppNotificationUi(
-    val id: String,
-    val kind: InAppNotificationKind,
-    val title: String,
-    val body: String,
-    val targetTab: PynapliTab,
-    val activityTab: ActivityTabUi? = null
-)
-
-private enum class InAppNotificationKind(
-    val icon: ImageVector
-) {
-    Message(Icons.Filled.ChatBubble),
-    Activity(Icons.Filled.LocalFireDepartment)
-}
-
-@Composable
-private fun InAppNotificationBanner(
-    notification: InAppNotificationUi,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(
-            imageVector = notification.kind.icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp)
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = notification.title,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = notification.body,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-private fun ConversationDto.toMessageNotification(
-    viewerUserId: String?,
-    settings: AppSettings
-): InAppNotificationUi {
-    val standardDetail = settings.notificationDetail == AppSettings.NOTIFICATION_STANDARD
-    return InAppNotificationUi(
-        id = "message:$conversationId:${lastMessage?.messageId ?: updatedAt}:$unreadCount",
-        kind = InAppNotificationKind.Message,
-        title = if (standardDetail) titleFor(viewerUserId) else "New message",
-        body = if (standardDetail) {
-            lastMessage?.body?.cleanNotificationText() ?: "Open messages"
-        } else {
-            "Open messages"
-        },
-        targetTab = PynapliTab.Messages
-    )
-}
-
-private fun ActivityEventDto.toActivityNotification(settings: AppSettings): InAppNotificationUi {
-    val standardDetail = settings.notificationDetail == AppSettings.NOTIFICATION_STANDARD
-    return InAppNotificationUi(
-        id = "activity:$eventId",
-        kind = InAppNotificationKind.Activity,
-        title = if (standardDetail) actorDisplayName else "New activity",
-        body = if (standardDetail) activityNotificationBody() else "Open Activity",
-        targetTab = PynapliTab.Activity,
-        activityTab = activityTab()
-    )
-}
-
-private fun ActivityEventDto.activityNotificationBody(): String =
-    when (type) {
-        "profile_view", "viewed_profile" -> if (count > 1) "viewed you $count times" else "viewed you"
-        "flirt" -> "sent a spark"
-        "swipe_like" -> "liked you"
-        "pineapple_like" -> "sent a Pineapple"
-        "intro_note" -> "sent an Intro Note"
-        "match" -> "matched with you"
-        "album_request" -> "requested album access"
-        "partner_chat_invite" -> "sent a chat invite"
-        else -> "new activity"
-    }
-
-private fun ActivityEventDto.activityTab(): ActivityTabUi =
-    when (type) {
-        "profile_view", "viewed_profile" -> ActivityTabUi.Views
-        "flirt" -> ActivityTabUi.Flirts
-        "swipe_like", "pineapple_like", "intro_note" -> ActivityTabUi.Likes
-        "match" -> ActivityTabUi.Matches
-        "album_request" -> ActivityTabUi.Albums
-        "partner_chat_invite", "psync_invite", "playing_tonight" -> ActivityTabUi.Invites
-        else -> ActivityTabUi.All
-    }
-
-private fun String.cleanNotificationText(): String {
-    val normalized = trim().replace('\n', ' ')
-    return if (normalized.length <= NOTIFICATION_BODY_MAX_LENGTH) {
-        normalized
-    } else {
-        normalized.take(NOTIFICATION_BODY_MAX_LENGTH - 3).trimEnd() + "..."
-    }
-}
-
-private const val NOTIFICATION_BODY_MAX_LENGTH = 96
-
-@Composable
-private fun PynapliBottomNavigation(
-    selectedTab: PynapliTab,
-    unreadMessages: Int,
-    activityBadgeCount: Int,
-    onTabSelected: (PynapliTab) -> Unit
-) {
-    NavigationBar(
-        modifier = Modifier.navigationBarsPadding(),
-        containerColor = MaterialTheme.colorScheme.background,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 0.dp
-    ) {
-        PynapliTab.entries.forEach { tab ->
-            val enabled = tab == PynapliTab.Grid ||
-                tab == PynapliTab.Swipe ||
-                tab == PynapliTab.Activity ||
-                tab == PynapliTab.Messages ||
-                tab == PynapliTab.Store
-            NavigationBarItem(
-                enabled = enabled,
-                selected = selectedTab == tab,
-                onClick = { if (enabled) onTabSelected(tab) },
-                icon = {
-                    val badgeCount = when (tab) {
-                        PynapliTab.Messages -> unreadMessages
-                        PynapliTab.Activity -> activityBadgeCount
-                        else -> 0
-                    }
-                    if (badgeCount > 0) {
-                        BadgedBox(
-                            badge = {
-                                Badge {
-                                    Text(text = badgeCount.toBadgeText())
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.label
-                            )
-                        }
-                    } else {
-                        Icon(
-                            imageVector = tab.icon,
-                            contentDescription = tab.label
-                        )
-                    }
-                },
-                label = { Text(text = tab.label) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            )
-        }
-    }
-}
-
-private fun Int.toBadgeText(): String = if (this > 9) "9+" else toString()
-
-private enum class PynapliTab(
-    val label: String,
-    val icon: ImageVector
-) {
-    Grid("Grid", Icons.Filled.GridView),
-    Swipe("Swipe", Icons.Filled.Style),
-    Activity("Activity", Icons.Filled.LocalFireDepartment),
-    Messages("Messages", Icons.Filled.ChatBubble),
-    Store("Store", Icons.Filled.ShoppingBag)
-}
 
 private enum class ProfileSurface {
     None,

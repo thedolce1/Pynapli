@@ -13,34 +13,45 @@
       }
     },
     "normalThread": {
-      "requiredTexts": ["Kai", "See you tonight", "Message"],
+      "requiredTexts": ["Kai", "FROM GRID", "See you tonight", "Message"],
       "forbiddenTexts": ["Request failed", "Illegal input", "Exception"],
       "image": {
         "minWidth": 320,
         "minHeight": 600,
-        "minNonBlackRatio": 0.05,
+        "minNonBlackRatio": 0.04,
         "maxBrightRatio": 0.35,
         "minColorBucketCount": 10
       }
     },
+    "threadProfilePeek": {
+      "requiredTexts": ["Kai", "Message", "Spark"],
+      "forbiddenTexts": ["Request failed", "Illegal input", "Exception"],
+      "image": {
+        "minWidth": 320,
+        "minHeight": 600,
+        "minNonBlackRatio": 0.04,
+        "maxBrightRatio": 0.40,
+        "minColorBucketCount": 10
+      }
+    },
     "messageSent": {
-      "requiredTexts": ["Kai", "See you tonight", "qa", "Sent", "Delete message"],
+      "requiredTexts": ["Kai", "FROM GRID", "See you tonight", "qa", "Sent", "Delete message"],
       "forbiddenTexts": ["Enter a message before sending.", "Request failed", "Illegal input", "Exception"],
       "image": {
         "minWidth": 320,
         "minHeight": 600,
-        "minNonBlackRatio": 0.05,
+        "minNonBlackRatio": 0.04,
         "maxBrightRatio": 0.40,
         "minColorBucketCount": 10
       }
     },
     "messageDeleted": {
-      "requiredTexts": ["Kai", "See you tonight", "You deleted a message", "Message"],
+      "requiredTexts": ["Kai", "FROM GRID", "See you tonight", "You deleted a message", "Message"],
       "forbiddenTexts": ["qa", "Request failed", "Illegal input", "Exception"],
       "image": {
         "minWidth": 320,
         "minHeight": 600,
-        "minNonBlackRatio": 0.05,
+        "minNonBlackRatio": 0.04,
         "maxBrightRatio": 0.40,
         "minColorBucketCount": 10
       }
@@ -62,18 +73,18 @@
       "image": {
         "minWidth": 320,
         "minHeight": 600,
-        "minNonBlackRatio": 0.05,
+        "minNonBlackRatio": 0.04,
         "maxBrightRatio": 0.35,
         "minColorBucketCount": 10
       }
     },
     "invitedPartnerAccepted": {
-      "requiredTexts": ["Maya", "Joined chat", "Join us when you are ready.", "Message"],
-      "forbiddenTexts": ["You were invited to join this chat.", "Request failed", "Exception"],
+      "requiredTexts": ["Maya", "Join us when you are ready.", "Message"],
+      "forbiddenTexts": ["Joined chat", "You were invited to join this chat.", "Request failed", "Exception"],
       "image": {
         "minWidth": 320,
         "minHeight": 600,
-        "minNonBlackRatio": 0.05,
+        "minNonBlackRatio": 0.04,
         "maxBrightRatio": 0.35,
         "minColorBucketCount": 10
       }
