@@ -1,6 +1,5 @@
 package com.pynapli.app.swipe
 
-import androidx.compose.runtime.Immutable
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.MatchDto
@@ -8,50 +7,10 @@ import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
-import com.pynapli.shared.network.dto.SwipeRewindResponseDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlin.random.Random
-
-@Immutable
-data class SwipeUiState(
-    val deckSessionId: String? = null,
-    val cards: List<SwipeCardDto> = emptyList(),
-    val filters: List<SwipeFilterUi> = defaultSwipeFilters,
-    val swipeFilters: SwipeFilters = SwipeFilters.defaults,
-    val isLoading: Boolean = false,
-    val isSubmitting: Boolean = false,
-    val isRewinding: Boolean = false,
-    val isPaging: Boolean = false,
-    val nextCursor: String? = null,
-    val adSupported: Boolean = false,
-    val pendingActionCount: Int = 0,
-    val pendingActionLimit: Int = MAX_PENDING_ACTIONS,
-    val paywallMessage: String? = null,
-    val errorCode: String? = null,
-    val errorMessage: String? = null,
-    val pendingMatch: MatchDto? = null
-) {
-    val topCard: SwipeCardDto? get() = cards.firstOrNull()
-    val hasMore: Boolean get() = cards.isNotEmpty() || nextCursor != null
-    val actionQueueFull: Boolean get() = pendingActionCount >= pendingActionLimit
-}
-
-@Immutable
-data class SwipeFilterUi(
-    val type: SwipeFilterType,
-    val label: String,
-    val active: Boolean,
-    val locked: Boolean = false
-)
-
-enum class SwipeFilterType {
-    ForYou,
-    Linked,
-    Age
-}
 
 class SwipeStateHolder(
     private val repository: SwipeRepository,
@@ -536,102 +495,4 @@ class SampleSwipeRepository : SwipeRepository {
 
     override suspend fun rewind(): AppResult<SwipeRewindUi?> =
         AppResult.Success(null)
-}
-
-@Immutable
-data class SwipeDeckUi(
-    val deckSessionId: String? = null,
-    val cards: List<SwipeCardDto>,
-    val nextCursor: String? = null,
-    val adSupported: Boolean = false,
-    val advancedFiltersApplied: Boolean = false
-)
-
-@Immutable
-data class SwipeRewindUi(
-    val deckSessionId: String,
-    val card: SwipeCardDto
-)
-
-@Immutable
-data class QueuedSwipeAction(
-    val actionId: String,
-    val deckSessionId: String?,
-    val card: SwipeCardDto,
-    val action: String,
-    val noteText: String? = null
-)
-
-private fun QueuedSwipeAction.paywallMessageFor(errorCode: String): String? =
-    when (errorCode) {
-        "ENTITLEMENT_REQUIRED" -> if (action == SwipeAction.INTRO_NOTE) {
-            "Intro Notes are included with Social or Select."
-        } else {
-            "Social or Select is required."
-        }
-        "PINEAPPLE_LIKE_INVENTORY_REQUIRED" -> "Pineapple Likes are scarce high-intent signals."
-        else -> null
-    }
-
-private fun SwipeRewindResponseDto.toUi(): SwipeRewindUi? {
-    val restoredCard = card ?: return null
-    if (!rewound) return null
-    return SwipeRewindUi(deckSessionId = deckSessionId, card = restoredCard)
-}
-
-private fun List<SwipeCardDto>.withRestoredTopCard(card: SwipeCardDto): List<SwipeCardDto> =
-    if (any { it.userId == card.userId }) {
-        this
-    } else {
-        listOf(card) + this
-    }
-
-internal val defaultSwipeFilters = listOf(
-    SwipeFilterUi(SwipeFilterType.ForYou, "For You", active = true),
-    SwipeFilterUi(SwipeFilterType.Linked, "Linked", active = false),
-    SwipeFilterUi(SwipeFilterType.Age, "Age", active = false)
-)
-
-internal fun List<SwipeFilterUi>.withActiveFilter(type: SwipeFilterType): List<SwipeFilterUi> =
-    map { filter -> filter.copy(active = filter.type == type) }
-
-internal fun List<SwipeFilterUi>.withPaidLocks(adSupported: Boolean): List<SwipeFilterUi> =
-    map { filter ->
-        filter.copy(
-            locked = when (filter.type) {
-                SwipeFilterType.ForYou -> false
-                SwipeFilterType.Linked,
-                SwipeFilterType.Age -> adSupported
-            }
-        )
-    }
-
-internal fun SwipeFilterType.toPresetFilters(): SwipeFilters = when (this) {
-    SwipeFilterType.ForYou -> SwipeFilters.forYou
-    SwipeFilterType.Linked -> SwipeFilters.linkedOnly
-    SwipeFilterType.Age -> SwipeFilters.ageRange
-}
-
-private const val INTRO_NOTE_MAX_LENGTH = 140
-private const val MAX_PENDING_ACTIONS = 10
-private const val LOAD_MORE_THRESHOLD = 3
-
-internal fun newSwipeActionId(random: Random = Random.Default): String {
-    val bytes = random.nextBytes(16)
-    bytes[6] = ((bytes[6].toInt() and 0x0f) or 0x40).toByte()
-    bytes[8] = ((bytes[8].toInt() and 0x3f) or 0x80).toByte()
-    val hex = bytes.joinToString(separator = "") { byte ->
-        (byte.toInt() and 0xff).toString(16).padStart(2, '0')
-    }
-    return buildString(36) {
-        append(hex.substring(0, 8))
-        append('-')
-        append(hex.substring(8, 12))
-        append('-')
-        append(hex.substring(12, 16))
-        append('-')
-        append(hex.substring(16, 20))
-        append('-')
-        append(hex.substring(20, 32))
-    }
 }
