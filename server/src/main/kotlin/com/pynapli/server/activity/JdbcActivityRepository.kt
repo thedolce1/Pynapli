@@ -2,7 +2,6 @@ package com.pynapli.server.activity
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.sql.ResultSet
 import java.sql.Timestamp
 import java.time.Duration
 import java.util.UUID
@@ -162,7 +161,7 @@ class JdbcActivityRepository(
                     statement.executeQuery().use { rs ->
                         buildList {
                             while (rs.next()) {
-                                add(rs.toActivityEventRecord())
+                                add(JdbcActivityRowMappers.activityEvent(rs))
                             }
                         }
                     }
@@ -177,15 +176,7 @@ class JdbcActivityRepository(
                     statement.setObject(1, recipientUserId)
                     statement.executeQuery().use { rs ->
                         rs.next()
-                        ActivitySummaryRecord(
-                            profileViewCount = rs.getInt("profile_view_count"),
-                            flirtCount = rs.getInt("flirt_count"),
-                            likeCount = rs.getInt("like_count"),
-                            matchCount = rs.getInt("match_count"),
-                            albumRequestCount = rs.getInt("album_request_count"),
-                            partnerInviteCount = rs.getInt("partner_invite_count"),
-                            latestBadgeOccurredAt = rs.getTimestamp("latest_badge_occurred_at")?.toInstant()
-                        )
+                        JdbcActivityRowMappers.summary(rs)
                     }
                 }
             }
@@ -248,25 +239,6 @@ class JdbcActivityRepository(
                 }
             }
         }
-    }
-
-    private fun ResultSet.toActivityEventRecord(): ActivityEventRecord {
-        val distanceMeters = getDouble("distance_meters").takeUnless { wasNull() }
-        return ActivityEventRecord(
-            eventId = getObject("event_id", UUID::class.java),
-            type = getString("event_type"),
-            actorUserId = getObject("actor_user_id", UUID::class.java),
-            actorDisplayName = getString("actor_display_name"),
-            actorProfilePhotoMediaAssetId = getObject("actor_profile_photo_media_asset_id", UUID::class.java),
-            count = getInt("aggregate_count"),
-            occurredAt = getTimestamp("occurred_at").toInstant(),
-            seen = getBoolean("seen"),
-            showDistance = getBoolean("actor_show_distance"),
-            distanceMeters = distanceMeters,
-            albumRequestStatus = getString("album_request_status"),
-            matchId = getString("match_id"),
-            conversationId = getString("conversation_id")
-        )
     }
 
     companion object {
