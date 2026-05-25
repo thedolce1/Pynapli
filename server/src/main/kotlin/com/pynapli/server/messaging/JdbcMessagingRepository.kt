@@ -3,7 +3,6 @@ package com.pynapli.server.messaging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
-import java.sql.ResultSet
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -12,24 +11,6 @@ import javax.sql.DataSource
 class JdbcMessagingRepository(
     private val dataSource: DataSource
 ) : MessagingRepository {
-    private enum class ParticipantStatus {
-        None,
-        Active,
-        Invited,
-        Inactive
-    }
-
-    private enum class PartnerInviteUserRole {
-        None,
-        InvitedPartner,
-        ThirdPartyApprover
-    }
-
-    private data class GridMessagePolicy(
-        val allowGridMessages: Boolean,
-        val gridMessagePolicy: String
-    )
-
     override suspend fun listConversations(userId: UUID, limit: Int): List<ConversationRecord> =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
@@ -935,17 +916,6 @@ class JdbcMessagingRepository(
             }
         }
 
-    private fun ResultSet.toMessageRecord(deliveryStatus: String): MessageRecord = MessageRecord(
-        messageId = getObject("id", UUID::class.java),
-        conversationId = getObject("conversation_id", UUID::class.java),
-        senderUserId = getObject("sender_user_id", UUID::class.java),
-        body = getString("body"),
-        createdAt = getTimestamp("created_at").toInstant(),
-        status = getString("moderation_status"),
-        deliveryStatus = deliveryStatus,
-        deletedAt = getTimestamp("deleted_at")?.toInstant()
-    )
-
     private fun Connection.insertMessageReviewQueue(
         messageId: UUID,
         senderUserId: UUID,
@@ -973,11 +943,6 @@ class JdbcMessagingRepository(
             statement.executeUpdate()
         }
     }
-
-    private fun MessageRecord.toCursor(): MessagePageCursor = MessagePageCursor(
-        createdAt = createdAt,
-        messageId = messageId
-    )
 
     private fun Connection.participantStatus(conversationId: UUID, userId: UUID): ParticipantStatus =
         prepareStatement(
@@ -1247,16 +1212,6 @@ class JdbcMessagingRepository(
         }
         touchConversation(conversationId)
     }
-
-    private fun ResultSet.toPartnerChatInviteRecord(): PartnerChatInviteRecord = PartnerChatInviteRecord(
-        inviteId = getObject("id", UUID::class.java),
-        threadId = getObject("thread_id", UUID::class.java),
-        inviterUserId = getObject("inviter_user_id", UUID::class.java),
-        invitedPartnerUserId = getObject("invited_partner_user_id", UUID::class.java),
-        thirdPartyStatus = getString("third_party_status"),
-        partnerStatus = getString("partner_status"),
-        createdAt = getTimestamp("created_at").toInstant()
-    )
 
     private fun Connection.markConversationGroup(conversationId: UUID) {
         prepareStatement(
