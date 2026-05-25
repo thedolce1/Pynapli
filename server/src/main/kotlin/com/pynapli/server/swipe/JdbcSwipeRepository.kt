@@ -844,78 +844,14 @@ class JdbcSwipeRepository(
         rewoundAt: Instant
     ): Boolean = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
-                // RETURNING consumed_inventory_id so we can refund the exact Pineapple
-                // Like premium_inventory row in the same transaction. Likes/Passes have
-                // a NULL inventory id and the refund step is a no-op for them.
-                val refundedInventoryId: UUID? = connection.prepareStatement(
-                    """
-                    UPDATE swipe_actions sa
-                    SET rewound_at = ?
-                    WHERE sa.id = ?
-                      AND sa.actor_user_id = ?
-                      AND sa.target_user_id = ?
-                      AND sa.rewound_at IS NULL
-                      AND sa.action IN ('like', 'pass', 'pineapple_like')
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM matches m
-                          WHERE (m.user_a = sa.actor_user_id AND m.user_b = sa.target_user_id)
-                             OR (m.user_a = sa.target_user_id AND m.user_b = sa.actor_user_id)
-                      )
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM safety_reports sr
-                          WHERE sr.reporter_user_id = sa.actor_user_id
-                            AND sr.reported_user_id = sa.target_user_id
-                      )
-                    RETURNING sa.consumed_inventory_id
-                    """.trimIndent()
-                ).use { statement ->
-                    statement.setTimestamp(1, Timestamp.from(rewoundAt))
-                    statement.setObject(2, actionId)
-                    statement.setObject(3, actorUserId)
-                    statement.setObject(4, targetUserId)
-                    statement.executeQuery().use { rs ->
-                        if (!rs.next()) {
-                            connection.rollback()
-                            return@withContext false
-                        }
-                        rs.getObject("consumed_inventory_id", UUID::class.java)
-                    }
-                }
-
-                if (refundedInventoryId != null) {
-                    // Atomic refund in the same TX as the rewound_at update. If the
-                    // referenced row was deleted (ON DELETE SET NULL nulled out the
-                    // pointer by then), the update touches 0 rows and we proceed —
-                    // the credit is effectively forfeited rather than rolled back.
-                    connection.prepareStatement(
-                        """
-                        UPDATE premium_inventory
-                        SET quantity = quantity + 1,
-                            updated_at = ?
-                        WHERE id = ?
-                        """.trimIndent()
-                    ).use { statement ->
-                        statement.setTimestamp(1, Timestamp.from(rewoundAt))
-                        statement.setObject(2, refundedInventoryId)
-                        statement.executeUpdate()
-                    }
-                }
-
-                connection.insertDeckSession(session)
-                connection.insertDeckCards(listOf(card))
-                connection.commit()
-                true
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
-            }
+            connection.rewindSwipeActionTransaction(
+                actionId = actionId,
+                actorUserId = actorUserId,
+                targetUserId = targetUserId,
+                session = session,
+                card = card,
+                rewoundAt = rewoundAt
+            )
         }
     }
 

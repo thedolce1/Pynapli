@@ -1,6 +1,8 @@
 package com.pynapli.server.swipe
 
 import java.sql.Connection
+import java.sql.Timestamp
+import java.time.Instant
 import java.util.UUID
 
 internal fun Connection.recordSwipeActionTransaction(
@@ -92,6 +94,36 @@ internal fun Connection.findSwipeActionById(actionId: UUID, actorUserId: UUID): 
         }
     }
 
+internal fun Connection.rewindSwipeActionTransaction(
+    actionId: UUID,
+    actorUserId: UUID,
+    targetUserId: UUID,
+    session: SwipeDeckSessionRecord,
+    card: SwipeDeckSessionCardRecord,
+    rewoundAt: Instant
+): Boolean {
+    val previousAutoCommit = autoCommit
+    autoCommit = false
+    try {
+        val rewoundAction = markSwipeActionRewound(actionId, actorUserId, targetUserId, rewoundAt)
+            ?: run {
+                rollback()
+                return false
+            }
+
+        refundPremiumInventory(rewoundAction.consumedInventoryId, rewoundAt)
+        insertDeckSession(session)
+        insertDeckCards(listOf(card))
+        commit()
+        return true
+    } catch (error: Throwable) {
+        rollback()
+        throw error
+    } finally {
+        autoCommit = previousAutoCommit
+    }
+}
+
 private fun Connection.insertSwipeAction(
     actionId: UUID,
     actorUserId: UUID,
@@ -118,7 +150,71 @@ private fun Connection.insertSwipeAction(
     statement.setObject(6, consumedInventoryId)
     statement.setObject(7, travelLocationId)
     statement.executeUpdate() > 0
+    }
+
+private fun Connection.markSwipeActionRewound(
+    actionId: UUID,
+    actorUserId: UUID,
+    targetUserId: UUID,
+    rewoundAt: Instant
+): RewoundSwipeAction? = prepareStatement(
+    """
+    UPDATE swipe_actions sa
+    SET rewound_at = ?
+    WHERE sa.id = ?
+      AND sa.actor_user_id = ?
+      AND sa.target_user_id = ?
+      AND sa.rewound_at IS NULL
+      AND sa.action IN ('like', 'pass', 'pineapple_like')
+      AND NOT EXISTS (
+          SELECT 1
+          FROM matches m
+          WHERE (m.user_a = sa.actor_user_id AND m.user_b = sa.target_user_id)
+             OR (m.user_a = sa.target_user_id AND m.user_b = sa.actor_user_id)
+      )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM safety_reports sr
+          WHERE sr.reporter_user_id = sa.actor_user_id
+            AND sr.reported_user_id = sa.target_user_id
+      )
+    RETURNING sa.consumed_inventory_id
+    """.trimIndent()
+).use { statement ->
+    statement.setTimestamp(1, Timestamp.from(rewoundAt))
+    statement.setObject(2, actionId)
+    statement.setObject(3, actorUserId)
+    statement.setObject(4, targetUserId)
+    statement.executeQuery().use { rs ->
+        if (rs.next()) {
+            RewoundSwipeAction(
+                consumedInventoryId = rs.getObject("consumed_inventory_id", UUID::class.java)
+            )
+        } else {
+            null
+        }
+    }
 }
+
+private fun Connection.refundPremiumInventory(inventoryId: UUID?, rewoundAt: Instant) {
+    if (inventoryId == null) return
+    prepareStatement(
+        """
+        UPDATE premium_inventory
+        SET quantity = quantity + 1,
+            updated_at = ?
+        WHERE id = ?
+        """.trimIndent()
+    ).use { statement ->
+        statement.setTimestamp(1, Timestamp.from(rewoundAt))
+        statement.setObject(2, inventoryId)
+        statement.executeUpdate()
+    }
+}
+
+private data class RewoundSwipeAction(
+    val consumedInventoryId: UUID?
+)
 
 private fun Connection.createMatchForMutualPositiveSwipe(
     actorUserId: UUID,
