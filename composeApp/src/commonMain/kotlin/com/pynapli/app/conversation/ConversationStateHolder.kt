@@ -4,17 +4,12 @@ import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
-import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
 import com.pynapli.shared.network.dto.MatchDto
-import com.pynapli.shared.network.dto.MessageDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlin.time.Clock
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 
 class ConversationStateHolder(
     private val repository: ConversationRepository
@@ -36,7 +31,7 @@ class ConversationStateHolder(
 
         when (val result = repository.createDirectConversation(card.id)) {
             is AppResult.Success -> {
-                val detail = result.value.withReadConversation()
+                val detail = result.value.withReadConversation(repository)
                 _state.update { current ->
                     current.copy(
                         detail = detail,
@@ -69,7 +64,7 @@ class ConversationStateHolder(
 
         when (val result = repository.createDirectConversation(match.matchedUserId, origin = "swipe")) {
             is AppResult.Success -> {
-                val detail = result.value.withReadConversation()
+                val detail = result.value.withReadConversation(repository)
                 _state.update { current ->
                     current.copy(
                         detail = detail,
@@ -107,7 +102,7 @@ class ConversationStateHolder(
 
         when (val result = repository.getConversationDetail(conversation.conversationId)) {
             is AppResult.Success -> {
-                val detail = result.value.withReadConversation()
+                val detail = result.value.withReadConversation(repository)
                 _state.update { current ->
                     current.copy(
                         detail = detail,
@@ -145,7 +140,7 @@ class ConversationStateHolder(
 
         when (val result = repository.getConversationDetail(conversationId)) {
             is AppResult.Success -> {
-                val detail = result.value.withReadConversation()
+                val detail = result.value.withReadConversation(repository)
                 _state.update { current ->
                     current.copy(
                         detail = detail,
@@ -175,7 +170,7 @@ class ConversationStateHolder(
 
         when (val result = repository.getConversationDetail(conversationId)) {
             is AppResult.Success -> {
-                val detail = result.value.withReadConversation()
+                val detail = result.value.withReadConversation(repository)
                 _state.update { existing ->
                     val existingDetail = existing.detail ?: return@update existing
                     if (existingDetail.conversation.conversationId != conversationId) {
@@ -376,7 +371,7 @@ class ConversationStateHolder(
 
         when (val result = repository.acceptPartnerInvite(conversationId)) {
             is AppResult.Success -> {
-                val detail = result.value.withReadConversation()
+                val detail = result.value.withReadConversation(repository)
                 _state.update { existing ->
                     existing.copy(
                         detail = detail,
@@ -438,7 +433,7 @@ class ConversationStateHolder(
             is AppResult.Success -> {
                 _state.update { existing ->
                     existing.copy(
-                        detail = detailResult.value.withReadConversation(),
+                        detail = detailResult.value.withReadConversation(repository),
                         titleOverride = detailResult.value.conversation.titleFor(existing.viewerUserId),
                         isRespondingToInvite = false,
                         partnerInviteFeedback = "Invite declined",
@@ -577,81 +572,4 @@ class ConversationStateHolder(
         _state.value = ConversationUiState()
     }
 
-    private fun ConversationDetailDto.withAppendedMessage(message: MessageDto): ConversationDetailDto =
-        copy(
-            conversation = conversation.copy(
-                lastMessage = message,
-                unreadCount = 0,
-                updatedAt = message.createdAt
-            ),
-            messages = messages + message
-        )
-
-    private fun ConversationDetailDto.withUpdatedMessage(message: MessageDto): ConversationDetailDto =
-        copy(
-            conversation = conversation.copy(
-                lastMessage = if (conversation.lastMessage?.messageId == message.messageId) {
-                    message
-                } else {
-                    conversation.lastMessage
-                }
-            ),
-            messages = messages.map { existing ->
-                if (existing.messageId == message.messageId) message else existing
-            }
-        )
-
-    private suspend fun ConversationDetailDto.withReadConversation(): ConversationDetailDto =
-        when (val readResult = repository.markConversationRead(conversation.conversationId)) {
-            is AppResult.Success -> copy(conversation = readResult.value)
-            is AppResult.Failure -> this
-        }
-
-    private fun ConversationDetailDto.withPrependedPage(page: ConversationDetailDto): ConversationDetailDto =
-        copy(
-            conversation = page.conversation,
-            messages = mergeMessages(page.messages + messages),
-            nextCursor = page.nextCursor
-        )
-
-    private fun ConversationDetailDto.withMergedMessagesFrom(existing: ConversationDetailDto): ConversationDetailDto =
-        copy(
-            messages = mergeMessages(existing.messages + messages),
-            nextCursor = existing.nextCursor ?: nextCursor
-        )
-
-    private fun mergeMessages(messages: List<MessageDto>): List<MessageDto> =
-        messages
-            .associateBy { message -> message.messageId }
-            .values
-            .sortedWith(compareBy<MessageDto> { message -> message.createdAt }.thenBy { message -> message.messageId })
 }
-
-internal fun ConversationDto.titleFor(viewerUserId: String?): String =
-    participants
-        .filter { participant -> participant.status in visibleConversationParticipantStatuses }
-        .filterNot { participant -> viewerUserId != null && participant.userId == viewerUserId }
-        .joinToString(", ") { participant -> participant.displayName }
-        .ifBlank { participants.firstOrNull()?.displayName ?: "Conversation" }
-
-private fun ConversationUiState.partnerInviteAcceptedFeedback(detail: ConversationDetailDto): String =
-    when {
-        isViewerInvited && detail.conversation.partnerInvite == null -> "Joined chat"
-        isViewerInvited -> "Invite accepted"
-        else -> "Invite approved"
-    }
-
-internal val visibleConversationParticipantStatuses = setOf(
-    ConversationParticipantStatus.ACTIVE,
-    ConversationParticipantStatus.INVITED
-)
-
-private const val TYPING_SIGNAL_THROTTLE_MS = 2_500L
-private const val TYPING_INDICATOR_TTL_MS = 6_000L
-
-@OptIn(ExperimentalTime::class)
-private fun currentTimeMillis(): Long = Clock.System.now().toEpochMilliseconds()
-
-@OptIn(ExperimentalTime::class)
-private fun parseInstantMillis(value: String): Long? =
-    runCatching { Instant.parse(value).toEpochMilliseconds() }.getOrNull()
