@@ -1,12 +1,8 @@
 package com.pynapli.app.swipe
 
 import com.pynapli.shared.core.result.AppResult
-import com.pynapli.shared.network.PynapliApiClient
-import com.pynapli.shared.network.dto.MatchDto
 import com.pynapli.shared.network.dto.SwipeAction
-import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeCardDto
-import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -399,100 +395,4 @@ class SwipeStateHolder(
 
     private fun String?.normalizedOwnerUserId(): String? =
         this?.trim()?.takeIf { it.isNotEmpty() }
-}
-
-interface SwipeRepository {
-    suspend fun loadDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckUi>
-
-    suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?>
-
-    suspend fun rewind(): AppResult<SwipeRewindUi?>
-}
-
-class ApiSwipeRepository(
-    private val apiClient: PynapliApiClient
-) : SwipeRepository {
-    override suspend fun loadDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckUi> =
-        when (val result = apiClient.querySwipeDeck(request)) {
-            is AppResult.Success -> AppResult.Success(
-                SwipeDeckUi(
-                    deckSessionId = result.value.deckSessionId,
-                    cards = result.value.items,
-                    nextCursor = result.value.nextCursor,
-                    adSupported = result.value.adSupported,
-                    advancedFiltersApplied = result.value.advancedFiltersApplied
-                )
-            )
-            is AppResult.Failure -> result
-        }
-
-    override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> =
-        when (
-            val result = apiClient.submitSwipeAction(
-                SwipeActionRequestDto(
-                    actionId = action.actionId,
-                    deckSessionId = action.deckSessionId.orEmpty(),
-                    cardToken = action.card.rankToken,
-                    targetUserId = action.card.userId,
-                    action = action.action,
-                    noteText = action.noteText
-                )
-            )
-        ) {
-            is AppResult.Success -> AppResult.Success(result.value.match)
-            is AppResult.Failure -> result
-        }
-
-    override suspend fun rewind(): AppResult<SwipeRewindUi?> =
-        when (val result = apiClient.rewindSwipeAction()) {
-            is AppResult.Success -> AppResult.Success(result.value.toUi())
-            is AppResult.Failure -> result
-        }
-}
-
-class SampleSwipeRepository : SwipeRepository {
-    private val cards = mutableListOf(
-        SwipeCardDto(
-            userId = "sample-1",
-            displayName = "Maya",
-            displayAge = 31,
-            distanceLabel = "800 m",
-            distanceMeters = 800,
-            photoUrl = null,
-            linkedPartner = com.pynapli.shared.network.dto.LinkedPartnerMiniDto(
-                userId = "sample-linked-1",
-                displayName = "Noa"
-            ),
-            rankToken = "swipe:sample:1"
-        ),
-        SwipeCardDto(
-            userId = "sample-2",
-            displayName = "Alex",
-            displayAge = 34,
-            distanceLabel = "1.2 km",
-            distanceMeters = 1_200,
-            photoUrl = null,
-            rankToken = "swipe:sample:2"
-        )
-    )
-
-    override suspend fun loadDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckUi> =
-        AppResult.Success(
-            SwipeDeckUi(
-                deckSessionId = "sample-session",
-                cards = cards.toList(),
-                nextCursor = null,
-                adSupported = true,
-                advancedFiltersApplied = request.lifestyleTags.isNotEmpty() ||
-                    request.logisticsTags.isNotEmpty()
-            )
-        )
-
-    override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
-        cards.removeAll { it.userId == action.card.userId }
-        return AppResult.Success(null)
-    }
-
-    override suspend fun rewind(): AppResult<SwipeRewindUi?> =
-        AppResult.Success(null)
 }
