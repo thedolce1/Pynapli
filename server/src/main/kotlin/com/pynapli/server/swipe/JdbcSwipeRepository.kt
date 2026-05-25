@@ -225,98 +225,20 @@ class JdbcSwipeRepository(
     override suspend fun findDeckSession(sessionId: UUID, viewerUserId: UUID): SwipeDeckSessionRecord? =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
-                connection.prepareStatement(
-                    """
-                    SELECT id,
-                           deck_session_token,
-                           deck_session_token_hash,
-                           viewer_user_id,
-                           scope_hash,
-                           radius_meters,
-                           page_limit,
-                           filter_payload::text AS filter_payload,
-                           generated_at,
-                           expires_at
-                    FROM swipe_deck_sessions
-                    WHERE id = ?
-                      AND viewer_user_id = ?
-                    """.trimIndent()
-                ).use { statement ->
-                    statement.setObject(1, sessionId)
-                    statement.setObject(2, viewerUserId)
-                    statement.executeQuery().use { rs ->
-                        if (!rs.next()) null else rs.toSwipeDeckSessionRecord()
-                    }
-                }
+                connection.findDeckSession(sessionId, viewerUserId)
             }
         }
 
     override suspend fun findDeckSessionState(sessionId: UUID, viewerUserId: UUID): SwipeDeckSessionState? =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
-                val session = connection.prepareStatement(
-                    """
-                    SELECT id,
-                           deck_session_token,
-                           deck_session_token_hash,
-                           viewer_user_id,
-                           scope_hash,
-                           radius_meters,
-                           page_limit,
-                           filter_payload::text AS filter_payload,
-                           generated_at,
-                           expires_at
-                    FROM swipe_deck_sessions
-                    WHERE id = ?
-                      AND viewer_user_id = ?
-                    """.trimIndent()
-                ).use { statement ->
-                    statement.setObject(1, sessionId)
-                    statement.setObject(2, viewerUserId)
-                    statement.executeQuery().use { rs ->
-                        if (!rs.next()) null else rs.toSwipeDeckSessionRecord()
-                    }
-                } ?: return@withContext null
-
-                val targetIds = connection.prepareStatement(
-                    """
-                    SELECT target_user_id
-                    FROM swipe_deck_cards
-                    WHERE deck_session_id = ?
-                    """.trimIndent()
-                ).use { statement ->
-                    statement.setObject(1, sessionId)
-                    statement.executeQuery().use { rs ->
-                        buildSet {
-                            while (rs.next()) {
-                                add(rs.getObject("target_user_id", UUID::class.java))
-                            }
-                        }
-                    }
-                }
-
-                SwipeDeckSessionState(session = session, targetUserIds = targetIds)
+                connection.findDeckSessionState(sessionId, viewerUserId)
             }
         }
 
     override suspend fun listDeckSessionTargetIds(sessionId: UUID): Set<UUID> = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            connection.prepareStatement(
-                """
-                SELECT target_user_id
-                FROM swipe_deck_cards
-                WHERE deck_session_id = ?
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, sessionId)
-                statement.executeQuery().use { rs ->
-                    buildSet {
-                        while (rs.next()) {
-                            add(rs.getObject("target_user_id", UUID::class.java))
-                        }
-                    }
-                }
-            }
+            connection.listDeckSessionTargetIds(sessionId)
         }
     }
 
@@ -328,34 +250,13 @@ class JdbcSwipeRepository(
         now: Instant
     ): Boolean = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            connection.prepareStatement(
-                """
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM swipe_deck_sessions s
-                    JOIN swipe_deck_cards c
-                      ON c.deck_session_id = s.id
-                    WHERE s.id = ?
-                      AND s.viewer_user_id = ?
-                      AND c.viewer_user_id = ?
-                      AND c.target_user_id = ?
-                      AND c.card_token_hash = ?
-                      AND s.expires_at > ?
-                      AND c.action_recorded_at IS NULL
-                )
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, sessionId)
-                statement.setObject(2, viewerUserId)
-                statement.setObject(3, viewerUserId)
-                statement.setObject(4, targetUserId)
-                statement.setString(5, cardTokenHash)
-                statement.setTimestamp(6, Timestamp.from(now))
-                statement.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getBoolean(1)
-                }
-            }
+            connection.isDeckCardActionable(
+                sessionId = sessionId,
+                cardTokenHash = cardTokenHash,
+                viewerUserId = viewerUserId,
+                targetUserId = targetUserId,
+                now = now
+            )
         }
     }
 
