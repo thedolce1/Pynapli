@@ -10,19 +10,18 @@ import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ExecutionException
 import javax.sql.DataSource
 
 class JdbcSwipeRepository(
     private val dataSource: DataSource,
-    private val rankCacheTtl: Duration = Duration.ofSeconds(5),
-    private val rankCacheMaxEntries: Int = 128,
+    rankCacheTtl: Duration = Duration.ofSeconds(5),
+    rankCacheMaxEntries: Int = 128,
     private val rankCacheWindow: Int = 128
 ) : SwipeRepository {
-    private val rankCache = ConcurrentHashMap<DeckRankCacheKey, CachedDeckRankRows>()
-    private val rankCacheInFlight = ConcurrentHashMap<DeckRankCacheKey, CompletableFuture<CachedDeckRankRows>>()
+    private val deckRankCache = JdbcSwipeDeckRankCache(
+        ttl = rankCacheTtl,
+        maxEntries = rankCacheMaxEntries
+    )
 
     override suspend fun queryDeck(
         viewerUserId: UUID,
@@ -150,9 +149,7 @@ class JdbcSwipeRepository(
 
         if (
             !filters.isRankCacheEligible() ||
-            rankCacheTtl.isZero ||
-            rankCacheTtl.isNegative ||
-            rankCacheMaxEntries <= 0
+            !deckRankCache.isEnabled()
         ) {
             return queryDeckRank(
                 viewerUserId = viewerUserId,
@@ -177,7 +174,7 @@ class JdbcSwipeRepository(
             filterKey = filters.rankCacheKey(),
             window = cacheWindow
         )
-        val cachedRows = loadRankCacheRows(cacheKey) {
+        val cachedRows = deckRankCache.load(cacheKey) {
             queryDeckRank(
                 viewerUserId = viewerUserId,
                 radiusMeters = radiusMeters,
@@ -387,51 +384,6 @@ class JdbcSwipeRepository(
                 rs.getBoolean(1)
             }
         }
-
-    private fun loadRankCacheRows(
-        cacheKey: DeckRankCacheKey,
-        loader: () -> List<DeckRankRow>
-    ): List<DeckRankRow> {
-        val now = Instant.now()
-        rankCache[cacheKey]?.let { cached ->
-            if (cached.expiresAt.isAfter(now)) return cached.rows
-            rankCache.remove(cacheKey, cached)
-        }
-
-        val newFuture = CompletableFuture<CachedDeckRankRows>()
-        val existingFuture = rankCacheInFlight.putIfAbsent(cacheKey, newFuture)
-        if (existingFuture != null) {
-            return try {
-                existingFuture.get().rows
-            } catch (error: ExecutionException) {
-                throw (error.cause ?: error)
-            }
-        }
-
-        try {
-            val loaded = CachedDeckRankRows(
-                rows = loader(),
-                expiresAt = now.plus(rankCacheTtl)
-            )
-            rankCache[cacheKey] = loaded
-            evictRankCache(now)
-            newFuture.complete(loaded)
-            return loaded.rows
-        } catch (error: Throwable) {
-            newFuture.completeExceptionally(error)
-            throw error
-        } finally {
-            rankCacheInFlight.remove(cacheKey, newFuture)
-        }
-    }
-
-    private fun evictRankCache(now: Instant) {
-        if (rankCache.size < rankCacheMaxEntries) return
-        rankCache.entries.removeIf { (_, cached) -> !cached.expiresAt.isAfter(now) }
-        if (rankCache.size >= rankCacheMaxEntries) {
-            rankCache.clear()
-        }
-    }
 
     private fun Connection.listActiveSwipedTargetIds(actorUserId: UUID, targetUserIds: Set<UUID>): Set<UUID> {
         if (targetUserIds.isEmpty()) return emptySet()
