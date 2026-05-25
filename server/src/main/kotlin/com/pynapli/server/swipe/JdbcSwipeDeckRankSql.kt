@@ -1,0 +1,686 @@
+package com.pynapli.server.swipe
+
+import com.pynapli.server.discovery.DiscoveryFilters
+import java.sql.Connection
+import java.util.UUID
+
+internal fun Connection.queryDeckRankNearestWindow(
+    viewerUserId: UUID,
+    radiusMeters: Int,
+    limit: Int,
+    filters: DiscoveryFilters,
+    excludedTargetUserIds: Set<UUID>,
+    userSpecificViewerId: UUID?
+): List<DeckRankRow> {
+    val candidateLimit = nearestCandidateWindowLimit(limit, filters)
+    val sql = """
+        WITH viewer_location AS (
+            SELECT ul.geom AS geom
+            FROM user_locations ul
+            WHERE ul.user_id = ?
+        ),
+        nearest_locations AS MATERIALIZED (
+            SELECT near.user_id,
+                   near.geom,
+                   ST_Distance(v.geom, near.geom) AS distance_meters,
+                   v.geom <-> near.geom AS distance_order
+            FROM viewer_location v
+            JOIN LATERAL (
+                SELECT user_id, geom
+                FROM user_locations
+                WHERE ST_DWithin(v.geom, geom, ?)
+                ORDER BY geom <-> v.geom
+                LIMIT ?
+            ) near ON true
+        )
+        SELECT u.id AS user_id,
+               COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+               p.display_age,
+               p.bio,
+               COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
+               p.verified_at IS NOT NULL AS verified,
+               ds.show_distance,
+               nl.distance_meters,
+               EXISTS (
+                   SELECT 1
+                   FROM boost_activations ba
+                   WHERE ba.user_id = u.id
+                     AND ba.status = 'active'
+                     AND ba.ends_at > now()
+               ) AS is_boosted,
+               false AS visiting,
+               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+        FROM nearest_locations nl
+        JOIN users u ON u.id = nl.user_id
+        JOIN profiles p ON p.user_id = u.id
+        JOIN discovery_settings ds ON ds.user_id = u.id
+        LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+        WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
+          AND u.status = 'active'
+          AND u.deleted_at IS NULL
+          AND p.visibility_status = 'visible'
+          AND ds.swipe_visible = true
+          AND ds.incognito = false
+          AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
+          AND (?::integer IS NULL OR p.display_age >= ?::integer)
+          AND (?::integer IS NULL OR p.display_age <= ?::integer)
+          AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
+          AND (?::boolean = false OR p.verified_at IS NOT NULL)
+          AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
+          AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
+          AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+          AND (
+              ?::boolean IS NULL
+              OR ?::boolean = EXISTS (
+                  SELECT 1
+                  FROM user_profile_links upl
+                  JOIN users linked_user
+                    ON linked_user.id = upl.linked_user_id
+                  JOIN profiles linked_profile
+                    ON linked_profile.user_id = linked_user.id
+                  JOIN discovery_settings linked_ds
+                    ON linked_ds.user_id = linked_user.id
+                  LEFT JOIN account_risk_states linked_risk
+                    ON linked_risk.user_id = linked_user.id
+                  WHERE upl.user_id = u.id
+                    AND upl.status = 'active'
+                    AND upl.unlinked_at IS NULL
+                    AND linked_user.status = 'active'
+                    AND linked_user.deleted_at IS NULL
+                    AND linked_profile.visibility_status = 'visible'
+                    AND linked_ds.incognito = false
+                    AND COALESCE(linked_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM user_blocks ub
+                        WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
+                           OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
+                    )
+              )
+          )
+          AND (
+              ?::uuid IS NULL
+              OR NOT EXISTS (
+                  SELECT 1 FROM swipe_actions sa
+                  WHERE sa.actor_user_id = ?::uuid
+                    AND sa.target_user_id = u.id
+                    AND sa.rewound_at IS NULL
+              )
+          )
+          AND (
+              ?::boolean = false
+              OR u.id <> ALL(?::uuid[])
+          )
+        ORDER BY soft_score DESC, nl.distance_order
+        LIMIT ?
+    """.trimIndent()
+
+    return prepareStatement(sql).use { statement ->
+        val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
+        val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
+        val intents = createArrayOf("text", filters.intents.toTypedArray())
+        val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
+        val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+        val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
+        statement.setObject(1, viewerUserId)
+        statement.setDouble(2, radiusMeters.toDouble())
+        statement.setInt(3, candidateLimit)
+        statement.setBoolean(4, filters.verifiedPreferred)
+        statement.setNullableUuid(5, userSpecificViewerId)
+        statement.setNullableUuid(6, userSpecificViewerId)
+        statement.setObject(7, filters.minimumAge)
+        statement.setObject(8, filters.minimumAge)
+        statement.setObject(9, filters.maximumAge)
+        statement.setObject(10, filters.maximumAge)
+        statement.setArray(11, contexts)
+        statement.setArray(12, contexts)
+        statement.setBoolean(13, filters.verifiedOnly)
+        statement.setBoolean(14, filters.facePhotoVerifiedOnly)
+        statement.setBoolean(15, filters.ageVerifiedOnly)
+        statement.setArray(16, styles)
+        statement.setArray(17, styles)
+        statement.setArray(18, intents)
+        statement.setArray(19, intents)
+        statement.setArray(20, lifestyleTags)
+        statement.setArray(21, lifestyleTags)
+        statement.setArray(22, logisticsTags)
+        statement.setArray(23, logisticsTags)
+        statement.setObject(24, filters.linkedOnly)
+        statement.setObject(25, filters.linkedOnly)
+        statement.setObject(26, viewerUserId)
+        statement.setObject(27, viewerUserId)
+        statement.setNullableUuid(28, userSpecificViewerId)
+        statement.setNullableUuid(29, userSpecificViewerId)
+        statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
+        statement.setArray(31, excludedIds)
+        statement.setInt(32, limit)
+        statement.executeDeckRankRows()
+    }.sortedByDescending { it.isBoosted }
+}
+
+internal fun Connection.queryDeckRankForcedTargetsLocal(
+    viewerUserId: UUID,
+    radiusMeters: Int,
+    limit: Int,
+    filters: DiscoveryFilters,
+    excludedTargetUserIds: Set<UUID>,
+    userSpecificViewerId: UUID?,
+    forcedTargetUserIds: Set<UUID>
+): List<DeckRankRow> {
+    val sql = """
+        WITH viewer_location AS (
+            SELECT geom
+            FROM user_locations
+            WHERE user_id = ?
+        ),
+        forced_locations AS MATERIALIZED (
+            SELECT ul.user_id,
+                   ul.geom,
+                   ST_Distance(v.geom, ul.geom) AS distance_meters,
+                   v.geom <-> ul.geom AS distance_order
+            FROM viewer_location v
+            JOIN user_locations ul
+              ON ul.user_id = ANY(?::uuid[])
+             AND ST_DWithin(v.geom, ul.geom, ?)
+        )
+        SELECT u.id AS user_id,
+               COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+               p.display_age,
+               p.bio,
+               COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
+               p.verified_at IS NOT NULL AS verified,
+               ds.show_distance,
+               fl.distance_meters,
+               EXISTS (
+                   SELECT 1
+                   FROM boost_activations ba
+                   WHERE ba.user_id = u.id
+                     AND ba.status = 'active'
+                     AND ba.ends_at > now()
+               ) AS is_boosted,
+               false AS visiting,
+               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+        FROM forced_locations fl
+        JOIN users u ON u.id = fl.user_id
+        JOIN profiles p ON p.user_id = u.id
+        JOIN discovery_settings ds ON ds.user_id = u.id
+        LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+        WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
+          AND u.status = 'active'
+          AND u.deleted_at IS NULL
+          AND p.visibility_status = 'visible'
+          AND ds.swipe_visible = true
+          AND ds.incognito = false
+          AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
+          AND (?::integer IS NULL OR p.display_age >= ?::integer)
+          AND (?::integer IS NULL OR p.display_age <= ?::integer)
+          AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
+          AND (?::boolean = false OR p.verified_at IS NOT NULL)
+          AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
+          AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
+          AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+          AND (
+              ?::uuid IS NULL
+              OR NOT EXISTS (
+                  SELECT 1 FROM swipe_actions sa
+                  WHERE sa.actor_user_id = ?::uuid
+                    AND sa.target_user_id = u.id
+                    AND sa.rewound_at IS NULL
+              )
+          )
+          AND (
+              ?::boolean = false
+              OR u.id <> ALL(?::uuid[])
+          )
+        ORDER BY soft_score DESC, fl.distance_order
+        LIMIT ?
+    """.trimIndent()
+
+    return prepareStatement(sql).use { statement ->
+        val forcedIds = createArrayOf("uuid", forcedTargetUserIds.toTypedArray())
+        val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
+        val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
+        val intents = createArrayOf("text", filters.intents.toTypedArray())
+        val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
+        val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+        val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
+        statement.setObject(1, viewerUserId)
+        statement.setArray(2, forcedIds)
+        statement.setDouble(3, radiusMeters.toDouble())
+        statement.setBoolean(4, filters.verifiedPreferred)
+        statement.setNullableUuid(5, userSpecificViewerId)
+        statement.setNullableUuid(6, userSpecificViewerId)
+        statement.setObject(7, filters.minimumAge)
+        statement.setObject(8, filters.minimumAge)
+        statement.setObject(9, filters.maximumAge)
+        statement.setObject(10, filters.maximumAge)
+        statement.setArray(11, contexts)
+        statement.setArray(12, contexts)
+        statement.setBoolean(13, filters.verifiedOnly)
+        statement.setBoolean(14, filters.facePhotoVerifiedOnly)
+        statement.setBoolean(15, filters.ageVerifiedOnly)
+        statement.setArray(16, styles)
+        statement.setArray(17, styles)
+        statement.setArray(18, intents)
+        statement.setArray(19, intents)
+        statement.setArray(20, lifestyleTags)
+        statement.setArray(21, lifestyleTags)
+        statement.setArray(22, logisticsTags)
+        statement.setArray(23, logisticsTags)
+        statement.setNullableUuid(24, userSpecificViewerId)
+        statement.setNullableUuid(25, userSpecificViewerId)
+        statement.setBoolean(26, excludedTargetUserIds.isNotEmpty())
+        statement.setArray(27, excludedIds)
+        statement.setInt(28, limit)
+        statement.executeDeckRankRows()
+    }.sortedByDescending { it.isBoosted }
+}
+
+internal fun Connection.queryDeckRankForcedTargets(
+    viewerUserId: UUID,
+    radiusMeters: Int,
+    limit: Int,
+    filters: DiscoveryFilters,
+    excludedTargetUserIds: Set<UUID>,
+    userSpecificViewerId: UUID?,
+    forcedTargetUserIds: Set<UUID>,
+    includeTravelLocations: Boolean
+): List<DeckRankRow> {
+    if (!includeTravelLocations) {
+        return queryDeckRankForcedTargetsLocal(
+            viewerUserId = viewerUserId,
+            radiusMeters = radiusMeters,
+            limit = limit,
+            filters = filters,
+            excludedTargetUserIds = excludedTargetUserIds,
+            userSpecificViewerId = userSpecificViewerId,
+            forcedTargetUserIds = forcedTargetUserIds
+        )
+    }
+    val sql = """
+        WITH viewer_location AS (
+            SELECT COALESCE(tl.geom, ul.geom) AS geom
+            FROM user_locations ul
+            LEFT JOIN travel_locations tl
+              ON tl.user_id = ul.user_id
+             AND tl.status = 'active'
+             AND tl.active_until IS NULL
+            WHERE ul.user_id = ?
+        ),
+        forced_targets AS (
+            SELECT unnest(?::uuid[]) AS user_id
+        )
+        SELECT u.id AS user_id,
+               COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+               p.display_age,
+               p.bio,
+               COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
+               p.verified_at IS NOT NULL AS verified,
+               ds.show_distance,
+               ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
+               EXISTS (
+                   SELECT 1
+                   FROM boost_activations ba
+                   WHERE ba.user_id = u.id
+                     AND ba.status = 'active'
+                     AND ba.ends_at > now()
+               ) AS is_boosted,
+               target_travel.id IS NOT NULL AS visiting,
+               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+        FROM viewer_location v
+        JOIN forced_targets ft ON true
+        JOIN users u ON u.id = ft.user_id
+        JOIN user_locations ul ON ul.user_id = u.id
+        JOIN profiles p ON p.user_id = u.id
+        JOIN discovery_settings ds ON ds.user_id = u.id
+        LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+        LEFT JOIN travel_locations target_travel
+          ON target_travel.user_id = u.id
+         AND target_travel.status = 'active'
+         AND target_travel.active_until IS NULL
+        WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
+          AND u.status = 'active'
+          AND u.deleted_at IS NULL
+          AND p.visibility_status = 'visible'
+          AND ds.swipe_visible = true
+          AND ds.incognito = false
+          AND (target_travel.id IS NULL OR ds.visible_while_traveling = true)
+          AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
+          AND (
+              ST_DWithin(v.geom, ul.geom, ?)
+              OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
+          )
+          AND (?::integer IS NULL OR p.display_age >= ?::integer)
+          AND (?::integer IS NULL OR p.display_age <= ?::integer)
+          AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
+          AND (?::boolean = false OR p.verified_at IS NOT NULL)
+          AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
+          AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
+          AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+          AND (
+              ?::uuid IS NULL
+              OR NOT EXISTS (
+                  SELECT 1 FROM swipe_actions sa
+                  WHERE sa.actor_user_id = ?::uuid
+                    AND sa.target_user_id = u.id
+                    AND sa.rewound_at IS NULL
+              )
+          )
+          AND (
+              ?::boolean = false
+              OR u.id <> ALL(?::uuid[])
+          )
+        ORDER BY soft_score DESC, v.geom <-> COALESCE(target_travel.geom, ul.geom)
+        LIMIT ?
+    """.trimIndent()
+
+    return prepareStatement(sql).use { statement ->
+        val forcedIds = createArrayOf("uuid", forcedTargetUserIds.toTypedArray())
+        val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
+        val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
+        val intents = createArrayOf("text", filters.intents.toTypedArray())
+        val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
+        val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+        val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
+        statement.setObject(1, viewerUserId)
+        statement.setArray(2, forcedIds)
+        statement.setBoolean(3, filters.verifiedPreferred)
+        statement.setNullableUuid(4, userSpecificViewerId)
+        statement.setNullableUuid(5, userSpecificViewerId)
+        statement.setDouble(6, radiusMeters.toDouble())
+        statement.setDouble(7, radiusMeters.toDouble())
+        statement.setObject(8, filters.minimumAge)
+        statement.setObject(9, filters.minimumAge)
+        statement.setObject(10, filters.maximumAge)
+        statement.setObject(11, filters.maximumAge)
+        statement.setArray(12, contexts)
+        statement.setArray(13, contexts)
+        statement.setBoolean(14, filters.verifiedOnly)
+        statement.setBoolean(15, filters.facePhotoVerifiedOnly)
+        statement.setBoolean(16, filters.ageVerifiedOnly)
+        statement.setArray(17, styles)
+        statement.setArray(18, styles)
+        statement.setArray(19, intents)
+        statement.setArray(20, intents)
+        statement.setArray(21, lifestyleTags)
+        statement.setArray(22, lifestyleTags)
+        statement.setArray(23, logisticsTags)
+        statement.setArray(24, logisticsTags)
+        statement.setNullableUuid(25, userSpecificViewerId)
+        statement.setNullableUuid(26, userSpecificViewerId)
+        statement.setBoolean(27, excludedTargetUserIds.isNotEmpty())
+        statement.setArray(28, excludedIds)
+        statement.setInt(29, limit)
+        statement.executeDeckRankRows()
+    }.sortedByDescending { it.isBoosted }
+}
+
+internal fun Connection.queryDeckRank(
+    viewerUserId: UUID,
+    radiusMeters: Int,
+    limit: Int,
+    filters: DiscoveryFilters,
+    excludedTargetUserIds: Set<UUID>,
+    userSpecificViewerId: UUID?,
+    forcedTargetUserIds: Set<UUID> = emptySet(),
+    useNearestCandidateWindow: Boolean = false,
+    includeTravelLocations: Boolean = true
+): List<DeckRankRow> {
+    if (forcedTargetUserIds.isNotEmpty()) {
+        return queryDeckRankForcedTargets(
+            viewerUserId = viewerUserId,
+            radiusMeters = radiusMeters,
+            limit = limit,
+            filters = filters,
+            excludedTargetUserIds = excludedTargetUserIds,
+            userSpecificViewerId = userSpecificViewerId,
+            forcedTargetUserIds = forcedTargetUserIds,
+            includeTravelLocations = includeTravelLocations
+        )
+    }
+    if (useNearestCandidateWindow) {
+        val nearestRows = queryDeckRankNearestWindow(
+            viewerUserId = viewerUserId,
+            radiusMeters = radiusMeters,
+            limit = limit,
+            filters = filters,
+            excludedTargetUserIds = excludedTargetUserIds,
+            userSpecificViewerId = userSpecificViewerId
+        )
+        if (nearestRows.size >= limit) {
+            return nearestRows
+        }
+    }
+
+    // KNN spatial ordering via PostGIS `<->` operator. The GiST index on
+    // user_locations.geom can serve the ordering directly when `<->` is the
+    // sole ORDER BY clause — adding a CASE expression or a tiebreaker
+    // forces a full sort and defeats the optimization. So:
+    //   - `is_boosted` is returned as a SELECT column (cheap EXISTS) rather
+    //     than living in the ORDER BY; the Kotlin side re-shuffles boosted
+    //     users to the head of the page (spec L320: boost increases
+    //     impressions, not matches, so prioritizing within the local page
+    //     is sufficient).
+    //   - The previous `u.id ASC` tiebreaker is dropped; ST_Distance ties
+    //     on real coordinates are vanishingly rare and the tiebreaker
+    //     defeats the KNN index scan.
+    val sql = """
+        WITH viewer_location AS (
+            -- Passport/travel mode (SWIPE_IMPLEMENTATION_SPEC L339-354): an
+            -- active travel_locations row overrides GPS for deck ranking.
+            SELECT COALESCE(tl.geom, ul.geom) AS geom
+            FROM user_locations ul
+            LEFT JOIN travel_locations tl
+              ON tl.user_id = ul.user_id
+             AND tl.status = 'active'
+             AND tl.active_until IS NULL
+            WHERE ul.user_id = ?
+        )
+        SELECT u.id AS user_id,
+               COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+               p.display_age,
+               p.bio,
+               COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
+               p.verified_at IS NOT NULL AS verified,
+               ds.show_distance,
+               -- Distance shown to the viewer reflects where the target *appears*
+               -- to be — their travel point if active, else their real GPS.
+               ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
+               EXISTS (
+                   SELECT 1
+                   FROM boost_activations ba
+                   WHERE ba.user_id = u.id
+                     AND ba.status = 'active'
+                     AND ba.ends_at > now()
+               ) AS is_boosted,
+               -- SWIPE_IMPLEMENTATION_SPEC L348: target is "visiting" when
+               -- they have an active travel_locations row. The LEFT JOIN
+               -- below brings in `target_travel.id` only for rows in that
+               -- state — null means physically local.
+               target_travel.id IS NOT NULL AS visiting,
+               -- FILTERS_SPEC L406-417 ranking inputs (B4 v1):
+               -- +1 when verifiedPreferred is on AND the target is verified.
+               -- Intent/style scoring is deferred; they would lose signal on the
+               -- B3 relaxed pass (the relaxed filter set drops intents/styles, so
+               -- a CASE that piggybacks on the filter param would always score 0).
+               -- A v2 would carry separate "ranking hints" alongside filters.
+               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+        FROM viewer_location v
+        JOIN user_locations ul ON true
+        JOIN users u ON u.id = ul.user_id
+        JOIN profiles p ON p.user_id = u.id
+        JOIN discovery_settings ds ON ds.user_id = u.id
+        LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+        -- SWIPE_IMPLEMENTATION_SPEC L344-348: target-side travel override.
+        -- When a target has an active travel_locations row they appear in
+        -- decks centered on that destination (matches Tinder Passport's
+        -- "place yourself elsewhere" semantics), and the visiting flag fires.
+        LEFT JOIN travel_locations target_travel
+          ON target_travel.user_id = u.id
+         AND target_travel.status = 'active'
+         AND target_travel.active_until IS NULL
+        WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
+          AND u.status = 'active'
+          AND u.deleted_at IS NULL
+          AND p.visibility_status = 'visible'
+          AND ds.swipe_visible = true
+          AND ds.incognito = false
+          -- PROFILE_SETTINGS_SPEC L221-245 "Visible while traveling":
+          -- when a target is in travel mode AND opted out, they're hidden
+          -- from every discovery surface for the duration of the session.
+          AND (target_travel.id IS NULL OR ds.visible_while_traveling = true)
+          AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
+          -- OR keeps both ST_DWithin calls index-eligible. The first uses
+          -- the GiST index on user_locations.geom for the bulk of (non-
+          -- travelling) candidates; the second uses the GiST on
+          -- travel_locations.geom for the (much smaller) active-travel set.
+          AND (
+              ST_DWithin(v.geom, ul.geom, ?)
+              OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
+          )
+          AND (?::integer IS NULL OR p.display_age >= ?::integer)
+          AND (?::integer IS NULL OR p.display_age <= ?::integer)
+          AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
+          AND (?::boolean = false OR p.verified_at IS NOT NULL)
+          AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
+          AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
+          AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
+          AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+          AND (
+              ?::boolean IS NULL
+              OR ?::boolean = EXISTS (
+                  SELECT 1
+                  FROM user_profile_links upl
+                  JOIN users linked_user
+                    ON linked_user.id = upl.linked_user_id
+                  JOIN profiles linked_profile
+                    ON linked_profile.user_id = linked_user.id
+                  JOIN discovery_settings linked_ds
+                    ON linked_ds.user_id = linked_user.id
+                  LEFT JOIN account_risk_states linked_risk
+                    ON linked_risk.user_id = linked_user.id
+                  WHERE upl.user_id = u.id
+                    AND upl.status = 'active'
+                    AND upl.unlinked_at IS NULL
+                    AND linked_user.status = 'active'
+                    AND linked_user.deleted_at IS NULL
+                    AND linked_profile.visibility_status = 'visible'
+                    AND linked_ds.incognito = false
+                    AND COALESCE(linked_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM user_blocks ub
+                        WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
+                           OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
+                    )
+              )
+          )
+          AND (
+              ?::uuid IS NULL
+              OR NOT EXISTS (
+                  SELECT 1 FROM swipe_actions sa
+                  WHERE sa.actor_user_id = ?::uuid
+                    AND sa.target_user_id = u.id
+                    AND sa.rewound_at IS NULL
+              )
+          )
+          AND (
+              ?::boolean = false
+              OR u.id <> ALL(?::uuid[])
+          )
+          AND (
+              ?::boolean = false
+              OR u.id = ANY(?::uuid[])
+          )
+        -- KNN ORDER on a COALESCE'd expression can't use the GiST index
+        -- directly, so we accept a small in-memory sort over the (already
+        -- filtered) candidate set. The candidate set is bounded by the
+        -- ST_DWithin filter above, which IS index-driven.
+        ORDER BY soft_score DESC, v.geom <-> COALESCE(target_travel.geom, ul.geom)
+        LIMIT ?
+    """.trimIndent()
+
+    val rankedByDistance = prepareStatement(sql).use { statement ->
+        val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
+        val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
+        val intents = createArrayOf("text", filters.intents.toTypedArray())
+        val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
+        val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+        val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
+        val forcedIds = createArrayOf("uuid", forcedTargetUserIds.toTypedArray())
+        statement.setObject(1, viewerUserId)
+        // $2: verifiedPreferred soft_score signal (SELECT). Placed early in the SQL
+        // text so the SELECT param appears before the WHERE/ORDER BY params.
+        statement.setBoolean(2, filters.verifiedPreferred)
+        statement.setNullableUuid(3, userSpecificViewerId)
+        statement.setNullableUuid(4, userSpecificViewerId)
+        // $5 + $6: ST_DWithin radius bound twice — once against target's
+        // real GPS, once against target's travel point.
+        statement.setDouble(5, radiusMeters.toDouble())
+        statement.setDouble(6, radiusMeters.toDouble())
+        statement.setObject(7, filters.minimumAge)
+        statement.setObject(8, filters.minimumAge)
+        statement.setObject(9, filters.maximumAge)
+        statement.setObject(10, filters.maximumAge)
+        statement.setArray(11, contexts)
+        statement.setArray(12, contexts)
+        statement.setBoolean(13, filters.verifiedOnly)
+        statement.setBoolean(14, filters.facePhotoVerifiedOnly)
+        statement.setBoolean(15, filters.ageVerifiedOnly)
+        statement.setArray(16, styles)
+        statement.setArray(17, styles)
+        statement.setArray(18, intents)
+        statement.setArray(19, intents)
+        statement.setArray(20, lifestyleTags)
+        statement.setArray(21, lifestyleTags)
+        statement.setArray(22, logisticsTags)
+        statement.setArray(23, logisticsTags)
+        statement.setObject(24, filters.linkedOnly)
+        statement.setObject(25, filters.linkedOnly)
+        statement.setObject(26, viewerUserId)
+        statement.setObject(27, viewerUserId)
+        statement.setNullableUuid(28, userSpecificViewerId)
+        statement.setNullableUuid(29, userSpecificViewerId)
+        statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
+        statement.setArray(31, excludedIds)
+        statement.setBoolean(32, forcedTargetUserIds.isNotEmpty())
+        statement.setArray(33, forcedIds)
+        statement.setInt(34, limit)
+        statement.executeQuery().use { rs ->
+            buildList {
+                while (rs.next()) {
+                    add(
+                        DeckRankRow(
+                            userId = rs.getObject("user_id", UUID::class.java),
+                            displayName = rs.getString("display_name"),
+                            displayAge = rs.getInt("display_age").takeUnless { rs.wasNull() },
+                            bio = rs.getString("bio"),
+                            tags = rs.readStringArray("profile_tags"),
+                            verified = rs.getBoolean("verified"),
+                            visiting = rs.getBoolean("visiting"),
+                            showDistance = rs.getBoolean("show_distance"),
+                            distanceMeters = rs.getDouble("distance_meters"),
+                            isBoosted = rs.getBoolean("is_boosted"),
+                            softScore = rs.getInt("soft_score")
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    // Boosted users float to the head of the page, preserving distance order
+    // within each bucket. Stable sort: boosted=true first, then SQL order.
+    return rankedByDistance.sortedByDescending { it.isBoosted }
+}
