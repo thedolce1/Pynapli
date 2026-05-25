@@ -3,7 +3,6 @@ package com.pynapli.server.messaging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
-import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -101,40 +100,15 @@ class JdbcMessagingRepository(
                     return@withContext null
                 }
 
-                val messageId = messageIdFactory()
-                val message = connection.prepareStatement(
-                    """
-                    INSERT INTO messages (
-                        id,
-                        conversation_id,
-                        sender_user_id,
-                        body,
-                        moderation_status,
-                        body_fingerprint,
-                        safety_reason
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at
-                    """.trimIndent()
-                ).use { statement ->
-                    statement.setObject(1, messageId)
-                    statement.setObject(2, conversationId)
-                    statement.setObject(3, userId)
-                    statement.setString(4, body)
-                    statement.setString(5, moderationStatus)
-                    statement.setString(6, bodyFingerprint)
-                    statement.setString(7, safetyReason)
-                    statement.executeQuery().use { rs ->
-                        rs.next()
-                        rs.toMessageRecord(
-                            deliveryStatus = if (moderationStatus == MessageModerationStatus.HELD) {
-                                DELIVERY_HELD_FOR_REVIEW
-                            } else {
-                                DELIVERY_SENT
-                            }
-                        )
-                    }
-                }
+                val message = connection.insertMessage(
+                    messageId = messageIdFactory(),
+                    userId = userId,
+                    conversationId = conversationId,
+                    body = body,
+                    moderationStatus = moderationStatus,
+                    bodyFingerprint = bodyFingerprint,
+                    safetyReason = safetyReason
+                )
 
                 if (moderationStatus == MessageModerationStatus.HELD && safetyReason != null) {
                     connection.insertMessageReviewQueue(
@@ -145,33 +119,8 @@ class JdbcMessagingRepository(
                     )
                 }
 
-                connection.prepareStatement(
-                    """
-                    UPDATE conversations
-                    SET updated_at = ?
-                    WHERE id = ?
-                    """.trimIndent()
-                ).use { statement ->
-                    statement.setTimestamp(1, Timestamp.from(message.createdAt))
-                    statement.setObject(2, conversationId)
-                    statement.executeUpdate()
-                }
-
-                connection.prepareStatement(
-                    """
-            UPDATE conversation_participants
-            SET last_read_at = ?
-            WHERE conversation_id = ?
-              AND user_id = ?
-              AND left_at IS NULL
-              AND invitation_status = 'active'
-            """.trimIndent()
-                ).use { statement ->
-                    statement.setTimestamp(1, Timestamp.from(message.createdAt))
-                    statement.setObject(2, conversationId)
-                    statement.setObject(3, userId)
-                    statement.executeUpdate()
-                }
+                connection.touchConversationAt(conversationId, message.createdAt)
+                connection.markSenderReadAt(userId, conversationId, message.createdAt)
 
                 connection.commit()
                 message
@@ -188,38 +137,7 @@ class JdbcMessagingRepository(
         dataSource.connection.use { connection ->
             connection.autoCommit = false
             try {
-                val message = connection.prepareStatement(
-                    """
-                    UPDATE messages
-                    SET deleted_at = now()
-                    WHERE id = ?
-                      AND sender_user_id = ?
-                      AND deleted_at IS NULL
-                      AND moderation_status = 'visible'
-                      AND EXISTS (
-                          SELECT 1
-                          FROM conversation_participants cp
-                          WHERE cp.conversation_id = messages.conversation_id
-                            AND cp.user_id = ?
-                            AND cp.left_at IS NULL
-                            AND cp.invitation_status IN ('active', 'invited')
-                      )
-                    RETURNING id,
-                              conversation_id,
-                              sender_user_id,
-                              '' AS body,
-                              created_at,
-                              moderation_status,
-                              deleted_at
-                    """.trimIndent()
-                ).use { statement ->
-                    statement.setObject(1, messageId)
-                    statement.setObject(2, userId)
-                    statement.setObject(3, userId)
-                    statement.executeQuery().use { rs ->
-                        if (rs.next()) rs.toMessageRecord(deliveryStatus = DELIVERY_DELETED) else null
-                    }
-                }
+                val message = connection.deleteOwnVisibleMessage(userId, messageId)
 
                 if (message == null) {
                     connection.rollback()
@@ -244,52 +162,14 @@ class JdbcMessagingRepository(
         since: Instant
     ): Int = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            connection.prepareStatement(
-                """
-                SELECT COUNT(*) AS duplicate_count
-                FROM messages
-                WHERE sender_user_id = ?
-                  AND body_fingerprint = ?
-                  AND created_at >= ?
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, userId)
-                statement.setString(2, bodyFingerprint)
-                statement.setTimestamp(3, Timestamp.from(since))
-                statement.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getInt("duplicate_count")
-                }
-            }
+            connection.countRecentMessagesByFingerprint(userId, bodyFingerprint, since)
         }
     }
 
     override suspend fun hasSentMessageInConversation(userId: UUID, conversationId: UUID): Boolean =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
-                connection.prepareStatement(
-                    """
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM messages m
-                        JOIN conversation_participants cp
-                          ON cp.conversation_id = m.conversation_id
-                         AND cp.user_id = ?
-                         AND cp.left_at IS NULL
-                         AND cp.invitation_status = 'active'
-                        WHERE m.conversation_id = ?
-                          AND m.sender_user_id = ?
-                    )
-                    """.trimIndent()
-                ).use { statement ->
-                    statement.setObject(1, userId)
-                    statement.setObject(2, conversationId)
-                    statement.setObject(3, userId)
-                    statement.executeQuery().use { rs ->
-                        rs.next()
-                        rs.getBoolean(1)
-                    }
-                }
+                connection.hasSentMessageInConversation(userId, conversationId)
             }
         }
 
@@ -450,22 +330,7 @@ class JdbcMessagingRepository(
 
     override suspend fun leaveConversation(userId: UUID, conversationId: UUID): Boolean = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            val updated = connection.prepareStatement(
-                """
-                UPDATE conversation_participants
-                SET invitation_status = 'left',
-                    invitation_responded_at = COALESCE(invitation_responded_at, now()),
-                    left_at = now()
-                WHERE conversation_id = ?
-                  AND user_id = ?
-                  AND left_at IS NULL
-                  AND invitation_status IN ('active', 'invited')
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, conversationId)
-                statement.setObject(2, userId)
-                statement.executeUpdate()
-            }
+            val updated = connection.leaveConversationParticipant(userId, conversationId)
             if (updated > 0) connection.touchConversation(conversationId)
             updated > 0
         }
@@ -580,9 +445,6 @@ class JdbcMessagingRepository(
 
     companion object {
         private const val DEFAULT_MESSAGE_PAGE_LIMIT = 50
-        private const val DELIVERY_SENT = "sent"
-        private const val DELIVERY_HELD_FOR_REVIEW = "held_for_review"
-        private const val DELIVERY_DELETED = "deleted"
 
         private val CONVERSATION_QUERY = """
             SELECT c.kind,
