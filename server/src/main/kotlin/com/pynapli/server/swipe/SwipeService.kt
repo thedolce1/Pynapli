@@ -16,7 +16,6 @@ import com.pynapli.shared.network.dto.MatchesListResponseDto
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
-import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckResponseDto
 import com.pynapli.shared.network.dto.SwipeRewindResponseDto
@@ -41,6 +40,7 @@ class SwipeService(
 ) {
     private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver)
     private val sideEffects = SwipeActionSideEffects(activityService, notificationPublisher)
+    private val deckPageBuilder = SwipeDeckPageBuilder(deckTokenCodec, dtoMapper)
 
     suspend fun queryDeck(viewerUserId: UUID, request: SwipeDeckRequestDto): SwipeDeckResponseDto {
         // FILTERS_SPEC L356-365: dealbreaker keys must be on the allow-list; unknown keys
@@ -178,35 +178,15 @@ class SwipeService(
         val onlineUserIds = profile("swipe.deck.presence") {
             onlineUserIdsFor(presenceLookupIds)
         }
-        val pageItems = pageCards.mapIndexed { index, card ->
-            val position = startPosition + index
-            val cardToken = deckTokenCodec.issueCardToken(
-                deckSessionId = deckSession.deckSessionId,
-                viewerUserId = viewerUserId,
-                targetUserId = card.userId,
-                scopeHash = scopeHash,
-                generatedAt = deckSession.generatedAt,
-                expiresAt = deckSession.expiresAt,
-                position = position
-            )
-            SwipeDeckPageItem(
-                dto = dtoMapper.cardToDto(
-                    card = card,
-                    rankToken = cardToken,
-                    online = card.userId in onlineUserIds,
-                    onlineUserIds = onlineUserIds
-                ),
-                persistedCard = SwipeDeckSessionCardRecord(
-                    cardId = UUID.randomUUID(),
-                    sessionId = deckSession.sessionId,
-                    viewerUserId = viewerUserId,
-                    targetUserId = card.userId,
-                    cardTokenHash = deckTokenCodec.tokenHash(cardToken),
-                    position = position,
-                    dealtAt = now
-                )
-            )
-        }
+        val pageItems = deckPageBuilder.buildPageItems(
+            pageCards = pageCards,
+            deckSession = deckSession,
+            viewerUserId = viewerUserId,
+            scopeHash = scopeHash,
+            startPosition = startPosition,
+            onlineUserIds = onlineUserIds,
+            dealtAt = now
+        )
         profile("swipe.deck.session.upsert") {
             repository.upsertDeckSession(
                 session = deckSession.toSessionRecord(
@@ -528,11 +508,6 @@ class SwipeService(
             generatedAt = generatedAt,
             expiresAt = expiresAt
         )
-
-    private data class SwipeDeckPageItem(
-        val dto: SwipeCardDto,
-        val persistedCard: SwipeDeckSessionCardRecord
-    )
 
     companion object {
         private const val MIN_RADIUS_METERS = 1_000
