@@ -5,10 +5,8 @@ import com.pynapli.server.profiling.profile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
-import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.Timestamp
-import java.sql.Types
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -1259,69 +1257,6 @@ class JdbcSwipeRepository(
         }
     }
 
-    private data class DeckRankRow(
-        val userId: UUID,
-        val displayName: String,
-        val displayAge: Int?,
-        val bio: String?,
-        val tags: List<String>,
-        val verified: Boolean,
-        val visiting: Boolean,
-        val showDistance: Boolean,
-        val distanceMeters: Double,
-        val isBoosted: Boolean,
-        val softScore: Int
-    )
-
-    private data class DeckHydration(
-        val thumbnailMediaAssetId: UUID?,
-        val thumbnailMediaAssetIds: List<UUID>,
-        val linkedPartnerUserId: UUID?,
-        val linkedPartnerDisplayName: String?,
-        val linkedPartnerThumbnailMediaAssetId: UUID?
-    )
-
-    private data class DeckLocationCacheKey(
-        val longitudeE3: Int,
-        val latitudeE3: Int
-    )
-
-    private data class DeckRankCacheKey(
-        val location: DeckLocationCacheKey,
-        val radiusMeters: Int,
-        val filterKey: String,
-        val window: Int
-    )
-
-    private data class CachedDeckRankRows(
-        val rows: List<DeckRankRow>,
-        val expiresAt: Instant
-    )
-
-    private fun PreparedStatement.executeDeckRankRows(): List<DeckRankRow> =
-        executeQuery().use { rs ->
-            buildList {
-                while (rs.next()) {
-                    add(rs.readDeckRankRow())
-                }
-            }
-        }
-
-    private fun ResultSet.readDeckRankRow(): DeckRankRow =
-        DeckRankRow(
-            userId = getObject("user_id", UUID::class.java),
-            displayName = getString("display_name"),
-            displayAge = getInt("display_age").takeUnless { wasNull() },
-            bio = getString("bio"),
-            tags = readStringArray("profile_tags"),
-            verified = getBoolean("verified"),
-            visiting = getBoolean("visiting"),
-            showDistance = getBoolean("show_distance"),
-            distanceMeters = getDouble("distance_meters"),
-            isBoosted = getBoolean("is_boosted"),
-            softScore = getInt("soft_score")
-        )
-
     override suspend fun upsertDeckSession(
         session: SwipeDeckSessionRecord,
         cards: List<SwipeDeckSessionCardRecord>
@@ -2436,68 +2371,3 @@ class JdbcSwipeRepository(
 
 internal fun canonicalPair(a: UUID, b: UUID): Pair<UUID, UUID> =
     if (a.toString() < b.toString()) a to b else b to a
-
-private fun PreparedStatement.setNullableUuid(index: Int, value: UUID?) {
-    if (value == null) {
-        setNull(index, Types.OTHER)
-    } else {
-        setObject(index, value)
-    }
-}
-
-private fun DiscoveryFilters.isRankCacheEligible(): Boolean =
-    linkedOnly == null
-
-private fun DiscoveryFilters.rankCacheKey(): String =
-    buildString {
-        append(minimumAge ?: "")
-        append(';')
-        append(maximumAge ?: "")
-        append(';')
-        append(relationshipContexts.sorted().joinToString("|"))
-        append(';')
-        append(linkedOnly ?: "")
-        append(';')
-        append(verifiedOnly)
-        append(';')
-        append(facePhotoVerifiedOnly)
-        append(';')
-        append(ageVerifiedOnly)
-        append(';')
-        append(discoveryStyles.sorted().joinToString("|"))
-        append(';')
-        append(lifestyleTags.sorted().joinToString("|"))
-        append(';')
-        append(logisticsTags.sorted().joinToString("|"))
-        append(';')
-        append(tonightAvailableOnly)
-        append(';')
-        append(intents.sorted().joinToString("|"))
-        append(';')
-        append(verifiedPreferred)
-    }
-
-private fun nearestCandidateWindowLimit(limit: Int, filters: DiscoveryFilters): Int {
-    val multiplier = if (filters.hasAdvancedFilters || filters.verifiedPreferred) 20 else 8
-    return (limit * multiplier).coerceIn(limit, 1_500)
-}
-
-private fun ResultSet.readStringArray(column: String): List<String> {
-    val sqlArray = getArray(column) ?: return emptyList()
-    return try {
-        @Suppress("UNCHECKED_CAST")
-        (sqlArray.array as Array<String?>?)?.filterNotNull().orEmpty()
-    } finally {
-        sqlArray.free()
-    }
-}
-
-private fun ResultSet.readUuidArray(column: String): List<UUID> {
-    val sqlArray = getArray(column) ?: return emptyList()
-    return try {
-        @Suppress("UNCHECKED_CAST")
-        (sqlArray.array as Array<UUID?>?)?.filterNotNull().orEmpty()
-    } finally {
-        sqlArray.free()
-    }
-}
