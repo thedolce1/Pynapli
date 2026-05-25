@@ -126,8 +126,13 @@ class DiscoveryCursorCodec(
         private fun base64UrlEncode(bytes: ByteArray): String =
             Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 
-        private fun base64UrlDecode(value: String): ByteArray =
-            Base64.getUrlDecoder().decode(value)
+        private fun base64UrlDecode(value: String): ByteArray {
+            val decoded = Base64.getUrlDecoder().decode(value)
+            if (base64UrlEncode(decoded) != value) {
+                throw IllegalArgumentException("Non-canonical base64url cursor segment.")
+            }
+            return decoded
+        }
     }
 }
 
