@@ -17,7 +17,6 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 class SubscriptionService(
     private val repository: SubscriptionRepository,
@@ -29,16 +28,19 @@ class SubscriptionService(
     private val entitlementCacheTtl: Duration = Duration.ofSeconds(5),
     private val entitlementCacheMaxSize: Int = 10_000
 ) {
-    private val entitlementCache = ConcurrentHashMap<UUID, CachedEntitlement>()
+    private val entitlementCache = SubscriptionEntitlementCache(
+        ttl = entitlementCacheTtl,
+        maxSize = entitlementCacheMaxSize
+    )
 
     suspend fun getEntitlement(userId: UUID): SubscriptionEntitlementDto {
         val now = clock.instant()
-        cachedEntitlement(userId, now)?.let { return it }
+        entitlementCache.get(userId, now)?.let { return it }
 
         val entitlement = repository.findBestActiveEntitlement(userId, now)
             ?.let { SubscriptionEntitlementMapper.activeToDto(it) }
             ?: SubscriptionEntitlementMapper.free()
-        cacheEntitlement(userId, entitlement, now)
+        entitlementCache.put(userId, entitlement, now)
         return entitlement
     }
 
@@ -648,31 +650,8 @@ class SubscriptionService(
         return subscription
     }
 
-    private fun cachedEntitlement(userId: UUID, now: Instant): SubscriptionEntitlementDto? {
-        val cached = entitlementCache[userId] ?: return null
-        if (cached.expiresAt > now) return cached.entitlement
-        entitlementCache.remove(userId, cached)
-        return null
-    }
-
-    private fun cacheEntitlement(userId: UUID, entitlement: SubscriptionEntitlementDto, now: Instant) {
-        if (entitlementCacheTtl <= Duration.ZERO || entitlementCacheMaxSize <= 0) return
-        trimEntitlementCache(now)
-        entitlementCache[userId] = CachedEntitlement(
-            entitlement = entitlement,
-            expiresAt = now.plus(entitlementCacheTtl)
-        )
-    }
-
-    private fun trimEntitlementCache(now: Instant) {
-        if (entitlementCache.size < entitlementCacheMaxSize) return
-        entitlementCache.entries.removeIf { it.value.expiresAt <= now }
-        if (entitlementCache.size < entitlementCacheMaxSize) return
-        entitlementCache.keys.firstOrNull()?.let { entitlementCache.remove(it) }
-    }
-
     private fun invalidateEntitlement(userId: UUID) {
-        entitlementCache.remove(userId)
+        entitlementCache.invalidate(userId)
     }
 
     private fun VerifiedPlayStoreSubscriptionPurchase.toSubscriptionStatus(now: Instant): String {
@@ -702,11 +681,6 @@ class SubscriptionService(
         private const val PLAY_STORE_SYNC_MAX_LIMIT = 500
         private const val PLAY_STORE_PRODUCT_TYPE_SUBSCRIPTION = 1
     }
-
-    private data class CachedEntitlement(
-        val entitlement: SubscriptionEntitlementDto,
-        val expiresAt: Instant
-    )
 }
 
 class SubscriptionException(val code: String) : RuntimeException(code)
