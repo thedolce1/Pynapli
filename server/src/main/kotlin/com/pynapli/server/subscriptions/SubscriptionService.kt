@@ -32,6 +32,10 @@ class SubscriptionService(
         ttl = entitlementCacheTtl,
         maxSize = entitlementCacheMaxSize
     )
+    private val playStorePurchaseApplier = PlayStoreSubscriptionPurchaseApplier(
+        repository = repository,
+        invalidateEntitlement = entitlementCache::invalidate
+    )
 
     suspend fun getEntitlement(userId: UUID): SubscriptionEntitlementDto {
         val now = clock.instant()
@@ -201,14 +205,14 @@ class SubscriptionService(
                 pendingVerificationResponse(userId)
             }
             is PlayStorePurchaseVerificationResult.Verified -> {
-                val subscription = applyVerifiedPlayStoreSubscription(
+                val subscription = playStorePurchaseApplier.applyVerifiedPurchase(
                     userId = userId,
                     tier = tier,
                     purchase = verification.purchase,
                     verifiedAt = now
                 )
 
-                if (subscription.status in ACTIVE_SUBSCRIPTION_STATUSES) {
+                if (subscription.status in ACTIVE_PLAY_STORE_SUBSCRIPTION_STATUSES) {
                     SubscriptionPurchaseSyncResponseDto(
                         status = SubscriptionPurchaseSyncStatus.ACTIVE,
                         entitlement = getEntitlement(userId)
@@ -248,26 +252,16 @@ class SubscriptionService(
                 is PlayStorePurchaseVerificationResult.Invalid -> {
                     invalid++
                     revoked++
-                    repository.upsertVerifiedPlayStoreSubscriptionPurchase(
-                        userId = candidate.userId,
-                        productId = candidate.productId,
-                        purchaseToken = candidate.purchaseToken,
-                        orderId = null,
-                        tier = candidate.tier,
-                        status = "revoked",
+                    playStorePurchaseApplier.revokeStoredPurchase(
+                        stored = candidate,
                         externalStatus = verification.code,
-                        acknowledgementState = null,
-                        acknowledgedAt = null,
-                        currentPeriodStart = candidate.currentPeriodStart,
-                        currentPeriodEnd = candidate.currentPeriodEnd,
                         verifiedAt = now
                     )
-                    invalidateEntitlement(candidate.userId)
                 }
                 PlayStorePurchaseVerificationResult.VerificationUnavailable -> unavailable++
                 is PlayStorePurchaseVerificationResult.Verified -> {
                     verified++
-                    val subscription = applyVerifiedPlayStoreSubscription(
+                    val subscription = playStorePurchaseApplier.applyVerifiedPurchase(
                         userId = candidate.userId,
                         tier = candidate.tier,
                         purchase = verification.purchase,
@@ -479,21 +473,12 @@ class SubscriptionService(
         return when (verification) {
             is PlayStorePurchaseVerificationResult.Invalid -> {
                 if (stored != null) {
-                    repository.upsertVerifiedPlayStoreSubscriptionPurchase(
-                        userId = stored.userId,
-                        productId = stored.productId,
+                    playStorePurchaseApplier.revokeStoredPurchase(
+                        stored = stored,
                         purchaseToken = purchaseToken,
-                        orderId = null,
-                        tier = stored.tier,
-                        status = "revoked",
                         externalStatus = verification.code,
-                        acknowledgementState = null,
-                        acknowledgedAt = null,
-                        currentPeriodStart = stored.currentPeriodStart,
-                        currentPeriodEnd = stored.currentPeriodEnd,
                         verifiedAt = clock.instant()
                     )
-                    invalidateEntitlement(stored.userId)
                     repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "processed", verification.code)
                     PlayStoreRtdnProcessingResult(
                         status = "processed",
@@ -554,7 +539,7 @@ class SubscriptionService(
                         errorCode = "PURCHASE_NOT_LINKED"
                     )
                 }
-                val subscription = applyVerifiedPlayStoreSubscription(
+                val subscription = playStorePurchaseApplier.applyVerifiedPurchase(
                     userId = userId,
                     tier = tier,
                     purchase = purchase,
@@ -599,21 +584,13 @@ class SubscriptionService(
                 errorCode = "PURCHASE_NOT_LINKED"
             )
         }
-        repository.upsertVerifiedPlayStoreSubscriptionPurchase(
-            userId = stored.userId,
-            productId = stored.productId,
+        playStorePurchaseApplier.revokeStoredPurchase(
+            stored = stored,
             purchaseToken = purchaseToken,
             orderId = notification.orderId,
-            tier = stored.tier,
-            status = "revoked",
             externalStatus = "VOIDED_PURCHASE_REFUND_TYPE_${notification.refundType ?: 0}",
-            acknowledgementState = null,
-            acknowledgedAt = null,
-            currentPeriodStart = stored.currentPeriodStart,
-            currentPeriodEnd = stored.currentPeriodEnd,
             verifiedAt = clock.instant()
         )
-        invalidateEntitlement(stored.userId)
         repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "processed")
         return PlayStoreRtdnProcessingResult(
             status = "processed",
@@ -625,52 +602,11 @@ class SubscriptionService(
         )
     }
 
-    private suspend fun applyVerifiedPlayStoreSubscription(
-        userId: UUID,
-        tier: String,
-        purchase: VerifiedPlayStoreSubscriptionPurchase,
-        verifiedAt: Instant
-    ): SubscriptionRecord {
-        val subscriptionStatus = purchase.toSubscriptionStatus(verifiedAt)
-        val subscription = repository.upsertVerifiedPlayStoreSubscriptionPurchase(
-            userId = userId,
-            productId = purchase.productId,
-            purchaseToken = purchase.purchaseToken,
-            orderId = purchase.latestOrderId,
-            tier = tier,
-            status = subscriptionStatus,
-            externalStatus = purchase.subscriptionState,
-            acknowledgementState = purchase.acknowledgementState,
-            acknowledgedAt = if (purchase.isAcknowledged()) verifiedAt else null,
-            currentPeriodStart = purchase.currentPeriodStart,
-            currentPeriodEnd = purchase.currentPeriodEnd,
-            verifiedAt = verifiedAt
-        )
-        invalidateEntitlement(userId)
-        return subscription
-    }
-
     private fun invalidateEntitlement(userId: UUID) {
         entitlementCache.invalidate(userId)
     }
 
-    private fun VerifiedPlayStoreSubscriptionPurchase.toSubscriptionStatus(now: Instant): String {
-        if (currentPeriodEnd <= now) return "expired"
-        return when (subscriptionState) {
-            "SUBSCRIPTION_STATE_ACTIVE",
-            "SUBSCRIPTION_STATE_CANCELED" -> "active"
-            "SUBSCRIPTION_STATE_IN_GRACE_PERIOD" -> "grace"
-            "SUBSCRIPTION_STATE_EXPIRED" -> "expired"
-            "SUBSCRIPTION_STATE_REVOKED" -> "revoked"
-            else -> "pending"
-        }
-    }
-
-    private fun VerifiedPlayStoreSubscriptionPurchase.isAcknowledged(): Boolean =
-        acknowledgementState == "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED"
-
     companion object {
-        private val ACTIVE_SUBSCRIPTION_STATUSES = setOf("active", "grace")
         private val ADMIN_GRANTABLE_TIERS = setOf(SubscriptionTier.SOCIAL, SubscriptionTier.SELECT)
         private val ADMIN_GRANTABLE_SOURCES = setOf(EntitlementSource.ADMIN, EntitlementSource.PROMO)
         private val BOOST_DURATION: Duration = Duration.ofMinutes(30)
