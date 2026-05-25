@@ -35,7 +35,9 @@ class SubscriptionService(
         val now = clock.instant()
         cachedEntitlement(userId, now)?.let { return it }
 
-        val entitlement = repository.findBestActiveEntitlement(userId, now)?.toEntitlement() ?: freeEntitlement()
+        val entitlement = repository.findBestActiveEntitlement(userId, now)
+            ?.let { SubscriptionEntitlementMapper.activeToDto(it) }
+            ?: SubscriptionEntitlementMapper.free()
         cacheEntitlement(userId, entitlement, now)
         return entitlement
     }
@@ -402,95 +404,6 @@ class SubscriptionService(
             alreadyActive = !result.consumedInventory
         )
     }
-
-    private fun SubscriptionRecord.toEntitlement(): SubscriptionEntitlementDto =
-        paidEntitlement(
-            tier = tier,
-            source = EntitlementSource.OWN_SUBSCRIPTION,
-            sourceSubscriptionId = subscriptionId,
-            sourceUserId = userId,
-            linkedPartnerUserId = null,
-            startsAt = currentPeriodStart,
-            endsAt = currentPeriodEnd
-        )
-
-    private fun LinkedPartnerSubscriptionRecord.toEntitlement(): SubscriptionEntitlementDto =
-        paidEntitlement(
-            tier = subscription.tier,
-            source = EntitlementSource.LINKED_PARTNER_BENEFIT,
-            sourceSubscriptionId = subscription.subscriptionId,
-            sourceUserId = linkedPartnerUserId,
-            linkedPartnerUserId = linkedPartnerUserId,
-            startsAt = subscription.currentPeriodStart,
-            endsAt = subscription.currentPeriodEnd
-        )
-
-    private fun StoredEntitlementRecord.toEntitlement(): SubscriptionEntitlementDto =
-        paidEntitlement(
-            tier = tier,
-            source = source,
-            sourceSubscriptionId = sourceId,
-            sourceUserId = userId,
-            linkedPartnerUserId = null,
-            startsAt = startsAt,
-            endsAt = endsAt
-        )
-
-    private fun ActiveEntitlementRecord.toEntitlement(): SubscriptionEntitlementDto =
-        paidEntitlement(
-            tier = tier,
-            source = source,
-            sourceSubscriptionId = sourceSubscriptionId,
-            sourceUserId = sourceUserId,
-            linkedPartnerUserId = linkedPartnerUserId,
-            startsAt = startsAt,
-            endsAt = endsAt
-        )
-
-    private fun paidEntitlement(
-        tier: String,
-        source: String,
-        sourceSubscriptionId: UUID?,
-        sourceUserId: UUID,
-        linkedPartnerUserId: UUID?,
-        startsAt: Instant,
-        endsAt: Instant?
-    ): SubscriptionEntitlementDto =
-        SubscriptionEntitlementDto(
-            tier = tier,
-            source = source,
-            displayName = displayNameFor(tier),
-            adSupported = false,
-            linkedPartnerIncluded = true,
-            sourceSubscriptionId = sourceSubscriptionId?.toString(),
-            sourceUserId = sourceUserId.toString(),
-            linkedPartnerUserId = linkedPartnerUserId?.toString(),
-            startsAt = startsAt.toString(),
-            endsAt = endsAt?.toString()
-        )
-
-    private fun freeEntitlement(): SubscriptionEntitlementDto =
-        SubscriptionEntitlementDto(
-            tier = SubscriptionTier.FREE,
-            source = EntitlementSource.FREE,
-            displayName = "Pynapli Free",
-            adSupported = true,
-            linkedPartnerIncluded = false
-        )
-
-    private fun tierRank(tier: String): Int =
-        when (tier) {
-            SubscriptionTier.SELECT -> 2
-            SubscriptionTier.SOCIAL -> 1
-            else -> 0
-        }
-
-    private fun displayNameFor(tier: String): String =
-        when (tier) {
-            SubscriptionTier.SELECT -> "Pynapli Select"
-            SubscriptionTier.SOCIAL -> "Pynapli Social"
-            else -> "Pynapli Free"
-        }
 
     private fun tierForPlayStoreProduct(productId: String): String? =
         when (productId) {
