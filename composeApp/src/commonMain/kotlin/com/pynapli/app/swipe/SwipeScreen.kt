@@ -1,33 +1,14 @@
 package com.pynapli.app.swipe
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
-import coil3.SingletonImageLoader
-import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
-import com.pynapli.app.ads.AdPlacement
-import com.pynapli.app.ads.AdPlacementPolicy
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.toUi
 import com.pynapli.app.profile.ProfileDetailActionMode
@@ -70,8 +51,6 @@ fun SwipeScreen(
     var linkedPartnerPreviewCard by remember { mutableStateOf<SwipeCardDto?>(null) }
     var filtersSheetVisible by remember { mutableStateOf(false) }
     var travelSheetVisible by remember { mutableStateOf(false) }
-    val platformContext = LocalPlatformContext.current
-    val swipeImagePrefetchUrls = remember(state.cards) { planSwipeImagePrefetch(state.cards) }
 
     LaunchedEffect(stateHolder, viewerUserId) {
         stateHolder.load(ownerUserId = viewerUserId)
@@ -89,17 +68,7 @@ fun SwipeScreen(
         travelLocationStateHolder?.load()
     }
 
-    LaunchedEffect(swipeImagePrefetchUrls) {
-        if (swipeImagePrefetchUrls.isEmpty()) return@LaunchedEffect
-        val imageLoader = runCatching { SingletonImageLoader.get(platformContext) }.getOrNull() ?: return@LaunchedEffect
-        swipeImagePrefetchUrls.forEach { url ->
-            imageLoader.enqueue(
-                ImageRequest.Builder(platformContext)
-                    .data(url)
-                    .build()
-            )
-        }
-    }
+    SwipeImagePrefetchEffect(cards = state.cards)
 
     LaunchedEffect(state.pendingMatch, matchNotificationsEnabled) {
         if (!matchNotificationsEnabled && state.pendingMatch != null) {
@@ -115,124 +84,43 @@ fun SwipeScreen(
         profileDetailStateHolder.dismiss()
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag(SwipeTestTags.ROOT)
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 12.dp)
-    ) {
-        SwipeHeader(
-            activeFilterCount = state.swipeFilters.activeCount,
-            travelCityName = travelLocationState.current?.city,
-            onOpenFilters = { filtersSheetVisible = true },
-            onOpenTravel = { travelSheetVisible = true }
-        )
-        Spacer(Modifier.height(10.dp))
-        SwipeFilterRow(
-            filters = state.filters,
-            onFilterSelected = { filter -> scope.launch { stateHolder.selectFilter(filter) } }
-        )
-        state.paywallMessage?.let { message ->
-            SwipePaywallRow(
-                message = message,
-                onOpenStore = onOpenStore
-            )
-        }
-        if (AdPlacementPolicy.canShowAds(state.adSupported, AdPlacement.SwipeBetweenBatches)) {
-            SwipeAdSlot()
-        }
-        if (topPicksState.items.isNotEmpty()) {
-            TopPicksRow(
-                state = topPicksState,
-                onPickSelected = { pickCard ->
-                    scope.launch { profileDetailStateHolder.open(pickCard.toProfileCardUi()) }
-                }
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentAlignment = Alignment.Center
-        ) {
-            when {
-                state.isLoading && state.cards.isEmpty() -> {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-                state.errorMessage != null && state.cards.isEmpty() && state.nextCursor == null -> {
-                    SwipeError(
-                        message = state.errorMessage ?: "Could not load swipe deck.",
-                        onRetry = { scope.launch { stateHolder.load() } }
-                    )
-                }
-                state.cards.isEmpty() && state.nextCursor != null -> {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-                !state.hasMore -> {
-                    EmptyDeck(
-                        filtersActive = state.swipeFilters.isAnyActive,
-                        onRefresh = { scope.launch { stateHolder.load() } },
-                        onOpenFilters = { filtersSheetVisible = true }
-                    )
-                }
-                else -> {
-                    SwipeCardStack(
-                        cards = state.cards,
-                        enabled = !state.actionQueueFull,
-                        requestedAction = requestedAction,
-                        distanceUnit = distanceUnit,
-                        onActionConsumed = { requestedAction = null },
-                        onOpenProfile = { card ->
-                            profileActionMode = ProfileDetailActionMode.SwipeUnmatched
-                            selectedProfileCard = card
-                            scope.launch {
-                                profileDetailStateHolder.open(card.toProfileCardUi())
-                            }
-                        },
-                        onLinkedPartnerTap = { card ->
-                            linkedPartnerPreviewCard = card
-                        },
-                        onSwiped = { card, action ->
-                            scope.launch { stateHolder.submitAction(card, action) }
-                        }
-                    )
-                }
+    SwipeScreenContent(
+        state = state,
+        topPicksState = topPicksState,
+        travelCityName = travelLocationState.current?.city,
+        requestedAction = requestedAction,
+        distanceUnit = distanceUnit,
+        onOpenFilters = { filtersSheetVisible = true },
+        onOpenTravel = { travelSheetVisible = true },
+        onOpenStore = onOpenStore,
+        onFilterSelected = { filter -> scope.launch { stateHolder.selectFilter(filter) } },
+        onTopPickSelected = { pickCard ->
+            scope.launch { profileDetailStateHolder.open(pickCard.toProfileCardUi()) }
+        },
+        onRetryDeck = { scope.launch { stateHolder.load() } },
+        onActionConsumed = { requestedAction = null },
+        onOpenProfile = { card ->
+            profileActionMode = ProfileDetailActionMode.SwipeUnmatched
+            selectedProfileCard = card
+            scope.launch {
+                profileDetailStateHolder.open(card.toProfileCardUi())
             }
-        }
-
-        Spacer(Modifier.height(16.dp))
-        if (state.errorMessage != null && state.cards.isNotEmpty()) {
-            SwipeInlineError(message = state.errorMessage ?: "")
-            Spacer(Modifier.height(8.dp))
-        }
-        if (state.pendingActionCount > 0) {
-            SwipePendingSync(
-                count = state.pendingActionCount,
-                onRetry = { scope.launch { stateHolder.retryPendingActions() } }
-            )
-            Spacer(Modifier.height(8.dp))
-        }
-
-        SwipeActions(
-            actionEnabled = state.hasMore && !state.actionQueueFull,
-            rewindEnabled = !state.isSubmitting && !state.isRewinding,
-            isSubmitting = false,
-            onRewind = { scope.launch { stateHolder.rewind() } },
-            onPass = { requestedAction = SwipeAction.PASS },
-            onIntroNote = {
-                state.topCard?.let { card ->
-                    introNoteCard = card
-                    introNoteText = ""
-                }
-            },
-            onPineappleLike = { requestedAction = SwipeAction.PINEAPPLE_LIKE },
-            onLike = { requestedAction = SwipeAction.LIKE }
-        )
-    }
+        },
+        onLinkedPartnerTap = { card -> linkedPartnerPreviewCard = card },
+        onSwiped = { card, action -> scope.launch { stateHolder.submitAction(card, action) } },
+        onRetryPendingActions = { scope.launch { stateHolder.retryPendingActions() } },
+        onRewind = { scope.launch { stateHolder.rewind() } },
+        onPass = { requestedAction = SwipeAction.PASS },
+        onIntroNote = {
+            state.topCard?.let { card ->
+                introNoteCard = card
+                introNoteText = ""
+            }
+        },
+        onPineappleLike = { requestedAction = SwipeAction.PINEAPPLE_LIKE },
+        onLike = { requestedAction = SwipeAction.LIKE },
+        modifier = modifier
+    )
 
     if (matchNotificationsEnabled) state.pendingMatch?.let { match ->
         MatchOverlay(
@@ -415,26 +303,4 @@ fun SwipeScreen(
             }
         )
     }
-}
-
-internal object SwipeTestTags {
-    const val ROOT = "swipe-root"
-    const val TOP_CARD = "swipe-top-card"
-    const val CARD_PREFIX = "swipe-card-"
-    const val ONLINE_DOT = "swipe-card-online-dot"
-    const val VERIFIED_BADGE = "swipe-card-verified-badge"
-    const val VISITING_PILL = "swipe-card-visiting-pill"
-    const val LINKED_PARTNER_BADGE = "swipe-card-linked-partner-badge"
-    const val LINKED_PARTNER_PREVIEW_DIALOG = "swipe-linked-partner-preview-dialog"
-    const val LINKED_PARTNER_PREVIEW_VIEW_PROFILE = "swipe-linked-partner-preview-view-profile"
-    const val LINKED_PARTNER_PREVIEW_ONLINE = "swipe-linked-partner-preview-online"
-    const val SHORT_BIO = "swipe-card-short-bio"
-    const val TAGS_ROW = "swipe-card-tags-row"
-    const val PHOTO_CAROUSEL = "swipe-card-photo-carousel"
-    const val PHOTO_CAROUSEL_INDICATORS = "swipe-card-photo-carousel-indicators"
-    const val REWIND_ACTION = "swipe-action-rewind"
-    const val PASS_ACTION = "swipe-action-pass"
-    const val INTRO_NOTE_ACTION = "swipe-action-intro-note"
-    const val PINEAPPLE_LIKE_ACTION = "swipe-action-pineapple-like"
-    const val LIKE_ACTION = "swipe-action-like"
 }
