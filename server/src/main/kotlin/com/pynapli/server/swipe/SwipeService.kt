@@ -2,7 +2,6 @@ package com.pynapli.server.swipe
 
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.discovery.DiscoveryFilters
-import com.pynapli.server.discovery.discoveryFiltersFrom
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
@@ -20,7 +19,6 @@ import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
 import com.pynapli.shared.network.dto.SwipeCardDto
-import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckResponseDto
 import com.pynapli.shared.network.dto.SwipeRewindResponseDto
@@ -46,29 +44,17 @@ class SwipeService(
     private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver)
 
     suspend fun queryDeck(viewerUserId: UUID, request: SwipeDeckRequestDto): SwipeDeckResponseDto {
-        val radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
-        val limit = request.limit.coerceIn(1, MAX_LIMIT)
         // FILTERS_SPEC L356-365: dealbreaker keys must be on the allow-list; unknown keys
         // are rejected so clients cannot smuggle in unrecognized hard-gate semantics.
-        // B3 will use this validated set to decide which filters can be relaxed when
-        // recommendations run low (L373); for B2 the validation is the only enforcement.
-        request.dealbreakers.forEach { key ->
-            if (key.trim() !in SwipeDealbreakerKey.ALL) throw SwipeException("INVALID_SWIPE_FILTER")
-        }
-        val filters = discoveryFiltersFrom(
-            minimumAge = request.minimumAge,
-            maximumAge = request.maximumAge,
-            relationshipContexts = request.relationshipContexts,
-            linkedOnly = request.linkedOnly,
-            verifiedOnly = request.verifiedOnly,
-            facePhotoVerifiedOnly = request.facePhotoVerifiedOnly,
-            ageVerifiedOnly = request.ageVerifiedOnly,
-            discoveryStyles = request.discoveryStyles,
-            lifestyleTags = request.lifestyleTags,
-            logisticsTags = request.logisticsTags,
-            intents = request.intents,
-            verifiedPreferred = request.verifiedPreferred
-        ) { _ -> SwipeException("INVALID_SWIPE_FILTER") }
+        val deckRequest = SwipeDeckRequestParser.parse(
+            request = request,
+            minRadiusMeters = MIN_RADIUS_METERS,
+            maxRadiusMeters = MAX_RADIUS_METERS,
+            maxLimit = MAX_LIMIT
+        )
+        val radiusMeters = deckRequest.radiusMeters
+        val limit = deckRequest.limit
+        val filters = deckRequest.filters
         val policy = profile("swipe.deck.policy") {
             subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
         }
@@ -137,7 +123,7 @@ class SwipeService(
         // FILTERS_SPEC L373 + L403-409: if the first-pass result is small AND some filters
         // are relaxable (i.e., not in the dealbreaker set), retry with non-dealbreaker
         // fields cleared / radius widened. Dealbreakers stay set in both passes.
-        val dealbreakerSet = request.dealbreakers.mapTo(mutableSetOf()) { it.trim() }
+        val dealbreakerSet = deckRequest.dealbreakers
         val lowWaterMark = SwipeDeckRelaxation.lowWaterMark(limit)
         val result = if (
             firstPass.viewerHadLocation &&
@@ -256,19 +242,11 @@ class SwipeService(
     }
 
     suspend fun submitAction(viewerUserId: UUID, request: SwipeActionRequestDto): SwipeActionResponseDto {
-        val targetUserId = request.targetUserId.toUuidOrThrow()
-        if (targetUserId == viewerUserId) throw SwipeException("INVALID_SWIPE_TARGET")
-
-        val action = request.action.trim().lowercase()
-        if (action !in ACTIONS) throw SwipeException("INVALID_SWIPE_ACTION")
-        val noteText = request.noteText?.trim()?.takeIf { it.isNotEmpty() }
-        if (action == SwipeAction.INTRO_NOTE) {
-            if (noteText == null) throw SwipeException("INTRO_NOTE_EMPTY")
-            if (noteText.length > INTRO_NOTE_MAX_LENGTH) throw SwipeException("INTRO_NOTE_TOO_LONG")
-        } else if (noteText != null) {
-            throw SwipeException("INVALID_SWIPE_ACTION")
-        }
-        val actionId = request.actionId.trim().toActionIdOrThrow()
+        val parsedRequest = SwipeActionRequestParser.parse(viewerUserId, request)
+        val targetUserId = parsedRequest.targetUserId
+        val action = parsedRequest.action
+        val noteText = parsedRequest.noteText
+        val actionId = parsedRequest.actionId
         val existingAction = profile("swipe.action.idempotency") {
             repository.findSwipeActionById(actionId, viewerUserId)
         }
@@ -285,15 +263,11 @@ class SwipeService(
             }
             return existingAction.toResponseDto(viewerUserId)
         }
-        val deckSessionId = request.deckSessionId.trim()
-        if (deckSessionId.isEmpty()) throw SwipeException(SwipeDeckTokenCodec.INVALID_DECK_SESSION)
-        val cardToken = request.cardToken.trim()
-        if (cardToken.isEmpty()) throw SwipeException(SwipeDeckTokenCodec.INVALID_CARD_TOKEN)
         val now = clock.instant()
         val actionTokens = try {
             deckTokenCodec.validateAction(
-                deckSessionId = deckSessionId,
-                cardToken = cardToken,
+                deckSessionId = parsedRequest.deckSessionId,
+                cardToken = parsedRequest.cardToken,
                 viewerUserId = viewerUserId,
                 targetUserId = targetUserId,
                 now = now
@@ -587,12 +561,6 @@ class SwipeService(
             expiresAt = expiresAt
         )
 
-    private fun String.toUuidOrThrow(): UUID =
-        runCatching { UUID.fromString(this) }.getOrElse { throw SwipeException("INVALID_SWIPE_TARGET") }
-
-    private fun String.toActionIdOrThrow(): UUID =
-        runCatching { UUID.fromString(this) }.getOrElse { throw SwipeException("INVALID_SWIPE_ACTION_ID") }
-
     private data class SwipeDeckPageItem(
         val dto: SwipeCardDto,
         val persistedCard: SwipeDeckSessionCardRecord
@@ -603,13 +571,6 @@ class SwipeService(
         private const val MAX_RADIUS_METERS = 100_000
         private const val MAX_LIMIT = 60
         private const val MATCHES_LIMIT = 50
-        private const val INTRO_NOTE_MAX_LENGTH = 140
-        private val ACTIONS = setOf(
-            SwipeAction.LIKE,
-            SwipeAction.PASS,
-            SwipeAction.PINEAPPLE_LIKE,
-            SwipeAction.INTRO_NOTE
-        )
     }
 }
 
