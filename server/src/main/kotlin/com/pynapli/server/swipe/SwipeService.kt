@@ -3,8 +3,6 @@ package com.pynapli.server.swipe
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.media.MediaAssetUrlResolver
-import com.pynapli.server.notifications.NotificationEventDraft
-import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
@@ -42,6 +40,7 @@ class SwipeService(
     private val activityService: ActivityService? = null
 ) {
     private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver)
+    private val sideEffects = SwipeActionSideEffects(activityService, notificationPublisher)
 
     suspend fun queryDeck(viewerUserId: UUID, request: SwipeDeckRequestDto): SwipeDeckResponseDto {
         // FILTERS_SPEC L356-365: dealbreaker keys must be on the allow-list; unknown keys
@@ -351,57 +350,26 @@ class SwipeService(
             )
         }
         if (result.newlyRecorded) {
-            profile("swipe.action.activity") {
-                recordActivityForAction(
-                    viewerUserId = viewerUserId,
-                    targetUserId = targetUserId,
-                    action = action,
-                    match = result.match
-                )
-            }
+            sideEffects.recordActivityForAction(
+                viewerUserId = viewerUserId,
+                targetUserId = targetUserId,
+                action = action,
+                match = result.match
+            )
         }
         val match = result.match
         if (match != null) {
-            profile("swipe.action.notify") {
-                notificationPublisher?.enqueue(
-                    NotificationEventDraft(
-                        recipientUserId = targetUserId,
-                        actorUserId = viewerUserId,
-                        kind = NotificationKind.MATCH,
-                        subjectId = match.matchId,
-                        idempotencyKey = "match:${match.matchId}:$targetUserId",
-                        payload = mapOf(
-                            "target" to "activity",
-                            "activityTab" to "matches",
-                            "activityEventType" to "match",
-                            "matchId" to match.matchId.toString(),
-                            "matchedUserId" to viewerUserId.toString()
-                        )
-                    )
-                )
-            }
+            sideEffects.notifyMatch(
+                viewerUserId = viewerUserId,
+                targetUserId = targetUserId,
+                match = match
+            )
         }
 
         return SwipeActionResponseDto(
             recorded = result.recorded,
             match = match?.toDto(viewerUserId)
         )
-    }
-
-    private suspend fun recordActivityForAction(
-        viewerUserId: UUID,
-        targetUserId: UUID,
-        action: String,
-        match: MatchRecord?
-    ) {
-        val activity = activityService ?: return
-        when (action) {
-            SwipeAction.LIKE -> activity.recordSwipeInterest(viewerUserId, targetUserId, "swipe_like")
-            SwipeAction.PINEAPPLE_LIKE -> activity.recordSwipeInterest(viewerUserId, targetUserId, "pineapple_like")
-            SwipeAction.INTRO_NOTE -> activity.recordSwipeInterest(viewerUserId, targetUserId, "intro_note")
-            else -> Unit
-        }
-        match?.let { activity.recordMatch(it.userA, it.userB, it.matchId) }
     }
 
     suspend fun rewind(viewerUserId: UUID): SwipeRewindResponseDto {
