@@ -3,8 +3,6 @@ package com.pynapli.server.swipe
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.discoveryFiltersFrom
-import com.pynapli.server.distance.toPublicDistanceLabel
-import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
@@ -17,8 +15,6 @@ import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
-import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
-import com.pynapli.shared.network.dto.MatchDto
 import com.pynapli.shared.network.dto.MatchesListResponseDto
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
@@ -47,6 +43,8 @@ class SwipeService(
     private val clock: Clock = Clock.systemUTC(),
     private val activityService: ActivityService? = null
 ) {
+    private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver)
+
     suspend fun queryDeck(viewerUserId: UUID, request: SwipeDeckRequestDto): SwipeDeckResponseDto {
         val radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
         val limit = request.limit.coerceIn(1, MAX_LIMIT)
@@ -198,7 +196,12 @@ class SwipeService(
                 position = position
             )
             SwipeDeckPageItem(
-                dto = card.toDto(rankToken = cardToken, online = card.userId in onlineUserIds, onlineUserIds = onlineUserIds),
+                dto = dtoMapper.cardToDto(
+                    card = card,
+                    rankToken = cardToken,
+                    online = card.userId in onlineUserIds,
+                    onlineUserIds = onlineUserIds
+                ),
                 persistedCard = SwipeDeckSessionCardRecord(
                     cardId = UUID.randomUUID(),
                     sessionId = deckSession.sessionId,
@@ -271,7 +274,7 @@ class SwipeService(
             if (existingAction.rewoundAt != null) {
                 return SwipeActionResponseDto(recorded = false)
             }
-            return existingAction.toResponse(viewerUserId)
+            return existingAction.toResponseDto(viewerUserId)
         }
         val deckSessionId = request.deckSessionId.trim()
         if (deckSessionId.isEmpty()) throw SwipeException(SwipeDeckTokenCodec.INVALID_DECK_SESSION)
@@ -398,15 +401,7 @@ class SwipeService(
 
         return SwipeActionResponseDto(
             recorded = result.recorded,
-            match = match?.let { record ->
-                MatchDto(
-                    matchId = record.matchId.toString(),
-                    matchedUserId = if (record.userA == viewerUserId) record.userB.toString() else record.userA.toString(),
-                    matchedDisplayName = null,
-                    matchedPhotoUrl = null,
-                    createdAt = record.createdAt.toString()
-                )
-            }
+            match = match?.toDto(viewerUserId)
         )
     }
 
@@ -512,7 +507,8 @@ class SwipeService(
             SwipeRewindResponseDto(
                 rewound = true,
                 deckSessionId = deckSession.deckSessionId,
-                card = candidate.card.toDto(
+                card = dtoMapper.cardToDto(
+                    card = candidate.card,
                     rankToken = cardToken,
                     online = candidate.targetUserId in online,
                     onlineUserIds = online
@@ -543,16 +539,7 @@ class SwipeService(
             }
         }
         return MatchesListResponseDto(
-            matches = visible.map { record ->
-                MatchDto(
-                    matchId = record.matchId.toString(),
-                    matchedUserId = record.matchedUserId.toString(),
-                    matchedDisplayName = record.matchedDisplayName,
-                    matchedPhotoUrl = record.matchedThumbnailMediaAssetId
-                        ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-                    createdAt = record.createdAt.toString()
-                )
-            }
+            matches = visible.map { record -> dtoMapper.matchSummaryToDto(record) }
         )
     }
 
@@ -560,54 +547,6 @@ class SwipeService(
         val service = presenceService ?: return emptySet()
         if (userIds.isEmpty()) return emptySet()
         return runCatching { service.onlineUserIds(userIds) }.getOrDefault(emptySet())
-    }
-
-    private fun SwipeCardRecord.toDto(
-        rankToken: String,
-        online: Boolean,
-        onlineUserIds: Set<UUID>
-    ): SwipeCardDto {
-        val resolver = mediaAssetUrlResolver
-        val resolvedPhotoUrls = if (resolver == null) {
-            emptyList()
-        } else {
-            val sourceIds = if (thumbnailMediaAssetIds.isNotEmpty()) {
-                thumbnailMediaAssetIds
-            } else {
-                listOfNotNull(thumbnailMediaAssetId)
-            }
-            sourceIds.take(MAX_VISIBLE_PHOTOS).mapNotNull { resolver.publicContentUrl(it) }
-        }
-        return SwipeCardDto(
-            userId = userId.toString(),
-            displayName = displayName,
-            displayAge = displayAge,
-            distanceLabel = if (showDistance) distanceMeters.toPublicDistanceLabel() else null,
-            distanceMeters = if (showDistance) distanceMeters.toPublicDistanceMeters() else null,
-            photoUrl = resolvedPhotoUrls.firstOrNull(),
-            photoUrls = resolvedPhotoUrls,
-            linkedPartner = linkedPartnerUserId?.let { partnerUserId ->
-                LinkedPartnerMiniDto(
-                    userId = partnerUserId.toString(),
-                    displayName = linkedPartnerDisplayName,
-                    thumbnailUrl = linkedPartnerThumbnailMediaAssetId
-                        ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-                    online = partnerUserId in onlineUserIds
-                )
-            },
-            rankToken = rankToken,
-            online = online,
-            shortBio = bio.toShortBio(),
-            tags = tags.toVisibleTags(),
-            verified = verified,
-            visiting = visiting
-        )
-    }
-
-    private fun String?.toShortBio(): String? {
-        val trimmed = this?.trim().orEmpty()
-        if (trimmed.isEmpty()) return null
-        return if (trimmed.length <= MAX_SHORT_BIO_CHARS) trimmed else trimmed.take(MAX_SHORT_BIO_CHARS)
     }
 
     private fun hasRelaxableFilters(
@@ -656,22 +595,6 @@ class SwipeService(
         if (SwipeDealbreakerKey.DISTANCE in dealbreakers) radiusMeters
         else (radiusMeters * 2).coerceAtMost(MAX_RADIUS_METERS)
 
-    private fun List<String>.toVisibleTags(): List<String> {
-        if (isEmpty()) return emptyList()
-        val seen = LinkedHashSet<String>()
-        val display = mutableListOf<String>()
-        for (raw in this) {
-            val trimmed = raw.trim()
-            if (trimmed.isEmpty()) continue
-            val key = trimmed.lowercase()
-            if (seen.add(key)) {
-                display += trimmed
-                if (display.size >= MAX_VISIBLE_TAGS) break
-            }
-        }
-        return display
-    }
-
     private fun IssuedSwipeDeckSession.toSessionRecord(
         viewerUserId: UUID,
         scopeHash: String,
@@ -707,21 +630,6 @@ class SwipeService(
     private fun String.toActionIdOrThrow(): UUID =
         runCatching { UUID.fromString(this) }.getOrElse { throw SwipeException("INVALID_SWIPE_ACTION_ID") }
 
-    private fun SwipeActionRecord.toResponse(viewerUserId: UUID): SwipeActionResponseDto =
-        SwipeActionResponseDto(
-            recorded = true,
-            match = match?.toDto(viewerUserId)
-        )
-
-    private fun MatchRecord.toDto(viewerUserId: UUID): MatchDto =
-        MatchDto(
-            matchId = matchId.toString(),
-            matchedUserId = if (userA == viewerUserId) userB.toString() else userA.toString(),
-            matchedDisplayName = null,
-            matchedPhotoUrl = null,
-            createdAt = createdAt.toString()
-        )
-
     private data class SwipeDeckPageItem(
         val dto: SwipeCardDto,
         val persistedCard: SwipeDeckSessionCardRecord
@@ -733,9 +641,6 @@ class SwipeService(
         private const val MAX_LIMIT = 60
         private const val MATCHES_LIMIT = 50
         private const val INTRO_NOTE_MAX_LENGTH = 140
-        private const val MAX_SHORT_BIO_CHARS = 120
-        private const val MAX_VISIBLE_TAGS = 3
-        private const val MAX_VISIBLE_PHOTOS = 5
         // Below this, the deck is considered "low" and relaxation is attempted on
         // non-dealbreaker filters (FILTERS_SPEC L373 + L403-409). Threshold is the
         // larger of limit/3 and MIN_RELAXATION_THRESHOLD so micro-relaxations on
