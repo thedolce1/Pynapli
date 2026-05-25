@@ -36,6 +36,13 @@ class SubscriptionService(
         repository = repository,
         invalidateEntitlement = entitlementCache::invalidate
     )
+    private val playStoreRtdnProcessor = PlayStoreRtdnProcessor(
+        repository = repository,
+        clock = clock,
+        playStorePackageName = playStorePackageName,
+        playStorePurchaseVerifier = playStorePurchaseVerifier,
+        purchaseApplier = playStorePurchaseApplier
+    )
 
     suspend fun getEntitlement(userId: UUID): SubscriptionEntitlementDto {
         val now = clock.instant()
@@ -184,7 +191,7 @@ class SubscriptionService(
         if (purchaseToken.length !in 16..4096) throw SubscriptionException("INVALID_PURCHASE_TOKEN")
         if (packageName != playStorePackageName) throw SubscriptionException("INVALID_PURCHASE_PACKAGE")
 
-        val tier = tierForPlayStoreProduct(productId) ?: throw SubscriptionException("INVALID_SUBSCRIPTION_PRODUCT")
+        val tier = playStoreTierForProduct(productId) ?: throw SubscriptionException("INVALID_SUBSCRIPTION_PRODUCT")
         val now = clock.instant()
         return when (
             val verification = playStorePurchaseVerifier.verifySubscriptionPurchase(
@@ -293,76 +300,8 @@ class SubscriptionService(
 
     suspend fun handlePlayStoreRealTimeDeveloperNotification(
         envelope: PlayStoreRtdnEnvelope
-    ): PlayStoreRtdnProcessingResult {
-        val notification = envelope.notification
-        val eventInsert = PlayStoreRtdnEventInsert(
-            messageId = envelope.messageId,
-            packageName = notification.packageName,
-            eventType = envelope.eventType,
-            notificationType = envelope.notificationType,
-            purchaseToken = envelope.purchaseToken,
-            productId = envelope.productId,
-            eventTime = envelope.eventTime,
-            rawPayload = envelope.rawPayload
-        )
-        val inserted = repository.insertPlayStoreRtdnEvent(eventInsert)
-        if (!inserted) {
-            return PlayStoreRtdnProcessingResult(
-                status = "duplicate",
-                eventType = envelope.eventType,
-                messageId = envelope.messageId,
-                purchaseToken = envelope.purchaseToken,
-                productId = envelope.productId
-            )
-        }
-
-        fun finish(
-            status: String,
-            errorCode: String? = null,
-            productId: String? = envelope.productId,
-            subscriptionStatus: String? = null
-        ): PlayStoreRtdnProcessingResult {
-            return PlayStoreRtdnProcessingResult(
-                status = status,
-                eventType = envelope.eventType,
-                messageId = envelope.messageId,
-                purchaseToken = envelope.purchaseToken,
-                productId = productId,
-                subscriptionStatus = subscriptionStatus,
-                errorCode = errorCode
-            )
-        }
-
-        if (notification.packageName != playStorePackageName) {
-            repository.updatePlayStoreRtdnEventStatus(
-                messageId = envelope.messageId,
-                processingStatus = "ignored",
-                errorCode = "INVALID_PURCHASE_PACKAGE"
-            )
-            return finish(status = "ignored", errorCode = "INVALID_PURCHASE_PACKAGE")
-        }
-
-        return when {
-            notification.testNotification != null -> {
-                repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "processed")
-                finish(status = "processed")
-            }
-            notification.subscriptionNotification != null -> {
-                processSubscriptionRtdn(envelope, notification.subscriptionNotification)
-            }
-            notification.voidedPurchaseNotification != null -> {
-                processVoidedPurchaseRtdn(envelope, notification.voidedPurchaseNotification)
-            }
-            else -> {
-                repository.updatePlayStoreRtdnEventStatus(
-                    messageId = envelope.messageId,
-                    processingStatus = "ignored",
-                    errorCode = "UNSUPPORTED_RTDN_EVENT"
-                )
-                finish(status = "ignored", errorCode = "UNSUPPORTED_RTDN_EVENT")
-            }
-        }
-    }
+    ): PlayStoreRtdnProcessingResult =
+        playStoreRtdnProcessor.handle(envelope)
 
     suspend fun getPolicy(userId: UUID): EntitlementPolicy =
         getEntitlement(userId).toPolicy()
@@ -401,13 +340,6 @@ class SubscriptionService(
         )
     }
 
-    private fun tierForPlayStoreProduct(productId: String): String? =
-        when (productId) {
-            SubscriptionProductId.PLAY_SOCIAL_MONTHLY -> SubscriptionTier.SOCIAL
-            SubscriptionProductId.PLAY_SELECT_MONTHLY -> SubscriptionTier.SELECT
-            else -> null
-        }
-
     private suspend fun grantDevPremiumProduct(
         userId: UUID,
         inventoryType: String,
@@ -437,171 +369,6 @@ class SubscriptionService(
             entitlement = getEntitlement(userId)
         )
 
-    private suspend fun processSubscriptionRtdn(
-        envelope: PlayStoreRtdnEnvelope,
-        notification: PlayStoreSubscriptionNotificationDto
-    ): PlayStoreRtdnProcessingResult {
-        val purchaseToken = notification.purchaseToken?.trim()?.takeIf { it.length in 16..4096 }
-        if (purchaseToken == null) {
-            repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "ignored", "INVALID_PURCHASE_TOKEN")
-            return PlayStoreRtdnProcessingResult(
-                status = "ignored",
-                eventType = envelope.eventType,
-                messageId = envelope.messageId,
-                purchaseToken = notification.purchaseToken,
-                productId = notification.subscriptionId,
-                errorCode = "INVALID_PURCHASE_TOKEN"
-            )
-        }
-
-        val stored = repository.findPlayStoreSubscriptionByPurchaseToken(purchaseToken)
-        val productId = notification.subscriptionId?.trim()?.takeIf { it.isNotEmpty() }
-            ?: stored?.productId
-        val verification = if (productId == null) {
-            playStorePurchaseVerifier.verifySubscriptionPurchaseByToken(
-                packageName = playStorePackageName,
-                purchaseToken = purchaseToken
-            )
-        } else {
-            playStorePurchaseVerifier.verifySubscriptionPurchase(
-                packageName = playStorePackageName,
-                productId = productId,
-                purchaseToken = purchaseToken
-            )
-        }
-
-        return when (verification) {
-            is PlayStorePurchaseVerificationResult.Invalid -> {
-                if (stored != null) {
-                    playStorePurchaseApplier.revokeStoredPurchase(
-                        stored = stored,
-                        purchaseToken = purchaseToken,
-                        externalStatus = verification.code,
-                        verifiedAt = clock.instant()
-                    )
-                    repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "processed", verification.code)
-                    PlayStoreRtdnProcessingResult(
-                        status = "processed",
-                        eventType = envelope.eventType,
-                        messageId = envelope.messageId,
-                        purchaseToken = purchaseToken,
-                        productId = stored.productId,
-                        subscriptionStatus = "revoked",
-                        errorCode = verification.code
-                    )
-                } else {
-                    repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "ignored", verification.code)
-                    PlayStoreRtdnProcessingResult(
-                        status = "ignored",
-                        eventType = envelope.eventType,
-                        messageId = envelope.messageId,
-                        purchaseToken = purchaseToken,
-                        productId = productId,
-                        errorCode = verification.code
-                    )
-                }
-            }
-            PlayStorePurchaseVerificationResult.VerificationUnavailable -> {
-                repository.updatePlayStoreRtdnEventStatus(
-                    messageId = envelope.messageId,
-                    processingStatus = "retry",
-                    errorCode = "RTDN_VERIFICATION_UNAVAILABLE"
-                )
-                throw SubscriptionException("RTDN_VERIFICATION_UNAVAILABLE")
-            }
-            is PlayStorePurchaseVerificationResult.Verified -> {
-                val purchase = verification.purchase
-                val tier = tierForPlayStoreProduct(purchase.productId)
-                    ?: stored?.tier
-                    ?: run {
-                        repository.updatePlayStoreRtdnEventStatus(
-                            envelope.messageId,
-                            "ignored",
-                            "INVALID_SUBSCRIPTION_PRODUCT"
-                        )
-                        return PlayStoreRtdnProcessingResult(
-                            status = "ignored",
-                            eventType = envelope.eventType,
-                            messageId = envelope.messageId,
-                            purchaseToken = purchaseToken,
-                            productId = purchase.productId,
-                            errorCode = "INVALID_SUBSCRIPTION_PRODUCT"
-                        )
-                    }
-                val userId = stored?.userId ?: run {
-                    repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "ignored", "PURCHASE_NOT_LINKED")
-                    return PlayStoreRtdnProcessingResult(
-                        status = "ignored",
-                        eventType = envelope.eventType,
-                        messageId = envelope.messageId,
-                        purchaseToken = purchaseToken,
-                        productId = purchase.productId,
-                        errorCode = "PURCHASE_NOT_LINKED"
-                    )
-                }
-                val subscription = playStorePurchaseApplier.applyVerifiedPurchase(
-                    userId = userId,
-                    tier = tier,
-                    purchase = purchase,
-                    verifiedAt = clock.instant()
-                )
-                repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "processed")
-                PlayStoreRtdnProcessingResult(
-                    status = "processed",
-                    eventType = envelope.eventType,
-                    messageId = envelope.messageId,
-                    purchaseToken = purchaseToken,
-                    productId = purchase.productId,
-                    subscriptionStatus = subscription.status
-                )
-            }
-        }
-    }
-
-    private suspend fun processVoidedPurchaseRtdn(
-        envelope: PlayStoreRtdnEnvelope,
-        notification: PlayStoreVoidedPurchaseNotificationDto
-    ): PlayStoreRtdnProcessingResult {
-        val purchaseToken = notification.purchaseToken?.trim()?.takeIf { it.length in 16..4096 }
-        if (purchaseToken == null) {
-            repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "ignored", "INVALID_PURCHASE_TOKEN")
-            return PlayStoreRtdnProcessingResult(
-                status = "ignored",
-                eventType = envelope.eventType,
-                messageId = envelope.messageId,
-                purchaseToken = notification.purchaseToken,
-                errorCode = "INVALID_PURCHASE_TOKEN"
-            )
-        }
-        val stored = repository.findPlayStoreSubscriptionByPurchaseToken(purchaseToken)
-        if (stored == null || notification.productType != PLAY_STORE_PRODUCT_TYPE_SUBSCRIPTION) {
-            repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "ignored", "PURCHASE_NOT_LINKED")
-            return PlayStoreRtdnProcessingResult(
-                status = "ignored",
-                eventType = envelope.eventType,
-                messageId = envelope.messageId,
-                purchaseToken = purchaseToken,
-                errorCode = "PURCHASE_NOT_LINKED"
-            )
-        }
-        playStorePurchaseApplier.revokeStoredPurchase(
-            stored = stored,
-            purchaseToken = purchaseToken,
-            orderId = notification.orderId,
-            externalStatus = "VOIDED_PURCHASE_REFUND_TYPE_${notification.refundType ?: 0}",
-            verifiedAt = clock.instant()
-        )
-        repository.updatePlayStoreRtdnEventStatus(envelope.messageId, "processed")
-        return PlayStoreRtdnProcessingResult(
-            status = "processed",
-            eventType = envelope.eventType,
-            messageId = envelope.messageId,
-            purchaseToken = purchaseToken,
-            productId = stored.productId,
-            subscriptionStatus = "revoked"
-        )
-    }
-
     private fun invalidateEntitlement(userId: UUID) {
         entitlementCache.invalidate(userId)
     }
@@ -615,7 +382,6 @@ class SubscriptionService(
         private const val DEV_INVENTORY_GRANTED = "inventory_granted"
         private const val PLAY_STORE_SYNC_DEFAULT_LIMIT = 100
         private const val PLAY_STORE_SYNC_MAX_LIMIT = 500
-        private const val PLAY_STORE_PRODUCT_TYPE_SUBSCRIPTION = 1
     }
 }
 
