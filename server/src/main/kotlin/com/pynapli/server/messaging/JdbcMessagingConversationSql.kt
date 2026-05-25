@@ -2,6 +2,7 @@ package com.pynapli.server.messaging
 
 import java.sql.Connection
 import java.sql.Timestamp
+import java.time.Instant
 import java.util.UUID
 
 internal fun Connection.listConversationIds(userId: UUID, limit: Int): List<UUID> =
@@ -369,3 +370,65 @@ internal fun Connection.insertMessageReviewQueue(
         statement.executeUpdate()
     }
 }
+
+internal fun Connection.loadConversation(userId: UUID, conversationId: UUID): ConversationRecord? {
+    val participants = mutableListOf<ConversationParticipantRecord>()
+    var kind: String? = null
+    var origin: String? = null
+    var updatedAt: Instant? = null
+
+    prepareStatement(CONVERSATION_QUERY).use { statement ->
+        statement.setObject(1, userId)
+        statement.setObject(2, conversationId)
+        statement.executeQuery().use { rs ->
+            while (rs.next()) {
+                kind = rs.getString("kind")
+                origin = rs.getString("origin")
+                updatedAt = rs.getTimestamp("updated_at").toInstant()
+                participants.add(
+                    ConversationParticipantRecord(
+                        userId = rs.getObject("participant_user_id", UUID::class.java),
+                        displayName = rs.getString("display_name"),
+                        status = rs.getString("invitation_status"),
+                        invitedByUserId = rs.getObject("invited_by_user_id", UUID::class.java)
+                    )
+                )
+            }
+        }
+    }
+
+    return ConversationRecord(
+        conversationId = conversationId,
+        kind = kind ?: return null,
+        origin = origin ?: return null,
+        participants = participants,
+        lastMessage = loadLastMessage(userId, conversationId),
+        unreadCount = loadUnreadCount(userId, conversationId),
+        updatedAt = updatedAt ?: return null,
+        partnerInvite = loadOpenPartnerInvite(conversationId, forUpdate = false)
+    )
+}
+
+private val CONVERSATION_QUERY = """
+    SELECT c.kind,
+           c.origin,
+           c.updated_at,
+           cp.user_id AS participant_user_id,
+           cp.invitation_status,
+           cp.invited_by_user_id,
+           COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name
+    FROM conversations c
+    JOIN conversation_participants viewer_cp
+      ON viewer_cp.conversation_id = c.id
+     AND viewer_cp.user_id = ?
+     AND viewer_cp.left_at IS NULL
+     AND viewer_cp.invitation_status IN ('active', 'invited')
+    JOIN conversation_participants cp
+      ON cp.conversation_id = c.id
+     AND cp.left_at IS NULL
+     AND cp.invitation_status IN ('active', 'invited')
+    JOIN users u ON u.id = cp.user_id
+    JOIN profiles p ON p.user_id = u.id
+    WHERE c.id = ?
+    ORDER BY cp.joined_at ASC, cp.user_id ASC
+""".trimIndent()

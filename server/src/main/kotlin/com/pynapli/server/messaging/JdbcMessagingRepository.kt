@@ -2,7 +2,6 @@ package com.pynapli.server.messaging
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.sql.Connection
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -175,25 +174,7 @@ class JdbcMessagingRepository(
 
     override suspend fun getActiveLinkedPartnerUserId(userId: UUID): UUID? = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            connection.prepareStatement(
-                """
-                SELECT upl.linked_user_id
-                FROM user_profile_links upl
-                JOIN users linked_user
-                  ON linked_user.id = upl.linked_user_id
-                 AND linked_user.status = 'active'
-                 AND linked_user.deleted_at IS NULL
-                WHERE upl.user_id = ?
-                  AND upl.status = 'active'
-                  AND upl.unlinked_at IS NULL
-                LIMIT 1
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, userId)
-                statement.executeQuery().use { rs ->
-                    if (rs.next()) rs.getObject("linked_user_id", UUID::class.java) else null
-                }
-            }
+            connection.loadActiveLinkedPartnerUserId(userId)
         }
     }
 
@@ -336,138 +317,7 @@ class JdbcMessagingRepository(
         }
     }
 
-    private fun Connection.targetAllowsConversation(viewerUserId: UUID, targetUserId: UUID, origin: String): Boolean =
-        when (origin) {
-            "grid" -> targetAllowsGridConversation(viewerUserId, targetUserId)
-            "swipe" -> targetAllowsSwipeConversation(viewerUserId, targetUserId)
-            else -> false
-        }
-
-    private fun Connection.targetAllowsGridConversation(viewerUserId: UUID, targetUserId: UUID): Boolean {
-        val policy = prepareStatement(
-            """
-            SELECT ds.allow_grid_messages, ds.grid_message_policy
-            FROM users u
-            JOIN profiles p ON p.user_id = u.id
-            JOIN discovery_settings ds ON ds.user_id = u.id
-            WHERE u.id = ?
-              AND u.status = 'active'
-              AND u.deleted_at IS NULL
-              AND p.visibility_status = 'visible'
-              AND ds.grid_visible = true
-              AND ds.incognito = false
-            """.trimIndent()
-        ).use { statement ->
-            statement.setObject(1, targetUserId)
-            statement.executeQuery().use { rs ->
-                if (!rs.next()) return false
-                GridMessagePolicy(
-                    allowGridMessages = rs.getBoolean("allow_grid_messages"),
-                    gridMessagePolicy = rs.getString("grid_message_policy")
-                )
-            }
-        }
-
-        return when {
-            !policy.allowGridMessages -> false
-            policy.gridMessagePolicy == "everyone" -> true
-            policy.gridMessagePolicy == "matches_only" -> targetAllowsSwipeConversation(viewerUserId, targetUserId)
-            else -> false
-        }
-    }
-
-    private fun Connection.targetAllowsSwipeConversation(viewerUserId: UUID, targetUserId: UUID): Boolean =
-        prepareStatement(
-            """
-            SELECT EXISTS (
-                SELECT 1
-                FROM matches m
-                JOIN users target
-                  ON target.id = ?
-                 AND target.status = 'active'
-                 AND target.deleted_at IS NULL
-                JOIN profiles target_profile
-                  ON target_profile.user_id = target.id
-                 AND target_profile.visibility_status = 'visible'
-                WHERE LEAST(m.user_a, m.user_b) = LEAST(?::uuid, ?::uuid)
-                  AND GREATEST(m.user_a, m.user_b) = GREATEST(?::uuid, ?::uuid)
-            )
-            """.trimIndent()
-        ).use { statement ->
-            statement.setObject(1, targetUserId)
-            statement.setObject(2, viewerUserId)
-            statement.setObject(3, targetUserId)
-            statement.setObject(4, viewerUserId)
-            statement.setObject(5, targetUserId)
-            statement.executeQuery().use { rs ->
-                rs.next()
-                rs.getBoolean(1)
-            }
-        }
-
-    private fun Connection.loadConversation(userId: UUID, conversationId: UUID): ConversationRecord? {
-        val participants = mutableListOf<ConversationParticipantRecord>()
-        var kind: String? = null
-        var origin: String? = null
-        var updatedAt: Instant? = null
-
-        prepareStatement(CONVERSATION_QUERY).use { statement ->
-            statement.setObject(1, userId)
-            statement.setObject(2, conversationId)
-            statement.executeQuery().use { rs ->
-                while (rs.next()) {
-                    kind = rs.getString("kind")
-                    origin = rs.getString("origin")
-                    updatedAt = rs.getTimestamp("updated_at").toInstant()
-                    participants.add(
-                        ConversationParticipantRecord(
-                            userId = rs.getObject("participant_user_id", UUID::class.java),
-                            displayName = rs.getString("display_name"),
-                            status = rs.getString("invitation_status"),
-                            invitedByUserId = rs.getObject("invited_by_user_id", UUID::class.java)
-                        )
-                    )
-                }
-            }
-        }
-
-        return ConversationRecord(
-            conversationId = conversationId,
-            kind = kind ?: return null,
-            origin = origin ?: return null,
-            participants = participants,
-            lastMessage = loadLastMessage(userId, conversationId),
-            unreadCount = loadUnreadCount(userId, conversationId),
-            updatedAt = updatedAt ?: return null,
-            partnerInvite = loadOpenPartnerInvite(conversationId, forUpdate = false)
-        )
-    }
-
     companion object {
         private const val DEFAULT_MESSAGE_PAGE_LIMIT = 50
-
-        private val CONVERSATION_QUERY = """
-            SELECT c.kind,
-                   c.origin,
-                   c.updated_at,
-                   cp.user_id AS participant_user_id,
-                   cp.invitation_status,
-                   cp.invited_by_user_id,
-                   COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name
-            FROM conversations c
-            JOIN conversation_participants viewer_cp
-              ON viewer_cp.conversation_id = c.id
-             AND viewer_cp.user_id = ?
-             AND viewer_cp.left_at IS NULL
-             AND viewer_cp.invitation_status IN ('active', 'invited')
-            JOIN conversation_participants cp
-              ON cp.conversation_id = c.id
-             AND cp.left_at IS NULL
-             AND cp.invitation_status IN ('active', 'invited')
-            JOIN users u ON u.id = cp.user_id
-            JOIN profiles p ON p.user_id = u.id
-            WHERE c.id = ?
-            ORDER BY cp.joined_at ASC, cp.user_id ASC
-        """.trimIndent()
     }
 }
