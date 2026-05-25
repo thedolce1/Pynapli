@@ -138,14 +138,23 @@ class SwipeService(
         // are relaxable (i.e., not in the dealbreaker set), retry with non-dealbreaker
         // fields cleared / radius widened. Dealbreakers stay set in both passes.
         val dealbreakerSet = request.dealbreakers.mapTo(mutableSetOf()) { it.trim() }
-        val lowWaterMark = (limit / 3).coerceAtLeast(MIN_RELAXATION_THRESHOLD)
+        val lowWaterMark = SwipeDeckRelaxation.lowWaterMark(limit)
         val result = if (
             firstPass.viewerHadLocation &&
             firstPass.cards.size < lowWaterMark &&
-            hasRelaxableFilters(filters, radiusMeters, dealbreakerSet)
+            SwipeDeckRelaxation.hasRelaxableFilters(
+                filters = filters,
+                radiusMeters = radiusMeters,
+                maxRadiusMeters = MAX_RADIUS_METERS,
+                dealbreakers = dealbreakerSet
+            )
         ) {
-            val relaxedFilters = relaxFilters(filters, dealbreakerSet)
-            val relaxedRadius = relaxRadius(radiusMeters, dealbreakerSet)
+            val relaxedFilters = SwipeDeckRelaxation.relaxFilters(filters, dealbreakerSet)
+            val relaxedRadius = SwipeDeckRelaxation.relaxRadius(
+                radiusMeters = radiusMeters,
+                maxRadiusMeters = MAX_RADIUS_METERS,
+                dealbreakers = dealbreakerSet
+            )
             val alreadySeen = excludedTargetUserIds + firstPass.cards.mapTo(mutableSetOf()) { it.userId }
             val secondPass = profile("swipe.deck.repo.queryDeckRelaxed") {
                 repository.queryDeck(
@@ -549,52 +558,6 @@ class SwipeService(
         return runCatching { service.onlineUserIds(userIds) }.getOrDefault(emptySet())
     }
 
-    private fun hasRelaxableFilters(
-        filters: DiscoveryFilters,
-        radiusMeters: Int,
-        dealbreakers: Set<String>
-    ): Boolean {
-        if (SwipeDealbreakerKey.AGE !in dealbreakers &&
-            (filters.minimumAge != null || filters.maximumAge != null)) return true
-        if (SwipeDealbreakerKey.VERIFIED !in dealbreakers &&
-            (filters.verifiedOnly || filters.facePhotoVerifiedOnly || filters.ageVerifiedOnly)) return true
-        if (SwipeDealbreakerKey.DISCOVERY_STYLES !in dealbreakers &&
-            filters.discoveryStyles.isNotEmpty()) return true
-        if (SwipeDealbreakerKey.INTENTS !in dealbreakers &&
-            filters.intents.isNotEmpty()) return true
-        if (SwipeDealbreakerKey.LINKED_ONLY !in dealbreakers &&
-            filters.linkedOnly != null) return true
-        // relationshipContexts, lifestyleTags, logisticsTags are always relaxable
-        // (not in the dealbreaker allow-list per SwipeDealbreakerKey).
-        if (filters.relationshipContexts.isNotEmpty()) return true
-        if (filters.lifestyleTags.isNotEmpty()) return true
-        if (filters.logisticsTags.isNotEmpty()) return true
-        if (SwipeDealbreakerKey.DISTANCE !in dealbreakers &&
-            radiusMeters < MAX_RADIUS_METERS) return true
-        return false
-    }
-
-    private fun relaxFilters(
-        filters: DiscoveryFilters,
-        dealbreakers: Set<String>
-    ): DiscoveryFilters = filters.copy(
-        minimumAge = if (SwipeDealbreakerKey.AGE in dealbreakers) filters.minimumAge else null,
-        maximumAge = if (SwipeDealbreakerKey.AGE in dealbreakers) filters.maximumAge else null,
-        relationshipContexts = emptySet(),
-        linkedOnly = if (SwipeDealbreakerKey.LINKED_ONLY in dealbreakers) filters.linkedOnly else null,
-        verifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.verifiedOnly else false,
-        facePhotoVerifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.facePhotoVerifiedOnly else false,
-        ageVerifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.ageVerifiedOnly else false,
-        discoveryStyles = if (SwipeDealbreakerKey.DISCOVERY_STYLES in dealbreakers) filters.discoveryStyles else emptySet(),
-        intents = if (SwipeDealbreakerKey.INTENTS in dealbreakers) filters.intents else emptySet(),
-        lifestyleTags = emptySet(),
-        logisticsTags = emptySet()
-    )
-
-    private fun relaxRadius(radiusMeters: Int, dealbreakers: Set<String>): Int =
-        if (SwipeDealbreakerKey.DISTANCE in dealbreakers) radiusMeters
-        else (radiusMeters * 2).coerceAtMost(MAX_RADIUS_METERS)
-
     private fun IssuedSwipeDeckSession.toSessionRecord(
         viewerUserId: UUID,
         scopeHash: String,
@@ -641,11 +604,6 @@ class SwipeService(
         private const val MAX_LIMIT = 60
         private const val MATCHES_LIMIT = 50
         private const val INTRO_NOTE_MAX_LENGTH = 140
-        // Below this, the deck is considered "low" and relaxation is attempted on
-        // non-dealbreaker filters (FILTERS_SPEC L373 + L403-409). Threshold is the
-        // larger of limit/3 and MIN_RELAXATION_THRESHOLD so micro-relaxations on
-        // very small page requests still fire when the deck is essentially empty.
-        private const val MIN_RELAXATION_THRESHOLD = 3
         private val ACTIONS = setOf(
             SwipeAction.LIKE,
             SwipeAction.PASS,
