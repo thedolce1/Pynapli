@@ -124,6 +124,14 @@ fun ProfileHubScreen(
             onClearMessagesError = onClearMessagesError,
             modifier = modifier
         )
+    } else if (state.safetyCenterVisible) {
+        ProfileHubSafetyCenterContent(
+            state = state,
+            onBack = stateHolder::dismissSafetyCenter,
+            onUnblockUser = { userId -> scope.launch { stateHolder.unblockUser(userId) } },
+            onClearMessage = stateHolder::clearMessage,
+            modifier = modifier
+        )
     } else {
         ProfileHubContent(
             state = state,
@@ -138,6 +146,10 @@ fun ProfileHubScreen(
             onEditProfile = stateHolder::openEditor,
             onOpenPrivacy = stateHolder::openPrivacySettings,
             onOpenActivityControls = stateHolder::openActivityControls,
+            onOpenSafetyCenter = {
+                stateHolder.openSafetyCenter()
+                scope.launch { stateHolder.loadBlocks() }
+            },
             onOpenAgeVerification = stateHolder::openAgeVerification,
             onOpenAppSettings = {
                 appSettingsStateHolder.editFromCurrent()

@@ -2,6 +2,7 @@ package com.pynapli.app.profilehub
 
 import androidx.compose.runtime.Immutable
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
+import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.MeDto
 
 @Immutable
@@ -15,9 +16,13 @@ data class ProfileHubUiState(
     val activityVisible: Boolean = false,
     val appSettingsVisible: Boolean = false,
     val notificationCenterVisible: Boolean = false,
+    val safetyCenterVisible: Boolean = false,
     val ageVerificationDialogVisible: Boolean = false,
     val ageVerificationStatus: AgeVerificationStatusDto? = null,
+    val blockedUsers: List<BlockSummaryDto> = emptyList(),
     val isAgeVerificationMutating: Boolean = false,
+    val isBlocksLoading: Boolean = false,
+    val unblockingUserId: String? = null,
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val errorMessage: String? = null,

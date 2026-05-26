@@ -75,6 +75,12 @@ internal fun ageVerificationSummary(state: ProfileHubUiState): String {
     }
 }
 
+internal fun safetyCenterSummary(state: ProfileHubUiState): String = when {
+    state.isBlocksLoading -> "Loading blocks"
+    state.blockedUsers.isEmpty() -> "Guidelines and blocks"
+    else -> "${state.blockedUsers.size} blocked"
+}
+
 internal fun appSettingsSummary(state: AppSettingsUiState): String {
     if (state.isLoading) return "Loading"
     return "${themeModeLabel(state.settings.themeMode)}, ${distanceUnitShortLabel(state.settings.distanceUnit)}"

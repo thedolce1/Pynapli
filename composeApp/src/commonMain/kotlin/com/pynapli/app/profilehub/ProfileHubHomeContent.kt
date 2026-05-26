@@ -41,6 +41,7 @@ internal fun ProfileHubContent(
     onEditProfile: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenActivityControls: () -> Unit,
+    onOpenSafetyCenter: () -> Unit,
     onOpenAgeVerification: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onOpenAlbums: () -> Unit,
@@ -189,7 +190,8 @@ internal fun ProfileHubContent(
                 ProfileHubRow(
                     icon = Icons.Filled.Security,
                     label = "Safety center",
-                    value = "Guidelines"
+                    value = safetyCenterSummary(state),
+                    onClick = onOpenSafetyCenter
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.LocalFireDepartment,

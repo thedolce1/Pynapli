@@ -4,6 +4,8 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.AuthUserDto
+import com.pynapli.shared.network.dto.BlockSummaryDto
+import com.pynapli.shared.network.dto.BlocksListDto
 import com.pynapli.shared.network.dto.DiscoverySettingsDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.ProfileDto
@@ -69,6 +71,58 @@ class ProfileHubStateHolderTest {
         assertEquals(true, stateHolder.state.value.ageVerificationDialogVisible)
         assertEquals("Add your birthdate.", stateHolder.state.value.errorMessage)
     }
+
+    @Test
+    fun loadBlocksShowsSafetyCenterBlockList() = runBlocking {
+        val repository = FakeProfileHubRepository(
+            listBlocksResult = AppResult.Success(
+                BlocksListDto(
+                    blocks = listOf(
+                        BlockSummaryDto(
+                            blockedUserId = "blocked-1",
+                            blockedDisplayName = "Jordan",
+                            createdAt = "2026-05-26T12:00:00Z"
+                        )
+                    )
+                )
+            )
+        )
+        val stateHolder = ProfileHubStateHolder(repository)
+
+        stateHolder.openSafetyCenter()
+        stateHolder.loadBlocks()
+
+        assertEquals(true, stateHolder.state.value.safetyCenterVisible)
+        assertEquals("Jordan", stateHolder.state.value.blockedUsers.single().blockedDisplayName)
+        assertEquals(null, stateHolder.state.value.errorMessage)
+    }
+
+    @Test
+    fun unblockUserRemovesBlockedUserAndShowsFeedback() = runBlocking {
+        val repository = FakeProfileHubRepository(
+            listBlocksResult = AppResult.Success(
+                BlocksListDto(
+                    blocks = listOf(
+                        BlockSummaryDto(
+                            blockedUserId = "blocked-1",
+                            blockedDisplayName = "Jordan",
+                            createdAt = "2026-05-26T12:00:00Z"
+                        )
+                    )
+                )
+            ),
+            unblockResult = AppResult.Success(Unit)
+        )
+        val stateHolder = ProfileHubStateHolder(repository)
+        stateHolder.openSafetyCenter()
+        stateHolder.loadBlocks()
+
+        stateHolder.unblockUser("blocked-1")
+
+        assertEquals("blocked-1", repository.lastUnblockedUserId)
+        assertEquals(emptyList(), stateHolder.state.value.blockedUsers)
+        assertEquals("User unblocked", stateHolder.state.value.feedbackMessage)
+    }
 }
 
 private class FakeProfileHubRepository(
@@ -78,9 +132,15 @@ private class FakeProfileHubRepository(
     ),
     private val startAgeResult: AppResult<AgeVerificationStatusDto> = AppResult.Failure(
         AppError("UNIMPLEMENTED", "Not implemented.")
+    ),
+    private val listBlocksResult: AppResult<BlocksListDto> = AppResult.Success(BlocksListDto(emptyList())),
+    private val unblockResult: AppResult<Unit> = AppResult.Failure(
+        AppError("UNIMPLEMENTED", "Not implemented.")
     )
 ) : ProfileHubRepository {
     var lastStartRequest: StartAgeVerificationRequestDto? = null
+        private set
+    var lastUnblockedUserId: String? = null
         private set
 
     override suspend fun loadMe(): AppResult<MeDto> = loadMeResult
@@ -99,6 +159,13 @@ private class FakeProfileHubRepository(
 
     override suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun listBlocks(): AppResult<BlocksListDto> = listBlocksResult
+
+    override suspend fun unblockUser(userId: String): AppResult<Unit> {
+        lastUnblockedUserId = userId
+        return unblockResult
+    }
 }
 
 private fun testMe(): MeDto =

@@ -63,6 +63,7 @@ class ProfileHubStateHolder(
                 activityVisible = false,
                 appSettingsVisible = false,
                 notificationCenterVisible = false,
+                safetyCenterVisible = false,
                 ageVerificationDialogVisible = false,
                 draft = existing.me?.profile?.toDraft() ?: existing.draft,
                 feedbackMessage = null,
@@ -89,6 +90,7 @@ class ProfileHubStateHolder(
                 activityVisible = false,
                 appSettingsVisible = false,
                 notificationCenterVisible = false,
+                safetyCenterVisible = false,
                 ageVerificationDialogVisible = false,
                 privacyDraft = existing.me?.discoverySettings?.toPrivacyDraft() ?: existing.privacyDraft,
                 feedbackMessage = null,
@@ -115,6 +117,7 @@ class ProfileHubStateHolder(
                 privacyVisible = false,
                 appSettingsVisible = false,
                 notificationCenterVisible = false,
+                safetyCenterVisible = false,
                 ageVerificationDialogVisible = false,
                 activityDraft = existing.me?.discoverySettings?.toActivityDraft() ?: existing.activityDraft,
                 feedbackMessage = null,
@@ -141,6 +144,7 @@ class ProfileHubStateHolder(
                 privacyVisible = false,
                 activityVisible = false,
                 notificationCenterVisible = false,
+                safetyCenterVisible = false,
                 ageVerificationDialogVisible = false,
                 feedbackMessage = null,
                 errorMessage = null
@@ -160,6 +164,7 @@ class ProfileHubStateHolder(
                 privacyVisible = false,
                 activityVisible = false,
                 appSettingsVisible = false,
+                safetyCenterVisible = false,
                 ageVerificationDialogVisible = false,
                 feedbackMessage = null,
                 errorMessage = null
@@ -180,6 +185,7 @@ class ProfileHubStateHolder(
                 activityVisible = false,
                 appSettingsVisible = false,
                 notificationCenterVisible = false,
+                safetyCenterVisible = false,
                 feedbackMessage = null,
                 errorMessage = null
             )
@@ -188,6 +194,33 @@ class ProfileHubStateHolder(
 
     fun dismissAgeVerification() {
         _state.update { it.copy(ageVerificationDialogVisible = false, errorMessage = null) }
+    }
+
+    fun openSafetyCenter() {
+        _state.update { existing ->
+            existing.copy(
+                safetyCenterVisible = true,
+                editVisible = false,
+                privacyVisible = false,
+                activityVisible = false,
+                appSettingsVisible = false,
+                notificationCenterVisible = false,
+                ageVerificationDialogVisible = false,
+                feedbackMessage = null,
+                errorMessage = null
+            )
+        }
+    }
+
+    fun dismissSafetyCenter() {
+        _state.update {
+            it.copy(
+                safetyCenterVisible = false,
+                isBlocksLoading = false,
+                unblockingUserId = null,
+                errorMessage = null
+            )
+        }
     }
 
     fun closeAppSettingsWithFeedback(message: String) {
@@ -249,6 +282,74 @@ class ProfileHubStateHolder(
 
     fun clearMessage() {
         _state.update { it.copy(errorMessage = null, feedbackMessage = null) }
+    }
+
+    suspend fun loadBlocks() {
+        if (state.value.isBlocksLoading) return
+
+        _state.update {
+            it.copy(
+                isBlocksLoading = true,
+                errorMessage = null,
+                feedbackMessage = null
+            )
+        }
+
+        when (val result = repository.listBlocks()) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        blockedUsers = result.value.blocks,
+                        isBlocksLoading = false,
+                        errorMessage = null
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update {
+                    it.copy(
+                        isBlocksLoading = false,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun unblockUser(userId: String) {
+        val current = state.value
+        if (current.unblockingUserId != null) return
+
+        _state.update {
+            it.copy(
+                unblockingUserId = userId,
+                errorMessage = null,
+                feedbackMessage = null
+            )
+        }
+
+        when (val result = repository.unblockUser(userId)) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        blockedUsers = it.blockedUsers.filterNot { block -> block.blockedUserId == userId },
+                        unblockingUserId = null,
+                        errorMessage = null,
+                        feedbackMessage = "User unblocked"
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update {
+                    it.copy(
+                        unblockingUserId = null,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
     }
 
     fun reset() {
