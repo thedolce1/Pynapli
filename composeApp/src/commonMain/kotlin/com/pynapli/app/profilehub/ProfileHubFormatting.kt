@@ -87,6 +87,15 @@ internal fun appSettingsSummary(state: AppSettingsUiState): String {
     return "${themeModeLabel(state.settings.themeMode)}, ${distanceUnitShortLabel(state.settings.distanceUnit)}"
 }
 
+internal fun dataExportSummary(state: ProfileHubUiState): String = when {
+    state.isDataExportMutating -> "Requesting"
+    state.latestDataExport == null -> "Request a copy"
+    state.latestDataExport.status == "ready" -> "Ready"
+    state.latestDataExport.status == "failed" -> "Needs retry"
+    state.latestDataExport.status == "expired" -> "Expired"
+    else -> "Requested"
+}
+
 internal fun quietHoursSummary(draft: AppSettingsDraft): String =
     if (!draft.quietHoursEnabled) {
         "Off"

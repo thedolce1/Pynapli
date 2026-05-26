@@ -1,6 +1,9 @@
 package com.pynapli.app.profilehub
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.AccountDataExportDto
+import com.pynapli.shared.network.dto.DeleteAccountRequestDto
+import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.BlocksListDto
 import com.pynapli.shared.network.dto.HiddenProfilesListDto
@@ -35,4 +38,10 @@ interface ProfileHubRepository {
     suspend fun listReportHistory(): AppResult<ReportHistoryListDto>
 
     suspend fun getSupportContact(): AppResult<SupportContactDto>
+
+    suspend fun latestDataExportRequest(): AppResult<AccountDataExportDto?>
+
+    suspend fun requestDataExport(): AppResult<AccountDataExportDto>
+
+    suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto>
 }

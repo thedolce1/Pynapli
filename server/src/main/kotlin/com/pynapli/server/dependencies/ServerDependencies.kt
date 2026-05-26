@@ -7,6 +7,8 @@ import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.activity.ActivityCursorCodec
 import com.pynapli.server.activity.JdbcActivityRetentionRepository
 import com.pynapli.server.activity.JdbcActivityRepository
+import com.pynapli.server.account.AccountLifecycleService
+import com.pynapli.server.account.JdbcAccountLifecycleRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.config.ServerConfig
@@ -128,6 +130,7 @@ class ServerDependencies(
     val topPicksService: TopPicksService?,
     val tonightAvailabilityService: TonightAvailabilityService?,
     val ageVerificationService: AgeVerificationService?,
+    val accountLifecycleService: AccountLifecycleService?,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
     private val profileActivityScope: CoroutineScope? = null,
     private val probes: List<DependencyProbe>
@@ -161,6 +164,9 @@ class ServerDependencies(
             val redis = RedisDependencyProbe(redisCache)
             val profileActivityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             val authService = AuthService(JdbcAuthRepository(database.dataSource))
+            val accountLifecycleService = AccountLifecycleService(
+                JdbcAccountLifecycleRepository(database.dataSource)
+            )
             val locationService = LocationService(JdbcLocationRepository(database.dataSource))
             val travelLocationRepository = JdbcTravelLocationRepository(database.dataSource)
             val presenceRepository = RedisPresenceRepository(redisCache)
@@ -412,6 +418,7 @@ class ServerDependencies(
                 topPicksService = topPicksService,
                 tonightAvailabilityService = tonightAvailabilityService,
                 ageVerificationService = ageVerificationService,
+                accountLifecycleService = accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,
                 profileActivityScope = profileActivityScope,
                 probes = listOf(postgres, redis)
@@ -466,6 +473,7 @@ class ServerDependencies(
                 topPicksService = null,
                 tonightAvailabilityService = null,
                 ageVerificationService = null,
+                accountLifecycleService = null,
                 requestProfilerFactory = RequestProfilerFactory.disabled(),
                 probes = emptyList()
             )

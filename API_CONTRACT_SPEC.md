@@ -125,6 +125,24 @@ Rules:
 - Email signup requires `birthdate`, `confirmedAdult=true`, `acceptedTerms=true`, and `acceptedPrivacy=true`.
 - Ktor validates adult age from DOB, then records acceptance timestamps and server-controlled terms/privacy versions.
 
+## Account Lifecycle API
+
+```http
+GET  /v1/account/data-export
+POST /v1/account/data-export
+POST /v1/account/delete
+```
+
+Rules:
+
+- Account lifecycle routes require bearer auth.
+- `GET /v1/account/data-export` returns the latest export request or `204 No Content`.
+- `POST /v1/account/data-export` records a server-side export request and returns its status.
+- Production archive generation and signed download delivery happen asynchronously after the request.
+- `POST /v1/account/delete` requires `confirmation = "DELETE"`.
+- Account deletion is server-authoritative: set user status to `deleted`, set `deleted_at`, hide the profile, disable Grid/Swipe/events/viewed-list discovery, clear active travel visibility, revoke sessions, and record a deletion event.
+- Safety, moderation, and legal-retention records are preserved where required instead of hard-deleted.
+
 ## Me / Profile API
 
 ```http

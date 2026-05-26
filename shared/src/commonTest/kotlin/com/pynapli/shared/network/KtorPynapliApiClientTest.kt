@@ -3,6 +3,7 @@ package com.pynapli.shared.network
 import com.pynapli.shared.core.config.PynapliConfig
 import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.AccountDataExportDto
 import com.pynapli.shared.network.dto.ActivitySummaryDto
 import com.pynapli.shared.network.dto.BoostActivationDto
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
@@ -14,6 +15,8 @@ import com.pynapli.shared.network.dto.ConversationListResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CurrentLocationDto
+import com.pynapli.shared.network.dto.DeleteAccountRequestDto
+import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
 import com.pynapli.shared.network.dto.MarkActivitySeenRequestDto
@@ -143,6 +146,65 @@ class KtorPynapliApiClientTest {
         assertEquals("/v1/me", requestPath)
         assertEquals(HttpMethod.Get, requestMethod)
         assertEquals("Seb Dev", (success.value as MeDto).profile.displayName)
+    }
+
+    @Test
+    fun requestDataExportSendsBearerTokenAndMapsStatus() = runBlocking {
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = """
+                    {
+                      "requestId": "export-1",
+                      "status": "requested",
+                      "requestedAt": "2026-05-26T12:00:00Z",
+                      "message": "Your data export request has been received."
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.requestDataExport()
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("/v1/account/data-export", requestPath)
+        assertEquals(HttpMethod.Post, requestMethod)
+        assertEquals("requested", (success.value as AccountDataExportDto).status)
+    }
+
+    @Test
+    fun deleteAccountSendsConfirmationAndMapsResponse() = runBlocking {
+        var requestPath: String? = null
+        var requestMethod: HttpMethod? = null
+        val httpClient = testHttpClient { request ->
+            requestPath = request.url.encodedPath
+            requestMethod = request.method
+            respond(
+                content = """
+                    {
+                      "deleted": true,
+                      "revokedSessionCount": 2,
+                      "message": "Your account has been deleted and removed from discovery."
+                    }
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            )
+        }
+        val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+        val result = api.deleteAccount(DeleteAccountRequestDto("DELETE"))
+
+        val success = assertIs<AppResult.Success<*>>(result)
+        assertEquals("/v1/account/delete", requestPath)
+        assertEquals(HttpMethod.Post, requestMethod)
+        assertEquals(true, (success.value as DeleteAccountResponseDto).deleted)
     }
 
     @Test

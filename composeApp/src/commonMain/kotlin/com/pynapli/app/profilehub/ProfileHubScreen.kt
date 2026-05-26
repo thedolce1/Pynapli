@@ -1,7 +1,11 @@
 package com.pynapli.app.profilehub
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -14,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.app.messages.MessagesUiState
@@ -48,6 +53,8 @@ fun ProfileHubScreen(
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var showDeleteAccountConfirm by remember { mutableStateOf(false) }
+    var deleteAccountConfirmation by remember { mutableStateOf("") }
 
     LaunchedEffect(stateHolder) {
         stateHolder.load()
@@ -161,6 +168,11 @@ fun ProfileHubScreen(
                 stateHolder.openAppSettings()
             },
             onOpenAlbums = onOpenAlbums,
+            onRequestDataExport = { scope.launch { stateHolder.requestDataExport() } },
+            onDeleteAccountClick = {
+                deleteAccountConfirmation = ""
+                showDeleteAccountConfirm = true
+            },
             onLogoutClick = { showLogoutConfirm = true },
             onClearMessage = stateHolder::clearMessage,
             modifier = modifier
@@ -198,6 +210,29 @@ fun ProfileHubScreen(
             }
         )
     }
+
+    if (showDeleteAccountConfirm) {
+        DeleteAccountDialog(
+            confirmation = deleteAccountConfirmation,
+            isDeleting = state.isDeletingAccount,
+            onConfirmationChanged = { deleteAccountConfirmation = it },
+            onDismiss = {
+                if (!state.isDeletingAccount) {
+                    showDeleteAccountConfirm = false
+                    deleteAccountConfirmation = ""
+                }
+            },
+            onDelete = {
+                scope.launch {
+                    if (stateHolder.deleteAccount(deleteAccountConfirmation)) {
+                        showDeleteAccountConfirm = false
+                        deleteAccountConfirmation = ""
+                        onLogout()
+                    }
+                }
+            }
+        )
+    }
 }
 
 private fun SupportContactDto.toMailtoUri(): String =
@@ -216,6 +251,51 @@ private fun String.mailtoEncode(): String = buildString {
             }
         }
     }
+}
+
+@Composable
+private fun DeleteAccountDialog(
+    confirmation: String,
+    isDeleting: Boolean,
+    onConfirmationChanged: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onDelete: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete account?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Your profile will be removed from Grid, Swipe, events, viewed lists, and active sessions. Safety and legal retention records may be preserved."
+                )
+                OutlinedTextField(
+                    value = confirmation,
+                    onValueChange = onConfirmationChanged,
+                    label = { Text("Type DELETE") },
+                    singleLine = true,
+                    enabled = !isDeleting,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDelete,
+                enabled = !isDeleting && confirmation.trim() == "DELETE"
+            ) {
+                Text(if (isDeleting) "Deleting" else "Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isDeleting
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable

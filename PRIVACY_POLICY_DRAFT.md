@@ -193,6 +193,13 @@ Account deletion should:
 - Remove or anonymize profile data where required.
 - Retain limited safety/legal records where necessary.
 
+Current MVP implementation:
+
+- Users can request deletion from Profile/Settings by typing `DELETE`.
+- The server marks the account deleted, hides the profile, disables discovery flags, clears active travel visibility, revokes sessions, and records a deletion event.
+- Safety/moderation/legal-retention rows are preserved as soft-retention records until formal retention schedules are finalized.
+- Users can request a data export from Profile/Settings; production archive generation and download delivery are still to be defined.
+
 ## Children
 
 Pynapli is 18+ and not intended for minors.
@@ -210,8 +217,8 @@ Security contact placeholder:
 ## Implementation Checklist
 
 - [x] Privacy controls exist in settings.
-- [ ] Account deletion exists.
-- [ ] Data export process defined.
+- [x] Account deletion exists as a server-authoritative soft-delete path.
+- [ ] Partial: data export request exists; production archive generation/download process is not complete.
 - [ ] Analytics redaction rules implemented.
 - [ ] Crash reporting redaction rules implemented.
 - [x] Location retention minimized.

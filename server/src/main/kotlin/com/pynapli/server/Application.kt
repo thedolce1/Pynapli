@@ -1,6 +1,7 @@
 package com.pynapli.server
 
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.account.configureAccountLifecycleRoutes
 import com.pynapli.server.activity.configureActivityStreamRoutes
 import com.pynapli.server.activity.configureActivityRoutes
 import com.pynapli.server.auth.configureAuthRoutes
@@ -71,6 +72,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)
     configureAuthRoutes(dependencies.authService)
+    configureAccountLifecycleRoutes(dependencies.authService, dependencies.accountLifecycleService)
     configureProfileRoutes(dependencies.authService, dependencies.profileService, dependencies.requestProfilerFactory)
     configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)
     configureProfileLinkRoutes(dependencies.authService, dependencies.profileLinkService)

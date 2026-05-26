@@ -148,6 +148,10 @@ class AuthService(
         return repository.revokeSession(session.id)
     }
 
+    fun invalidateCachedSessionsForUser(userId: UUID) {
+        accessSessionCache.entries.removeIf { (_, cached) -> cached.user.id == userId }
+    }
+
     private suspend fun createSession(
         user: UserRecord,
         deviceId: String?,

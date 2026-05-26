@@ -76,6 +76,23 @@ class AuthServiceTest {
     }
 
     @Test
+    fun userCacheInvalidationForcesFreshAccountStatusCheck() = runBlocking {
+        val repository = InMemoryAuthRepository()
+        val service = AuthService(repository)
+        val session = signup(service)
+        val userId = UUID.fromString(session.user.userId)
+        service.authenticate(session.accessToken)
+        repository.setUserStatus(userId, "deleted")
+
+        service.invalidateCachedSessionsForUser(userId)
+
+        val error = assertFailsWith<AuthException> {
+            service.authenticate(session.accessToken)
+        }
+        assertEquals("ACCOUNT_NOT_ACTIVE", error.code)
+    }
+
+    @Test
     fun suspendedCurrentUserCannotAuthenticateExistingSession() = runBlocking {
         val repository = InMemoryAuthRepository()
         val service = AuthService(repository)

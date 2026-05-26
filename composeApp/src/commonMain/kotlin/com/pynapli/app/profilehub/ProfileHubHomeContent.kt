@@ -9,6 +9,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CardMembership
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Lock
@@ -45,6 +47,8 @@ internal fun ProfileHubContent(
     onOpenAgeVerification: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onOpenAlbums: () -> Unit,
+    onRequestDataExport: () -> Unit,
+    onDeleteAccountClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier
@@ -215,6 +219,18 @@ internal fun ProfileHubContent(
                     label = "App settings",
                     value = appSettingsSummary(appSettingsState),
                     onClick = onOpenAppSettings
+                )
+                ProfileHubRow(
+                    icon = Icons.Filled.Download,
+                    label = "Data export",
+                    value = dataExportSummary(state),
+                    onClick = onRequestDataExport
+                )
+                ProfileHubRow(
+                    icon = Icons.Filled.Delete,
+                    label = "Delete account",
+                    value = if (state.isDeletingAccount) "Deleting" else "Permanent",
+                    onClick = onDeleteAccountClick
                 )
                 ProfileHubRow(
                     icon = Icons.AutoMirrored.Filled.Logout,

@@ -1,6 +1,7 @@
 package com.pynapli.app.profilehub
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.DeleteAccountRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,10 +24,15 @@ class ProfileHubStateHolder(
                     is AppResult.Success -> status.value
                     is AppResult.Failure -> null
                 }
+                val latestDataExport = when (val export = repository.latestDataExportRequest()) {
+                    is AppResult.Success -> export.value
+                    is AppResult.Failure -> null
+                }
                 _state.update { existing ->
                     existing.copy(
                         me = result.value,
                         ageVerificationStatus = ageVerificationStatus,
+                        latestDataExport = latestDataExport,
                         draft = if (existing.editVisible) existing.draft else result.value.profile.toDraft(),
                         privacyDraft = if (existing.privacyVisible) {
                             existing.privacyDraft
@@ -286,6 +292,81 @@ class ProfileHubStateHolder(
 
     fun clearMessage() {
         _state.update { it.copy(errorMessage = null, feedbackMessage = null) }
+    }
+
+    suspend fun requestDataExport() {
+        val current = state.value
+        if (current.isDataExportMutating) return
+
+        _state.update {
+            it.copy(
+                isDataExportMutating = true,
+                errorMessage = null,
+                feedbackMessage = null
+            )
+        }
+
+        when (val result = repository.requestDataExport()) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        latestDataExport = result.value,
+                        isDataExportMutating = false,
+                        errorMessage = null,
+                        feedbackMessage = result.value.message
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update {
+                    it.copy(
+                        isDataExportMutating = false,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun deleteAccount(confirmation: String): Boolean {
+        val current = state.value
+        if (current.isDeletingAccount) return false
+
+        _state.update {
+            it.copy(
+                isDeletingAccount = true,
+                errorMessage = null,
+                feedbackMessage = null
+            )
+        }
+
+        return when (
+            val result = repository.deleteAccount(
+                DeleteAccountRequestDto(confirmation = confirmation)
+            )
+        ) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        isDeletingAccount = false,
+                        errorMessage = null,
+                        feedbackMessage = result.value.message
+                    )
+                }
+                true
+            }
+
+            is AppResult.Failure -> {
+                _state.update {
+                    it.copy(
+                        isDeletingAccount = false,
+                        errorMessage = result.error.message
+                    )
+                }
+                false
+            }
+        }
     }
 
     suspend fun loadBlocks() {

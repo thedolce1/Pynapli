@@ -478,6 +478,17 @@ Account settings include:
 - Delete account
 - Logout
 
+### Data Export
+
+Data export is a server-backed account control.
+
+Current MVP behavior:
+
+- User can request an export from Profile/Settings.
+- Server records the request in `account_data_export_requests`.
+- UI shows the latest request status.
+- Production archive generation/download delivery remains a follow-up job.
+
 ### Delete Account
 
 Delete account must be clear and compliant.
@@ -489,6 +500,8 @@ Rules:
 - Confirm intentionally.
 - Revoke sessions.
 - Remove profile from discovery.
+- Preserve safety/legal retention records where required.
+- Clear active travel visibility and discovery participation.
 
 ### Logout
 
@@ -646,7 +659,8 @@ Client-local:
 - [x] Hidden-profile management remains separate from blocking.
 - [x] Report history and support contact exist in Safety Center.
 - [ ] Discreet app icon exists or is planned.
-- [ ] Partial: logout exists; data export and account deletion are not implemented.
+- [x] Logout exists.
+- [ ] Partial: data export request and account deletion exist; production export archive generation is not implemented.
 - [x] Server-authoritative settings are not only local.
 
 ## Do Not Implement

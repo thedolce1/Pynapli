@@ -2,10 +2,13 @@ package com.pynapli.app.profilehub
 
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.AccountDataExportDto
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlocksListDto
+import com.pynapli.shared.network.dto.DeleteAccountRequestDto
+import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import com.pynapli.shared.network.dto.DiscoverySettingsDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfilesListDto
@@ -229,6 +232,54 @@ class ProfileHubStateHolderTest {
         assertEquals("support@pynapli.com", stateHolder.state.value.supportContact?.email)
         assertEquals(null, stateHolder.state.value.errorMessage)
     }
+
+    @Test
+    fun requestDataExportShowsServerBackedStatus() = runBlocking {
+        val repository = FakeProfileHubRepository(
+            requestDataExportResult = AppResult.Success(testDataExport())
+        )
+        val stateHolder = ProfileHubStateHolder(repository)
+
+        stateHolder.requestDataExport()
+
+        assertEquals("requested", stateHolder.state.value.latestDataExport?.status)
+        assertEquals("Your data export request has been received.", stateHolder.state.value.feedbackMessage)
+    }
+
+    @Test
+    fun deleteAccountSendsConfirmationAndReportsSuccess() = runBlocking {
+        val repository = FakeProfileHubRepository(
+            deleteAccountResult = AppResult.Success(
+                DeleteAccountResponseDto(
+                    deleted = true,
+                    revokedSessionCount = 2,
+                    message = "Your account has been deleted and removed from discovery."
+                )
+            )
+        )
+        val stateHolder = ProfileHubStateHolder(repository)
+
+        val deleted = stateHolder.deleteAccount("DELETE")
+
+        assertEquals(true, deleted)
+        assertEquals("DELETE", repository.lastDeleteAccountRequest?.confirmation)
+        assertEquals("Your account has been deleted and removed from discovery.", stateHolder.state.value.feedbackMessage)
+    }
+
+    @Test
+    fun failedDeleteAccountShowsErrorAndKeepsSession() = runBlocking {
+        val repository = FakeProfileHubRepository(
+            deleteAccountResult = AppResult.Failure(
+                AppError("INVALID_ACCOUNT_DELETE_CONFIRMATION", "Type DELETE to confirm account deletion.")
+            )
+        )
+        val stateHolder = ProfileHubStateHolder(repository)
+
+        val deleted = stateHolder.deleteAccount("delete")
+
+        assertEquals(false, deleted)
+        assertEquals("Type DELETE to confirm account deletion.", stateHolder.state.value.errorMessage)
+    }
 }
 
 private class FakeProfileHubRepository(
@@ -258,6 +309,13 @@ private class FakeProfileHubRepository(
             subject = "Pynapli support request",
             body = "Account reference: user-1"
         )
+    ),
+    private val latestDataExportResult: AppResult<AccountDataExportDto?> = AppResult.Success(null),
+    private val requestDataExportResult: AppResult<AccountDataExportDto> = AppResult.Failure(
+        AppError("UNIMPLEMENTED", "Not implemented.")
+    ),
+    private val deleteAccountResult: AppResult<DeleteAccountResponseDto> = AppResult.Failure(
+        AppError("UNIMPLEMENTED", "Not implemented.")
     )
 ) : ProfileHubRepository {
     var lastStartRequest: StartAgeVerificationRequestDto? = null
@@ -265,6 +323,8 @@ private class FakeProfileHubRepository(
     var lastUnblockedUserId: String? = null
         private set
     var lastUnhiddenUserId: String? = null
+        private set
+    var lastDeleteAccountRequest: DeleteAccountRequestDto? = null
         private set
 
     override suspend fun loadMe(): AppResult<MeDto> = loadMeResult
@@ -301,7 +361,24 @@ private class FakeProfileHubRepository(
     override suspend fun listReportHistory(): AppResult<ReportHistoryListDto> = listReportsResult
 
     override suspend fun getSupportContact(): AppResult<SupportContactDto> = supportContactResult
+
+    override suspend fun latestDataExportRequest(): AppResult<AccountDataExportDto?> = latestDataExportResult
+
+    override suspend fun requestDataExport(): AppResult<AccountDataExportDto> = requestDataExportResult
+
+    override suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto> {
+        lastDeleteAccountRequest = request
+        return deleteAccountResult
+    }
 }
+
+private fun testDataExport(): AccountDataExportDto =
+    AccountDataExportDto(
+        requestId = "export-1",
+        status = "requested",
+        requestedAt = "2026-05-26T12:00:00Z",
+        message = "Your data export request has been received."
+    )
 
 private fun testMe(): MeDto =
     MeDto(

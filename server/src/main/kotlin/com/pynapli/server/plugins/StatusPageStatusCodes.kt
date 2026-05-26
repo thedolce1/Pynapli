@@ -2,6 +2,12 @@ package com.pynapli.server.plugins
 
 import io.ktor.http.HttpStatusCode
 
+internal fun accountLifecycleStatusFor(code: String): HttpStatusCode = when (code) {
+    "ACCOUNT_ALREADY_DELETED" -> HttpStatusCode.Conflict
+    "INVALID_ACCOUNT_DELETE_CONFIRMATION" -> HttpStatusCode.BadRequest
+    else -> HttpStatusCode.BadRequest
+}
+
 internal fun profileStatusFor(code: String): HttpStatusCode = when (code) {
     "PROFILE_NOT_FOUND" -> HttpStatusCode.NotFound
     "INVALID_DISPLAY_NAME",

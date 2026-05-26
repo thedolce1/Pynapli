@@ -116,6 +116,45 @@ Indexes:
 - `user_id`
 - `jwt_jti`
 
+### account_data_export_requests
+
+Server-backed data export requests.
+
+Fields:
+
+- `id`
+- `user_id`
+- `status`: requested, processing, ready, failed, expired
+- `requested_at`
+- `completed_at`
+- `expires_at`
+- `download_url`
+- `error_message`
+
+Rules:
+
+- Request creation is immediate and server-authoritative.
+- Archive generation/download URL delivery is asynchronous.
+
+### account_deletion_events
+
+Audit record for user-requested account deletion.
+
+Fields:
+
+- `id`
+- `user_id`
+- `requested_at`
+- `completed_at`
+- `revoked_session_count`
+- `retention_note`
+
+Rules:
+
+- Account deletion soft-deletes `users` (`status='deleted'`, `deleted_at`).
+- Profile and discovery settings are removed from discovery surfaces.
+- Safety/legal retention data is preserved where required.
+
 ## Profile Tables
 
 ### profiles

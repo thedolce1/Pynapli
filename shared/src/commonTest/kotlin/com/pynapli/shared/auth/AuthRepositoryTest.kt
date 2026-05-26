@@ -3,6 +3,7 @@ package com.pynapli.shared.auth
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.AccountDataExportDto
 import com.pynapli.shared.network.dto.ActivityFeedResponseDto
 import com.pynapli.shared.network.dto.ActivitySummaryDto
 import com.pynapli.shared.network.dto.AgeVerificationRequirementsDto
@@ -18,6 +19,8 @@ import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateProfileLinkInvitationRequestDto
+import com.pynapli.shared.network.dto.DeleteAccountRequestDto
+import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
@@ -217,6 +220,15 @@ private class FakeApiClient(
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun logout(): AppResult<LogoutResponseDto> = logoutResult
+
+    override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun requestDataExport(): AppResult<AccountDataExportDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))

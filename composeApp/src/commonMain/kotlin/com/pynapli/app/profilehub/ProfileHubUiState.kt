@@ -1,6 +1,7 @@
 package com.pynapli.app.profilehub
 
 import androidx.compose.runtime.Immutable
+import com.pynapli.shared.network.dto.AccountDataExportDto
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
@@ -26,7 +27,10 @@ data class ProfileHubUiState(
     val hiddenProfiles: List<HiddenProfileSummaryDto> = emptyList(),
     val reportHistory: List<ReportHistoryItemDto> = emptyList(),
     val supportContact: SupportContactDto? = null,
+    val latestDataExport: AccountDataExportDto? = null,
     val isAgeVerificationMutating: Boolean = false,
+    val isDataExportMutating: Boolean = false,
+    val isDeletingAccount: Boolean = false,
     val isBlocksLoading: Boolean = false,
     val isHiddenProfilesLoading: Boolean = false,
     val isReportHistoryLoading: Boolean = false,

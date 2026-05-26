@@ -5,6 +5,7 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ActivityFeedResponseDto
 import com.pynapli.shared.network.dto.ActivitySummaryDto
+import com.pynapli.shared.network.dto.AccountDataExportDto
 import com.pynapli.shared.network.dto.AgeVerificationRequirementsDto
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.ApiErrorDto
@@ -18,6 +19,8 @@ import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateProfileLinkInvitationRequestDto
+import com.pynapli.shared.network.dto.DeleteAccountRequestDto
+import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
@@ -113,6 +116,12 @@ interface PynapliApiClient {
     suspend fun refreshSession(request: RefreshSessionRequestDto): AppResult<AuthSessionDto>
 
     suspend fun logout(): AppResult<LogoutResponseDto>
+
+    suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
+
+    suspend fun requestDataExport(): AppResult<AccountDataExportDto>
+
+    suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto>
 
     suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto>
 
@@ -311,6 +320,35 @@ class KtorPynapliApiClient(
         authenticatedPost { token ->
             httpClient.post(config.endpoint("/v1/auth/logout")) {
                 bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
+        authenticatedPost { token ->
+            val response = httpClient.get(config.endpoint("/v1/account/data-export")) {
+                bearerAuth(token)
+            }
+            if (response.status.value == 204) {
+                AppResult.Success(null)
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                response.toAppResult<AccountDataExportDto>(json) as AppResult<AccountDataExportDto?>
+            }
+        }
+
+    override suspend fun requestDataExport(): AppResult<AccountDataExportDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/account/data-export")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/account/delete")) {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(request)
             }.toAppResult(json)
         }
 
