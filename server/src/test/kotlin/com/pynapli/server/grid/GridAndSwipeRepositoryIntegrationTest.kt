@@ -227,6 +227,41 @@ class GridAndSwipeRepositoryIntegrationTest : StringSpec({
         }
     }
 
+    "swipe deck and action eligibility exclude profiles hidden by the viewer" {
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000020a1")
+            val hiddenTarget = UUID.fromString("00000000-0000-0000-0000-0000000020a2")
+            val visibleTarget = UUID.fromString("00000000-0000-0000-0000-0000000020a3")
+
+            dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+            dataSource.insertDiscoverableUser(hiddenTarget, "Hidden", age = 35, longitude = -122.0836, latitude = 37.4226)
+            dataSource.insertDiscoverableUser(visibleTarget, "Visible", age = 36, longitude = -122.0838, latitude = 37.4228)
+            val service = SwipeService(JdbcSwipeRepository(dataSource))
+
+            val originalDeck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 2))
+            val staleHiddenCard = originalDeck.items.first { it.userId == hiddenTarget.toString() }
+            dataSource.insertHiddenProfile(viewer, hiddenTarget)
+
+            val refreshedDeck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 2))
+            assertEquals(false, refreshedDeck.items.any { it.userId == hiddenTarget.toString() })
+            assertTrue(refreshedDeck.items.any { it.userId == visibleTarget.toString() })
+
+            val error = assertFailsWith<SwipeException> {
+                service.submitAction(
+                    viewer,
+                    SwipeActionRequestDto(
+                        actionId = UUID.randomUUID().toString(),
+                        deckSessionId = originalDeck.deckSessionId,
+                        targetUserId = staleHiddenCard.userId,
+                        action = SwipeAction.LIKE,
+                        cardToken = staleHiddenCard.rankToken
+                    )
+                )
+            }
+            assertEquals("INVALID_SWIPE_TARGET", error.code)
+        }
+    }
+
     "swipe action rejects a stale dealt card after target leaves swipe discovery" {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000002011")
@@ -1625,6 +1660,7 @@ private fun DataSource.analyzeGridPlannerTables() {
                 "discovery_settings",
                 "user_locations",
                 "user_blocks",
+                "user_hidden_profiles",
                 "user_profile_links",
                 "boost_activations",
                 "media_albums",
@@ -1661,6 +1697,26 @@ private fun DataSource.insertBlock(blockerUserId: UUID, blockedUserId: UUID) {
             statement.setObject(1, UUID.randomUUID())
             statement.setObject(2, blockerUserId)
             statement.setObject(3, blockedUserId)
+            statement.executeUpdate()
+        }
+    }
+}
+
+private fun DataSource.insertHiddenProfile(hiderUserId: UUID, hiddenUserId: UUID) {
+    connection.use { connection ->
+        connection.prepareStatement(
+            """
+            INSERT INTO user_hidden_profiles (
+                id,
+                hider_user_id,
+                hidden_user_id
+            )
+            VALUES (?, ?, ?)
+            """.trimIndent()
+        ).use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, hiderUserId)
+            statement.setObject(3, hiddenUserId)
             statement.executeUpdate()
         }
     }

@@ -61,6 +61,12 @@ internal fun Connection.isSwipeActionTargetEligible(
                     AND sa.target_user_id = target.id
                     AND sa.rewound_at IS NULL
               )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM user_hidden_profiles uhp
+                  WHERE uhp.hider_user_id = ?
+                    AND uhp.hidden_user_id = target.id
+              )
         )
         """.trimIndent()
     ).use { statement ->
@@ -71,6 +77,7 @@ internal fun Connection.isSwipeActionTargetEligible(
         statement.setDouble(5, radiusMeters.toDouble())
         statement.setDouble(6, radiusMeters.toDouble())
         statement.setObject(7, viewerUserId)
+        statement.setObject(8, viewerUserId)
         statement.executeQuery().use { rs ->
             rs.next()
             rs.getBoolean(1)
@@ -163,6 +170,12 @@ internal fun Connection.checkSwipeActionPreconditions(
                       WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = target.id)
                          OR (ub.blocker_user_id = target.id AND ub.blocked_user_id = ?)
                   )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM user_hidden_profiles uhp
+                      WHERE uhp.hider_user_id = ?
+                        AND uhp.hidden_user_id = target.id
+                  )
             ) AS target_eligible
         """.trimIndent()
     ).use { statement ->
@@ -181,6 +194,7 @@ internal fun Connection.checkSwipeActionPreconditions(
         statement.setObject(13, viewerUserId)
         statement.setObject(14, viewerUserId)
         statement.setObject(15, viewerUserId)
+        statement.setObject(16, viewerUserId)
         statement.executeQuery().use { rs ->
             rs.next()
             SwipeActionPreconditionCheck(

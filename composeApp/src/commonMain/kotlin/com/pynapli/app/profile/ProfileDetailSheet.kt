@@ -53,6 +53,7 @@ fun ProfileDetailSheet(
     onSpark: () -> Unit,
     onRequestAlbum: () -> Unit,
     onViewPrivateAlbum: () -> Unit,
+    onHide: () -> Unit,
     onBlock: (reason: String?) -> Unit,
     onReport: (category: String, note: String?) -> Unit,
     actionMode: ProfileDetailActionMode = ProfileDetailActionMode.Grid,
@@ -76,6 +77,7 @@ fun ProfileDetailSheet(
     val profilePhotoUrl = profile?.profilePhotoUrl ?: card.thumbnailUrl
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBlockConfirm by remember { mutableStateOf(false) }
+    var showHideConfirm by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
@@ -98,6 +100,7 @@ fun ProfileDetailSheet(
                 distanceLabel = distanceLabel,
                 profilePhotoUrl = profilePhotoUrl,
                 onDismiss = onDismiss,
+                onHideClick = { showHideConfirm = true },
                 onBlockClick = { showBlockConfirm = true },
                 onReportClick = { showReportDialog = true }
             )
@@ -198,6 +201,18 @@ fun ProfileDetailSheet(
                 onBlock(reason)
             },
             onDismiss = { showBlockConfirm = false }
+        )
+    }
+
+    if (showHideConfirm) {
+        HideProfileConfirmDialog(
+            displayName = displayName,
+            isHiding = state.isHiding,
+            onConfirm = {
+                showHideConfirm = false
+                onHide()
+            },
+            onDismiss = { showHideConfirm = false }
         )
     }
 

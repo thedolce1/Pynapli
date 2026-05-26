@@ -20,9 +20,10 @@ import io.ktor.server.routing.routing
 fun Application.configureSafetyRoutes(
     authService: AuthService?,
     blockService: BlockService?,
+    hiddenProfileService: HiddenProfileService?,
     reportService: ReportService?
 ) {
-    if (authService == null || blockService == null || reportService == null) return
+    if (authService == null || blockService == null || hiddenProfileService == null || reportService == null) return
 
     routing {
         get("/v1/blocks") {
@@ -41,6 +42,24 @@ fun Application.configureSafetyRoutes(
             val user = authService.authenticate(call.requiredBearerToken())
             val targetUserId = call.parameters["userId"] ?: throw SafetyException("INVALID_BLOCK_TARGET")
             blockService.unblockUser(user.id, targetUserId)
+            call.respond(HttpStatusCode.NoContent)
+        }
+
+        get("/v1/hidden-profiles") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(hiddenProfileService.listHiddenProfiles(user.id))
+        }
+
+        post("/v1/hidden-profiles/{userId}") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val targetUserId = call.parameters["userId"] ?: throw SafetyException("INVALID_HIDDEN_PROFILE_TARGET")
+            call.respond(hiddenProfileService.hideProfile(user.id, targetUserId))
+        }
+
+        delete("/v1/hidden-profiles/{userId}") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val targetUserId = call.parameters["userId"] ?: throw SafetyException("INVALID_HIDDEN_PROFILE_TARGET")
+            hiddenProfileService.unhideProfile(user.id, targetUserId)
             call.respond(HttpStatusCode.NoContent)
         }
 

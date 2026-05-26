@@ -56,7 +56,10 @@ import com.pynapli.server.profilelink.JdbcProfileLinkRepository
 import com.pynapli.server.profilelink.ProfileLinkService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockService
+import com.pynapli.server.safety.HiddenProfileRepository
+import com.pynapli.server.safety.HiddenProfileService
 import com.pynapli.server.safety.JdbcBlockRepository
+import com.pynapli.server.safety.JdbcHiddenProfileRepository
 import com.pynapli.server.safety.JdbcReportRepository
 import com.pynapli.server.safety.JdbcRiskRepository
 import com.pynapli.server.safety.RateLimitService
@@ -108,6 +111,7 @@ class ServerDependencies(
     val notificationService: NotificationService?,
     val notificationDispatchWorker: NotificationDispatchWorker?,
     val blockService: BlockService?,
+    val hiddenProfileService: HiddenProfileService?,
     val reportService: ReportService?,
     val swipeService: SwipeService?,
     val subscriptionService: SubscriptionService?,
@@ -118,6 +122,7 @@ class ServerDependencies(
     val presenceBroadcaster: PresenceBroadcaster?,
     val presenceOfflineScanner: PresenceOfflineScanner?,
     val blockRepository: BlockRepository?,
+    val hiddenProfileRepository: HiddenProfileRepository?,
     val savedGridFilterService: SavedGridFilterService?,
     val savedSwipeFilterService: SavedSwipeFilterService?,
     val topPicksService: TopPicksService?,
@@ -196,6 +201,8 @@ class ServerDependencies(
             }
             val blockRepository = JdbcBlockRepository(database.dataSource)
             val blockService = BlockService(blockRepository)
+            val hiddenProfileRepository = JdbcHiddenProfileRepository(database.dataSource)
+            val hiddenProfileService = HiddenProfileService(hiddenProfileRepository)
             val riskService = RiskService(JdbcRiskRepository(database.dataSource))
             val riskPolicyService = RiskPolicyService(riskService)
             val rateLimitService = RateLimitService(
@@ -304,6 +311,7 @@ class ServerDependencies(
                 presenceService = presenceService,
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
                 blockRepository = blockRepository,
+                hiddenProfileRepository = hiddenProfileRepository,
                 subscriptionService = subscriptionService,
                 viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
                 rateLimitService = rateLimitService
@@ -386,6 +394,7 @@ class ServerDependencies(
                 notificationService = notificationService,
                 notificationDispatchWorker = notificationDispatchWorker,
                 blockService = blockService,
+                hiddenProfileService = hiddenProfileService,
                 reportService = reportService,
                 swipeService = swipeService,
                 subscriptionService = subscriptionService,
@@ -396,6 +405,7 @@ class ServerDependencies(
                 presenceBroadcaster = presenceBroadcaster,
                 presenceOfflineScanner = presenceOfflineScanner,
                 blockRepository = blockRepository,
+                hiddenProfileRepository = hiddenProfileRepository,
                 savedGridFilterService = savedGridFilterService,
                 savedSwipeFilterService = savedSwipeFilterService,
                 topPicksService = topPicksService,
@@ -438,6 +448,7 @@ class ServerDependencies(
                 notificationService = null,
                 notificationDispatchWorker = null,
                 blockService = null,
+                hiddenProfileService = null,
                 reportService = null,
                 swipeService = null,
                 subscriptionService = null,
@@ -448,6 +459,7 @@ class ServerDependencies(
                 presenceBroadcaster = null,
                 presenceOfflineScanner = null,
                 blockRepository = null,
+                hiddenProfileRepository = null,
                 savedGridFilterService = null,
                 savedSwipeFilterService = null,
                 topPicksService = null,

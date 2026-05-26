@@ -36,6 +36,8 @@ class JdbcSwipeRepository(
             if (viewerLocationKey == null) {
                 return@withContext SwipeDeckResult(viewerHadLocation = false, cards = emptyList())
             }
+            val hiddenTargetUserIds = connection.listHiddenProfileIds(viewerUserId)
+            val discoveryExcludedTargetIds = excludedTargetUserIds + hiddenTargetUserIds
 
             // Two-phase deck query (mirrors the Grid pattern from IMPLEMENTATION_AUDIT L70):
             //   Phase 1 ranks candidates with the cheap row-level filters and base profile
@@ -49,7 +51,7 @@ class JdbcSwipeRepository(
                     radiusMeters = radiusMeters,
                     limit = limit,
                     filters = filters,
-                    excludedTargetUserIds = excludedTargetUserIds
+                    excludedTargetUserIds = discoveryExcludedTargetIds
                 )
             }
 
@@ -82,6 +84,16 @@ class JdbcSwipeRepository(
                     verified = row.verified,
                     visiting = row.visiting
                 )
+            }.map { card ->
+                if (card.linkedPartnerUserId in hiddenTargetUserIds) {
+                    card.copy(
+                        linkedPartnerUserId = null,
+                        linkedPartnerDisplayName = null,
+                        linkedPartnerThumbnailMediaAssetId = null
+                    )
+                } else {
+                    card
+                }
             }
 
             SwipeDeckResult(viewerHadLocation = true, cards = cards)
@@ -415,3 +427,21 @@ class JdbcSwipeRepository(
     }
 
 }
+
+private fun Connection.listHiddenProfileIds(viewerUserId: UUID): Set<UUID> =
+    prepareStatement(
+        """
+        SELECT hidden_user_id
+        FROM user_hidden_profiles
+        WHERE hider_user_id = ?
+        """.trimIndent()
+    ).use { statement ->
+        statement.setObject(1, viewerUserId)
+        statement.executeQuery().use { rs ->
+            buildSet {
+                while (rs.next()) {
+                    add(rs.getObject("hidden_user_id", UUID::class.java))
+                }
+            }
+        }
+    }

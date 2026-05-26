@@ -28,6 +28,8 @@ import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlockUserRequestDto
 import com.pynapli.shared.network.dto.BlocksListDto
 import com.pynapli.shared.network.dto.CreateReportRequestDto
+import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
+import com.pynapli.shared.network.dto.HiddenProfilesListDto
 import com.pynapli.shared.network.dto.MediaAlbumGrantDto
 import com.pynapli.shared.network.dto.MediaAlbumGrantsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
@@ -448,6 +450,15 @@ private class FakeApiClient(
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun listBlocks(): AppResult<BlocksListDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun hideProfile(targetUserId: String): AppResult<HiddenProfileSummaryDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun unhideProfile(targetUserId: String): AppResult<Unit> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto> =

@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.People
@@ -38,12 +39,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.shared.network.dto.BlockSummaryDto
+import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 
 @Composable
 internal fun ProfileHubSafetyCenterContent(
     state: ProfileHubUiState,
     onBack: () -> Unit,
     onUnblockUser: (String) -> Unit,
+    onUnhideProfile: (String) -> Unit,
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -152,6 +155,43 @@ internal fun ProfileHubSafetyCenterContent(
                 )
             }
         }
+
+        item {
+            ProfileHubSection("Hidden profiles") {
+                when {
+                    state.isHiddenProfilesLoading -> {
+                        SafetyCenterInfoRow(
+                            icon = Icons.Filled.VisibilityOff,
+                            label = "Loading",
+                            value = "Checking profiles hidden from discovery."
+                        )
+                    }
+
+                    state.hiddenProfiles.isEmpty() -> {
+                        SafetyCenterInfoRow(
+                            icon = Icons.Filled.VisibilityOff,
+                            label = "No hidden profiles",
+                            value = "Hidden profiles will not appear in your Grid or Swipe deck."
+                        )
+                    }
+
+                    else -> Unit
+                }
+            }
+        }
+
+        if (!state.isHiddenProfilesLoading && state.hiddenProfiles.isNotEmpty()) {
+            items(
+                items = state.hiddenProfiles,
+                key = { it.hiddenUserId }
+            ) { hiddenProfile ->
+                HiddenProfileRow(
+                    hiddenProfile = hiddenProfile,
+                    isUnhiding = state.unhidingUserId == hiddenProfile.hiddenUserId,
+                    onUnhideProfile = onUnhideProfile
+                )
+            }
+        }
     }
 }
 
@@ -236,6 +276,54 @@ private fun BlockedUserRow(
             enabled = !isUnblocking
         ) {
             Text(if (isUnblocking) "Unblocking" else "Unblock")
+        }
+    }
+}
+
+@Composable
+private fun HiddenProfileRow(
+    hiddenProfile: HiddenProfileSummaryDto,
+    isUnhiding: Boolean,
+    onUnhideProfile: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+            .clickable(enabled = !isUnhiding) { onUnhideProfile(hiddenProfile.hiddenUserId) }
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SafetyIcon(icon = Icons.Filled.VisibilityOff)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = hiddenProfile.hiddenDisplayName?.takeIf { it.isNotBlank() }
+                    ?: "Member ${hiddenProfile.hiddenUserId.take(8)}",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = hiddenProfile.createdAt.take(10).takeIf { it.isNotBlank() } ?: "Hidden",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        TextButton(
+            onClick = { onUnhideProfile(hiddenProfile.hiddenUserId) },
+            enabled = !isUnhiding
+        ) {
+            Text(if (isUnhiding) "Unhiding" else "Unhide")
         }
     }
 }

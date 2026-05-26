@@ -808,14 +808,15 @@ Indexes:
 Fields:
 
 - `id`
-- `user_id`
+- `hider_user_id`
 - `hidden_user_id`
-- `surface`
 - `created_at`
 
 Rules:
 
 - Hidden is not blocked.
+- Hidden is a one-way discovery exclusion.
+- Hidden applies across discovery surfaces where applicable.
 
 ## Notifications
 
@@ -926,7 +927,7 @@ Do not store unless legally reviewed and required:
 - [x] Entitlements are server-authoritative.
 - [x] Risk state and moderation tables exist.
 - [x] Age verification records and profile age timestamp exist.
-- [ ] Blocks and hides are separate.
+- [x] Blocks and hides are separate.
 - [x] Notification events are Ktor-owned.
 - [x] Redis only stores ephemeral/cache data.
 

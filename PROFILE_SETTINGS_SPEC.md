@@ -643,7 +643,7 @@ Client-local:
 - [x] Verification flow entry exists.
 - [x] Safety center exists.
 - [x] Blocked-user management exists in Safety Center.
-- [ ] Hidden-profile management remains separate from blocking and is not implemented yet.
+- [x] Hidden-profile management remains separate from blocking.
 - [ ] Discreet app icon exists or is planned.
 - [ ] Partial: logout exists; data export and account deletion are not implemented.
 - [x] Server-authoritative settings are not only local.

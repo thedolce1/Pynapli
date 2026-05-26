@@ -14,12 +14,14 @@ data class ProfileDetailUiState(
     val isRequestingAlbum: Boolean = false,
     val isLoadingPrivateAlbum: Boolean = false,
     val isBlocking: Boolean = false,
+    val isHiding: Boolean = false,
     val isReporting: Boolean = false,
     val privateAlbumItems: List<MediaAlbumItemUi> = emptyList(),
     val flirtFeedback: String? = null,
     val albumFeedback: String? = null,
     val reportFeedback: String? = null,
     val blockedTargetUserId: String? = null,
+    val hiddenTargetUserId: String? = null,
     val errorMessage: String? = null
 ) {
     val visible: Boolean

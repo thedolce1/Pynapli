@@ -129,6 +129,7 @@ fun ProfileHubScreen(
             state = state,
             onBack = stateHolder::dismissSafetyCenter,
             onUnblockUser = { userId -> scope.launch { stateHolder.unblockUser(userId) } },
+            onUnhideProfile = { userId -> scope.launch { stateHolder.unhideProfile(userId) } },
             onClearMessage = stateHolder::clearMessage,
             modifier = modifier
         )
@@ -148,7 +149,7 @@ fun ProfileHubScreen(
             onOpenActivityControls = stateHolder::openActivityControls,
             onOpenSafetyCenter = {
                 stateHolder.openSafetyCenter()
-                scope.launch { stateHolder.loadBlocks() }
+                scope.launch { stateHolder.loadSafetyLists() }
             },
             onOpenAgeVerification = stateHolder::openAgeVerification,
             onOpenAppSettings = {

@@ -217,7 +217,9 @@ class ProfileHubStateHolder(
             it.copy(
                 safetyCenterVisible = false,
                 isBlocksLoading = false,
+                isHiddenProfilesLoading = false,
                 unblockingUserId = null,
+                unhidingUserId = null,
                 errorMessage = null
             )
         }
@@ -317,6 +319,44 @@ class ProfileHubStateHolder(
         }
     }
 
+    suspend fun loadHiddenProfiles() {
+        if (state.value.isHiddenProfilesLoading) return
+
+        _state.update {
+            it.copy(
+                isHiddenProfilesLoading = true,
+                errorMessage = null,
+                feedbackMessage = null
+            )
+        }
+
+        when (val result = repository.listHiddenProfiles()) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        hiddenProfiles = result.value.hiddenProfiles,
+                        isHiddenProfilesLoading = false,
+                        errorMessage = null
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update {
+                    it.copy(
+                        isHiddenProfilesLoading = false,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun loadSafetyLists() {
+        loadBlocks()
+        loadHiddenProfiles()
+    }
+
     suspend fun unblockUser(userId: String) {
         val current = state.value
         if (current.unblockingUserId != null) return
@@ -345,6 +385,41 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         unblockingUserId = null,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun unhideProfile(userId: String) {
+        val current = state.value
+        if (current.unhidingUserId != null) return
+
+        _state.update {
+            it.copy(
+                unhidingUserId = userId,
+                errorMessage = null,
+                feedbackMessage = null
+            )
+        }
+
+        when (val result = repository.unhideProfile(userId)) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        hiddenProfiles = it.hiddenProfiles.filterNot { profile -> profile.hiddenUserId == userId },
+                        unhidingUserId = null,
+                        errorMessage = null,
+                        feedbackMessage = "Profile unhidden"
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update {
+                    it.copy(
+                        unhidingUserId = null,
                         errorMessage = result.error.message
                     )
                 }

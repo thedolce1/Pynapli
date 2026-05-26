@@ -9,6 +9,9 @@ import com.pynapli.server.subscriptions.LinkedPartnerSubscriptionRecord
 import com.pynapli.server.safety.RateLimitCounter
 import com.pynapli.server.safety.RateLimitRepository
 import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.HiddenProfileRecord
+import com.pynapli.server.safety.HiddenProfileRepository
+import com.pynapli.server.safety.HiddenProfileSummaryRecord
 import com.pynapli.server.subscriptions.StoredEntitlementRecord
 import com.pynapli.server.subscriptions.SubscriptionRecord
 import com.pynapli.server.subscriptions.SubscriptionRepository
@@ -90,6 +93,45 @@ class GridServiceTest {
 
         assertNull(response.items.first().distanceLabel)
         assertNull(response.items.first().distanceMeters)
+    }
+
+    @Test
+    fun queryGridRemovesHiddenProfilesAndHiddenLinkedPartnerMini() = runBlocking {
+        val viewerId = UUID.randomUUID()
+        val visibleTarget = UUID.randomUUID()
+        val hiddenTarget = UUID.randomUUID()
+        val hiddenPartner = UUID.randomUUID()
+        val service = GridService(
+            repository = StaticGridRepository(
+                GridQueryResult(
+                    viewerHadLocation = true,
+                    cards = listOf(
+                        GridCardRecord(
+                            userId = hiddenTarget,
+                            displayName = "Hidden",
+                            showDistance = true,
+                            distanceMeters = 200.0
+                        ),
+                        GridCardRecord(
+                            userId = visibleTarget,
+                            displayName = "Visible",
+                            showDistance = true,
+                            distanceMeters = 300.0,
+                            linkedPartnerUserId = hiddenPartner,
+                            linkedPartnerDisplayName = "Hidden partner"
+                        )
+                    )
+                )
+            ),
+            hiddenProfileRepository = StaticHiddenProfileRepository(
+                hiddenByUser = mapOf(viewerId to setOf(hiddenTarget, hiddenPartner))
+            )
+        )
+
+        val response = service.queryGrid(viewerId, GridQueryRequestDto())
+
+        assertEquals(listOf(visibleTarget.toString()), response.items.map { it.userId })
+        assertNull(response.items.single().linkedPartner)
     }
 
     @Test
@@ -505,6 +547,22 @@ private class StaticGridViewerTrustRepository(
     private val ageVerifiedUserIds: Set<UUID>
 ) : GridViewerTrustRepository {
     override suspend fun isAgeVerified(userId: UUID): Boolean = userId in ageVerifiedUserIds
+}
+
+private class StaticHiddenProfileRepository(
+    private val hiddenByUser: Map<UUID, Set<UUID>>
+) : HiddenProfileRepository {
+    override suspend fun hideProfile(
+        hiderUserId: UUID,
+        hiddenUserId: UUID,
+        hideIdFactory: () -> UUID
+    ): HiddenProfileRecord = error("Not implemented")
+
+    override suspend fun unhideProfile(hiderUserId: UUID, hiddenUserId: UUID): Boolean = false
+
+    override suspend fun listHiddenProfiles(hiderUserId: UUID): List<HiddenProfileSummaryRecord> = emptyList()
+
+    override suspend fun listHiddenProfileIds(hiderUserId: UUID): Set<UUID> = hiddenByUser[hiderUserId].orEmpty()
 }
 
 private class StaticMediaAssetUrlResolver : MediaAssetUrlResolver {

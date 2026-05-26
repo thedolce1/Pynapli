@@ -102,6 +102,12 @@ fun GridScreen(
         profileDetailStateHolder.dismiss()
     }
 
+    LaunchedEffect(profileState.hiddenTargetUserId) {
+        val hiddenId = profileDetailStateHolder.consumeHiddenTargetUserId() ?: return@LaunchedEffect
+        stateHolder.removeCardById(hiddenId)
+        profileDetailStateHolder.dismiss()
+    }
+
     if (profileState.visible) {
         ProfileDetailSheet(
             state = profileState,
@@ -129,6 +135,9 @@ fun GridScreen(
             },
             onBlock = { reason ->
                 scope.launch { profileDetailStateHolder.blockUser(reason) }
+            },
+            onHide = {
+                scope.launch { profileDetailStateHolder.hideProfile() }
             },
             onReport = { category, note ->
                 scope.launch { profileDetailStateHolder.submitReport(category, note) }

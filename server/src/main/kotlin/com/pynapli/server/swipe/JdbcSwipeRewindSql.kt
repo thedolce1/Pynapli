@@ -149,6 +149,12 @@ internal fun Connection.findLatestRewindableAction(
           )
           AND NOT EXISTS (
               SELECT 1
+              FROM user_hidden_profiles uhp
+              WHERE uhp.hider_user_id = ?
+                AND uhp.hidden_user_id = u.id
+          )
+          AND NOT EXISTS (
+              SELECT 1
               FROM matches m
               WHERE (m.user_a = sa.actor_user_id AND m.user_b = sa.target_user_id)
                  OR (m.user_a = sa.target_user_id AND m.user_b = sa.actor_user_id)
@@ -170,6 +176,7 @@ internal fun Connection.findLatestRewindableAction(
         statement.setDouble(5, radiusMeters.toDouble())
         statement.setObject(6, viewerUserId)
         statement.setObject(7, viewerUserId)
+        statement.setObject(8, viewerUserId)
         statement.executeQuery().use { rs ->
             if (!rs.next()) {
                 null

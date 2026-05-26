@@ -4,6 +4,7 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.BlocksListDto
+import com.pynapli.shared.network.dto.HiddenProfilesListDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
@@ -34,4 +35,10 @@ class ApiProfileHubRepository(
 
     override suspend fun unblockUser(userId: String): AppResult<Unit> =
         apiClient.unblockUser(userId)
+
+    override suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto> =
+        apiClient.listHiddenProfiles()
+
+    override suspend fun unhideProfile(userId: String): AppResult<Unit> =
+        apiClient.unhideProfile(userId)
 }

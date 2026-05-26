@@ -84,6 +84,14 @@ fun SwipeScreen(
         profileDetailStateHolder.dismiss()
     }
 
+    LaunchedEffect(profileState.hiddenTargetUserId) {
+        val hiddenId = profileDetailStateHolder.consumeHiddenTargetUserId() ?: return@LaunchedEffect
+        stateHolder.removeCardById(hiddenId)
+        selectedProfileCard = null
+        profileActionMode = ProfileDetailActionMode.SwipeUnmatched
+        profileDetailStateHolder.dismiss()
+    }
+
     SwipeScreenContent(
         state = state,
         topPicksState = topPicksState,
@@ -172,6 +180,9 @@ fun SwipeScreen(
             },
             onBlock = { reason ->
                 scope.launch { profileDetailStateHolder.blockUser(reason) }
+            },
+            onHide = {
+                scope.launch { profileDetailStateHolder.hideProfile() }
             },
             onReport = { category, note ->
                 scope.launch { profileDetailStateHolder.submitReport(category, note) }

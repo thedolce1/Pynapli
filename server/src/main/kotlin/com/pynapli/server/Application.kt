@@ -99,6 +99,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureSafetyRoutes(
         authService = dependencies.authService,
         blockService = dependencies.blockService,
+        hiddenProfileService = dependencies.hiddenProfileService,
         reportService = dependencies.reportService
     )
     configureSwipeRoutes(

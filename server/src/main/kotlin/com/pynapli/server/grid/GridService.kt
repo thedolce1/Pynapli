@@ -13,6 +13,7 @@ import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.safety.HiddenProfileRepository
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.server.subscriptions.EntitlementPolicy
@@ -26,6 +27,7 @@ class GridService(
     private val presenceService: PresenceService? = null,
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val blockRepository: BlockRepository? = null,
+    private val hiddenProfileRepository: HiddenProfileRepository? = null,
     private val subscriptionService: SubscriptionService? = null,
     private val viewerTrustRepository: GridViewerTrustRepository? = null,
     private val rateLimitService: RateLimitService? = null
@@ -110,14 +112,36 @@ class GridService(
                 result.cards.filterNot { it.userId in blockedRelatedIds }
             }
         }
-
-        profile("grid.presenceRefresh") { refreshViewerPresence(viewerUserId) }
-        val onlineUserIds = profile("grid.presenceLookup") { onlineUserIdsFor(visibleCards) }
-        val filteredCards = profile("grid.onlineFilter") {
-            if (request.onlineOnly) {
-                visibleCards.filter { it.userId in onlineUserIds }
+        val hiddenProfileIds = profile("grid.hiddenProfiles") {
+            hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty()
+        }
+        val discoverableCards = profile("grid.hiddenFilter") {
+            if (hiddenProfileIds.isEmpty()) {
+                visibleCards
             } else {
                 visibleCards
+                    .filterNot { it.userId in hiddenProfileIds }
+                    .map { card ->
+                        if (card.linkedPartnerUserId in hiddenProfileIds) {
+                            card.copy(
+                                linkedPartnerUserId = null,
+                                linkedPartnerDisplayName = null,
+                                linkedPartnerThumbnailMediaAssetId = null
+                            )
+                        } else {
+                            card
+                        }
+                    }
+            }
+        }
+
+        profile("grid.presenceRefresh") { refreshViewerPresence(viewerUserId) }
+        val onlineUserIds = profile("grid.presenceLookup") { onlineUserIdsFor(discoverableCards) }
+        val filteredCards = profile("grid.onlineFilter") {
+            if (request.onlineOnly) {
+                discoverableCards.filter { it.userId in onlineUserIds }
+            } else {
+                discoverableCards
             }
         }
         val dtoCards = profile("grid.dto") { filteredCards.map { it.toDto(onlineUserIds) } }

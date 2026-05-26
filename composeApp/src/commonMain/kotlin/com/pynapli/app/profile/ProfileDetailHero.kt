@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -45,6 +46,7 @@ internal fun ProfileHero(
     distanceLabel: String?,
     profilePhotoUrl: String?,
     onDismiss: () -> Unit,
+    onHideClick: () -> Unit,
     onBlockClick: () -> Unit,
     onReportClick: () -> Unit
 ) {
@@ -75,6 +77,7 @@ internal fun ProfileHero(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             ProfileOverflowMenu(
+                onHideClick = onHideClick,
                 onBlockClick = onBlockClick,
                 onReportClick = onReportClick
             )
@@ -141,6 +144,7 @@ internal fun ProfileHero(
 
 @Composable
 private fun ProfileOverflowMenu(
+    onHideClick: () -> Unit,
     onBlockClick: () -> Unit,
     onReportClick: () -> Unit
 ) {
@@ -163,6 +167,20 @@ private fun ProfileOverflowMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
+            DropdownMenuItem(
+                text = { Text("Hide") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.VisibilityOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onHideClick()
+                }
+            )
             DropdownMenuItem(
                 text = { Text("Block") },
                 leadingIcon = {

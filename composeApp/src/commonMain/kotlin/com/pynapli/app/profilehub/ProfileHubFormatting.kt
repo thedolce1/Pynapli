@@ -76,9 +76,9 @@ internal fun ageVerificationSummary(state: ProfileHubUiState): String {
 }
 
 internal fun safetyCenterSummary(state: ProfileHubUiState): String = when {
-    state.isBlocksLoading -> "Loading blocks"
-    state.blockedUsers.isEmpty() -> "Guidelines and blocks"
-    else -> "${state.blockedUsers.size} blocked"
+    state.isBlocksLoading || state.isHiddenProfilesLoading -> "Loading safety lists"
+    state.blockedUsers.isEmpty() && state.hiddenProfiles.isEmpty() -> "Guidelines, blocks, hidden"
+    else -> "${state.blockedUsers.size} blocked, ${state.hiddenProfiles.size} hidden"
 }
 
 internal fun appSettingsSummary(state: AppSettingsUiState): String {

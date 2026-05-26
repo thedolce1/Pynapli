@@ -93,6 +93,40 @@ class SafetyRepositoryIntegrationTest {
     }
 
     @Test
+    fun hiddenProfileIsOneWayAndCanBeRemoved() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000414")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000415")
+        val repository = JdbcHiddenProfileRepository(dataSource)
+        dataSource.insertUser(viewer)
+        dataSource.insertUser(target)
+
+        repository.hideProfile(viewer, target)
+
+        assertEquals(setOf(target), repository.listHiddenProfileIds(viewer))
+        assertEquals(emptySet(), repository.listHiddenProfileIds(target))
+
+        val removed = repository.unhideProfile(viewer, target)
+        assertTrue(removed)
+        assertEquals(emptySet(), repository.listHiddenProfileIds(viewer))
+    }
+
+    @Test
+    fun listHiddenProfilesJoinsProfileDisplayName() = runBlocking {
+        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000416")
+        val target = UUID.fromString("00000000-0000-0000-0000-000000000417")
+        val repository = JdbcHiddenProfileRepository(dataSource)
+        dataSource.insertUser(viewer)
+        dataSource.insertUser(target)
+        dataSource.setProfileDisplayName(target, "Riley")
+
+        repository.hideProfile(viewer, target)
+
+        val summary = repository.listHiddenProfiles(viewer).single()
+        assertEquals(target, summary.hiddenUserId)
+        assertEquals("Riley", summary.hiddenDisplayName)
+    }
+
+    @Test
     fun reportRepositoryStoresCategoriesAndNotes() = runBlocking {
         val reporter = UUID.fromString("00000000-0000-0000-0000-000000000421")
         val reported = UUID.fromString("00000000-0000-0000-0000-000000000422")

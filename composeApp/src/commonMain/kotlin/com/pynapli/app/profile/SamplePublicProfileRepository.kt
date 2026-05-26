@@ -3,6 +3,7 @@ package com.pynapli.app.profile
 import com.pynapli.app.media.MediaAlbumItemUi
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.BlockSummaryDto
+import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.ReportDto
@@ -47,6 +48,14 @@ class SamplePublicProfileRepository : PublicProfileRepository {
                 blockedUserId = userId,
                 reason = reason,
                 createdAt = "2026-04-28T00:00:00Z"
+            )
+        )
+
+    override suspend fun hideProfile(userId: String): AppResult<HiddenProfileSummaryDto> =
+        AppResult.Success(
+            HiddenProfileSummaryDto(
+                hiddenUserId = userId,
+                createdAt = "2026-05-26T00:00:00Z"
             )
         )
 

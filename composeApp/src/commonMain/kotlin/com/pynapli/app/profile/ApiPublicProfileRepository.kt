@@ -7,6 +7,7 @@ import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlockUserRequestDto
 import com.pynapli.shared.network.dto.CreateReportRequestDto
+import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.ReportDto
@@ -42,6 +43,9 @@ class ApiPublicProfileRepository(
 
     override suspend fun blockUser(userId: String, reason: String?): AppResult<BlockSummaryDto> =
         apiClient.blockUser(userId, BlockUserRequestDto(reason = reason))
+
+    override suspend fun hideProfile(userId: String): AppResult<HiddenProfileSummaryDto> =
+        apiClient.hideProfile(userId)
 
     override suspend fun submitReport(
         userId: String,

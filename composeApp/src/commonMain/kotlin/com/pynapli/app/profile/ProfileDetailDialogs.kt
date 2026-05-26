@@ -69,6 +69,44 @@ internal fun BlockConfirmDialog(
 }
 
 @Composable
+internal fun HideProfileConfirmDialog(
+    displayName: String,
+    isHiding: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Hide $displayName?") },
+        text = {
+            Text(
+                "They will stop appearing in your Grid and Swipe deck. " +
+                    "You can unhide them from Safety Center."
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isHiding
+            ) {
+                if (isHiding) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp)
+                    )
+                } else {
+                    Text("Hide")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isHiding) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
 internal fun ReportCategoryDialog(
     isSubmitting: Boolean,
     onSubmit: (category: String, note: String?) -> Unit,

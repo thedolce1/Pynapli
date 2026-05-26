@@ -3,6 +3,7 @@ package com.pynapli.app.profile
 import com.pynapli.app.media.MediaAlbumItemUi
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.BlockSummaryDto
+import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.ReportDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessResponseDto
@@ -18,6 +19,8 @@ interface PublicProfileRepository {
     suspend fun loadPrivateAlbum(userId: String): AppResult<List<MediaAlbumItemUi>>
 
     suspend fun blockUser(userId: String, reason: String?): AppResult<BlockSummaryDto>
+
+    suspend fun hideProfile(userId: String): AppResult<HiddenProfileSummaryDto>
 
     suspend fun submitReport(
         userId: String,

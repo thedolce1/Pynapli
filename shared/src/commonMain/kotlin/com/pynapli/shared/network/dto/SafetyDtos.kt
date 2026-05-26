@@ -55,6 +55,18 @@ data class BlocksListDto(
 )
 
 @Serializable
+data class HiddenProfileSummaryDto(
+    val hiddenUserId: String,
+    val hiddenDisplayName: String? = null,
+    val createdAt: String
+)
+
+@Serializable
+data class HiddenProfilesListDto(
+    val hiddenProfiles: List<HiddenProfileSummaryDto>
+)
+
+@Serializable
 data class CreateReportRequestDto(
     val reportedUserId: String,
     val targetType: String,

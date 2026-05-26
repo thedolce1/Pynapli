@@ -192,6 +192,41 @@ class ProfileDetailStateHolder(
         }
     }
 
+    suspend fun hideProfile() {
+        val targetUserId = _state.value.profile?.userId ?: _state.value.selectedCard?.id ?: return
+        if (_state.value.isHiding) return
+
+        _state.update { current ->
+            current.copy(
+                isHiding = true,
+                flirtFeedback = null,
+                albumFeedback = null,
+                reportFeedback = null,
+                errorMessage = null
+            )
+        }
+
+        when (val result = repository.hideProfile(targetUserId)) {
+            is AppResult.Success -> {
+                _state.update { current ->
+                    current.copy(
+                        isHiding = false,
+                        hiddenTargetUserId = targetUserId
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update { current ->
+                    current.copy(
+                        isHiding = false,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
     suspend fun submitReport(category: String, note: String? = null) {
         val targetUserId = _state.value.profile?.userId ?: _state.value.selectedCard?.id ?: return
         if (_state.value.isReporting) return
@@ -230,6 +265,12 @@ class ProfileDetailStateHolder(
     fun consumeBlockedTargetUserId(): String? {
         val current = _state.value.blockedTargetUserId ?: return null
         _state.update { it.copy(blockedTargetUserId = null) }
+        return current
+    }
+
+    fun consumeHiddenTargetUserId(): String? {
+        val current = _state.value.hiddenTargetUserId ?: return null
+        _state.update { it.copy(hiddenTargetUserId = null) }
         return current
     }
 

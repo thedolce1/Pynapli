@@ -178,8 +178,6 @@ Rules:
 
 ```http
 POST /v1/grid/query
-POST /v1/grid/hide/{userId}
-DELETE /v1/grid/hide/{userId}
 ```
 
 Request:
@@ -465,6 +463,9 @@ POST /v1/reports
 POST /v1/blocks/{userId}
 DELETE /v1/blocks/{userId}
 GET  /v1/blocks
+POST /v1/hidden-profiles/{userId}
+DELETE /v1/hidden-profiles/{userId}
+GET  /v1/hidden-profiles
 GET  /v1/safety/community-guidelines
 ```
 
@@ -472,6 +473,8 @@ Rules:
 
 - Block/report are never premium.
 - Blocks apply across Grid, Swipe, Activity, Messages.
+- Hidden profiles are never premium.
+- Hidden profiles remove the target from the viewer's discovery surfaces without treating the target as blocked.
 
 ## Verification API
 

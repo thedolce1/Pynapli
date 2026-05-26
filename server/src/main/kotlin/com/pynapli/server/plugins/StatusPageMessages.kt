@@ -110,6 +110,8 @@ internal fun userSafeMessage(code: String): String = when (code) {
     "INVALID_BLOCK_TARGET" -> "That user could not be blocked."
     "BLOCK_SELF_FORBIDDEN" -> "You cannot block yourself."
     "BLOCK_REASON_TOO_LONG" -> "Block reason is too long."
+    "INVALID_HIDDEN_PROFILE_TARGET" -> "That profile could not be hidden."
+    "HIDE_SELF_FORBIDDEN" -> "You cannot hide yourself."
     "INVALID_REPORT_TARGET" -> "That target could not be reported."
     "INVALID_REPORT_CATEGORY" -> "Choose a valid report reason."
     "REPORT_SELF_FORBIDDEN" -> "You cannot report yourself."

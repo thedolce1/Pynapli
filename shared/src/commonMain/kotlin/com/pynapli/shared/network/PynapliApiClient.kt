@@ -38,6 +38,8 @@ import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlockUserRequestDto
 import com.pynapli.shared.network.dto.BlocksListDto
 import com.pynapli.shared.network.dto.CreateReportRequestDto
+import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
+import com.pynapli.shared.network.dto.HiddenProfilesListDto
 import com.pynapli.shared.network.dto.MediaAlbumGrantDto
 import com.pynapli.shared.network.dto.MediaAlbumGrantsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
@@ -262,6 +264,12 @@ interface PynapliApiClient {
     suspend fun unblockUser(targetUserId: String): AppResult<Unit>
 
     suspend fun listBlocks(): AppResult<BlocksListDto>
+
+    suspend fun hideProfile(targetUserId: String): AppResult<HiddenProfileSummaryDto>
+
+    suspend fun unhideProfile(targetUserId: String): AppResult<Unit>
+
+    suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto>
 
     suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto>
 
@@ -871,6 +879,32 @@ class KtorPynapliApiClient(
     override suspend fun listBlocks(): AppResult<BlocksListDto> =
         authenticatedPost { token ->
             httpClient.get(config.endpoint("/v1/blocks")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun hideProfile(targetUserId: String): AppResult<HiddenProfileSummaryDto> =
+        authenticatedPost { token ->
+            httpClient.post(config.endpoint("/v1/hidden-profiles/$targetUserId")) {
+                bearerAuth(token)
+            }.toAppResult(json)
+        }
+
+    override suspend fun unhideProfile(targetUserId: String): AppResult<Unit> =
+        authenticatedPost { token ->
+            val response = httpClient.delete(config.endpoint("/v1/hidden-profiles/$targetUserId")) {
+                bearerAuth(token)
+            }
+            if (response.status.value in 200..299) {
+                AppResult.Success(Unit)
+            } else {
+                response.toAppResult<Unit>(json)
+            }
+        }
+
+    override suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/hidden-profiles")) {
                 bearerAuth(token)
             }.toAppResult(json)
         }

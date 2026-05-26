@@ -7,6 +7,8 @@ import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlocksListDto
 import com.pynapli.shared.network.dto.DiscoverySettingsDto
+import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
+import com.pynapli.shared.network.dto.HiddenProfilesListDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.ProfileDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
@@ -123,6 +125,58 @@ class ProfileHubStateHolderTest {
         assertEquals(emptyList(), stateHolder.state.value.blockedUsers)
         assertEquals("User unblocked", stateHolder.state.value.feedbackMessage)
     }
+
+    @Test
+    fun loadHiddenProfilesShowsSafetyCenterHiddenList() = runBlocking {
+        val repository = FakeProfileHubRepository(
+            listHiddenProfilesResult = AppResult.Success(
+                HiddenProfilesListDto(
+                    hiddenProfiles = listOf(
+                        HiddenProfileSummaryDto(
+                            hiddenUserId = "hidden-1",
+                            hiddenDisplayName = "Riley",
+                            createdAt = "2026-05-26T12:00:00Z"
+                        )
+                    )
+                )
+            )
+        )
+        val stateHolder = ProfileHubStateHolder(repository)
+
+        stateHolder.openSafetyCenter()
+        stateHolder.loadHiddenProfiles()
+
+        assertEquals(true, stateHolder.state.value.safetyCenterVisible)
+        assertEquals("Riley", stateHolder.state.value.hiddenProfiles.single().hiddenDisplayName)
+        assertEquals(null, stateHolder.state.value.errorMessage)
+    }
+
+    @Test
+    fun unhideProfileRemovesHiddenProfileAndShowsFeedback() = runBlocking {
+        val repository = FakeProfileHubRepository(
+            listHiddenProfilesResult = AppResult.Success(
+                HiddenProfilesListDto(
+                    hiddenProfiles = listOf(
+                        HiddenProfileSummaryDto(
+                            hiddenUserId = "hidden-1",
+                            hiddenDisplayName = "Riley",
+                            createdAt = "2026-05-26T12:00:00Z"
+                        )
+                    )
+                )
+            ),
+            unhideResult = AppResult.Success(Unit)
+        )
+        val stateHolder = ProfileHubStateHolder(repository)
+        stateHolder.openSafetyCenter()
+        stateHolder.loadHiddenProfiles()
+
+        stateHolder.unhideProfile("hidden-1")
+
+        assertEquals("hidden-1", repository.lastUnhiddenUserId)
+        assertEquals(emptyList(), stateHolder.state.value.hiddenProfiles)
+        assertEquals("Profile unhidden", stateHolder.state.value.feedbackMessage)
+    }
 }
 
 private class FakeProfileHubRepository(
@@ -136,11 +190,19 @@ private class FakeProfileHubRepository(
     private val listBlocksResult: AppResult<BlocksListDto> = AppResult.Success(BlocksListDto(emptyList())),
     private val unblockResult: AppResult<Unit> = AppResult.Failure(
         AppError("UNIMPLEMENTED", "Not implemented.")
+    ),
+    private val listHiddenProfilesResult: AppResult<HiddenProfilesListDto> = AppResult.Success(
+        HiddenProfilesListDto(emptyList())
+    ),
+    private val unhideResult: AppResult<Unit> = AppResult.Failure(
+        AppError("UNIMPLEMENTED", "Not implemented.")
     )
 ) : ProfileHubRepository {
     var lastStartRequest: StartAgeVerificationRequestDto? = null
         private set
     var lastUnblockedUserId: String? = null
+        private set
+    var lastUnhiddenUserId: String? = null
         private set
 
     override suspend fun loadMe(): AppResult<MeDto> = loadMeResult
@@ -165,6 +227,13 @@ private class FakeProfileHubRepository(
     override suspend fun unblockUser(userId: String): AppResult<Unit> {
         lastUnblockedUserId = userId
         return unblockResult
+    }
+
+    override suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto> = listHiddenProfilesResult
+
+    override suspend fun unhideProfile(userId: String): AppResult<Unit> {
+        lastUnhiddenUserId = userId
+        return unhideResult
     }
 }
 
