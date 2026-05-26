@@ -145,6 +145,43 @@ class ReportServiceTest {
         assertEquals("RATE_LIMITED", error.code)
         assertEquals(emptyList(), repository.captured)
     }
+
+    @Test
+    fun listReportsReturnsOnlyUserSafeHistory() = runBlocking {
+        val reporterId = UUID.fromString("00000000-0000-0000-0000-000000000060")
+        val repository = InMemoryReportRepository()
+        val service = ReportService(repository)
+        repository.history += ReportHistoryRecord(
+            id = UUID.fromString("00000000-0000-0000-0000-000000000061"),
+            reportedDisplayName = "Riley",
+            targetType = ReportTargetType.PROFILE,
+            category = ReportCategory.SPAM_OR_FAKE_PROFILE,
+            status = "dismissed",
+            createdAt = Instant.parse("2026-04-28T19:00:00Z")
+        )
+
+        val response = service.listReports(reporterId)
+
+        assertEquals(1, response.reports.size)
+        assertEquals("Riley", response.reports.single().reportedDisplayName)
+        assertEquals("reviewed", response.reports.single().status)
+        assertEquals(ReportCategory.SPAM_OR_FAKE_PROFILE, response.reports.single().category)
+    }
+
+    @Test
+    fun supportContactIncludesSafeAccountReference() {
+        val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000070")
+        val service = ReportService(
+            repository = InMemoryReportRepository(),
+            supportEmail = "support@pynapli.com"
+        )
+
+        val contact = service.supportContact(viewerId)
+
+        assertEquals("support@pynapli.com", contact.email)
+        assertEquals("Pynapli support request", contact.subject)
+        assertEquals(true, contact.body.contains(viewerId.toString()))
+    }
 }
 
 private fun denyingRateLimitService(): RateLimitService =
@@ -185,6 +222,7 @@ private data class CapturedReportRiskSignal(
 
 private class InMemoryReportRepository : ReportRepository {
     val captured = mutableListOf<ReportRecord>()
+    val history = mutableListOf<ReportHistoryRecord>()
     private val now = Instant.parse("2026-04-28T18:00:00Z")
 
     override suspend fun createReport(
@@ -210,4 +248,9 @@ private class InMemoryReportRepository : ReportRepository {
         captured.add(record)
         return record
     }
+
+    override suspend fun listReportsByReporter(
+        reporterUserId: UUID,
+        limit: Int
+    ): List<ReportHistoryRecord> = history.take(limit)
 }

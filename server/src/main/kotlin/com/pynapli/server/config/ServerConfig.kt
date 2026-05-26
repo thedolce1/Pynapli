@@ -43,6 +43,7 @@ data class ServerConfig(
     val playStoreRtdnOidcServiceAccountEmail: String? = null,
     val devStorePurchasesEnabled: Boolean = false,
     val adminApiToken: String? = null,
+    val supportEmail: String = "support@pynapli.com",
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
     val activityCursorSecret: String = "pynapli-local-dev-activity-cursor-secret",
     val swipeDeckTokenSecret: String = "pynapli-local-dev-swipe-deck-token-secret"
@@ -178,6 +179,10 @@ data class ServerConfig(
                 adminApiToken = System.getenv("PYNAPLI_ADMIN_API_TOKEN")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() },
+                supportEmail = System.getenv("PYNAPLI_SUPPORT_EMAIL")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: "support@pynapli.com",
                 discoveryCursorSecret = System.getenv("PYNAPLI_DISCOVERY_CURSOR_SECRET")
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }

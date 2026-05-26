@@ -11,7 +11,11 @@ import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfilesListDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.ProfileDto
+import com.pynapli.shared.network.dto.ReportCategory
+import com.pynapli.shared.network.dto.ReportHistoryItemDto
+import com.pynapli.shared.network.dto.ReportHistoryListDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
+import com.pynapli.shared.network.dto.SupportContactDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import kotlinx.coroutines.runBlocking
@@ -177,6 +181,54 @@ class ProfileHubStateHolderTest {
         assertEquals(emptyList(), stateHolder.state.value.hiddenProfiles)
         assertEquals("Profile unhidden", stateHolder.state.value.feedbackMessage)
     }
+
+    @Test
+    fun loadReportHistoryShowsSafetyCenterReports() = runBlocking {
+        val repository = FakeProfileHubRepository(
+            listReportsResult = AppResult.Success(
+                ReportHistoryListDto(
+                    reports = listOf(
+                        ReportHistoryItemDto(
+                            reportId = "report-1",
+                            reportedDisplayName = "Casey",
+                            targetType = "profile",
+                            category = ReportCategory.SPAM_OR_FAKE_PROFILE,
+                            status = "received",
+                            createdAt = "2026-05-26T12:00:00Z"
+                        )
+                    )
+                )
+            )
+        )
+        val stateHolder = ProfileHubStateHolder(repository)
+
+        stateHolder.openSafetyCenter()
+        stateHolder.loadReportHistory()
+
+        assertEquals(true, stateHolder.state.value.safetyCenterVisible)
+        assertEquals("Casey", stateHolder.state.value.reportHistory.single().reportedDisplayName)
+        assertEquals(null, stateHolder.state.value.errorMessage)
+    }
+
+    @Test
+    fun loadSupportContactShowsServerBackedEmail() = runBlocking {
+        val repository = FakeProfileHubRepository(
+            supportContactResult = AppResult.Success(
+                SupportContactDto(
+                    email = "support@pynapli.com",
+                    subject = "Pynapli support request",
+                    body = "Account reference: user-1"
+                )
+            )
+        )
+        val stateHolder = ProfileHubStateHolder(repository)
+
+        stateHolder.openSafetyCenter()
+        stateHolder.loadSupportContact()
+
+        assertEquals("support@pynapli.com", stateHolder.state.value.supportContact?.email)
+        assertEquals(null, stateHolder.state.value.errorMessage)
+    }
 }
 
 private class FakeProfileHubRepository(
@@ -196,6 +248,16 @@ private class FakeProfileHubRepository(
     ),
     private val unhideResult: AppResult<Unit> = AppResult.Failure(
         AppError("UNIMPLEMENTED", "Not implemented.")
+    ),
+    private val listReportsResult: AppResult<ReportHistoryListDto> = AppResult.Success(
+        ReportHistoryListDto(emptyList())
+    ),
+    private val supportContactResult: AppResult<SupportContactDto> = AppResult.Success(
+        SupportContactDto(
+            email = "support@pynapli.com",
+            subject = "Pynapli support request",
+            body = "Account reference: user-1"
+        )
     )
 ) : ProfileHubRepository {
     var lastStartRequest: StartAgeVerificationRequestDto? = null
@@ -235,6 +297,10 @@ private class FakeProfileHubRepository(
         lastUnhiddenUserId = userId
         return unhideResult
     }
+
+    override suspend fun listReportHistory(): AppResult<ReportHistoryListDto> = listReportsResult
+
+    override suspend fun getSupportContact(): AppResult<SupportContactDto> = supportContactResult
 }
 
 private fun testMe(): MeDto =

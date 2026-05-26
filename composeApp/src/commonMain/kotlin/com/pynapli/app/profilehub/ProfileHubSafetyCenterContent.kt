@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
+import com.pynapli.shared.network.dto.SupportContactDto
 
 @Composable
 internal fun ProfileHubSafetyCenterContent(
@@ -47,6 +48,7 @@ internal fun ProfileHubSafetyCenterContent(
     onBack: () -> Unit,
     onUnblockUser: (String) -> Unit,
     onUnhideProfile: (String) -> Unit,
+    onContactSupport: (SupportContactDto) -> Unit,
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -114,7 +116,7 @@ internal fun ProfileHubSafetyCenterContent(
                 SafetyCenterInfoRow(
                     icon = Icons.Filled.ChatBubble,
                     label = "Support",
-                    value = "support@pynapli.com"
+                    value = state.supportContact?.email ?: "Support contact is loading."
                 )
             }
         }
@@ -192,11 +194,16 @@ internal fun ProfileHubSafetyCenterContent(
                 )
             }
         }
+
+        profileHubSafetyReportsSection(
+            state = state,
+            onContactSupport = onContactSupport
+        )
     }
 }
 
 @Composable
-private fun SafetyCenterInfoRow(
+internal fun SafetyCenterInfoRow(
     icon: ImageVector,
     label: String,
     value: String
@@ -329,7 +336,7 @@ private fun HiddenProfileRow(
 }
 
 @Composable
-private fun SafetyIcon(icon: ImageVector) {
+internal fun SafetyIcon(icon: ImageVector) {
     Box(
         modifier = Modifier
             .size(34.dp)

@@ -5,7 +5,9 @@ import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.BlocksListDto
 import com.pynapli.shared.network.dto.HiddenProfilesListDto
 import com.pynapli.shared.network.dto.MeDto
+import com.pynapli.shared.network.dto.ReportHistoryListDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
+import com.pynapli.shared.network.dto.SupportContactDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 
@@ -29,4 +31,8 @@ interface ProfileHubRepository {
     suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto>
 
     suspend fun unhideProfile(userId: String): AppResult<Unit>
+
+    suspend fun listReportHistory(): AppResult<ReportHistoryListDto>
+
+    suspend fun getSupportContact(): AppResult<SupportContactDto>
 }

@@ -38,6 +38,7 @@ import com.pynapli.shared.network.dto.MediaUploadSlotDto
 import com.pynapli.shared.network.dto.MarkActivitySeenRequestDto
 import com.pynapli.shared.network.dto.MarkActivitySeenResponseDto
 import com.pynapli.shared.network.dto.ReportDto
+import com.pynapli.shared.network.dto.ReportHistoryListDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.NotificationPreferencesDto
@@ -56,6 +57,7 @@ import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
 import com.pynapli.shared.network.dto.StorePurchaseResponseDto
+import com.pynapli.shared.network.dto.SupportContactDto
 import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
@@ -462,6 +464,12 @@ private class FakeApiClient(
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun listReports(limit: Int?): AppResult<ReportHistoryListDto> =
+        AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun getSupportContact(): AppResult<SupportContactDto> =
         AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun querySwipeDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckResponseDto> =

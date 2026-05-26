@@ -13,10 +13,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.app.messages.MessagesUiState
 import com.pynapli.app.profilelink.ProfileLinksUiState
+import com.pynapli.shared.network.dto.SupportContactDto
 import kotlinx.coroutines.launch
 
 @Composable
@@ -44,6 +46,7 @@ fun ProfileHubScreen(
     val partnerChatInvites = messagesState.partnerChatInvites(viewerUserId)
     val actionItemCount = profileLinksState.incomingInvites.size + partnerChatInvites.size
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     var showLogoutConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(stateHolder) {
@@ -130,6 +133,7 @@ fun ProfileHubScreen(
             onBack = stateHolder::dismissSafetyCenter,
             onUnblockUser = { userId -> scope.launch { stateHolder.unblockUser(userId) } },
             onUnhideProfile = { userId -> scope.launch { stateHolder.unhideProfile(userId) } },
+            onContactSupport = { contact -> runCatching { uriHandler.openUri(contact.toMailtoUri()) } },
             onClearMessage = stateHolder::clearMessage,
             modifier = modifier
         )
@@ -193,6 +197,24 @@ fun ProfileHubScreen(
                 }
             }
         )
+    }
+}
+
+private fun SupportContactDto.toMailtoUri(): String =
+    "mailto:$email?subject=${subject.mailtoEncode()}&body=${body.mailtoEncode()}"
+
+private fun String.mailtoEncode(): String = buildString {
+    for (char in this@mailtoEncode) {
+        when {
+            char.isLetterOrDigit() -> append(char)
+            char == '-' || char == '_' || char == '.' || char == '~' -> append(char)
+            char == ' ' -> append("%20")
+            char == '\n' -> append("%0A")
+            else -> {
+                append('%')
+                append(char.code.toString(16).uppercase().padStart(2, '0'))
+            }
+        }
     }
 }
 

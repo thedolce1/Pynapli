@@ -13,6 +13,11 @@ interface ReportRepository {
         note: String?,
         reportIdFactory: () -> UUID = UUID::randomUUID
     ): ReportRecord
+
+    suspend fun listReportsByReporter(
+        reporterUserId: UUID,
+        limit: Int
+    ): List<ReportHistoryRecord>
 }
 
 data class ReportRecord(
@@ -23,6 +28,15 @@ data class ReportRecord(
     val targetId: String?,
     val category: String,
     val note: String?,
+    val status: String,
+    val createdAt: Instant
+)
+
+data class ReportHistoryRecord(
+    val id: UUID,
+    val reportedDisplayName: String?,
+    val targetType: String,
+    val category: String,
     val status: String,
     val createdAt: Instant
 )

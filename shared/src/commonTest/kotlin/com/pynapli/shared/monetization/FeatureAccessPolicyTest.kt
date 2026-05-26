@@ -11,7 +11,12 @@ class FeatureAccessPolicyTest {
             PynapliFeature.BlockUser,
             PynapliFeature.UnblockUser,
             PynapliFeature.ListBlocks,
+            PynapliFeature.HideProfile,
+            PynapliFeature.UnhideProfile,
+            PynapliFeature.ListHiddenProfiles,
             PynapliFeature.SubmitReport,
+            PynapliFeature.ListReports,
+            PynapliFeature.SupportContact,
             PynapliFeature.SafetyCenter,
             PynapliFeature.AgeVerification
         )

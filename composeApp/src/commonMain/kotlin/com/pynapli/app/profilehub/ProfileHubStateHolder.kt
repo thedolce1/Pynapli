@@ -218,6 +218,8 @@ class ProfileHubStateHolder(
                 safetyCenterVisible = false,
                 isBlocksLoading = false,
                 isHiddenProfilesLoading = false,
+                isReportHistoryLoading = false,
+                isSupportContactLoading = false,
                 unblockingUserId = null,
                 unhidingUserId = null,
                 errorMessage = null
@@ -352,9 +354,77 @@ class ProfileHubStateHolder(
         }
     }
 
+    suspend fun loadReportHistory() {
+        if (state.value.isReportHistoryLoading) return
+
+        _state.update {
+            it.copy(
+                isReportHistoryLoading = true,
+                errorMessage = null,
+                feedbackMessage = null
+            )
+        }
+
+        when (val result = repository.listReportHistory()) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        reportHistory = result.value.reports,
+                        isReportHistoryLoading = false,
+                        errorMessage = null
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update {
+                    it.copy(
+                        isReportHistoryLoading = false,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun loadSupportContact() {
+        if (state.value.isSupportContactLoading) return
+
+        _state.update {
+            it.copy(
+                isSupportContactLoading = true,
+                errorMessage = null,
+                feedbackMessage = null
+            )
+        }
+
+        when (val result = repository.getSupportContact()) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        supportContact = result.value,
+                        isSupportContactLoading = false,
+                        errorMessage = null
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update {
+                    it.copy(
+                        isSupportContactLoading = false,
+                        errorMessage = result.error.message
+                    )
+                }
+            }
+        }
+    }
+
     suspend fun loadSafetyLists() {
         loadBlocks()
         loadHiddenProfiles()
+        loadReportHistory()
+        loadSupportContact()
     }
 
     suspend fun unblockUser(userId: String) {

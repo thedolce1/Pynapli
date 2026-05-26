@@ -85,3 +85,25 @@ data class ReportDto(
     val status: String,
     val createdAt: String
 )
+
+@Serializable
+data class ReportHistoryItemDto(
+    val reportId: String,
+    val reportedDisplayName: String? = null,
+    val targetType: String,
+    val category: String,
+    val status: String,
+    val createdAt: String
+)
+
+@Serializable
+data class ReportHistoryListDto(
+    val reports: List<ReportHistoryItemDto>
+)
+
+@Serializable
+data class SupportContactDto(
+    val email: String,
+    val subject: String,
+    val body: String
+)

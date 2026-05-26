@@ -5,6 +5,8 @@ import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.MeDto
+import com.pynapli.shared.network.dto.ReportHistoryItemDto
+import com.pynapli.shared.network.dto.SupportContactDto
 
 @Immutable
 data class ProfileHubUiState(
@@ -22,9 +24,13 @@ data class ProfileHubUiState(
     val ageVerificationStatus: AgeVerificationStatusDto? = null,
     val blockedUsers: List<BlockSummaryDto> = emptyList(),
     val hiddenProfiles: List<HiddenProfileSummaryDto> = emptyList(),
+    val reportHistory: List<ReportHistoryItemDto> = emptyList(),
+    val supportContact: SupportContactDto? = null,
     val isAgeVerificationMutating: Boolean = false,
     val isBlocksLoading: Boolean = false,
     val isHiddenProfilesLoading: Boolean = false,
+    val isReportHistoryLoading: Boolean = false,
+    val isSupportContactLoading: Boolean = false,
     val unblockingUserId: String? = null,
     val unhidingUserId: String? = null,
     val isLoading: Boolean = false,

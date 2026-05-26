@@ -644,6 +644,7 @@ Client-local:
 - [x] Safety center exists.
 - [x] Blocked-user management exists in Safety Center.
 - [x] Hidden-profile management remains separate from blocking.
+- [x] Report history and support contact exist in Safety Center.
 - [ ] Discreet app icon exists or is planned.
 - [ ] Partial: logout exists; data export and account deletion are not implemented.
 - [x] Server-authoritative settings are not only local.

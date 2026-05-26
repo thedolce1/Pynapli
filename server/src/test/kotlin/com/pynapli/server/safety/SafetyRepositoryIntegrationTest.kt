@@ -149,6 +149,43 @@ class SafetyRepositoryIntegrationTest {
     }
 
     @Test
+    fun reportHistoryListsOnlyReporterRowsWithDisplayNames() = runBlocking {
+        val reporter = UUID.fromString("00000000-0000-0000-0000-000000000423")
+        val otherReporter = UUID.fromString("00000000-0000-0000-0000-000000000424")
+        val reported = UUID.fromString("00000000-0000-0000-0000-000000000425")
+        val otherReported = UUID.fromString("00000000-0000-0000-0000-000000000426")
+        val repository = JdbcReportRepository(dataSource)
+        dataSource.insertUser(reporter)
+        dataSource.insertUser(otherReporter)
+        dataSource.insertUser(reported)
+        dataSource.insertUser(otherReported)
+        dataSource.setProfileDisplayName(reported, "Casey")
+
+        val ownReport = repository.createReport(
+            reporterUserId = reporter,
+            reportedUserId = reported,
+            targetType = ReportTargetType.PROFILE,
+            targetId = null,
+            category = ReportCategory.SPAM_OR_FAKE_PROFILE,
+            note = "Looks fake"
+        )
+        repository.createReport(
+            reporterUserId = otherReporter,
+            reportedUserId = otherReported,
+            targetType = ReportTargetType.PROFILE,
+            targetId = null,
+            category = ReportCategory.OTHER,
+            note = "Other user's report"
+        )
+
+        val history = repository.listReportsByReporter(reporter, limit = 10)
+
+        assertEquals(listOf(ownReport.id), history.map { it.id })
+        assertEquals("Casey", history.single().reportedDisplayName)
+        assertEquals(ReportCategory.SPAM_OR_FAKE_PROFILE, history.single().category)
+    }
+
+    @Test
     fun adminReportReviewFlowUpdatesStatusAndWritesAuditRows() = runBlocking {
         val reporter = UUID.fromString("00000000-0000-0000-0000-000000000441")
         val reported = UUID.fromString("00000000-0000-0000-0000-000000000442")

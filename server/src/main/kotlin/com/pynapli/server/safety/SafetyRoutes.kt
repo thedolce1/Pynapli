@@ -68,6 +68,17 @@ fun Application.configureSafetyRoutes(
             val request = call.receive<CreateReportRequestDto>()
             call.respond(reportService.submitReport(user.id, request))
         }
+
+        get("/v1/reports") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
+            call.respond(reportService.listReports(user.id, limit))
+        }
+
+        get("/v1/support/contact") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(reportService.supportContact(user.id))
+        }
     }
 }
 

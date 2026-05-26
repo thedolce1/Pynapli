@@ -460,12 +460,14 @@ Rules:
 
 ```http
 POST /v1/reports
+GET  /v1/reports
 POST /v1/blocks/{userId}
 DELETE /v1/blocks/{userId}
 GET  /v1/blocks
 POST /v1/hidden-profiles/{userId}
 DELETE /v1/hidden-profiles/{userId}
 GET  /v1/hidden-profiles
+GET  /v1/support/contact
 GET  /v1/safety/community-guidelines
 ```
 
@@ -475,6 +477,9 @@ Rules:
 - Blocks apply across Grid, Swipe, Activity, Messages.
 - Hidden profiles are never premium.
 - Hidden profiles remove the target from the viewer's discovery surfaces without treating the target as blocked.
+- Report history is reporter-scoped and returns only user-safe status, category, target type, display name, and timestamps.
+- Report history must not expose moderator notes, internal risk state, admin reasons, or private reported-user data.
+- Support contact is never premium and returns server-configured contact details with a user-safe account reference.
 
 ## Verification API
 

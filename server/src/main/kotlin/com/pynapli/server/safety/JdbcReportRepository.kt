@@ -2,6 +2,7 @@ package com.pynapli.server.safety
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.sql.ResultSet
 import java.util.UUID
 import javax.sql.DataSource
 
@@ -64,5 +65,50 @@ class JdbcReportRepository(
                 }
             }
         }
+    }
+
+    override suspend fun listReportsByReporter(
+        reporterUserId: UUID,
+        limit: Int
+    ): List<ReportHistoryRecord> = withContext(Dispatchers.IO) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT sr.id,
+                       p.display_name AS reported_display_name,
+                       sr.target_type,
+                       sr.category,
+                       sr.status,
+                       sr.created_at
+                FROM safety_reports sr
+                LEFT JOIN profiles p ON p.user_id = sr.reported_user_id
+                WHERE sr.reporter_user_id = ?
+                ORDER BY sr.created_at DESC, sr.id DESC
+                LIMIT ?
+                """.trimIndent()
+            ).use { statement ->
+                statement.setObject(1, reporterUserId)
+                statement.setInt(2, limit.coerceIn(1, MAX_HISTORY_LIMIT))
+                statement.executeQuery().use { rs ->
+                    buildList {
+                        while (rs.next()) add(rs.toReportHistoryRecord())
+                    }
+                }
+            }
+        }
+    }
+
+    private fun ResultSet.toReportHistoryRecord(): ReportHistoryRecord =
+        ReportHistoryRecord(
+            id = getObject("id", UUID::class.java),
+            reportedDisplayName = getString("reported_display_name"),
+            targetType = getString("target_type"),
+            category = getString("category"),
+            status = getString("status"),
+            createdAt = getTimestamp("created_at").toInstant()
+        )
+
+    private companion object {
+        const val MAX_HISTORY_LIMIT = 50
     }
 }

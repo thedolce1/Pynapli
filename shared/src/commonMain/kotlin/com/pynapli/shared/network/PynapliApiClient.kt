@@ -49,6 +49,7 @@ import com.pynapli.shared.network.dto.MarkActivitySeenRequestDto
 import com.pynapli.shared.network.dto.MarkActivitySeenResponseDto
 import com.pynapli.shared.network.dto.NotificationPreferencesDto
 import com.pynapli.shared.network.dto.ReportDto
+import com.pynapli.shared.network.dto.ReportHistoryListDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PresenceHeartbeatResponseDto
@@ -71,6 +72,7 @@ import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
 import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncResponseDto
 import com.pynapli.shared.network.dto.StorePurchaseResponseDto
+import com.pynapli.shared.network.dto.SupportContactDto
 import com.pynapli.shared.network.dto.UnregisterPushDeviceRequestDto
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
@@ -272,6 +274,10 @@ interface PynapliApiClient {
     suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto>
 
     suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto>
+
+    suspend fun listReports(limit: Int? = null): AppResult<ReportHistoryListDto>
+
+    suspend fun getSupportContact(): AppResult<SupportContactDto>
 
     suspend fun querySwipeDeck(request: SwipeDeckRequestDto = SwipeDeckRequestDto()): AppResult<SwipeDeckResponseDto>
 
@@ -915,6 +921,21 @@ class KtorPynapliApiClient(
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)
+            }.toAppResult(json)
+        }
+
+    override suspend fun listReports(limit: Int?): AppResult<ReportHistoryListDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/reports")) {
+                bearerAuth(token)
+                if (limit != null) parameter("limit", limit)
+            }.toAppResult(json)
+        }
+
+    override suspend fun getSupportContact(): AppResult<SupportContactDto> =
+        authenticatedPost { token ->
+            httpClient.get(config.endpoint("/v1/support/contact")) {
+                bearerAuth(token)
             }.toAppResult(json)
         }
 

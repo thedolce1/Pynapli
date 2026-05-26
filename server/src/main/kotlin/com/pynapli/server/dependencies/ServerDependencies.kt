@@ -212,7 +212,8 @@ class ServerDependencies(
             val reportService = ReportService(
                 repository = JdbcReportRepository(database.dataSource),
                 riskSignalPublisher = riskService,
-                rateLimitService = rateLimitService
+                rateLimitService = rateLimitService,
+                supportEmail = config.supportEmail
             )
             val notificationRepository = JdbcNotificationRepository(database.dataSource)
             val notificationService = NotificationService(notificationRepository)

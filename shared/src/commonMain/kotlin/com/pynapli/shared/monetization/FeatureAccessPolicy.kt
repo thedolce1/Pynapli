@@ -8,6 +8,8 @@ enum class PynapliFeature(val requiresPaidEntitlement: Boolean) {
     UnhideProfile(false),
     ListHiddenProfiles(false),
     SubmitReport(false),
+    ListReports(false),
+    SupportContact(false),
     SafetyCenter(false),
     AgeVerification(false),
     GridAdvancedFilters(true),
@@ -28,6 +30,8 @@ object FeatureAccessPolicy {
         PynapliFeature.UnhideProfile,
         PynapliFeature.ListHiddenProfiles,
         PynapliFeature.SubmitReport,
+        PynapliFeature.ListReports,
+        PynapliFeature.SupportContact,
         PynapliFeature.SafetyCenter,
         PynapliFeature.AgeVerification
     )

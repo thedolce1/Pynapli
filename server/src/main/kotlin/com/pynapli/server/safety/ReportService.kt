@@ -1,7 +1,10 @@
 package com.pynapli.server.safety
 
 import com.pynapli.shared.network.dto.CreateReportRequestDto
+import com.pynapli.shared.network.dto.ReportHistoryItemDto
+import com.pynapli.shared.network.dto.ReportHistoryListDto
 import com.pynapli.shared.network.dto.ReportDto
+import com.pynapli.shared.network.dto.SupportContactDto
 import com.pynapli.shared.monetization.FeatureAccessPolicy
 import com.pynapli.shared.monetization.PynapliFeature
 import org.slf4j.LoggerFactory
@@ -10,7 +13,8 @@ import java.util.UUID
 class ReportService(
     private val repository: ReportRepository,
     private val riskSignalPublisher: ReportRiskSignalPublisher? = null,
-    private val rateLimitService: RateLimitService? = null
+    private val rateLimitService: RateLimitService? = null,
+    private val supportEmail: String = "support@pynapli.com"
 ) {
     suspend fun submitReport(reporterUserId: UUID, request: CreateReportRequestDto): ReportDto {
         FeatureAccessPolicy.requireAlwaysFreeSafetyFeature(PynapliFeature.SubmitReport)
@@ -64,11 +68,48 @@ class ReportService(
         )
     }
 
+    suspend fun listReports(reporterUserId: UUID, limit: Int = DEFAULT_HISTORY_LIMIT): ReportHistoryListDto {
+        FeatureAccessPolicy.requireAlwaysFreeSafetyFeature(PynapliFeature.ListReports)
+        return ReportHistoryListDto(
+            reports = repository.listReportsByReporter(
+                reporterUserId = reporterUserId,
+                limit = limit.coerceIn(1, MAX_HISTORY_LIMIT)
+            ).map { record ->
+                ReportHistoryItemDto(
+                    reportId = record.id.toString(),
+                    reportedDisplayName = record.reportedDisplayName,
+                    targetType = record.targetType,
+                    category = record.category,
+                    status = record.status.toUserVisibleStatus(),
+                    createdAt = record.createdAt.toString()
+                )
+            }
+        )
+    }
+
+    fun supportContact(userId: UUID): SupportContactDto {
+        FeatureAccessPolicy.requireAlwaysFreeSafetyFeature(PynapliFeature.SupportContact)
+        val accountReference = userId.toString()
+        return SupportContactDto(
+            email = supportEmail,
+            subject = "Pynapli support request",
+            body = "Account reference: $accountReference\n\nHow can we help?"
+        )
+    }
+
     private fun String.toUuidOrThrow(): UUID =
         runCatching { UUID.fromString(this) }.getOrElse { throw SafetyException("INVALID_REPORT_TARGET") }
 
+    private fun String.toUserVisibleStatus(): String = when (this) {
+        "under_review" -> "under_review"
+        "resolved", "dismissed" -> "reviewed"
+        else -> "received"
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(ReportService::class.java)
+        private const val DEFAULT_HISTORY_LIMIT = 25
+        private const val MAX_HISTORY_LIMIT = 50
         private const val MAX_NOTE_LENGTH = 2_000
         private val TARGET_TYPES = setOf("profile", "message", "media", "album", "session")
         private val CATEGORIES = setOf(
