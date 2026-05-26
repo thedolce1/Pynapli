@@ -2,8 +2,6 @@ package com.pynapli.server.notifications
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.sql.Connection
-import java.sql.ResultSet
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -14,7 +12,7 @@ class JdbcNotificationRepository(
 ) : NotificationRepository {
     override suspend fun getPreferences(userId: UUID): NotificationPreferencesRecord? = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            connection.ensurePreferences(userId)
+            connection.ensureNotificationPreferences(userId)
             connection.prepareStatement(PREFERENCES_QUERY).use { statement ->
                 statement.setObject(1, userId)
                 statement.executeQuery().use { rs ->
@@ -92,7 +90,7 @@ class JdbcNotificationRepository(
         update: NotificationPreferencesUpdate
     ): NotificationPreferencesRecord? = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            connection.ensurePreferences(userId)
+            connection.ensureNotificationPreferences(userId)
             connection.prepareStatement(
                 """
                 UPDATE notification_preferences
@@ -281,7 +279,7 @@ class JdbcNotificationRepository(
     override suspend fun claimPendingNotifications(limit: Int): List<NotificationDeliveryRecord> =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
-                connection.withTransaction {
+                connection.withNotificationTransaction {
                     connection.prepareStatement(
                         """
                         WITH claimed AS (
@@ -327,7 +325,7 @@ class JdbcNotificationRepository(
         limit: Int
     ): Int = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            connection.withTransaction {
+            connection.withNotificationTransaction {
                 connection.prepareStatement(
                     """
                     WITH stale AS (
@@ -457,94 +455,6 @@ class JdbcNotificationRepository(
                 statement.setObject(5, notificationId)
                 statement.executeUpdate() > 0
             }
-        }
-    }
-
-    private fun Connection.ensurePreferences(userId: UUID) {
-        prepareStatement(
-            """
-            INSERT INTO notification_preferences (user_id)
-            SELECT id
-            FROM users
-            WHERE id = ?
-              AND deleted_at IS NULL
-            ON CONFLICT (user_id) DO NOTHING
-            """.trimIndent()
-        ).use { statement ->
-            statement.setObject(1, userId)
-            statement.executeUpdate()
-        }
-    }
-
-    private fun ResultSet.toNotificationPreferencesRecord(): NotificationPreferencesRecord =
-        NotificationPreferencesRecord(
-            userId = getObject("user_id", UUID::class.java),
-            detailLevel = getString("detail_level"),
-            messagesEnabled = getBoolean("messages_enabled"),
-            matchesEnabled = getBoolean("matches_enabled"),
-            activityEnabled = getBoolean("activity_enabled"),
-            flirtsEnabled = getBoolean("flirts_enabled"),
-            albumRequestsEnabled = getBoolean("album_requests_enabled"),
-            partnerInvitesEnabled = getBoolean("partner_invites_enabled"),
-            systemSafetyEnabled = getBoolean("system_safety_enabled"),
-            quietHoursEnabled = getBoolean("quiet_hours_enabled"),
-            quietHoursStartMinute = getInt("quiet_hours_start_minute"),
-            quietHoursEndMinute = getInt("quiet_hours_end_minute"),
-            quietHoursTimezone = getString("quiet_hours_timezone")
-        )
-
-    private fun ResultSet.toPushDeviceRecord(): PushDeviceRecord =
-        PushDeviceRecord(
-            deviceId = getObject("id", UUID::class.java),
-            userId = getObject("user_id", UUID::class.java),
-            platform = getString("platform"),
-            notificationsEnabled = getBoolean("notifications_enabled"),
-            lastSeenAt = getTimestamp("last_seen_at").toInstant()
-        )
-
-    private fun ResultSet.toNotificationOutboxRecord(): NotificationOutboxRecord =
-        NotificationOutboxRecord(
-            notificationId = getObject("id", UUID::class.java),
-            recipientUserId = getObject("recipient_user_id", UUID::class.java),
-            kind = getString("kind"),
-            status = getString("status"),
-            createdAt = getTimestamp("created_at").toInstant()
-        )
-
-    private fun ResultSet.toNotificationDeliveryRecord(): NotificationDeliveryRecord =
-        NotificationDeliveryRecord(
-            notificationId = getObject("id", UUID::class.java),
-            recipientUserId = getObject("recipient_user_id", UUID::class.java),
-            actorUserId = getObject("actor_user_id", UUID::class.java),
-            kind = getString("kind"),
-            subjectId = getObject("subject_id", UUID::class.java),
-            title = getString("title"),
-            body = getString("body"),
-            payloadJson = getString("payload_json"),
-            attemptCount = getInt("attempt_count"),
-            createdAt = getTimestamp("created_at").toInstant()
-        )
-
-    private fun ResultSet.toPushDeliveryTarget(): PushDeliveryTarget =
-        PushDeliveryTarget(
-            deviceId = getObject("id", UUID::class.java),
-            userId = getObject("user_id", UUID::class.java),
-            platform = getString("platform"),
-            deviceToken = getString("device_token")
-        )
-
-    private fun <T> Connection.withTransaction(block: () -> T): T {
-        val previousAutoCommit = autoCommit
-        autoCommit = false
-        try {
-            val result = block()
-            commit()
-            return result
-        } catch (error: Throwable) {
-            rollback()
-            throw error
-        } finally {
-            autoCommit = previousAutoCommit
         }
     }
 
