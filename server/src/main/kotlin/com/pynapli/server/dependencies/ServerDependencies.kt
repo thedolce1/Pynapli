@@ -1,5 +1,6 @@
 package com.pynapli.server.dependencies
 
+import com.pynapli.server.account.AccountDataExportWorker
 import com.pynapli.server.account.AccountLifecycleService
 import com.pynapli.server.account.JdbcAccountLifecycleRepository
 import com.pynapli.server.activity.ActivityBroadcaster
@@ -130,6 +131,7 @@ class ServerDependencies(
     val activityService: ActivityService?,
     val activityRetentionWorker: ActivityRetentionWorker?,
     val mediaCleanupWorker: MediaCleanupWorker?,
+    val accountDataExportWorker: AccountDataExportWorker?,
     val notificationService: NotificationService?,
     val notificationDispatchWorker: NotificationDispatchWorker?,
     val productMetrics: ProductMetrics?,
@@ -176,6 +178,7 @@ class ServerDependencies(
         runCatching { playStoreSubscriptionSyncWorker?.close() }
         runCatching { activityRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
+        runCatching { accountDataExportWorker?.close() }
         runCatching { tonightSessionExpiryWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
         runCatching { profileActivityScope?.cancel() }
@@ -410,6 +413,7 @@ class ServerDependencies(
                 activityService = activityService,
                 activityRetentionWorker = activityRetentionWorker,
                 mediaCleanupWorker = mediaCleanupWorker,
+                accountDataExportWorker = core.accountDataExportWorker,
                 notificationService = core.notificationService,
                 notificationDispatchWorker = core.notificationDispatchWorker,
                 productMetrics = core.productMetrics,
@@ -490,6 +494,7 @@ class ServerDependencies(
                 activityService = null,
                 activityRetentionWorker = null,
                 mediaCleanupWorker = null,
+                accountDataExportWorker = null,
                 notificationService = null,
                 notificationDispatchWorker = null,
                 productMetrics = null,

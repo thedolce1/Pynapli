@@ -1,7 +1,11 @@
 package com.pynapli.server.dependencies
 
+import com.pynapli.server.account.AccountDataExportProcessor
+import com.pynapli.server.account.AccountDataExportWorker
 import com.pynapli.server.account.AccountLifecycleService
+import com.pynapli.server.account.JdbcAccountDataExportArchiver
 import com.pynapli.server.account.JdbcAccountLifecycleRepository
+import com.pynapli.server.account.LocalAccountExportStorage
 import com.pynapli.server.activity.ActivityBroadcaster
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
@@ -45,9 +49,11 @@ import com.pynapli.server.safety.ReportService
 import com.pynapli.server.safety.RiskFalsePositiveMetrics
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.safety.RiskService
+import java.nio.file.Path
 
 internal class CoreDependencies(
     val accountLifecycleService: AccountLifecycleService,
+    val accountDataExportWorker: AccountDataExportWorker?,
     val travelLocationRepository: TravelLocationRepository,
     val presenceService: PresenceService,
     val presenceBroadcaster: PresenceBroadcaster,
@@ -78,10 +84,31 @@ internal fun buildCoreDependencies(
     database: Database,
     redisCache: RedisCache,
 ): CoreDependencies {
+    val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource)
+    val accountExportStorage =
+        LocalAccountExportStorage(
+            directory = Path.of(config.accountDataExportDirectory),
+            downloadBaseUrl = config.mediaUploadBaseUrl,
+        )
     val accountLifecycleService =
         AccountLifecycleService(
-            JdbcAccountLifecycleRepository(database.dataSource),
+            repository = accountLifecycleRepository,
+            exportStorage = accountExportStorage,
         )
+    val accountDataExportWorker =
+        if (config.accountDataExportEnabled) {
+            AccountDataExportWorker(
+                processor =
+                    AccountDataExportProcessor(
+                        repository = accountLifecycleRepository,
+                        archiver = JdbcAccountDataExportArchiver(database.dataSource),
+                        storage = accountExportStorage,
+                    ),
+                intervalMillis = config.accountDataExportIntervalMillis,
+            )
+        } else {
+            null
+        }
     val travelLocationRepository = JdbcTravelLocationRepository(database.dataSource)
     val presenceRepository = RedisPresenceRepository(redisCache)
     val presenceBroadcaster = PresenceBroadcaster()
@@ -162,6 +189,7 @@ internal fun buildCoreDependencies(
 
     return CoreDependencies(
         accountLifecycleService = accountLifecycleService,
+        accountDataExportWorker = accountDataExportWorker,
         travelLocationRepository = travelLocationRepository,
         presenceService = presenceService,
         presenceBroadcaster = presenceBroadcaster,
