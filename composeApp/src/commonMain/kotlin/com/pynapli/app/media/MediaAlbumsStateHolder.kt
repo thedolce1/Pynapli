@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 class MediaAlbumsStateHolder(
-    private val repository: MediaAlbumsRepository
+    private val repository: MediaAlbumsRepository,
 ) {
     private val _state = MutableStateFlow(MediaAlbumsUiState())
     val state: StateFlow<MediaAlbumsUiState> = _state.asStateFlow()
@@ -36,19 +36,19 @@ class MediaAlbumsStateHolder(
                         privateItems = privateResult.value,
                         privateGrants = grantsResult.value,
                         isLoading = false,
-                        errorMessage = null
+                        errorMessage = null,
                     )
 
                 profileResult is AppResult.Failure ->
                     existing.copy(
                         isLoading = false,
-                        errorMessage = profileResult.error.message
+                        errorMessage = profileResult.error.message,
                     )
 
                 privateResult is AppResult.Failure ->
                     existing.copy(
                         isLoading = false,
-                        errorMessage = privateResult.error.message
+                        errorMessage = privateResult.error.message,
                     )
 
                 grantsResult is AppResult.Failure ->
@@ -56,7 +56,7 @@ class MediaAlbumsStateHolder(
                         profileItems = (profileResult as? AppResult.Success)?.value ?: existing.profileItems,
                         privateItems = (privateResult as? AppResult.Success)?.value ?: existing.privateItems,
                         isLoading = false,
-                        errorMessage = grantsResult.error.message
+                        errorMessage = grantsResult.error.message,
                     )
 
                 else -> existing.copy(isLoading = false)
@@ -71,7 +71,7 @@ class MediaAlbumsStateHolder(
         _state.update { existing ->
             existing.copy(
                 revokingGranteeIds = existing.revokingGranteeIds + granteeUserId,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -80,7 +80,7 @@ class MediaAlbumsStateHolder(
                 _state.update { existing ->
                     existing.copy(
                         privateGrants = existing.privateGrants.filterNot { it.granteeUserId == granteeUserId },
-                        revokingGranteeIds = existing.revokingGranteeIds - granteeUserId
+                        revokingGranteeIds = existing.revokingGranteeIds - granteeUserId,
                     )
                 }
             }
@@ -89,7 +89,7 @@ class MediaAlbumsStateHolder(
                 _state.update { existing ->
                     existing.copy(
                         revokingGranteeIds = existing.revokingGranteeIds - granteeUserId,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -98,7 +98,7 @@ class MediaAlbumsStateHolder(
 
     suspend fun uploadPickedMedia(
         kind: MediaAlbumKindUi,
-        media: PickedMediaForUpload
+        media: PickedMediaForUpload,
     ) {
         val current = state.value
         if (kind == MediaAlbumKindUi.Profile && current.isUploadingProfile) return
@@ -109,22 +109,24 @@ class MediaAlbumsStateHolder(
             is AppResult.Success -> {
                 val item = result.value
                 _state.update { existing ->
-                    val profileItems = if (kind == MediaAlbumKindUi.Profile) {
-                        existing.profileItems.withPrependedUnique(item)
-                    } else {
-                        existing.profileItems
-                    }
-                    val privateItems = if (kind == MediaAlbumKindUi.Private) {
-                        existing.privateItems.withPrependedUnique(item)
-                    } else {
-                        existing.privateItems
-                    }
+                    val profileItems =
+                        if (kind == MediaAlbumKindUi.Profile) {
+                            existing.profileItems.withPrependedUnique(item)
+                        } else {
+                            existing.profileItems
+                        }
+                    val privateItems =
+                        if (kind == MediaAlbumKindUi.Private) {
+                            existing.privateItems.withPrependedUnique(item)
+                        } else {
+                            existing.privateItems
+                        }
                     existing.copy(
                         profileItems = profileItems,
                         privateItems = privateItems,
                         isUploadingProfile = if (kind == MediaAlbumKindUi.Profile) false else existing.isUploadingProfile,
                         isUploadingPrivate = if (kind == MediaAlbumKindUi.Private) false else existing.isUploadingPrivate,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -134,7 +136,7 @@ class MediaAlbumsStateHolder(
                     existing.copy(
                         isUploadingProfile = if (kind == MediaAlbumKindUi.Profile) false else existing.isUploadingProfile,
                         isUploadingPrivate = if (kind == MediaAlbumKindUi.Private) false else existing.isUploadingPrivate,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -149,16 +151,18 @@ class MediaAlbumsStateHolder(
         _state.update { it.copy(errorMessage = null) }
     }
 
-    private fun setUploading(kind: MediaAlbumKindUi, uploading: Boolean) {
+    private fun setUploading(
+        kind: MediaAlbumKindUi,
+        uploading: Boolean,
+    ) {
         _state.update { existing ->
             existing.copy(
                 isUploadingProfile = if (kind == MediaAlbumKindUi.Profile) uploading else existing.isUploadingProfile,
                 isUploadingPrivate = if (kind == MediaAlbumKindUi.Private) uploading else existing.isUploadingPrivate,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
 
-    private fun List<MediaAlbumItemUi>.withPrependedUnique(item: MediaAlbumItemUi): List<MediaAlbumItemUi> =
-        listOf(item) + filterNot { existing -> existing.mediaAssetId == item.mediaAssetId }
+    private fun List<MediaAlbumItemUi>.withPrependedUnique(item: MediaAlbumItemUi): List<MediaAlbumItemUi> = listOf(item) + filterNot { existing -> existing.mediaAssetId == item.mediaAssetId }
 }

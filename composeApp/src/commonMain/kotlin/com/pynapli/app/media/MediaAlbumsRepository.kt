@@ -7,7 +7,7 @@ interface MediaAlbumsRepository {
 
     suspend fun uploadMedia(
         kind: MediaAlbumKindUi,
-        media: PickedMediaForUpload
+        media: PickedMediaForUpload,
     ): AppResult<MediaAlbumItemUi>
 
     suspend fun loadPrivateGrants(): AppResult<List<MediaPrivateGrantUi>>

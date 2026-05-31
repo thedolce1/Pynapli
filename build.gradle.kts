@@ -13,8 +13,8 @@ plugins {
     alias(libs.plugins.spotless) apply false
 }
 
-// Spotless: Kotlin formatting gate. Adopted incrementally via `ratchetFrom` so only files
-// changed relative to origin/main are enforced — no big-bang reformat of the existing tree.
+// Spotless: Kotlin formatting gate. The codebase was formatted to ktlint_official in one pass
+// (see .git-blame-ignore-revs), so enforcement now covers all files — no ratchet needed.
 // detekt is intentionally NOT added yet: no stable detekt release supports Kotlin 2.3 (only
 // 2.0.0-alpha), which the version policy in docs/OFFICIAL_TECH_REFERENCE_GUIDE.md disallows.
 allprojects {
@@ -23,7 +23,6 @@ allprojects {
         rootProject.libs.versions.ktlint
             .get()
     extensions.configure<com.diffplug.gradle.spotless.SpotlessExtension> {
-        ratchetFrom = "origin/main"
         kotlin {
             target("src/**/*.kt")
             targetExclude("**/build/**", "**/generated/**")

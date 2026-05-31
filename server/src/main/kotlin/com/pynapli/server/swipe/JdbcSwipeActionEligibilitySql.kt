@@ -9,7 +9,7 @@ internal fun Connection.isSwipeActionTargetEligible(
     viewerUserId: UUID,
     targetUserId: UUID,
     radiusMeters: Int,
-    requireIntroNotesAllowed: Boolean
+    requireIntroNotesAllowed: Boolean,
 ): Boolean =
     prepareStatement(
         """
@@ -68,7 +68,7 @@ internal fun Connection.isSwipeActionTargetEligible(
                     AND uhp.hidden_user_id = target.id
               )
         )
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, viewerUserId)
         statement.setObject(2, targetUserId)
@@ -91,7 +91,7 @@ internal fun Connection.checkSwipeActionPreconditions(
     targetUserId: UUID,
     radiusMeters: Int,
     requireIntroNotesAllowed: Boolean,
-    now: Instant
+    now: Instant,
 ): SwipeActionPreconditionCheck =
     prepareStatement(
         """
@@ -177,7 +177,7 @@ internal fun Connection.checkSwipeActionPreconditions(
                         AND uhp.hidden_user_id = target.id
                   )
             ) AS target_eligible
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, viewerUserId)
         statement.setObject(2, sessionId)
@@ -200,7 +200,7 @@ internal fun Connection.checkSwipeActionPreconditions(
             SwipeActionPreconditionCheck(
                 deckCardActionable = rs.getBoolean("deck_card_actionable"),
                 targetEligible = rs.getBoolean("target_eligible"),
-                viewerTravelLocationId = rs.getObject("viewer_travel_location_id", UUID::class.java)
+                viewerTravelLocationId = rs.getObject("viewer_travel_location_id", UUID::class.java),
             )
         }
     }

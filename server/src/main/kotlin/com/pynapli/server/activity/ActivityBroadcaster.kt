@@ -8,12 +8,13 @@ import java.time.Instant
 import java.util.UUID
 
 class ActivityBroadcaster(
-    extraBufferCapacity: Int = DEFAULT_BUFFER_CAPACITY
+    extraBufferCapacity: Int = DEFAULT_BUFFER_CAPACITY,
 ) {
-    private val _deltas = MutableSharedFlow<ActivityRealtimeDelta>(
-        replay = 0,
-        extraBufferCapacity = extraBufferCapacity
-    )
+    private val _deltas =
+        MutableSharedFlow<ActivityRealtimeDelta>(
+            replay = 0,
+            extraBufferCapacity = extraBufferCapacity,
+        )
     val deltas: SharedFlow<ActivityRealtimeDelta> = _deltas.asSharedFlow()
 
     suspend fun emit(delta: ActivityRealtimeDelta) {
@@ -30,13 +31,13 @@ data class ActivityRealtimeDelta(
     val type: String,
     val tab: String = ActivityFeedTab.fromEventType(type).value,
     val occurredAt: Instant = Instant.now(),
-    val eventId: UUID? = null
+    val eventId: UUID? = null,
 ) {
     fun toDto(): ActivityDeltaDto =
         ActivityDeltaDto(
             type = type,
             tab = tab,
             occurredAt = occurredAt.toString(),
-            eventId = eventId?.toString()
+            eventId = eventId?.toString(),
         )
 }

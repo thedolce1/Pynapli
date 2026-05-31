@@ -17,7 +17,7 @@ internal fun Connection.findViewerLocationCacheKey(viewerUserId: UUID): DeckLoca
              AND tl.active_until IS NULL
             WHERE ul.user_id = ?
         ) viewer_location
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, viewerUserId)
         statement.executeQuery().use { rs ->
@@ -30,7 +30,7 @@ internal fun Connection.findViewerLocationCacheKey(viewerUserId: UUID): DeckLoca
                 // enough for the swipe UI's coarse labels.
                 DeckLocationCacheKey(
                     longitudeE3 = Math.round(rs.getDouble("longitude") * 1_000.0).toInt(),
-                    latitudeE3 = Math.round(rs.getDouble("latitude") * 1_000.0).toInt()
+                    latitudeE3 = Math.round(rs.getDouble("latitude") * 1_000.0).toInt(),
                 )
             }
         }
@@ -39,7 +39,7 @@ internal fun Connection.findViewerLocationCacheKey(viewerUserId: UUID): DeckLoca
 internal fun Connection.listActiveTravelCandidateUserIdsNear(
     viewerUserId: UUID,
     radiusMeters: Int,
-    limit: Int = 2_000
+    limit: Int = 2_000,
 ): Set<UUID> =
     prepareStatement(
         """
@@ -72,7 +72,7 @@ internal fun Connection.listActiveTravelCandidateUserIdsNear(
           AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
         ORDER BY v.geom <-> tl.geom
         LIMIT ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, viewerUserId)
         statement.setDouble(2, radiusMeters.toDouble())
@@ -87,13 +87,15 @@ internal fun Connection.listActiveTravelCandidateUserIdsNear(
         }
     }
 
-internal fun Connection.hasAnyActiveProfileLinksNear(viewerUserId: UUID, radiusMeters: Int): Boolean =
-    listLinkedCandidateUserIdsNear(viewerUserId, radiusMeters, limit = 1).isNotEmpty()
+internal fun Connection.hasAnyActiveProfileLinksNear(
+    viewerUserId: UUID,
+    radiusMeters: Int,
+): Boolean = listLinkedCandidateUserIdsNear(viewerUserId, radiusMeters, limit = 1).isNotEmpty()
 
 internal fun Connection.listLinkedCandidateUserIdsNear(
     viewerUserId: UUID,
     radiusMeters: Int,
-    limit: Int = 2_000
+    limit: Int = 2_000,
 ): Set<UUID> =
     prepareStatement(
         """
@@ -153,7 +155,7 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
           )
           AND ST_DWithin(v.geom, COALESCE(target_travel.geom, ul.geom), ?)
         LIMIT ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, viewerUserId)
         statement.setObject(2, viewerUserId)
@@ -178,7 +180,7 @@ internal fun Connection.hasActiveTravelLocations(): Boolean =
             WHERE status = 'active'
               AND active_until IS NULL
         )
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.executeQuery().use { rs ->
             rs.next()
@@ -186,7 +188,10 @@ internal fun Connection.hasActiveTravelLocations(): Boolean =
         }
     }
 
-internal fun Connection.listActiveSwipedTargetIds(actorUserId: UUID, targetUserIds: Set<UUID>): Set<UUID> {
+internal fun Connection.listActiveSwipedTargetIds(
+    actorUserId: UUID,
+    targetUserIds: Set<UUID>,
+): Set<UUID> {
     if (targetUserIds.isEmpty()) return emptySet()
     return prepareStatement(
         """
@@ -195,7 +200,7 @@ internal fun Connection.listActiveSwipedTargetIds(actorUserId: UUID, targetUserI
         WHERE actor_user_id = ?
           AND rewound_at IS NULL
           AND target_user_id = ANY(?::uuid[])
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, actorUserId)
         statement.setArray(2, createArrayOf("uuid", targetUserIds.toTypedArray()))

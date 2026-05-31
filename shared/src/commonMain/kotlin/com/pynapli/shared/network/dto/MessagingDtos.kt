@@ -29,7 +29,7 @@ object MessageDeltaType {
 @Serializable
 data class CreateDirectConversationRequestDto(
     val targetUserId: String,
-    val origin: String = "grid"
+    val origin: String = "grid",
 )
 
 @Serializable
@@ -41,7 +41,7 @@ data class ConversationDto(
     val lastMessage: MessageDto? = null,
     val unreadCount: Int,
     val updatedAt: String,
-    val partnerInvite: PartnerChatInviteDto? = null
+    val partnerInvite: PartnerChatInviteDto? = null,
 )
 
 @Serializable
@@ -50,20 +50,20 @@ data class ConversationParticipantDto(
     val displayName: String,
     val online: Boolean = false,
     val status: String = ConversationParticipantStatus.ACTIVE,
-    val invitedByUserId: String? = null
+    val invitedByUserId: String? = null,
 )
 
 @Serializable
 data class ConversationDetailDto(
     val conversation: ConversationDto,
     val messages: List<MessageDto>,
-    val nextCursor: String? = null
+    val nextCursor: String? = null,
 )
 
 @Serializable
 data class ConversationListResponseDto(
     val items: List<ConversationDto>,
-    val nextCursor: String? = null
+    val nextCursor: String? = null,
 )
 
 @Serializable
@@ -75,7 +75,7 @@ data class MessageDto(
     val createdAt: String,
     val status: String,
     val deliveryStatus: String,
-    val deletedAt: String? = null
+    val deletedAt: String? = null,
 )
 
 @Serializable
@@ -85,23 +85,23 @@ data class PartnerChatInviteDto(
     val invitedPartnerUserId: String,
     val thirdPartyStatus: String,
     val partnerStatus: String,
-    val createdAt: String
+    val createdAt: String,
 )
 
 @Serializable
 data class SendMessageRequestDto(
-    val body: String
+    val body: String,
 )
 
 @Serializable
 data class SendTypingIndicatorRequestDto(
-    val isTyping: Boolean
+    val isTyping: Boolean,
 )
 
 @Serializable
 data class ConversationPartnerInviteResponseDto(
     val status: String,
-    val conversation: ConversationDto? = null
+    val conversation: ConversationDto? = null,
 )
 
 @Serializable
@@ -112,5 +112,5 @@ data class MessageDeltaDto(
     val messageId: String? = null,
     val actorUserId: String? = null,
     val actorDisplayName: String? = null,
-    val expiresAt: String? = null
+    val expiresAt: String? = null,
 )

@@ -37,7 +37,7 @@ fun ConversationSheet(
     onDeclineInvite: () -> Unit = {},
     onLeaveConversation: () -> Unit = {},
     onDeleteMessage: (String) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     if (!state.visible) return
 
@@ -49,17 +49,18 @@ fun ConversationSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = modifier
+        modifier = modifier,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ConversationHeader(
                 title = title,
-                onDismiss = onDismiss
+                onDismiss = onDismiss,
             )
 
             ConversationContent(
@@ -75,7 +76,7 @@ fun ConversationSheet(
                 onDeleteMessage = onDeleteMessage,
                 fillAvailableHeight = false,
                 showLeaveAction = true,
-                showPartnerStatusFeedback = true
+                showPartnerStatusFeedback = true,
             )
         }
     }
@@ -96,23 +97,24 @@ fun ConversationScreen(
     onDeclineInvite: () -> Unit = {},
     onLeaveConversation: () -> Unit = {},
     onDeleteMessage: (String) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .testTag(ConversationTestTags.fullScreen)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .testTag(ConversationTestTags.fullScreen),
     ) {
         PynapliSocialTopRail(
             onProfileClick = onProfileIconClick,
             onActionClick = {},
-            actionContentDescription = "Message options"
+            actionContentDescription = "Message options",
         )
         FullScreenConversationHeader(
             state = state,
             onBack = onBack,
-            onOpenParticipantProfile = onOpenParticipantProfile
+            onOpenParticipantProfile = onOpenParticipantProfile,
         )
         ConversationContextStrip(conversation = state.detail?.conversation)
         ConversationContent(
@@ -129,7 +131,7 @@ fun ConversationScreen(
             fillAvailableHeight = true,
             showLeaveAction = false,
             showPartnerStatusFeedback = false,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
         )
     }
 }
@@ -149,15 +151,16 @@ private fun ColumnScope.ConversationContent(
     fillAvailableHeight: Boolean,
     showLeaveAction: Boolean,
     showPartnerStatusFeedback: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     when {
         state.isOpening -> {
             Box(
-                modifier = modifier
-                    .fillMaxWidth()
-                    .then(if (fillAvailableHeight) Modifier.weight(1f) else Modifier.heightIn(min = 180.dp)),
-                contentAlignment = Alignment.Center
+                modifier =
+                    modifier
+                        .fillMaxWidth()
+                        .then(if (fillAvailableHeight) Modifier.weight(1f) else Modifier.heightIn(min = 180.dp)),
+                contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
@@ -165,15 +168,16 @@ private fun ColumnScope.ConversationContent(
 
         state.errorMessage != null && state.detail == null -> {
             Box(
-                modifier = modifier
-                    .fillMaxWidth()
-                    .then(if (fillAvailableHeight) Modifier.weight(1f) else Modifier),
-                contentAlignment = Alignment.Center
+                modifier =
+                    modifier
+                        .fillMaxWidth()
+                        .then(if (fillAvailableHeight) Modifier.weight(1f) else Modifier),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = state.errorMessage,
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
@@ -181,7 +185,7 @@ private fun ColumnScope.ConversationContent(
         else -> {
             Column(
                 modifier = modifier.then(if (fillAvailableHeight) Modifier.weight(1f) else Modifier),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 ConversationPartnerActions(
                     state = state,
@@ -191,22 +195,26 @@ private fun ColumnScope.ConversationContent(
                     onDeclineInvite = onDeclineInvite,
                     onLeaveConversation = onLeaveConversation,
                     showLeaveAction = showLeaveAction,
-                    showPartnerStatusFeedback = showPartnerStatusFeedback
+                    showPartnerStatusFeedback = showPartnerStatusFeedback,
                 )
                 MessageList(
                     messages = state.detail?.messages.orEmpty(),
                     viewerUserId = state.viewerUserId,
-                    senderDisplayNames = state.detail?.conversation?.participants
-                        ?.associate { participant -> participant.userId to participant.displayName }
-                        .orEmpty(),
+                    senderDisplayNames =
+                        state.detail
+                            ?.conversation
+                            ?.participants
+                            ?.associate { participant -> participant.userId to participant.displayName }
+                            .orEmpty(),
                     hasOlderMessages = state.detail?.nextCursor != null,
                     isLoadingOlder = state.isLoadingOlder,
                     isDeletingMessageIds = state.isDeletingMessageIds,
                     onLoadOlder = onLoadOlder,
                     onDeleteMessage = onDeleteMessage,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (fillAvailableHeight) Modifier.weight(1f) else Modifier.heightIn(min = 220.dp, max = 430.dp))
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .then(if (fillAvailableHeight) Modifier.weight(1f) else Modifier.heightIn(min = 220.dp, max = 430.dp)),
                 )
                 TypingIndicator(participants = state.typingParticipants)
                 if (!state.isViewerInvited) {
@@ -218,7 +226,7 @@ private fun ColumnScope.ConversationContent(
                         remainingCharacters = state.draftRemaining,
                         errorMessage = state.errorMessage,
                         onDraftChanged = onDraftChanged,
-                        onSend = onSend
+                        onSend = onSend,
                     )
                 }
             }
@@ -228,6 +236,7 @@ private fun ColumnScope.ConversationContent(
 
 object ConversationTestTags {
     fun deleteMessage(messageId: String): String = "conversation-delete-message-$messageId"
+
     const val typingIndicator: String = "conversation-typing-indicator"
     const val fullScreen: String = "conversation-full-screen"
     const val fullScreenHeader: String = "conversation-full-screen-header"

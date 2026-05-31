@@ -10,23 +10,24 @@ import java.util.UUID
 
 internal class SwipeActionSideEffects(
     private val activityService: ActivityService?,
-    private val notificationPublisher: NotificationPublisher?
+    private val notificationPublisher: NotificationPublisher?,
 ) {
     suspend fun recordActivityForAction(
         viewerUserId: UUID,
         targetUserId: UUID,
         action: String,
-        match: MatchRecord?
+        match: MatchRecord?,
     ) {
         val activity = activityService ?: return
         profile("swipe.action.activity") {
             when (action) {
                 SwipeAction.LIKE -> activity.recordSwipeInterest(viewerUserId, targetUserId, "swipe_like")
-                SwipeAction.PINEAPPLE_LIKE -> activity.recordSwipeInterest(
-                    viewerUserId,
-                    targetUserId,
-                    "pineapple_like"
-                )
+                SwipeAction.PINEAPPLE_LIKE ->
+                    activity.recordSwipeInterest(
+                        viewerUserId,
+                        targetUserId,
+                        "pineapple_like",
+                    )
 
                 SwipeAction.INTRO_NOTE -> activity.recordSwipeInterest(viewerUserId, targetUserId, "intro_note")
                 else -> Unit
@@ -38,7 +39,7 @@ internal class SwipeActionSideEffects(
     suspend fun notifyMatch(
         viewerUserId: UUID,
         targetUserId: UUID,
-        match: MatchRecord
+        match: MatchRecord,
     ) {
         profile("swipe.action.notify") {
             notificationPublisher?.enqueue(
@@ -48,14 +49,15 @@ internal class SwipeActionSideEffects(
                     kind = NotificationKind.MATCH,
                     subjectId = match.matchId,
                     idempotencyKey = "match:${match.matchId}:$targetUserId",
-                    payload = mapOf(
-                        "target" to "activity",
-                        "activityTab" to "matches",
-                        "activityEventType" to "match",
-                        "matchId" to match.matchId.toString(),
-                        "matchedUserId" to viewerUserId.toString()
-                    )
-                )
+                    payload =
+                        mapOf(
+                            "target" to "activity",
+                            "activityTab" to "matches",
+                            "activityEventType" to "match",
+                            "matchId" to match.matchId.toString(),
+                            "matchedUserId" to viewerUserId.toString(),
+                        ),
+                ),
             )
         }
     }

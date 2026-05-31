@@ -5,4 +5,3 @@ import platform.UIKit.UIDevice
 actual class PlatformInfoProvider {
     actual fun platformName(): String = UIDevice.currentDevice.systemName()
 }
-

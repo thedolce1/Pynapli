@@ -40,7 +40,7 @@ data class ProfileHubUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val errorMessage: String? = null,
-    val feedbackMessage: String? = null
+    val feedbackMessage: String? = null,
 )
 
 @Immutable
@@ -50,7 +50,7 @@ data class ProfileEditDraft(
     val gender: String = "",
     val orientation: String = "",
     val relationshipContext: String = "",
-    val discoveryStyle: String = "both"
+    val discoveryStyle: String = "both",
 )
 
 @Immutable
@@ -60,7 +60,7 @@ data class PrivacySettingsDraft(
     val showDistance: Boolean = true,
     // PROFILE_SETTINGS_SPEC L221-245: when false, the viewer is hidden from
     // every discovery surface while they have an active travel_locations row.
-    val visibleWhileTraveling: Boolean = true
+    val visibleWhileTraveling: Boolean = true,
 )
 
 @Immutable
@@ -70,5 +70,5 @@ data class ActivitySettingsDraft(
     val gridMessagePolicy: String = "everyone",
     val allowFlirts: Boolean = true,
     val allowIntroNotes: Boolean = true,
-    val allowAlbumRequests: Boolean = true
+    val allowAlbumRequests: Boolean = true,
 )

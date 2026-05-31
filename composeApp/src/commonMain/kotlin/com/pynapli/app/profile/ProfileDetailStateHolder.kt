@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 class ProfileDetailStateHolder(
-    private val repository: PublicProfileRepository
+    private val repository: PublicProfileRepository,
 ) {
     private val _state = MutableStateFlow(ProfileDetailUiState())
     val state: StateFlow<ProfileDetailUiState> = _state.asStateFlow()
@@ -20,7 +20,7 @@ class ProfileDetailStateHolder(
         _state.update {
             ProfileDetailUiState(
                 selectedCard = card,
-                isLoading = true
+                isLoading = true,
             )
         }
 
@@ -30,7 +30,7 @@ class ProfileDetailStateHolder(
                     current.copy(
                         profile = result.value,
                         isLoading = false,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -39,7 +39,7 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isLoading = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -54,8 +54,8 @@ class ProfileDetailStateHolder(
                 thumbnailUrl = partner.thumbnailUrl,
                 online = false,
                 distanceLabel = null,
-                tone = GridCardTone.entries[partner.userId.stableIndex(GridCardTone.entries.size)]
-            )
+                tone = GridCardTone.entries[partner.userId.stableIndex(GridCardTone.entries.size)],
+            ),
         )
     }
 
@@ -66,7 +66,7 @@ class ProfileDetailStateHolder(
                 isSendingFlirt = true,
                 albumFeedback = null,
                 flirtFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -75,7 +75,7 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isSendingFlirt = false,
-                        flirtFeedback = "Spark sent"
+                        flirtFeedback = "Spark sent",
                     )
                 }
             }
@@ -84,7 +84,7 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isSendingFlirt = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -98,7 +98,7 @@ class ProfileDetailStateHolder(
                 isRequestingAlbum = true,
                 flirtFeedback = null,
                 albumFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -108,7 +108,7 @@ class ProfileDetailStateHolder(
                     current.copy(
                         isRequestingAlbum = false,
                         profile = current.profile?.copy(privateAlbumAccessStatus = "pending"),
-                        albumFeedback = "Album request sent"
+                        albumFeedback = "Album request sent",
                     )
                 }
             }
@@ -117,7 +117,7 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isRequestingAlbum = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -130,7 +130,7 @@ class ProfileDetailStateHolder(
             current.copy(
                 isLoadingPrivateAlbum = true,
                 albumFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -141,7 +141,7 @@ class ProfileDetailStateHolder(
                         isLoadingPrivateAlbum = false,
                         privateAlbumItems = result.value,
                         profile = current.profile?.copy(privateAlbumAccessStatus = "granted"),
-                        albumFeedback = if (result.value.isEmpty()) "Private album is empty" else null
+                        albumFeedback = if (result.value.isEmpty()) "Private album is empty" else null,
                     )
                 }
             }
@@ -150,7 +150,7 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isLoadingPrivateAlbum = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -167,7 +167,7 @@ class ProfileDetailStateHolder(
                 flirtFeedback = null,
                 albumFeedback = null,
                 reportFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -176,7 +176,7 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isBlocking = false,
-                        blockedTargetUserId = targetUserId
+                        blockedTargetUserId = targetUserId,
                     )
                 }
             }
@@ -185,7 +185,7 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isBlocking = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -202,7 +202,7 @@ class ProfileDetailStateHolder(
                 flirtFeedback = null,
                 albumFeedback = null,
                 reportFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -211,7 +211,7 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isHiding = false,
-                        hiddenTargetUserId = targetUserId
+                        hiddenTargetUserId = targetUserId,
                     )
                 }
             }
@@ -220,14 +220,17 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isHiding = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
         }
     }
 
-    suspend fun submitReport(category: String, note: String? = null) {
+    suspend fun submitReport(
+        category: String,
+        note: String? = null,
+    ) {
         val targetUserId = _state.value.profile?.userId ?: _state.value.selectedCard?.id ?: return
         if (_state.value.isReporting) return
 
@@ -237,7 +240,7 @@ class ProfileDetailStateHolder(
                 flirtFeedback = null,
                 albumFeedback = null,
                 reportFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -246,7 +249,7 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isReporting = false,
-                        reportFeedback = "Report submitted"
+                        reportFeedback = "Report submitted",
                     )
                 }
             }
@@ -255,7 +258,7 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isReporting = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -277,5 +280,4 @@ class ProfileDetailStateHolder(
     fun dismiss() {
         _state.value = ProfileDetailUiState()
     }
-
 }

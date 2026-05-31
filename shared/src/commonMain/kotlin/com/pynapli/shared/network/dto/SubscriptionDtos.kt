@@ -43,14 +43,14 @@ data class SubscriptionEntitlementDto(
     val sourceUserId: String? = null,
     val linkedPartnerUserId: String? = null,
     val startsAt: String? = null,
-    val endsAt: String? = null
+    val endsAt: String? = null,
 )
 
 @Serializable
 data class SubscriptionInventoryResponseDto(
     val tiers: List<SubscriptionTierDto>,
     val premiumProducts: List<PremiumProductDto> = emptyList(),
-    val balances: List<PremiumInventoryBalanceDto> = emptyList()
+    val balances: List<PremiumInventoryBalanceDto> = emptyList(),
 )
 
 @Serializable
@@ -62,7 +62,7 @@ data class SubscriptionTierDto(
     val linkedPartnerIncluded: Boolean,
     val features: List<String>,
     val playStoreProductId: String? = null,
-    val appStoreProductId: String? = null
+    val appStoreProductId: String? = null,
 )
 
 @Serializable
@@ -75,14 +75,14 @@ data class PremiumProductDto(
     val quantity: Int,
     val features: List<String>,
     val playStoreProductId: String? = null,
-    val appStoreProductId: String? = null
+    val appStoreProductId: String? = null,
 )
 
 @Serializable
 data class PremiumInventoryBalanceDto(
     val inventoryType: String,
     val quantity: Int,
-    val nextExpiresAt: String? = null
+    val nextExpiresAt: String? = null,
 )
 
 object SubscriptionPurchaseSyncStatus {
@@ -95,25 +95,25 @@ object SubscriptionPurchaseSyncStatus {
 data class SubmitPlayStoreSubscriptionPurchaseRequestDto(
     val productId: String,
     val purchaseToken: String,
-    val packageName: String
+    val packageName: String,
 )
 
 @Serializable
 data class SubmitDevStorePurchaseRequestDto(
-    val productId: String
+    val productId: String,
 )
 
 @Serializable
 data class StorePurchaseResponseDto(
     val status: String,
     val entitlement: SubscriptionEntitlementDto,
-    val inventory: SubscriptionInventoryResponseDto
+    val inventory: SubscriptionInventoryResponseDto,
 )
 
 @Serializable
 data class SubscriptionPurchaseSyncResponseDto(
     val status: String,
-    val entitlement: SubscriptionEntitlementDto
+    val entitlement: SubscriptionEntitlementDto,
 )
 
 @Serializable
@@ -122,5 +122,5 @@ data class BoostActivationDto(
     val boostType: String,
     val startsAt: String,
     val endsAt: String,
-    val alreadyActive: Boolean
+    val alreadyActive: Boolean,
 )

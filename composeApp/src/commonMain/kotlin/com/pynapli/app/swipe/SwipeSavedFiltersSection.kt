@@ -25,18 +25,19 @@ import com.pynapli.shared.network.dto.SavedSwipeFilterDto
 internal fun SavedSwipePresetsSection(
     state: SavedSwipeFiltersUiState,
     onApply: (SavedSwipeFilterDto) -> Unit,
-    @Suppress("UNUSED_PARAMETER") onDelete: (id: String) -> Unit
+    @Suppress("UNUSED_PARAMETER") onDelete: (id: String) -> Unit,
 ) {
     if (state.entitlementRequired) {
         ComingSoonSection(message = "Saved swipe filter presets unlock with Social or Select.")
         return
     }
     FlowRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(SwipeFilterTags.SAVED_PRESETS),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag(SwipeFilterTags.SAVED_PRESETS),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         state.items.forEach { dto ->
             SwipeSheetChip(label = dto.name, active = false) { onApply(dto) }
@@ -49,26 +50,27 @@ internal fun SaveSwipePresetRow(
     name: String,
     onNameChange: (String) -> Unit,
     isSaving: Boolean,
-    onSave: () -> Unit
+    onSave: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         OutlinedTextField(
             value = name,
             onValueChange = onNameChange,
-            modifier = Modifier
-                .weight(1f)
-                .testTag(SwipeFilterTags.SAVE_PRESET_NAME),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .testTag(SwipeFilterTags.SAVE_PRESET_NAME),
             singleLine = true,
-            placeholder = { Text(text = "Name this filter") }
+            placeholder = { Text(text = "Name this filter") },
         )
         Button(
             onClick = onSave,
             enabled = !isSaving && name.isNotBlank(),
-            modifier = Modifier.testTag(SwipeFilterTags.SAVE_PRESET_SUBMIT)
+            modifier = Modifier.testTag(SwipeFilterTags.SAVE_PRESET_SUBMIT),
         ) { Text(text = if (isSaving) "Saving" else "Save") }
     }
 }

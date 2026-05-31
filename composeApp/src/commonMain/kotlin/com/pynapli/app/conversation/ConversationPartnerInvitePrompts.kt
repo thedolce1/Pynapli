@@ -30,67 +30,67 @@ internal fun PartnerInvitePrompt(
     isResponding: Boolean,
     errorMessage: String?,
     onAcceptInvite: () -> Unit,
-    onDeclineInvite: () -> Unit
+    onDeclineInvite: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
                 text = title,
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             body?.let {
                 Text(
                     text = it,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Button(
                     onClick = onAcceptInvite,
-                    enabled = !isResponding
+                    enabled = !isResponding,
                 ) {
                     if (isResponding) {
                         CircularProgressIndicator(
                             strokeWidth = 2.dp,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(16.dp),
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Filled.Check,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                     }
                     Text(
                         text = "Accept",
-                        modifier = Modifier.padding(start = 6.dp)
+                        modifier = Modifier.padding(start = 6.dp),
                     )
                 }
                 OutlinedButton(
                     onClick = onDeclineInvite,
-                    enabled = !isResponding
+                    enabled = !isResponding,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Close,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                     Text(
                         text = "Decline",
-                        modifier = Modifier.padding(start = 6.dp)
+                        modifier = Modifier.padding(start = 6.dp),
                     )
                 }
             }
@@ -98,7 +98,7 @@ internal fun PartnerInvitePrompt(
                 Text(
                     text = message,
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
@@ -108,27 +108,27 @@ internal fun PartnerInvitePrompt(
 @Composable
 internal fun PartnerInviteStatusNotice(
     title: String,
-    body: String
+    body: String,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
                 text = title,
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = body,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
             )
         }
     }

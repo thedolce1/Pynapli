@@ -11,14 +11,14 @@ data class MediaAlbumsUiState(
     val isLoading: Boolean = false,
     val isUploadingProfile: Boolean = false,
     val isUploadingPrivate: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 )
 
 @Immutable
 data class MediaPrivateGrantUi(
     val granteeUserId: String,
     val displayName: String?,
-    val grantedAt: String
+    val grantedAt: String,
 ) {
     val displayLabel: String
         get() = displayName?.takeIf { it.isNotBlank() } ?: "User ${granteeUserId.take(8)}"
@@ -36,37 +36,40 @@ data class MediaAlbumItemUi(
     val sortOrder: Int,
     val createdAt: String,
     val mediaUrl: String? = null,
-    val uploadUrl: String? = null
+    val uploadUrl: String? = null,
 ) {
     val statusLabel: String
-        get() = when (processingStatus) {
-            "pending_upload" -> "Pending upload"
-            "uploaded" -> "Uploaded"
-            "processing" -> "Processing"
-            "ready" -> "Ready"
-            "failed" -> "Failed"
-            else -> processingStatus.replace('_', ' ').replaceFirstChar { it.uppercase() }
-        }
+        get() =
+            when (processingStatus) {
+                "pending_upload" -> "Pending upload"
+                "uploaded" -> "Uploaded"
+                "processing" -> "Processing"
+                "ready" -> "Ready"
+                "failed" -> "Failed"
+                else -> processingStatus.replace('_', ' ').replaceFirstChar { it.uppercase() }
+            }
 
     val isOwnerVisibleImage: Boolean
-        get() = mediaUrl != null &&
-            mediaType == "image" &&
-            processingStatus in ownerVisibleProcessingStatuses &&
-            moderationStatus in ownerVisibleModerationStatuses
+        get() =
+            mediaUrl != null &&
+                mediaType == "image" &&
+                processingStatus in ownerVisibleProcessingStatuses &&
+                moderationStatus in ownerVisibleModerationStatuses
 
     val isPublicDiscoverableImage: Boolean
-        get() = mediaUrl != null &&
-            mediaType == "image" &&
-            processingStatus == "ready" &&
-            moderationStatus == "approved"
+        get() =
+            mediaUrl != null &&
+                mediaType == "image" &&
+                processingStatus == "ready" &&
+                moderationStatus == "approved"
 }
 
 enum class MediaAlbumKindUi(
     val apiValue: String,
-    val title: String
+    val title: String,
 ) {
     Profile("profile", "Profile photos"),
-    Private("private", "Private album")
+    Private("private", "Private album"),
 }
 
 class PickedMediaForUpload(
@@ -74,11 +77,10 @@ class PickedMediaForUpload(
     val byteSize: Long,
     val pixelWidth: Int?,
     val pixelHeight: Int?,
-    val bytes: ByteArray
+    val bytes: ByteArray,
 )
 
-fun MediaAlbumsUiState.primaryOwnerProfilePhotoUrl(): String? =
-    profileItems.primaryOwnerVisibleImageUrl()
+fun MediaAlbumsUiState.primaryOwnerProfilePhotoUrl(): String? = profileItems.primaryOwnerVisibleImageUrl()
 
 private fun List<MediaAlbumItemUi>.primaryOwnerVisibleImageUrl(): String? =
     asSequence()

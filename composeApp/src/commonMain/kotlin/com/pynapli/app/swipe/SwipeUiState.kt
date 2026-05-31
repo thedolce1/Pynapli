@@ -21,7 +21,7 @@ data class SwipeUiState(
     val paywallMessage: String? = null,
     val errorCode: String? = null,
     val errorMessage: String? = null,
-    val pendingMatch: MatchDto? = null
+    val pendingMatch: MatchDto? = null,
 ) {
     val topCard: SwipeCardDto? get() = cards.firstOrNull()
     val hasMore: Boolean get() = cards.isNotEmpty() || nextCursor != null

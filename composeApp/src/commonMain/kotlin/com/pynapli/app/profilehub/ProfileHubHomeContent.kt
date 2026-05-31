@@ -51,20 +51,21 @@ internal fun ProfileHubContent(
     onDeleteAccountClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onClearMessage: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = ProfileSurfaceBottomPadding),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             ProfileHubTopBar(
                 onBack = onBack,
                 actionCount = actionItemCount,
-                onNotificationsClick = onOpenNotificationCenter
+                onNotificationsClick = onOpenNotificationCenter,
             )
         }
 
@@ -74,7 +75,7 @@ internal fun ProfileHubContent(
                 profileImageUrl = profileImageUrl,
                 linkedPartnerLabel = profileLinksState.current?.displayLabel,
                 profilePhotoCount = mediaState.profileItems.size,
-                privatePhotoCount = mediaState.privateItems.size
+                privatePhotoCount = mediaState.privateItems.size,
             )
         }
 
@@ -83,7 +84,7 @@ internal fun ProfileHubContent(
                 ProfileHubMessageBand(
                     message = message,
                     isError = true,
-                    onDismiss = onClearMessage
+                    onDismiss = onClearMessage,
                 )
             }
         }
@@ -93,7 +94,7 @@ internal fun ProfileHubContent(
                 ProfileHubMessageBand(
                     message = message,
                     isError = false,
-                    onDismiss = onClearMessage
+                    onDismiss = onClearMessage,
                 )
             }
         }
@@ -104,7 +105,7 @@ internal fun ProfileHubContent(
                     icon = Icons.Filled.Notifications,
                     label = "Action center",
                     value = actionCenterSummary(actionItemCount),
-                    onClick = onOpenNotificationCenter
+                    onClick = onOpenNotificationCenter,
                 )
             }
         }
@@ -115,12 +116,12 @@ internal fun ProfileHubContent(
                     icon = Icons.Filled.Edit,
                     label = "Edit profile",
                     value = profileBasicsSummary(state),
-                    onClick = onEditProfile
+                    onClick = onEditProfile,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.Visibility,
                     label = "Preview profile",
-                    value = "Public view"
+                    value = "Public view",
                 )
             }
         }
@@ -131,12 +132,12 @@ internal fun ProfileHubContent(
                     icon = Icons.Filled.People,
                     label = "Linked partner",
                     value = profileLinksState.current?.displayLabel ?: pendingPartnerStatus(profileLinksState),
-                    onClick = onOpenAlbums
+                    onClick = onOpenAlbums,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.ChatBubble,
                     label = "Partner chat invites",
-                    value = partnerChatInviteSummary(partnerChatInviteCount)
+                    value = partnerChatInviteSummary(partnerChatInviteCount),
                 )
             }
         }
@@ -147,12 +148,12 @@ internal fun ProfileHubContent(
                     icon = Icons.Filled.PhotoLibrary,
                     label = "Photos and private album",
                     value = albumSummary(mediaState),
-                    onClick = onOpenAlbums
+                    onClick = onOpenAlbums,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.Lock,
                     label = "Album access",
-                    value = grantSummary(mediaState)
+                    value = grantSummary(mediaState),
                 )
             }
         }
@@ -162,12 +163,12 @@ internal fun ProfileHubContent(
                 ProfileHubRow(
                     icon = Icons.Filled.CardMembership,
                     label = "Current plan",
-                    value = "Free"
+                    value = "Free",
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.People,
                     label = "Linked partner benefit",
-                    value = if (profileLinksState.current == null) "No active link" else "Eligible"
+                    value = if (profileLinksState.current == null) "No active link" else "Eligible",
                 )
             }
         }
@@ -178,13 +179,13 @@ internal fun ProfileHubContent(
                     icon = Icons.Filled.Visibility,
                     label = "Visibility",
                     value = visibilitySummary(state),
-                    onClick = onOpenPrivacy
+                    onClick = onOpenPrivacy,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.Tune,
                     label = "Distance display",
                     value = distanceSummary(state),
-                    onClick = onOpenPrivacy
+                    onClick = onOpenPrivacy,
                 )
             }
         }
@@ -195,19 +196,19 @@ internal fun ProfileHubContent(
                     icon = Icons.Filled.Security,
                     label = "Safety center",
                     value = safetyCenterSummary(state),
-                    onClick = onOpenSafetyCenter
+                    onClick = onOpenSafetyCenter,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.LocalFireDepartment,
                     label = "Activity controls",
                     value = activityControlsSummary(state),
-                    onClick = onOpenActivityControls
+                    onClick = onOpenActivityControls,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.Lock,
                     label = "Age verification",
                     value = ageVerificationSummary(state),
-                    onClick = onOpenAgeVerification
+                    onClick = onOpenAgeVerification,
                 )
             }
         }
@@ -218,25 +219,25 @@ internal fun ProfileHubContent(
                     icon = Icons.Filled.Settings,
                     label = "App settings",
                     value = appSettingsSummary(appSettingsState),
-                    onClick = onOpenAppSettings
+                    onClick = onOpenAppSettings,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.Download,
                     label = "Data export",
                     value = dataExportSummary(state),
-                    onClick = onRequestDataExport
+                    onClick = onRequestDataExport,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.Delete,
                     label = "Delete account",
                     value = if (state.isDeletingAccount) "Deleting" else "Permanent",
-                    onClick = onDeleteAccountClick
+                    onClick = onDeleteAccountClick,
                 )
                 ProfileHubRow(
                     icon = Icons.AutoMirrored.Filled.Logout,
                     label = "Log out",
                     value = "Keep account",
-                    onClick = onLogoutClick
+                    onClick = onLogoutClick,
                 )
             }
         }

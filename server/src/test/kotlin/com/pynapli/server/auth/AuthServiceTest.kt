@@ -12,165 +12,188 @@ import kotlin.test.assertNotEquals
 
 class AuthServiceTest {
     @Test
-    fun signupCreatesSessionAndMeCanAuthenticate() = runBlocking {
-        val service = AuthService(InMemoryAuthRepository())
+    fun signupCreatesSessionAndMeCanAuthenticate() =
+        runBlocking {
+            val service = AuthService(InMemoryAuthRepository())
 
-        val session = signup(service, deviceId = "device-1", platform = "android", appVersion = "0.1")
+            val session = signup(service, deviceId = "device-1", platform = "android", appVersion = "0.1")
 
-        val user = service.authenticate(session.accessToken)
+            val user = service.authenticate(session.accessToken)
 
-        assertEquals(session.user.userId, user.id.toString())
-        assertEquals("active", user.status)
-    }
-
-    @Test
-    fun loginRejectsWrongPassword() = runBlocking {
-        val service = AuthService(InMemoryAuthRepository())
-        signup(service)
-
-        val error = assertFailsWith<AuthException> {
-            service.loginEmail("alex@example.com", "wrong horse battery", null, null, null)
+            assertEquals(session.user.userId, user.id.toString())
+            assertEquals("active", user.status)
         }
 
-        assertEquals("INVALID_CREDENTIALS", error.code)
-    }
+    @Test
+    fun loginRejectsWrongPassword() =
+        runBlocking {
+            val service = AuthService(InMemoryAuthRepository())
+            signup(service)
+
+            val error =
+                assertFailsWith<AuthException> {
+                    service.loginEmail("alex@example.com", "wrong horse battery", null, null, null)
+                }
+
+            assertEquals("INVALID_CREDENTIALS", error.code)
+        }
 
     @Test
-    fun refreshRotatesTokens() = runBlocking {
-        val service = AuthService(InMemoryAuthRepository())
-        val session = signup(service)
+    fun refreshRotatesTokens() =
+        runBlocking {
+            val service = AuthService(InMemoryAuthRepository())
+            val session = signup(service)
 
-        val refreshed = service.refresh(session.refreshToken)
+            val refreshed = service.refresh(session.refreshToken)
 
-        assertEquals(session.user.userId, refreshed.user.userId)
-        assertNotEquals(session.accessToken, refreshed.accessToken)
-        assertNotEquals(session.refreshToken, refreshed.refreshToken)
-    }
+            assertEquals(session.user.userId, refreshed.user.userId)
+            assertNotEquals(session.accessToken, refreshed.accessToken)
+            assertNotEquals(session.refreshToken, refreshed.refreshToken)
+        }
 
     @Test
-    fun refreshInvalidatesCachedOldAccessToken() = runBlocking {
-        val service = AuthService(InMemoryAuthRepository())
-        val session = signup(service)
-        service.authenticate(session.accessToken)
-
-        service.refresh(session.refreshToken)
-
-        val error = assertFailsWith<AuthException> {
+    fun refreshInvalidatesCachedOldAccessToken() =
+        runBlocking {
+            val service = AuthService(InMemoryAuthRepository())
+            val session = signup(service)
             service.authenticate(session.accessToken)
+
+            service.refresh(session.refreshToken)
+
+            val error =
+                assertFailsWith<AuthException> {
+                    service.authenticate(session.accessToken)
+                }
+            assertEquals("UNAUTHENTICATED", error.code)
         }
-        assertEquals("UNAUTHENTICATED", error.code)
-    }
 
     @Test
-    fun logoutInvalidatesCachedAccessToken() = runBlocking {
-        val service = AuthService(InMemoryAuthRepository())
-        val session = signup(service)
-        service.authenticate(session.accessToken)
-
-        assertEquals(true, service.logout(session.accessToken))
-
-        val error = assertFailsWith<AuthException> {
+    fun logoutInvalidatesCachedAccessToken() =
+        runBlocking {
+            val service = AuthService(InMemoryAuthRepository())
+            val session = signup(service)
             service.authenticate(session.accessToken)
+
+            assertEquals(true, service.logout(session.accessToken))
+
+            val error =
+                assertFailsWith<AuthException> {
+                    service.authenticate(session.accessToken)
+                }
+            assertEquals("UNAUTHENTICATED", error.code)
         }
-        assertEquals("UNAUTHENTICATED", error.code)
-    }
 
     @Test
-    fun userCacheInvalidationForcesFreshAccountStatusCheck() = runBlocking {
-        val repository = InMemoryAuthRepository()
-        val service = AuthService(repository)
-        val session = signup(service)
-        val userId = UUID.fromString(session.user.userId)
-        service.authenticate(session.accessToken)
-        repository.setUserStatus(userId, "deleted")
-
-        service.invalidateCachedSessionsForUser(userId)
-
-        val error = assertFailsWith<AuthException> {
+    fun userCacheInvalidationForcesFreshAccountStatusCheck() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+            val session = signup(service)
+            val userId = UUID.fromString(session.user.userId)
             service.authenticate(session.accessToken)
+            repository.setUserStatus(userId, "deleted")
+
+            service.invalidateCachedSessionsForUser(userId)
+
+            val error =
+                assertFailsWith<AuthException> {
+                    service.authenticate(session.accessToken)
+                }
+            assertEquals("ACCOUNT_NOT_ACTIVE", error.code)
         }
-        assertEquals("ACCOUNT_NOT_ACTIVE", error.code)
-    }
 
     @Test
-    fun suspendedCurrentUserCannotAuthenticateExistingSession() = runBlocking {
-        val repository = InMemoryAuthRepository()
-        val service = AuthService(repository)
-        val session = signup(service)
-        repository.setUserStatus(UUID.fromString(session.user.userId), "suspended")
+    fun suspendedCurrentUserCannotAuthenticateExistingSession() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+            val session = signup(service)
+            repository.setUserStatus(UUID.fromString(session.user.userId), "suspended")
 
-        val error = assertFailsWith<AuthException> {
-            service.authenticate(session.accessToken)
+            val error =
+                assertFailsWith<AuthException> {
+                    service.authenticate(session.accessToken)
+                }
+
+            assertEquals("ACCOUNT_NOT_ACTIVE", error.code)
         }
-
-        assertEquals("ACCOUNT_NOT_ACTIVE", error.code)
-    }
 
     @Test
-    fun shortPasswordIsRejected() = runBlocking {
-        val service = AuthService(InMemoryAuthRepository())
+    fun shortPasswordIsRejected() =
+        runBlocking {
+            val service = AuthService(InMemoryAuthRepository())
 
-        val error = assertFailsWith<AuthException> {
-            signup(service, password = "short")
+            val error =
+                assertFailsWith<AuthException> {
+                    signup(service, password = "short")
+                }
+
+            assertEquals("PASSWORD_TOO_SHORT", error.code)
         }
-
-        assertEquals("PASSWORD_TOO_SHORT", error.code)
-    }
 
     @Test
-    fun signupStoresBirthdateAndAcceptanceState() = runBlocking {
-        val repository = InMemoryAuthRepository()
-        val service = AuthService(repository)
+    fun signupStoresBirthdateAndAcceptanceState() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
 
-        val session = signup(service, birthdate = "1990-05-13")
-        val profile = repository.signupProfiles.getValue(UUID.fromString(session.user.userId))
+            val session = signup(service, birthdate = "1990-05-13")
+            val profile = repository.signupProfiles.getValue(UUID.fromString(session.user.userId))
 
-        assertEquals(LocalDate.parse("1990-05-13"), profile.birthdate)
-        assertEquals(true, profile.adultConfirmed)
-        assertEquals(true, profile.termsAccepted)
-        assertEquals(true, profile.privacyAccepted)
-    }
+            assertEquals(LocalDate.parse("1990-05-13"), profile.birthdate)
+            assertEquals(true, profile.adultConfirmed)
+            assertEquals(true, profile.termsAccepted)
+            assertEquals(true, profile.privacyAccepted)
+        }
 
     @Test
-    fun signupRequiresBirthdate() = runBlocking {
-        val service = AuthService(InMemoryAuthRepository())
+    fun signupRequiresBirthdate() =
+        runBlocking {
+            val service = AuthService(InMemoryAuthRepository())
 
-        val error = assertFailsWith<AuthException> {
-            signup(service, birthdate = null)
+            val error =
+                assertFailsWith<AuthException> {
+                    signup(service, birthdate = null)
+                }
+
+            assertEquals("BIRTHDATE_REQUIRED", error.code)
         }
-
-        assertEquals("BIRTHDATE_REQUIRED", error.code)
-    }
 
     @Test
-    fun signupRejectsUnderageBirthdate() = runBlocking {
-        val service = AuthService(InMemoryAuthRepository())
+    fun signupRejectsUnderageBirthdate() =
+        runBlocking {
+            val service = AuthService(InMemoryAuthRepository())
 
-        val error = assertFailsWith<AuthException> {
-            signup(service, birthdate = "2010-01-01")
+            val error =
+                assertFailsWith<AuthException> {
+                    signup(service, birthdate = "2010-01-01")
+                }
+
+            assertEquals("AGE_RESTRICTED", error.code)
         }
-
-        assertEquals("AGE_RESTRICTED", error.code)
-    }
 
     @Test
-    fun signupRequiresAgeAndTermsAcceptance() = runBlocking {
-        val service = AuthService(InMemoryAuthRepository())
+    fun signupRequiresAgeAndTermsAcceptance() =
+        runBlocking {
+            val service = AuthService(InMemoryAuthRepository())
 
-        val adultError = assertFailsWith<AuthException> {
-            signup(service, confirmedAdult = false)
-        }
-        val termsError = assertFailsWith<AuthException> {
-            signup(service, acceptedTerms = false)
-        }
-        val privacyError = assertFailsWith<AuthException> {
-            signup(service, acceptedPrivacy = false)
-        }
+            val adultError =
+                assertFailsWith<AuthException> {
+                    signup(service, confirmedAdult = false)
+                }
+            val termsError =
+                assertFailsWith<AuthException> {
+                    signup(service, acceptedTerms = false)
+                }
+            val privacyError =
+                assertFailsWith<AuthException> {
+                    signup(service, acceptedPrivacy = false)
+                }
 
-        assertEquals("ADULT_CONFIRMATION_REQUIRED", adultError.code)
-        assertEquals("TERMS_ACCEPTANCE_REQUIRED", termsError.code)
-        assertEquals("PRIVACY_ACCEPTANCE_REQUIRED", privacyError.code)
-    }
+            assertEquals("ADULT_CONFIRMATION_REQUIRED", adultError.code)
+            assertEquals("TERMS_ACCEPTANCE_REQUIRED", termsError.code)
+            assertEquals("PRIVACY_ACCEPTANCE_REQUIRED", privacyError.code)
+        }
 }
 
 private suspend fun signup(
@@ -183,7 +206,7 @@ private suspend fun signup(
     acceptedPrivacy: Boolean = true,
     deviceId: String? = null,
     platform: String? = null,
-    appVersion: String? = null
+    appVersion: String? = null,
 ) = service.signupEmail(
     email = email,
     password = password,
@@ -193,7 +216,7 @@ private suspend fun signup(
     acceptedPrivacy = acceptedPrivacy,
     deviceId = deviceId,
     platform = platform,
-    appVersion = appVersion
+    appVersion = appVersion,
 )
 
 private class InMemoryAuthRepository : AuthRepository {
@@ -213,24 +236,24 @@ private class InMemoryAuthRepository : AuthRepository {
         termsAcceptedAt: Instant,
         termsVersion: String,
         privacyAcceptedAt: Instant,
-        privacyVersion: String
+        privacyVersion: String,
     ): UserRecord {
         if (identitiesByEmailHash.containsKey(emailHash)) throw AuthException("EMAIL_ALREADY_EXISTS")
         val user = UserRecord(userId, "active")
         users[userId] = user
         identitiesByEmailHash[emailHash] = EmailIdentityRecord(userId, passwordHash, "active")
-        signupProfiles[userId] = SignupProfile(
-            birthdate = birthdate,
-            displayAge = displayAge,
-            adultConfirmed = adultConfirmedAt == termsAcceptedAt,
-            termsAccepted = termsVersion.isNotBlank(),
-            privacyAccepted = privacyVersion.isNotBlank()
-        )
+        signupProfiles[userId] =
+            SignupProfile(
+                birthdate = birthdate,
+                displayAge = displayAge,
+                adultConfirmed = adultConfirmedAt == termsAcceptedAt,
+                termsAccepted = termsVersion.isNotBlank(),
+                privacyAccepted = privacyVersion.isNotBlank(),
+            )
         return user
     }
 
-    override suspend fun findEmailIdentity(emailHash: String): EmailIdentityRecord? =
-        identitiesByEmailHash[emailHash]
+    override suspend fun findEmailIdentity(emailHash: String): EmailIdentityRecord? = identitiesByEmailHash[emailHash]
 
     override suspend fun findUser(userId: UUID): UserRecord? = users[userId]
 
@@ -243,42 +266,42 @@ private class InMemoryAuthRepository : AuthRepository {
         platform: String?,
         appVersion: String?,
         accessExpiresAt: Instant,
-        refreshExpiresAt: Instant
+        refreshExpiresAt: Instant,
     ): SessionRecord {
-        val session = SessionRecord(
-            id = sessionId,
-            userId = userId,
-            accessTokenHash = accessTokenHash,
-            refreshTokenHash = refreshTokenHash,
-            accessExpiresAt = accessExpiresAt,
-            refreshExpiresAt = refreshExpiresAt,
-            revokedAt = null,
-            userStatus = users[userId]?.status ?: "active"
-        )
+        val session =
+            SessionRecord(
+                id = sessionId,
+                userId = userId,
+                accessTokenHash = accessTokenHash,
+                refreshTokenHash = refreshTokenHash,
+                accessExpiresAt = accessExpiresAt,
+                refreshExpiresAt = refreshExpiresAt,
+                revokedAt = null,
+                userStatus = users[userId]?.status ?: "active",
+            )
         sessions[sessionId] = session
         return session
     }
 
-    override suspend fun findSessionByAccessTokenHash(tokenHash: String): SessionRecord? =
-        sessions.values.firstOrNull { it.accessTokenHash == tokenHash }?.withCurrentUserStatus()
+    override suspend fun findSessionByAccessTokenHash(tokenHash: String): SessionRecord? = sessions.values.firstOrNull { it.accessTokenHash == tokenHash }?.withCurrentUserStatus()
 
-    override suspend fun findSessionByRefreshTokenHash(tokenHash: String): SessionRecord? =
-        sessions.values.firstOrNull { it.refreshTokenHash == tokenHash }?.withCurrentUserStatus()
+    override suspend fun findSessionByRefreshTokenHash(tokenHash: String): SessionRecord? = sessions.values.firstOrNull { it.refreshTokenHash == tokenHash }?.withCurrentUserStatus()
 
     override suspend fun rotateSession(
         sessionId: UUID,
         accessTokenHash: String,
         refreshTokenHash: String,
         accessExpiresAt: Instant,
-        refreshExpiresAt: Instant
+        refreshExpiresAt: Instant,
     ): SessionRecord? {
         val current = sessions[sessionId] ?: return null
-        val rotated = current.copy(
-            accessTokenHash = accessTokenHash,
-            refreshTokenHash = refreshTokenHash,
-            accessExpiresAt = accessExpiresAt,
-            refreshExpiresAt = refreshExpiresAt
-        )
+        val rotated =
+            current.copy(
+                accessTokenHash = accessTokenHash,
+                refreshTokenHash = refreshTokenHash,
+                accessExpiresAt = accessExpiresAt,
+                refreshExpiresAt = refreshExpiresAt,
+            )
         sessions[sessionId] = rotated
         return rotated.withCurrentUserStatus()
     }
@@ -289,15 +312,17 @@ private class InMemoryAuthRepository : AuthRepository {
         return true
     }
 
-    fun setUserStatus(userId: UUID, status: String) {
+    fun setUserStatus(
+        userId: UUID,
+        status: String,
+    ) {
         users[userId] = users.getValue(userId).copy(status = status)
         identitiesByEmailHash.replaceAll { _, identity ->
             if (identity.userId == userId) identity.copy(userStatus = status) else identity
         }
     }
 
-    private fun SessionRecord.withCurrentUserStatus(): SessionRecord =
-        copy(userStatus = users[userId]?.status ?: userStatus)
+    private fun SessionRecord.withCurrentUserStatus(): SessionRecord = copy(userStatus = users[userId]?.status ?: userStatus)
 }
 
 private data class SignupProfile(
@@ -305,5 +330,5 @@ private data class SignupProfile(
     val displayAge: Int,
     val adultConfirmed: Boolean,
     val termsAccepted: Boolean,
-    val privacyAccepted: Boolean
+    val privacyAccepted: Boolean,
 )

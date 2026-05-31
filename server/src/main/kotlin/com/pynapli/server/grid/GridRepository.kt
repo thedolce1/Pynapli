@@ -9,7 +9,7 @@ interface GridRepository {
         radiusMeters: Int,
         limit: Int,
         filters: DiscoveryFilters = DiscoveryFilters(),
-        cursor: GridCursorAnchor? = null
+        cursor: GridCursorAnchor? = null,
     ): GridQueryResult
 }
 
@@ -20,7 +20,7 @@ interface GridViewerTrustRepository {
 data class GridQueryResult(
     val viewerHadLocation: Boolean,
     val cards: List<GridCardRecord>,
-    val nextCursorAnchor: GridCursorAnchor? = null
+    val nextCursorAnchor: GridCursorAnchor? = null,
 )
 
 data class GridCardRecord(
@@ -39,19 +39,19 @@ data class GridCardRecord(
      * on the Grid card (SWIPE_IMPLEMENTATION_SPEC L348) so the viewer knows
      * the person is browsing their area in passport mode, not local.
      */
-    val visiting: Boolean = false
+    val visiting: Boolean = false,
 )
 
 data class GridCursorAnchor(
     val boostBucket: Int,
     val distanceBucketMeters: Int,
     val userId: UUID,
-    val seenCount: Int = 0
+    val seenCount: Int = 0,
 )
 
 fun GridCardRecord.toCursorAnchor(): GridCursorAnchor =
     GridCursorAnchor(
         boostBucket = boostBucket,
         distanceBucketMeters = distanceBucketMeters,
-        userId = userId
+        userId = userId,
     )

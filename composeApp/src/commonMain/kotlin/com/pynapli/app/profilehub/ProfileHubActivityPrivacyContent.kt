@@ -24,32 +24,34 @@ internal fun ActivityControlsContent(
     onAllowIntroNotesChanged: (Boolean) -> Unit,
     onAllowAlbumRequestsChanged: (Boolean) -> Unit,
     onSave: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         ProfileHubTopBar(
             title = "Activity controls",
             onBack = onBack,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             state.errorMessage?.let { message ->
                 item {
                     ProfileHubMessageBand(
                         message = message,
                         isError = true,
-                        onDismiss = { }
+                        onDismiss = { },
                     )
                 }
             }
@@ -60,7 +62,7 @@ internal fun ActivityControlsContent(
                         label = "Appear in Viewed lists",
                         value = if (state.activityDraft.showInViewedLists) "Shown" else "Hidden",
                         checked = state.activityDraft.showInViewedLists,
-                        onCheckedChange = onShowInViewedListsChanged
+                        onCheckedChange = onShowInViewedListsChanged,
                     )
                 }
             }
@@ -71,19 +73,19 @@ internal fun ActivityControlsContent(
                         label = "Allow flirts",
                         value = if (state.activityDraft.allowFlirts) "On" else "Off",
                         checked = state.activityDraft.allowFlirts,
-                        onCheckedChange = onAllowFlirtsChanged
+                        onCheckedChange = onAllowFlirtsChanged,
                     )
                     PrivacyToggleRow(
                         label = "Allow Intro Notes",
                         value = if (state.activityDraft.allowIntroNotes) "On" else "Off",
                         checked = state.activityDraft.allowIntroNotes,
-                        onCheckedChange = onAllowIntroNotesChanged
+                        onCheckedChange = onAllowIntroNotesChanged,
                     )
                     PrivacyToggleRow(
                         label = "Allow album requests",
                         value = if (state.activityDraft.allowAlbumRequests) "On" else "Off",
                         checked = state.activityDraft.allowAlbumRequests,
-                        onCheckedChange = onAllowAlbumRequestsChanged
+                        onCheckedChange = onAllowAlbumRequestsChanged,
                     )
                 }
             }
@@ -92,20 +94,21 @@ internal fun ActivityControlsContent(
                 ProfileHubSection("Grid messages") {
                     PrivacyToggleRow(
                         label = "Allow grid messages",
-                        value = if (state.activityDraft.allowGridMessages) {
-                            gridMessagePolicyLabel(state.activityDraft.gridMessagePolicy)
-                        } else {
-                            "Off"
-                        },
+                        value =
+                            if (state.activityDraft.allowGridMessages) {
+                                gridMessagePolicyLabel(state.activityDraft.gridMessagePolicy)
+                            } else {
+                                "Off"
+                            },
                         checked = state.activityDraft.allowGridMessages,
-                        onCheckedChange = onAllowGridMessagesChanged
+                        onCheckedChange = onAllowGridMessagesChanged,
                     )
                     gridMessagePolicyOptions.forEach { option ->
                         DiscoveryStyleRow(
                             label = option.label,
                             value = option.value,
                             selected = state.activityDraft.gridMessagePolicy == option.value,
-                            onSelected = onGridMessagePolicyChanged
+                            onSelected = onGridMessagePolicyChanged,
                         )
                     }
                 }
@@ -115,7 +118,7 @@ internal fun ActivityControlsContent(
         ProfileHubSaveButton(
             label = "Save controls",
             isSaving = state.isSaving,
-            onSave = onSave
+            onSave = onSave,
         )
     }
 }
@@ -129,32 +132,34 @@ internal fun PrivacyDiscoveryContent(
     onShowDistanceChanged: (Boolean) -> Unit,
     onVisibleWhileTravelingChanged: (Boolean) -> Unit,
     onSave: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         ProfileHubTopBar(
             title = "Privacy",
             onBack = onBack,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             state.errorMessage?.let { message ->
                 item {
                     ProfileHubMessageBand(
                         message = message,
                         isError = true,
-                        onDismiss = { }
+                        onDismiss = { },
                     )
                 }
             }
@@ -165,13 +170,13 @@ internal fun PrivacyDiscoveryContent(
                         label = "Grid visibility",
                         value = if (state.privacyDraft.gridVisible) "On" else "Off",
                         checked = state.privacyDraft.gridVisible,
-                        onCheckedChange = onGridVisibleChanged
+                        onCheckedChange = onGridVisibleChanged,
                     )
                     PrivacyToggleRow(
                         label = "Swipe visibility",
                         value = if (state.privacyDraft.swipeVisible) "On" else "Off",
                         checked = state.privacyDraft.swipeVisible,
-                        onCheckedChange = onSwipeVisibleChanged
+                        onCheckedChange = onSwipeVisibleChanged,
                     )
                     // PROFILE_SETTINGS_SPEC L221-245: opting out hides the user
                     // from every discovery surface whenever their travel session
@@ -180,7 +185,7 @@ internal fun PrivacyDiscoveryContent(
                         label = "Visible while traveling",
                         value = if (state.privacyDraft.visibleWhileTraveling) "On" else "Off",
                         checked = state.privacyDraft.visibleWhileTraveling,
-                        onCheckedChange = onVisibleWhileTravelingChanged
+                        onCheckedChange = onVisibleWhileTravelingChanged,
                     )
                 }
             }
@@ -191,7 +196,7 @@ internal fun PrivacyDiscoveryContent(
                         label = "Distance display",
                         value = if (state.privacyDraft.showDistance) "Shown" else "Hidden",
                         checked = state.privacyDraft.showDistance,
-                        onCheckedChange = onShowDistanceChanged
+                        onCheckedChange = onShowDistanceChanged,
                     )
                 }
             }
@@ -200,7 +205,7 @@ internal fun PrivacyDiscoveryContent(
         ProfileHubSaveButton(
             label = "Save privacy",
             isSaving = state.isSaving,
-            onSave = onSave
+            onSave = onSave,
         )
     }
 }

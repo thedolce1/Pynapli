@@ -35,7 +35,7 @@ fun interface TravelRegionPolicy {
 data class TravelRegionRef(
     val city: String,
     val region: String?,
-    val country: String?
+    val country: String?,
 )
 
 sealed interface TravelRegionRequirement {
@@ -56,6 +56,5 @@ sealed interface TravelRegionRequirement {
  * this for a real policy via DI when the safety review is in place.
  */
 object EmptyTravelRegionPolicy : TravelRegionPolicy {
-    override fun requirementFor(destination: TravelRegionRef): TravelRegionRequirement =
-        TravelRegionRequirement.None
+    override fun requirementFor(destination: TravelRegionRef): TravelRegionRequirement = TravelRegionRequirement.None
 }

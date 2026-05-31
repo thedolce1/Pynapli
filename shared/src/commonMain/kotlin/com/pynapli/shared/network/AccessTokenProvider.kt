@@ -5,7 +5,7 @@ interface AccessTokenProvider {
 }
 
 class StaticAccessTokenProvider(
-    private val token: String?
+    private val token: String?,
 ) : AccessTokenProvider {
     override suspend fun accessToken(): String? = token
 }

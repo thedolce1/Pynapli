@@ -5,8 +5,8 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.moderation.requireAdminActor
 import com.pynapli.server.moderation.requiredAdminReason
-import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
+import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
@@ -21,7 +21,7 @@ import io.ktor.server.routing.routing
 
 fun Application.configureAgeVerificationRoutes(
     authService: AuthService?,
-    ageVerificationService: AgeVerificationService?
+    ageVerificationService: AgeVerificationService?,
 ) {
     if (authService == null || ageVerificationService == null) return
 
@@ -46,7 +46,7 @@ fun Application.configureAgeVerificationRoutes(
 
 fun Application.configureAgeVerificationAdminRoutes(
     config: ServerConfig,
-    ageVerificationService: AgeVerificationService?
+    ageVerificationService: AgeVerificationService?,
 ) {
     val adminApiToken = config.adminApiToken ?: return
     if (ageVerificationService == null) return

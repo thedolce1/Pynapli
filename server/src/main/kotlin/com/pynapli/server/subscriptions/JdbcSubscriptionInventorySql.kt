@@ -7,13 +7,16 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
-internal fun Connection.consumePremiumInventoryRecord(userId: UUID, inventoryType: String, now: Instant): Boolean =
-    consumePremiumInventoryRecordReturningId(userId, inventoryType, now) != null
+internal fun Connection.consumePremiumInventoryRecord(
+    userId: UUID,
+    inventoryType: String,
+    now: Instant,
+): Boolean = consumePremiumInventoryRecordReturningId(userId, inventoryType, now) != null
 
 internal fun Connection.consumePremiumInventoryRecordReturningId(
     userId: UUID,
     inventoryType: String,
-    now: Instant
+    now: Instant,
 ): UUID? =
     prepareStatement(CONSUME_PREMIUM_INVENTORY_QUERY).use { statement ->
         statement.setObject(1, userId)
@@ -24,7 +27,10 @@ internal fun Connection.consumePremiumInventoryRecordReturningId(
         }
     }
 
-internal fun Connection.refundPremiumInventoryRecord(inventoryId: UUID, now: Instant): Boolean =
+internal fun Connection.refundPremiumInventoryRecord(
+    inventoryId: UUID,
+    now: Instant,
+): Boolean =
     prepareStatement(REFUND_PREMIUM_INVENTORY_QUERY).use { statement ->
         statement.setTimestamp(1, Timestamp.from(now))
         statement.setObject(2, inventoryId)
@@ -33,7 +39,7 @@ internal fun Connection.refundPremiumInventoryRecord(inventoryId: UUID, now: Ins
 
 internal fun Connection.listPremiumInventoryBalances(
     userId: UUID,
-    now: Instant
+    now: Instant,
 ): List<PremiumInventoryBalanceRecord> =
     prepareStatement(LIST_PREMIUM_INVENTORY_BALANCES_QUERY).use { statement ->
         statement.setObject(1, userId)
@@ -53,7 +59,7 @@ internal fun Connection.grantPremiumInventoryRecord(
     quantity: Int,
     source: String,
     expiresAt: Instant?,
-    now: Instant
+    now: Instant,
 ) {
     prepareStatement(GRANT_PREMIUM_INVENTORY_QUERY).use { statement ->
         statement.setObject(1, UUID.randomUUID())
@@ -74,7 +80,7 @@ internal fun Connection.grantPremiumInventoryRecord(
 internal fun Connection.listPremiumInventoryBalanceRecord(
     userId: UUID,
     inventoryType: String,
-    now: Instant
+    now: Instant,
 ): PremiumInventoryBalanceRecord? =
     prepareStatement(LIST_ONE_PREMIUM_INVENTORY_BALANCE_QUERY).use { statement ->
         statement.setObject(1, userId)
@@ -85,7 +91,10 @@ internal fun Connection.listPremiumInventoryBalanceRecord(
         }
     }
 
-internal fun Connection.findActiveBoostActivation(userId: UUID, now: Instant): BoostActivationRecord? =
+internal fun Connection.findActiveBoostActivation(
+    userId: UUID,
+    now: Instant,
+): BoostActivationRecord? =
     prepareStatement(FIND_ACTIVE_BOOST_ACTIVATION_QUERY).use { statement ->
         statement.setObject(1, userId)
         statement.setTimestamp(2, Timestamp.from(now))
@@ -97,7 +106,7 @@ internal fun Connection.findActiveBoostActivation(userId: UUID, now: Instant): B
 internal fun Connection.insertBoostActivation(
     userId: UUID,
     startsAt: Instant,
-    duration: Duration
+    duration: Duration,
 ): BoostActivationRecord =
     prepareStatement(INSERT_BOOST_ACTIVATION_QUERY).use { statement ->
         statement.setObject(1, UUID.randomUUID())
@@ -110,7 +119,8 @@ internal fun Connection.insertBoostActivation(
         }
     }
 
-private val CONSUME_PREMIUM_INVENTORY_QUERY = """
+private val CONSUME_PREMIUM_INVENTORY_QUERY =
+    """
     WITH candidate AS (
         SELECT id
         FROM premium_inventory
@@ -128,16 +138,18 @@ private val CONSUME_PREMIUM_INVENTORY_QUERY = """
     FROM candidate
     WHERE inventory.id = candidate.id
     RETURNING inventory.id
-""".trimIndent()
+    """.trimIndent()
 
-private val REFUND_PREMIUM_INVENTORY_QUERY = """
+private val REFUND_PREMIUM_INVENTORY_QUERY =
+    """
     UPDATE premium_inventory
     SET quantity = quantity + 1,
         updated_at = ?
     WHERE id = ?
-""".trimIndent()
+    """.trimIndent()
 
-private val LIST_PREMIUM_INVENTORY_BALANCES_QUERY = """
+private val LIST_PREMIUM_INVENTORY_BALANCES_QUERY =
+    """
     SELECT inventory_type,
            COALESCE(sum(quantity), 0)::integer AS quantity,
            min(expires_at) FILTER (WHERE expires_at IS NOT NULL) AS next_expires_at
@@ -147,9 +159,10 @@ private val LIST_PREMIUM_INVENTORY_BALANCES_QUERY = """
       AND (expires_at IS NULL OR expires_at > ?)
     GROUP BY inventory_type
     ORDER BY inventory_type ASC
-""".trimIndent()
+    """.trimIndent()
 
-private val LIST_ONE_PREMIUM_INVENTORY_BALANCE_QUERY = """
+private val LIST_ONE_PREMIUM_INVENTORY_BALANCE_QUERY =
+    """
     SELECT inventory_type,
            COALESCE(sum(quantity), 0)::integer AS quantity,
            min(expires_at) FILTER (WHERE expires_at IS NOT NULL) AS next_expires_at
@@ -159,9 +172,10 @@ private val LIST_ONE_PREMIUM_INVENTORY_BALANCE_QUERY = """
       AND quantity > 0
       AND (expires_at IS NULL OR expires_at > ?)
     GROUP BY inventory_type
-""".trimIndent()
+    """.trimIndent()
 
-private val GRANT_PREMIUM_INVENTORY_QUERY = """
+private val GRANT_PREMIUM_INVENTORY_QUERY =
+    """
     INSERT INTO premium_inventory (
         id,
         user_id,
@@ -172,9 +186,10 @@ private val GRANT_PREMIUM_INVENTORY_QUERY = """
         updated_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?)
-""".trimIndent()
+    """.trimIndent()
 
-private val FIND_ACTIVE_BOOST_ACTIVATION_QUERY = """
+private val FIND_ACTIVE_BOOST_ACTIVATION_QUERY =
+    """
     SELECT id AS boost_activation_id,
            user_id AS boost_user_id,
            boost_type,
@@ -191,9 +206,10 @@ private val FIND_ACTIVE_BOOST_ACTIVATION_QUERY = """
              id ASC
     LIMIT 1
     FOR UPDATE
-""".trimIndent()
+    """.trimIndent()
 
-private val INSERT_BOOST_ACTIVATION_QUERY = """
+private val INSERT_BOOST_ACTIVATION_QUERY =
+    """
     INSERT INTO boost_activations (
         id,
         user_id,
@@ -211,4 +227,4 @@ private val INSERT_BOOST_ACTIVATION_QUERY = """
               starts_at,
               ends_at,
               status
-""".trimIndent()
+    """.trimIndent()

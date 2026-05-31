@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 internal fun SwipeAdvancedFilterControls(
     draft: SwipeFilters,
     onDraftChange: (SwipeFilters) -> Unit,
-    onSubscribe: () -> Unit
+    onSubscribe: () -> Unit,
 ) {
     SectionTitle("Advanced")
     if (draft.requiresAdvancedEntitlement) {
@@ -30,15 +30,15 @@ internal fun SwipeAdvancedFilterControls(
         ageVerified = draft.ageVerified,
         onChange = { face, ageV ->
             onDraftChange(draft.copy(facePhotoVerified = face, ageVerified = ageV))
-        }
+        },
     )
     LifestyleTagsSection(
         selected = draft.lifestyleTags,
-        onChange = { onDraftChange(draft.copy(lifestyleTags = it)) }
+        onChange = { onDraftChange(draft.copy(lifestyleTags = it)) },
     )
     LogisticsTagsSection(
         selected = draft.logisticsTags,
-        onChange = { onDraftChange(draft.copy(logisticsTags = it)) }
+        onChange = { onDraftChange(draft.copy(logisticsTags = it)) },
     )
 }
 
@@ -49,7 +49,7 @@ internal fun SwipeSaveCurrentFilters(
     draft: SwipeFilters,
     onNameChange: (String) -> Unit,
     onSavePreset: (String, SwipeFilters) -> Unit,
-    onSaved: () -> Unit
+    onSaved: () -> Unit,
 ) {
     if (!savedState.entitlementRequired) {
         SectionTitle("Save current filters")
@@ -62,7 +62,7 @@ internal fun SwipeSaveCurrentFilters(
                     onSavePreset(saveName, draft)
                     onSaved()
                 }
-            }
+            },
         )
     }
 }
@@ -72,24 +72,25 @@ internal fun SwipeFiltersFooter(
     draft: SwipeFilters,
     onDismiss: () -> Unit,
     onApply: (SwipeFilters) -> Unit,
-    onClearAll: () -> Unit
+    onClearAll: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         TextButton(
             onClick = onClearAll,
-            modifier = Modifier.testTag(SwipeFilterTags.CLEAR_ALL)
+            modifier = Modifier.testTag(SwipeFilterTags.CLEAR_ALL),
         ) { Text(text = "Clear all") }
         Box(modifier = Modifier.weight(1f))
         OutlinedButton(onClick = onDismiss) { Text(text = "Cancel") }
         Button(
             onClick = { onApply(draft) },
-            modifier = Modifier.testTag(SwipeFilterTags.APPLY)
+            modifier = Modifier.testTag(SwipeFilterTags.APPLY),
         ) { Text(text = "Apply") }
     }
 }

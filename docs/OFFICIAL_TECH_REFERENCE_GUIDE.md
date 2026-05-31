@@ -98,11 +98,13 @@ Use these for version compatibility:
 Current decision (2026-05-31):
 
 - **Spotless `8.6.0` + ktlint `1.7.1`** is the Kotlin format gate (`spotlessCheck`), wired into
-  `scripts/verify.ps1` and CI. Adoption is incremental via Spotless `ratchetFrom = "origin/main"`,
-  so only files changed relative to `main` are enforced — the existing tree is not reformatted in
-  one big-bang commit. ktlint is configured by the root `.editorconfig`
-  (`ktlint_code_style = ktlint_official`, `max_line_length = 120`, Compose function-naming
-  exemption).
+  `scripts/verify.ps1` and CI, enforced on **all** Kotlin files. The codebase was formatted to
+  `ktlint_official` in one pass (recorded in `.git-blame-ignore-revs`), so the earlier
+  `ratchetFrom` incremental mode was removed. ktlint is configured by the root `.editorconfig`.
+  The non-auto-fixable, stylistic ktlint rules (`max-line-length`, `property-naming`,
+  `function-naming`, `filename`, `package-name`) are disabled and left to code review — they
+  conflict with existing Kotlin/KMP conventions (e.g. long DTO type names, `Platform.android.kt`
+  actuals) and ktlint cannot auto-fix them. Every auto-fixable formatting rule stays enforced.
 - **detekt is intentionally deferred** (documented exception per the "Rules For Using References"
   policy above). As of 2026-05, no **stable** detekt release supports Kotlin 2.3 — only
   `2.0.0-alpha.x` — and the version policy disallows alpha dependencies without a written reason.

@@ -40,46 +40,49 @@ import com.pynapli.shared.network.dto.ConversationParticipantDto
 internal fun FullScreenConversationHeader(
     state: ConversationUiState,
     onBack: () -> Unit,
-    onOpenParticipantProfile: (ConversationParticipantDto) -> Unit
+    onOpenParticipantProfile: (ConversationParticipantDto) -> Unit,
 ) {
     val participant = state.detail?.conversation?.primaryOtherParticipant(state.viewerUserId)
     val title = state.conversationTitle()
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
-            .testTag(ConversationTestTags.fullScreenHeader)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+                .testTag(ConversationTestTags.fullScreenHeader),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 10.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             IconButton(onClick = onBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onSurface
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
             ConversationAvatar(
                 participant = participant,
                 online = participant?.online == true,
-                onClick = participant?.let { selected -> { onOpenParticipantProfile(selected) } }
+                onClick = participant?.let { selected -> { onOpenParticipantProfile(selected) } },
             )
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .then(
-                        if (participant != null) {
-                            Modifier.clickable { onOpenParticipantProfile(participant) }
-                        } else {
-                            Modifier
-                        }
-                    )
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .then(
+                            if (participant != null) {
+                                Modifier.clickable { onOpenParticipantProfile(participant) }
+                            } else {
+                                Modifier
+                            },
+                        ),
             ) {
                 Text(
                     text = title,
@@ -87,14 +90,14 @@ internal fun FullScreenConversationHeader(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = if (participant?.online == true) "Online" else "Active recently",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             IconButton(
@@ -103,13 +106,13 @@ internal fun FullScreenConversationHeader(
                         onOpenParticipantProfile(participant)
                     }
                 },
-                enabled = participant != null
+                enabled = participant != null,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Person,
                     contentDescription = "Open profile",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
             IconButton(onClick = {}) {
@@ -117,7 +120,7 @@ internal fun FullScreenConversationHeader(
                     imageVector = Icons.Filled.MoreVert,
                     contentDescription = "Conversation options",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
@@ -129,38 +132,45 @@ internal fun FullScreenConversationHeader(
 private fun ConversationAvatar(
     participant: ConversationParticipantDto?,
     online: Boolean,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
 ) {
-    val initial = participant?.displayName?.trim()?.firstOrNull()?.uppercaseChar()?.toString() ?: ""
+    val initial =
+        participant
+            ?.displayName
+            ?.trim()
+            ?.firstOrNull()
+            ?.uppercaseChar()
+            ?.toString() ?: ""
     Box(modifier = Modifier.size(46.dp)) {
         Box(
-            modifier = Modifier
-                .size(46.dp)
-                .clip(CircleShape)
-                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                .background(
-                    Brush.linearGradient(
-                        listOf(Color(0xFF202031), Color(0xFF193831))
-                    )
-                )
-                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF202031), Color(0xFF193831)),
+                        ),
+                    ).border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = initial,
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
         }
         if (online) {
             Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(13.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF13E58A))
-                    .border(2.dp, MaterialTheme.colorScheme.background, CircleShape)
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(13.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF13E58A))
+                        .border(2.dp, MaterialTheme.colorScheme.background, CircleShape),
             )
         }
     }
@@ -170,23 +180,24 @@ private fun ConversationAvatar(
 internal fun ConversationContextStrip(conversation: ConversationDto?) {
     if (conversation == null) return
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.68f))
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.68f))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Surface(
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant
+            color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Text(
                 text = conversation.origin.conversationOriginLabel(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             )
         }
         Text(
@@ -194,7 +205,7 @@ internal fun ConversationContextStrip(conversation: ConversationDto?) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.36f))
@@ -203,12 +214,12 @@ internal fun ConversationContextStrip(conversation: ConversationDto?) {
 @Composable
 internal fun ConversationHeader(
     title: String,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = title,
@@ -217,12 +228,12 @@ internal fun ConversationHeader(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         IconButton(onClick = onDismiss) {
             Icon(
                 imageVector = Icons.Filled.Close,
-                contentDescription = "Close conversation"
+                contentDescription = "Close conversation",
             )
         }
     }

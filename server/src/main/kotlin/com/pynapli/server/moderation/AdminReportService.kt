@@ -3,63 +3,62 @@ package com.pynapli.server.moderation
 import java.util.UUID
 
 class AdminReportService(
-    private val repository: AdminReportRepository
+    private val repository: AdminReportRepository,
 ) {
     suspend fun listReports(
         statusText: String?,
         limitText: String?,
         actorId: String,
-        reason: String
+        reason: String,
     ): List<AdminReportRecord> {
         val status = statusText?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: "open"
         if (status !in LIST_STATUSES) throw ModerationException("INVALID_REPORT_REVIEW_STATUS")
-        val limit = limitText?.takeIf { it.isNotBlank() }?.toIntOrNull()
-            ?.takeIf { it in 1..MAX_REPORT_REVIEW_LIMIT }
-            ?: if (limitText.isNullOrBlank()) DEFAULT_REPORT_REVIEW_LIMIT else throw ModerationException("INVALID_REVIEW_LIMIT")
+        val limit =
+            limitText
+                ?.takeIf { it.isNotBlank() }
+                ?.toIntOrNull()
+                ?.takeIf { it in 1..MAX_REPORT_REVIEW_LIMIT }
+                ?: if (limitText.isNullOrBlank()) DEFAULT_REPORT_REVIEW_LIMIT else throw ModerationException("INVALID_REVIEW_LIMIT")
         return repository.listReports(
             status = status,
             limit = limit,
             actorId = actorId.normalizedActorIdOrThrow(),
-            reason = reason.normalizedReasonOrThrow()
+            reason = reason.normalizedReasonOrThrow(),
         )
     }
 
     suspend fun markUnderReview(
         reportIdText: String,
         actorId: String,
-        reason: String?
-    ): AdminReportActionRecord =
-        updateReportStatus(reportIdText, "under_review", actorId, reason)
+        reason: String?,
+    ): AdminReportActionRecord = updateReportStatus(reportIdText, "under_review", actorId, reason)
 
     suspend fun resolveReport(
         reportIdText: String,
         actorId: String,
-        reason: String?
-    ): AdminReportActionRecord =
-        updateReportStatus(reportIdText, "resolved", actorId, reason)
+        reason: String?,
+    ): AdminReportActionRecord = updateReportStatus(reportIdText, "resolved", actorId, reason)
 
     suspend fun dismissReport(
         reportIdText: String,
         actorId: String,
-        reason: String?
-    ): AdminReportActionRecord =
-        updateReportStatus(reportIdText, "dismissed", actorId, reason)
+        reason: String?,
+    ): AdminReportActionRecord = updateReportStatus(reportIdText, "dismissed", actorId, reason)
 
     private suspend fun updateReportStatus(
         reportIdText: String,
         status: String,
         actorId: String,
-        reason: String?
+        reason: String?,
     ): AdminReportActionRecord =
         repository.updateReportStatus(
             reportId = reportIdText.toUuidOrThrow(),
             status = status,
             actorId = actorId.normalizedActorIdOrThrow(),
-            reason = reason.normalizedReasonOrThrow()
+            reason = reason.normalizedReasonOrThrow(),
         ) ?: throw ModerationException("REPORT_REVIEW_NOT_FOUND")
 
-    private fun String.toUuidOrThrow(): UUID =
-        runCatching { UUID.fromString(this) }.getOrElse { throw ModerationException("INVALID_ID") }
+    private fun String.toUuidOrThrow(): UUID = runCatching { UUID.fromString(this) }.getOrElse { throw ModerationException("INVALID_ID") }
 
     private fun String.normalizedActorIdOrThrow(): String {
         val normalized = trim()

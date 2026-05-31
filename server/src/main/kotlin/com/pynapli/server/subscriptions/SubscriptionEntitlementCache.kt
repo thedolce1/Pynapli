@@ -8,24 +8,32 @@ import java.util.concurrent.ConcurrentHashMap
 
 internal class SubscriptionEntitlementCache(
     private val ttl: Duration,
-    private val maxSize: Int
+    private val maxSize: Int,
 ) {
     private val entries = ConcurrentHashMap<UUID, CachedEntitlement>()
 
-    fun get(userId: UUID, now: Instant): SubscriptionEntitlementDto? {
+    fun get(
+        userId: UUID,
+        now: Instant,
+    ): SubscriptionEntitlementDto? {
         val cached = entries[userId] ?: return null
         if (cached.expiresAt > now) return cached.entitlement
         entries.remove(userId, cached)
         return null
     }
 
-    fun put(userId: UUID, entitlement: SubscriptionEntitlementDto, now: Instant) {
+    fun put(
+        userId: UUID,
+        entitlement: SubscriptionEntitlementDto,
+        now: Instant,
+    ) {
         if (ttl <= Duration.ZERO || maxSize <= 0) return
         trim(now)
-        entries[userId] = CachedEntitlement(
-            entitlement = entitlement,
-            expiresAt = now.plus(ttl)
-        )
+        entries[userId] =
+            CachedEntitlement(
+                entitlement = entitlement,
+                expiresAt = now.plus(ttl),
+            )
     }
 
     fun invalidate(userId: UUID) {
@@ -41,6 +49,6 @@ internal class SubscriptionEntitlementCache(
 
     private data class CachedEntitlement(
         val entitlement: SubscriptionEntitlementDto,
-        val expiresAt: Instant
+        val expiresAt: Instant,
     )
 }

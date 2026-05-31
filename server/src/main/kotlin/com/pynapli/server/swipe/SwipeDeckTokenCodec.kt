@@ -14,14 +14,17 @@ import javax.crypto.spec.SecretKeySpec
 
 class SwipeDeckTokenCodec(
     secret: String = DEFAULT_SECRET,
-    private val json: Json = Json {
-        encodeDefaults = true
-        ignoreUnknownKeys = false
-    }
+    private val json: Json =
+        Json {
+            encodeDefaults = true
+            ignoreUnknownKeys = false
+        },
 ) {
-    private val secretBytes = secret.also { value ->
-        require(value.isNotBlank()) { "Swipe deck token secret must not be blank." }
-    }.toByteArray(StandardCharsets.UTF_8)
+    private val secretBytes =
+        secret
+            .also { value ->
+                require(value.isNotBlank()) { "Swipe deck token secret must not be blank." }
+            }.toByteArray(StandardCharsets.UTF_8)
 
     fun issueDeckSession(
         viewerUserId: UUID,
@@ -29,27 +32,28 @@ class SwipeDeckTokenCodec(
         now: Instant,
         ttl: Duration = DEFAULT_SESSION_TTL,
         sessionId: UUID = UUID.randomUUID(),
-        nonce: UUID = UUID.randomUUID()
+        nonce: UUID = UUID.randomUUID(),
     ): IssuedSwipeDeckSession {
         val expiresAt = now.plus(ttl)
-        val deckSessionId = encode(
-            SwipeDeckTokenPayload(
-                kind = KIND_DECK_SESSION,
-                sessionId = sessionId.toString(),
-                viewerUserId = viewerUserId.toString(),
-                scopeHash = scopeHash,
-                generatedAtEpochSeconds = now.epochSecond,
-                expiresAtEpochSeconds = expiresAt.epochSecond,
-                nonce = nonce.toString()
-            ),
-            invalidCode = INVALID_DECK_SESSION
-        )
+        val deckSessionId =
+            encode(
+                SwipeDeckTokenPayload(
+                    kind = KIND_DECK_SESSION,
+                    sessionId = sessionId.toString(),
+                    viewerUserId = viewerUserId.toString(),
+                    scopeHash = scopeHash,
+                    generatedAtEpochSeconds = now.epochSecond,
+                    expiresAtEpochSeconds = expiresAt.epochSecond,
+                    nonce = nonce.toString(),
+                ),
+                invalidCode = INVALID_DECK_SESSION,
+            )
         return IssuedSwipeDeckSession(
             sessionId = sessionId,
             deckSessionId = deckSessionId,
             deckSessionTokenHash = tokenHash(deckSessionId),
             generatedAt = now,
-            expiresAt = expiresAt
+            expiresAt = expiresAt,
         )
     }
 
@@ -60,7 +64,7 @@ class SwipeDeckTokenCodec(
         scopeHash: String,
         generatedAt: Instant,
         expiresAt: Instant,
-        position: Int
+        position: Int,
     ): String =
         encode(
             SwipeDeckTokenPayload(
@@ -72,9 +76,9 @@ class SwipeDeckTokenCodec(
                 deckSessionHash = deckSessionHash(deckSessionId),
                 generatedAtEpochSeconds = generatedAt.epochSecond,
                 expiresAtEpochSeconds = expiresAt.epochSecond,
-                position = position
+                position = position,
             ),
-            invalidCode = INVALID_CARD_TOKEN
+            invalidCode = INVALID_CARD_TOKEN,
         )
 
     fun validateAction(
@@ -82,7 +86,7 @@ class SwipeDeckTokenCodec(
         cardToken: String,
         viewerUserId: UUID,
         targetUserId: UUID,
-        now: Instant
+        now: Instant,
     ): ValidatedSwipeActionTokens {
         val session = decode(deckSessionId, invalidCode = INVALID_DECK_SESSION)
         val sessionId = session.sessionId.toUuidOrThrow(INVALID_DECK_SESSION)
@@ -116,7 +120,7 @@ class SwipeDeckTokenCodec(
             sessionId = sessionId,
             deckSessionTokenHash = tokenHash(deckSessionId),
             cardTokenHash = tokenHash(cardToken),
-            scopeHash = session.scopeHash
+            scopeHash = session.scopeHash,
         )
     }
 
@@ -124,7 +128,7 @@ class SwipeDeckTokenCodec(
         deckSession: IssuedSwipeDeckSession,
         viewerUserId: UUID,
         scopeHash: String,
-        nextPosition: Int
+        nextPosition: Int,
     ): String =
         encode(
             SwipeDeckTokenPayload(
@@ -135,12 +139,16 @@ class SwipeDeckTokenCodec(
                 deckSessionHash = deckSession.deckSessionTokenHash,
                 generatedAtEpochSeconds = deckSession.generatedAt.epochSecond,
                 expiresAtEpochSeconds = deckSession.expiresAt.epochSecond,
-                position = nextPosition
+                position = nextPosition,
             ),
-            invalidCode = INVALID_CURSOR
+            invalidCode = INVALID_CURSOR,
         )
 
-    fun decodeCursor(cursor: String, viewerUserId: UUID, now: Instant): DecodedSwipeDeckCursor {
+    fun decodeCursor(
+        cursor: String,
+        viewerUserId: UUID,
+        now: Instant,
+    ): DecodedSwipeDeckCursor {
         val payload = decode(cursor, invalidCode = INVALID_CURSOR)
         val sessionId = payload.sessionId.toUuidOrThrow(INVALID_CURSOR)
         val nextPosition = payload.position ?: throw SwipeDeckTokenException(INVALID_CURSOR)
@@ -161,37 +169,46 @@ class SwipeDeckTokenCodec(
             sessionId = sessionId,
             deckSessionTokenHash = payload.deckSessionHash,
             scopeHash = payload.scopeHash,
-            nextPosition = nextPosition
+            nextPosition = nextPosition,
         )
     }
 
     fun tokenHash(token: String): String = sha256Base64Url(token)
 
-    private fun encode(payload: SwipeDeckTokenPayload, invalidCode: String): String {
-        val payloadJson = runCatching {
-            json.encodeToString(SwipeDeckTokenPayload.serializer(), payload)
-        }.getOrElse { throw SwipeDeckTokenException(invalidCode) }
+    private fun encode(
+        payload: SwipeDeckTokenPayload,
+        invalidCode: String,
+    ): String {
+        val payloadJson =
+            runCatching {
+                json.encodeToString(SwipeDeckTokenPayload.serializer(), payload)
+            }.getOrElse { throw SwipeDeckTokenException(invalidCode) }
         val payloadSegment = base64UrlEncode(payloadJson.toByteArray(StandardCharsets.UTF_8))
         val signedValue = "$TOKEN_VERSION.$payloadSegment"
         val signature = base64UrlEncode(hmacSha256(signedValue))
         return "$signedValue.$signature"
     }
 
-    private fun decode(token: String, invalidCode: String): SwipeDeckTokenPayload {
+    private fun decode(
+        token: String,
+        invalidCode: String,
+    ): SwipeDeckTokenPayload {
         val parts = token.split(".")
         if (parts.size != 3 || parts[0] != TOKEN_VERSION) throw SwipeDeckTokenException(invalidCode)
 
         val signedValue = "${parts[0]}.${parts[1]}"
         val expectedSignature = hmacSha256(signedValue)
-        val suppliedSignature = runCatching { base64UrlDecode(parts[2]) }
-            .getOrElse { throw SwipeDeckTokenException(invalidCode) }
+        val suppliedSignature =
+            runCatching { base64UrlDecode(parts[2]) }
+                .getOrElse { throw SwipeDeckTokenException(invalidCode) }
         if (!MessageDigest.isEqual(expectedSignature, suppliedSignature)) {
             throw SwipeDeckTokenException(invalidCode)
         }
 
-        val payloadJson = runCatching {
-            String(base64UrlDecode(parts[1]), StandardCharsets.UTF_8)
-        }.getOrElse { throw SwipeDeckTokenException(invalidCode) }
+        val payloadJson =
+            runCatching {
+                String(base64UrlDecode(parts[1]), StandardCharsets.UTF_8)
+            }.getOrElse { throw SwipeDeckTokenException(invalidCode) }
 
         return runCatching {
             json.decodeFromString(SwipeDeckTokenPayload.serializer(), payloadJson)
@@ -222,44 +239,42 @@ class SwipeDeckTokenCodec(
             viewerUserId: UUID,
             radiusMeters: Int,
             limit: Int,
-            filters: DiscoveryFilters
+            filters: DiscoveryFilters,
         ): String {
-            val normalized = buildString {
-                append("swipe_deck:v1")
-                append("|viewer=").append(viewerUserId)
-                append("|radius=").append(radiusMeters)
-                append("|limit=").append(limit)
-                append("|minAge=").append(filters.minimumAge ?: "")
-                append("|maxAge=").append(filters.maximumAge ?: "")
-                append("|linkedOnly=").append(filters.linkedOnly ?: "")
-                append("|verifiedOnly=").append(filters.verifiedOnly)
-                append("|facePhotoVerifiedOnly=").append(filters.facePhotoVerifiedOnly)
-                append("|ageVerifiedOnly=").append(filters.ageVerifiedOnly)
-                append("|relationshipContexts=")
-                append(filters.relationshipContexts.sorted().joinToString(","))
-                append("|discoveryStyles=")
-                append(filters.discoveryStyles.sorted().joinToString(","))
-                append("|lifestyleTags=")
-                append(filters.lifestyleTags.sorted().joinToString(","))
-                append("|logisticsTags=")
-                append(filters.logisticsTags.sorted().joinToString(","))
-                append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
-                append("|intents=")
-                append(filters.intents.sorted().joinToString(","))
-            }
+            val normalized =
+                buildString {
+                    append("swipe_deck:v1")
+                    append("|viewer=").append(viewerUserId)
+                    append("|radius=").append(radiusMeters)
+                    append("|limit=").append(limit)
+                    append("|minAge=").append(filters.minimumAge ?: "")
+                    append("|maxAge=").append(filters.maximumAge ?: "")
+                    append("|linkedOnly=").append(filters.linkedOnly ?: "")
+                    append("|verifiedOnly=").append(filters.verifiedOnly)
+                    append("|facePhotoVerifiedOnly=").append(filters.facePhotoVerifiedOnly)
+                    append("|ageVerifiedOnly=").append(filters.ageVerifiedOnly)
+                    append("|relationshipContexts=")
+                    append(filters.relationshipContexts.sorted().joinToString(","))
+                    append("|discoveryStyles=")
+                    append(filters.discoveryStyles.sorted().joinToString(","))
+                    append("|lifestyleTags=")
+                    append(filters.lifestyleTags.sorted().joinToString(","))
+                    append("|logisticsTags=")
+                    append(filters.logisticsTags.sorted().joinToString(","))
+                    append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
+                    append("|intents=")
+                    append(filters.intents.sorted().joinToString(","))
+                }
             return sha256Base64Url(normalized)
         }
 
         private fun deckSessionHash(deckSessionId: String): String = sha256Base64Url(deckSessionId)
 
-        private fun sha256Base64Url(value: String): String =
-            base64UrlEncode(MessageDigest.getInstance("SHA-256").digest(value.toByteArray(StandardCharsets.UTF_8)))
+        private fun sha256Base64Url(value: String): String = base64UrlEncode(MessageDigest.getInstance("SHA-256").digest(value.toByteArray(StandardCharsets.UTF_8)))
 
-        private fun base64UrlEncode(bytes: ByteArray): String =
-            Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+        private fun base64UrlEncode(bytes: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 
-        private fun base64UrlDecode(value: String): ByteArray =
-            Base64.getUrlDecoder().decode(value)
+        private fun base64UrlDecode(value: String): ByteArray = Base64.getUrlDecoder().decode(value)
     }
 }
 
@@ -268,24 +283,26 @@ data class IssuedSwipeDeckSession(
     val deckSessionId: String,
     val deckSessionTokenHash: String,
     val generatedAt: Instant,
-    val expiresAt: Instant
+    val expiresAt: Instant,
 )
 
 data class ValidatedSwipeActionTokens(
     val sessionId: UUID,
     val deckSessionTokenHash: String,
     val cardTokenHash: String,
-    val scopeHash: String
+    val scopeHash: String,
 )
 
 data class DecodedSwipeDeckCursor(
     val sessionId: UUID,
     val deckSessionTokenHash: String,
     val scopeHash: String,
-    val nextPosition: Int
+    val nextPosition: Int,
 )
 
-class SwipeDeckTokenException(val code: String) : RuntimeException(code)
+class SwipeDeckTokenException(
+    val code: String,
+) : RuntimeException(code)
 
 @Serializable
 private data class SwipeDeckTokenPayload(
@@ -299,7 +316,7 @@ private data class SwipeDeckTokenPayload(
     val generatedAtEpochSeconds: Long,
     val expiresAtEpochSeconds: Long,
     val nonce: String? = null,
-    val position: Int? = null
+    val position: Int? = null,
 )
 
 private fun String?.toUuidOrThrow(code: String): UUID =

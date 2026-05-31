@@ -11,5 +11,4 @@ internal const val TYPING_INDICATOR_TTL_MS = 6_000L
 internal fun currentTimeMillis(): Long = Clock.System.now().toEpochMilliseconds()
 
 @OptIn(ExperimentalTime::class)
-internal fun parseInstantMillis(value: String): Long? =
-    runCatching { Instant.parse(value).toEpochMilliseconds() }.getOrNull()
+internal fun parseInstantMillis(value: String): Long? = runCatching { Instant.parse(value).toEpochMilliseconds() }.getOrNull()

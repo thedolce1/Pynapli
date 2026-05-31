@@ -46,9 +46,8 @@ class TopPicksService(
     private val freeTierLimit: Int = FREE_TIER_LIMIT,
     private val paidTierLimit: Int = PAID_TIER_LIMIT,
     private val sessionIdFactory: () -> UUID = UUID::randomUUID,
-    private val cardIdFactory: () -> UUID = UUID::randomUUID
+    private val cardIdFactory: () -> UUID = UUID::randomUUID,
 ) {
-
     suspend fun getCurrentPicks(viewerUserId: UUID): TopPicksResponseDto {
         val now = clock.instant()
         val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
@@ -64,97 +63,106 @@ class TopPicksService(
     private suspend fun generateFreshSession(
         viewerUserId: UUID,
         now: Instant,
-        tierLimit: Int
+        tierLimit: Int,
     ): TopPicksResponseDto {
         // Quality bias per spec L311: verified profiles are ordered first via the
         // existing soft_score ORDER BY. Already-actioned targets are excluded by
         // the swipe SQL itself so Picks never re-show profiles the user passed.
         val filters = DiscoveryFilters(verifiedPreferred = true)
-        val deckResult = swipeRepository.queryDeck(
-            viewerUserId = viewerUserId,
-            radiusMeters = pickRadiusMeters,
-            limit = tierLimit,
-            filters = filters
-        )
+        val deckResult =
+            swipeRepository.queryDeck(
+                viewerUserId = viewerUserId,
+                radiusMeters = pickRadiusMeters,
+                limit = tierLimit,
+                filters = filters,
+            )
         if (!deckResult.viewerHadLocation) throw TopPicksException("LOCATION_REQUIRED")
 
         val candidates = deckResult.cards.take(tierLimit)
-        val scopeHash = SwipeDeckTokenCodec.deckScopeHash(
-            viewerUserId = viewerUserId,
-            radiusMeters = pickRadiusMeters,
-            limit = tierLimit,
-            filters = filters
-        )
-        val deckSession = deckTokenCodec.issueDeckSession(
-            viewerUserId = viewerUserId,
-            scopeHash = scopeHash,
-            now = now,
-            ttl = refreshInterval
-        )
+        val scopeHash =
+            SwipeDeckTokenCodec.deckScopeHash(
+                viewerUserId = viewerUserId,
+                radiusMeters = pickRadiusMeters,
+                limit = tierLimit,
+                filters = filters,
+            )
+        val deckSession =
+            deckTokenCodec.issueDeckSession(
+                viewerUserId = viewerUserId,
+                scopeHash = scopeHash,
+                now = now,
+                ttl = refreshInterval,
+            )
         val expiresAt = now.plus(refreshInterval)
 
         // Mint raw tokens once; they get returned to the client and the hashes
         // get persisted for server-side validation on submitAction.
-        val tokens = candidates.mapIndexed { index, card ->
-            val raw = deckTokenCodec.issueCardToken(
-                deckSessionId = deckSession.deckSessionId,
-                viewerUserId = viewerUserId,
-                targetUserId = card.userId,
-                scopeHash = scopeHash,
-                generatedAt = deckSession.generatedAt,
-                expiresAt = deckSession.expiresAt,
-                position = index
-            )
-            CardTokenBinding(
-                position = index,
-                targetUserId = card.userId,
-                rawToken = raw,
-                tokenHash = deckTokenCodec.tokenHash(raw),
-                cardRecord = card
-            )
-        }
-        val swipeCards = tokens.map { binding ->
-            SwipeDeckSessionCardRecord(
-                cardId = UUID.randomUUID(),
-                sessionId = deckSession.sessionId,
-                viewerUserId = viewerUserId,
-                targetUserId = binding.targetUserId,
-                cardTokenHash = binding.tokenHash,
-                position = binding.position,
-                dealtAt = now
-            )
-        }
-        swipeRepository.upsertDeckSession(
-            session = SwipeDeckSessionRecord(
-                sessionId = deckSession.sessionId,
-                deckSessionToken = deckSession.deckSessionId,
-                deckSessionTokenHash = deckSession.deckSessionTokenHash,
-                viewerUserId = viewerUserId,
-                scopeHash = scopeHash,
-                radiusMeters = pickRadiusMeters,
-                pageLimit = tierLimit,
-                filterPayload = filters.toPersistedJson(),
-                generatedAt = deckSession.generatedAt,
-                expiresAt = deckSession.expiresAt
-            ),
-            cards = swipeCards
-        )
-        val saved = topPicksRepository.createSession(
-            sessionId = sessionIdFactory(),
-            userId = viewerUserId,
-            deckSessionId = deckSession.sessionId,
-            generatedAt = now,
-            expiresAt = expiresAt,
-            cards = tokens.map { binding ->
-                TopPickCardInsert(
-                    cardId = cardIdFactory(),
-                    targetUserId = binding.targetUserId,
-                    position = binding.position,
-                    cardTokenHash = binding.tokenHash,
-                    dealtAt = now
+        val tokens =
+            candidates.mapIndexed { index, card ->
+                val raw =
+                    deckTokenCodec.issueCardToken(
+                        deckSessionId = deckSession.deckSessionId,
+                        viewerUserId = viewerUserId,
+                        targetUserId = card.userId,
+                        scopeHash = scopeHash,
+                        generatedAt = deckSession.generatedAt,
+                        expiresAt = deckSession.expiresAt,
+                        position = index,
+                    )
+                CardTokenBinding(
+                    position = index,
+                    targetUserId = card.userId,
+                    rawToken = raw,
+                    tokenHash = deckTokenCodec.tokenHash(raw),
+                    cardRecord = card,
                 )
             }
+        val swipeCards =
+            tokens.map { binding ->
+                SwipeDeckSessionCardRecord(
+                    cardId = UUID.randomUUID(),
+                    sessionId = deckSession.sessionId,
+                    viewerUserId = viewerUserId,
+                    targetUserId = binding.targetUserId,
+                    cardTokenHash = binding.tokenHash,
+                    position = binding.position,
+                    dealtAt = now,
+                )
+            }
+        swipeRepository.upsertDeckSession(
+            session =
+                SwipeDeckSessionRecord(
+                    sessionId = deckSession.sessionId,
+                    deckSessionToken = deckSession.deckSessionId,
+                    deckSessionTokenHash = deckSession.deckSessionTokenHash,
+                    viewerUserId = viewerUserId,
+                    scopeHash = scopeHash,
+                    radiusMeters = pickRadiusMeters,
+                    pageLimit = tierLimit,
+                    filterPayload = filters.toPersistedJson(),
+                    generatedAt = deckSession.generatedAt,
+                    expiresAt = deckSession.expiresAt,
+                ),
+            cards = swipeCards,
         )
+        val saved =
+            topPicksRepository.createSession(
+                sessionId = sessionIdFactory(),
+                userId = viewerUserId,
+                deckSessionId = deckSession.sessionId,
+                generatedAt = now,
+                expiresAt = expiresAt,
+                cards =
+                    tokens.map { binding ->
+                        TopPickCardInsert(
+                            cardId = cardIdFactory(),
+                            targetUserId = binding.targetUserId,
+                            position = binding.position,
+                            cardTokenHash = binding.tokenHash,
+                            dealtAt = now,
+                        )
+                    },
+            )
         val onlineIds = onlineFor(candidates.map { it.userId }.toSet())
         return TopPicksResponseDto(
             sessionId = saved.session.sessionId.toString(),
@@ -162,21 +170,23 @@ class TopPicksService(
             generatedAt = saved.session.generatedAt.toString(),
             expiresAt = saved.session.expiresAt.toString(),
             tierLimit = tierLimit,
-            picks = tokens.map { binding ->
-                TopPickCardDto(
-                    position = binding.position,
-                    card = binding.cardRecord.toCardDto(
-                        rankToken = binding.rawToken,
-                        onlineIds = onlineIds
+            picks =
+                tokens.map { binding ->
+                    TopPickCardDto(
+                        position = binding.position,
+                        card =
+                            binding.cardRecord.toCardDto(
+                                rankToken = binding.rawToken,
+                                onlineIds = onlineIds,
+                            ),
                     )
-                )
-            }
+                },
         )
     }
 
     private suspend fun TopPickSessionWithCards.toResponse(
         viewerUserId: UUID,
-        tierLimit: Int
+        tierLimit: Int,
     ): TopPicksResponseDto {
         if (cards.isEmpty()) {
             return TopPicksResponseDto(
@@ -185,7 +195,7 @@ class TopPicksService(
                 generatedAt = session.generatedAt.toString(),
                 expiresAt = session.expiresAt.toString(),
                 picks = emptyList(),
-                tierLimit = tierLimit
+                tierLimit = tierLimit,
             )
         }
         // Re-hydrate the cached pick targets via the swipe ranker so the response
@@ -195,12 +205,13 @@ class TopPicksService(
         // but keep the cached session intact — the next refresh past expiry will
         // regenerate.
         val targetIds = cards.map { it.targetUserId }.toSet()
-        val deckResult = swipeRepository.queryDeck(
-            viewerUserId = viewerUserId,
-            radiusMeters = pickRadiusMeters,
-            limit = (targetIds.size * 4).coerceAtLeast(targetIds.size),
-            filters = DiscoveryFilters(verifiedPreferred = true)
-        )
+        val deckResult =
+            swipeRepository.queryDeck(
+                viewerUserId = viewerUserId,
+                radiusMeters = pickRadiusMeters,
+                limit = (targetIds.size * 4).coerceAtLeast(targetIds.size),
+                filters = DiscoveryFilters(verifiedPreferred = true),
+            )
         val byTarget = deckResult.cards.associateBy { it.userId }
         val onlineIds = onlineFor(targetIds)
 
@@ -209,8 +220,9 @@ class TopPicksService(
         // generatedAt, expiresAt, position) — re-running with the same inputs
         // produces the same plaintext token whose hash matches the persisted
         // card_token_hash. We sanity-check that match below.
-        val backingSession = swipeRepository.findDeckSession(session.deckSessionId, viewerUserId)
-            ?: throw TopPicksException("STALE_TOP_PICK_SESSION")
+        val backingSession =
+            swipeRepository.findDeckSession(session.deckSessionId, viewerUserId)
+                ?: throw TopPicksException("STALE_TOP_PICK_SESSION")
 
         return TopPicksResponseDto(
             sessionId = session.sessionId.toString(),
@@ -218,31 +230,34 @@ class TopPicksService(
             generatedAt = session.generatedAt.toString(),
             expiresAt = session.expiresAt.toString(),
             tierLimit = tierLimit,
-            picks = cards.mapNotNull { record ->
-                val candidate = byTarget[record.targetUserId] ?: return@mapNotNull null
-                val rawToken = deckTokenCodec.issueCardToken(
-                    deckSessionId = backingSession.deckSessionToken,
-                    viewerUserId = viewerUserId,
-                    targetUserId = record.targetUserId,
-                    scopeHash = backingSession.scopeHash,
-                    generatedAt = backingSession.generatedAt,
-                    expiresAt = backingSession.expiresAt,
-                    position = record.position
-                )
-                // Defense: if the reissued hash doesn't match what's persisted,
-                // the codec secret rotated or the migration is partial — skip
-                // the card rather than hand a token that would fail submitAction.
-                if (deckTokenCodec.tokenHash(rawToken) != record.cardTokenHash) {
-                    return@mapNotNull null
-                }
-                TopPickCardDto(
-                    position = record.position,
-                    card = candidate.toCardDto(
-                        rankToken = rawToken,
-                        onlineIds = onlineIds
+            picks =
+                cards.mapNotNull { record ->
+                    val candidate = byTarget[record.targetUserId] ?: return@mapNotNull null
+                    val rawToken =
+                        deckTokenCodec.issueCardToken(
+                            deckSessionId = backingSession.deckSessionToken,
+                            viewerUserId = viewerUserId,
+                            targetUserId = record.targetUserId,
+                            scopeHash = backingSession.scopeHash,
+                            generatedAt = backingSession.generatedAt,
+                            expiresAt = backingSession.expiresAt,
+                            position = record.position,
+                        )
+                    // Defense: if the reissued hash doesn't match what's persisted,
+                    // the codec secret rotated or the migration is partial — skip
+                    // the card rather than hand a token that would fail submitAction.
+                    if (deckTokenCodec.tokenHash(rawToken) != record.cardTokenHash) {
+                        return@mapNotNull null
+                    }
+                    TopPickCardDto(
+                        position = record.position,
+                        card =
+                            candidate.toCardDto(
+                                rankToken = rawToken,
+                                onlineIds = onlineIds,
+                            ),
                     )
-                )
-            }
+                },
         )
     }
 
@@ -254,19 +269,21 @@ class TopPicksService(
 
     private fun SwipeCardRecord.toCardDto(
         rankToken: String,
-        onlineIds: Set<UUID>
+        onlineIds: Set<UUID>,
     ): SwipeCardDto {
         val resolver = mediaAssetUrlResolver
-        val resolvedPhotoUrls = if (resolver == null) {
-            emptyList()
-        } else {
-            val sourceIds = if (thumbnailMediaAssetIds.isNotEmpty()) {
-                thumbnailMediaAssetIds
+        val resolvedPhotoUrls =
+            if (resolver == null) {
+                emptyList()
             } else {
-                listOfNotNull(thumbnailMediaAssetId)
+                val sourceIds =
+                    if (thumbnailMediaAssetIds.isNotEmpty()) {
+                        thumbnailMediaAssetIds
+                    } else {
+                        listOfNotNull(thumbnailMediaAssetId)
+                    }
+                sourceIds.take(MAX_VISIBLE_PHOTOS).mapNotNull { resolver.publicContentUrl(it) }
             }
-            sourceIds.take(MAX_VISIBLE_PHOTOS).mapNotNull { resolver.publicContentUrl(it) }
-        }
         return SwipeCardDto(
             userId = userId.toString(),
             displayName = displayName,
@@ -275,21 +292,23 @@ class TopPicksService(
             distanceMeters = if (showDistance) distanceMeters.toPublicDistanceMeters() else null,
             photoUrl = resolvedPhotoUrls.firstOrNull(),
             photoUrls = resolvedPhotoUrls,
-            linkedPartner = linkedPartnerUserId?.let { partnerUserId ->
-                LinkedPartnerMiniDto(
-                    userId = partnerUserId.toString(),
-                    displayName = linkedPartnerDisplayName,
-                    thumbnailUrl = linkedPartnerThumbnailMediaAssetId
-                        ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-                    online = partnerUserId in onlineIds
-                )
-            },
+            linkedPartner =
+                linkedPartnerUserId?.let { partnerUserId ->
+                    LinkedPartnerMiniDto(
+                        userId = partnerUserId.toString(),
+                        displayName = linkedPartnerDisplayName,
+                        thumbnailUrl =
+                            linkedPartnerThumbnailMediaAssetId
+                                ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                        online = partnerUserId in onlineIds,
+                    )
+                },
             rankToken = rankToken,
             online = userId in onlineIds,
             shortBio = bio?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_SHORT_BIO_CHARS),
             tags = tags.take(MAX_VISIBLE_TAGS),
             verified = verified,
-            visiting = visiting
+            visiting = visiting,
         )
     }
 
@@ -298,7 +317,7 @@ class TopPicksService(
         val targetUserId: UUID,
         val rawToken: String,
         val tokenHash: String,
-        val cardRecord: SwipeCardRecord
+        val cardRecord: SwipeCardRecord,
     )
 
     companion object {
@@ -312,4 +331,6 @@ class TopPicksService(
     }
 }
 
-class TopPicksException(val code: String) : RuntimeException(code)
+class TopPicksException(
+    val code: String,
+) : RuntimeException(code)

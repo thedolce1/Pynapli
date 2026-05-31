@@ -5,7 +5,7 @@ import com.pynapli.shared.network.dto.MediaAlbumItemDto
 
 internal fun MediaAlbumItemDto.toUi(
     kind: MediaAlbumKindUi,
-    mediaUrl: String? = null
+    mediaUrl: String? = null,
 ): MediaAlbumItemUi =
     MediaAlbumItemUi(
         mediaAssetId = mediaAsset.mediaAssetId,
@@ -17,12 +17,12 @@ internal fun MediaAlbumItemDto.toUi(
         moderationStatus = mediaAsset.moderationStatus,
         sortOrder = sortOrder,
         createdAt = addedAt,
-        mediaUrl = mediaUrl
+        mediaUrl = mediaUrl,
     )
 
 internal fun MediaAlbumGrantDto.toUi(): MediaPrivateGrantUi =
     MediaPrivateGrantUi(
         granteeUserId = granteeUserId,
         displayName = granteeDisplayName,
-        grantedAt = grantedAt
+        grantedAt = grantedAt,
     )

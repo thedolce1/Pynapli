@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 data class MeDto(
     val user: AuthUserDto,
     val profile: ProfileDto,
-    val discoverySettings: DiscoverySettingsDto
+    val discoverySettings: DiscoverySettingsDto,
 )
 
 @Serializable
@@ -22,7 +22,7 @@ data class ProfileDto(
     val profileCompletenessScore: Int,
     val moderationStatus: String,
     val visibilityStatus: String,
-    val ageVerified: Boolean = false
+    val ageVerified: Boolean = false,
 )
 
 @Serializable
@@ -41,7 +41,7 @@ data class PublicProfileDto(
     val linkedPartner: LinkedPartnerMiniDto? = null,
     val allowGridMessages: Boolean,
     val allowFlirts: Boolean,
-    val allowAlbumRequests: Boolean
+    val allowAlbumRequests: Boolean,
 )
 
 @Serializable
@@ -63,7 +63,7 @@ data class DiscoverySettingsDto(
     // PROFILE_SETTINGS_SPEC L221-245: when false, the viewer is hidden from
     // every discovery surface while they have an active travel_locations row.
     // Defaults true so existing clients see the documented passport behavior.
-    val visibleWhileTraveling: Boolean = true
+    val visibleWhileTraveling: Boolean = true,
 )
 
 @Serializable
@@ -73,7 +73,7 @@ data class UpdateProfileRequestDto(
     val gender: String? = null,
     val orientation: String? = null,
     val relationshipContext: String? = null,
-    val discoveryStyle: String? = null
+    val discoveryStyle: String? = null,
 )
 
 @Serializable
@@ -87,5 +87,5 @@ data class UpdateDiscoverySettingsRequestDto(
     val allowFlirts: Boolean? = null,
     val allowIntroNotes: Boolean? = null,
     val allowAlbumRequests: Boolean? = null,
-    val visibleWhileTraveling: Boolean? = null
+    val visibleWhileTraveling: Boolean? = null,
 )

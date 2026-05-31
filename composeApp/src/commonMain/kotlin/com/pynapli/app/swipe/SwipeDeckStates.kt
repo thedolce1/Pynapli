@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 internal fun EmptyDeck(
     filtersActive: Boolean,
     onRefresh: () -> Unit,
-    onOpenFilters: () -> Unit
+    onOpenFilters: () -> Unit,
 ) {
     // FILTERS_SPEC L487-489: when filters are active and the deck is empty (server
     // already ran the relaxation pass per B3 and still found nothing), nudge the
@@ -32,28 +32,35 @@ internal fun EmptyDeck(
     // remains for the unfiltered case.
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
             imageVector = Icons.Filled.Style,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-            modifier = Modifier.size(56.dp)
+            modifier = Modifier.size(56.dp),
         )
         Text(
-            text = if (filtersActive) "No more recommendations match your filters"
-                else "No more profiles nearby",
+            text =
+                if (filtersActive) {
+                    "No more recommendations match your filters"
+                } else {
+                    "No more profiles nearby"
+                },
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         Text(
-            text = if (filtersActive)
-                "Try widening distance or removing a dealbreaker. Grid shows live nearby profiles."
-                else "Check back later or expand your radius.",
+            text =
+                if (filtersActive) {
+                    "Try widening distance or removing a dealbreaker. Grid shows live nearby profiles."
+                } else {
+                    "Check back later or expand your radius."
+                },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (filtersActive) {
@@ -71,16 +78,19 @@ internal fun EmptyDeck(
 }
 
 @Composable
-internal fun SwipeError(message: String, onRetry: () -> Unit) {
+internal fun SwipeError(
+    message: String,
+    onRetry: () -> Unit,
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
             text = message,
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         TextButton(onClick = onRetry) { Text("Retry") }
     }

@@ -7,19 +7,19 @@ interface MessageModerationRepository {
     suspend fun listOpenMessageReviews(
         limit: Int,
         actorId: String,
-        reason: String
+        reason: String,
     ): List<MessageReviewRecord>
 
     suspend fun releaseHeldMessage(
         messageId: UUID,
         actorId: String,
-        reason: String
+        reason: String,
     ): MessageReviewActionRecord?
 
     suspend fun removeHeldMessage(
         messageId: UUID,
         actorId: String,
-        reason: String
+        reason: String,
     ): MessageReviewActionRecord?
 }
 
@@ -32,7 +32,7 @@ data class MessageReviewRecord(
     val safetyReason: String,
     val queueStatus: String,
     val createdAt: Instant,
-    val updatedAt: Instant
+    val updatedAt: Instant,
 )
 
 data class MessageReviewActionRecord(
@@ -41,5 +41,5 @@ data class MessageReviewActionRecord(
     val senderUserId: UUID,
     val messageStatus: String,
     val queueStatus: String,
-    val reviewedAt: Instant
+    val reviewedAt: Instant,
 )

@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.collect
 
 class GridPresenceStreamCoordinator(
     private val client: PresenceStreamClient,
-    private val gridStateHolder: GridStateHolder
+    private val gridStateHolder: GridStateHolder,
 ) {
     suspend fun run() {
         client.connect(gridStateHolder.visibleUserIds).collect { delta ->

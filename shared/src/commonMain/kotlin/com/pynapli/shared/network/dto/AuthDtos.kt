@@ -12,7 +12,7 @@ data class EmailSignupRequestDto(
     val acceptedPrivacy: Boolean = false,
     val deviceId: String? = null,
     val platform: String? = null,
-    val appVersion: String? = null
+    val appVersion: String? = null,
 )
 
 @Serializable
@@ -21,28 +21,28 @@ data class EmailLoginRequestDto(
     val password: String,
     val deviceId: String? = null,
     val platform: String? = null,
-    val appVersion: String? = null
+    val appVersion: String? = null,
 )
 
 @Serializable
 data class RefreshSessionRequestDto(
-    val refreshToken: String
+    val refreshToken: String,
 )
 
 @Serializable
 data class AuthSessionDto(
     val accessToken: String,
     val refreshToken: String,
-    val user: AuthUserDto
+    val user: AuthUserDto,
 )
 
 @Serializable
 data class AuthUserDto(
     val userId: String,
-    val status: String
+    val status: String,
 )
 
 @Serializable
 data class LogoutResponseDto(
-    val loggedOut: Boolean
+    val loggedOut: Boolean,
 )

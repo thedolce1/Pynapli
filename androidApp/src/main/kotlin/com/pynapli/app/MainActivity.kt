@@ -41,27 +41,30 @@ class MainActivity : ComponentActivity() {
     private var activityStreamJob: Job? = null
     private var messageStreamJob: Job? = null
     private var pendingMediaAlbumKind: MediaAlbumKindUi? = null
-    private val locationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        if (permissions.values.any { granted -> granted }) {
-            submitCurrentLocation()
-        } else {
-            appGraph.locationStateHolder.markPermissionDenied()
+    private val locationPermissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions(),
+        ) { permissions ->
+            if (permissions.values.any { granted -> granted }) {
+                submitCurrentLocation()
+            } else {
+                appGraph.locationStateHolder.markPermissionDenied()
+            }
         }
-    }
-    private val mediaPickerLauncher = registerForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        handlePickedMedia(uri)
-    }
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) {
-        activityScope.launch {
-            syncPushRegistrationNow()
+    private val mediaPickerLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.PickVisualMedia(),
+        ) { uri ->
+            handlePickedMedia(uri)
         }
-    }
+    private val notificationPermissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) {
+            activityScope.launch {
+                syncPushRegistrationNow()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,7 +94,7 @@ class MainActivity : ComponentActivity() {
                 deepLinkStateHolder = appGraph.deepLinkStateHolder,
                 onUseCurrentLocation = ::requestCurrentLocation,
                 onPickMediaForAlbum = ::pickMediaForAlbum,
-                devLoginCredentials = appGraph.devLoginCredentials.takeIf { isDebuggable() }
+                devLoginCredentials = appGraph.devLoginCredentials.takeIf { isDebuggable() },
             )
         }
         handleNotificationDeepLink(intent)
@@ -106,19 +109,22 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         if (presenceStreamJob?.isActive != true) {
-            presenceStreamJob = activityScope.launch {
-                runCatching { appGraph.gridPresenceStreamCoordinator.run() }
-            }
+            presenceStreamJob =
+                activityScope.launch {
+                    runCatching { appGraph.gridPresenceStreamCoordinator.run() }
+                }
         }
         if (activityStreamJob?.isActive != true) {
-            activityStreamJob = activityScope.launch {
-                runCatching { appGraph.activityRealtimeCoordinator.run() }
-            }
+            activityStreamJob =
+                activityScope.launch {
+                    runCatching { appGraph.activityRealtimeCoordinator.run() }
+                }
         }
         if (messageStreamJob?.isActive != true) {
-            messageStreamJob = activityScope.launch {
-                runCatching { appGraph.messagesRealtimeCoordinator.run() }
-            }
+            messageStreamJob =
+                activityScope.launch {
+                    runCatching { appGraph.messagesRealtimeCoordinator.run() }
+                }
         }
     }
 
@@ -146,18 +152,17 @@ class MainActivity : ComponentActivity() {
         activityScope.launch {
             combine(
                 appGraph.authStateHolder.state,
-                appGraph.appSettingsStateHolder.state
+                appGraph.appSettingsStateHolder.state,
             ) { authState, appSettingsState ->
                 PushRegistrationSyncInput(
                     userId = authState.session?.userId,
-                    settings = appSettingsState.settings
+                    settings = appSettingsState.settings,
                 )
-            }
-                .distinctUntilChanged()
+            }.distinctUntilChanged()
                 .collectLatest { input ->
                     appGraph.pushRegistrationCoordinator.syncAuthenticatedDevice(
                         userId = input.userId,
-                        settings = input.settings
+                        settings = input.settings,
                     )
                 }
         }
@@ -167,11 +172,10 @@ class MainActivity : ComponentActivity() {
         activityScope.launch {
             combine(
                 appGraph.authStateHolder.state,
-                appGraph.appSettingsStateHolder.state
+                appGraph.appSettingsStateHolder.state,
             ) { authState, appSettingsState ->
                 authState.authenticated && appSettingsState.settings.pushNotificationsEnabled()
-            }
-                .distinctUntilChanged()
+            }.distinctUntilChanged()
                 .collectLatest { shouldPrompt ->
                     if (shouldPrompt) {
                         requestNotificationPermissionIfUseful()
@@ -195,7 +199,7 @@ class MainActivity : ComponentActivity() {
         val settings = appGraph.appSettingsStateHolder.state.value.settings
         appGraph.pushRegistrationCoordinator.syncAuthenticatedDevice(
             userId = authState.session?.userId,
-            settings = settings
+            settings = settings,
         )
     }
 
@@ -205,13 +209,13 @@ class MainActivity : ComponentActivity() {
             AppDeepLinkStateHolder.TARGET_ACTIVITY -> {
                 appGraph.deepLinkStateHolder.openActivity(
                     tab = PynapliNotificationDeepLinks.activityTabFromIntent(intent),
-                    eventId = PynapliNotificationDeepLinks.activityEventIdFromIntent(intent)
+                    eventId = PynapliNotificationDeepLinks.activityEventIdFromIntent(intent),
                 )
             }
 
             AppDeepLinkStateHolder.TARGET_MESSAGES -> {
                 appGraph.deepLinkStateHolder.openMessages(
-                    conversationId = PynapliNotificationDeepLinks.conversationIdFromIntent(intent)
+                    conversationId = PynapliNotificationDeepLinks.conversationIdFromIntent(intent),
                 )
             }
         }
@@ -220,7 +224,7 @@ class MainActivity : ComponentActivity() {
     private fun pickMediaForAlbum(kind: MediaAlbumKindUi) {
         pendingMediaAlbumKind = kind
         mediaPickerLauncher.launch(
-            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
         )
     }
 
@@ -247,8 +251,8 @@ class MainActivity : ComponentActivity() {
             locationPermissionLauncher.launch(
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ),
             )
         }
     }
@@ -257,8 +261,7 @@ class MainActivity : ComponentActivity() {
         checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-    private fun isDebuggable(): Boolean =
-        applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+    private fun isDebuggable(): Boolean = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
     @SuppressLint("MissingPermission")
     private fun submitCurrentLocation() {
@@ -276,9 +279,11 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val lastKnownLocation = providers.mapNotNull { provider ->
-            runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
-        }.newestOrNull()
+        val lastKnownLocation =
+            providers
+                .mapNotNull { provider ->
+                    runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
+                }.newestOrNull()
 
         if (lastKnownLocation != null) {
             submitDeviceLocation(lastKnownLocation)
@@ -307,13 +312,14 @@ class MainActivity : ComponentActivity() {
 
     private fun submitDeviceLocation(currentLocation: Location) {
         activityScope.launch {
-            val result = appGraph.locationStateHolder.submitLocation(
-                DeviceLocation(
-                    latitude = currentLocation.latitude,
-                    longitude = currentLocation.longitude,
-                    accuracyMeters = currentLocation.accuracyMetersOrNull()
+            val result =
+                appGraph.locationStateHolder.submitLocation(
+                    DeviceLocation(
+                        latitude = currentLocation.latitude,
+                        longitude = currentLocation.longitude,
+                        accuracyMeters = currentLocation.accuracyMetersOrNull(),
+                    ),
                 )
-            )
             when (result.gridRefresh) {
                 GridLocationRefresh.None -> Unit
                 GridLocationRefresh.QuietRefresh -> appGraph.gridStateHolder.load(quiet = true)
@@ -328,21 +334,21 @@ class MainActivity : ComponentActivity() {
                 runCatching { isProviderEnabled(provider) }.getOrDefault(false)
             }
 
-    private fun Location.accuracyMetersOrNull(): Int? =
-        if (hasAccuracy()) accuracy.toInt() else null
+    private fun Location.accuracyMetersOrNull(): Int? = if (hasAccuracy()) accuracy.toInt() else null
 
-    private fun List<Location>.newestOrNull(): Location? =
-        maxWithOrNull(compareBy<Location> { it.time }.thenBy { it.elapsedRealtimeNanos })
+    private fun List<Location>.newestOrNull(): Location? = maxWithOrNull(compareBy<Location> { it.time }.thenBy { it.elapsedRealtimeNanos })
 
     private fun readPickedImage(uri: Uri): PickedMediaForUpload? =
         runCatching {
             val contentType = contentResolver.getType(uri)?.lowercase() ?: "image/jpeg"
-            val bytes = contentResolver.openInputStream(uri)?.use { input ->
-                input.readBytes()
-            } ?: return null
-            val bounds = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
+            val bytes =
+                contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes()
+                } ?: return null
+            val bounds =
+                BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
 
             PickedMediaForUpload(
@@ -350,18 +356,17 @@ class MainActivity : ComponentActivity() {
                 byteSize = bytes.size.toLong(),
                 pixelWidth = bounds.outWidth.takeIf { it > 0 },
                 pixelHeight = bounds.outHeight.takeIf { it > 0 },
-                bytes = bytes
+                bytes = bytes,
             )
         }.getOrNull()
 }
 
 private data class PushRegistrationSyncInput(
     val userId: String?,
-    val settings: AppSettings
+    val settings: AppSettings,
 )
 
-private fun AppSettings.pushNotificationsEnabled(): Boolean =
-    messageNotifications || matchNotifications || activityNotifications
+private fun AppSettings.pushNotificationsEnabled(): Boolean = messageNotifications || matchNotifications || activityNotifications
 
 private const val NOTIFICATION_PERMISSION_PREFERENCES = "pynapli_notification_permission"
 private const val KEY_NOTIFICATION_PERMISSION_REQUESTED = "requested"

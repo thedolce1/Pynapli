@@ -8,8 +8,18 @@ trim_trailing_whitespace = true
 insert_final_newline = true
 
 [*.{kt,kts}]
+# 120 is the editor wrap guide; ktlint's max-line-length rule is disabled because it cannot
+# auto-fix long lines (long Kotlin type/DTO names make 120 impractical) — line length is a
+# review concern, while all other ktlint_official rules are enforced by the gate.
 max_line_length = 120
 ktlint_code_style = ktlint_official
+# ktlint rules that ktlint cannot auto-fix and that conflict with the existing code style are
+# left to code review rather than the gate; every auto-fixable formatting rule stays enforced.
+ktlint_standard_max-line-length = disabled
+ktlint_standard_property-naming = disabled
+ktlint_standard_function-naming = disabled
+ktlint_standard_filename = disabled
+ktlint_standard_package-name = disabled
 # Allow Compose @Composable functions to be PascalCase without ktlint flagging them.
 ktlint_function_naming_ignore_when_annotated_with = Composable, Preview
 

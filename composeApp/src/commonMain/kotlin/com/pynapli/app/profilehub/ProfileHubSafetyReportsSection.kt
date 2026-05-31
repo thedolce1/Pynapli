@@ -31,7 +31,7 @@ import com.pynapli.shared.network.dto.SupportContactDto
 
 internal fun LazyListScope.profileHubSafetyReportsSection(
     state: ProfileHubUiState,
-    onContactSupport: (SupportContactDto) -> Unit
+    onContactSupport: (SupportContactDto) -> Unit,
 ) {
     item {
         ProfileHubSection("Reports and support") {
@@ -40,14 +40,14 @@ internal fun LazyListScope.profileHubSafetyReportsSection(
                     SafetyCenterInfoRow(
                         icon = Icons.Filled.ChatBubble,
                         label = "Support",
-                        value = "Loading support contact."
+                        value = "Loading support contact.",
                     )
                 }
 
                 state.supportContact != null -> {
                     SupportContactRow(
                         contact = state.supportContact,
-                        onContactSupport = onContactSupport
+                        onContactSupport = onContactSupport,
                     )
                 }
 
@@ -55,7 +55,7 @@ internal fun LazyListScope.profileHubSafetyReportsSection(
                     SafetyCenterInfoRow(
                         icon = Icons.Filled.ChatBubble,
                         label = "Support",
-                        value = "Support contact will appear here."
+                        value = "Support contact will appear here.",
                     )
                 }
             }
@@ -65,7 +65,7 @@ internal fun LazyListScope.profileHubSafetyReportsSection(
                     SafetyCenterInfoRow(
                         icon = Icons.Filled.Security,
                         label = "Report history",
-                        value = "Checking reports you submitted."
+                        value = "Checking reports you submitted.",
                     )
                 }
 
@@ -73,7 +73,7 @@ internal fun LazyListScope.profileHubSafetyReportsSection(
                     SafetyCenterInfoRow(
                         icon = Icons.Filled.Security,
                         label = "No report history",
-                        value = "Reports you submit will appear here."
+                        value = "Reports you submit will appear here.",
                     )
                 }
 
@@ -81,7 +81,7 @@ internal fun LazyListScope.profileHubSafetyReportsSection(
                     SafetyCenterInfoRow(
                         icon = Icons.Filled.Security,
                         label = "Report history",
-                        value = "${state.reportHistory.size} submitted report${if (state.reportHistory.size == 1) "" else "s"}."
+                        value = "${state.reportHistory.size} submitted report${if (state.reportHistory.size == 1) "" else "s"}.",
                     )
                 }
             }
@@ -91,7 +91,7 @@ internal fun LazyListScope.profileHubSafetyReportsSection(
     if (!state.isReportHistoryLoading && state.reportHistory.isNotEmpty()) {
         items(
             items = state.reportHistory,
-            key = { it.reportId }
+            key = { it.reportId },
         ) { report ->
             ReportHistoryRow(report = report)
         }
@@ -101,23 +101,24 @@ internal fun LazyListScope.profileHubSafetyReportsSection(
 @Composable
 private fun SupportContactRow(
     contact: SupportContactDto,
-    onContactSupport: (SupportContactDto) -> Unit
+    onContactSupport: (SupportContactDto) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-            .clickable { onContactSupport(contact) }
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                .clickable { onContactSupport(contact) }
+                .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SafetyIcon(icon = Icons.Filled.ChatBubble)
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Text(
                 text = "Contact support",
@@ -125,14 +126,14 @@ private fun SupportContactRow(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = contact.email,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
         TextButton(onClick = { onContactSupport(contact) }) {
@@ -144,19 +145,20 @@ private fun SupportContactRow(
 @Composable
 private fun ReportHistoryRow(report: ReportHistoryItemDto) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SafetyIcon(icon = Icons.Filled.Security)
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Text(
                 text = report.reportedDisplayName?.takeIf { it.isNotBlank() } ?: report.targetType.toTargetLabel(),
@@ -164,48 +166,51 @@ private fun ReportHistoryRow(report: ReportHistoryItemDto) {
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = "${report.category.toReportCategoryLabel()} - ${report.status.toReportStatusLabel()}",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = report.createdAt.take(10).takeIf { it.isNotBlank() } ?: "Submitted",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
 
-private fun String.toTargetLabel(): String = when (this) {
-    ReportTargetType.MESSAGE -> "Reported message"
-    ReportTargetType.MEDIA -> "Reported media"
-    ReportTargetType.ALBUM -> "Reported album"
-    ReportTargetType.SESSION -> "Reported session"
-    else -> "Reported profile"
-}
+private fun String.toTargetLabel(): String =
+    when (this) {
+        ReportTargetType.MESSAGE -> "Reported message"
+        ReportTargetType.MEDIA -> "Reported media"
+        ReportTargetType.ALBUM -> "Reported album"
+        ReportTargetType.SESSION -> "Reported session"
+        else -> "Reported profile"
+    }
 
-private fun String.toReportStatusLabel(): String = when (this) {
-    "under_review" -> "Under review"
-    "reviewed" -> "Reviewed"
-    else -> "Received"
-}
+private fun String.toReportStatusLabel(): String =
+    when (this) {
+        "under_review" -> "Under review"
+        "reviewed" -> "Reviewed"
+        else -> "Received"
+    }
 
-private fun String.toReportCategoryLabel(): String = when (this) {
-    ReportCategory.UNDERAGE_USER -> "Underage user"
-    ReportCategory.HARASSMENT_OR_THREATS -> "Harassment or threats"
-    ReportCategory.EXPLICIT_PUBLIC_CONTENT -> "Explicit public content"
-    ReportCategory.SPAM_OR_FAKE_PROFILE -> "Spam or fake profile"
-    ReportCategory.IMPERSONATION -> "Impersonation"
-    ReportCategory.SOLICITATION -> "Solicitation"
-    ReportCategory.NON_CONSENSUAL_CONTENT -> "Non-consensual content"
-    ReportCategory.PRIVATE_INFO_DOXXING -> "Private info or doxxing"
-    else -> "Other"
-}
+private fun String.toReportCategoryLabel(): String =
+    when (this) {
+        ReportCategory.UNDERAGE_USER -> "Underage user"
+        ReportCategory.HARASSMENT_OR_THREATS -> "Harassment or threats"
+        ReportCategory.EXPLICIT_PUBLIC_CONTENT -> "Explicit public content"
+        ReportCategory.SPAM_OR_FAKE_PROFILE -> "Spam or fake profile"
+        ReportCategory.IMPERSONATION -> "Impersonation"
+        ReportCategory.SOLICITATION -> "Solicitation"
+        ReportCategory.NON_CONSENSUAL_CONTENT -> "Non-consensual content"
+        ReportCategory.PRIVATE_INFO_DOXXING -> "Private info or doxxing"
+        else -> "Other"
+    }

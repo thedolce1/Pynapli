@@ -44,7 +44,7 @@ data class SwipeDeckRequestDto(
     // FILTERS_SPEC L344-352 "Verified preferred (ranking weight)" — soft signal that
     // boosts verified targets in the deck ranking without filtering out unverified ones.
     // Distinct from verifiedOnly (hard filter).
-    val verifiedPreferred: Boolean = false
+    val verifiedPreferred: Boolean = false,
 )
 
 @Serializable
@@ -64,7 +64,7 @@ data class SwipeCardDto(
     val verified: Boolean = false,
     // SWIPE_IMPLEMENTATION_SPEC L348: target has an active travel mode row, so
     // they're virtually in the viewer's area rather than physically there.
-    val visiting: Boolean = false
+    val visiting: Boolean = false,
 )
 
 @Serializable
@@ -74,7 +74,7 @@ data class SwipeDeckResponseDto(
     val items: List<SwipeCardDto>,
     val nextCursor: String? = null,
     val adSupported: Boolean = false,
-    val advancedFiltersApplied: Boolean = false
+    val advancedFiltersApplied: Boolean = false,
 )
 
 @Serializable
@@ -84,7 +84,7 @@ data class SwipeActionRequestDto(
     val cardToken: String = "",
     val targetUserId: String,
     val action: String,
-    val noteText: String? = null
+    val noteText: String? = null,
 )
 
 @Serializable
@@ -93,26 +93,26 @@ data class MatchDto(
     val matchedUserId: String,
     val matchedDisplayName: String? = null,
     val matchedPhotoUrl: String? = null,
-    val createdAt: String
+    val createdAt: String,
 )
 
 @Serializable
 data class SwipeActionResponseDto(
     val recorded: Boolean,
-    val match: MatchDto? = null
+    val match: MatchDto? = null,
 )
 
 @Serializable
 data class SwipeRewindResponseDto(
     val rewound: Boolean,
     val deckSessionId: String = "",
-    val card: SwipeCardDto? = null
+    val card: SwipeCardDto? = null,
 )
 
 @Serializable
 data class MatchesListResponseDto(
     val matches: List<MatchDto>,
-    val nextCursor: String? = null
+    val nextCursor: String? = null,
 )
 
 // FILTERS_SPEC L463-477: Saved filter presets, Swipe equivalent of `SavedGridFilter*`.
@@ -124,18 +124,18 @@ data class SavedSwipeFilterDto(
     val name: String,
     val payload: SwipeDeckRequestDto,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 @Serializable
 data class SavedSwipeFiltersListDto(
-    val items: List<SavedSwipeFilterDto>
+    val items: List<SavedSwipeFilterDto>,
 )
 
 @Serializable
 data class CreateSavedSwipeFilterRequestDto(
     val name: String,
-    val payload: SwipeDeckRequestDto
+    val payload: SwipeDeckRequestDto,
 )
 
 // SWIPE_IMPLEMENTATION_SPEC L293-313: daily curated set. The session is stable
@@ -144,7 +144,7 @@ data class CreateSavedSwipeFilterRequestDto(
 @Serializable
 data class TopPickCardDto(
     val position: Int,
-    val card: SwipeCardDto
+    val card: SwipeCardDto,
 )
 
 @Serializable
@@ -154,5 +154,5 @@ data class TopPicksResponseDto(
     val generatedAt: String,
     val expiresAt: String,
     val picks: List<TopPickCardDto>,
-    val tierLimit: Int
+    val tierLimit: Int,
 )

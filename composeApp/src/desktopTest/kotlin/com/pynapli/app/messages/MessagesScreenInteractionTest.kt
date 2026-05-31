@@ -14,9 +14,9 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
-import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
+import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
 import com.pynapli.shared.network.dto.PartnerChatInviteStatus
 import kotlin.test.Test
@@ -25,32 +25,39 @@ import kotlin.test.assertEquals
 class MessagesScreenInteractionTest {
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun messagesRowApprovesThirdPartyPartnerInvite() = runComposeUiTest {
-        val repository = ThirdPartyInviteMessagesRepository()
-        val stateHolder = MessagesStateHolder(repository)
+    fun messagesRowApprovesThirdPartyPartnerInvite() =
+        runComposeUiTest {
+            val repository = ThirdPartyInviteMessagesRepository()
+            val stateHolder = MessagesStateHolder(repository)
 
-        setContent {
-            PynapliTheme(themeMode = "dark") {
-                Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
-                    MessagesScreen(
-                        viewerUserId = "target",
-                        onThreadSelected = {},
-                        stateHolder = stateHolder
-                    )
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        MessagesScreen(
+                            viewerUserId = "target",
+                            onThreadSelected = {},
+                            stateHolder = stateHolder,
+                        )
+                    }
                 }
             }
+
+            waitUntil(timeoutMillis = 5_000) { repository.listCount == 1 }
+            onNodeWithText("Partner invite needs your approval").assertExists()
+            onNodeWithText("Approval").assertExists()
+
+            onNodeWithTag(MessagesTestTags.acceptInvite("conversation-1")).performClick()
+            waitUntil(timeoutMillis = 5_000) { repository.acceptCount == 1 }
+
+            assertEquals(
+                ConversationParticipantStatus.ACTIVE,
+                stateHolder.state.value.conversations
+                    .single()
+                    .participants[2]
+                    .status,
+            )
+            onNodeWithText("No messages yet").assertExists()
         }
-
-        waitUntil(timeoutMillis = 5_000) { repository.listCount == 1 }
-        onNodeWithText("Partner invite needs your approval").assertExists()
-        onNodeWithText("Approval").assertExists()
-
-        onNodeWithTag(MessagesTestTags.acceptInvite("conversation-1")).performClick()
-        waitUntil(timeoutMillis = 5_000) { repository.acceptCount == 1 }
-
-        assertEquals(ConversationParticipantStatus.ACTIVE, stateHolder.state.value.conversations.single().participants[2].status)
-        onNodeWithText("No messages yet").assertExists()
-    }
 }
 
 private class ThirdPartyInviteMessagesRepository : MessagesRepository {
@@ -68,21 +75,22 @@ private class ThirdPartyInviteMessagesRepository : MessagesRepository {
 
     override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> {
         acceptCount += 1
-        conversation = conversation.copy(
-            partnerInvite = null,
-            participants = conversation.participants.map { participant ->
-                if (participant.userId == "partner") {
-                    participant.copy(status = ConversationParticipantStatus.ACTIVE)
-                } else {
-                    participant
-                }
-            }
-        )
+        conversation =
+            conversation.copy(
+                partnerInvite = null,
+                participants =
+                    conversation.participants.map { participant ->
+                        if (participant.userId == "partner") {
+                            participant.copy(status = ConversationParticipantStatus.ACTIVE)
+                        } else {
+                            participant
+                        }
+                    },
+            )
         return AppResult.Success(ConversationDetailDto(conversation = conversation, messages = emptyList()))
     }
 
-    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
-        AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
+    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
 }
 
 private fun pendingThirdPartyApprovalConversation(): ConversationDto =
@@ -90,24 +98,26 @@ private fun pendingThirdPartyApprovalConversation(): ConversationDto =
         conversationId = "conversation-1",
         kind = "group",
         origin = "grid",
-        participants = listOf(
-            ConversationParticipantDto("inviter", "Maya", status = ConversationParticipantStatus.ACTIVE),
-            ConversationParticipantDto("target", "You", status = ConversationParticipantStatus.ACTIVE),
-            ConversationParticipantDto(
-                userId = "partner",
-                displayName = "Rae",
-                status = ConversationParticipantStatus.INVITED,
-                invitedByUserId = "inviter"
-            )
-        ),
+        participants =
+            listOf(
+                ConversationParticipantDto("inviter", "Maya", status = ConversationParticipantStatus.ACTIVE),
+                ConversationParticipantDto("target", "You", status = ConversationParticipantStatus.ACTIVE),
+                ConversationParticipantDto(
+                    userId = "partner",
+                    displayName = "Rae",
+                    status = ConversationParticipantStatus.INVITED,
+                    invitedByUserId = "inviter",
+                ),
+            ),
         unreadCount = 0,
         updatedAt = "2026-05-22T14:00:00Z",
-        partnerInvite = PartnerChatInviteDto(
-            inviteId = "invite-1",
-            inviterUserId = "inviter",
-            invitedPartnerUserId = "partner",
-            thirdPartyStatus = PartnerChatInviteStatus.PENDING,
-            partnerStatus = PartnerChatInviteStatus.ACCEPTED,
-            createdAt = "2026-05-22T14:00:00Z"
-        )
+        partnerInvite =
+            PartnerChatInviteDto(
+                inviteId = "invite-1",
+                inviterUserId = "inviter",
+                invitedPartnerUserId = "partner",
+                thirdPartyStatus = PartnerChatInviteStatus.PENDING,
+                partnerStatus = PartnerChatInviteStatus.ACCEPTED,
+                createdAt = "2026-05-22T14:00:00Z",
+            ),
     )

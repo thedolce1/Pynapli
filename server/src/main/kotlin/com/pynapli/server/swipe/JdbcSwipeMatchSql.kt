@@ -6,7 +6,7 @@ import java.util.UUID
 internal fun Connection.upsertMatch(
     actorUserId: UUID,
     targetUserId: UUID,
-    matchIdFactory: () -> UUID
+    matchIdFactory: () -> UUID,
 ): MatchRecord {
     val (userA, userB) = canonicalPair(actorUserId, targetUserId)
     return prepareStatement(
@@ -16,7 +16,7 @@ internal fun Connection.upsertMatch(
         ON CONFLICT (user_a, user_b) DO UPDATE
         SET user_a = EXCLUDED.user_a
         RETURNING id, user_a, user_b, created_at
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, matchIdFactory())
         statement.setObject(2, userA)
@@ -27,13 +27,16 @@ internal fun Connection.upsertMatch(
                 matchId = rs.getObject("id", UUID::class.java),
                 userA = rs.getObject("user_a", UUID::class.java),
                 userB = rs.getObject("user_b", UUID::class.java),
-                createdAt = rs.getTimestamp("created_at").toInstant()
+                createdAt = rs.getTimestamp("created_at").toInstant(),
             )
         }
     }
 }
 
-internal fun Connection.listMatchSummaries(viewerUserId: UUID, limit: Int): List<MatchSummaryRecord> =
+internal fun Connection.listMatchSummaries(
+    viewerUserId: UUID,
+    limit: Int,
+): List<MatchSummaryRecord> =
     prepareStatement(
         """
         SELECT m.id AS match_id,
@@ -75,7 +78,7 @@ internal fun Connection.listMatchSummaries(viewerUserId: UUID, limit: Int): List
           AND COALESCE(matched_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
         ORDER BY m.created_at DESC, m.id ASC
         LIMIT ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, viewerUserId)
         statement.setObject(2, viewerUserId)
@@ -90,13 +93,15 @@ internal fun Connection.listMatchSummaries(viewerUserId: UUID, limit: Int): List
                             matchedUserId = rs.getObject("matched_user_id", UUID::class.java),
                             matchedDisplayName = rs.getString("display_name"),
                             matchedThumbnailMediaAssetId = rs.getObject("thumbnail_media_asset_id", UUID::class.java),
-                            createdAt = rs.getTimestamp("created_at").toInstant()
-                        )
+                            createdAt = rs.getTimestamp("created_at").toInstant(),
+                        ),
                     )
                 }
             }
         }
     }
 
-internal fun canonicalPair(a: UUID, b: UUID): Pair<UUID, UUID> =
-    if (a.toString() < b.toString()) a to b else b to a
+internal fun canonicalPair(
+    a: UUID,
+    b: UUID,
+): Pair<UUID, UUID> = if (a.toString() < b.toString()) a to b else b to a

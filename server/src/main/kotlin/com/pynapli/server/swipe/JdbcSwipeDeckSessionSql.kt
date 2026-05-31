@@ -23,7 +23,7 @@ internal fun Connection.insertDeckSession(session: SwipeDeckSessionRecord) {
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)
         ON CONFLICT (id) DO NOTHING
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, session.sessionId)
         statement.setString(2, session.deckSessionToken)
@@ -54,7 +54,7 @@ internal fun Connection.insertDeckCards(cards: List<SwipeDeckSessionCardRecord>)
         )
         VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT DO NOTHING
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         for (card in cards) {
             statement.setObject(1, card.cardId)
@@ -70,7 +70,10 @@ internal fun Connection.insertDeckCards(cards: List<SwipeDeckSessionCardRecord>)
     }
 }
 
-internal fun Connection.findDeckSession(sessionId: UUID, viewerUserId: UUID): SwipeDeckSessionRecord? =
+internal fun Connection.findDeckSession(
+    sessionId: UUID,
+    viewerUserId: UUID,
+): SwipeDeckSessionRecord? =
     prepareStatement(
         """
         SELECT id,
@@ -86,7 +89,7 @@ internal fun Connection.findDeckSession(sessionId: UUID, viewerUserId: UUID): Sw
         FROM swipe_deck_sessions
         WHERE id = ?
           AND viewer_user_id = ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, sessionId)
         statement.setObject(2, viewerUserId)
@@ -95,11 +98,14 @@ internal fun Connection.findDeckSession(sessionId: UUID, viewerUserId: UUID): Sw
         }
     }
 
-internal fun Connection.findDeckSessionState(sessionId: UUID, viewerUserId: UUID): SwipeDeckSessionState? {
+internal fun Connection.findDeckSessionState(
+    sessionId: UUID,
+    viewerUserId: UUID,
+): SwipeDeckSessionState? {
     val session = findDeckSession(sessionId, viewerUserId) ?: return null
     return SwipeDeckSessionState(
         session = session,
-        targetUserIds = listDeckSessionTargetIds(sessionId)
+        targetUserIds = listDeckSessionTargetIds(sessionId),
     )
 }
 
@@ -109,7 +115,7 @@ internal fun Connection.listDeckSessionTargetIds(sessionId: UUID): Set<UUID> =
         SELECT target_user_id
         FROM swipe_deck_cards
         WHERE deck_session_id = ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, sessionId)
         statement.executeQuery().use { rs ->
@@ -126,42 +132,43 @@ internal fun Connection.isDeckCardActionable(
     cardTokenHash: String,
     viewerUserId: UUID,
     targetUserId: UUID,
-    now: Instant
-): Boolean = prepareStatement(
-    """
-    SELECT EXISTS (
-        SELECT 1
-        FROM swipe_deck_sessions s
-        JOIN swipe_deck_cards c
-          ON c.deck_session_id = s.id
-        WHERE s.id = ?
-          AND s.viewer_user_id = ?
-          AND c.viewer_user_id = ?
-          AND c.target_user_id = ?
-          AND c.card_token_hash = ?
-          AND s.expires_at > ?
-          AND c.action_recorded_at IS NULL
-    )
-    """.trimIndent()
-).use { statement ->
-    statement.setObject(1, sessionId)
-    statement.setObject(2, viewerUserId)
-    statement.setObject(3, viewerUserId)
-    statement.setObject(4, targetUserId)
-    statement.setString(5, cardTokenHash)
-    statement.setTimestamp(6, Timestamp.from(now))
-    statement.executeQuery().use { rs ->
-        rs.next()
-        rs.getBoolean(1)
+    now: Instant,
+): Boolean =
+    prepareStatement(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM swipe_deck_sessions s
+            JOIN swipe_deck_cards c
+              ON c.deck_session_id = s.id
+            WHERE s.id = ?
+              AND s.viewer_user_id = ?
+              AND c.viewer_user_id = ?
+              AND c.target_user_id = ?
+              AND c.card_token_hash = ?
+              AND s.expires_at > ?
+              AND c.action_recorded_at IS NULL
+        )
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, sessionId)
+        statement.setObject(2, viewerUserId)
+        statement.setObject(3, viewerUserId)
+        statement.setObject(4, targetUserId)
+        statement.setString(5, cardTokenHash)
+        statement.setTimestamp(6, Timestamp.from(now))
+        statement.executeQuery().use { rs ->
+            rs.next()
+            rs.getBoolean(1)
+        }
     }
-}
 
 internal fun Connection.markDeckCardActionRecorded(
     sessionId: UUID,
     cardTokenHash: String,
     targetUserId: UUID,
     action: String,
-    now: Instant
+    now: Instant,
 ) {
     prepareStatement(
         """
@@ -172,7 +179,7 @@ internal fun Connection.markDeckCardActionRecorded(
           AND target_user_id = ?
           AND card_token_hash = ?
           AND action_recorded_at IS NULL
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setString(1, action)
         statement.setTimestamp(2, Timestamp.from(now))
@@ -194,5 +201,5 @@ internal fun ResultSet.toSwipeDeckSessionRecord(): SwipeDeckSessionRecord =
         pageLimit = getInt("page_limit"),
         filterPayload = getString("filter_payload"),
         generatedAt = getTimestamp("generated_at").toInstant(),
-        expiresAt = getTimestamp("expires_at").toInstant()
+        expiresAt = getTimestamp("expires_at").toInstant(),
     )

@@ -8,7 +8,7 @@ import javax.crypto.spec.PBEKeySpec
 
 class PasswordHasher(
     private val iterations: Int = 210_000,
-    private val keyLengthBits: Int = 256
+    private val keyLengthBits: Int = 256,
 ) {
     private val random = SecureRandom()
     private val encoder = Base64.getUrlEncoder().withoutPadding()
@@ -21,18 +21,25 @@ class PasswordHasher(
         return PasswordHash(
             hash = encoder.encodeToString(hash),
             salt = encoder.encodeToString(salt),
-            iterations = iterations
+            iterations = iterations,
         )
     }
 
-    fun verify(password: String, stored: PasswordHash): Boolean {
+    fun verify(
+        password: String,
+        stored: PasswordHash,
+    ): Boolean {
         val salt = decoder.decode(stored.salt)
         val calculated = pbkdf2(password, salt, stored.iterations)
         val storedBytes = decoder.decode(stored.hash)
         return MessageDigest.isEqual(calculated, storedBytes)
     }
 
-    private fun pbkdf2(password: String, salt: ByteArray, iterations: Int): ByteArray {
+    private fun pbkdf2(
+        password: String,
+        salt: ByteArray,
+        iterations: Int,
+    ): ByteArray {
         val spec = PBEKeySpec(password.toCharArray(), salt, iterations, keyLengthBits)
         return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
     }
@@ -41,7 +48,7 @@ class PasswordHasher(
 data class PasswordHash(
     val hash: String,
     val salt: String,
-    val iterations: Int
+    val iterations: Int,
 )
 
 object TokenGenerator {
@@ -65,4 +72,3 @@ object Sha256 {
 }
 
 fun normalizeEmail(email: String): String = email.trim().lowercase()
-

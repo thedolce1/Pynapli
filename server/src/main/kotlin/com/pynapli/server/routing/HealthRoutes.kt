@@ -16,24 +16,25 @@ fun Application.configureHealthRoutes(dependencies: ServerDependencies) {
                 HealthDto(
                     status = "ok",
                     service = "pynapli-api",
-                    environment = dependencies.config.environment
-                )
+                    environment = dependencies.config.environment,
+                ),
             )
         }
 
         get("/health/deep") {
             val dependencyStatuses = dependencies.checkAll()
             val isHealthy = dependencyStatuses.all { it.status == "ok" }
-            val response = DeepHealthDto(
-                status = if (isHealthy) "ok" else "degraded",
-                service = "pynapli-api",
-                environment = dependencies.config.environment,
-                dependencies = dependencyStatuses
-            )
+            val response =
+                DeepHealthDto(
+                    status = if (isHealthy) "ok" else "degraded",
+                    service = "pynapli-api",
+                    environment = dependencies.config.environment,
+                    dependencies = dependencyStatuses,
+                )
 
             call.respond(
                 status = if (isHealthy) HttpStatusCode.OK else HttpStatusCode.ServiceUnavailable,
-                message = response
+                message = response,
             )
         }
     }

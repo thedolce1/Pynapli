@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
 
 fun Application.configureAdminRiskRoutes(
     config: ServerConfig,
-    adminRiskService: AdminRiskService?
+    adminRiskService: AdminRiskService?,
 ) {
     val adminApiToken = config.adminApiToken ?: return
     if (adminRiskService == null) return
@@ -23,12 +23,13 @@ fun Application.configureAdminRiskRoutes(
             get("/states") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val reason = call.requiredAdminReason()
-                val states = adminRiskService.listRiskStates(
-                    tierFilterText = call.request.queryParameters["tier"],
-                    limitText = call.request.queryParameters["limit"],
-                    actorId = actor.actorId,
-                    reason = reason
-                )
+                val states =
+                    adminRiskService.listRiskStates(
+                        tierFilterText = call.request.queryParameters["tier"],
+                        limitText = call.request.queryParameters["limit"],
+                        actorId = actor.actorId,
+                        reason = reason,
+                    )
                 call.respond(AdminRiskStateListDto(items = states.map { it.toDto() }))
             }
 
@@ -36,83 +37,94 @@ fun Application.configureAdminRiskRoutes(
                 val actor = call.requireAdminActor(adminApiToken)
                 val reason = call.requiredAdminReason()
                 val userId = call.parameters["userId"] ?: throw ModerationException("INVALID_ID")
-                val events = adminRiskService.listRiskEvents(
-                    userIdText = userId,
-                    limitText = call.request.queryParameters["limit"],
-                    actorId = actor.actorId,
-                    reason = reason
-                )
+                val events =
+                    adminRiskService.listRiskEvents(
+                        userIdText = userId,
+                        limitText = call.request.queryParameters["limit"],
+                        actorId = actor.actorId,
+                        reason = reason,
+                    )
                 call.respond(AdminRiskEventListDto(items = events.map { it.toDto() }))
             }
 
             post("/users/{userId}/clear") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val userId = call.parameters["userId"] ?: throw ModerationException("INVALID_ID")
-                val request = call.receiveNullable<AdminRiskActionRequestDto>()
-                    ?: throw ModerationException("MODERATION_REASON_REQUIRED")
+                val request =
+                    call.receiveNullable<AdminRiskActionRequestDto>()
+                        ?: throw ModerationException("MODERATION_REASON_REQUIRED")
                 call.respond(
-                    adminRiskService.clearRisk(
-                        userIdText = userId,
-                        actorId = actor.actorId,
-                        reason = request.reason
-                    ).toDto()
+                    adminRiskService
+                        .clearRisk(
+                            userIdText = userId,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
                 )
             }
 
             post("/users/{userId}/set-tier") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val userId = call.parameters["userId"] ?: throw ModerationException("INVALID_ID")
-                val request = call.receiveNullable<AdminRiskSetTierRequestDto>()
-                    ?: throw ModerationException("INVALID_RISK_TIER")
+                val request =
+                    call.receiveNullable<AdminRiskSetTierRequestDto>()
+                        ?: throw ModerationException("INVALID_RISK_TIER")
                 call.respond(
-                    adminRiskService.setRiskTier(
-                        userIdText = userId,
-                        tierText = request.tier,
-                        actorId = actor.actorId,
-                        reason = request.reason
-                    ).toDto()
+                    adminRiskService
+                        .setRiskTier(
+                            userIdText = userId,
+                            tierText = request.tier,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
                 )
             }
 
             post("/users/{userId}/reviewed") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val userId = call.parameters["userId"] ?: throw ModerationException("INVALID_ID")
-                val request = call.receiveNullable<AdminRiskActionRequestDto>()
-                    ?: throw ModerationException("MODERATION_REASON_REQUIRED")
+                val request =
+                    call.receiveNullable<AdminRiskActionRequestDto>()
+                        ?: throw ModerationException("MODERATION_REASON_REQUIRED")
                 call.respond(
-                    adminRiskService.markRiskReviewed(
-                        userIdText = userId,
-                        actorId = actor.actorId,
-                        reason = request.reason
-                    ).toDto()
+                    adminRiskService
+                        .markRiskReviewed(
+                            userIdText = userId,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
                 )
             }
 
             post("/users/{userId}/lock") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val userId = call.parameters["userId"] ?: throw ModerationException("INVALID_ID")
-                val request = call.receiveNullable<AdminRiskActionRequestDto>()
-                    ?: throw ModerationException("MODERATION_REASON_REQUIRED")
+                val request =
+                    call.receiveNullable<AdminRiskActionRequestDto>()
+                        ?: throw ModerationException("MODERATION_REASON_REQUIRED")
                 call.respond(
-                    adminRiskService.lockAccount(
-                        userIdText = userId,
-                        actorId = actor.actorId,
-                        reason = request.reason
-                    ).toDto()
+                    adminRiskService
+                        .lockAccount(
+                            userIdText = userId,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
                 )
             }
 
             post("/users/{userId}/ban") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val userId = call.parameters["userId"] ?: throw ModerationException("INVALID_ID")
-                val request = call.receiveNullable<AdminRiskActionRequestDto>()
-                    ?: throw ModerationException("MODERATION_REASON_REQUIRED")
+                val request =
+                    call.receiveNullable<AdminRiskActionRequestDto>()
+                        ?: throw ModerationException("MODERATION_REASON_REQUIRED")
                 call.respond(
-                    adminRiskService.banAccount(
-                        userIdText = userId,
-                        actorId = actor.actorId,
-                        reason = request.reason
-                    ).toDto()
+                    adminRiskService
+                        .banAccount(
+                            userIdText = userId,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
                 )
             }
         }
@@ -121,7 +133,7 @@ fun Application.configureAdminRiskRoutes(
 
 @Serializable
 data class AdminRiskStateListDto(
-    val items: List<AdminRiskStateDto>
+    val items: List<AdminRiskStateDto>,
 )
 
 @Serializable
@@ -132,12 +144,12 @@ data class AdminRiskStateDto(
     val tier: String,
     val lastEventAt: String? = null,
     val lastReviewedAt: String? = null,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 @Serializable
 data class AdminRiskEventListDto(
-    val items: List<AdminRiskEventDto>
+    val items: List<AdminRiskEventDto>,
 )
 
 @Serializable
@@ -151,18 +163,18 @@ data class AdminRiskEventDto(
     val scoreAfter: Int,
     val tierAfter: String,
     val metadataJson: String,
-    val createdAt: String
+    val createdAt: String,
 )
 
 @Serializable
 data class AdminRiskActionRequestDto(
-    val reason: String? = null
+    val reason: String? = null,
 )
 
 @Serializable
 data class AdminRiskSetTierRequestDto(
     val tier: String? = null,
-    val reason: String? = null
+    val reason: String? = null,
 )
 
 @Serializable
@@ -172,7 +184,7 @@ data class AdminRiskActionDto(
     val tier: String,
     val accountStatus: String? = null,
     val lastReviewedAt: String? = null,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 private fun AdminRiskStateRecord.toDto(): AdminRiskStateDto =
@@ -183,7 +195,7 @@ private fun AdminRiskStateRecord.toDto(): AdminRiskStateDto =
         tier = tier,
         lastEventAt = lastEventAt?.toString(),
         lastReviewedAt = lastReviewedAt?.toString(),
-        updatedAt = updatedAt.toString()
+        updatedAt = updatedAt.toString(),
     )
 
 private fun AdminRiskEventRecord.toDto(): AdminRiskEventDto =
@@ -197,7 +209,7 @@ private fun AdminRiskEventRecord.toDto(): AdminRiskEventDto =
         scoreAfter = scoreAfter,
         tierAfter = tierAfter,
         metadataJson = metadataJson,
-        createdAt = createdAt.toString()
+        createdAt = createdAt.toString(),
     )
 
 private fun AdminRiskActionRecord.toDto(): AdminRiskActionDto =
@@ -207,5 +219,5 @@ private fun AdminRiskActionRecord.toDto(): AdminRiskActionDto =
         tier = tier,
         accountStatus = accountStatus,
         lastReviewedAt = lastReviewedAt?.toString(),
-        updatedAt = updatedAt.toString()
+        updatedAt = updatedAt.toString(),
     )

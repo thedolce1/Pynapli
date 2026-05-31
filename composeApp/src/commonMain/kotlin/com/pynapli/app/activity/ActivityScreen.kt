@@ -35,7 +35,7 @@ fun ActivityScreen(
     distanceUnit: String = AppSettings.UNIT_METRIC,
     onOpenStore: () -> Unit = {},
     onOpenMatch: (ActivityEventDto) -> Unit = {},
-    onOpenPartnerChatInvite: (String) -> Unit = {}
+    onOpenPartnerChatInvite: (String) -> Unit = {},
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -61,18 +61,17 @@ fun ActivityScreen(
         onRefresh = { scope.launch { stateHolder.load() } },
         onOpenStore = onOpenStore,
         distanceUnit = distanceUnit,
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
 @Composable
-private fun rememberActivityStateHolder(): ActivityStateHolder {
-    return remember {
+private fun rememberActivityStateHolder(): ActivityStateHolder =
+    remember {
         ActivityStateHolder(
-            repository = SampleActivityFeedRepository()
+            repository = SampleActivityFeedRepository(),
         )
     }
-}
 
 @Composable
 private fun ActivityScreenContent(
@@ -88,7 +87,7 @@ private fun ActivityScreenContent(
     onRefresh: () -> Unit,
     onOpenStore: () -> Unit,
     distanceUnit: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
 
@@ -102,28 +101,29 @@ private fun ActivityScreenContent(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         ActivityHeader(
             loading = state.isLoading,
-            onRefresh = onRefresh
+            onRefresh = onRefresh,
         )
         ActivityTabRow(
             selectedTab = state.selectedTab,
-            onTabSelected = onTabSelected
+            onTabSelected = onTabSelected,
         )
         ActivityInlineMessage(
             message = state.actionFeedback ?: state.errorMessage?.takeIf { state.items.isNotEmpty() },
-            isError = state.actionFeedback == null && state.errorMessage != null
+            isError = state.actionFeedback == null && state.errorMessage != null,
         )
 
         when {
             state.isLoading && state.items.isEmpty() -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
@@ -131,45 +131,48 @@ private fun ActivityScreenContent(
 
             state.errorMessage != null && state.items.isEmpty() -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 28.dp),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 28.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = state.errorMessage,
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
 
-            state.items.isEmpty() -> EmptyActivityState(
-                label = "No activity yet.",
-                modifier = Modifier.fillMaxSize()
-            )
+            state.items.isEmpty() ->
+                EmptyActivityState(
+                    label = "No activity yet.",
+                    modifier = Modifier.fillMaxSize(),
+                )
 
-            state.visibleItems.isEmpty() -> EmptyActivityState(
-                label = state.selectedTab.emptyLabel(),
-                modifier = Modifier.fillMaxSize()
-            )
+            state.visibleItems.isEmpty() ->
+                EmptyActivityState(
+                    label = state.selectedTab.emptyLabel(),
+                    modifier = Modifier.fillMaxSize(),
+                )
 
             else -> {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     if (state.gatedCount > 0) {
                         item(key = "activity-gate") {
                             ActivityGateRow(
                                 gatedCount = state.gatedCount,
-                                onOpenStore = onOpenStore
+                                onOpenStore = onOpenStore,
                             )
                         }
                     }
                     items(
                         items = state.visibleItems,
-                        key = { item -> item.eventId }
+                        key = { item -> item.eventId },
                     ) { item ->
                         ActivityRow(
                             item = item,
@@ -182,7 +185,7 @@ private fun ActivityScreenContent(
                             onAlbumRequestDecision = onAlbumRequestDecision,
                             onOpenMatch = onOpenMatch,
                             onOpenPartnerChatInvite = onOpenPartnerChatInvite,
-                            onDismissEvent = onDismissEvent
+                            onDismissEvent = onDismissEvent,
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                     }
@@ -190,7 +193,7 @@ private fun ActivityScreenContent(
                         item(key = "activity-load-more") {
                             ActivityLoadMoreRow(
                                 loading = state.isLoadingMore,
-                                onLoadMore = onLoadMore
+                                onLoadMore = onLoadMore,
                             )
                         }
                     }

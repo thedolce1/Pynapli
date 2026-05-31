@@ -11,72 +11,80 @@ import kotlin.test.assertTrue
 
 class HiddenProfileServiceTest {
     @Test
-    fun hideProfileCreatesOneWayDiscoveryHide() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000601")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000602")
-        val repository = InMemoryHiddenProfileRepository()
-        val service = HiddenProfileService(repository)
+    fun hideProfileCreatesOneWayDiscoveryHide() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000601")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000602")
+            val repository = InMemoryHiddenProfileRepository()
+            val service = HiddenProfileService(repository)
 
-        val summary = service.hideProfile(viewer, target.toString())
+            val summary = service.hideProfile(viewer, target.toString())
 
-        assertEquals(target.toString(), summary.hiddenUserId)
-        assertTrue(target in repository.listHiddenProfileIds(viewer))
-        assertFalse(viewer in repository.listHiddenProfileIds(target))
-    }
-
-    @Test
-    fun hideProfileRejectsSelfHide() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000611")
-        val service = HiddenProfileService(InMemoryHiddenProfileRepository())
-
-        val error = assertFailsWith<SafetyException> {
-            service.hideProfile(viewer, viewer.toString())
+            assertEquals(target.toString(), summary.hiddenUserId)
+            assertTrue(target in repository.listHiddenProfileIds(viewer))
+            assertFalse(viewer in repository.listHiddenProfileIds(target))
         }
 
-        assertEquals("HIDE_SELF_FORBIDDEN", error.code)
-    }
-
     @Test
-    fun hideProfileRejectsInvalidTarget() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000621")
-        val service = HiddenProfileService(InMemoryHiddenProfileRepository())
+    fun hideProfileRejectsSelfHide() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000611")
+            val service = HiddenProfileService(InMemoryHiddenProfileRepository())
 
-        val error = assertFailsWith<SafetyException> {
-            service.hideProfile(viewer, "not-a-uuid")
+            val error =
+                assertFailsWith<SafetyException> {
+                    service.hideProfile(viewer, viewer.toString())
+                }
+
+            assertEquals("HIDE_SELF_FORBIDDEN", error.code)
         }
 
-        assertEquals("INVALID_HIDDEN_PROFILE_TARGET", error.code)
-    }
-
     @Test
-    fun unhideProfileRemovesDiscoveryHide() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000631")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000632")
-        val repository = InMemoryHiddenProfileRepository()
-        val service = HiddenProfileService(repository)
-        service.hideProfile(viewer, target.toString())
+    fun hideProfileRejectsInvalidTarget() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000621")
+            val service = HiddenProfileService(InMemoryHiddenProfileRepository())
 
-        val removed = service.unhideProfile(viewer, target.toString())
+            val error =
+                assertFailsWith<SafetyException> {
+                    service.hideProfile(viewer, "not-a-uuid")
+                }
 
-        assertTrue(removed)
-        assertFalse(target in repository.listHiddenProfileIds(viewer))
-    }
-
-    @Test
-    fun listHiddenProfilesReturnsDisplayNames() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000641")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000642")
-        val repository = InMemoryHiddenProfileRepository().apply {
-            setDisplayName(target, "Riley")
+            assertEquals("INVALID_HIDDEN_PROFILE_TARGET", error.code)
         }
-        val service = HiddenProfileService(repository)
-        service.hideProfile(viewer, target.toString())
 
-        val response = service.listHiddenProfiles(viewer)
+    @Test
+    fun unhideProfileRemovesDiscoveryHide() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000631")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000632")
+            val repository = InMemoryHiddenProfileRepository()
+            val service = HiddenProfileService(repository)
+            service.hideProfile(viewer, target.toString())
 
-        assertEquals("Riley", response.hiddenProfiles.single().hiddenDisplayName)
-        assertEquals(target.toString(), response.hiddenProfiles.single().hiddenUserId)
-    }
+            val removed = service.unhideProfile(viewer, target.toString())
+
+            assertTrue(removed)
+            assertFalse(target in repository.listHiddenProfileIds(viewer))
+        }
+
+    @Test
+    fun listHiddenProfilesReturnsDisplayNames() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000641")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000642")
+            val repository =
+                InMemoryHiddenProfileRepository().apply {
+                    setDisplayName(target, "Riley")
+                }
+            val service = HiddenProfileService(repository)
+            service.hideProfile(viewer, target.toString())
+
+            val response = service.listHiddenProfiles(viewer)
+
+            assertEquals("Riley", response.hiddenProfiles.single().hiddenDisplayName)
+            assertEquals(target.toString(), response.hiddenProfiles.single().hiddenUserId)
+        }
 }
 
 class InMemoryHiddenProfileRepository : HiddenProfileRepository {
@@ -87,22 +95,25 @@ class InMemoryHiddenProfileRepository : HiddenProfileRepository {
     override suspend fun hideProfile(
         hiderUserId: UUID,
         hiddenUserId: UUID,
-        hideIdFactory: () -> UUID
+        hideIdFactory: () -> UUID,
     ): HiddenProfileRecord {
         val key = hiderUserId to hiddenUserId
-        val record = records[key]
-            ?: HiddenProfileRecord(
-                id = hideIdFactory(),
-                hiderUserId = hiderUserId,
-                hiddenUserId = hiddenUserId,
-                createdAt = now
-            )
+        val record =
+            records[key]
+                ?: HiddenProfileRecord(
+                    id = hideIdFactory(),
+                    hiderUserId = hiderUserId,
+                    hiddenUserId = hiddenUserId,
+                    createdAt = now,
+                )
         records[key] = record
         return record
     }
 
-    override suspend fun unhideProfile(hiderUserId: UUID, hiddenUserId: UUID): Boolean =
-        records.remove(hiderUserId to hiddenUserId) != null
+    override suspend fun unhideProfile(
+        hiderUserId: UUID,
+        hiddenUserId: UUID,
+    ): Boolean = records.remove(hiderUserId to hiddenUserId) != null
 
     override suspend fun listHiddenProfiles(hiderUserId: UUID): List<HiddenProfileSummaryRecord> =
         records.values
@@ -112,7 +123,7 @@ class InMemoryHiddenProfileRepository : HiddenProfileRepository {
                 HiddenProfileSummaryRecord(
                     hiddenUserId = record.hiddenUserId,
                     hiddenDisplayName = displayNames[record.hiddenUserId],
-                    createdAt = record.createdAt
+                    createdAt = record.createdAt,
                 )
             }
 
@@ -121,7 +132,10 @@ class InMemoryHiddenProfileRepository : HiddenProfileRepository {
             .filter { it.hiderUserId == hiderUserId }
             .mapTo(mutableSetOf()) { it.hiddenUserId }
 
-    fun setDisplayName(userId: UUID, displayName: String) {
+    fun setDisplayName(
+        userId: UUID,
+        displayName: String,
+    ) {
         displayNames[userId] = displayName
     }
 }

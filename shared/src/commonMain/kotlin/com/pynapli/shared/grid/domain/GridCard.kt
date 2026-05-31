@@ -7,6 +7,5 @@ data class GridCard(
     val online: Boolean,
     val distanceMetersRounded: Int?,
     val linkedPartnerUserId: String?,
-    val linkedPartnerThumbUrl: String?
+    val linkedPartnerThumbUrl: String?,
 )
-

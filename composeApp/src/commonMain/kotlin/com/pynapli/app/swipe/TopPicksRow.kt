@@ -35,42 +35,44 @@ import com.pynapli.shared.network.dto.SwipeCardDto
 @Composable
 internal fun TopPicksRow(
     state: TopPicksUiState,
-    onPickSelected: (SwipeCardDto) -> Unit
+    onPickSelected: (SwipeCardDto) -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(TopPicksTags.ROW)
-            .padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag(TopPicksTags.ROW)
+                .padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = if (state.tierLimit > 1) "Today's Top Picks" else "Today's Top Pick",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             Text(
                 text = "Refreshes daily",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall
+                style = MaterialTheme.typography.labelSmall,
             )
         }
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(items = state.items, key = { it.position }) { pick ->
                 TopPickThumbCard(
                     card = pick.card,
-                    onClick = { onPickSelected(pick.card) }
+                    onClick = { onPickSelected(pick.card) },
                 )
             }
         }
@@ -80,38 +82,39 @@ internal fun TopPicksRow(
 @Composable
 private fun TopPickThumbCard(
     card: SwipeCardDto,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .size(width = 96.dp, height = 128.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
-            .testTag(TopPicksTags.cardTag(card.userId))
+        modifier =
+            Modifier
+                .size(width = 96.dp, height = 128.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(onClick = onClick)
+                .testTag(TopPicksTags.cardTag(card.userId)),
     ) {
         card.photoUrl?.let { url ->
             AsyncImage(
                 model = url,
                 contentDescription = card.displayName,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         }
         Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.Transparent,
-                            Color(0xCC000000)
-                        )
-                    )
-                )
-                .padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(1.dp)
+            modifier =
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Transparent,
+                                Color(0xCC000000),
+                            ),
+                        ),
+                    ).padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
@@ -120,14 +123,14 @@ private fun TopPickThumbCard(
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 if (card.verified) {
                     Icon(
                         imageVector = Icons.Filled.Verified,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(12.dp),
                     )
                 }
             }
@@ -137,7 +140,7 @@ private fun TopPickThumbCard(
                         text = label,
                         color = Color.White.copy(alpha = 0.8f),
                         style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1
+                        maxLines = 1,
                     )
                 }
                 if (card.visiting) {
@@ -145,7 +148,7 @@ private fun TopPickThumbCard(
                         text = "Visiting",
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1
+                        maxLines = 1,
                     )
                 }
             }
@@ -155,5 +158,6 @@ private fun TopPickThumbCard(
 
 internal object TopPicksTags {
     const val ROW: String = "top-picks-row"
+
     fun cardTag(userId: String): String = "top-picks-card-$userId"
 }

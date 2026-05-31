@@ -10,5 +10,5 @@ interface PresenceRepository {
 
 data class PresenceState(
     val online: Boolean,
-    val expiresInSeconds: Int
+    val expiresInSeconds: Int,
 )

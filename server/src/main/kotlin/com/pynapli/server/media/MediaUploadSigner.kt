@@ -10,7 +10,7 @@ interface MediaUploadSigner {
         ownerUserId: UUID,
         mediaAssetId: UUID,
         albumKind: String,
-        contentType: String
+        contentType: String,
     ): MediaUploadDestination
 }
 
@@ -21,7 +21,7 @@ data class MediaUploadDestination(
     val uploadUrl: String,
     val uploadMethod: String,
     val uploadHeaders: Map<String, String>,
-    val expiresAt: Instant
+    val expiresAt: Instant,
 )
 
 class StaticMediaUploadSigner(
@@ -29,13 +29,13 @@ class StaticMediaUploadSigner(
     private val storageBucket: String,
     private val uploadBaseUrl: String,
     private val ttl: Duration = Duration.ofMinutes(10),
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
 ) : MediaUploadSigner {
     override fun createUploadDestination(
         ownerUserId: UUID,
         mediaAssetId: UUID,
         albumKind: String,
-        contentType: String
+        contentType: String,
     ): MediaUploadDestination {
         val objectKey = "users/$ownerUserId/$albumKind/$mediaAssetId.${contentType.fileExtension()}"
         val encodedObjectKey = objectKey.replace("/", "%2F")
@@ -46,23 +46,58 @@ class StaticMediaUploadSigner(
             uploadUrl = "${uploadBaseUrl.trimEnd('/')}/$storageBucket/$encodedObjectKey",
             uploadMethod = "PUT",
             uploadHeaders = mapOf("Content-Type" to contentType),
-            expiresAt = clock.instant().plus(ttl)
+            expiresAt = clock.instant().plus(ttl),
         )
     }
+}
 
+/**
+ * Production signer: issues GCS V4 signed `PUT` URLs via [GcsV4SignedUrlFactory]. The object layout
+ * matches [StaticMediaUploadSigner] (`users/{owner}/{album}/{assetId}.{ext}`) so the stored asset
+ * key and the signed URL agree. The client uploads with `PUT` + the declared `Content-Type`.
+ */
+class GcsV4MediaUploadSigner(
+    private val storageBucket: String,
+    private val signedUrlFactory: GcsV4SignedUrlFactory,
+    private val ttl: Duration = Duration.ofMinutes(15),
+) : MediaUploadSigner {
+    override fun createUploadDestination(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+        albumKind: String,
+        contentType: String,
+    ): MediaUploadDestination {
+        val objectKey = "users/$ownerUserId/$albumKind/$mediaAssetId.${contentType.fileExtension()}"
+        val signed =
+            signedUrlFactory.sign(
+                method = "PUT",
+                bucket = storageBucket,
+                objectKey = objectKey,
+                ttl = ttl,
+            )
+        return MediaUploadDestination(
+            storageProvider = "gcs",
+            storageBucket = storageBucket,
+            storageObjectKey = objectKey,
+            uploadUrl = signed.url,
+            uploadMethod = "PUT",
+            uploadHeaders = mapOf("Content-Type" to contentType),
+            expiresAt = Instant.ofEpochSecond(signed.expiresAtEpochSeconds),
+        )
+    }
 }
 
 class LocalDevMediaUploadSigner(
     private val storageBucket: String,
     private val uploadBaseUrl: String,
     private val ttl: Duration = Duration.ofMinutes(10),
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
 ) : MediaUploadSigner {
     override fun createUploadDestination(
         ownerUserId: UUID,
         mediaAssetId: UUID,
         albumKind: String,
-        contentType: String
+        contentType: String,
     ): MediaUploadDestination {
         val objectKey = "local/users/$ownerUserId/$albumKind/$mediaAssetId.${contentType.fileExtension()}"
         return MediaUploadDestination(
@@ -72,16 +107,17 @@ class LocalDevMediaUploadSigner(
             uploadUrl = "${uploadBaseUrl.trimEnd('/')}/v1/media/uploads/local/$mediaAssetId",
             uploadMethod = "PUT",
             uploadHeaders = mapOf("Content-Type" to contentType),
-            expiresAt = clock.instant().plus(ttl)
+            expiresAt = clock.instant().plus(ttl),
         )
     }
 }
 
-private fun String.fileExtension(): String = when (lowercase()) {
-    "image/jpeg" -> "jpg"
-    "image/png" -> "png"
-    "image/webp" -> "webp"
-    "video/mp4" -> "mp4"
-    "video/quicktime" -> "mov"
-    else -> "bin"
-}
+private fun String.fileExtension(): String =
+    when (lowercase()) {
+        "image/jpeg" -> "jpg"
+        "image/png" -> "png"
+        "image/webp" -> "webp"
+        "video/mp4" -> "mp4"
+        "video/quicktime" -> "mov"
+        else -> "bin"
+    }

@@ -3,7 +3,10 @@ package com.pynapli.server.moderation
 import java.sql.Connection
 import java.util.UUID
 
-internal fun Connection.selectRiskStates(tierFilter: String, limit: Int): List<AdminRiskStateRecord> =
+internal fun Connection.selectRiskStates(
+    tierFilter: String,
+    limit: Int,
+): List<AdminRiskStateRecord> =
     prepareStatement(
         """
         SELECT ars.user_id,
@@ -34,7 +37,7 @@ internal fun Connection.selectRiskStates(tierFilter: String, limit: Int): List<A
             ars.updated_at DESC,
             ars.user_id ASC
         LIMIT ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setString(1, tierFilter)
         statement.setString(2, tierFilter)
@@ -47,7 +50,10 @@ internal fun Connection.selectRiskStates(tierFilter: String, limit: Int): List<A
         }
     }
 
-internal fun Connection.selectRiskEvents(userId: UUID, limit: Int): List<AdminRiskEventRecord> =
+internal fun Connection.selectRiskEvents(
+    userId: UUID,
+    limit: Int,
+): List<AdminRiskEventRecord> =
     prepareStatement(
         """
         SELECT id,
@@ -64,7 +70,7 @@ internal fun Connection.selectRiskEvents(userId: UUID, limit: Int): List<AdminRi
         WHERE user_id = ?
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.setInt(2, limit)
@@ -85,7 +91,7 @@ internal fun Connection.activeOrPausedUserExists(userId: UUID): Boolean =
               AND deleted_at IS NULL
               AND status IN ('active', 'paused', 'suspended')
         )
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.executeQuery().use { rs ->
@@ -103,7 +109,7 @@ internal fun Connection.lockUserStatus(userId: UUID): String? =
           AND deleted_at IS NULL
           AND status <> 'deleted'
         FOR UPDATE
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.executeQuery().use { rs ->
@@ -111,7 +117,10 @@ internal fun Connection.lockUserStatus(userId: UUID): String? =
         }
     }
 
-internal fun Connection.updateUserStatus(userId: UUID, status: String) {
+internal fun Connection.updateUserStatus(
+    userId: UUID,
+    status: String,
+) {
     prepareStatement(
         """
         UPDATE users
@@ -119,7 +128,7 @@ internal fun Connection.updateUserStatus(userId: UUID, status: String) {
             updated_at = now()
         WHERE id = ?
           AND deleted_at IS NULL
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setString(1, status)
         statement.setObject(2, userId)
@@ -134,7 +143,7 @@ internal fun Connection.revokeUserSessions(userId: UUID): Int =
         SET revoked_at = now()
         WHERE user_id = ?
           AND revoked_at IS NULL
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.executeUpdate()
@@ -147,7 +156,7 @@ internal fun Connection.lockRiskScore(userId: UUID): Int? =
         FROM account_risk_states
         WHERE user_id = ?
         FOR UPDATE
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.executeQuery().use { rs ->
@@ -166,7 +175,7 @@ internal fun Connection.lockRiskState(userId: UUID): AdminRiskActionRecord? =
         FROM account_risk_states
         WHERE user_id = ?
         FOR UPDATE
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.executeQuery().use { rs ->
@@ -178,7 +187,7 @@ internal fun Connection.upsertRiskState(
     userId: UUID,
     score: Int,
     tier: String,
-    reviewed: Boolean
+    reviewed: Boolean,
 ): AdminRiskActionRecord =
     prepareStatement(
         """
@@ -212,7 +221,7 @@ internal fun Connection.upsertRiskState(
                   tier,
                   last_reviewed_at,
                   updated_at
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.setInt(2, score)
@@ -237,7 +246,7 @@ internal fun Connection.updateRiskReviewedAt(userId: UUID): AdminRiskActionRecor
                   tier,
                   last_reviewed_at,
                   updated_at
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.executeQuery().use { rs ->
@@ -251,7 +260,7 @@ internal fun Connection.insertRiskEvent(
     reason: String,
     delta: Int,
     state: AdminRiskActionRecord,
-    metadataJson: String
+    metadataJson: String,
 ) {
     prepareStatement(
         """
@@ -267,7 +276,7 @@ internal fun Connection.insertRiskEvent(
             metadata
         )
         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?::jsonb)
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, UUID.randomUUID())
         statement.setObject(2, userId)

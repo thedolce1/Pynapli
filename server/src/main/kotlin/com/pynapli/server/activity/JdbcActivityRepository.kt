@@ -11,67 +11,80 @@ class JdbcActivityRepository(
     private val dataSource: DataSource,
     private val profileViewCooldown: Duration = Duration.ofMinutes(30),
     private val flirtCooldown: Duration = Duration.ofMinutes(15),
-    private val albumRequestCooldown: Duration = Duration.ofHours(24)
+    private val albumRequestCooldown: Duration = Duration.ofHours(24),
 ) : ActivityRepository {
-    override suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID): Boolean = withContext(Dispatchers.IO) {
-        if (viewerUserId == targetUserId) return@withContext false
+    override suspend fun recordProfileView(
+        viewerUserId: UUID,
+        targetUserId: UUID,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            if (viewerUserId == targetUserId) return@withContext false
 
-        dataSource.connection.use { connection ->
-            connection.prepareStatement(JdbcActivitySql.UPSERT_ELIGIBLE_PROFILE_VIEW_QUERY).use { statement ->
-                statement.setObject(1, UUID.randomUUID())
-                statement.setObject(2, targetUserId)
-                statement.setObject(3, viewerUserId)
-                statement.setObject(4, targetUserId)
-                statement.setObject(5, viewerUserId)
-                statement.setObject(6, targetUserId)
-                statement.setString(7, "${profileViewCooldown.toMinutes()} minutes")
-                statement.setString(8, "${profileViewCooldown.toMinutes()} minutes")
-                statement.setString(9, "${profileViewCooldown.toMinutes()} minutes")
-                statement.executeQuery().use { rs -> rs.next() }
-            }
-        }
-    }
-
-    override suspend fun recordFlirt(senderUserId: UUID, targetUserId: UUID): Boolean = withContext(Dispatchers.IO) {
-        if (senderUserId == targetUserId) return@withContext false
-
-        dataSource.connection.use { connection ->
-            val eligible = connection.prepareStatement(JdbcActivitySql.FLIRT_ELIGIBILITY_QUERY).use { statement ->
-                statement.setObject(1, senderUserId)
-                statement.setObject(2, targetUserId)
-                statement.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getBoolean(1)
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(JdbcActivitySql.UPSERT_ELIGIBLE_PROFILE_VIEW_QUERY).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, targetUserId)
+                    statement.setObject(3, viewerUserId)
+                    statement.setObject(4, targetUserId)
+                    statement.setObject(5, viewerUserId)
+                    statement.setObject(6, targetUserId)
+                    statement.setString(7, "${profileViewCooldown.toMinutes()} minutes")
+                    statement.setString(8, "${profileViewCooldown.toMinutes()} minutes")
+                    statement.setString(9, "${profileViewCooldown.toMinutes()} minutes")
+                    statement.executeQuery().use { rs -> rs.next() }
                 }
             }
-            if (!eligible) return@withContext false
+        }
 
-            connection.prepareStatement(JdbcActivitySql.UPSERT_FLIRT_QUERY).use { statement ->
-                statement.setObject(1, UUID.randomUUID())
-                statement.setObject(2, targetUserId)
-                statement.setObject(3, senderUserId)
-                statement.setObject(4, targetUserId)
-                statement.setString(5, "${flirtCooldown.toMinutes()} minutes")
-                statement.setString(6, "${flirtCooldown.toMinutes()} minutes")
-                statement.setString(7, "${flirtCooldown.toMinutes()} minutes")
-                statement.executeUpdate() > 0
+    override suspend fun recordFlirt(
+        senderUserId: UUID,
+        targetUserId: UUID,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            if (senderUserId == targetUserId) return@withContext false
+
+            dataSource.connection.use { connection ->
+                val eligible =
+                    connection.prepareStatement(JdbcActivitySql.FLIRT_ELIGIBILITY_QUERY).use { statement ->
+                        statement.setObject(1, senderUserId)
+                        statement.setObject(2, targetUserId)
+                        statement.executeQuery().use { rs ->
+                            rs.next()
+                            rs.getBoolean(1)
+                        }
+                    }
+                if (!eligible) return@withContext false
+
+                connection.prepareStatement(JdbcActivitySql.UPSERT_FLIRT_QUERY).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, targetUserId)
+                    statement.setObject(3, senderUserId)
+                    statement.setObject(4, targetUserId)
+                    statement.setString(5, "${flirtCooldown.toMinutes()} minutes")
+                    statement.setString(6, "${flirtCooldown.toMinutes()} minutes")
+                    statement.setString(7, "${flirtCooldown.toMinutes()} minutes")
+                    statement.executeUpdate() > 0
+                }
             }
         }
-    }
 
-    override suspend fun recordAlbumRequest(requesterUserId: UUID, targetUserId: UUID): Boolean =
+    override suspend fun recordAlbumRequest(
+        requesterUserId: UUID,
+        targetUserId: UUID,
+    ): Boolean =
         withContext(Dispatchers.IO) {
             if (requesterUserId == targetUserId) return@withContext false
 
             dataSource.connection.use { connection ->
-                val eligible = connection.prepareStatement(JdbcActivitySql.ALBUM_REQUEST_ELIGIBILITY_QUERY).use { statement ->
-                    statement.setObject(1, requesterUserId)
-                    statement.setObject(2, targetUserId)
-                    statement.executeQuery().use { rs ->
-                        rs.next()
-                        rs.getBoolean(1)
+                val eligible =
+                    connection.prepareStatement(JdbcActivitySql.ALBUM_REQUEST_ELIGIBILITY_QUERY).use { statement ->
+                        statement.setObject(1, requesterUserId)
+                        statement.setObject(2, targetUserId)
+                        statement.executeQuery().use { rs ->
+                            rs.next()
+                            rs.getBoolean(1)
+                        }
                     }
-                }
                 if (!eligible) return@withContext false
 
                 connection.prepareStatement(JdbcActivitySql.UPSERT_ALBUM_REQUEST_QUERY).use { statement ->
@@ -87,7 +100,11 @@ class JdbcActivityRepository(
             }
         }
 
-    override suspend fun recordSwipeInterest(actorUserId: UUID, targetUserId: UUID, eventType: String): Boolean =
+    override suspend fun recordSwipeInterest(
+        actorUserId: UUID,
+        targetUserId: UUID,
+        eventType: String,
+    ): Boolean =
         withContext(Dispatchers.IO) {
             if (actorUserId == targetUserId || eventType !in JdbcActivitySql.SWIPE_INTEREST_EVENT_TYPES) return@withContext false
 
@@ -105,7 +122,11 @@ class JdbcActivityRepository(
             }
         }
 
-    override suspend fun recordMatch(recipientUserId: UUID, actorUserId: UUID, matchId: UUID): Boolean =
+    override suspend fun recordMatch(
+        recipientUserId: UUID,
+        actorUserId: UUID,
+        matchId: UUID,
+    ): Boolean =
         withContext(Dispatchers.IO) {
             if (recipientUserId == actorUserId) return@withContext false
 
@@ -126,23 +147,24 @@ class JdbcActivityRepository(
     override suspend fun recordPartnerChatInvite(
         inviterUserId: UUID,
         inviteeUserId: UUID,
-        conversationId: UUID
-    ): Boolean = withContext(Dispatchers.IO) {
-        if (inviterUserId == inviteeUserId) return@withContext false
+        conversationId: UUID,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            if (inviterUserId == inviteeUserId) return@withContext false
 
-        dataSource.connection.use { connection ->
-            connection.prepareStatement(JdbcActivitySql.UPSERT_PARTNER_CHAT_INVITE_QUERY).use { statement ->
-                statement.setObject(1, UUID.randomUUID())
-                statement.setObject(2, inviteeUserId)
-                statement.setObject(3, inviterUserId)
-                statement.setObject(4, inviteeUserId)
-                statement.setString(5, """{"conversationId":"$conversationId"}""")
-                statement.setObject(6, inviterUserId)
-                statement.setObject(7, inviteeUserId)
-                statement.executeQuery().use { rs -> rs.next() }
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(JdbcActivitySql.UPSERT_PARTNER_CHAT_INVITE_QUERY).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, inviteeUserId)
+                    statement.setObject(3, inviterUserId)
+                    statement.setObject(4, inviteeUserId)
+                    statement.setString(5, """{"conversationId":"$conversationId"}""")
+                    statement.setObject(6, inviterUserId)
+                    statement.setObject(7, inviteeUserId)
+                    statement.executeQuery().use { rs -> rs.next() }
+                }
             }
         }
-    }
 
     override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> =
         withContext(Dispatchers.IO) {
@@ -182,7 +204,10 @@ class JdbcActivityRepository(
             }
         }
 
-    override suspend fun markActivityEventsSeen(recipientUserId: UUID, eventIds: Set<UUID>): Int =
+    override suspend fun markActivityEventsSeen(
+        recipientUserId: UUID,
+        eventIds: Set<UUID>,
+    ): Int =
         withContext(Dispatchers.IO) {
             if (eventIds.isEmpty()) return@withContext 0
 
@@ -196,7 +221,10 @@ class JdbcActivityRepository(
             }
         }
 
-    override suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): Boolean =
+    override suspend fun dismissActivityEvent(
+        recipientUserId: UUID,
+        eventId: UUID,
+    ): Boolean =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
                 connection.prepareStatement(JdbcActivitySql.DISMISS_ACTIVITY_EVENT_QUERY).use { statement ->
@@ -209,24 +237,25 @@ class JdbcActivityRepository(
 
     override suspend fun getAlbumRequestEvent(
         recipientUserId: UUID,
-        eventId: UUID
-    ): AlbumRequestEventRecord? = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            connection.prepareStatement(JdbcActivitySql.GET_ALBUM_REQUEST_EVENT_QUERY).use { statement ->
-                statement.setObject(1, eventId)
-                statement.setObject(2, recipientUserId)
-                statement.executeQuery().use { rs ->
-                    if (rs.next()) {
-                        AlbumRequestEventRecord(
-                            eventId = rs.getObject("id", UUID::class.java),
-                            ownerUserId = rs.getObject("recipient_user_id", UUID::class.java),
-                            requesterUserId = rs.getObject("actor_user_id", UUID::class.java)
-                        )
-                    } else {
-                        null
+        eventId: UUID,
+    ): AlbumRequestEventRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(JdbcActivitySql.GET_ALBUM_REQUEST_EVENT_QUERY).use { statement ->
+                    statement.setObject(1, eventId)
+                    statement.setObject(2, recipientUserId)
+                    statement.executeQuery().use { rs ->
+                        if (rs.next()) {
+                            AlbumRequestEventRecord(
+                                eventId = rs.getObject("id", UUID::class.java),
+                                ownerUserId = rs.getObject("recipient_user_id", UUID::class.java),
+                                requesterUserId = rs.getObject("actor_user_id", UUID::class.java),
+                            )
+                        } else {
+                            null
+                        }
                     }
                 }
             }
         }
-    }
 }

@@ -7,20 +7,20 @@ data class AgeVerificationRequirementsDto(
     val required: Boolean,
     val enhancedRequired: Boolean,
     val acceptedMethods: List<AgeVerificationMethodDto>,
-    val status: AgeVerificationStatusDto? = null
+    val status: AgeVerificationStatusDto? = null,
 )
 
 @Serializable
 data class AgeVerificationMethodDto(
     val method: String,
-    val label: String
+    val label: String,
 )
 
 @Serializable
 data class StartAgeVerificationRequestDto(
     val confirmedAdult: Boolean,
     val method: String? = null,
-    val market: String? = null
+    val market: String? = null,
 )
 
 @Serializable
@@ -31,7 +31,7 @@ data class AgeVerificationStatusDto(
     val requestedAt: String? = null,
     val verifiedAt: String? = null,
     val expiresAt: String? = null,
-    val message: String
+    val message: String,
 )
 
 @Serializable
@@ -43,11 +43,11 @@ data class AgeVerificationCallbackRequestDto(
     val status: String,
     val verifiedAt: String? = null,
     val expiresAt: String? = null,
-    val reason: String? = null
+    val reason: String? = null,
 )
 
 @Serializable
 data class AdminAgeVerificationReviewRequestDto(
     val status: String,
-    val reason: String? = null
+    val reason: String? = null,
 )

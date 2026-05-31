@@ -1,0 +1,6 @@
+# Revisions to ignore in `git blame` (bulk mechanical reformats, no logic changes).
+# Enable locally with:  git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub applies this file automatically.)
+
+# Format entire codebase to ktlint_official (mechanical)
+02a59899cddd868a13143c96d9e770d28f596646

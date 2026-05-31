@@ -13,11 +13,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
 import com.pynapli.app.profilelink.ProfileLinksUiState
+import kotlinx.coroutines.launch
 
 @Composable
 fun MediaAlbumsScreen(
@@ -25,7 +25,7 @@ fun MediaAlbumsScreen(
     profileLinksStateHolder: ProfileLinksStateHolder,
     onBack: () -> Unit,
     onPickMedia: (MediaAlbumKindUi) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val state by stateHolder.state.collectAsState()
     val profileLinksState by profileLinksStateHolder.state.collectAsState()
@@ -59,7 +59,7 @@ fun MediaAlbumsScreen(
         },
         onClearError = stateHolder::clearError,
         onClearProfileLinkMessage = profileLinksStateHolder::clearMessages,
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
@@ -76,16 +76,17 @@ private fun MediaAlbumsContent(
     onUnlinkProfile: () -> Unit,
     onClearError: () -> Unit,
     onClearProfileLinkMessage: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 18.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             MediaAlbumsHeader(onBack = onBack)
@@ -95,7 +96,7 @@ private fun MediaAlbumsContent(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 ErrorBand(
                     message = message,
-                    onDismiss = onClearError
+                    onDismiss = onClearError,
                 )
             }
         }
@@ -105,7 +106,7 @@ private fun MediaAlbumsContent(
             onAccept = onAcceptProfileLink,
             onDecline = onDeclineProfileLink,
             onUnlink = onUnlinkProfile,
-            onClearMessage = onClearProfileLinkMessage
+            onClearMessage = onClearProfileLinkMessage,
         )
 
         if (state.isLoading && state.profileItems.isEmpty() && state.privateItems.isEmpty()) {
@@ -118,20 +119,20 @@ private fun MediaAlbumsContent(
             kind = MediaAlbumKindUi.Profile,
             items = state.profileItems,
             isUploading = state.isUploadingProfile,
-            onAdd = onAddProfile
+            onAdd = onAddProfile,
         )
 
         albumSection(
             kind = MediaAlbumKindUi.Private,
             items = state.privateItems,
             isUploading = state.isUploadingPrivate,
-            onAdd = onAddPrivate
+            onAdd = onAddPrivate,
         )
 
         privateGrantsSection(
             grants = state.privateGrants,
             revokingGranteeIds = state.revokingGranteeIds,
-            onRevokeGrant = onRevokeGrant
+            onRevokeGrant = onRevokeGrant,
         )
     }
 }

@@ -7,7 +7,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SwipeImagePrefetchPlannerTest {
-
     @Test
     fun emptyCardsReturnsEmpty() {
         assertTrue(planSwipeImagePrefetch(emptyList()).isEmpty())
@@ -15,17 +14,18 @@ class SwipeImagePrefetchPlannerTest {
 
     @Test
     fun topCardPrefetchesAllCarouselPhotosAndOthersGetCoverOnly() {
-        val cards = listOf(
-            card(
-                "a",
-                photoUrls = listOf("https://cdn/a-1.jpg", "https://cdn/a-2.jpg", "https://cdn/a-3.jpg"),
-                partnerUrl = "https://cdn/a-partner.jpg"
-            ),
-            card("b", photoUrls = listOf("https://cdn/b-1.jpg", "https://cdn/b-2.jpg")),
-            card("c", partnerUrl = "https://cdn/c-partner.jpg"),
-            card("d", photoUrl = "https://cdn/d.jpg"),
-            card("e", photoUrl = "https://cdn/e.jpg")
-        )
+        val cards =
+            listOf(
+                card(
+                    "a",
+                    photoUrls = listOf("https://cdn/a-1.jpg", "https://cdn/a-2.jpg", "https://cdn/a-3.jpg"),
+                    partnerUrl = "https://cdn/a-partner.jpg",
+                ),
+                card("b", photoUrls = listOf("https://cdn/b-1.jpg", "https://cdn/b-2.jpg")),
+                card("c", partnerUrl = "https://cdn/c-partner.jpg"),
+                card("d", photoUrl = "https://cdn/d.jpg"),
+                card("e", photoUrl = "https://cdn/e.jpg"),
+            )
 
         val urls = planSwipeImagePrefetch(cards, windowSize = 4)
 
@@ -37,27 +37,29 @@ class SwipeImagePrefetchPlannerTest {
                 "https://cdn/a-partner.jpg",
                 "https://cdn/b-1.jpg",
                 "https://cdn/c-partner.jpg",
-                "https://cdn/d.jpg"
+                "https://cdn/d.jpg",
             ),
-            urls
+            urls,
         )
     }
 
     @Test
     fun topCardPhotoCountCapApplies() {
-        val cards = listOf(
-            card(
-                "top",
-                photoUrls = listOf(
-                    "https://cdn/1.jpg",
-                    "https://cdn/2.jpg",
-                    "https://cdn/3.jpg",
-                    "https://cdn/4.jpg",
-                    "https://cdn/5.jpg",
-                    "https://cdn/6.jpg"
-                )
+        val cards =
+            listOf(
+                card(
+                    "top",
+                    photoUrls =
+                        listOf(
+                            "https://cdn/1.jpg",
+                            "https://cdn/2.jpg",
+                            "https://cdn/3.jpg",
+                            "https://cdn/4.jpg",
+                            "https://cdn/5.jpg",
+                            "https://cdn/6.jpg",
+                        ),
+                ),
             )
-        )
 
         val urls = planSwipeImagePrefetch(cards, windowSize = 1, topCardPhotoCount = 3)
 
@@ -66,11 +68,12 @@ class SwipeImagePrefetchPlannerTest {
 
     @Test
     fun deduplicatesRepeatedUrls() {
-        val cards = listOf(
-            card("a", photoUrl = "https://cdn/shared.jpg"),
-            card("b", photoUrl = "https://cdn/shared.jpg", partnerUrl = "https://cdn/shared.jpg"),
-            card("c", photoUrl = "https://cdn/other.jpg")
-        )
+        val cards =
+            listOf(
+                card("a", photoUrl = "https://cdn/shared.jpg"),
+                card("b", photoUrl = "https://cdn/shared.jpg", partnerUrl = "https://cdn/shared.jpg"),
+                card("c", photoUrl = "https://cdn/other.jpg"),
+            )
 
         val urls = planSwipeImagePrefetch(cards, windowSize = 10)
 
@@ -90,19 +93,20 @@ private fun card(
     userId: String,
     photoUrl: String? = null,
     photoUrls: List<String> = emptyList(),
-    partnerUrl: String? = null
+    partnerUrl: String? = null,
 ): SwipeCardDto =
     SwipeCardDto(
         userId = userId,
         displayName = "User $userId",
         photoUrl = photoUrl,
         photoUrls = photoUrls,
-        linkedPartner = partnerUrl?.let {
-            LinkedPartnerMiniDto(
-                userId = "$userId-partner",
-                displayName = "Partner $userId",
-                thumbnailUrl = it
-            )
-        },
-        rankToken = "rank-$userId"
+        linkedPartner =
+            partnerUrl?.let {
+                LinkedPartnerMiniDto(
+                    userId = "$userId-partner",
+                    displayName = "Partner $userId",
+                    thumbnailUrl = it,
+                )
+            },
+        rankToken = "rank-$userId",
     )

@@ -1,7 +1,7 @@
 package com.pynapli.server.subscriptions
 
-import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.BoostActivationDto
+import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.PremiumInventoryBalanceDto
 import com.pynapli.shared.network.dto.PremiumInventoryType
 import com.pynapli.shared.network.dto.StorePurchaseResponseDto
@@ -26,38 +26,43 @@ class SubscriptionService(
     private val playStoreSyncStaleAfter: Duration = Duration.ofHours(6),
     private val playStoreSyncRenewalLookahead: Duration = Duration.ofHours(24),
     private val entitlementCacheTtl: Duration = Duration.ofSeconds(5),
-    private val entitlementCacheMaxSize: Int = 10_000
+    private val entitlementCacheMaxSize: Int = 10_000,
 ) {
-    private val entitlementCache = SubscriptionEntitlementCache(
-        ttl = entitlementCacheTtl,
-        maxSize = entitlementCacheMaxSize
-    )
-    private val playStorePurchaseApplier = PlayStoreSubscriptionPurchaseApplier(
-        repository = repository,
-        invalidateEntitlement = entitlementCache::invalidate
-    )
-    private val playStoreRtdnProcessor = PlayStoreRtdnProcessor(
-        repository = repository,
-        clock = clock,
-        playStorePackageName = playStorePackageName,
-        playStorePurchaseVerifier = playStorePurchaseVerifier,
-        purchaseApplier = playStorePurchaseApplier
-    )
+    private val entitlementCache =
+        SubscriptionEntitlementCache(
+            ttl = entitlementCacheTtl,
+            maxSize = entitlementCacheMaxSize,
+        )
+    private val playStorePurchaseApplier =
+        PlayStoreSubscriptionPurchaseApplier(
+            repository = repository,
+            invalidateEntitlement = entitlementCache::invalidate,
+        )
+    private val playStoreRtdnProcessor =
+        PlayStoreRtdnProcessor(
+            repository = repository,
+            clock = clock,
+            playStorePackageName = playStorePackageName,
+            playStorePurchaseVerifier = playStorePurchaseVerifier,
+            purchaseApplier = playStorePurchaseApplier,
+        )
 
     suspend fun getEntitlement(userId: UUID): SubscriptionEntitlementDto {
         val now = clock.instant()
         entitlementCache.get(userId, now)?.let { return it }
 
-        val entitlement = repository.findBestActiveEntitlement(userId, now)
-            ?.let { SubscriptionEntitlementMapper.activeToDto(it) }
-            ?: SubscriptionEntitlementMapper.free()
+        val entitlement =
+            repository
+                .findBestActiveEntitlement(userId, now)
+                ?.let { SubscriptionEntitlementMapper.activeToDto(it) }
+                ?: SubscriptionEntitlementMapper.free()
         entitlementCache.put(userId, entitlement, now)
         return entitlement
     }
 
     suspend fun listStoredEntitlementsForUser(
         userIdText: String,
-        limitText: String?
+        limitText: String?,
     ): List<StoredEntitlementRecord> {
         val userId = userIdText.toUuidOrThrow("INVALID_ENTITLEMENT_USER")
         val limit = limitText?.toIntOrNull()?.coerceIn(1, 100) ?: 50
@@ -71,12 +76,15 @@ class SubscriptionService(
         startsAtText: String?,
         endsAtText: String?,
         actorId: String,
-        reason: String
+        reason: String,
     ): StoredEntitlementRecord {
         val userId = userIdText.toUuidOrThrow("INVALID_ENTITLEMENT_USER")
-        val tier = tierText?.trim()?.lowercase()
-            ?.takeIf { it in ADMIN_GRANTABLE_TIERS }
-            ?: throw SubscriptionException("INVALID_ENTITLEMENT_TIER")
+        val tier =
+            tierText
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf { it in ADMIN_GRANTABLE_TIERS }
+                ?: throw SubscriptionException("INVALID_ENTITLEMENT_TIER")
         val source = sourceText?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: EntitlementSource.ADMIN
         if (source !in ADMIN_GRANTABLE_SOURCES) throw SubscriptionException("INVALID_ENTITLEMENT_SOURCE")
         val startsAt = startsAtText?.toInstantOrThrow("INVALID_ENTITLEMENT_PERIOD") ?: clock.instant()
@@ -85,15 +93,16 @@ class SubscriptionService(
         val normalizedActorId = actorId.validatedAdminActor()
         val normalizedReason = reason.validatedAdminReason()
 
-        val record = repository.grantStoredEntitlement(
-            userId = userId,
-            tier = tier,
-            source = source,
-            startsAt = startsAt,
-            endsAt = endsAt,
-            actorId = normalizedActorId,
-            reason = normalizedReason
-        ) ?: throw SubscriptionException("INVALID_ENTITLEMENT_USER")
+        val record =
+            repository.grantStoredEntitlement(
+                userId = userId,
+                tier = tier,
+                source = source,
+                startsAt = startsAt,
+                endsAt = endsAt,
+                actorId = normalizedActorId,
+                reason = normalizedReason,
+            ) ?: throw SubscriptionException("INVALID_ENTITLEMENT_USER")
         invalidateEntitlement(userId)
         return record
     }
@@ -101,88 +110,89 @@ class SubscriptionService(
     suspend fun revokeStoredEntitlement(
         entitlementIdText: String,
         actorId: String,
-        reason: String
+        reason: String,
     ): StoredEntitlementRecord {
         val entitlementId = entitlementIdText.toUuidOrThrow("ENTITLEMENT_NOT_FOUND")
-        val record = repository.revokeStoredEntitlement(
-            entitlementId = entitlementId,
-            actorId = actorId.validatedAdminActor(),
-            reason = reason.validatedAdminReason()
-        ) ?: throw SubscriptionException("ENTITLEMENT_NOT_FOUND")
+        val record =
+            repository.revokeStoredEntitlement(
+                entitlementId = entitlementId,
+                actorId = actorId.validatedAdminActor(),
+                reason = reason.validatedAdminReason(),
+            ) ?: throw SubscriptionException("ENTITLEMENT_NOT_FOUND")
         invalidateEntitlement(record.userId)
         return record
     }
 
-    fun getInventory(): SubscriptionInventoryResponseDto =
-        SubscriptionCatalog.inventory()
+    fun getInventory(): SubscriptionInventoryResponseDto = SubscriptionCatalog.inventory()
 
     suspend fun getInventory(userId: UUID): SubscriptionInventoryResponseDto {
         val now = clock.instant()
         return getInventory().copy(
-            balances = repository.listPremiumInventoryBalances(userId, now).map { it.toDto() }
+            balances = repository.listPremiumInventoryBalances(userId, now).map { it.toDto() },
         )
     }
 
     suspend fun recordDevStorePurchase(
         userId: UUID,
-        request: SubmitDevStorePurchaseRequestDto
+        request: SubmitDevStorePurchaseRequestDto,
     ): StorePurchaseResponseDto {
         val productId = request.productId.trim()
         if (productId.isEmpty()) throw SubscriptionException("INVALID_STORE_PRODUCT")
         val now = clock.instant()
-        val status = when (productId) {
-            SubscriptionProductId.PLAY_SOCIAL_MONTHLY -> {
-                repository.upsertDevSubscriptionPurchase(
-                    userId = userId,
-                    productId = productId,
-                    tier = SubscriptionTier.SOCIAL,
-                    startsAt = now,
-                    endsAt = now.plus(DEV_SUBSCRIPTION_PERIOD)
-                )
-                invalidateEntitlement(userId)
-                SubscriptionPurchaseSyncStatus.ACTIVE
-            }
+        val status =
+            when (productId) {
+                SubscriptionProductId.PLAY_SOCIAL_MONTHLY -> {
+                    repository.upsertDevSubscriptionPurchase(
+                        userId = userId,
+                        productId = productId,
+                        tier = SubscriptionTier.SOCIAL,
+                        startsAt = now,
+                        endsAt = now.plus(DEV_SUBSCRIPTION_PERIOD),
+                    )
+                    invalidateEntitlement(userId)
+                    SubscriptionPurchaseSyncStatus.ACTIVE
+                }
 
-            SubscriptionProductId.PLAY_SELECT_MONTHLY -> {
-                repository.upsertDevSubscriptionPurchase(
-                    userId = userId,
-                    productId = productId,
-                    tier = SubscriptionTier.SELECT,
-                    startsAt = now,
-                    endsAt = now.plus(DEV_SUBSCRIPTION_PERIOD)
-                )
-                invalidateEntitlement(userId)
-                SubscriptionPurchaseSyncStatus.ACTIVE
-            }
+                SubscriptionProductId.PLAY_SELECT_MONTHLY -> {
+                    repository.upsertDevSubscriptionPurchase(
+                        userId = userId,
+                        productId = productId,
+                        tier = SubscriptionTier.SELECT,
+                        startsAt = now,
+                        endsAt = now.plus(DEV_SUBSCRIPTION_PERIOD),
+                    )
+                    invalidateEntitlement(userId)
+                    SubscriptionPurchaseSyncStatus.ACTIVE
+                }
 
-            SubscriptionProductId.BOOST_SINGLE -> {
-                grantDevPremiumProduct(userId, PremiumInventoryType.BOOST, quantity = 1, now = now)
-                DEV_INVENTORY_GRANTED
-            }
+                SubscriptionProductId.BOOST_SINGLE -> {
+                    grantDevPremiumProduct(userId, PremiumInventoryType.BOOST, quantity = 1, now = now)
+                    DEV_INVENTORY_GRANTED
+                }
 
-            SubscriptionProductId.PINEAPPLE_LIKES_FIVE -> {
-                grantDevPremiumProduct(userId, PremiumInventoryType.PINEAPPLE_LIKE, quantity = 5, now = now)
-                DEV_INVENTORY_GRANTED
-            }
+                SubscriptionProductId.PINEAPPLE_LIKES_FIVE -> {
+                    grantDevPremiumProduct(userId, PremiumInventoryType.PINEAPPLE_LIKE, quantity = 5, now = now)
+                    DEV_INVENTORY_GRANTED
+                }
 
-            SubscriptionProductId.INTRO_NOTES_THREE -> {
-                grantDevPremiumProduct(userId, PremiumInventoryType.INTRO_NOTE, quantity = 3, now = now)
-                DEV_INVENTORY_GRANTED
-            }
+                SubscriptionProductId.INTRO_NOTES_THREE -> {
+                    grantDevPremiumProduct(userId, PremiumInventoryType.INTRO_NOTE, quantity = 3, now = now)
+                    DEV_INVENTORY_GRANTED
+                }
 
-            else -> throw SubscriptionException("INVALID_STORE_PRODUCT")
-        }
+                else -> throw SubscriptionException("INVALID_STORE_PRODUCT")
+            }
 
         return StorePurchaseResponseDto(
             status = status,
             entitlement = getEntitlement(userId),
-            inventory = getInventory(userId)
+            inventory = getInventory(userId),
         )
     }
 
     suspend fun recordPlayStoreSubscriptionPurchase(
         userId: UUID,
-        request: SubmitPlayStoreSubscriptionPurchaseRequestDto
+        request: SubmitPlayStoreSubscriptionPurchaseRequestDto,
     ): SubscriptionPurchaseSyncResponseDto {
         val productId = request.productId.trim()
         val purchaseToken = request.purchaseToken.trim()
@@ -194,11 +204,12 @@ class SubscriptionService(
         val tier = playStoreTierForProduct(productId) ?: throw SubscriptionException("INVALID_SUBSCRIPTION_PRODUCT")
         val now = clock.instant()
         return when (
-            val verification = playStorePurchaseVerifier.verifySubscriptionPurchase(
-                packageName = packageName,
-                productId = productId,
-                purchaseToken = purchaseToken
-            )
+            val verification =
+                playStorePurchaseVerifier.verifySubscriptionPurchase(
+                    packageName = packageName,
+                    productId = productId,
+                    purchaseToken = purchaseToken,
+                )
         ) {
             is PlayStorePurchaseVerificationResult.Invalid -> throw SubscriptionException(verification.code)
             PlayStorePurchaseVerificationResult.VerificationUnavailable -> {
@@ -207,22 +218,23 @@ class SubscriptionService(
                     productId = productId,
                     purchaseToken = purchaseToken,
                     tier = tier,
-                    now = now
+                    now = now,
                 )
                 pendingVerificationResponse(userId)
             }
             is PlayStorePurchaseVerificationResult.Verified -> {
-                val subscription = playStorePurchaseApplier.applyVerifiedPurchase(
-                    userId = userId,
-                    tier = tier,
-                    purchase = verification.purchase,
-                    verifiedAt = now
-                )
+                val subscription =
+                    playStorePurchaseApplier.applyVerifiedPurchase(
+                        userId = userId,
+                        tier = tier,
+                        purchase = verification.purchase,
+                        verifiedAt = now,
+                    )
 
                 if (subscription.status in ACTIVE_PLAY_STORE_SUBSCRIPTION_STATUSES) {
                     SubscriptionPurchaseSyncResponseDto(
                         status = SubscriptionPurchaseSyncStatus.ACTIVE,
-                        entitlement = getEntitlement(userId)
+                        entitlement = getEntitlement(userId),
                     )
                 } else {
                     pendingVerificationResponse(userId)
@@ -234,11 +246,12 @@ class SubscriptionService(
     suspend fun syncDuePlayStoreSubscriptions(limit: Int = PLAY_STORE_SYNC_DEFAULT_LIMIT): PlayStoreSubscriptionSyncSummary {
         val now = clock.instant()
         val normalizedLimit = limit.coerceIn(1, PLAY_STORE_SYNC_MAX_LIMIT)
-        val candidates = repository.listPlayStoreSubscriptionsDueForVerification(
-            staleBefore = now.minus(playStoreSyncStaleAfter),
-            renewalWindowEnd = now.plus(playStoreSyncRenewalLookahead),
-            limit = normalizedLimit
-        )
+        val candidates =
+            repository.listPlayStoreSubscriptionsDueForVerification(
+                staleBefore = now.minus(playStoreSyncStaleAfter),
+                renewalWindowEnd = now.plus(playStoreSyncRenewalLookahead),
+                limit = normalizedLimit,
+            )
         var verified = 0
         var active = 0
         var grace = 0
@@ -250,11 +263,12 @@ class SubscriptionService(
 
         candidates.forEach { candidate ->
             when (
-                val verification = playStorePurchaseVerifier.verifySubscriptionPurchase(
-                    packageName = playStorePackageName,
-                    productId = candidate.productId,
-                    purchaseToken = candidate.purchaseToken
-                )
+                val verification =
+                    playStorePurchaseVerifier.verifySubscriptionPurchase(
+                        packageName = playStorePackageName,
+                        productId = candidate.productId,
+                        purchaseToken = candidate.purchaseToken,
+                    )
             ) {
                 is PlayStorePurchaseVerificationResult.Invalid -> {
                     invalid++
@@ -262,18 +276,19 @@ class SubscriptionService(
                     playStorePurchaseApplier.revokeStoredPurchase(
                         stored = candidate,
                         externalStatus = verification.code,
-                        verifiedAt = now
+                        verifiedAt = now,
                     )
                 }
                 PlayStorePurchaseVerificationResult.VerificationUnavailable -> unavailable++
                 is PlayStorePurchaseVerificationResult.Verified -> {
                     verified++
-                    val subscription = playStorePurchaseApplier.applyVerifiedPurchase(
-                        userId = candidate.userId,
-                        tier = candidate.tier,
-                        purchase = verification.purchase,
-                        verifiedAt = now
-                    )
+                    val subscription =
+                        playStorePurchaseApplier.applyVerifiedPurchase(
+                            userId = candidate.userId,
+                            tier = candidate.tier,
+                            purchase = verification.purchase,
+                            verifiedAt = now,
+                        )
                     when (subscription.status) {
                         "active" -> active++
                         "grace" -> grace++
@@ -294,23 +309,19 @@ class SubscriptionService(
             expired = expired,
             revoked = revoked,
             invalid = invalid,
-            unavailable = unavailable
+            unavailable = unavailable,
         )
     }
 
     suspend fun handlePlayStoreRealTimeDeveloperNotification(
-        envelope: PlayStoreRtdnEnvelope
-    ): PlayStoreRtdnProcessingResult =
-        playStoreRtdnProcessor.handle(envelope)
+        envelope: PlayStoreRtdnEnvelope,
+    ): PlayStoreRtdnProcessingResult = playStoreRtdnProcessor.handle(envelope)
 
-    suspend fun getPolicy(userId: UUID): EntitlementPolicy =
-        getEntitlement(userId).toPolicy()
+    suspend fun getPolicy(userId: UUID): EntitlementPolicy = getEntitlement(userId).toPolicy()
 
-    suspend fun consumeIntroNoteInventory(userId: UUID): Boolean =
-        repository.consumeIntroNoteInventory(userId, clock.instant())
+    suspend fun consumeIntroNoteInventory(userId: UUID): Boolean = repository.consumeIntroNoteInventory(userId, clock.instant())
 
-    suspend fun consumePineappleLikeInventory(userId: UUID): Boolean =
-        repository.consumePineappleLikeInventory(userId, clock.instant())
+    suspend fun consumePineappleLikeInventory(userId: UUID): Boolean = repository.consumePineappleLikeInventory(userId, clock.instant())
 
     /**
      * Variant of `consumePineappleLikeInventory` that returns the consumed
@@ -318,25 +329,24 @@ class SubscriptionService(
      * on the action row and the rewind path can refund the exact row via
      * `refundPineappleLikeInventory`.
      */
-    suspend fun consumePineappleLikeInventoryReturningId(userId: UUID): UUID? =
-        repository.consumePineappleLikeInventoryReturningId(userId, clock.instant())
+    suspend fun consumePineappleLikeInventoryReturningId(userId: UUID): UUID? = repository.consumePineappleLikeInventoryReturningId(userId, clock.instant())
 
-    suspend fun refundPineappleLikeInventory(inventoryId: UUID): Boolean =
-        repository.refundInventoryById(inventoryId, clock.instant())
+    suspend fun refundPineappleLikeInventory(inventoryId: UUID): Boolean = repository.refundInventoryById(inventoryId, clock.instant())
 
     suspend fun activateBoost(userId: UUID): BoostActivationDto {
-        val result = repository.activateBoost(
-            userId = userId,
-            now = clock.instant(),
-            duration = BOOST_DURATION
-        ) ?: throw SubscriptionException("BOOST_INVENTORY_REQUIRED")
+        val result =
+            repository.activateBoost(
+                userId = userId,
+                now = clock.instant(),
+                duration = BOOST_DURATION,
+            ) ?: throw SubscriptionException("BOOST_INVENTORY_REQUIRED")
         val activation = result.activation
         return BoostActivationDto(
             activationId = activation.activationId.toString(),
             boostType = activation.boostType,
             startsAt = activation.startsAt.toString(),
             endsAt = activation.endsAt.toString(),
-            alreadyActive = !result.consumedInventory
+            alreadyActive = !result.consumedInventory,
         )
     }
 
@@ -344,7 +354,7 @@ class SubscriptionService(
         userId: UUID,
         inventoryType: String,
         quantity: Int,
-        now: Instant
+        now: Instant,
     ) {
         repository.grantPremiumInventory(
             userId = userId,
@@ -352,7 +362,7 @@ class SubscriptionService(
             quantity = quantity,
             source = "dev",
             expiresAt = now.plus(DEV_INVENTORY_PERIOD),
-            now = now
+            now = now,
         ) ?: throw SubscriptionException("INVALID_STORE_PRODUCT")
     }
 
@@ -360,13 +370,13 @@ class SubscriptionService(
         PremiumInventoryBalanceDto(
             inventoryType = inventoryType,
             quantity = quantity,
-            nextExpiresAt = nextExpiresAt?.toString()
+            nextExpiresAt = nextExpiresAt?.toString(),
         )
 
     private suspend fun pendingVerificationResponse(userId: UUID): SubscriptionPurchaseSyncResponseDto =
         SubscriptionPurchaseSyncResponseDto(
             status = SubscriptionPurchaseSyncStatus.PENDING_VERIFICATION,
-            entitlement = getEntitlement(userId)
+            entitlement = getEntitlement(userId),
         )
 
     private fun invalidateEntitlement(userId: UUID) {
@@ -385,7 +395,9 @@ class SubscriptionService(
     }
 }
 
-class SubscriptionException(val code: String) : RuntimeException(code)
+class SubscriptionException(
+    val code: String,
+) : RuntimeException(code)
 
 data class PlayStoreSubscriptionSyncSummary(
     val scanned: Int,
@@ -396,7 +408,7 @@ data class PlayStoreSubscriptionSyncSummary(
     val expired: Int,
     val revoked: Int,
     val invalid: Int,
-    val unavailable: Int
+    val unavailable: Int,
 )
 
 private fun String.toUuidOrThrow(code: String): UUID =

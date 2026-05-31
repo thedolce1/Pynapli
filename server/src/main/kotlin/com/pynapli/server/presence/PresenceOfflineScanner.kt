@@ -18,7 +18,7 @@ class PresenceOfflineScanner(
     private val repository: PresenceRepository,
     private val broadcaster: PresenceBroadcaster,
     private val intervalMillis: Long = DEFAULT_INTERVAL_MILLIS,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(PresenceOfflineScanner::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -26,14 +26,15 @@ class PresenceOfflineScanner(
 
     fun start() {
         if (job != null) return
-        job = scope.launch {
-            while (isActive) {
-                runCatching { scanOnce() }.onFailure { error ->
-                    logger.warn("Presence offline scan failed", error)
+        job =
+            scope.launch {
+                while (isActive) {
+                    runCatching { scanOnce() }.onFailure { error ->
+                        logger.warn("Presence offline scan failed", error)
+                    }
+                    delay(intervalMillis)
                 }
-                delay(intervalMillis)
             }
-        }
     }
 
     suspend fun scanOnce() {
@@ -49,8 +50,8 @@ class PresenceOfflineScanner(
                 PresenceDeltaDto(
                     userId = userId.toString(),
                     online = false,
-                    lastActiveAt = now
-                )
+                    lastActiveAt = now,
+                ),
             )
         }
     }

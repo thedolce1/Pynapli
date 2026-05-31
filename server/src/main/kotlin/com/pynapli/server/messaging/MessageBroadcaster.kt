@@ -8,12 +8,13 @@ import java.time.Instant
 import java.util.UUID
 
 class MessageBroadcaster(
-    extraBufferCapacity: Int = DEFAULT_BUFFER_CAPACITY
+    extraBufferCapacity: Int = DEFAULT_BUFFER_CAPACITY,
 ) {
-    private val _deltas = MutableSharedFlow<MessageRealtimeDelta>(
-        replay = 0,
-        extraBufferCapacity = extraBufferCapacity
-    )
+    private val _deltas =
+        MutableSharedFlow<MessageRealtimeDelta>(
+            replay = 0,
+            extraBufferCapacity = extraBufferCapacity,
+        )
     val deltas: SharedFlow<MessageRealtimeDelta> = _deltas.asSharedFlow()
 
     suspend fun emit(delta: MessageRealtimeDelta) {
@@ -33,7 +34,7 @@ data class MessageRealtimeDelta(
     val messageId: UUID? = null,
     val actorUserId: UUID? = null,
     val actorDisplayName: String? = null,
-    val expiresAt: Instant? = null
+    val expiresAt: Instant? = null,
 ) {
     fun toDto(): MessageDeltaDto =
         MessageDeltaDto(
@@ -43,6 +44,6 @@ data class MessageRealtimeDelta(
             messageId = messageId?.toString(),
             actorUserId = actorUserId?.toString(),
             actorDisplayName = actorDisplayName,
-            expiresAt = expiresAt?.toString()
+            expiresAt = expiresAt?.toString(),
         )
 }

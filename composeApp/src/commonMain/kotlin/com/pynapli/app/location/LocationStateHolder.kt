@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 class LocationStateHolder(
-    private val repository: LocationUpdateRepository
+    private val repository: LocationUpdateRepository,
 ) {
     private val _state = MutableStateFlow(LocationUiState())
     val state: StateFlow<LocationUiState> = _state.asStateFlow()
@@ -26,7 +26,7 @@ class LocationStateHolder(
         _state.update { current ->
             current.copy(
                 isUpdating = false,
-                errorMessage = "Location permission is required to load nearby profiles."
+                errorMessage = "Location permission is required to load nearby profiles.",
             )
         }
     }
@@ -35,7 +35,7 @@ class LocationStateHolder(
         _state.update { current ->
             current.copy(
                 isUpdating = false,
-                errorMessage = "Current location is not available yet."
+                errorMessage = "Current location is not available yet.",
             )
         }
     }
@@ -60,7 +60,7 @@ class LocationStateHolder(
                     current.copy(
                         isUpdating = false,
                         currentLocation = result.value,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
                 LocationUpdateResult(submitted = true, gridRefresh = gridRefresh)
@@ -70,7 +70,7 @@ class LocationStateHolder(
                 _state.update { current ->
                     current.copy(
                         isUpdating = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
                 LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None)
@@ -96,13 +96,13 @@ class LocationStateHolder(
 
 data class LocationUpdateResult(
     val submitted: Boolean,
-    val gridRefresh: GridLocationRefresh
+    val gridRefresh: GridLocationRefresh,
 )
 
 enum class GridLocationRefresh {
     None,
     QuietRefresh,
-    Refresh
+    Refresh,
 }
 
 interface LocationUpdateRepository {
@@ -110,7 +110,7 @@ interface LocationUpdateRepository {
 }
 
 class ApiLocationUpdateRepository(
-    private val apiClient: PynapliApiClient
+    private val apiClient: PynapliApiClient,
 ) : LocationUpdateRepository {
     override suspend fun updateCurrentLocation(location: DeviceLocation): AppResult<CurrentLocationDto> =
         apiClient.updateCurrentLocation(
@@ -118,7 +118,7 @@ class ApiLocationUpdateRepository(
                 latitude = location.latitude,
                 longitude = location.longitude,
                 accuracyMeters = location.accuracyMeters,
-                source = "gps"
-            )
+                source = "gps",
+            ),
         )
 }

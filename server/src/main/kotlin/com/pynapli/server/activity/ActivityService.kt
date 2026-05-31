@@ -34,9 +34,12 @@ class ActivityService(
     private val riskPolicyService: RiskPolicyService? = null,
     private val subscriptionService: SubscriptionService? = null,
     private val activityBroadcaster: ActivityBroadcaster? = null,
-    private val cursorCodec: ActivityCursorCodec = ActivityCursorCodec("pynapli-local-dev-activity-cursor-secret")
+    private val cursorCodec: ActivityCursorCodec = ActivityCursorCodec("pynapli-local-dev-activity-cursor-secret"),
 ) {
-    suspend fun recordProfileView(viewerUserId: UUID, targetUserId: UUID) {
+    suspend fun recordProfileView(
+        viewerUserId: UUID,
+        targetUserId: UUID,
+    ) {
         if (viewerUserId == targetUserId) return
         if (blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) == true) return
         if (riskPolicyService?.shouldSuppressPassiveActivity(viewerUserId) == true) return
@@ -50,15 +53,19 @@ class ActivityService(
                 kind = NotificationKind.PROFILE_VIEW,
                 subjectId = targetUserId,
                 idempotencyKey = "profile_view:$targetUserId:$viewerUserId",
-                payload = activityNotificationPayload(
-                    eventType = "profile_view",
-                    extra = mapOf("viewerUserId" to viewerUserId.toString())
-                )
-            )
+                payload =
+                    activityNotificationPayload(
+                        eventType = "profile_view",
+                        extra = mapOf("viewerUserId" to viewerUserId.toString()),
+                    ),
+            ),
         )
     }
 
-    suspend fun sendFlirt(senderUserId: UUID, targetUserId: UUID): SendFlirtResponseDto {
+    suspend fun sendFlirt(
+        senderUserId: UUID,
+        targetUserId: UUID,
+    ): SendFlirtResponseDto {
         if (senderUserId == targetUserId) throw ActivityException("INVALID_FLIRT_TARGET")
         if (riskPolicyService?.isSocialActionRestricted(senderUserId) == true) {
             throw ActivityException("RISK_RESTRICTED")
@@ -80,16 +87,20 @@ class ActivityService(
                 kind = NotificationKind.FLIRT,
                 subjectId = senderUserId,
                 idempotencyKey = "flirt:$senderUserId:$targetUserId",
-                payload = activityNotificationPayload(
-                    eventType = "flirt",
-                    extra = mapOf("actorUserId" to senderUserId.toString())
-                )
-            )
+                payload =
+                    activityNotificationPayload(
+                        eventType = "flirt",
+                        extra = mapOf("actorUserId" to senderUserId.toString()),
+                    ),
+            ),
         )
         return SendFlirtResponseDto(sent = true)
     }
 
-    suspend fun requestAlbumAccess(requesterUserId: UUID, targetUserId: UUID): RequestAlbumAccessResponseDto {
+    suspend fun requestAlbumAccess(
+        requesterUserId: UUID,
+        targetUserId: UUID,
+    ): RequestAlbumAccessResponseDto {
         if (requesterUserId == targetUserId) throw ActivityException("INVALID_ALBUM_REQUEST_TARGET")
         if (riskPolicyService?.isSocialActionRestricted(requesterUserId) == true) {
             throw ActivityException("RISK_RESTRICTED")
@@ -103,15 +114,16 @@ class ActivityService(
         if (!repository.recordAlbumRequest(requesterUserId, targetUserId)) {
             throw ActivityException("ALBUM_REQUEST_NOT_ALLOWED")
         }
-        val mediaRequested = runCatching {
-            mediaService?.requestPrivateAlbumAccess(
-                requesterUserId = requesterUserId,
-                ownerUserId = targetUserId
-            ) ?: true
-        }.getOrElse { error ->
-            if (error is MediaException) throw ActivityException(error.code)
-            throw error
-        }
+        val mediaRequested =
+            runCatching {
+                mediaService?.requestPrivateAlbumAccess(
+                    requesterUserId = requesterUserId,
+                    ownerUserId = targetUserId,
+                ) ?: true
+            }.getOrElse { error ->
+                if (error is MediaException) throw ActivityException(error.code)
+                throw error
+            }
         if (!mediaRequested) throw ActivityException("ALBUM_REQUEST_NOT_ALLOWED")
         publishActivityDelta(targetUserId, "album_request")
         notificationPublisher?.enqueue(
@@ -121,16 +133,21 @@ class ActivityService(
                 kind = NotificationKind.ALBUM_REQUEST,
                 subjectId = requesterUserId,
                 idempotencyKey = "album_request:$requesterUserId:$targetUserId",
-                payload = activityNotificationPayload(
-                    eventType = "album_request",
-                    extra = mapOf("requesterUserId" to requesterUserId.toString())
-                )
-            )
+                payload =
+                    activityNotificationPayload(
+                        eventType = "album_request",
+                        extra = mapOf("requesterUserId" to requesterUserId.toString()),
+                    ),
+            ),
         )
         return RequestAlbumAccessResponseDto(requested = true)
     }
 
-    suspend fun recordSwipeInterest(actorUserId: UUID, targetUserId: UUID, eventType: String) {
+    suspend fun recordSwipeInterest(
+        actorUserId: UUID,
+        targetUserId: UUID,
+        eventType: String,
+    ) {
         if (actorUserId == targetUserId) return
         if (eventType !in SWIPE_INTEREST_EVENT_TYPES) throw ActivityException("INVALID_ACTIVITY_EVENT_TYPE")
         if (blockRepository?.isBlockedEitherWay(actorUserId, targetUserId) == true) return
@@ -140,7 +157,11 @@ class ActivityService(
         }
     }
 
-    suspend fun recordMatch(userA: UUID, userB: UUID, matchId: UUID) {
+    suspend fun recordMatch(
+        userA: UUID,
+        userB: UUID,
+        matchId: UUID,
+    ) {
         if (userA == userB) return
         if (blockRepository?.isBlockedEitherWay(userA, userB) == true) return
         if (repository.recordMatch(recipientUserId = userA, actorUserId = userB, matchId = matchId)) {
@@ -151,7 +172,11 @@ class ActivityService(
         }
     }
 
-    suspend fun recordPartnerChatInvite(inviterUserId: UUID, inviteeUserId: UUID, conversationId: UUID) {
+    suspend fun recordPartnerChatInvite(
+        inviterUserId: UUID,
+        inviteeUserId: UUID,
+        conversationId: UUID,
+    ) {
         if (inviterUserId == inviteeUserId) return
         if (blockRepository?.isBlockedEitherWay(inviterUserId, inviteeUserId) == true) return
         if (riskPolicyService?.isSocialActionRestricted(inviterUserId) == true) return
@@ -163,22 +188,27 @@ class ActivityService(
     suspend fun respondToAlbumAccessRequest(
         ownerUserId: UUID,
         eventId: UUID,
-        approve: Boolean
+        approve: Boolean,
     ): RespondAlbumAccessResponseDto {
-        val event = repository.getAlbumRequestEvent(ownerUserId, eventId)
-            ?: throw ActivityException("ALBUM_REQUEST_NOT_FOUND")
-        val status = mediaService?.decidePrivateAlbumAccessRequest(
-            ownerUserId = event.ownerUserId,
-            requesterUserId = event.requesterUserId,
-            approved = approve
-        ) ?: throw ActivityException("ALBUM_REQUEST_NOT_FOUND")
+        val event =
+            repository.getAlbumRequestEvent(ownerUserId, eventId)
+                ?: throw ActivityException("ALBUM_REQUEST_NOT_FOUND")
+        val status =
+            mediaService?.decidePrivateAlbumAccessRequest(
+                ownerUserId = event.ownerUserId,
+                requesterUserId = event.requesterUserId,
+                approved = approve,
+            ) ?: throw ActivityException("ALBUM_REQUEST_NOT_FOUND")
         return RespondAlbumAccessResponseDto(
             eventId = event.eventId.toString(),
-            status = status
+            status = status,
         )
     }
 
-    suspend fun dismissActivityEvent(recipientUserId: UUID, eventId: UUID): DismissActivityEventResponseDto {
+    suspend fun dismissActivityEvent(
+        recipientUserId: UUID,
+        eventId: UUID,
+    ): DismissActivityEventResponseDto {
         if (!repository.dismissActivityEvent(recipientUserId, eventId)) {
             throw ActivityException("ACTIVITY_EVENT_NOT_FOUND")
         }
@@ -195,27 +225,27 @@ class ActivityService(
             matchCount = summary.matchCount,
             albumRequestCount = summary.albumRequestCount,
             partnerInviteCount = summary.partnerInviteCount,
-            latestBadgeOccurredAt = summary.latestBadgeOccurredAt?.toString()
+            latestBadgeOccurredAt = summary.latestBadgeOccurredAt?.toString(),
         )
     }
 
     suspend fun markActivityEventsSeen(
         recipientUserId: UUID,
-        eventIdTexts: List<String>
+        eventIdTexts: List<String>,
     ): MarkActivitySeenResponseDto {
         if (eventIdTexts.size > MAX_MARK_SEEN_IDS) {
             throw ActivityException("TOO_MANY_ACTIVITY_EVENTS")
         }
-        val eventIds = eventIdTexts
-            .map { value ->
-                runCatching { UUID.fromString(value) }
-                    .getOrElse { throw ActivityException("INVALID_ACTIVITY_EVENT") }
-            }
-            .toSet()
+        val eventIds =
+            eventIdTexts
+                .map { value ->
+                    runCatching { UUID.fromString(value) }
+                        .getOrElse { throw ActivityException("INVALID_ACTIVITY_EVENT") }
+                }.toSet()
         if (eventIds.isEmpty()) return MarkActivitySeenResponseDto(markedCount = 0)
 
         return MarkActivitySeenResponseDto(
-            markedCount = repository.markActivityEventsSeen(recipientUserId, eventIds)
+            markedCount = repository.markActivityEventsSeen(recipientUserId, eventIds),
         )
     }
 
@@ -223,27 +253,29 @@ class ActivityService(
         recipientUserId: UUID,
         limit: Int = DEFAULT_LIMIT,
         tabText: String? = null,
-        cursorText: String? = null
+        cursorText: String? = null,
     ): ActivityFeedResponseDto {
         val normalizedLimit = limit.coerceIn(1, MAX_LIMIT)
         val tab = ActivityFeedTab.from(tabText)
         val cursorScopeHash = ActivityCursorCodec.scopeHash(recipientUserId, tab)
-        val cursor = cursorText
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { token ->
-                try {
-                    cursorCodec.decode(token, cursorScopeHash)
-                } catch (_: ActivityCursorException) {
-                    throw ActivityException("INVALID_ACTIVITY_CURSOR")
+        val cursor =
+            cursorText
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { token ->
+                    try {
+                        cursorCodec.decode(token, cursorScopeHash)
+                    } catch (_: ActivityCursorException) {
+                        throw ActivityException("INVALID_ACTIVITY_CURSOR")
+                    }
                 }
-            }
         val policy = subscriptionService?.getPolicy(recipientUserId) ?: EntitlementPolicy.unrestricted()
-        val remainingReveal = if (policy.fullActivityReveal) {
-            Int.MAX_VALUE
-        } else {
-            (policy.activityRevealLimit - (cursor?.seenCount ?: 0)).coerceAtLeast(0)
-        }
+        val remainingReveal =
+            if (policy.fullActivityReveal) {
+                Int.MAX_VALUE
+            } else {
+                (policy.activityRevealLimit - (cursor?.seenCount ?: 0)).coerceAtLeast(0)
+            }
         if (remainingReveal == 0) {
             return ActivityFeedResponseDto(
                 items = emptyList(),
@@ -251,94 +283,104 @@ class ActivityService(
                 adSupported = policy.adSupported,
                 entitlementTier = policy.tier,
                 revealLimit = policy.activityRevealLimit,
-                gatedCount = 0
+                gatedCount = 0,
             )
         }
 
         val pageLimit = normalizedLimit.coerceAtMost(remainingReveal)
-        val events = repository.listActivity(
-            ActivityFeedQuery(
-                recipientUserId = recipientUserId,
-                eventTypes = tab.eventTypes,
-                limit = pageLimit + 1,
-                cursor = cursor
+        val events =
+            repository.listActivity(
+                ActivityFeedQuery(
+                    recipientUserId = recipientUserId,
+                    eventTypes = tab.eventTypes,
+                    limit = pageLimit + 1,
+                    cursor = cursor,
+                ),
             )
-        )
         val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(recipientUserId).orEmpty()
-        val blockVisible = if (blockedRelatedIds.isEmpty()) {
-            events
-        } else {
-            events.filterNot { it.actorUserId in blockedRelatedIds }
-        }
-        val visible = if (riskPolicyService == null) {
-            blockVisible
-        } else {
-            buildList {
-                for (event in blockVisible) {
-                    if (!riskPolicyService.shouldSuppressPassiveActivity(event.actorUserId)) {
-                        add(event)
+        val blockVisible =
+            if (blockedRelatedIds.isEmpty()) {
+                events
+            } else {
+                events.filterNot { it.actorUserId in blockedRelatedIds }
+            }
+        val visible =
+            if (riskPolicyService == null) {
+                blockVisible
+            } else {
+                buildList {
+                    for (event in blockVisible) {
+                        if (!riskPolicyService.shouldSuppressPassiveActivity(event.actorUserId)) {
+                            add(event)
+                        }
                     }
                 }
             }
-        }
         val revealed = visible.take(pageLimit)
         val seenCount = (cursor?.seenCount ?: 0) + revealed.size
         val hasMoreVisibleInFetchedPage = visible.size > pageLimit
         val canPageWithinReveal = policy.fullActivityReveal || seenCount < policy.activityRevealLimit
-        val nextCursor = if (hasMoreVisibleInFetchedPage && canPageWithinReveal && revealed.isNotEmpty()) {
-            cursorCodec.encode(cursorScopeHash, revealed.last().toCursorAnchor(seenCount))
-        } else {
-            null
-        }
-        val gatedCount = if (!policy.fullActivityReveal && nextCursor == null) {
-            (visible.size - revealed.size).coerceAtLeast(0)
-        } else {
-            0
-        }
+        val nextCursor =
+            if (hasMoreVisibleInFetchedPage && canPageWithinReveal && revealed.isNotEmpty()) {
+                cursorCodec.encode(cursorScopeHash, revealed.last().toCursorAnchor(seenCount))
+            } else {
+                null
+            }
+        val gatedCount =
+            if (!policy.fullActivityReveal && nextCursor == null) {
+                (visible.size - revealed.size).coerceAtLeast(0)
+            } else {
+                0
+            }
         return ActivityFeedResponseDto(
             items = revealed.map { it.toDto() },
             nextCursor = nextCursor,
             adSupported = policy.adSupported,
             entitlementTier = policy.tier,
             revealLimit = if (policy.fullActivityReveal) null else policy.activityRevealLimit,
-            gatedCount = gatedCount
+            gatedCount = gatedCount,
         )
     }
 
-    private fun ActivityEventRecord.toDto(): ActivityEventDto = ActivityEventDto(
-        eventId = eventId.toString(),
-        type = type,
-        actorUserId = actorUserId.toString(),
-        actorDisplayName = actorDisplayName,
-        actorPhotoUrl = actorProfilePhotoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-        count = count,
-        occurredAt = occurredAt.toString(),
-        seen = seen,
-        distanceLabel = if (showDistance) distanceMeters?.toPublicDistanceLabel() else null,
-        distanceMeters = if (showDistance) distanceMeters?.toPublicDistanceMeters() else null,
-        albumRequestStatus = albumRequestStatus,
-        matchId = matchId,
-        conversationId = conversationId
-    )
+    private fun ActivityEventRecord.toDto(): ActivityEventDto =
+        ActivityEventDto(
+            eventId = eventId.toString(),
+            type = type,
+            actorUserId = actorUserId.toString(),
+            actorDisplayName = actorDisplayName,
+            actorPhotoUrl = actorProfilePhotoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+            count = count,
+            occurredAt = occurredAt.toString(),
+            seen = seen,
+            distanceLabel = if (showDistance) distanceMeters?.toPublicDistanceLabel() else null,
+            distanceMeters = if (showDistance) distanceMeters?.toPublicDistanceMeters() else null,
+            albumRequestStatus = albumRequestStatus,
+            matchId = matchId,
+            conversationId = conversationId,
+        )
 
-    private suspend fun publishActivityDelta(recipientUserId: UUID, eventType: String) {
+    private suspend fun publishActivityDelta(
+        recipientUserId: UUID,
+        eventType: String,
+    ) {
         activityBroadcaster?.emit(
             ActivityRealtimeDelta(
                 recipientUserId = recipientUserId,
-                type = eventType
-            )
+                type = eventType,
+            ),
         )
     }
 
     private fun activityNotificationPayload(
         eventType: String,
-        extra: Map<String, String> = emptyMap()
+        extra: Map<String, String> = emptyMap(),
     ): Map<String, String> =
-        extra + mapOf(
-            "target" to "activity",
-            "activityTab" to ActivityFeedTab.fromEventType(eventType).value,
-            "activityEventType" to eventType
-        )
+        extra +
+            mapOf(
+                "target" to "activity",
+                "activityTab" to ActivityFeedTab.fromEventType(eventType).value,
+                "activityEventType" to eventType,
+            )
 
     companion object {
         private const val DEFAULT_LIMIT = 50
@@ -348,4 +390,6 @@ class ActivityService(
     }
 }
 
-class ActivityException(val code: String) : RuntimeException(code)
+class ActivityException(
+    val code: String,
+) : RuntimeException(code)

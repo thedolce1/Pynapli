@@ -18,14 +18,13 @@ class ProfileLinkService(
     private val blockRepository: BlockRepository? = null,
     private val notificationPublisher: NotificationPublisher? = null,
     private val clock: Clock = Clock.systemUTC(),
-    private val linkActivationCooldown: Duration = LINK_ACTIVATION_COOLDOWN
+    private val linkActivationCooldown: Duration = LINK_ACTIVATION_COOLDOWN,
 ) {
-    suspend fun getSummary(viewerUserId: UUID): ProfileLinksSummaryDto =
-        repository.getSummary(viewerUserId).toDto()
+    suspend fun getSummary(viewerUserId: UUID): ProfileLinksSummaryDto = repository.getSummary(viewerUserId).toDto()
 
     suspend fun createInvitation(
         requesterUserId: UUID,
-        request: CreateProfileLinkInvitationRequestDto
+        request: CreateProfileLinkInvitationRequestDto,
     ): ProfileLinksSummaryDto {
         val targetUserId = request.targetUserId.toUuidOrThrow()
         validateCanRequestLink(requesterUserId, targetUserId)
@@ -38,16 +37,20 @@ class ProfileLinkService(
                 kind = NotificationKind.PROFILE_LINK_INVITE,
                 subjectId = invitation.linkId,
                 idempotencyKey = "profile_link_invite:${invitation.linkId}:$targetUserId",
-                payload = mapOf("linkId" to invitation.linkId.toString())
-            )
+                payload = mapOf("linkId" to invitation.linkId.toString()),
+            ),
         )
         return getSummary(requesterUserId)
     }
 
-    suspend fun acceptInvitation(viewerUserId: UUID, linkIdValue: String): ProfileLinksSummaryDto {
+    suspend fun acceptInvitation(
+        viewerUserId: UUID,
+        linkIdValue: String,
+    ): ProfileLinksSummaryDto {
         val linkId = linkIdValue.toUuidOrThrow()
-        val invitation = repository.getPendingInvitationForRecipient(viewerUserId, linkId)
-            ?: throw ProfileLinkException("PROFILE_LINK_INVITE_NOT_FOUND")
+        val invitation =
+            repository.getPendingInvitationForRecipient(viewerUserId, linkId)
+                ?: throw ProfileLinkException("PROFILE_LINK_INVITE_NOT_FOUND")
 
         validatePairCanLink(invitation.requesterUserId, invitation.recipientUserId)
         validateLinkActivationCooldown(invitation.requesterUserId, invitation.recipientUserId)
@@ -64,14 +67,17 @@ class ProfileLinkService(
                 kind = NotificationKind.PROFILE_LINK_ACCEPTED,
                 subjectId = linkId,
                 idempotencyKey = "profile_link_accepted:$linkId:${invitation.requesterUserId}",
-                payload = mapOf("linkId" to linkId.toString())
-            )
+                payload = mapOf("linkId" to linkId.toString()),
+            ),
         )
 
         return getSummary(viewerUserId)
     }
 
-    suspend fun declineInvitation(viewerUserId: UUID, linkIdValue: String): ProfileLinksSummaryDto {
+    suspend fun declineInvitation(
+        viewerUserId: UUID,
+        linkIdValue: String,
+    ): ProfileLinksSummaryDto {
         val linkId = linkIdValue.toUuidOrThrow()
         if (!repository.declineInvitation(viewerUserId, linkId)) {
             throw ProfileLinkException("PROFILE_LINK_INVITE_NOT_FOUND")
@@ -86,7 +92,10 @@ class ProfileLinkService(
         return getSummary(viewerUserId)
     }
 
-    private suspend fun validateCanRequestLink(requesterUserId: UUID, targetUserId: UUID) {
+    private suspend fun validateCanRequestLink(
+        requesterUserId: UUID,
+        targetUserId: UUID,
+    ) {
         if (requesterUserId == targetUserId) throw ProfileLinkException("PROFILE_LINK_SELF_FORBIDDEN")
         if (!repository.isLinkableUser(targetUserId)) throw ProfileLinkException("PROFILE_LINK_TARGET_NOT_FOUND")
         validatePairCanLink(requesterUserId, targetUserId)
@@ -96,7 +105,10 @@ class ProfileLinkService(
         }
     }
 
-    private suspend fun validatePairCanLink(userIdA: UUID, userIdB: UUID) {
+    private suspend fun validatePairCanLink(
+        userIdA: UUID,
+        userIdB: UUID,
+    ) {
         if (blockRepository?.isBlockedEitherWay(userIdA, userIdB) == true) {
             throw ProfileLinkException("PROFILE_LINK_BLOCKED")
         }
@@ -105,7 +117,10 @@ class ProfileLinkService(
         }
     }
 
-    private suspend fun validateLinkActivationCooldown(userIdA: UUID, userIdB: UUID) {
+    private suspend fun validateLinkActivationCooldown(
+        userIdA: UUID,
+        userIdB: UUID,
+    ) {
         val since = clock.instant().minus(linkActivationCooldown)
         if (repository.findRecentUnlinkForEitherUser(userIdA, userIdB, since) != null) {
             throw ProfileLinkException("PROFILE_LINK_COOLDOWN")
@@ -116,7 +131,7 @@ class ProfileLinkService(
         ProfileLinksSummaryDto(
             current = current?.toDto(),
             incomingInvites = incomingInvites.map { it.toDto() },
-            outgoingInvites = outgoingInvites.map { it.toDto() }
+            outgoingInvites = outgoingInvites.map { it.toDto() },
         )
 
     private fun ProfileLinkRecord.toDto(): ProfileLinkDto =
@@ -129,7 +144,7 @@ class ProfileLinkService(
             direction = direction,
             createdAt = createdAt.toString(),
             acceptedAt = acceptedAt?.toString(),
-            unlinkedAt = unlinkedAt?.toString()
+            unlinkedAt = unlinkedAt?.toString(),
         )
 
     private fun String.toUuidOrThrow(): UUID =
@@ -138,6 +153,8 @@ class ProfileLinkService(
         }
 }
 
-class ProfileLinkException(val code: String) : RuntimeException(code)
+class ProfileLinkException(
+    val code: String,
+) : RuntimeException(code)
 
 private val LINK_ACTIVATION_COOLDOWN: Duration = Duration.ofDays(7)

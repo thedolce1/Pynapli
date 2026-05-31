@@ -30,7 +30,7 @@ internal fun SectionIntro(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
@@ -39,7 +39,7 @@ internal fun SectionTitle(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurface
+        color = MaterialTheme.colorScheme.onSurface,
     )
 }
 
@@ -49,24 +49,24 @@ internal fun SectionHeader(
     dealbreakerKey: String,
     eligible: Boolean,
     locked: Boolean,
-    onLockChange: (Boolean) -> Unit
+    onLockChange: (Boolean) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         DealbreakerLockChip(
             dealbreakerKey = dealbreakerKey,
             eligible = eligible,
             locked = locked,
-            onClick = { onLockChange(!locked) }
+            onClick = { onLockChange(!locked) },
         )
     }
 }
@@ -77,24 +77,24 @@ internal fun SubsectionHeader(
     dealbreakerKey: String,
     eligible: Boolean,
     locked: Boolean,
-    onLockChange: (Boolean) -> Unit
+    onLockChange: (Boolean) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = title,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         DealbreakerLockChip(
             dealbreakerKey = dealbreakerKey,
             eligible = eligible,
             locked = locked,
-            onClick = { onLockChange(!locked) }
+            onClick = { onLockChange(!locked) },
         )
     }
 }
@@ -112,7 +112,7 @@ private fun DealbreakerLockChip(
     dealbreakerKey: String,
     eligible: Boolean,
     locked: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     FilterChip(
         selected = locked,
@@ -123,14 +123,15 @@ private fun DealbreakerLockChip(
                 text = if (locked) "Locked" else "Lock",
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.labelSmall
+                style = MaterialTheme.typography.labelSmall,
             )
         },
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer
-        ),
-        modifier = Modifier.testTag(SwipeFilterTags.dealbreakerTag(dealbreakerKey))
+        colors =
+            FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            ),
+        modifier = Modifier.testTag(SwipeFilterTags.dealbreakerTag(dealbreakerKey)),
     )
 }
 
@@ -139,7 +140,7 @@ internal fun ComingSoonSection(message: String) {
     Text(
         text = message,
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
@@ -153,20 +154,21 @@ internal fun ComingSoonSection(message: String) {
 @Composable
 internal fun AdvancedPaywallBanner(onSubscribe: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .testTag(SwipeFilterTags.ADVANCED_PAYWALL),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .testTag(SwipeFilterTags.ADVANCED_PAYWALL),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(
             imageVector = Icons.Filled.Lock,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(18.dp),
         )
         Text(
             text = "Advanced filters require Pynapli+.",
@@ -174,11 +176,11 @@ internal fun AdvancedPaywallBanner(onSubscribe: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         TextButton(
             onClick = onSubscribe,
-            modifier = Modifier.testTag(SwipeFilterTags.ADVANCED_PAYWALL_SUBSCRIBE)
+            modifier = Modifier.testTag(SwipeFilterTags.ADVANCED_PAYWALL_SUBSCRIBE),
         ) {
             Text(text = "Subscribe", maxLines = 1)
         }
@@ -186,18 +188,24 @@ internal fun AdvancedPaywallBanner(onSubscribe: () -> Unit) {
 }
 
 @Composable
-internal fun SwipeSheetChip(label: String, active: Boolean, onClick: () -> Unit) {
+internal fun SwipeSheetChip(
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
     AssistChip(
         onClick = onClick,
         label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            labelColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-        ),
-        border = AssistChipDefaults.assistChipBorder(
-            enabled = true,
-            borderColor = MaterialTheme.colorScheme.outline
-        )
+        colors =
+            AssistChipDefaults.assistChipColors(
+                containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                labelColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            ),
+        border =
+            AssistChipDefaults.assistChipBorder(
+                enabled = true,
+                borderColor = MaterialTheme.colorScheme.outline,
+            ),
     )
 }
 

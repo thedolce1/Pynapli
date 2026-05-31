@@ -4,7 +4,10 @@ import java.time.Instant
 import java.util.UUID
 
 interface LocationRepository {
-    suspend fun upsertCurrentLocation(userId: UUID, update: LocationUpdate): CurrentLocationRecord
+    suspend fun upsertCurrentLocation(
+        userId: UUID,
+        update: LocationUpdate,
+    ): CurrentLocationRecord
 }
 
 data class LocationUpdate(
@@ -15,7 +18,7 @@ data class LocationUpdate(
     val geohash: String?,
     val city: String?,
     val region: String?,
-    val country: String?
+    val country: String?,
 )
 
 data class CurrentLocationRecord(
@@ -25,6 +28,5 @@ data class CurrentLocationRecord(
     val geohash: String?,
     val city: String?,
     val region: String?,
-    val country: String?
+    val country: String?,
 )
-

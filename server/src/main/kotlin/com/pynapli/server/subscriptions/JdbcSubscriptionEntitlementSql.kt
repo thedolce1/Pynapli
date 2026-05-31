@@ -6,7 +6,10 @@ import java.sql.Types
 import java.time.Instant
 import java.util.UUID
 
-internal fun Connection.loadBestActiveEntitlement(userId: UUID, now: Instant): ActiveEntitlementRecord? =
+internal fun Connection.loadBestActiveEntitlement(
+    userId: UUID,
+    now: Instant,
+): ActiveEntitlementRecord? =
     prepareStatement(ACTIVE_ENTITLEMENT_QUERY).use { statement ->
         statement.setObject(1, userId)
         statement.setTimestamp(2, Timestamp.from(now))
@@ -22,7 +25,10 @@ internal fun Connection.loadBestActiveEntitlement(userId: UUID, now: Instant): A
         }
     }
 
-internal fun Connection.loadBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord? =
+internal fun Connection.loadBestActiveOwnSubscription(
+    userId: UUID,
+    now: Instant,
+): SubscriptionRecord? =
     prepareStatement(ACTIVE_OWN_SUBSCRIPTION_QUERY).use { statement ->
         statement.setObject(1, userId)
         statement.setTimestamp(2, Timestamp.from(now))
@@ -34,7 +40,7 @@ internal fun Connection.loadBestActiveOwnSubscription(userId: UUID, now: Instant
 
 internal fun Connection.loadBestActiveLinkedPartnerSubscription(
     userId: UUID,
-    now: Instant
+    now: Instant,
 ): LinkedPartnerSubscriptionRecord? =
     prepareStatement(ACTIVE_LINKED_PARTNER_SUBSCRIPTION_QUERY).use { statement ->
         statement.setTimestamp(1, Timestamp.from(now))
@@ -45,12 +51,15 @@ internal fun Connection.loadBestActiveLinkedPartnerSubscription(
             LinkedPartnerSubscriptionRecord(
                 subscription = rs.toSubscriptionRecord(),
                 linkedPartnerUserId = rs.getObject("linked_partner_user_id", UUID::class.java),
-                partnerLinkId = rs.getObject("partner_link_id", UUID::class.java)
+                partnerLinkId = rs.getObject("partner_link_id", UUID::class.java),
             )
         }
     }
 
-internal fun Connection.loadBestActiveStoredEntitlement(userId: UUID, now: Instant): StoredEntitlementRecord? =
+internal fun Connection.loadBestActiveStoredEntitlement(
+    userId: UUID,
+    now: Instant,
+): StoredEntitlementRecord? =
     prepareStatement(ACTIVE_STORED_ENTITLEMENT_QUERY).use { statement ->
         statement.setObject(1, userId)
         statement.setTimestamp(2, Timestamp.from(now))
@@ -60,7 +69,10 @@ internal fun Connection.loadBestActiveStoredEntitlement(userId: UUID, now: Insta
         }
     }
 
-internal fun Connection.listStoredEntitlementRecordsForUser(userId: UUID, limit: Int): List<StoredEntitlementRecord> =
+internal fun Connection.listStoredEntitlementRecordsForUser(
+    userId: UUID,
+    limit: Int,
+): List<StoredEntitlementRecord> =
     prepareStatement(LIST_STORED_ENTITLEMENTS_FOR_USER_QUERY).use { statement ->
         statement.setObject(1, userId)
         statement.setInt(2, limit.coerceIn(1, 100))
@@ -78,7 +90,7 @@ internal fun Connection.grantStoredEntitlementRecord(
     tier: String,
     source: String,
     startsAt: Instant,
-    endsAt: Instant?
+    endsAt: Instant?,
 ): StoredEntitlementRecord? =
     prepareStatement(GRANT_STORED_ENTITLEMENT_QUERY).use { statement ->
         statement.setObject(1, userId)
@@ -106,7 +118,8 @@ internal fun Connection.revokeStoredEntitlementRecord(entitlementId: UUID): Stor
 
 private val ACTIVE_STATUSES = "('active', 'grace')"
 
-private val ACTIVE_ENTITLEMENT_QUERY = """
+private val ACTIVE_ENTITLEMENT_QUERY =
+    """
     SELECT tier,
            source,
            source_subscription_id,
@@ -206,9 +219,10 @@ private val ACTIVE_ENTITLEMENT_QUERY = """
              ends_at DESC NULLS FIRST,
              stable_id ASC
     LIMIT 1
-""".trimIndent()
+    """.trimIndent()
 
-private val ACTIVE_OWN_SUBSCRIPTION_QUERY = """
+private val ACTIVE_OWN_SUBSCRIPTION_QUERY =
+    """
     SELECT s.id AS subscription_id,
            s.user_id AS subscription_user_id,
            s.tier,
@@ -233,9 +247,10 @@ private val ACTIVE_OWN_SUBSCRIPTION_QUERY = """
         s.current_period_end DESC,
         s.id ASC
     LIMIT 1
-""".trimIndent()
+    """.trimIndent()
 
-private val ACTIVE_LINKED_PARTNER_SUBSCRIPTION_QUERY = """
+private val ACTIVE_LINKED_PARTNER_SUBSCRIPTION_QUERY =
+    """
     SELECT s.id AS subscription_id,
            s.user_id AS subscription_user_id,
            s.tier,
@@ -266,9 +281,10 @@ private val ACTIVE_LINKED_PARTNER_SUBSCRIPTION_QUERY = """
         s.current_period_end DESC,
         s.id ASC
     LIMIT 1
-""".trimIndent()
+    """.trimIndent()
 
-private val ACTIVE_STORED_ENTITLEMENT_QUERY = """
+private val ACTIVE_STORED_ENTITLEMENT_QUERY =
+    """
     SELECT e.id AS entitlement_id,
            e.user_id AS entitlement_user_id,
            e.tier,
@@ -301,9 +317,10 @@ private val ACTIVE_STORED_ENTITLEMENT_QUERY = """
         e.ends_at DESC NULLS FIRST,
         e.id ASC
     LIMIT 1
-""".trimIndent()
+    """.trimIndent()
 
-private val LIST_STORED_ENTITLEMENTS_FOR_USER_QUERY = """
+private val LIST_STORED_ENTITLEMENTS_FOR_USER_QUERY =
+    """
     SELECT e.id AS entitlement_id,
            e.user_id AS entitlement_user_id,
            e.tier,
@@ -318,9 +335,10 @@ private val LIST_STORED_ENTITLEMENTS_FOR_USER_QUERY = """
              e.created_at DESC,
              e.id ASC
     LIMIT ?
-""".trimIndent()
+    """.trimIndent()
 
-private val GRANT_STORED_ENTITLEMENT_QUERY = """
+private val GRANT_STORED_ENTITLEMENT_QUERY =
+    """
     WITH target_user AS (
         SELECT id
         FROM users
@@ -355,9 +373,10 @@ private val GRANT_STORED_ENTITLEMENT_QUERY = """
               starts_at,
               ends_at,
               status
-""".trimIndent()
+    """.trimIndent()
 
-private val REVOKE_STORED_ENTITLEMENT_QUERY = """
+private val REVOKE_STORED_ENTITLEMENT_QUERY =
+    """
     UPDATE entitlements
     SET status = 'revoked',
         updated_at = now()
@@ -371,4 +390,4 @@ private val REVOKE_STORED_ENTITLEMENT_QUERY = """
               starts_at,
               ends_at,
               status
-""".trimIndent()
+    """.trimIndent()

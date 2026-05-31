@@ -10,20 +10,29 @@ interface SwipeRepository {
         radiusMeters: Int,
         limit: Int,
         filters: DiscoveryFilters = DiscoveryFilters(),
-        excludedTargetUserIds: Set<UUID> = emptySet()
+        excludedTargetUserIds: Set<UUID> = emptySet(),
     ): SwipeDeckResult
 
-    suspend fun upsertDeckSession(session: SwipeDeckSessionRecord, cards: List<SwipeDeckSessionCardRecord>)
+    suspend fun upsertDeckSession(
+        session: SwipeDeckSessionRecord,
+        cards: List<SwipeDeckSessionCardRecord>,
+    )
 
-    suspend fun findDeckSession(sessionId: UUID, viewerUserId: UUID): SwipeDeckSessionRecord?
+    suspend fun findDeckSession(
+        sessionId: UUID,
+        viewerUserId: UUID,
+    ): SwipeDeckSessionRecord?
 
     suspend fun listDeckSessionTargetIds(sessionId: UUID): Set<UUID>
 
-    suspend fun findDeckSessionState(sessionId: UUID, viewerUserId: UUID): SwipeDeckSessionState? =
+    suspend fun findDeckSessionState(
+        sessionId: UUID,
+        viewerUserId: UUID,
+    ): SwipeDeckSessionState? =
         findDeckSession(sessionId, viewerUserId)?.let { session ->
             SwipeDeckSessionState(
                 session = session,
-                targetUserIds = listDeckSessionTargetIds(session.sessionId)
+                targetUserIds = listDeckSessionTargetIds(session.sessionId),
             )
         }
 
@@ -32,7 +41,7 @@ interface SwipeRepository {
         cardTokenHash: String,
         viewerUserId: UUID,
         targetUserId: UUID,
-        now: Instant
+        now: Instant,
     ): Boolean
 
     suspend fun markDeckCardActionRecorded(
@@ -40,14 +49,14 @@ interface SwipeRepository {
         cardTokenHash: String,
         targetUserId: UUID,
         action: String,
-        now: Instant
+        now: Instant,
     )
 
     suspend fun isActionTargetEligible(
         viewerUserId: UUID,
         targetUserId: UUID,
         radiusMeters: Int,
-        requireIntroNotesAllowed: Boolean = false
+        requireIntroNotesAllowed: Boolean = false,
     ): Boolean
 
     /**
@@ -64,28 +73,34 @@ interface SwipeRepository {
         targetUserId: UUID,
         radiusMeters: Int,
         requireIntroNotesAllowed: Boolean,
-        now: Instant
-    ): SwipeActionPreconditionCheck = SwipeActionPreconditionCheck(
-        deckCardActionable = isDeckCardActionable(
-            sessionId = sessionId,
-            cardTokenHash = cardTokenHash,
-            viewerUserId = viewerUserId,
-            targetUserId = targetUserId,
-            now = now
-        ),
-        targetEligible = isActionTargetEligible(
-            viewerUserId = viewerUserId,
-            targetUserId = targetUserId,
-            radiusMeters = radiusMeters,
-            requireIntroNotesAllowed = requireIntroNotesAllowed
+        now: Instant,
+    ): SwipeActionPreconditionCheck =
+        SwipeActionPreconditionCheck(
+            deckCardActionable =
+                isDeckCardActionable(
+                    sessionId = sessionId,
+                    cardTokenHash = cardTokenHash,
+                    viewerUserId = viewerUserId,
+                    targetUserId = targetUserId,
+                    now = now,
+                ),
+            targetEligible =
+                isActionTargetEligible(
+                    viewerUserId = viewerUserId,
+                    targetUserId = targetUserId,
+                    radiusMeters = radiusMeters,
+                    requireIntroNotesAllowed = requireIntroNotesAllowed,
+                ),
         )
-    )
 
-    suspend fun findSwipeActionById(actionId: UUID, actorUserId: UUID): SwipeActionRecord?
+    suspend fun findSwipeActionById(
+        actionId: UUID,
+        actorUserId: UUID,
+    ): SwipeActionRecord?
 
     suspend fun findLatestRewindableAction(
         viewerUserId: UUID,
-        radiusMeters: Int
+        radiusMeters: Int,
     ): SwipeRewindCandidateRecord?
 
     /**
@@ -109,7 +124,7 @@ interface SwipeRepository {
          * after it ends.
          */
         travelLocationId: UUID? = null,
-        matchIdFactory: () -> UUID = UUID::randomUUID
+        matchIdFactory: () -> UUID = UUID::randomUUID,
     ): SwipeActionResult
 
     suspend fun recordSwipeActionAndMarkCard(
@@ -123,25 +138,26 @@ interface SwipeRepository {
         noteText: String? = null,
         consumedInventoryId: UUID? = null,
         travelLocationId: UUID? = null,
-        matchIdFactory: () -> UUID = UUID::randomUUID
+        matchIdFactory: () -> UUID = UUID::randomUUID,
     ): SwipeActionResult {
-        val result = recordSwipeAction(
-            actionId = actionId,
-            actorUserId = actorUserId,
-            targetUserId = targetUserId,
-            action = action,
-            noteText = noteText,
-            consumedInventoryId = consumedInventoryId,
-            travelLocationId = travelLocationId,
-            matchIdFactory = matchIdFactory
-        )
+        val result =
+            recordSwipeAction(
+                actionId = actionId,
+                actorUserId = actorUserId,
+                targetUserId = targetUserId,
+                action = action,
+                noteText = noteText,
+                consumedInventoryId = consumedInventoryId,
+                travelLocationId = travelLocationId,
+                matchIdFactory = matchIdFactory,
+            )
         if (result.recorded) {
             markDeckCardActionRecorded(
                 sessionId = sessionId,
                 cardTokenHash = cardTokenHash,
                 targetUserId = targetUserId,
                 action = action,
-                now = now
+                now = now,
             )
         }
         return result
@@ -160,26 +176,29 @@ interface SwipeRepository {
         targetUserId: UUID,
         session: SwipeDeckSessionRecord,
         card: SwipeDeckSessionCardRecord,
-        rewoundAt: Instant
+        rewoundAt: Instant,
     ): Boolean
 
-    suspend fun listMatches(viewerUserId: UUID, limit: Int): List<MatchSummaryRecord>
+    suspend fun listMatches(
+        viewerUserId: UUID,
+        limit: Int,
+    ): List<MatchSummaryRecord>
 }
 
 data class SwipeDeckResult(
     val viewerHadLocation: Boolean,
-    val cards: List<SwipeCardRecord>
+    val cards: List<SwipeCardRecord>,
 )
 
 data class SwipeActionPreconditionCheck(
     val deckCardActionable: Boolean,
     val targetEligible: Boolean,
-    val viewerTravelLocationId: UUID? = null
+    val viewerTravelLocationId: UUID? = null,
 )
 
 data class SwipeDeckSessionState(
     val session: SwipeDeckSessionRecord,
-    val targetUserIds: Set<UUID>
+    val targetUserIds: Set<UUID>,
 )
 
 data class SwipeDeckSessionRecord(
@@ -192,7 +211,7 @@ data class SwipeDeckSessionRecord(
     val pageLimit: Int,
     val filterPayload: String,
     val generatedAt: Instant,
-    val expiresAt: Instant
+    val expiresAt: Instant,
 )
 
 data class SwipeDeckSessionCardRecord(
@@ -202,7 +221,7 @@ data class SwipeDeckSessionCardRecord(
     val targetUserId: UUID,
     val cardTokenHash: String,
     val position: Int,
-    val dealtAt: Instant
+    val dealtAt: Instant,
 )
 
 data class SwipeCardRecord(
@@ -224,13 +243,13 @@ data class SwipeCardRecord(
      * on the swipe card (SWIPE_IMPLEMENTATION_SPEC L348) so the viewer knows
      * the person is browsing their area in passport mode, not local.
      */
-    val visiting: Boolean = false
+    val visiting: Boolean = false,
 )
 
 data class SwipeActionResult(
     val recorded: Boolean,
     val match: MatchRecord?,
-    val newlyRecorded: Boolean = recorded
+    val newlyRecorded: Boolean = recorded,
 )
 
 data class SwipeActionRecord(
@@ -241,7 +260,7 @@ data class SwipeActionRecord(
     val noteText: String?,
     val createdAt: Instant,
     val rewoundAt: Instant?,
-    val match: MatchRecord?
+    val match: MatchRecord?,
 )
 
 data class SwipeRewindCandidateRecord(
@@ -254,14 +273,14 @@ data class SwipeRewindCandidateRecord(
      * if no inventory was consumed (Likes/Passes never consume). When non-null,
      * the rewind must refund this row atomically with the action rollback.
      */
-    val consumedInventoryId: UUID? = null
+    val consumedInventoryId: UUID? = null,
 )
 
 data class MatchRecord(
     val matchId: UUID,
     val userA: UUID,
     val userB: UUID,
-    val createdAt: Instant
+    val createdAt: Instant,
 )
 
 data class MatchSummaryRecord(
@@ -269,5 +288,5 @@ data class MatchSummaryRecord(
     val matchedUserId: UUID,
     val matchedDisplayName: String?,
     val matchedThumbnailMediaAssetId: UUID?,
-    val createdAt: Instant
+    val createdAt: Instant,
 )

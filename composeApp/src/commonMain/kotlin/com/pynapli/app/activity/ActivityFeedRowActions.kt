@@ -38,10 +38,11 @@ internal fun ActivityNewPill() {
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
         maxLines = 1,
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(MaterialTheme.colorScheme.primary)
-            .padding(horizontal = 6.dp, vertical = 2.dp)
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.primary)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
 
@@ -51,7 +52,7 @@ internal fun AlbumRequestActions(
     pendingAction: Boolean,
     expanded: Boolean,
     onReviewAlbumRequest: (String) -> Unit,
-    onAlbumRequestDecision: (String, Boolean) -> Unit
+    onAlbumRequestDecision: (String, Boolean) -> Unit,
 ) {
     if (item.type != "album_request") return
 
@@ -59,13 +60,14 @@ internal fun AlbumRequestActions(
         "pending" -> {
             if (!expanded) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
                 ) {
                     OutlinedButton(
                         onClick = { onReviewAlbumRequest(item.eventId) },
-                        enabled = !pendingAction
+                        enabled = !pendingAction,
                     ) {
                         Text(text = "Review", maxLines = 1)
                     }
@@ -73,22 +75,23 @@ internal fun AlbumRequestActions(
                 return
             }
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedButton(
                     onClick = { onAlbumRequestDecision(item.eventId, false) },
                     enabled = !pendingAction,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text(text = if (pendingAction) "..." else "Deny", maxLines = 1)
                 }
                 Button(
                     onClick = { onAlbumRequestDecision(item.eventId, true) },
                     enabled = !pendingAction,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text(text = if (pendingAction) "..." else "Grant", maxLines = 1)
                 }
@@ -96,13 +99,14 @@ internal fun AlbumRequestActions(
         }
 
         "approved",
-        "denied" -> {
+        "denied",
+        -> {
             Text(
                 text = if (item.albumRequestStatus == "approved") "Access granted" else "Request denied",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 6.dp),
-                maxLines = 1
+                maxLines = 1,
             )
         }
     }
@@ -112,14 +116,15 @@ internal fun AlbumRequestActions(
 internal fun ActivityPrimaryAction(
     item: ActivityEventDto,
     onOpenMatch: (ActivityEventDto) -> Unit,
-    onOpenPartnerChatInvite: (String) -> Unit
+    onOpenPartnerChatInvite: (String) -> Unit,
 ) {
     when (item.type) {
         "match" -> {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
             ) {
                 Button(onClick = { onOpenMatch(item) }) {
                     Text(text = "Message", maxLines = 1)
@@ -130,13 +135,14 @@ internal fun ActivityPrimaryAction(
         "partner_chat_invite" -> {
             val conversationId = item.conversationId
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
             ) {
                 Button(
                     onClick = { if (conversationId != null) onOpenPartnerChatInvite(conversationId) },
-                    enabled = conversationId != null
+                    enabled = conversationId != null,
                 ) {
                     Text(text = "Open invite", maxLines = 1)
                 }
@@ -148,30 +154,30 @@ internal fun ActivityPrimaryAction(
 @Composable
 internal fun ActivityAvatar(photoUrl: String?) {
     Box(
-        modifier = Modifier
-            .size(52.dp)
-            .clip(CircleShape)
-            .background(
-                Brush.linearGradient(
-                    listOf(Color(0xFF2B2622), Color(0xFF6D5D4F))
-                )
-            )
-            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(Color(0xFF2B2622), Color(0xFF6D5D4F)),
+                    ),
+                ).border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+        contentAlignment = Alignment.Center,
     ) {
         if (photoUrl != null) {
             AsyncImage(
                 model = photoUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             Icon(
                 imageVector = Icons.Filled.Person,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(24.dp),
             )
         }
     }

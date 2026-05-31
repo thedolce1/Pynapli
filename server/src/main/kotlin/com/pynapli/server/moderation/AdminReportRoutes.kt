@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
 
 fun Application.configureAdminReportRoutes(
     config: ServerConfig,
-    adminReportService: AdminReportService?
+    adminReportService: AdminReportService?,
 ) {
     val adminApiToken = config.adminApiToken ?: return
     if (adminReportService == null) return
@@ -23,54 +23,61 @@ fun Application.configureAdminReportRoutes(
             get {
                 val actor = call.requireAdminActor(adminApiToken)
                 val reason = call.requiredAdminReason()
-                val reports = adminReportService.listReports(
-                    statusText = call.request.queryParameters["status"],
-                    limitText = call.request.queryParameters["limit"],
-                    actorId = actor.actorId,
-                    reason = reason
-                )
+                val reports =
+                    adminReportService.listReports(
+                        statusText = call.request.queryParameters["status"],
+                        limitText = call.request.queryParameters["limit"],
+                        actorId = actor.actorId,
+                        reason = reason,
+                    )
                 call.respond(AdminReportListDto(items = reports.map { it.toDto() }))
             }
 
             post("/{reportId}/mark-under-review") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val reportId = call.parameters["reportId"] ?: throw ModerationException("INVALID_ID")
-                val request = call.receiveNullable<AdminReportActionRequestDto>()
-                    ?: throw ModerationException("MODERATION_REASON_REQUIRED")
+                val request =
+                    call.receiveNullable<AdminReportActionRequestDto>()
+                        ?: throw ModerationException("MODERATION_REASON_REQUIRED")
                 call.respond(
-                    adminReportService.markUnderReview(
-                        reportIdText = reportId,
-                        actorId = actor.actorId,
-                        reason = request.reason
-                    ).toDto()
+                    adminReportService
+                        .markUnderReview(
+                            reportIdText = reportId,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
                 )
             }
 
             post("/{reportId}/resolve") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val reportId = call.parameters["reportId"] ?: throw ModerationException("INVALID_ID")
-                val request = call.receiveNullable<AdminReportActionRequestDto>()
-                    ?: throw ModerationException("MODERATION_REASON_REQUIRED")
+                val request =
+                    call.receiveNullable<AdminReportActionRequestDto>()
+                        ?: throw ModerationException("MODERATION_REASON_REQUIRED")
                 call.respond(
-                    adminReportService.resolveReport(
-                        reportIdText = reportId,
-                        actorId = actor.actorId,
-                        reason = request.reason
-                    ).toDto()
+                    adminReportService
+                        .resolveReport(
+                            reportIdText = reportId,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
                 )
             }
 
             post("/{reportId}/dismiss") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val reportId = call.parameters["reportId"] ?: throw ModerationException("INVALID_ID")
-                val request = call.receiveNullable<AdminReportActionRequestDto>()
-                    ?: throw ModerationException("MODERATION_REASON_REQUIRED")
+                val request =
+                    call.receiveNullable<AdminReportActionRequestDto>()
+                        ?: throw ModerationException("MODERATION_REASON_REQUIRED")
                 call.respond(
-                    adminReportService.dismissReport(
-                        reportIdText = reportId,
-                        actorId = actor.actorId,
-                        reason = request.reason
-                    ).toDto()
+                    adminReportService
+                        .dismissReport(
+                            reportIdText = reportId,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
                 )
             }
         }
@@ -79,7 +86,7 @@ fun Application.configureAdminReportRoutes(
 
 @Serializable
 data class AdminReportListDto(
-    val items: List<AdminReportItemDto>
+    val items: List<AdminReportItemDto>,
 )
 
 @Serializable
@@ -94,19 +101,19 @@ data class AdminReportItemDto(
     val status: String,
     val createdAt: String,
     val updatedAt: String,
-    val reviewedAt: String? = null
+    val reviewedAt: String? = null,
 )
 
 @Serializable
 data class AdminReportActionRequestDto(
-    val reason: String? = null
+    val reason: String? = null,
 )
 
 @Serializable
 data class AdminReportActionDto(
     val reportId: String,
     val status: String,
-    val actedAt: String
+    val actedAt: String,
 )
 
 private fun AdminReportRecord.toDto(): AdminReportItemDto =
@@ -121,12 +128,12 @@ private fun AdminReportRecord.toDto(): AdminReportItemDto =
         status = status,
         createdAt = createdAt.toString(),
         updatedAt = updatedAt.toString(),
-        reviewedAt = reviewedAt?.toString()
+        reviewedAt = reviewedAt?.toString(),
     )
 
 private fun AdminReportActionRecord.toDto(): AdminReportActionDto =
     AdminReportActionDto(
         reportId = reportId.toString(),
         status = status,
-        actedAt = actedAt.toString()
+        actedAt = actedAt.toString(),
     )

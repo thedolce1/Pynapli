@@ -30,65 +30,71 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SwipeScreenVisualInteractionTest {
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun swipeScreenKeepsPremiumCardVisualSignature() =
+        runComposeUiTest {
+            val cards = visualSwipeCards()
+            val stateHolder = SwipeStateHolder(StaticSwipeVisualRepository(cards))
+
+            setSwipeContent(stateHolder)
+
+            waitUntil(timeoutMillis = 5_000) { stateHolder.state.value.cards.size == cards.size }
+            waitForIdle()
+
+            onNodeWithTag(SwipeTestTags.TOP_CARD).assertExists()
+            onNodeWithTag(SwipeTestTags.ROOT)
+                .captureToImage()
+                .assertSwipeVisualSignature()
+        }
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun swipeScreenKeepsPremiumCardVisualSignature() = runComposeUiTest {
-        val cards = visualSwipeCards()
-        val stateHolder = SwipeStateHolder(StaticSwipeVisualRepository(cards))
+    fun swipeActionsAdvanceDeckAndIntroNoteDialogOpens() =
+        runComposeUiTest {
+            mainClock.autoAdvance = true
+            val cards = visualSwipeCards()
+            val repository = StaticSwipeVisualRepository(cards)
+            var actionIndex = 0
+            val stateHolder =
+                SwipeStateHolder(
+                    repository = repository,
+                    actionIdFactory = { "00000000-0000-0000-0000-${(++actionIndex).toString().padStart(12, '0')}" },
+                )
 
-        setSwipeContent(stateHolder)
+            setSwipeContent(stateHolder)
+            waitUntil(timeoutMillis = 5_000) {
+                stateHolder.state.value.topCard
+                    ?.userId == cards.first().userId
+            }
+            waitForIdle()
 
-        waitUntil(timeoutMillis = 5_000) { stateHolder.state.value.cards.size == cards.size }
-        waitForIdle()
+            onNodeWithTag(SwipeTestTags.LIKE_ACTION).performClick()
+            waitForIdle()
+            mainClock.advanceTimeBy(SWIPE_FLY_OUT_TEST_MS)
+            waitForIdle()
+            waitUntil(timeoutMillis = 5_000) {
+                repository.submittedActions.any { it.action == SwipeAction.LIKE } &&
+                    stateHolder.state.value.topCard
+                        ?.userId == cards[1].userId
+            }
 
-        onNodeWithTag(SwipeTestTags.TOP_CARD).assertExists()
-        onNodeWithTag(SwipeTestTags.ROOT)
-            .captureToImage()
-            .assertSwipeVisualSignature()
-    }
+            onNodeWithTag(SwipeTestTags.PASS_ACTION).performClick()
+            waitForIdle()
+            mainClock.advanceTimeBy(SWIPE_FLY_OUT_TEST_MS)
+            waitForIdle()
+            waitUntil(timeoutMillis = 5_000) {
+                repository.submittedActions.any { it.action == SwipeAction.PASS } &&
+                    stateHolder.state.value.topCard
+                        ?.userId == cards[2].userId
+            }
 
-    @OptIn(ExperimentalTestApi::class)
-    @Test
-    fun swipeActionsAdvanceDeckAndIntroNoteDialogOpens() = runComposeUiTest {
-        mainClock.autoAdvance = true
-        val cards = visualSwipeCards()
-        val repository = StaticSwipeVisualRepository(cards)
-        var actionIndex = 0
-        val stateHolder = SwipeStateHolder(
-            repository = repository,
-            actionIdFactory = { "00000000-0000-0000-0000-${(++actionIndex).toString().padStart(12, '0')}" }
-        )
+            onNodeWithTag(SwipeTestTags.INTRO_NOTE_ACTION).performClick()
+            waitForIdle()
 
-        setSwipeContent(stateHolder)
-        waitUntil(timeoutMillis = 5_000) { stateHolder.state.value.topCard?.userId == cards.first().userId }
-        waitForIdle()
-
-        onNodeWithTag(SwipeTestTags.LIKE_ACTION).performClick()
-        waitForIdle()
-        mainClock.advanceTimeBy(SWIPE_FLY_OUT_TEST_MS)
-        waitForIdle()
-        waitUntil(timeoutMillis = 5_000) {
-            repository.submittedActions.any { it.action == SwipeAction.LIKE } &&
-                stateHolder.state.value.topCard?.userId == cards[1].userId
+            onNodeWithText("Intro Note").assertExists()
+            assertEquals(listOf(SwipeAction.LIKE, SwipeAction.PASS), repository.submittedActions.map { it.action })
         }
-
-        onNodeWithTag(SwipeTestTags.PASS_ACTION).performClick()
-        waitForIdle()
-        mainClock.advanceTimeBy(SWIPE_FLY_OUT_TEST_MS)
-        waitForIdle()
-        waitUntil(timeoutMillis = 5_000) {
-            repository.submittedActions.any { it.action == SwipeAction.PASS } &&
-                stateHolder.state.value.topCard?.userId == cards[2].userId
-        }
-
-        onNodeWithTag(SwipeTestTags.INTRO_NOTE_ACTION).performClick()
-        waitForIdle()
-
-        onNodeWithText("Intro Note").assertExists()
-        assertEquals(listOf(SwipeAction.LIKE, SwipeAction.PASS), repository.submittedActions.map { it.action })
-    }
-
 }
 
 @OptIn(ExperimentalTestApi::class)
@@ -100,40 +106,43 @@ private fun ComposeUiTest.setSwipeContent(stateHolder: SwipeStateHolder) {
                     stateHolder = stateHolder,
                     profileDetailStateHolder = ProfileDetailStateHolder(SamplePublicProfileRepository()),
                     conversationStateHolder = ConversationStateHolder(SampleConversationRepository()),
-                    viewerUserId = "viewer"
+                    viewerUserId = "viewer",
                 )
             }
         }
     }
 }
 
-private fun visualSwipeCards(): List<SwipeCardDto> = (0 until 8).map { index ->
-    SwipeCardDto(
-        userId = "visual-card-$index",
-        displayName = when (index % 5) {
-            0 -> "Maya"
-            1 -> "Alex"
-            2 -> "Noa"
-            3 -> "Sage"
-            else -> "Quinn"
-        },
-        displayAge = 31 + index,
-        distanceLabel = "${index + 1} km",
-        distanceMeters = (index + 1) * 1_000,
-        linkedPartner = if (index % 3 == 0) {
-            LinkedPartnerMiniDto(
-                userId = "partner-$index",
-                displayName = "Partner $index"
-            )
-        } else {
-            null
-        },
-        rankToken = "rank-token-$index"
-    )
-}
+private fun visualSwipeCards(): List<SwipeCardDto> =
+    (0 until 8).map { index ->
+        SwipeCardDto(
+            userId = "visual-card-$index",
+            displayName =
+                when (index % 5) {
+                    0 -> "Maya"
+                    1 -> "Alex"
+                    2 -> "Noa"
+                    3 -> "Sage"
+                    else -> "Quinn"
+                },
+            displayAge = 31 + index,
+            distanceLabel = "${index + 1} km",
+            distanceMeters = (index + 1) * 1_000,
+            linkedPartner =
+                if (index % 3 == 0) {
+                    LinkedPartnerMiniDto(
+                        userId = "partner-$index",
+                        displayName = "Partner $index",
+                    )
+                } else {
+                    null
+                },
+            rankToken = "rank-token-$index",
+        )
+    }
 
 private class StaticSwipeVisualRepository(
-    private val cards: List<SwipeCardDto>
+    private val cards: List<SwipeCardDto>,
 ) : SwipeRepository {
     val submittedActions = mutableListOf<QueuedSwipeAction>()
 
@@ -143,8 +152,8 @@ private class StaticSwipeVisualRepository(
                 deckSessionId = "visual-session",
                 cards = cards,
                 nextCursor = null,
-                adSupported = false
-            )
+                adSupported = false,
+            ),
         )
 
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
@@ -152,8 +161,7 @@ private class StaticSwipeVisualRepository(
         return AppResult.Success(null)
     }
 
-    override suspend fun rewind(): AppResult<SwipeRewindUi?> =
-        AppResult.Success(null)
+    override suspend fun rewind(): AppResult<SwipeRewindUi?> = AppResult.Success(null)
 }
 
 private fun ImageBitmap.assertSwipeVisualSignature() {
@@ -207,12 +215,11 @@ private fun ImageBitmap.visualSignature(sampleStep: Int = 4): SwipeVisualSignatu
         midToneRatio = midTone.toFloat() / sampled,
         brightRatio = bright.toFloat() / sampled,
         goldPixels = gold,
-        greenPixels = green
+        greenPixels = green,
     )
 }
 
-private fun Color.luminanceApprox(): Float =
-    (0.2126f * red) + (0.7152f * green) + (0.0722f * blue)
+private fun Color.luminanceApprox(): Float = (0.2126f * red) + (0.7152f * green) + (0.0722f * blue)
 
 private const val SWIPE_FLY_OUT_TEST_MS = 350L
 
@@ -223,5 +230,5 @@ private data class SwipeVisualSignature(
     val midToneRatio: Float,
     val brightRatio: Float,
     val goldPixels: Int,
-    val greenPixels: Int
+    val greenPixels: Int,
 )

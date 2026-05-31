@@ -38,29 +38,30 @@ internal fun GridScreenContent(
     onUseCurrentLocation: () -> Unit,
     onProfileIconClick: () -> Unit,
     onOpenStore: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var sheetVisible by remember { mutableStateOf(false) }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         GridHeader(
             locationLabel = state.locationLabel,
             profileImageUrl = profileImageUrl,
-            onProfileIconClick = onProfileIconClick
+            onProfileIconClick = onProfileIconClick,
         )
         QuickFilterRow(
             filters = state.filters,
             onToggled = onQuickFilterToggled,
-            onOpenSheet = { sheetVisible = true }
+            onOpenSheet = { sheetVisible = true },
         )
         state.paywallMessage?.let { message ->
             GridPaywallRow(
                 message = message,
-                onOpenStore = onOpenStore
+                onOpenStore = onOpenStore,
             )
         }
         if (state.adSupported) {
@@ -74,7 +75,7 @@ internal fun GridScreenContent(
             onProfileSelected = onProfileSelected,
             onLoadMore = onLoadMore,
             onUseCurrentLocation = onUseCurrentLocation,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
     }
 
@@ -98,12 +99,12 @@ internal fun GridScreenContent(
                 sheetVisible = false
                 val filters = GridFilters.fromGridQueryRequest(dto.payload)
                 onApplyFilters(
-                    if (lifestyleFiltersAllowed) filters else filters.copy(lifestyleTags = emptySet())
+                    if (lifestyleFiltersAllowed) filters else filters.copy(lifestyleTags = emptySet()),
                 )
             },
             onDeleteSavedPreset = onDeleteSavedPreset,
             onSetTonightAvailable = onSetTonightAvailable,
-            onClearTonightAvailable = onClearTonightAvailable
+            onClearTonightAvailable = onClearTonightAvailable,
         )
     }
 }

@@ -36,39 +36,40 @@ internal data class InAppNotificationUi(
     val title: String,
     val body: String,
     val targetTab: PynapliTab,
-    val activityTab: ActivityTabUi? = null
+    val activityTab: ActivityTabUi? = null,
 )
 
 internal enum class InAppNotificationKind(
-    val icon: ImageVector
+    val icon: ImageVector,
 ) {
     Message(Icons.Filled.ChatBubble),
-    Activity(Icons.Filled.LocalFireDepartment)
+    Activity(Icons.Filled.LocalFireDepartment),
 }
 
 @Composable
 internal fun InAppNotificationBanner(
     notification: InAppNotificationUi,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(12.dp),
+        modifier =
+            modifier
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(onClick = onClick)
+                .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(
             imageVector = notification.kind.icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(22.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -77,14 +78,14 @@ internal fun InAppNotificationBanner(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = notification.body,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -92,19 +93,20 @@ internal fun InAppNotificationBanner(
 
 internal fun ConversationDto.toMessageNotification(
     viewerUserId: String?,
-    settings: AppSettings
+    settings: AppSettings,
 ): InAppNotificationUi {
     val standardDetail = settings.notificationDetail == AppSettings.NOTIFICATION_STANDARD
     return InAppNotificationUi(
         id = "message:$conversationId:${lastMessage?.messageId ?: updatedAt}:$unreadCount",
         kind = InAppNotificationKind.Message,
         title = if (standardDetail) titleFor(viewerUserId) else "New message",
-        body = if (standardDetail) {
-            lastMessage?.body?.cleanNotificationText() ?: "Open messages"
-        } else {
-            "Open messages"
-        },
-        targetTab = PynapliTab.Messages
+        body =
+            if (standardDetail) {
+                lastMessage?.body?.cleanNotificationText() ?: "Open messages"
+            } else {
+                "Open messages"
+            },
+        targetTab = PynapliTab.Messages,
     )
 }
 
@@ -116,7 +118,7 @@ internal fun ActivityEventDto.toActivityNotification(settings: AppSettings): InA
         title = if (standardDetail) actorDisplayName else "New activity",
         body = if (standardDetail) activityNotificationBody() else "Open Activity",
         targetTab = PynapliTab.Activity,
-        activityTab = activityTab()
+        activityTab = activityTab(),
     )
 }
 

@@ -10,70 +10,73 @@ import java.util.UUID
 import javax.sql.DataSource
 
 class JdbcMessageModerationRepository(
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
 ) : MessageModerationRepository {
     override suspend fun listOpenMessageReviews(
         limit: Int,
         actorId: String,
-        reason: String
-    ): List<MessageReviewRecord> = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
-                connection.insertAdminAuditLog(
-                    actorId = actorId,
-                    action = "message_review_queue.list",
-                    targetType = "message_review_queue",
-                    targetId = null,
-                    reason = reason,
-                    metadataJson = """{"limit":$limit}"""
-                )
-                val items = connection.selectOpenMessageReviews(limit)
-                connection.commit()
-                items
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
+        reason: String,
+    ): List<MessageReviewRecord> =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val previousAutoCommit = connection.autoCommit
+                connection.autoCommit = false
+                try {
+                    connection.insertAdminAuditLog(
+                        actorId = actorId,
+                        action = "message_review_queue.list",
+                        targetType = "message_review_queue",
+                        targetId = null,
+                        reason = reason,
+                        metadataJson = """{"limit":$limit}""",
+                    )
+                    val items = connection.selectOpenMessageReviews(limit)
+                    connection.commit()
+                    items
+                } catch (error: Throwable) {
+                    connection.rollback()
+                    throw error
+                } finally {
+                    connection.autoCommit = previousAutoCommit
+                }
             }
         }
-    }
 
     override suspend fun releaseHeldMessage(
         messageId: UUID,
         actorId: String,
-        reason: String
-    ): MessageReviewActionRecord? = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            connection.reviewHeldMessage(
-                messageId = messageId,
-                actorId = actorId,
-                reason = reason,
-                messageStatus = "visible",
-                queueStatus = "released",
-                auditAction = "message_review.release"
-            )
+        reason: String,
+    ): MessageReviewActionRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.reviewHeldMessage(
+                    messageId = messageId,
+                    actorId = actorId,
+                    reason = reason,
+                    messageStatus = "visible",
+                    queueStatus = "released",
+                    auditAction = "message_review.release",
+                )
+            }
         }
-    }
 
     override suspend fun removeHeldMessage(
         messageId: UUID,
         actorId: String,
-        reason: String
-    ): MessageReviewActionRecord? = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            connection.reviewHeldMessage(
-                messageId = messageId,
-                actorId = actorId,
-                reason = reason,
-                messageStatus = "removed",
-                queueStatus = "removed",
-                auditAction = "message_review.remove"
-            )
+        reason: String,
+    ): MessageReviewActionRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.reviewHeldMessage(
+                    messageId = messageId,
+                    actorId = actorId,
+                    reason = reason,
+                    messageStatus = "removed",
+                    queueStatus = "removed",
+                    auditAction = "message_review.remove",
+                )
+            }
         }
-    }
 
     private fun Connection.selectOpenMessageReviews(limit: Int): List<MessageReviewRecord> =
         prepareStatement(
@@ -95,7 +98,7 @@ class JdbcMessageModerationRepository(
             WHERE q.status = 'open'
             ORDER BY q.created_at ASC, q.id ASC
             LIMIT ?
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setInt(1, limit)
             statement.executeQuery().use { rs ->
@@ -111,19 +114,21 @@ class JdbcMessageModerationRepository(
         reason: String,
         messageStatus: String,
         queueStatus: String,
-        auditAction: String
+        auditAction: String,
     ): MessageReviewActionRecord? {
         val previousAutoCommit = autoCommit
         autoCommit = false
         try {
-            val queued = lockOpenQueuedMessage(messageId) ?: run {
-                rollback()
-                return null
-            }
-            val reviewedAt = updateMessageStatus(messageId, messageStatus) ?: run {
-                rollback()
-                return null
-            }
+            val queued =
+                lockOpenQueuedMessage(messageId) ?: run {
+                    rollback()
+                    return null
+                }
+            val reviewedAt =
+                updateMessageStatus(messageId, messageStatus) ?: run {
+                    rollback()
+                    return null
+                }
             updateQueueStatus(messageId, queueStatus, reviewedAt)
             if (queueStatus == "released") {
                 touchConversation(queued.conversationId)
@@ -134,14 +139,15 @@ class JdbcMessageModerationRepository(
                 targetType = "message",
                 targetId = messageId,
                 reason = reason,
-                metadataJson = """
+                metadataJson =
+                    """
                     {
                       "conversationId":"${queued.conversationId}",
                       "senderUserId":"${queued.senderUserId}",
                       "messageStatus":"$messageStatus",
                       "queueStatus":"$queueStatus"
                     }
-                """.trimIndent()
+                    """.trimIndent(),
             )
             commit()
             return MessageReviewActionRecord(
@@ -150,7 +156,7 @@ class JdbcMessageModerationRepository(
                 senderUserId = queued.senderUserId,
                 messageStatus = messageStatus,
                 queueStatus = queueStatus,
-                reviewedAt = reviewedAt
+                reviewedAt = reviewedAt,
             )
         } catch (error: Throwable) {
             rollback()
@@ -173,14 +179,14 @@ class JdbcMessageModerationRepository(
             WHERE q.message_id = ?
               AND q.status = 'open'
             FOR UPDATE OF q, m
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setObject(1, messageId)
             statement.executeQuery().use { rs ->
                 if (rs.next()) {
                     QueuedMessage(
                         conversationId = rs.getObject("conversation_id", UUID::class.java),
-                        senderUserId = rs.getObject("sender_user_id", UUID::class.java)
+                        senderUserId = rs.getObject("sender_user_id", UUID::class.java),
                     )
                 } else {
                     null
@@ -188,7 +194,10 @@ class JdbcMessageModerationRepository(
             }
         }
 
-    private fun Connection.updateMessageStatus(messageId: UUID, messageStatus: String): Instant? =
+    private fun Connection.updateMessageStatus(
+        messageId: UUID,
+        messageStatus: String,
+    ): Instant? =
         prepareStatement(
             """
             UPDATE messages
@@ -198,7 +207,7 @@ class JdbcMessageModerationRepository(
               AND moderation_status = 'held'
               AND deleted_at IS NULL
             RETURNING reviewed_at
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setString(1, messageStatus)
             statement.setObject(2, messageId)
@@ -207,7 +216,11 @@ class JdbcMessageModerationRepository(
             }
         }
 
-    private fun Connection.updateQueueStatus(messageId: UUID, queueStatus: String, reviewedAt: Instant) {
+    private fun Connection.updateQueueStatus(
+        messageId: UUID,
+        queueStatus: String,
+        reviewedAt: Instant,
+    ) {
         prepareStatement(
             """
             UPDATE message_review_queue
@@ -216,7 +229,7 @@ class JdbcMessageModerationRepository(
                 updated_at = now()
             WHERE message_id = ?
               AND status = 'open'
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setString(1, queueStatus)
             statement.setTimestamp(2, Timestamp.from(reviewedAt))
@@ -231,7 +244,7 @@ class JdbcMessageModerationRepository(
             UPDATE conversations
             SET updated_at = now()
             WHERE id = ?
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setObject(1, conversationId)
             statement.executeUpdate()
@@ -248,11 +261,11 @@ class JdbcMessageModerationRepository(
             safetyReason = getString("reason"),
             queueStatus = getString("status"),
             createdAt = getTimestamp("created_at").toInstant(),
-            updatedAt = getTimestamp("updated_at").toInstant()
+            updatedAt = getTimestamp("updated_at").toInstant(),
         )
 
     private data class QueuedMessage(
         val conversationId: UUID,
-        val senderUserId: UUID
+        val senderUserId: UUID,
     )
 }

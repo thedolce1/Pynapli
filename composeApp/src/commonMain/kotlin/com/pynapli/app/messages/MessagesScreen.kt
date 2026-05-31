@@ -35,7 +35,7 @@ fun MessagesScreen(
     onThreadSelected: (ConversationDto) -> Unit,
     onProfileIconClick: () -> Unit = {},
     modifier: Modifier = Modifier,
-    stateHolder: MessagesStateHolder = rememberMessagesStateHolder()
+    stateHolder: MessagesStateHolder = rememberMessagesStateHolder(),
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -56,18 +56,17 @@ fun MessagesScreen(
         onDeclinePartnerInvite = { conversationId ->
             scope.launch { stateHolder.declinePartnerInvite(conversationId, viewerUserId) }
         },
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
 @Composable
-private fun rememberMessagesStateHolder(): MessagesStateHolder {
-    return remember {
+private fun rememberMessagesStateHolder(): MessagesStateHolder =
+    remember {
         MessagesStateHolder(
-            repository = SampleMessagesRepository()
+            repository = SampleMessagesRepository(),
         )
     }
-}
 
 @Composable
 private fun MessagesScreenContent(
@@ -78,25 +77,26 @@ private fun MessagesScreenContent(
     onRefresh: () -> Unit,
     onAcceptPartnerInvite: (String) -> Unit,
     onDeclinePartnerInvite: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         MessagesTopArea(
             conversationCount = state.conversations.size,
             unreadCount = state.unreadCount,
             onProfileIconClick = onProfileIconClick,
-            onRefresh = onRefresh
+            onRefresh = onRefresh,
         )
 
         when {
             state.isLoading && state.conversations.isEmpty() -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
@@ -104,15 +104,16 @@ private fun MessagesScreenContent(
 
             state.errorMessage != null && state.conversations.isEmpty() -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 28.dp),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 28.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = state.errorMessage,
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
@@ -123,13 +124,14 @@ private fun MessagesScreenContent(
 
             else -> {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .testTag(MessagesTestTags.LIST)
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .testTag(MessagesTestTags.LIST),
                 ) {
                     items(
                         items = state.conversations,
-                        key = { conversation -> conversation.conversationId }
+                        key = { conversation -> conversation.conversationId },
                     ) { conversation ->
                         ConversationRow(
                             conversation = conversation,
@@ -137,7 +139,7 @@ private fun MessagesScreenContent(
                             isMutatingInvite = conversation.conversationId in state.mutatingPartnerInviteConversationIds,
                             onClick = { onThreadSelected(conversation) },
                             onAcceptPartnerInvite = { onAcceptPartnerInvite(conversation.conversationId) },
-                            onDeclinePartnerInvite = { onDeclinePartnerInvite(conversation.conversationId) }
+                            onDeclinePartnerInvite = { onDeclinePartnerInvite(conversation.conversationId) },
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                     }
@@ -152,34 +154,35 @@ private fun MessagesTopArea(
     conversationCount: Int,
     unreadCount: Int,
     onProfileIconClick: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
     ) {
         PynapliSocialTopRail(
             onProfileClick = onProfileIconClick,
             onActionClick = onRefresh,
-            actionContentDescription = "Refresh messages"
+            actionContentDescription = "Refresh messages",
         )
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = "Messages",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = "$conversationCount conversations - $unreadCount unread",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -187,7 +190,10 @@ private fun MessagesTopArea(
 
 internal object MessagesTestTags {
     const val LIST = "messages-list"
+
     fun row(conversationId: String): String = "messages-row-$conversationId"
+
     fun acceptInvite(conversationId: String): String = "messages-invite-accept-$conversationId"
+
     fun declineInvite(conversationId: String): String = "messages-invite-decline-$conversationId"
 }

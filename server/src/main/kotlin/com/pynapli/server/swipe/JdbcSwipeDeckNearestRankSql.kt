@@ -10,10 +10,11 @@ internal fun Connection.queryDeckRankNearestWindow(
     limit: Int,
     filters: DiscoveryFilters,
     excludedTargetUserIds: Set<UUID>,
-    userSpecificViewerId: UUID?
+    userSpecificViewerId: UUID?,
 ): List<DeckRankRow> {
     val candidateLimit = nearestCandidateWindowLimit(limit, filters)
-    val sql = """
+    val sql =
+        """
         WITH viewer_location AS (
             SELECT ul.geom AS geom
             FROM user_locations ul
@@ -116,47 +117,48 @@ internal fun Connection.queryDeckRankNearestWindow(
           )
         ORDER BY soft_score DESC, nl.distance_order
         LIMIT ?
-    """.trimIndent()
+        """.trimIndent()
 
-    return prepareStatement(sql).use { statement ->
-        val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
-        val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
-        val intents = createArrayOf("text", filters.intents.toTypedArray())
-        val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
-        val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
-        val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
-        statement.setObject(1, viewerUserId)
-        statement.setDouble(2, radiusMeters.toDouble())
-        statement.setInt(3, candidateLimit)
-        statement.setBoolean(4, filters.verifiedPreferred)
-        statement.setNullableUuid(5, userSpecificViewerId)
-        statement.setNullableUuid(6, userSpecificViewerId)
-        statement.setObject(7, filters.minimumAge)
-        statement.setObject(8, filters.minimumAge)
-        statement.setObject(9, filters.maximumAge)
-        statement.setObject(10, filters.maximumAge)
-        statement.setArray(11, contexts)
-        statement.setArray(12, contexts)
-        statement.setBoolean(13, filters.verifiedOnly)
-        statement.setBoolean(14, filters.facePhotoVerifiedOnly)
-        statement.setBoolean(15, filters.ageVerifiedOnly)
-        statement.setArray(16, styles)
-        statement.setArray(17, styles)
-        statement.setArray(18, intents)
-        statement.setArray(19, intents)
-        statement.setArray(20, lifestyleTags)
-        statement.setArray(21, lifestyleTags)
-        statement.setArray(22, logisticsTags)
-        statement.setArray(23, logisticsTags)
-        statement.setObject(24, filters.linkedOnly)
-        statement.setObject(25, filters.linkedOnly)
-        statement.setObject(26, viewerUserId)
-        statement.setObject(27, viewerUserId)
-        statement.setNullableUuid(28, userSpecificViewerId)
-        statement.setNullableUuid(29, userSpecificViewerId)
-        statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
-        statement.setArray(31, excludedIds)
-        statement.setInt(32, limit)
-        statement.executeDeckRankRows()
-    }.sortedByDescending { it.isBoosted }
+    return prepareStatement(sql)
+        .use { statement ->
+            val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
+            val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
+            val intents = createArrayOf("text", filters.intents.toTypedArray())
+            val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
+            val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+            val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
+            statement.setObject(1, viewerUserId)
+            statement.setDouble(2, radiusMeters.toDouble())
+            statement.setInt(3, candidateLimit)
+            statement.setBoolean(4, filters.verifiedPreferred)
+            statement.setNullableUuid(5, userSpecificViewerId)
+            statement.setNullableUuid(6, userSpecificViewerId)
+            statement.setObject(7, filters.minimumAge)
+            statement.setObject(8, filters.minimumAge)
+            statement.setObject(9, filters.maximumAge)
+            statement.setObject(10, filters.maximumAge)
+            statement.setArray(11, contexts)
+            statement.setArray(12, contexts)
+            statement.setBoolean(13, filters.verifiedOnly)
+            statement.setBoolean(14, filters.facePhotoVerifiedOnly)
+            statement.setBoolean(15, filters.ageVerifiedOnly)
+            statement.setArray(16, styles)
+            statement.setArray(17, styles)
+            statement.setArray(18, intents)
+            statement.setArray(19, intents)
+            statement.setArray(20, lifestyleTags)
+            statement.setArray(21, lifestyleTags)
+            statement.setArray(22, logisticsTags)
+            statement.setArray(23, logisticsTags)
+            statement.setObject(24, filters.linkedOnly)
+            statement.setObject(25, filters.linkedOnly)
+            statement.setObject(26, viewerUserId)
+            statement.setObject(27, viewerUserId)
+            statement.setNullableUuid(28, userSpecificViewerId)
+            statement.setNullableUuid(29, userSpecificViewerId)
+            statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(31, excludedIds)
+            statement.setInt(32, limit)
+            statement.executeDeckRankRows()
+        }.sortedByDescending { it.isBoosted }
 }

@@ -1,5 +1,6 @@
 package com.pynapli.app
 
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.GridView
@@ -17,18 +18,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.unit.dp
 
 internal enum class PynapliTab(
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
 ) {
     Grid("Grid", Icons.Filled.GridView),
     Swipe("Swipe", Icons.Filled.Style),
     Activity("Activity", Icons.Filled.LocalFireDepartment),
     Messages("Messages", Icons.Filled.ChatBubble),
-    Store("Store", Icons.Filled.ShoppingBag)
+    Store("Store", Icons.Filled.ShoppingBag),
 }
 
 @Composable
@@ -36,58 +36,61 @@ internal fun PynapliBottomNavigation(
     selectedTab: PynapliTab,
     unreadMessages: Int,
     activityBadgeCount: Int,
-    onTabSelected: (PynapliTab) -> Unit
+    onTabSelected: (PynapliTab) -> Unit,
 ) {
     NavigationBar(
         modifier = Modifier.navigationBarsPadding(),
         containerColor = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 0.dp
+        tonalElevation = 0.dp,
     ) {
         PynapliTab.entries.forEach { tab ->
-            val enabled = tab == PynapliTab.Grid ||
-                tab == PynapliTab.Swipe ||
-                tab == PynapliTab.Activity ||
-                tab == PynapliTab.Messages ||
-                tab == PynapliTab.Store
+            val enabled =
+                tab == PynapliTab.Grid ||
+                    tab == PynapliTab.Swipe ||
+                    tab == PynapliTab.Activity ||
+                    tab == PynapliTab.Messages ||
+                    tab == PynapliTab.Store
             NavigationBarItem(
                 enabled = enabled,
                 selected = selectedTab == tab,
                 onClick = { if (enabled) onTabSelected(tab) },
                 icon = {
-                    val badgeCount = when (tab) {
-                        PynapliTab.Messages -> unreadMessages
-                        PynapliTab.Activity -> activityBadgeCount
-                        else -> 0
-                    }
+                    val badgeCount =
+                        when (tab) {
+                            PynapliTab.Messages -> unreadMessages
+                            PynapliTab.Activity -> activityBadgeCount
+                            else -> 0
+                        }
                     if (badgeCount > 0) {
                         BadgedBox(
                             badge = {
                                 Badge {
                                     Text(text = badgeCount.toBadgeText())
                                 }
-                            }
+                            },
                         ) {
                             Icon(
                                 imageVector = tab.icon,
-                                contentDescription = tab.label
+                                contentDescription = tab.label,
                             )
                         }
                     } else {
                         Icon(
                             imageVector = tab.icon,
-                            contentDescription = tab.label
+                            contentDescription = tab.label,
                         )
                     }
                 },
                 label = { Text(text = tab.label) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                colors =
+                    NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
             )
         }
     }

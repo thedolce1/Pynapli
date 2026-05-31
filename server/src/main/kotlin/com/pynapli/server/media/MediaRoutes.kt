@@ -23,7 +23,7 @@ import io.ktor.server.routing.routing
 fun Application.configureMediaRoutes(
     authService: AuthService?,
     mediaService: MediaService?,
-    localUploadStorage: LocalMediaUploadStorage? = null
+    localUploadStorage: LocalMediaUploadStorage? = null,
 ) {
     if (authService == null || mediaService == null) return
 
@@ -35,7 +35,7 @@ fun Application.configureMediaRoutes(
                     val content = storage.loadUpload(assetId)
                     call.respondBytes(
                         bytes = content.bytes,
-                        contentType = ContentType.parse(content.contentType)
+                        contentType = ContentType.parse(content.contentType),
                     )
                 }
 
@@ -50,7 +50,7 @@ fun Application.configureMediaRoutes(
                     storage.saveUpload(
                         mediaAssetIdText = assetId,
                         contentType = call.request.headers[HttpHeaders.ContentType],
-                        bytes = bytes
+                        bytes = bytes,
                     )
                     call.respond(HttpStatusCode.OK)
                 }

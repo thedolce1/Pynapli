@@ -31,56 +31,65 @@ internal fun ConversationPartnerActions(
     onDeclineInvite: () -> Unit,
     onLeaveConversation: () -> Unit,
     showLeaveAction: Boolean,
-    showPartnerStatusFeedback: Boolean
+    showPartnerStatusFeedback: Boolean,
 ) {
     val conversation = state.detail?.conversation ?: return
     val viewerUserId = state.viewerUserId
     val pendingInvite = conversation.partnerInvite
     val viewerParticipant = conversation.participants.firstOrNull { participant -> participant.userId == viewerUserId }
-    val viewerIsInvitedPartner = viewerUserId != null &&
-        pendingInvite?.invitedPartnerUserId == viewerUserId
-    val viewerCanApproveAsThirdParty = viewerUserId != null &&
-        pendingInvite != null &&
-        viewerParticipant?.status == ConversationParticipantStatus.ACTIVE &&
-        viewerUserId != pendingInvite.inviterUserId &&
-        viewerUserId != pendingInvite.invitedPartnerUserId
-    val partnerAcceptedWaiting = pendingInvite?.let { invite ->
-        viewerIsInvitedPartner &&
-            invite.partnerStatus == PartnerChatInviteStatus.ACCEPTED &&
-            invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
-    } == true
-    val thirdPartyApprovalNeeded = pendingInvite?.let { invite ->
-        viewerCanApproveAsThirdParty &&
-            invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
-    } == true
-    val waitingForPartner = pendingInvite?.let { invite ->
-        viewerCanApproveAsThirdParty &&
-            invite.thirdPartyStatus == PartnerChatInviteStatus.ACCEPTED &&
-            invite.partnerStatus == PartnerChatInviteStatus.PENDING
-    } == true
-    val inviterWaiting = viewerUserId != null &&
-        pendingInvite != null &&
-        viewerUserId == pendingInvite.inviterUserId
-    val partnerAlreadyInThread = linkedPartnerUserId != null &&
-        conversation.participants.any { participant ->
-            participant.userId == linkedPartnerUserId &&
-                participant.status in visibleConversationParticipantStatuses
-        }
-    val showInvitePartner = linkedPartnerUserId != null &&
-        !partnerAlreadyInThread &&
-        !state.isViewerInvited &&
-        !state.isLeaving
-    val showLeave = showLeaveAction &&
-        conversation.kind == "group" &&
-        !state.isViewerInvited &&
-        !state.isInvitingPartner
+    val viewerIsInvitedPartner =
+        viewerUserId != null &&
+            pendingInvite?.invitedPartnerUserId == viewerUserId
+    val viewerCanApproveAsThirdParty =
+        viewerUserId != null &&
+            pendingInvite != null &&
+            viewerParticipant?.status == ConversationParticipantStatus.ACTIVE &&
+            viewerUserId != pendingInvite.inviterUserId &&
+            viewerUserId != pendingInvite.invitedPartnerUserId
+    val partnerAcceptedWaiting =
+        pendingInvite?.let { invite ->
+            viewerIsInvitedPartner &&
+                invite.partnerStatus == PartnerChatInviteStatus.ACCEPTED &&
+                invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
+        } == true
+    val thirdPartyApprovalNeeded =
+        pendingInvite?.let { invite ->
+            viewerCanApproveAsThirdParty &&
+                invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
+        } == true
+    val waitingForPartner =
+        pendingInvite?.let { invite ->
+            viewerCanApproveAsThirdParty &&
+                invite.thirdPartyStatus == PartnerChatInviteStatus.ACCEPTED &&
+                invite.partnerStatus == PartnerChatInviteStatus.PENDING
+        } == true
+    val inviterWaiting =
+        viewerUserId != null &&
+            pendingInvite != null &&
+            viewerUserId == pendingInvite.inviterUserId
+    val partnerAlreadyInThread =
+        linkedPartnerUserId != null &&
+            conversation.participants.any { participant ->
+                participant.userId == linkedPartnerUserId &&
+                    participant.status in visibleConversationParticipantStatuses
+            }
+    val showInvitePartner =
+        linkedPartnerUserId != null &&
+            !partnerAlreadyInThread &&
+            !state.isViewerInvited &&
+            !state.isLeaving
+    val showLeave =
+        showLeaveAction &&
+            conversation.kind == "group" &&
+            !state.isViewerInvited &&
+            !state.isInvitingPartner
     val partnerFeedback = state.partnerInviteFeedback.takeIf { showPartnerStatusFeedback }
 
     when {
         partnerAcceptedWaiting -> {
             PartnerInviteStatusNotice(
                 title = "Invite accepted",
-                body = "Waiting for the chat to approve your join."
+                body = "Waiting for the chat to approve your join.",
             )
         }
 
@@ -91,7 +100,7 @@ internal fun ConversationPartnerActions(
                 isResponding = state.isRespondingToInvite,
                 errorMessage = state.errorMessage,
                 onAcceptInvite = onAcceptInvite,
-                onDeclineInvite = onDeclineInvite
+                onDeclineInvite = onDeclineInvite,
             )
         }
 
@@ -102,21 +111,21 @@ internal fun ConversationPartnerActions(
                 isResponding = state.isRespondingToInvite,
                 errorMessage = state.errorMessage,
                 onAcceptInvite = onAcceptInvite,
-                onDeclineInvite = onDeclineInvite
+                onDeclineInvite = onDeclineInvite,
             )
         }
 
         waitingForPartner -> {
             PartnerInviteStatusNotice(
                 title = "Invite approved",
-                body = "Waiting for the partner to accept."
+                body = "Waiting for the partner to accept.",
             )
         }
 
         inviterWaiting -> {
             PartnerInviteStatusNotice(
                 title = "Partner invite pending",
-                body = "The partner and chat must both approve before they can join."
+                body = "The partner and chat must both approve before they can join.",
             )
         }
 
@@ -125,37 +134,37 @@ internal fun ConversationPartnerActions(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     partnerFeedback?.let { message ->
                         Text(
                             text = message,
                             color = MaterialTheme.colorScheme.primary,
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
                     } ?: Box(modifier = Modifier.weight(1f))
 
                     if (showInvitePartner) {
                         TextButton(
                             onClick = onInvitePartner,
-                            enabled = !state.isInvitingPartner
+                            enabled = !state.isInvitingPartner,
                         ) {
                             if (state.isInvitingPartner) {
                                 CircularProgressIndicator(
                                     strokeWidth = 2.dp,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(16.dp),
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.Filled.PersonAdd,
                                     contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(18.dp),
                                 )
                             }
                             Text(
                                 text = "Invite partner",
-                                modifier = Modifier.padding(start = 6.dp)
+                                modifier = Modifier.padding(start = 6.dp),
                             )
                         }
                     }
@@ -163,23 +172,23 @@ internal fun ConversationPartnerActions(
                     if (showLeave) {
                         TextButton(
                             onClick = onLeaveConversation,
-                            enabled = !state.isLeaving
+                            enabled = !state.isLeaving,
                         ) {
                             if (state.isLeaving) {
                                 CircularProgressIndicator(
                                     strokeWidth = 2.dp,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(16.dp),
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Logout,
                                     contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(18.dp),
                                 )
                             }
                             Text(
                                 text = "Leave",
-                                modifier = Modifier.padding(start = 6.dp)
+                                modifier = Modifier.padding(start = 6.dp),
                             )
                         }
                     }
@@ -188,7 +197,7 @@ internal fun ConversationPartnerActions(
                     Text(
                         text = state.errorMessage,
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }

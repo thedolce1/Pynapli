@@ -18,6 +18,6 @@ internal fun SwipeCardDto.toProfileCardUi(): GridProfileCardUi {
         tone = GridCardTone.entries[toneIndex],
         linkedPartner = linkedPartner?.toUi(),
         linkedPartnerTone = linkedPartner?.let { LinkedPartnerTone.entries[linkedToneIndex] },
-        distanceMeters = distanceMeters
+        distanceMeters = distanceMeters,
     )
 }

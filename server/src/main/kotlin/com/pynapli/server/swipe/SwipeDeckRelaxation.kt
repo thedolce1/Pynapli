@@ -10,14 +10,13 @@ internal object SwipeDeckRelaxation {
     // very small page requests still fire when the deck is essentially empty.
     private const val MIN_RELAXATION_THRESHOLD = 3
 
-    fun lowWaterMark(limit: Int): Int =
-        (limit / 3).coerceAtLeast(MIN_RELAXATION_THRESHOLD)
+    fun lowWaterMark(limit: Int): Int = (limit / 3).coerceAtLeast(MIN_RELAXATION_THRESHOLD)
 
     fun hasRelaxableFilters(
         filters: DiscoveryFilters,
         radiusMeters: Int,
         maxRadiusMeters: Int,
-        dealbreakers: Set<String>
+        dealbreakers: Set<String>,
     ): Boolean {
         if (SwipeDealbreakerKey.AGE !in dealbreakers &&
             (filters.minimumAge != null || filters.maximumAge != null)
@@ -59,26 +58,32 @@ internal object SwipeDeckRelaxation {
 
     fun relaxFilters(
         filters: DiscoveryFilters,
-        dealbreakers: Set<String>
-    ): DiscoveryFilters = filters.copy(
-        minimumAge = if (SwipeDealbreakerKey.AGE in dealbreakers) filters.minimumAge else null,
-        maximumAge = if (SwipeDealbreakerKey.AGE in dealbreakers) filters.maximumAge else null,
-        relationshipContexts = emptySet(),
-        linkedOnly = if (SwipeDealbreakerKey.LINKED_ONLY in dealbreakers) filters.linkedOnly else null,
-        verifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.verifiedOnly else false,
-        facePhotoVerifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.facePhotoVerifiedOnly else false,
-        ageVerifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.ageVerifiedOnly else false,
-        discoveryStyles = if (SwipeDealbreakerKey.DISCOVERY_STYLES in dealbreakers) {
-            filters.discoveryStyles
-        } else {
-            emptySet()
-        },
-        intents = if (SwipeDealbreakerKey.INTENTS in dealbreakers) filters.intents else emptySet(),
-        lifestyleTags = emptySet(),
-        logisticsTags = emptySet()
-    )
+        dealbreakers: Set<String>,
+    ): DiscoveryFilters =
+        filters.copy(
+            minimumAge = if (SwipeDealbreakerKey.AGE in dealbreakers) filters.minimumAge else null,
+            maximumAge = if (SwipeDealbreakerKey.AGE in dealbreakers) filters.maximumAge else null,
+            relationshipContexts = emptySet(),
+            linkedOnly = if (SwipeDealbreakerKey.LINKED_ONLY in dealbreakers) filters.linkedOnly else null,
+            verifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.verifiedOnly else false,
+            facePhotoVerifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.facePhotoVerifiedOnly else false,
+            ageVerifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.ageVerifiedOnly else false,
+            discoveryStyles =
+                if (SwipeDealbreakerKey.DISCOVERY_STYLES in dealbreakers) {
+                    filters.discoveryStyles
+                } else {
+                    emptySet()
+                },
+            intents = if (SwipeDealbreakerKey.INTENTS in dealbreakers) filters.intents else emptySet(),
+            lifestyleTags = emptySet(),
+            logisticsTags = emptySet(),
+        )
 
-    fun relaxRadius(radiusMeters: Int, maxRadiusMeters: Int, dealbreakers: Set<String>): Int =
+    fun relaxRadius(
+        radiusMeters: Int,
+        maxRadiusMeters: Int,
+        dealbreakers: Set<String>,
+    ): Int =
         if (SwipeDealbreakerKey.DISTANCE in dealbreakers) {
             radiusMeters
         } else {

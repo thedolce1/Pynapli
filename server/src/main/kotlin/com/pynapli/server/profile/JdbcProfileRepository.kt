@@ -10,116 +10,125 @@ import java.util.UUID
 import javax.sql.DataSource
 
 class JdbcProfileRepository(
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
 ) : ProfileRepository {
-    override suspend fun getMe(userId: UUID): MeRecord? = withContext(Dispatchers.IO) {
-        profileBlocking("profile.db.connectionWait") { dataSource.connection }.use { connection ->
-            profileBlocking("profile.db.meQuery") {
-                connection.prepareStatement(ME_QUERY).use { statement ->
-                    statement.setObject(1, userId)
-                    statement.executeQuery().use { rs ->
-                        if (rs.next()) rs.toMeRecord() else null
+    override suspend fun getMe(userId: UUID): MeRecord? =
+        withContext(Dispatchers.IO) {
+            profileBlocking("profile.db.connectionWait") { dataSource.connection }.use { connection ->
+                profileBlocking("profile.db.meQuery") {
+                    connection.prepareStatement(ME_QUERY).use { statement ->
+                        statement.setObject(1, userId)
+                        statement.executeQuery().use { rs ->
+                            if (rs.next()) rs.toMeRecord() else null
+                        }
                     }
                 }
             }
         }
-    }
 
     override suspend fun getPublicProfile(
         viewerUserId: UUID,
-        targetUserId: UUID
-    ): PublicProfileRecord? = withContext(Dispatchers.IO) {
-        profileBlocking("profile.db.connectionWait") { dataSource.connection }.use { connection ->
-            profileBlocking("profile.db.publicQuery") {
-                connection.prepareStatement(PUBLIC_PROFILE_QUERY).use { statement ->
-                    statement.setObject(1, viewerUserId)
-                    statement.setObject(2, viewerUserId)
-                    statement.setObject(3, viewerUserId)
-                    statement.setObject(4, viewerUserId)
-                    statement.setObject(5, viewerUserId)
-                    statement.setObject(6, viewerUserId)
-                    statement.setObject(7, viewerUserId)
-                    statement.setObject(8, targetUserId)
-                    statement.executeQuery().use { rs ->
-                        if (rs.next()) rs.toPublicProfileRecord() else null
+        targetUserId: UUID,
+    ): PublicProfileRecord? =
+        withContext(Dispatchers.IO) {
+            profileBlocking("profile.db.connectionWait") { dataSource.connection }.use { connection ->
+                profileBlocking("profile.db.publicQuery") {
+                    connection.prepareStatement(PUBLIC_PROFILE_QUERY).use { statement ->
+                        statement.setObject(1, viewerUserId)
+                        statement.setObject(2, viewerUserId)
+                        statement.setObject(3, viewerUserId)
+                        statement.setObject(4, viewerUserId)
+                        statement.setObject(5, viewerUserId)
+                        statement.setObject(6, viewerUserId)
+                        statement.setObject(7, viewerUserId)
+                        statement.setObject(8, targetUserId)
+                        statement.executeQuery().use { rs ->
+                            if (rs.next()) rs.toPublicProfileRecord() else null
+                        }
                     }
                 }
             }
         }
-    }
 
-    override suspend fun updateProfile(userId: UUID, update: ProfileUpdate): MeRecord? = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            connection.prepareStatement(
-                """
-                UPDATE profiles
-                SET display_name = ?,
-                    birthdate = ?,
-                    display_age = ?,
-                    gender = ?,
-                    orientation = ?,
-                    relationship_context = ?,
-                    discovery_style = COALESCE(?, discovery_style),
-                    profile_completeness_score = ?,
-                    updated_at = now()
-                WHERE user_id = ?
-                """.trimIndent()
-            ).use { statement ->
-                statement.setString(1, update.displayName)
-                statement.setDate(2, update.birthdate?.let { Date.valueOf(it) })
-                update.displayAge?.let { statement.setInt(3, it) } ?: statement.setNull(3, java.sql.Types.INTEGER)
-                statement.setString(4, update.gender)
-                statement.setString(5, update.orientation)
-                statement.setString(6, update.relationshipContext)
-                statement.setString(7, update.discoveryStyle)
-                statement.setInt(8, update.profileCompletenessScore)
-                statement.setObject(9, userId)
-                if (statement.executeUpdate() == 0) return@withContext null
+    override suspend fun updateProfile(
+        userId: UUID,
+        update: ProfileUpdate,
+    ): MeRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE profiles
+                        SET display_name = ?,
+                            birthdate = ?,
+                            display_age = ?,
+                            gender = ?,
+                            orientation = ?,
+                            relationship_context = ?,
+                            discovery_style = COALESCE(?, discovery_style),
+                            profile_completeness_score = ?,
+                            updated_at = now()
+                        WHERE user_id = ?
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setString(1, update.displayName)
+                        statement.setDate(2, update.birthdate?.let { Date.valueOf(it) })
+                        update.displayAge?.let { statement.setInt(3, it) } ?: statement.setNull(3, java.sql.Types.INTEGER)
+                        statement.setString(4, update.gender)
+                        statement.setString(5, update.orientation)
+                        statement.setString(6, update.relationshipContext)
+                        statement.setString(7, update.discoveryStyle)
+                        statement.setInt(8, update.profileCompletenessScore)
+                        statement.setObject(9, userId)
+                        if (statement.executeUpdate() == 0) return@withContext null
+                    }
             }
-        }
 
-        getMe(userId)
-    }
+            getMe(userId)
+        }
 
     override suspend fun updateDiscoverySettings(
         userId: UUID,
-        update: DiscoverySettingsUpdate
-    ): MeRecord? = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            connection.prepareStatement(
-                """
-                UPDATE discovery_settings
-                SET grid_visible = COALESCE(?::boolean, grid_visible),
-                    swipe_visible = COALESCE(?::boolean, swipe_visible),
-                    show_distance = COALESCE(?::boolean, show_distance),
-                    show_in_viewed_lists = COALESCE(?::boolean, show_in_viewed_lists),
-                    allow_grid_messages = COALESCE(?::boolean, allow_grid_messages),
-                    grid_message_policy = COALESCE(?::text, grid_message_policy),
-                    allow_flirts = COALESCE(?::boolean, allow_flirts),
-                    allow_intro_notes = COALESCE(?::boolean, allow_intro_notes),
-                    allow_album_requests = COALESCE(?::boolean, allow_album_requests),
-                    visible_while_traveling = COALESCE(?::boolean, visible_while_traveling),
-                    updated_at = now()
-                WHERE user_id = ?
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, update.gridVisible)
-                statement.setObject(2, update.swipeVisible)
-                statement.setObject(3, update.showDistance)
-                statement.setObject(4, update.showInViewedLists)
-                statement.setObject(5, update.allowGridMessages)
-                statement.setString(6, update.gridMessagePolicy)
-                statement.setObject(7, update.allowFlirts)
-                statement.setObject(8, update.allowIntroNotes)
-                statement.setObject(9, update.allowAlbumRequests)
-                statement.setObject(10, update.visibleWhileTraveling)
-                statement.setObject(11, userId)
-                if (statement.executeUpdate() == 0) return@withContext null
+        update: DiscoverySettingsUpdate,
+    ): MeRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE discovery_settings
+                        SET grid_visible = COALESCE(?::boolean, grid_visible),
+                            swipe_visible = COALESCE(?::boolean, swipe_visible),
+                            show_distance = COALESCE(?::boolean, show_distance),
+                            show_in_viewed_lists = COALESCE(?::boolean, show_in_viewed_lists),
+                            allow_grid_messages = COALESCE(?::boolean, allow_grid_messages),
+                            grid_message_policy = COALESCE(?::text, grid_message_policy),
+                            allow_flirts = COALESCE(?::boolean, allow_flirts),
+                            allow_intro_notes = COALESCE(?::boolean, allow_intro_notes),
+                            allow_album_requests = COALESCE(?::boolean, allow_album_requests),
+                            visible_while_traveling = COALESCE(?::boolean, visible_while_traveling),
+                            updated_at = now()
+                        WHERE user_id = ?
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, update.gridVisible)
+                        statement.setObject(2, update.swipeVisible)
+                        statement.setObject(3, update.showDistance)
+                        statement.setObject(4, update.showInViewedLists)
+                        statement.setObject(5, update.allowGridMessages)
+                        statement.setString(6, update.gridMessagePolicy)
+                        statement.setObject(7, update.allowFlirts)
+                        statement.setObject(8, update.allowIntroNotes)
+                        statement.setObject(9, update.allowAlbumRequests)
+                        statement.setObject(10, update.visibleWhileTraveling)
+                        statement.setObject(11, userId)
+                        if (statement.executeUpdate() == 0) return@withContext null
+                    }
             }
-        }
 
-        getMe(userId)
-    }
+            getMe(userId)
+        }
 
     private fun ResultSet.toPublicProfileRecord(): PublicProfileRecord {
         val distanceMeters = getDouble("distance_meters").takeUnless { wasNull() }
@@ -139,7 +148,7 @@ class JdbcProfileRepository(
             privateAlbumAccessStatus = getString("private_album_access_status"),
             allowGridMessages = getBoolean("allow_grid_messages"),
             allowFlirts = getBoolean("allow_flirts"),
-            allowAlbumRequests = getBoolean("allow_album_requests")
+            allowAlbumRequests = getBoolean("allow_album_requests"),
         )
     }
 
@@ -148,42 +157,45 @@ class JdbcProfileRepository(
         return MeRecord(
             userId = userId,
             userStatus = getString("user_status"),
-            profile = ProfileRecord(
-                userId = userId,
-                displayName = getString("display_name"),
-                birthdate = getDate("birthdate")?.toLocalDate(),
-                displayAge = getInt("display_age").takeUnless { wasNull() },
-                gender = getString("gender"),
-                orientation = getString("orientation"),
-                relationshipContext = getString("relationship_context"),
-                discoveryStyle = getString("discovery_style"),
-                profileCompletenessScore = getInt("profile_completeness_score"),
-                moderationStatus = getString("moderation_status"),
-                visibilityStatus = getString("visibility_status"),
-                ageVerified = getBoolean("age_verified")
-            ),
-            discoverySettings = DiscoverySettingsRecord(
-                gridVisible = getBoolean("grid_visible"),
-                swipeVisible = getBoolean("swipe_visible"),
-                eventsVisible = getBoolean("events_visible"),
-                showDistance = getBoolean("show_distance"),
-                showInViewedLists = getBoolean("show_in_viewed_lists"),
-                incognito = getBoolean("incognito"),
-                allowGridMessages = getBoolean("allow_grid_messages"),
-                gridMessagePolicy = getString("grid_message_policy"),
-                allowFlirts = getBoolean("allow_flirts"),
-                allowIntroNotes = getBoolean("allow_intro_notes"),
-                allowAlbumRequests = getBoolean("allow_album_requests"),
-                soloEnabled = getBoolean("solo_enabled"),
-                togetherEnabled = getBoolean("together_enabled"),
-                socialEnabled = getBoolean("social_enabled"),
-                visibleWhileTraveling = getBoolean("visible_while_traveling")
-            )
+            profile =
+                ProfileRecord(
+                    userId = userId,
+                    displayName = getString("display_name"),
+                    birthdate = getDate("birthdate")?.toLocalDate(),
+                    displayAge = getInt("display_age").takeUnless { wasNull() },
+                    gender = getString("gender"),
+                    orientation = getString("orientation"),
+                    relationshipContext = getString("relationship_context"),
+                    discoveryStyle = getString("discovery_style"),
+                    profileCompletenessScore = getInt("profile_completeness_score"),
+                    moderationStatus = getString("moderation_status"),
+                    visibilityStatus = getString("visibility_status"),
+                    ageVerified = getBoolean("age_verified"),
+                ),
+            discoverySettings =
+                DiscoverySettingsRecord(
+                    gridVisible = getBoolean("grid_visible"),
+                    swipeVisible = getBoolean("swipe_visible"),
+                    eventsVisible = getBoolean("events_visible"),
+                    showDistance = getBoolean("show_distance"),
+                    showInViewedLists = getBoolean("show_in_viewed_lists"),
+                    incognito = getBoolean("incognito"),
+                    allowGridMessages = getBoolean("allow_grid_messages"),
+                    gridMessagePolicy = getString("grid_message_policy"),
+                    allowFlirts = getBoolean("allow_flirts"),
+                    allowIntroNotes = getBoolean("allow_intro_notes"),
+                    allowAlbumRequests = getBoolean("allow_album_requests"),
+                    soloEnabled = getBoolean("solo_enabled"),
+                    togetherEnabled = getBoolean("together_enabled"),
+                    socialEnabled = getBoolean("social_enabled"),
+                    visibleWhileTraveling = getBoolean("visible_while_traveling"),
+                ),
         )
     }
 
     companion object {
-        private val ME_QUERY = """
+        private val ME_QUERY =
+            """
             SELECT u.id AS user_id,
                    u.status AS user_status,
                    p.display_name,
@@ -217,9 +229,10 @@ class JdbcProfileRepository(
             JOIN discovery_settings ds ON ds.user_id = u.id
             WHERE u.id = ?
               AND u.deleted_at IS NULL
-        """.trimIndent()
+            """.trimIndent()
 
-        private val PUBLIC_PROFILE_QUERY = """
+        private val PUBLIC_PROFILE_QUERY =
+            """
             SELECT u.id AS user_id,
                    COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
                    profile_photo.media_asset_id AS profile_photo_media_asset_id,
@@ -366,6 +379,6 @@ class JdbcProfileRepository(
               AND ds.grid_visible = true
               AND ds.incognito = false
               AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-        """.trimIndent()
+            """.trimIndent()
     }
 }

@@ -10,7 +10,7 @@ import kotlinx.coroutines.launch
 class MessagesRealtimeCoordinator(
     private val client: MessageStreamClient,
     private val messagesStateHolder: MessagesStateHolder,
-    private val conversationStateHolder: ConversationStateHolder
+    private val conversationStateHolder: ConversationStateHolder,
 ) {
     suspend fun run() {
         coroutineScope {
@@ -22,16 +22,18 @@ class MessagesRealtimeCoordinator(
             }
             client.connect().collect { delta ->
                 when (delta.type) {
-                    MessageDeltaType.TYPING_STARTED -> conversationStateHolder.applyTypingStarted(
-                        conversationId = delta.conversationId,
-                        actorUserId = delta.actorUserId,
-                        actorDisplayName = delta.actorDisplayName,
-                        expiresAt = delta.expiresAt
-                    )
-                    MessageDeltaType.TYPING_STOPPED -> conversationStateHolder.applyTypingStopped(
-                        conversationId = delta.conversationId,
-                        actorUserId = delta.actorUserId
-                    )
+                    MessageDeltaType.TYPING_STARTED ->
+                        conversationStateHolder.applyTypingStarted(
+                            conversationId = delta.conversationId,
+                            actorUserId = delta.actorUserId,
+                            actorDisplayName = delta.actorDisplayName,
+                            expiresAt = delta.expiresAt,
+                        )
+                    MessageDeltaType.TYPING_STOPPED ->
+                        conversationStateHolder.applyTypingStopped(
+                            conversationId = delta.conversationId,
+                            actorUserId = delta.actorUserId,
+                        )
                     else -> {
                         messagesStateHolder.refreshSilently()
                         conversationStateHolder.refreshOpenConversationIfConversationId(delta.conversationId)

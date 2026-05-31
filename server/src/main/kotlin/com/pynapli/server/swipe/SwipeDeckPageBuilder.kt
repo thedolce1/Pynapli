@@ -6,7 +6,7 @@ import java.util.UUID
 
 internal class SwipeDeckPageBuilder(
     private val deckTokenCodec: SwipeDeckTokenCodec,
-    private val dtoMapper: SwipeDtoMapper
+    private val dtoMapper: SwipeDtoMapper,
 ) {
     fun buildPageItems(
         pageCards: List<SwipeCardRecord>,
@@ -15,40 +15,43 @@ internal class SwipeDeckPageBuilder(
         scopeHash: String,
         startPosition: Int,
         onlineUserIds: Set<UUID>,
-        dealtAt: Instant
+        dealtAt: Instant,
     ): List<SwipeDeckPageItem> =
         pageCards.mapIndexed { index, card ->
             val position = startPosition + index
-            val cardToken = deckTokenCodec.issueCardToken(
-                deckSessionId = deckSession.deckSessionId,
-                viewerUserId = viewerUserId,
-                targetUserId = card.userId,
-                scopeHash = scopeHash,
-                generatedAt = deckSession.generatedAt,
-                expiresAt = deckSession.expiresAt,
-                position = position
-            )
-            SwipeDeckPageItem(
-                dto = dtoMapper.cardToDto(
-                    card = card,
-                    rankToken = cardToken,
-                    online = card.userId in onlineUserIds,
-                    onlineUserIds = onlineUserIds
-                ),
-                persistedCard = SwipeDeckSessionCardRecord(
-                    cardId = UUID.randomUUID(),
-                    sessionId = deckSession.sessionId,
+            val cardToken =
+                deckTokenCodec.issueCardToken(
+                    deckSessionId = deckSession.deckSessionId,
                     viewerUserId = viewerUserId,
                     targetUserId = card.userId,
-                    cardTokenHash = deckTokenCodec.tokenHash(cardToken),
+                    scopeHash = scopeHash,
+                    generatedAt = deckSession.generatedAt,
+                    expiresAt = deckSession.expiresAt,
                     position = position,
-                    dealtAt = dealtAt
                 )
+            SwipeDeckPageItem(
+                dto =
+                    dtoMapper.cardToDto(
+                        card = card,
+                        rankToken = cardToken,
+                        online = card.userId in onlineUserIds,
+                        onlineUserIds = onlineUserIds,
+                    ),
+                persistedCard =
+                    SwipeDeckSessionCardRecord(
+                        cardId = UUID.randomUUID(),
+                        sessionId = deckSession.sessionId,
+                        viewerUserId = viewerUserId,
+                        targetUserId = card.userId,
+                        cardTokenHash = deckTokenCodec.tokenHash(cardToken),
+                        position = position,
+                        dealtAt = dealtAt,
+                    ),
             )
         }
 }
 
 internal data class SwipeDeckPageItem(
     val dto: SwipeCardDto,
-    val persistedCard: SwipeDeckSessionCardRecord
+    val persistedCard: SwipeDeckSessionCardRecord,
 )

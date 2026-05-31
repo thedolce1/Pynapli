@@ -1,7 +1,7 @@
 package com.pynapli.server.grid
 
-import com.pynapli.server.discovery.discoveryFiltersFrom
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.discovery.discoveryFiltersFrom
 import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
@@ -16,19 +16,18 @@ class SavedGridFilterService(
     private val subscriptionService: SubscriptionService? = null,
     private val viewerTrustRepository: GridViewerTrustRepository? = null,
     private val json: Json = Json,
-    private val idFactory: () -> UUID = UUID::randomUUID
+    private val idFactory: () -> UUID = UUID::randomUUID,
 ) {
-
     suspend fun list(viewerUserId: UUID): SavedGridFiltersListDto {
         requireEntitlement(viewerUserId)
         return SavedGridFiltersListDto(
-            items = repository.list(viewerUserId).map { it.toDto() }
+            items = repository.list(viewerUserId).map { it.toDto() },
         )
     }
 
     suspend fun create(
         viewerUserId: UUID,
-        request: CreateSavedGridFilterRequestDto
+        request: CreateSavedGridFilterRequestDto,
     ): SavedGridFilterDto {
         requireEntitlement(viewerUserId)
         val name = request.name.trim()
@@ -41,23 +40,28 @@ class SavedGridFilterService(
             throw SavedGridFilterException("SAVED_FILTER_LIMIT_REACHED")
         }
         val payloadJson = json.encodeToString(GridQueryRequestDto.serializer(), request.payload.normalized())
-        val record = try {
-            repository.create(
-                id = idFactory(),
-                userId = viewerUserId,
-                name = name,
-                payloadJson = payloadJson
-            )
-        } catch (_: SavedGridFilterDuplicateNameException) {
-            throw SavedGridFilterException("SAVED_FILTER_NAME_TAKEN")
-        }
+        val record =
+            try {
+                repository.create(
+                    id = idFactory(),
+                    userId = viewerUserId,
+                    name = name,
+                    payloadJson = payloadJson,
+                )
+            } catch (_: SavedGridFilterDuplicateNameException) {
+                throw SavedGridFilterException("SAVED_FILTER_NAME_TAKEN")
+            }
         return record.toDto()
     }
 
-    suspend fun delete(viewerUserId: UUID, idText: String): Boolean {
+    suspend fun delete(
+        viewerUserId: UUID,
+        idText: String,
+    ): Boolean {
         requireEntitlement(viewerUserId)
-        val id = runCatching { UUID.fromString(idText) }
-            .getOrElse { throw SavedGridFilterException("INVALID_SAVED_FILTER_ID") }
+        val id =
+            runCatching { UUID.fromString(idText) }
+                .getOrElse { throw SavedGridFilterException("INVALID_SAVED_FILTER_ID") }
         return repository.delete(viewerUserId, id)
     }
 
@@ -83,11 +87,14 @@ class SavedGridFilterService(
             lifestyleTags = payload.lifestyleTags,
             logisticsTags = payload.logisticsTags,
             tonightAvailableOnly = payload.tonightAvailableOnly,
-            intents = payload.intents
+            intents = payload.intents,
         ) { _ -> SavedGridFilterException("INVALID_SAVED_FILTER_PAYLOAD") }
     }
 
-    private suspend fun requireLifestyleFilterAccess(viewerUserId: UUID, filters: DiscoveryFilters) {
+    private suspend fun requireLifestyleFilterAccess(
+        viewerUserId: UUID,
+        filters: DiscoveryFilters,
+    ) {
         if (filters.lifestyleTags.isEmpty()) return
         val verified = viewerTrustRepository?.isAgeVerified(viewerUserId) ?: true
         if (!verified) throw SavedGridFilterException("AGE_VERIFICATION_REQUIRED")
@@ -97,16 +104,16 @@ class SavedGridFilterService(
      * Strips fields that should never be persisted in a preset (cursor is request-time
      * only; limit is server-controlled).
      */
-    private fun GridQueryRequestDto.normalized(): GridQueryRequestDto =
-        copy(cursor = null)
+    private fun GridQueryRequestDto.normalized(): GridQueryRequestDto = copy(cursor = null)
 
-    private fun SavedGridFilterRecord.toDto(): SavedGridFilterDto = SavedGridFilterDto(
-        id = id.toString(),
-        name = name,
-        payload = json.decodeFromString(GridQueryRequestDto.serializer(), payloadJson),
-        createdAt = createdAt.toString(),
-        updatedAt = updatedAt.toString()
-    )
+    private fun SavedGridFilterRecord.toDto(): SavedGridFilterDto =
+        SavedGridFilterDto(
+            id = id.toString(),
+            name = name,
+            payload = json.decodeFromString(GridQueryRequestDto.serializer(), payloadJson),
+            createdAt = createdAt.toString(),
+            updatedAt = updatedAt.toString(),
+        )
 
     companion object {
         const val MAX_NAME_LENGTH: Int = 60
@@ -114,4 +121,6 @@ class SavedGridFilterService(
     }
 }
 
-class SavedGridFilterException(val code: String) : RuntimeException(code)
+class SavedGridFilterException(
+    val code: String,
+) : RuntimeException(code)

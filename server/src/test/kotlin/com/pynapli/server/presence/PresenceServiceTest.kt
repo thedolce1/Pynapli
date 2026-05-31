@@ -8,17 +8,18 @@ import kotlin.test.assertTrue
 
 class PresenceServiceTest {
     @Test
-    fun heartbeatMarksUserOnline() = runBlocking {
-        val repository = InMemoryPresenceRepository()
-        val service = PresenceService(repository)
-        val userId = UUID.randomUUID()
+    fun heartbeatMarksUserOnline() =
+        runBlocking {
+            val repository = InMemoryPresenceRepository()
+            val service = PresenceService(repository)
+            val userId = UUID.randomUUID()
 
-        val response = service.heartbeat(userId)
+            val response = service.heartbeat(userId)
 
-        assertTrue(response.online)
-        assertEquals(300, response.expiresInSeconds)
-        assertEquals(setOf(userId), service.onlineUserIds(listOf(userId)))
-    }
+            assertTrue(response.online)
+            assertEquals(300, response.expiresInSeconds)
+            assertEquals(setOf(userId), service.onlineUserIds(listOf(userId)))
+        }
 }
 
 private class InMemoryPresenceRepository : PresenceRepository {
@@ -29,6 +30,5 @@ private class InMemoryPresenceRepository : PresenceRepository {
         return PresenceState(online = true, expiresInSeconds = 300)
     }
 
-    override suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> =
-        userIds.filterTo(mutableSetOf()) { it in onlineUserIds }
+    override suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> = userIds.filterTo(mutableSetOf()) { it in onlineUserIds }
 }

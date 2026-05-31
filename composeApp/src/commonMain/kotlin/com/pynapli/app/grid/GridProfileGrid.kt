@@ -34,11 +34,14 @@ internal fun ProfileGrid(
     onLoadMore: () -> Unit,
     canLoadMore: Boolean,
     isLoadingMore: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val shouldLoadMore by remember(cards.size, gridState, isLoadingMore, canLoadMore) {
         derivedStateOf {
-            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+            val lastVisibleIndex =
+                gridState.layoutInfo.visibleItemsInfo
+                    .lastOrNull()
+                    ?.index ?: return@derivedStateOf false
             canLoadMore && !isLoadingMore && cards.isNotEmpty() && lastVisibleIndex >= cards.lastIndex - 9
         }
     }
@@ -49,7 +52,10 @@ internal fun ProfileGrid(
 
     val prefetchUrls by remember(cards, gridState) {
         derivedStateOf {
-            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            val lastVisibleIndex =
+                gridState.layoutInfo.visibleItemsInfo
+                    .lastOrNull()
+                    ?.index ?: -1
             planThumbnailPrefetch(cards = cards, lastVisibleIndex = lastVisibleIndex)
         }
     }
@@ -59,9 +65,10 @@ internal fun ProfileGrid(
         val imageLoader = runCatching { SingletonImageLoader.get(platformContext) }.getOrNull() ?: return@LaunchedEffect
         prefetchUrls.forEach { url ->
             imageLoader.enqueue(
-                ImageRequest.Builder(platformContext)
+                ImageRequest
+                    .Builder(platformContext)
                     .data(url)
-                    .build()
+                    .build(),
             )
         }
     }
@@ -72,17 +79,17 @@ internal fun ProfileGrid(
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(start = 1.dp, end = 1.dp, bottom = 1.dp),
         horizontalArrangement = Arrangement.spacedBy(1.dp),
-        verticalArrangement = Arrangement.spacedBy(1.dp)
+        verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         items(
             items = cards,
             key = { card -> card.id },
-            contentType = { "grid-card" }
+            contentType = { "grid-card" },
         ) { card ->
             GridProfileTile(
                 card = card,
                 distanceUnit = distanceUnit,
-                onClick = { onProfileSelected(card) }
+                onClick = { onProfileSelected(card) },
             )
         }
 
@@ -90,17 +97,18 @@ internal fun ProfileGrid(
             item(
                 key = "grid-loading-more",
                 span = { GridItemSpan(maxLineSpan) },
-                contentType = "grid-loading"
+                contentType = "grid-loading",
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 18.dp),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 18.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator(
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(24.dp),
                     )
                 }
             }

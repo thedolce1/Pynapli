@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.update
  * the previous items so the row doesn't flicker between loads.
  */
 class TopPicksStateHolder(
-    private val repository: TopPicksRepository
+    private val repository: TopPicksRepository,
 ) {
     private val _state = MutableStateFlow(TopPicksUiState())
     val state: StateFlow<TopPicksUiState> = _state.asStateFlow()
@@ -25,24 +25,26 @@ class TopPicksStateHolder(
     suspend fun load() {
         _state.update { it.copy(isLoading = true, errorMessage = null, errorCode = null) }
         when (val result = repository.getCurrentPicks()) {
-            is AppResult.Success -> _state.update {
-                val response = result.value
-                it.copy(
-                    isLoading = false,
-                    sessionId = response.sessionId,
-                    expiresAt = response.expiresAt,
-                    generatedAt = response.generatedAt,
-                    tierLimit = response.tierLimit,
-                    items = response.picks
-                )
-            }
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    isLoading = false,
-                    errorCode = result.error.code,
-                    errorMessage = result.error.message
-                )
-            }
+            is AppResult.Success ->
+                _state.update {
+                    val response = result.value
+                    it.copy(
+                        isLoading = false,
+                        sessionId = response.sessionId,
+                        expiresAt = response.expiresAt,
+                        generatedAt = response.generatedAt,
+                        tierLimit = response.tierLimit,
+                        items = response.picks,
+                    )
+                }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        errorCode = result.error.code,
+                        errorMessage = result.error.message,
+                    )
+                }
         }
     }
 
@@ -60,7 +62,7 @@ data class TopPicksUiState(
     val tierLimit: Int = 0,
     val isLoading: Boolean = false,
     val errorCode: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 ) {
     val locationRequired: Boolean get() = errorCode == "LOCATION_REQUIRED"
 }
@@ -70,8 +72,7 @@ interface TopPicksRepository {
 }
 
 class ApiTopPicksRepository(
-    private val apiClient: PynapliApiClient
+    private val apiClient: PynapliApiClient,
 ) : TopPicksRepository {
-    override suspend fun getCurrentPicks(): AppResult<TopPicksResponseDto> =
-        apiClient.getTopPicks()
+    override suspend fun getCurrentPicks(): AppResult<TopPicksResponseDto> = apiClient.getTopPicks()
 }

@@ -7,14 +7,17 @@ private const val PARTNER_INVITE_PENDING = "pending"
 private const val PARTNER_INVITE_ACCEPTED = "accepted"
 private const val PARTNER_INVITE_DECLINED = "declined"
 
-internal fun Connection.participantStatus(conversationId: UUID, userId: UUID): ParticipantStatus =
+internal fun Connection.participantStatus(
+    conversationId: UUID,
+    userId: UUID,
+): ParticipantStatus =
     prepareStatement(
         """
         SELECT invitation_status, left_at
         FROM conversation_participants
         WHERE conversation_id = ?
           AND user_id = ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, conversationId)
         statement.setObject(2, userId)
@@ -37,7 +40,7 @@ internal fun Connection.participantStatus(conversationId: UUID, userId: UUID): P
 internal fun Connection.upsertInvitedParticipant(
     conversationId: UUID,
     partnerUserId: UUID,
-    inviterUserId: UUID
+    inviterUserId: UUID,
 ) {
     prepareStatement(
         """
@@ -63,7 +66,7 @@ internal fun Connection.upsertInvitedParticipant(
             last_read_at = now()
         WHERE conversation_participants.invitation_status IN ('declined', 'left')
            OR conversation_participants.left_at IS NOT NULL
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, conversationId)
         statement.setObject(2, partnerUserId)
@@ -72,7 +75,10 @@ internal fun Connection.upsertInvitedParticipant(
     }
 }
 
-internal fun Connection.partnerInviteCooldownActive(conversationId: UUID, partnerUserId: UUID): Boolean =
+internal fun Connection.partnerInviteCooldownActive(
+    conversationId: UUID,
+    partnerUserId: UUID,
+): Boolean =
     prepareStatement(
         """
         SELECT EXISTS (
@@ -83,7 +89,7 @@ internal fun Connection.partnerInviteCooldownActive(conversationId: UUID, partne
               AND third_party_status = ?
               AND resolved_at > now() - interval '24 hours'
         )
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, conversationId)
         statement.setObject(2, partnerUserId)
@@ -97,7 +103,7 @@ internal fun Connection.partnerInviteCooldownActive(conversationId: UUID, partne
 internal fun Connection.insertPartnerChatInvite(
     conversationId: UUID,
     inviterUserId: UUID,
-    partnerUserId: UUID
+    partnerUserId: UUID,
 ): Boolean =
     prepareStatement(
         """
@@ -111,7 +117,7 @@ internal fun Connection.insertPartnerChatInvite(
         )
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT DO NOTHING
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, UUID.randomUUID())
         statement.setObject(2, conversationId)
@@ -124,27 +130,28 @@ internal fun Connection.insertPartnerChatInvite(
 
 internal fun Connection.loadOpenPartnerInvite(
     conversationId: UUID,
-    forUpdate: Boolean
+    forUpdate: Boolean,
 ): PartnerChatInviteRecord? {
-    val query = buildString {
-        append(
-            """
-            SELECT id,
-                   thread_id,
-                   inviter_user_id,
-                   invited_partner_user_id,
-                   third_party_status,
-                   partner_status,
-                   created_at
-            FROM partner_chat_invites
-            WHERE thread_id = ?
-              AND resolved_at IS NULL
-            ORDER BY created_at DESC, id DESC
-            LIMIT 1
-            """.trimIndent()
-        )
-        if (forUpdate) append("\nFOR UPDATE")
-    }
+    val query =
+        buildString {
+            append(
+                """
+                SELECT id,
+                       thread_id,
+                       inviter_user_id,
+                       invited_partner_user_id,
+                       third_party_status,
+                       partner_status,
+                       created_at
+                FROM partner_chat_invites
+                WHERE thread_id = ?
+                  AND resolved_at IS NULL
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """.trimIndent(),
+            )
+            if (forUpdate) append("\nFOR UPDATE")
+        }
     return prepareStatement(query).use { statement ->
         statement.setObject(1, conversationId)
         statement.executeQuery().use { rs ->
@@ -155,7 +162,7 @@ internal fun Connection.loadOpenPartnerInvite(
 
 internal fun Connection.partnerInviteUserRole(
     userId: UUID,
-    invite: PartnerChatInviteRecord
+    invite: PartnerChatInviteRecord,
 ): PartnerInviteUserRole =
     when {
         userId == invite.invitedPartnerUserId -> PartnerInviteUserRole.InvitedPartner
@@ -168,12 +175,14 @@ internal fun Connection.acceptOpenPartnerInvite(
     conversationId: UUID,
     userId: UUID,
     invite: PartnerChatInviteRecord,
-    role: PartnerInviteUserRole
+    role: PartnerInviteUserRole,
 ) {
-    val partnerAccepted = invite.partnerStatus == PARTNER_INVITE_ACCEPTED ||
-        role == PartnerInviteUserRole.InvitedPartner
-    val thirdPartyAccepted = invite.thirdPartyStatus == PARTNER_INVITE_ACCEPTED ||
-        role == PartnerInviteUserRole.ThirdPartyApprover
+    val partnerAccepted =
+        invite.partnerStatus == PARTNER_INVITE_ACCEPTED ||
+            role == PartnerInviteUserRole.InvitedPartner
+    val thirdPartyAccepted =
+        invite.thirdPartyStatus == PARTNER_INVITE_ACCEPTED ||
+            role == PartnerInviteUserRole.ThirdPartyApprover
     val fullyAccepted = partnerAccepted && thirdPartyAccepted
 
     prepareStatement(
@@ -184,7 +193,7 @@ internal fun Connection.acceptOpenPartnerInvite(
             resolved_at = CASE WHEN ? THEN now() ELSE resolved_at END
         WHERE id = ?
           AND resolved_at IS NULL
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setBoolean(1, role == PartnerInviteUserRole.InvitedPartner)
         statement.setString(2, PARTNER_INVITE_ACCEPTED)
@@ -208,7 +217,7 @@ internal fun Connection.acceptOpenPartnerInvite(
               AND user_id = ?
               AND invitation_status = 'invited'
               AND left_at IS NULL
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setObject(1, conversationId)
             statement.setObject(2, invite.invitedPartnerUserId)
@@ -223,7 +232,7 @@ internal fun Connection.acceptOpenPartnerInvite(
               AND user_id = ?
               AND invitation_status = 'invited'
               AND left_at IS NULL
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setObject(1, conversationId)
             statement.setObject(2, userId)
@@ -237,7 +246,7 @@ internal fun Connection.acceptOpenPartnerInvite(
 internal fun Connection.declineOpenPartnerInvite(
     conversationId: UUID,
     invite: PartnerChatInviteRecord,
-    role: PartnerInviteUserRole
+    role: PartnerInviteUserRole,
 ) {
     prepareStatement(
         """
@@ -247,7 +256,7 @@ internal fun Connection.declineOpenPartnerInvite(
             resolved_at = now()
         WHERE id = ?
           AND resolved_at IS NULL
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setBoolean(1, role == PartnerInviteUserRole.InvitedPartner)
         statement.setString(2, PARTNER_INVITE_DECLINED)
@@ -267,7 +276,7 @@ internal fun Connection.declineOpenPartnerInvite(
           AND user_id = ?
           AND invitation_status = 'invited'
           AND left_at IS NULL
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, conversationId)
         statement.setObject(2, invite.invitedPartnerUserId)
@@ -283,7 +292,7 @@ internal fun Connection.markConversationGroup(conversationId: UUID) {
         SET kind = 'group',
             updated_at = now()
         WHERE id = ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, conversationId)
         statement.executeUpdate()
@@ -296,7 +305,7 @@ internal fun Connection.touchConversation(conversationId: UUID) {
         UPDATE conversations
         SET updated_at = now()
         WHERE id = ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, conversationId)
         statement.executeUpdate()

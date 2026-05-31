@@ -38,28 +38,30 @@ internal fun StoreHeader(
     entitlement: SubscriptionEntitlementDto?,
     isRestoringPurchases: Boolean,
     restoreEnabled: Boolean,
-    onRestorePurchases: () -> Unit
+    onRestorePurchases: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Filled.ShoppingBag,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(23.dp)
+                modifier = Modifier.size(23.dp),
             )
         }
         Column(modifier = Modifier.weight(1f)) {
@@ -67,24 +69,24 @@ internal fun StoreHeader(
                 text = "Store",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = entitlement?.source.sourceLabel(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
         OutlinedButton(
             onClick = onRestorePurchases,
-            enabled = restoreEnabled
+            enabled = restoreEnabled,
         ) {
             Icon(
                 imageVector = Icons.Filled.Refresh,
                 contentDescription = null,
-                modifier = Modifier.size(17.dp)
+                modifier = Modifier.size(17.dp),
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(if (isRestoringPurchases) "Restoring" else "Restore")
@@ -95,18 +97,18 @@ internal fun StoreHeader(
 @Composable
 internal fun CurrentPlanRow(entitlement: SubscriptionEntitlementDto?) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(14.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
+                    shape = RoundedCornerShape(8.dp),
+                ).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -115,18 +117,19 @@ internal fun CurrentPlanRow(entitlement: SubscriptionEntitlementDto?) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = if (entitlement?.linkedPartnerIncluded == true) {
-                    "Linked partner included"
-                } else {
-                    "Core discovery and safety included"
-                },
+                text =
+                    if (entitlement?.linkedPartnerIncluded == true) {
+                        "Linked partner included"
+                    } else {
+                        "Core discovery and safety included"
+                    },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Text(
@@ -134,7 +137,7 @@ internal fun CurrentPlanRow(entitlement: SubscriptionEntitlementDto?) {
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1
+            maxLines = 1,
         )
     }
 }
@@ -142,26 +145,27 @@ internal fun CurrentPlanRow(entitlement: SubscriptionEntitlementDto?) {
 @Composable
 internal fun StoreSectionTitle(
     title: String,
-    subtitle: String
+    subtitle: String,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
             text = title,
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
         )
         Text(
             text = subtitle,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
             maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -169,25 +173,26 @@ internal fun StoreSectionTitle(
 @Composable
 internal fun StoreMessageRow(
     message: String?,
-    error: String?
+    error: String?,
 ) {
     val text = error ?: message ?: return
     val color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        contentAlignment = Alignment.CenterStart
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        contentAlignment = Alignment.CenterStart,
     ) {
         Text(
             text = text,
             color = color,
             style = MaterialTheme.typography.bodySmall,
             maxLines = 3,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -197,38 +202,40 @@ internal fun StoreFeatureRow(label: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
             imageVector = Icons.Filled.Check,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(17.dp)
+            modifier = Modifier.size(17.dp),
         )
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
-private fun String?.sourceLabel(): String = when (this) {
-    EntitlementSource.OWN_SUBSCRIPTION -> "Paid subscription active"
-    EntitlementSource.LINKED_PARTNER_BENEFIT -> "Linked partner benefit active"
-    EntitlementSource.PROMO -> "Promo entitlement active"
-    EntitlementSource.ADMIN -> "Admin entitlement active"
-    else -> "Free plan active"
-}
+private fun String?.sourceLabel(): String =
+    when (this) {
+        EntitlementSource.OWN_SUBSCRIPTION -> "Paid subscription active"
+        EntitlementSource.LINKED_PARTNER_BENEFIT -> "Linked partner benefit active"
+        EntitlementSource.PROMO -> "Promo entitlement active"
+        EntitlementSource.ADMIN -> "Admin entitlement active"
+        else -> "Free plan active"
+    }
 
-private fun String.tierLabel(): String = when (this) {
-    SubscriptionTier.FREE -> "Free"
-    SubscriptionTier.SOCIAL -> "Social"
-    SubscriptionTier.SELECT -> "Select"
-    else -> this
-}
+private fun String.tierLabel(): String =
+    when (this) {
+        SubscriptionTier.FREE -> "Free"
+        SubscriptionTier.SOCIAL -> "Social"
+        SubscriptionTier.SELECT -> "Select"
+        else -> this
+    }
 
 internal object StoreTestTags {
     const val LIST = "store-list"

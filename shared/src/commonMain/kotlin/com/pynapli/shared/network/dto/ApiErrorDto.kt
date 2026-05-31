@@ -7,6 +7,5 @@ data class ApiErrorDto(
     val code: String,
     val message: String,
     val requestId: String,
-    val details: Map<String, String> = emptyMap()
+    val details: Map<String, String> = emptyMap(),
 )
-

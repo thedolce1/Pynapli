@@ -1,7 +1,8 @@
 package com.pynapli.server.activity
 
 internal object JdbcActivitySql {
-    val UPSERT_ELIGIBLE_PROFILE_VIEW_QUERY = """
+    val UPSERT_ELIGIBLE_PROFILE_VIEW_QUERY =
+        """
         INSERT INTO activity_events (
             id,
             recipient_user_id,
@@ -58,9 +59,10 @@ internal object JdbcActivitySql {
             END,
             visibility_status = 'visible'
         RETURNING id
-    """.trimIndent()
+        """.trimIndent()
 
-    val FLIRT_ELIGIBILITY_QUERY = """
+    val FLIRT_ELIGIBILITY_QUERY =
+        """
         SELECT EXISTS (
             SELECT 1
             FROM users sender
@@ -83,9 +85,10 @@ internal object JdbcActivitySql {
               AND target.status = 'active'
               AND target.deleted_at IS NULL
         )
-    """.trimIndent()
+        """.trimIndent()
 
-    val UPSERT_FLIRT_QUERY = """
+    val UPSERT_FLIRT_QUERY =
+        """
         INSERT INTO activity_events (
             id,
             recipient_user_id,
@@ -120,9 +123,10 @@ internal object JdbcActivitySql {
                 ELSE activity_events.seen_at
             END,
             visibility_status = 'visible'
-    """.trimIndent()
+        """.trimIndent()
 
-    val ALBUM_REQUEST_ELIGIBILITY_QUERY = """
+    val ALBUM_REQUEST_ELIGIBILITY_QUERY =
+        """
         SELECT EXISTS (
             SELECT 1
             FROM users requester
@@ -145,9 +149,10 @@ internal object JdbcActivitySql {
               AND target.status = 'active'
               AND target.deleted_at IS NULL
         )
-    """.trimIndent()
+        """.trimIndent()
 
-    val UPSERT_ALBUM_REQUEST_QUERY = """
+    val UPSERT_ALBUM_REQUEST_QUERY =
+        """
         INSERT INTO activity_events (
             id,
             recipient_user_id,
@@ -182,9 +187,10 @@ internal object JdbcActivitySql {
                 ELSE activity_events.seen_at
             END,
             visibility_status = 'visible'
-    """.trimIndent()
+        """.trimIndent()
 
-    val UPSERT_SWIPE_INTEREST_QUERY = """
+    val UPSERT_SWIPE_INTEREST_QUERY =
+        """
         INSERT INTO activity_events (
             id,
             recipient_user_id,
@@ -219,9 +225,10 @@ internal object JdbcActivitySql {
         WHERE event_type IN ('swipe_like', 'pineapple_like', 'intro_note') AND deleted_at IS NULL
         DO NOTHING
         RETURNING id
-    """.trimIndent()
+        """.trimIndent()
 
-    val UPSERT_MATCH_ACTIVITY_QUERY = """
+    val UPSERT_MATCH_ACTIVITY_QUERY =
+        """
         INSERT INTO activity_events (
             id,
             recipient_user_id,
@@ -254,9 +261,10 @@ internal object JdbcActivitySql {
         WHERE event_type = 'match' AND deleted_at IS NULL
         DO NOTHING
         RETURNING id
-    """.trimIndent()
+        """.trimIndent()
 
-    val UPSERT_PARTNER_CHAT_INVITE_QUERY = """
+    val UPSERT_PARTNER_CHAT_INVITE_QUERY =
+        """
         INSERT INTO activity_events (
             id,
             recipient_user_id,
@@ -289,9 +297,10 @@ internal object JdbcActivitySql {
         WHERE event_type = 'partner_chat_invite' AND deleted_at IS NULL
         DO NOTHING
         RETURNING id
-    """.trimIndent()
+        """.trimIndent()
 
-    val ACTIVITY_FEED_QUERY = """
+    val ACTIVITY_FEED_QUERY =
+        """
         WITH recipient_location AS (
             SELECT geom
             FROM user_locations
@@ -399,9 +408,10 @@ internal object JdbcActivitySql {
           )
         ORDER BY ae.occurred_at DESC, ae.id DESC
         LIMIT ?
-    """.trimIndent()
+        """.trimIndent()
 
-    val ACTIVITY_SUMMARY_QUERY = """
+    val ACTIVITY_SUMMARY_QUERY =
+        """
         WITH visible_events AS (
             SELECT ae.event_type,
                    ae.occurred_at,
@@ -494,9 +504,10 @@ internal object JdbcActivitySql {
                    )
                ) AS latest_badge_occurred_at
         FROM visible_events
-    """.trimIndent()
+        """.trimIndent()
 
-    val MARK_ACTIVITY_EVENTS_SEEN_QUERY = """
+    val MARK_ACTIVITY_EVENTS_SEEN_QUERY =
+        """
         UPDATE activity_events
         SET seen_at = now(),
             updated_at = now()
@@ -505,18 +516,20 @@ internal object JdbcActivitySql {
           AND visibility_status = 'visible'
           AND deleted_at IS NULL
           AND seen_at IS NULL
-    """.trimIndent()
+        """.trimIndent()
 
-    val DISMISS_ACTIVITY_EVENT_QUERY = """
+    val DISMISS_ACTIVITY_EVENT_QUERY =
+        """
         UPDATE activity_events
         SET deleted_at = now(),
             updated_at = now()
         WHERE id = ?
           AND recipient_user_id = ?
           AND deleted_at IS NULL
-    """.trimIndent()
+        """.trimIndent()
 
-    val GET_ALBUM_REQUEST_EVENT_QUERY = """
+    val GET_ALBUM_REQUEST_EVENT_QUERY =
+        """
         SELECT id, recipient_user_id, actor_user_id
         FROM activity_events
         WHERE id = ?
@@ -525,7 +538,7 @@ internal object JdbcActivitySql {
           AND visibility_status = 'visible'
           AND deleted_at IS NULL
         LIMIT 1
-    """.trimIndent()
+        """.trimIndent()
 
     val SWIPE_INTEREST_EVENT_TYPES = setOf("swipe_like", "pineapple_like", "intro_note")
 }

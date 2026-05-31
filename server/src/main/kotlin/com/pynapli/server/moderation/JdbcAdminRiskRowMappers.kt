@@ -11,7 +11,7 @@ internal fun ResultSet.toAdminRiskStateRecord(): AdminRiskStateRecord =
         tier = getString("tier"),
         lastEventAt = getTimestamp("last_event_at")?.toInstant(),
         lastReviewedAt = getTimestamp("last_reviewed_at")?.toInstant(),
-        updatedAt = getTimestamp("updated_at").toInstant()
+        updatedAt = getTimestamp("updated_at").toInstant(),
     )
 
 internal fun ResultSet.toAdminRiskEventRecord(): AdminRiskEventRecord =
@@ -25,7 +25,7 @@ internal fun ResultSet.toAdminRiskEventRecord(): AdminRiskEventRecord =
         scoreAfter = getInt("score_after"),
         tierAfter = getString("tier_after"),
         metadataJson = getString("metadata_json"),
-        createdAt = getTimestamp("created_at").toInstant()
+        createdAt = getTimestamp("created_at").toInstant(),
     )
 
 internal fun ResultSet.toAdminRiskActionRecord(): AdminRiskActionRecord =
@@ -34,5 +34,5 @@ internal fun ResultSet.toAdminRiskActionRecord(): AdminRiskActionRecord =
         score = getInt("score"),
         tier = getString("tier"),
         lastReviewedAt = getTimestamp("last_reviewed_at")?.toInstant(),
-        updatedAt = getTimestamp("updated_at").toInstant()
+        updatedAt = getTimestamp("updated_at").toInstant(),
     )

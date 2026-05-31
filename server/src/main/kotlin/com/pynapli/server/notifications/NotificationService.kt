@@ -20,7 +20,7 @@ interface NotificationPublisher {
 
 class NotificationService(
     private val repository: NotificationRepository,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
 ) : NotificationPublisher {
     suspend fun getPreferences(userId: UUID): NotificationPreferencesDto =
         repository.getPreferences(userId)?.toDto()
@@ -28,57 +28,64 @@ class NotificationService(
 
     suspend fun updatePreferences(
         userId: UUID,
-        request: UpdateNotificationPreferencesRequestDto
+        request: UpdateNotificationPreferencesRequestDto,
     ): NotificationPreferencesDto {
-        val current = repository.getPreferences(userId)
-            ?: throw NotificationException("NOTIFICATION_PREFERENCES_NOT_FOUND")
-        val detailLevel = request.detailLevel?.trim()?.lowercase()?.also { detail ->
-            if (detail !in detailLevels) throw NotificationException("INVALID_NOTIFICATION_DETAIL_LEVEL")
-        }
-        val quietHoursStartMinute = request.quietHoursStartMinute?.also { minute ->
-            if (minute !in MIN_QUIET_HOURS_MINUTE..MAX_QUIET_HOURS_MINUTE) {
-                throw NotificationException("INVALID_QUIET_HOURS_WINDOW")
+        val current =
+            repository.getPreferences(userId)
+                ?: throw NotificationException("NOTIFICATION_PREFERENCES_NOT_FOUND")
+        val detailLevel =
+            request.detailLevel?.trim()?.lowercase()?.also { detail ->
+                if (detail !in detailLevels) throw NotificationException("INVALID_NOTIFICATION_DETAIL_LEVEL")
             }
-        }
-        val quietHoursEndMinute = request.quietHoursEndMinute?.also { minute ->
-            if (minute !in MIN_QUIET_HOURS_MINUTE..MAX_QUIET_HOURS_MINUTE) {
-                throw NotificationException("INVALID_QUIET_HOURS_WINDOW")
+        val quietHoursStartMinute =
+            request.quietHoursStartMinute?.also { minute ->
+                if (minute !in MIN_QUIET_HOURS_MINUTE..MAX_QUIET_HOURS_MINUTE) {
+                    throw NotificationException("INVALID_QUIET_HOURS_WINDOW")
+                }
             }
-        }
+        val quietHoursEndMinute =
+            request.quietHoursEndMinute?.also { minute ->
+                if (minute !in MIN_QUIET_HOURS_MINUTE..MAX_QUIET_HOURS_MINUTE) {
+                    throw NotificationException("INVALID_QUIET_HOURS_WINDOW")
+                }
+            }
         val effectiveQuietHoursEnabled = request.quietHoursEnabled ?: current.quietHoursEnabled
         val effectiveQuietHoursStartMinute = quietHoursStartMinute ?: current.quietHoursStartMinute
         val effectiveQuietHoursEndMinute = quietHoursEndMinute ?: current.quietHoursEndMinute
         if (effectiveQuietHoursEnabled && effectiveQuietHoursStartMinute == effectiveQuietHoursEndMinute) {
             throw NotificationException("INVALID_QUIET_HOURS_WINDOW")
         }
-        val quietHoursTimezone = request.quietHoursTimezone?.trim()?.takeIf { it.isNotEmpty() }?.also { timezone ->
-            if (timezone.length > MAX_TIMEZONE_LENGTH || runCatching { ZoneId.of(timezone) }.isFailure) {
-                throw NotificationException("INVALID_QUIET_HOURS_TIMEZONE")
+        val quietHoursTimezone =
+            request.quietHoursTimezone?.trim()?.takeIf { it.isNotEmpty() }?.also { timezone ->
+                if (timezone.length > MAX_TIMEZONE_LENGTH || runCatching { ZoneId.of(timezone) }.isFailure) {
+                    throw NotificationException("INVALID_QUIET_HOURS_TIMEZONE")
+                }
             }
-        }
 
-        return repository.updatePreferences(
-            userId = userId,
-            update = NotificationPreferencesUpdate(
-                detailLevel = detailLevel,
-                messagesEnabled = request.messagesEnabled,
-                matchesEnabled = request.matchesEnabled,
-                activityEnabled = request.activityEnabled,
-                flirtsEnabled = request.flirtsEnabled,
-                albumRequestsEnabled = request.albumRequestsEnabled,
-                partnerInvitesEnabled = request.partnerInvitesEnabled,
-                systemSafetyEnabled = request.systemSafetyEnabled,
-                quietHoursEnabled = request.quietHoursEnabled,
-                quietHoursStartMinute = quietHoursStartMinute,
-                quietHoursEndMinute = quietHoursEndMinute,
-                quietHoursTimezone = quietHoursTimezone
-            )
-        )?.toDto() ?: throw NotificationException("NOTIFICATION_PREFERENCES_NOT_FOUND")
+        return repository
+            .updatePreferences(
+                userId = userId,
+                update =
+                    NotificationPreferencesUpdate(
+                        detailLevel = detailLevel,
+                        messagesEnabled = request.messagesEnabled,
+                        matchesEnabled = request.matchesEnabled,
+                        activityEnabled = request.activityEnabled,
+                        flirtsEnabled = request.flirtsEnabled,
+                        albumRequestsEnabled = request.albumRequestsEnabled,
+                        partnerInvitesEnabled = request.partnerInvitesEnabled,
+                        systemSafetyEnabled = request.systemSafetyEnabled,
+                        quietHoursEnabled = request.quietHoursEnabled,
+                        quietHoursStartMinute = quietHoursStartMinute,
+                        quietHoursEndMinute = quietHoursEndMinute,
+                        quietHoursTimezone = quietHoursTimezone,
+                    ),
+            )?.toDto() ?: throw NotificationException("NOTIFICATION_PREFERENCES_NOT_FOUND")
     }
 
     suspend fun registerPushDevice(
         userId: UUID,
-        request: RegisterPushDeviceRequestDto
+        request: RegisterPushDeviceRequestDto,
     ): PushDeviceRegistrationResponseDto {
         val platform = request.platform.trim().lowercase()
         if (platform !in platforms) throw NotificationException("INVALID_PUSH_PLATFORM")
@@ -88,23 +95,28 @@ class NotificationService(
             throw NotificationException("INVALID_PUSH_TOKEN")
         }
 
-        val record = repository.upsertPushDevice(
-            userId = userId,
-            registration = PushDeviceRegistration(
-                platform = platform,
-                deviceToken = token,
-                appVersion = request.appVersion.cleaned(MAX_APP_VERSION_LENGTH),
-                locale = request.locale.cleaned(MAX_LOCALE_LENGTH),
-                timezone = request.timezone.cleaned(MAX_TIMEZONE_LENGTH),
-                notificationsEnabled = request.notificationsEnabled
-            ),
-            deviceIdFactory = UUID::randomUUID
-        )
+        val record =
+            repository.upsertPushDevice(
+                userId = userId,
+                registration =
+                    PushDeviceRegistration(
+                        platform = platform,
+                        deviceToken = token,
+                        appVersion = request.appVersion.cleaned(MAX_APP_VERSION_LENGTH),
+                        locale = request.locale.cleaned(MAX_LOCALE_LENGTH),
+                        timezone = request.timezone.cleaned(MAX_TIMEZONE_LENGTH),
+                        notificationsEnabled = request.notificationsEnabled,
+                    ),
+                deviceIdFactory = UUID::randomUUID,
+            )
 
         return PushDeviceRegistrationResponseDto(record.toDto())
     }
 
-    suspend fun unregisterPushDevice(userId: UUID, request: UnregisterPushDeviceRequestDto) {
+    suspend fun unregisterPushDevice(
+        userId: UUID,
+        request: UnregisterPushDeviceRequestDto,
+    ) {
         val platform = request.platform.trim().lowercase()
         if (platform !in platforms) throw NotificationException("INVALID_PUSH_PLATFORM")
 
@@ -116,7 +128,7 @@ class NotificationService(
         repository.unregisterPushDevice(
             userId = userId,
             platform = platform,
-            deviceToken = token
+            deviceToken = token,
         )
     }
 
@@ -136,28 +148,30 @@ class NotificationService(
                 recipientUserId = notification.recipientUserId,
                 kind = kind,
                 throttleKey = throttlePolicy.key,
-                since = clock.instant().minusSeconds(throttlePolicy.windowSeconds)
+                since = clock.instant().minusSeconds(throttlePolicy.windowSeconds),
             )
         ) {
             return null
         }
 
         val copy = notificationCopy(kind = kind, detailLevel = gate.preferences.detailLevel)
-        val idempotencyKey = throttlePolicy?.bucketedIdempotencyKey(clock.instant().epochSecond)
-            ?: notification.idempotencyKey
+        val idempotencyKey =
+            throttlePolicy?.bucketedIdempotencyKey(clock.instant().epochSecond)
+                ?: notification.idempotencyKey
         return repository.insertOutboxNotification(
-            notification = NotificationOutboxInsert(
-                recipientUserId = notification.recipientUserId,
-                actorUserId = notification.actorUserId,
-                kind = kind,
-                subjectId = notification.subjectId,
-                idempotencyKey = idempotencyKey,
-                throttleKey = throttlePolicy?.key,
-                title = copy.title,
-                body = copy.body,
-                payloadJson = notification.payload.toPayloadJson(kind, gate.preferences.detailLevel)
-            ),
-            notificationIdFactory = UUID::randomUUID
+            notification =
+                NotificationOutboxInsert(
+                    recipientUserId = notification.recipientUserId,
+                    actorUserId = notification.actorUserId,
+                    kind = kind,
+                    subjectId = notification.subjectId,
+                    idempotencyKey = idempotencyKey,
+                    throttleKey = throttlePolicy?.key,
+                    title = copy.title,
+                    body = copy.body,
+                    payloadJson = notification.payload.toPayloadJson(kind, gate.preferences.detailLevel),
+                ),
+            notificationIdFactory = UUID::randomUUID,
         )
     }
 
@@ -174,7 +188,7 @@ class NotificationService(
             quietHoursEnabled = quietHoursEnabled,
             quietHoursStartMinute = quietHoursStartMinute,
             quietHoursEndMinute = quietHoursEndMinute,
-            quietHoursTimezone = quietHoursTimezone
+            quietHoursTimezone = quietHoursTimezone,
         )
 
     private fun PushDeviceRecord.toDto(): PushDeviceDto =
@@ -182,7 +196,7 @@ class NotificationService(
             deviceId = deviceId.toString(),
             platform = platform,
             notificationsEnabled = notificationsEnabled,
-            lastSeenAt = lastSeenAt.toString()
+            lastSeenAt = lastSeenAt.toString(),
         )
 
     private fun String?.cleaned(maxLength: Int): String? {
@@ -199,16 +213,20 @@ class NotificationService(
             NotificationKind.ALBUM_REQUEST -> activityEnabled && albumRequestsEnabled
             NotificationKind.PROFILE_LINK_INVITE,
             NotificationKind.PROFILE_LINK_ACCEPTED,
-            NotificationKind.PARTNER_CHAT_INVITE -> partnerInvitesEnabled
+            NotificationKind.PARTNER_CHAT_INVITE,
+            -> partnerInvitesEnabled
             NotificationKind.SYSTEM_SAFETY -> systemSafetyEnabled
             else -> false
         }
 
-    private fun notificationCopy(kind: String, detailLevel: String): NotificationCopy {
+    private fun notificationCopy(
+        kind: String,
+        detailLevel: String,
+    ): NotificationCopy {
         if (detailLevel == NotificationDetailLevel.DISCREET) {
             return NotificationCopy(
                 title = "Pynapli",
-                body = "You have a new update."
+                body = "You have a new update.",
             )
         }
 
@@ -217,62 +235,74 @@ class NotificationService(
             NotificationKind.MATCH -> NotificationCopy("New match", "You have a new match.")
             NotificationKind.FLIRT -> NotificationCopy("New flirt", "Someone flirted with you.")
             NotificationKind.PROFILE_VIEW -> NotificationCopy("New activity", "Someone viewed your profile.")
-            NotificationKind.ALBUM_REQUEST -> NotificationCopy(
-                "Private album request",
-                "Someone requested access to your private album."
-            )
-            NotificationKind.PROFILE_LINK_INVITE -> NotificationCopy(
-                "Profile link invite",
-                "Someone invited you to link profiles."
-            )
-            NotificationKind.PROFILE_LINK_ACCEPTED -> NotificationCopy(
-                "Profile link accepted",
-                "Your profile link invite was accepted."
-            )
-            NotificationKind.PARTNER_CHAT_INVITE -> NotificationCopy(
-                "Chat invite",
-                "Your linked partner invited you to a chat."
-            )
+            NotificationKind.ALBUM_REQUEST ->
+                NotificationCopy(
+                    "Private album request",
+                    "Someone requested access to your private album.",
+                )
+            NotificationKind.PROFILE_LINK_INVITE ->
+                NotificationCopy(
+                    "Profile link invite",
+                    "Someone invited you to link profiles.",
+                )
+            NotificationKind.PROFILE_LINK_ACCEPTED ->
+                NotificationCopy(
+                    "Profile link accepted",
+                    "Your profile link invite was accepted.",
+                )
+            NotificationKind.PARTNER_CHAT_INVITE ->
+                NotificationCopy(
+                    "Chat invite",
+                    "Your linked partner invited you to a chat.",
+                )
             NotificationKind.SYSTEM_SAFETY -> NotificationCopy("Pynapli safety", "You have a safety update.")
             else -> NotificationCopy("Pynapli", "You have a new update.")
         }
     }
 
-    private fun Map<String, String>.toPayloadJson(kind: String, detailLevel: String): String {
-        val payload = buildMap<String, JsonElement> {
-            put("kind", JsonPrimitive(kind))
-            put("detailLevel", JsonPrimitive(detailLevel))
-            this@toPayloadJson.forEach { (key, value) ->
-                put(key, JsonPrimitive(value))
+    private fun Map<String, String>.toPayloadJson(
+        kind: String,
+        detailLevel: String,
+    ): String {
+        val payload =
+            buildMap<String, JsonElement> {
+                put("kind", JsonPrimitive(kind))
+                put("detailLevel", JsonPrimitive(detailLevel))
+                this@toPayloadJson.forEach { (key, value) ->
+                    put(key, JsonPrimitive(value))
+                }
             }
-        }
         return JsonObject(payload).toString()
     }
 
     private fun NotificationEventDraft.throttlePolicy(kind: String): NotificationThrottlePolicy? =
         when (kind) {
-            NotificationKind.MESSAGE -> subjectId?.let { conversationId ->
+            NotificationKind.MESSAGE ->
+                subjectId?.let { conversationId ->
+                    NotificationThrottlePolicy(
+                        key = "message:$recipientUserId:conversation:$conversationId",
+                        windowSeconds = MESSAGE_THREAD_WINDOW_SECONDS,
+                    )
+                }
+            NotificationKind.FLIRT ->
+                actorUserId?.let { actorUserId ->
+                    NotificationThrottlePolicy(
+                        key = "flirt:$recipientUserId:actor:$actorUserId",
+                        windowSeconds = SOCIAL_ACTOR_WINDOW_SECONDS,
+                    )
+                }
+            NotificationKind.PROFILE_VIEW ->
                 NotificationThrottlePolicy(
-                    key = "message:${recipientUserId}:conversation:$conversationId",
-                    windowSeconds = MESSAGE_THREAD_WINDOW_SECONDS
+                    key = "profile_view:$recipientUserId",
+                    windowSeconds = PROFILE_VIEW_WINDOW_SECONDS,
                 )
-            }
-            NotificationKind.FLIRT -> actorUserId?.let { actorUserId ->
-                NotificationThrottlePolicy(
-                    key = "flirt:${recipientUserId}:actor:$actorUserId",
-                    windowSeconds = SOCIAL_ACTOR_WINDOW_SECONDS
-                )
-            }
-            NotificationKind.PROFILE_VIEW -> NotificationThrottlePolicy(
-                key = "profile_view:$recipientUserId",
-                windowSeconds = PROFILE_VIEW_WINDOW_SECONDS
-            )
-            NotificationKind.ALBUM_REQUEST -> actorUserId?.let { actorUserId ->
-                NotificationThrottlePolicy(
-                    key = "album_request:${recipientUserId}:actor:$actorUserId",
-                    windowSeconds = SOCIAL_ACTOR_WINDOW_SECONDS
-                )
-            }
+            NotificationKind.ALBUM_REQUEST ->
+                actorUserId?.let { actorUserId ->
+                    NotificationThrottlePolicy(
+                        key = "album_request:$recipientUserId:actor:$actorUserId",
+                        windowSeconds = SOCIAL_ACTOR_WINDOW_SECONDS,
+                    )
+                }
             else -> null
         }
 
@@ -288,31 +318,35 @@ class NotificationService(
         private const val SOCIAL_ACTOR_WINDOW_SECONDS = 6L * 60L * 60L
         private const val PROFILE_VIEW_WINDOW_SECONDS = 6L * 60L * 60L
 
-        private val detailLevels = setOf(
-            NotificationDetailLevel.DISCREET,
-            NotificationDetailLevel.STANDARD
-        )
+        private val detailLevels =
+            setOf(
+                NotificationDetailLevel.DISCREET,
+                NotificationDetailLevel.STANDARD,
+            )
         private val platforms = setOf("android", "ios")
-        private val notificationKinds = setOf(
-            NotificationKind.MESSAGE,
-            NotificationKind.MATCH,
-            NotificationKind.FLIRT,
-            NotificationKind.PROFILE_VIEW,
-            NotificationKind.ALBUM_REQUEST,
-            NotificationKind.PROFILE_LINK_INVITE,
-            NotificationKind.PROFILE_LINK_ACCEPTED,
-            NotificationKind.PARTNER_CHAT_INVITE,
-            NotificationKind.SYSTEM_SAFETY
-        )
+        private val notificationKinds =
+            setOf(
+                NotificationKind.MESSAGE,
+                NotificationKind.MATCH,
+                NotificationKind.FLIRT,
+                NotificationKind.PROFILE_VIEW,
+                NotificationKind.ALBUM_REQUEST,
+                NotificationKind.PROFILE_LINK_INVITE,
+                NotificationKind.PROFILE_LINK_ACCEPTED,
+                NotificationKind.PARTNER_CHAT_INVITE,
+                NotificationKind.SYSTEM_SAFETY,
+            )
     }
 }
 
 private data class NotificationThrottlePolicy(
     val key: String,
-    val windowSeconds: Long
+    val windowSeconds: Long,
 )
 
-class NotificationException(val code: String) : RuntimeException(code)
+class NotificationException(
+    val code: String,
+) : RuntimeException(code)
 
 object NotificationKind {
     const val MESSAGE = "message"
@@ -332,13 +366,12 @@ data class NotificationEventDraft(
     val kind: String,
     val subjectId: UUID?,
     val idempotencyKey: String,
-    val payload: Map<String, String> = emptyMap()
+    val payload: Map<String, String> = emptyMap(),
 )
 
 private data class NotificationCopy(
     val title: String,
-    val body: String
+    val body: String,
 )
 
-private fun NotificationThrottlePolicy.bucketedIdempotencyKey(epochSecond: Long): String =
-    "$key:${epochSecond / windowSeconds}"
+private fun NotificationThrottlePolicy.bucketedIdempotencyKey(epochSecond: Long): String = "$key:${epochSecond / windowSeconds}"

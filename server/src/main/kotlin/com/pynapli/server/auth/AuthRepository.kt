@@ -17,7 +17,7 @@ interface AuthRepository {
         termsAcceptedAt: Instant,
         termsVersion: String,
         privacyAcceptedAt: Instant,
-        privacyVersion: String
+        privacyVersion: String,
     ): UserRecord
 
     suspend fun findEmailIdentity(emailHash: String): EmailIdentityRecord?
@@ -33,7 +33,7 @@ interface AuthRepository {
         platform: String?,
         appVersion: String?,
         accessExpiresAt: Instant,
-        refreshExpiresAt: Instant
+        refreshExpiresAt: Instant,
     ): SessionRecord
 
     suspend fun findSessionByAccessTokenHash(tokenHash: String): SessionRecord?
@@ -45,7 +45,7 @@ interface AuthRepository {
         accessTokenHash: String,
         refreshTokenHash: String,
         accessExpiresAt: Instant,
-        refreshExpiresAt: Instant
+        refreshExpiresAt: Instant,
     ): SessionRecord?
 
     suspend fun revokeSession(sessionId: UUID): Boolean
@@ -53,13 +53,13 @@ interface AuthRepository {
 
 data class UserRecord(
     val id: UUID,
-    val status: String
+    val status: String,
 )
 
 data class EmailIdentityRecord(
     val userId: UUID,
     val passwordHash: PasswordHash,
-    val userStatus: String
+    val userStatus: String,
 )
 
 data class SessionRecord(
@@ -70,5 +70,5 @@ data class SessionRecord(
     val accessExpiresAt: Instant,
     val refreshExpiresAt: Instant,
     val revokedAt: Instant?,
-    val userStatus: String
+    val userStatus: String,
 )

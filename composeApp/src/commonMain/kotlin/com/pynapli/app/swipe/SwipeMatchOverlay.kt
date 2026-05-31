@@ -27,44 +27,48 @@ internal fun MatchOverlay(
     match: MatchDto,
     showDetails: Boolean,
     onDismiss: () -> Unit,
-    onMessage: () -> Unit
+    onMessage: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xCC000000)),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xCC000000)),
+        contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier
-                .padding(32.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(28.dp),
+            modifier =
+                Modifier
+                    .padding(32.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
                 text = "It's a match",
                 color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = if (showDetails) {
-                    match.matchedDisplayName ?: "You both liked each other."
-                } else {
-                    "You both liked each other."
-                },
+                text =
+                    if (showDetails) {
+                        match.matchedDisplayName ?: "You both liked each other."
+                    } else {
+                        "You both liked each other."
+                    },
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
             Button(
                 onClick = onMessage,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                    ),
             ) {
                 Text("Message")
             }

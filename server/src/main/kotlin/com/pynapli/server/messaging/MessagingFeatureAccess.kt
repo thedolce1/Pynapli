@@ -5,11 +5,11 @@ import com.pynapli.shared.network.dto.SubscriptionTier
 import java.util.UUID
 
 internal class MessagingFeatureAccess(
-    private val subscriptionService: SubscriptionService?
+    private val subscriptionService: SubscriptionService?,
 ) {
     suspend fun readReceiptsAllowed(
         userId: UUID,
-        cache: MutableMap<UUID, Boolean> = mutableMapOf()
+        cache: MutableMap<UUID, Boolean> = mutableMapOf(),
     ): Boolean =
         cache.getOrPut(userId) {
             val tier = subscriptionService?.getPolicy(userId)?.tier ?: SubscriptionTier.SELECT

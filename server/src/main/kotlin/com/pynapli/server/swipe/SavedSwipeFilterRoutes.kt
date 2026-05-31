@@ -17,7 +17,7 @@ import io.ktor.server.routing.routing
 
 fun Application.configureSavedSwipeFilterRoutes(
     authService: AuthService?,
-    savedSwipeFilterService: SavedSwipeFilterService?
+    savedSwipeFilterService: SavedSwipeFilterService?,
 ) {
     if (authService == null || savedSwipeFilterService == null) return
 
@@ -36,8 +36,9 @@ fun Application.configureSavedSwipeFilterRoutes(
 
         delete("/v1/me/swipe-filters/{id}") {
             val user = authService.authenticate(call.requiredBearerToken())
-            val id = call.parameters["id"]?.takeIf { it.isNotBlank() }
-                ?: throw SavedSwipeFilterException("INVALID_SAVED_FILTER_ID")
+            val id =
+                call.parameters["id"]?.takeIf { it.isNotBlank() }
+                    ?: throw SavedSwipeFilterException("INVALID_SAVED_FILTER_ID")
             val removed = savedSwipeFilterService.delete(user.id, id)
             if (removed) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound)
         }

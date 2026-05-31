@@ -18,9 +18,10 @@ internal fun SwipeImagePrefetchEffect(cards: List<SwipeCardDto>) {
         val imageLoader = runCatching { SingletonImageLoader.get(platformContext) }.getOrNull() ?: return@LaunchedEffect
         swipeImagePrefetchUrls.forEach { url ->
             imageLoader.enqueue(
-                ImageRequest.Builder(platformContext)
+                ImageRequest
+                    .Builder(platformContext)
                     .data(url)
-                    .build()
+                    .build(),
             )
         }
     }

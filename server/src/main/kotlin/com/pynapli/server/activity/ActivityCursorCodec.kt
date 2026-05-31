@@ -12,40 +12,51 @@ import javax.crypto.spec.SecretKeySpec
 
 class ActivityCursorCodec(
     secret: String,
-    private val json: Json = Json {
-        encodeDefaults = true
-        ignoreUnknownKeys = false
-    }
+    private val json: Json =
+        Json {
+            encodeDefaults = true
+            ignoreUnknownKeys = false
+        },
 ) {
-    private val secretBytes = secret.also { value ->
-        require(value.isNotBlank()) { "Activity cursor secret must not be blank." }
-    }.toByteArray(StandardCharsets.UTF_8)
+    private val secretBytes =
+        secret
+            .also { value ->
+                require(value.isNotBlank()) { "Activity cursor secret must not be blank." }
+            }.toByteArray(StandardCharsets.UTF_8)
 
-    fun encode(scopeHash: String, anchor: ActivityCursorAnchor): String =
+    fun encode(
+        scopeHash: String,
+        anchor: ActivityCursorAnchor,
+    ): String =
         encodePayload(
             ActivityCursorPayload(
                 surface = SURFACE_ACTIVITY,
                 scopeHash = scopeHash,
                 occurredAt = anchor.occurredAt.toString(),
                 eventId = anchor.eventId.toString(),
-                seenCount = anchor.seenCount
-            )
+                seenCount = anchor.seenCount,
+            ),
         )
 
-    fun decode(token: String, expectedScopeHash: String): ActivityCursorAnchor {
+    fun decode(
+        token: String,
+        expectedScopeHash: String,
+    ): ActivityCursorAnchor {
         val payload = decodePayload(token)
         if (payload.surface != SURFACE_ACTIVITY || payload.version != VERSION || payload.scopeHash != expectedScopeHash) {
             throw ActivityCursorException()
         }
 
         return ActivityCursorAnchor(
-            occurredAt = runCatching {
-                Instant.parse(payload.occurredAt ?: throw ActivityCursorException())
-            }.getOrElse { throw ActivityCursorException() },
-            eventId = runCatching {
-                UUID.fromString(payload.eventId ?: throw ActivityCursorException())
-            }.getOrElse { throw ActivityCursorException() },
-            seenCount = payload.seenCount?.coerceAtLeast(0) ?: 0
+            occurredAt =
+                runCatching {
+                    Instant.parse(payload.occurredAt ?: throw ActivityCursorException())
+                }.getOrElse { throw ActivityCursorException() },
+            eventId =
+                runCatching {
+                    UUID.fromString(payload.eventId ?: throw ActivityCursorException())
+                }.getOrElse { throw ActivityCursorException() },
+            seenCount = payload.seenCount?.coerceAtLeast(0) ?: 0,
         )
     }
 
@@ -66,9 +77,10 @@ class ActivityCursorCodec(
         val suppliedSignature = runCatching { base64UrlDecode(parts[2]) }.getOrElse { throw ActivityCursorException() }
         if (!MessageDigest.isEqual(expectedSignature, suppliedSignature)) throw ActivityCursorException()
 
-        val payloadJson = runCatching {
-            String(base64UrlDecode(parts[1]), StandardCharsets.UTF_8)
-        }.getOrElse { throw ActivityCursorException() }
+        val payloadJson =
+            runCatching {
+                String(base64UrlDecode(parts[1]), StandardCharsets.UTF_8)
+            }.getOrElse { throw ActivityCursorException() }
 
         return runCatching {
             json.decodeFromString(ActivityCursorPayload.serializer(), payloadJson)
@@ -86,16 +98,17 @@ class ActivityCursorCodec(
         private const val TOKEN_VERSION = "v1"
         private const val SURFACE_ACTIVITY = "activity"
 
-        fun scopeHash(viewerUserId: UUID, tab: ActivityFeedTab): String {
+        fun scopeHash(
+            viewerUserId: UUID,
+            tab: ActivityFeedTab,
+        ): String {
             val normalized = "activity:v1|viewer=$viewerUserId|tab=${tab.value}"
             return base64UrlEncode(MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray(StandardCharsets.UTF_8)))
         }
 
-        private fun base64UrlEncode(bytes: ByteArray): String =
-            Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+        private fun base64UrlEncode(bytes: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 
-        private fun base64UrlDecode(value: String): ByteArray =
-            Base64.getUrlDecoder().decode(value)
+        private fun base64UrlDecode(value: String): ByteArray = Base64.getUrlDecoder().decode(value)
     }
 }
 
@@ -103,7 +116,7 @@ class ActivityCursorException : RuntimeException("INVALID_ACTIVITY_CURSOR")
 
 enum class ActivityFeedTab(
     val value: String,
-    val eventTypes: Set<String>
+    val eventTypes: Set<String>,
 ) {
     ALL("all", emptySet()),
     VIEWS("views", setOf("profile_view")),
@@ -111,7 +124,8 @@ enum class ActivityFeedTab(
     LIKES("likes", setOf("swipe_like", "pineapple_like", "intro_note")),
     MATCHES("matches", setOf("match")),
     ALBUMS("albums", setOf("album_request")),
-    INVITES("invites", setOf("partner_chat_invite", "psync_invite", "playing_tonight"));
+    INVITES("invites", setOf("partner_chat_invite", "psync_invite", "playing_tonight")),
+    ;
 
     companion object {
         fun from(value: String?): ActivityFeedTab {
@@ -119,8 +133,7 @@ enum class ActivityFeedTab(
             return entries.firstOrNull { it.value == normalized } ?: throw ActivityException("INVALID_ACTIVITY_TAB")
         }
 
-        fun fromEventType(eventType: String): ActivityFeedTab =
-            entries.firstOrNull { tab -> eventType in tab.eventTypes } ?: ALL
+        fun fromEventType(eventType: String): ActivityFeedTab = entries.firstOrNull { tab -> eventType in tab.eventTypes } ?: ALL
     }
 }
 
@@ -131,5 +144,5 @@ private data class ActivityCursorPayload(
     val scopeHash: String,
     val occurredAt: String? = null,
     val eventId: String? = null,
-    val seenCount: Int? = null
+    val seenCount: Int? = null,
 )

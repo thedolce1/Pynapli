@@ -31,7 +31,7 @@ internal fun BlockConfirmDialog(
     displayName: String,
     isBlocking: Boolean,
     onConfirm: (reason: String?) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -39,23 +39,24 @@ internal fun BlockConfirmDialog(
         text = {
             Text(
                 "They will not see you in the grid or messages, " +
-                    "and any open conversation will be hidden."
+                    "and any open conversation will be hidden.",
             )
         },
         confirmButton = {
             Button(
                 onClick = { onConfirm(null) },
                 enabled = !isBlocking,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ),
             ) {
                 if (isBlocking) {
                     CircularProgressIndicator(
                         color = MaterialTheme.colorScheme.onError,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                 } else {
                     Text("Block")
@@ -64,7 +65,7 @@ internal fun BlockConfirmDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !isBlocking) { Text("Cancel") }
-        }
+        },
     )
 }
 
@@ -73,7 +74,7 @@ internal fun HideProfileConfirmDialog(
     displayName: String,
     isHiding: Boolean,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -81,19 +82,19 @@ internal fun HideProfileConfirmDialog(
         text = {
             Text(
                 "They will stop appearing in your Grid and Swipe deck. " +
-                    "You can unhide them from Safety Center."
+                    "You can unhide them from Safety Center.",
             )
         },
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                enabled = !isHiding
+                enabled = !isHiding,
             ) {
                 if (isHiding) {
                     CircularProgressIndicator(
                         color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                 } else {
                     Text("Hide")
@@ -102,7 +103,7 @@ internal fun HideProfileConfirmDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !isHiding) { Text("Cancel") }
-        }
+        },
     )
 }
 
@@ -110,7 +111,7 @@ internal fun HideProfileConfirmDialog(
 internal fun ReportCategoryDialog(
     isSubmitting: Boolean,
     onSubmit: (category: String, note: String?) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     AlertDialog(
@@ -121,27 +122,29 @@ internal fun ReportCategoryDialog(
                 Text(
                     text = "Pick the closest reason. Moderators review reports.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 ReportCategory.ALL.forEach { category ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
                     ) {
                         TextButton(
                             onClick = { selectedCategory = category },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         ) {
                             Text(
                                 text = category.toReportLabel(),
-                                color = if (selectedCategory == category) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
-                                style = MaterialTheme.typography.bodyMedium
+                                color =
+                                    if (selectedCategory == category) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         }
                         if (selectedCategory == category) {
@@ -149,7 +152,7 @@ internal fun ReportCategoryDialog(
                                 imageVector = Icons.Filled.Check,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(18.dp),
                             )
                         }
                     }
@@ -162,13 +165,13 @@ internal fun ReportCategoryDialog(
                     val category = selectedCategory ?: return@Button
                     onSubmit(category, null)
                 },
-                enabled = !isSubmitting && selectedCategory != null
+                enabled = !isSubmitting && selectedCategory != null,
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(
                         color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                 } else {
                     Text("Submit")
@@ -177,19 +180,20 @@ internal fun ReportCategoryDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !isSubmitting) { Text("Cancel") }
-        }
+        },
     )
 }
 
-private fun String.toReportLabel(): String = when (this) {
-    ReportCategory.UNDERAGE_USER -> "Underage user"
-    ReportCategory.HARASSMENT_OR_THREATS -> "Harassment or threats"
-    ReportCategory.EXPLICIT_PUBLIC_CONTENT -> "Explicit public content"
-    ReportCategory.SPAM_OR_FAKE_PROFILE -> "Spam or fake profile"
-    ReportCategory.IMPERSONATION -> "Impersonation"
-    ReportCategory.SOLICITATION -> "Solicitation"
-    ReportCategory.NON_CONSENSUAL_CONTENT -> "Non-consensual content"
-    ReportCategory.PRIVATE_INFO_DOXXING -> "Private info or doxxing"
-    ReportCategory.OTHER -> "Other"
-    else -> this
-}
+private fun String.toReportLabel(): String =
+    when (this) {
+        ReportCategory.UNDERAGE_USER -> "Underage user"
+        ReportCategory.HARASSMENT_OR_THREATS -> "Harassment or threats"
+        ReportCategory.EXPLICIT_PUBLIC_CONTENT -> "Explicit public content"
+        ReportCategory.SPAM_OR_FAKE_PROFILE -> "Spam or fake profile"
+        ReportCategory.IMPERSONATION -> "Impersonation"
+        ReportCategory.SOLICITATION -> "Solicitation"
+        ReportCategory.NON_CONSENSUAL_CONTENT -> "Non-consensual content"
+        ReportCategory.PRIVATE_INFO_DOXXING -> "Private info or doxxing"
+        ReportCategory.OTHER -> "Other"
+        else -> this
+    }

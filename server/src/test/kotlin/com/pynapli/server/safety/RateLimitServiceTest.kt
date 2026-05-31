@@ -9,65 +9,73 @@ import kotlin.test.assertTrue
 
 class RateLimitServiceTest {
     @Test
-    fun checkAllowsActionsWithinPolicyLimit() = runBlocking {
-        val repository = SequencedRateLimitRepository(listOf(1, 2))
-        val service = RateLimitService(repository)
-        val userId = UUID.fromString("00000000-0000-0000-0000-000000000701")
+    fun checkAllowsActionsWithinPolicyLimit() =
+        runBlocking {
+            val repository = SequencedRateLimitRepository(listOf(1, 2))
+            val service = RateLimitService(repository)
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000701")
 
-        val first = service.check(userId, RateLimitedAction.REPORT)
-        val second = service.check(userId, RateLimitedAction.REPORT)
+            val first = service.check(userId, RateLimitedAction.REPORT)
+            val second = service.check(userId, RateLimitedAction.REPORT)
 
-        assertTrue(first.allowed)
-        assertTrue(second.allowed)
-        assertEquals("pynapli:rate:report:$userId", repository.keys.single())
-    }
-
-    @Test
-    fun checkDeniesWhenPolicyLimitIsExceededAndRecordsRiskSignal() = runBlocking {
-        val userId = UUID.fromString("00000000-0000-0000-0000-000000000711")
-        val riskSignals = CapturingRateLimitRiskSignalPublisher()
-        val service = RateLimitService(
-            repository = SequencedRateLimitRepository(listOf(31)),
-            riskSignalPublisher = riskSignals
-        )
-
-        val decision = service.check(userId, RateLimitedAction.REPORT)
-
-        assertFalse(decision.allowed)
-        assertEquals(31, decision.count)
-        assertEquals(30, decision.limit)
-        assertEquals(1, riskSignals.captured.size)
-        assertEquals(userId, riskSignals.captured.single().userId)
-        assertEquals(RateLimitedAction.REPORT, riskSignals.captured.single().action)
-    }
+            assertTrue(first.allowed)
+            assertTrue(second.allowed)
+            assertEquals("pynapli:rate:report:$userId", repository.keys.single())
+        }
 
     @Test
-    fun checkDeniesProfileViewVelocityWhenLimitIsExceeded() = runBlocking {
-        val userId = UUID.fromString("00000000-0000-0000-0000-000000000721")
-        val repository = SequencedRateLimitRepository(listOf(241))
-        val riskSignals = CapturingRateLimitRiskSignalPublisher()
-        val service = RateLimitService(
-            repository = repository,
-            riskSignalPublisher = riskSignals
-        )
+    fun checkDeniesWhenPolicyLimitIsExceededAndRecordsRiskSignal() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000711")
+            val riskSignals = CapturingRateLimitRiskSignalPublisher()
+            val service =
+                RateLimitService(
+                    repository = SequencedRateLimitRepository(listOf(31)),
+                    riskSignalPublisher = riskSignals,
+                )
 
-        val decision = service.check(userId, RateLimitedAction.PROFILE_VIEW)
+            val decision = service.check(userId, RateLimitedAction.REPORT)
 
-        assertFalse(decision.allowed)
-        assertEquals(241, decision.count)
-        assertEquals(240, decision.limit)
-        assertEquals(RateLimitedAction.PROFILE_VIEW, riskSignals.captured.single().action)
-        assertEquals("pynapli:rate:profile_view:$userId", repository.keys.single())
-    }
+            assertFalse(decision.allowed)
+            assertEquals(31, decision.count)
+            assertEquals(30, decision.limit)
+            assertEquals(1, riskSignals.captured.size)
+            assertEquals(userId, riskSignals.captured.single().userId)
+            assertEquals(RateLimitedAction.REPORT, riskSignals.captured.single().action)
+        }
+
+    @Test
+    fun checkDeniesProfileViewVelocityWhenLimitIsExceeded() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000721")
+            val repository = SequencedRateLimitRepository(listOf(241))
+            val riskSignals = CapturingRateLimitRiskSignalPublisher()
+            val service =
+                RateLimitService(
+                    repository = repository,
+                    riskSignalPublisher = riskSignals,
+                )
+
+            val decision = service.check(userId, RateLimitedAction.PROFILE_VIEW)
+
+            assertFalse(decision.allowed)
+            assertEquals(241, decision.count)
+            assertEquals(240, decision.limit)
+            assertEquals(RateLimitedAction.PROFILE_VIEW, riskSignals.captured.single().action)
+            assertEquals("pynapli:rate:profile_view:$userId", repository.keys.single())
+        }
 }
 
 private class SequencedRateLimitRepository(
-    private val counts: List<Long>
+    private val counts: List<Long>,
 ) : RateLimitRepository {
     val keys = mutableSetOf<String>()
     private var index = 0
 
-    override suspend fun increment(key: String, windowSeconds: Long): RateLimitCounter {
+    override suspend fun increment(
+        key: String,
+        windowSeconds: Long,
+    ): RateLimitCounter {
         keys += key
         val count = counts.getOrElse(index++) { counts.last() }
         return RateLimitCounter(count = count, ttlSeconds = windowSeconds)
@@ -82,7 +90,7 @@ private class CapturingRateLimitRiskSignalPublisher : RateLimitRiskSignalPublish
         action: String,
         count: Long,
         limit: Long,
-        windowSeconds: Long
+        windowSeconds: Long,
     ) {
         captured += CapturedRateLimitRiskSignal(userId, action, count, limit, windowSeconds)
     }
@@ -93,5 +101,5 @@ private data class CapturedRateLimitRiskSignal(
     val action: String,
     val count: Long,
     val limit: Long,
-    val windowSeconds: Long
+    val windowSeconds: Long,
 )

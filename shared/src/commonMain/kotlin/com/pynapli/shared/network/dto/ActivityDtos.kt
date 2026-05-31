@@ -9,7 +9,7 @@ data class ActivityFeedResponseDto(
     val adSupported: Boolean = false,
     val entitlementTier: String? = null,
     val revealLimit: Int? = null,
-    val gatedCount: Int = 0
+    val gatedCount: Int = 0,
 )
 
 @Serializable
@@ -21,54 +21,54 @@ data class ActivitySummaryDto(
     val matchCount: Int = 0,
     val albumRequestCount: Int = 0,
     val partnerInviteCount: Int = 0,
-    val latestBadgeOccurredAt: String? = null
+    val latestBadgeOccurredAt: String? = null,
 )
 
 @Serializable
 data class MarkActivitySeenRequestDto(
-    val eventIds: List<String>
+    val eventIds: List<String>,
 )
 
 @Serializable
 data class MarkActivitySeenResponseDto(
-    val markedCount: Int
+    val markedCount: Int,
 )
 
 @Serializable
 data class SendFlirtRequestDto(
-    val targetUserId: String
+    val targetUserId: String,
 )
 
 @Serializable
 data class SendFlirtResponseDto(
-    val sent: Boolean
+    val sent: Boolean,
 )
 
 @Serializable
 data class RequestAlbumAccessRequestDto(
-    val targetUserId: String
+    val targetUserId: String,
 )
 
 @Serializable
 data class RequestAlbumAccessResponseDto(
-    val requested: Boolean
+    val requested: Boolean,
 )
 
 @Serializable
 data class RespondAlbumAccessRequestDto(
-    val approve: Boolean
+    val approve: Boolean,
 )
 
 @Serializable
 data class RespondAlbumAccessResponseDto(
     val eventId: String,
-    val status: String
+    val status: String,
 )
 
 @Serializable
 data class DismissActivityEventResponseDto(
     val eventId: String,
-    val dismissed: Boolean
+    val dismissed: Boolean,
 )
 
 @Serializable
@@ -76,7 +76,7 @@ data class ActivityDeltaDto(
     val type: String,
     val tab: String,
     val occurredAt: String,
-    val eventId: String? = null
+    val eventId: String? = null,
 )
 
 @Serializable
@@ -93,5 +93,5 @@ data class ActivityEventDto(
     val distanceMeters: Int? = null,
     val albumRequestStatus: String? = null,
     val matchId: String? = null,
-    val conversationId: String? = null
+    val conversationId: String? = null,
 )

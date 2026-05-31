@@ -37,19 +37,19 @@ internal fun ProfileLinksHeader() {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
             imageVector = Icons.Filled.People,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(18.dp),
         )
         Text(
             text = "Linked profile",
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -60,46 +60,49 @@ internal fun ProfileLinkRow(
     statusLabel: String,
     isBusy: Boolean,
     primaryActionLabel: String?,
-    onPrimaryAction: () -> Unit
+    onPrimaryAction: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         ProfileLinkAvatar(link = link)
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = link.displayLabel,
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = statusLabel,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 1
+                maxLines = 1,
             )
         }
         when {
-            isBusy -> CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(18.dp)
-            )
+            isBusy ->
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp),
+                )
 
-            primaryActionLabel != null -> TextButton(onClick = onPrimaryAction) {
-                Text(primaryActionLabel)
-            }
+            primaryActionLabel != null ->
+                TextButton(onClick = onPrimaryAction) {
+                    Text(primaryActionLabel)
+                }
         }
     }
 }
@@ -109,41 +112,42 @@ internal fun IncomingProfileLinkRow(
     link: ProfileLinkUi,
     isBusy: Boolean,
     onAccept: () -> Unit,
-    onDecline: () -> Unit
+    onDecline: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         ProfileLinkAvatar(link = link)
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = link.displayLabel,
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = "Incoming invite",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 1
+                maxLines = 1,
             )
         }
         if (isBusy) {
             CircularProgressIndicator(
                 color = MaterialTheme.colorScheme.primary,
                 strokeWidth = 2.dp,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(18.dp),
             )
         } else {
             TextButton(onClick = onDecline) {
@@ -162,28 +166,29 @@ internal fun EmptyLinkedProfileRow() {
         text = "No linked profile.",
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+        modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
     )
 }
 
 @Composable
 internal fun LoadingLinkedProfileRow() {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 2.dp, bottom = 2.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         CircularProgressIndicator(
             color = MaterialTheme.colorScheme.primary,
             strokeWidth = 2.dp,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(18.dp),
         )
         Text(
             text = "Loading linked profile",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }
@@ -192,24 +197,25 @@ internal fun LoadingLinkedProfileRow() {
 internal fun LinkMessageBand(
     message: String,
     isError: Boolean,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = 0.14f))
-            .border(1.dp, color.copy(alpha = 0.38f), RoundedCornerShape(8.dp))
-            .clickable(onClick = onDismiss)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(color.copy(alpha = 0.14f))
+                .border(1.dp, color.copy(alpha = 0.38f), RoundedCornerShape(8.dp))
+                .clickable(onClick = onDismiss)
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = message,
             color = color,
             style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -217,25 +223,26 @@ internal fun LinkMessageBand(
 @Composable
 private fun ProfileLinkAvatar(link: ProfileLinkUi) {
     Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+        contentAlignment = Alignment.Center,
     ) {
         if (link.otherPhotoUrl != null) {
             AsyncImage(
                 model = link.otherPhotoUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             Icon(
                 imageVector = Icons.Filled.Person,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(18.dp),
             )
         }
     }

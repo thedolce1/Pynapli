@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 class ProfileHubStateHolder(
-    private val repository: ProfileHubRepository
+    private val repository: ProfileHubRepository,
 ) {
     private val _state = MutableStateFlow(ProfileHubUiState())
     val state: StateFlow<ProfileHubUiState> = _state.asStateFlow()
@@ -20,32 +20,36 @@ class ProfileHubStateHolder(
 
         when (val result = repository.loadMe()) {
             is AppResult.Success -> {
-                val ageVerificationStatus = when (val status = repository.loadAgeVerificationStatus()) {
-                    is AppResult.Success -> status.value
-                    is AppResult.Failure -> null
-                }
-                val latestDataExport = when (val export = repository.latestDataExportRequest()) {
-                    is AppResult.Success -> export.value
-                    is AppResult.Failure -> null
-                }
+                val ageVerificationStatus =
+                    when (val status = repository.loadAgeVerificationStatus()) {
+                        is AppResult.Success -> status.value
+                        is AppResult.Failure -> null
+                    }
+                val latestDataExport =
+                    when (val export = repository.latestDataExportRequest()) {
+                        is AppResult.Success -> export.value
+                        is AppResult.Failure -> null
+                    }
                 _state.update { existing ->
                     existing.copy(
                         me = result.value,
                         ageVerificationStatus = ageVerificationStatus,
                         latestDataExport = latestDataExport,
                         draft = if (existing.editVisible) existing.draft else result.value.profile.toDraft(),
-                        privacyDraft = if (existing.privacyVisible) {
-                            existing.privacyDraft
-                        } else {
-                            result.value.discoverySettings.toPrivacyDraft()
-                        },
-                        activityDraft = if (existing.activityVisible) {
-                            existing.activityDraft
-                        } else {
-                            result.value.discoverySettings.toActivityDraft()
-                        },
+                        privacyDraft =
+                            if (existing.privacyVisible) {
+                                existing.privacyDraft
+                            } else {
+                                result.value.discoverySettings.toPrivacyDraft()
+                            },
+                        activityDraft =
+                            if (existing.activityVisible) {
+                                existing.activityDraft
+                            } else {
+                                result.value.discoverySettings.toActivityDraft()
+                            },
                         isLoading = false,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -54,7 +58,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -73,7 +77,7 @@ class ProfileHubStateHolder(
                 ageVerificationDialogVisible = false,
                 draft = existing.me?.profile?.toDraft() ?: existing.draft,
                 feedbackMessage = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -83,7 +87,7 @@ class ProfileHubStateHolder(
             existing.copy(
                 editVisible = false,
                 draft = existing.me?.profile?.toDraft() ?: existing.draft,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -100,7 +104,7 @@ class ProfileHubStateHolder(
                 ageVerificationDialogVisible = false,
                 privacyDraft = existing.me?.discoverySettings?.toPrivacyDraft() ?: existing.privacyDraft,
                 feedbackMessage = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -110,7 +114,7 @@ class ProfileHubStateHolder(
             existing.copy(
                 privacyVisible = false,
                 privacyDraft = existing.me?.discoverySettings?.toPrivacyDraft() ?: existing.privacyDraft,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -127,7 +131,7 @@ class ProfileHubStateHolder(
                 ageVerificationDialogVisible = false,
                 activityDraft = existing.me?.discoverySettings?.toActivityDraft() ?: existing.activityDraft,
                 feedbackMessage = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -137,7 +141,7 @@ class ProfileHubStateHolder(
             existing.copy(
                 activityVisible = false,
                 activityDraft = existing.me?.discoverySettings?.toActivityDraft() ?: existing.activityDraft,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -153,7 +157,7 @@ class ProfileHubStateHolder(
                 safetyCenterVisible = false,
                 ageVerificationDialogVisible = false,
                 feedbackMessage = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -173,7 +177,7 @@ class ProfileHubStateHolder(
                 safetyCenterVisible = false,
                 ageVerificationDialogVisible = false,
                 feedbackMessage = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -193,7 +197,7 @@ class ProfileHubStateHolder(
                 notificationCenterVisible = false,
                 safetyCenterVisible = false,
                 feedbackMessage = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -213,7 +217,7 @@ class ProfileHubStateHolder(
                 notificationCenterVisible = false,
                 ageVerificationDialogVisible = false,
                 feedbackMessage = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -228,7 +232,7 @@ class ProfileHubStateHolder(
                 isSupportContactLoading = false,
                 unblockingUserId = null,
                 unhidingUserId = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -238,7 +242,7 @@ class ProfileHubStateHolder(
             it.copy(
                 appSettingsVisible = false,
                 errorMessage = null,
-                feedbackMessage = message
+                feedbackMessage = message,
             )
         }
     }
@@ -265,24 +269,27 @@ class ProfileHubStateHolder(
 
     fun updateShowInViewedLists(value: Boolean) = updateActivityDraft { it.copy(showInViewedLists = value) }
 
-    fun updateAllowGridMessages(value: Boolean) = updateActivityDraft {
-        it.copy(
-            allowGridMessages = value,
-            gridMessagePolicy = when {
-                value && it.gridMessagePolicy == "no_one" -> "everyone"
-                !value -> "no_one"
-                else -> it.gridMessagePolicy
-            }
-        )
-    }
+    fun updateAllowGridMessages(value: Boolean) =
+        updateActivityDraft {
+            it.copy(
+                allowGridMessages = value,
+                gridMessagePolicy =
+                    when {
+                        value && it.gridMessagePolicy == "no_one" -> "everyone"
+                        !value -> "no_one"
+                        else -> it.gridMessagePolicy
+                    },
+            )
+        }
 
-    fun updateGridMessagePolicy(value: String) = updateActivityDraft {
-        val normalized = value.lowercase()
-        it.copy(
-            gridMessagePolicy = normalized,
-            allowGridMessages = normalized != "no_one"
-        )
-    }
+    fun updateGridMessagePolicy(value: String) =
+        updateActivityDraft {
+            val normalized = value.lowercase()
+            it.copy(
+                gridMessagePolicy = normalized,
+                allowGridMessages = normalized != "no_one",
+            )
+        }
 
     fun updateAllowFlirts(value: Boolean) = updateActivityDraft { it.copy(allowFlirts = value) }
 
@@ -302,7 +309,7 @@ class ProfileHubStateHolder(
             it.copy(
                 isDataExportMutating = true,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
@@ -313,7 +320,7 @@ class ProfileHubStateHolder(
                         latestDataExport = result.value,
                         isDataExportMutating = false,
                         errorMessage = null,
-                        feedbackMessage = result.value.message
+                        feedbackMessage = result.value.message,
                     )
                 }
             }
@@ -322,7 +329,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isDataExportMutating = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -337,21 +344,22 @@ class ProfileHubStateHolder(
             it.copy(
                 isDeletingAccount = true,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
         return when (
-            val result = repository.deleteAccount(
-                DeleteAccountRequestDto(confirmation = confirmation)
-            )
+            val result =
+                repository.deleteAccount(
+                    DeleteAccountRequestDto(confirmation = confirmation),
+                )
         ) {
             is AppResult.Success -> {
                 _state.update {
                     it.copy(
                         isDeletingAccount = false,
                         errorMessage = null,
-                        feedbackMessage = result.value.message
+                        feedbackMessage = result.value.message,
                     )
                 }
                 true
@@ -361,7 +369,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isDeletingAccount = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
                 false
@@ -376,7 +384,7 @@ class ProfileHubStateHolder(
             it.copy(
                 isBlocksLoading = true,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
@@ -386,7 +394,7 @@ class ProfileHubStateHolder(
                     it.copy(
                         blockedUsers = result.value.blocks,
                         isBlocksLoading = false,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -395,7 +403,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isBlocksLoading = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -409,7 +417,7 @@ class ProfileHubStateHolder(
             it.copy(
                 isHiddenProfilesLoading = true,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
@@ -419,7 +427,7 @@ class ProfileHubStateHolder(
                     it.copy(
                         hiddenProfiles = result.value.hiddenProfiles,
                         isHiddenProfilesLoading = false,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -428,7 +436,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isHiddenProfilesLoading = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -442,7 +450,7 @@ class ProfileHubStateHolder(
             it.copy(
                 isReportHistoryLoading = true,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
@@ -452,7 +460,7 @@ class ProfileHubStateHolder(
                     it.copy(
                         reportHistory = result.value.reports,
                         isReportHistoryLoading = false,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -461,7 +469,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isReportHistoryLoading = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -475,7 +483,7 @@ class ProfileHubStateHolder(
             it.copy(
                 isSupportContactLoading = true,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
@@ -485,7 +493,7 @@ class ProfileHubStateHolder(
                     it.copy(
                         supportContact = result.value,
                         isSupportContactLoading = false,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -494,7 +502,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isSupportContactLoading = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -516,7 +524,7 @@ class ProfileHubStateHolder(
             it.copy(
                 unblockingUserId = userId,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
@@ -527,7 +535,7 @@ class ProfileHubStateHolder(
                         blockedUsers = it.blockedUsers.filterNot { block -> block.blockedUserId == userId },
                         unblockingUserId = null,
                         errorMessage = null,
-                        feedbackMessage = "User unblocked"
+                        feedbackMessage = "User unblocked",
                     )
                 }
             }
@@ -536,7 +544,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         unblockingUserId = null,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -551,7 +559,7 @@ class ProfileHubStateHolder(
             it.copy(
                 unhidingUserId = userId,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
@@ -562,7 +570,7 @@ class ProfileHubStateHolder(
                         hiddenProfiles = it.hiddenProfiles.filterNot { profile -> profile.hiddenUserId == userId },
                         unhidingUserId = null,
                         errorMessage = null,
-                        feedbackMessage = "Profile unhidden"
+                        feedbackMessage = "Profile unhidden",
                     )
                 }
             }
@@ -571,7 +579,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         unhidingUserId = null,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -596,7 +604,7 @@ class ProfileHubStateHolder(
             it.copy(
                 isSaving = true,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
@@ -611,7 +619,7 @@ class ProfileHubStateHolder(
                         editVisible = false,
                         isSaving = false,
                         errorMessage = null,
-                        feedbackMessage = "Profile updated"
+                        feedbackMessage = "Profile updated",
                     )
                 }
             }
@@ -620,7 +628,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isSaving = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -635,7 +643,7 @@ class ProfileHubStateHolder(
             it.copy(
                 isSaving = true,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
@@ -649,7 +657,7 @@ class ProfileHubStateHolder(
                         privacyVisible = false,
                         isSaving = false,
                         errorMessage = null,
-                        feedbackMessage = "Privacy updated"
+                        feedbackMessage = "Privacy updated",
                     )
                 }
             }
@@ -658,7 +666,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isSaving = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -678,7 +686,7 @@ class ProfileHubStateHolder(
             it.copy(
                 isSaving = true,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
@@ -692,7 +700,7 @@ class ProfileHubStateHolder(
                         activityVisible = false,
                         isSaving = false,
                         errorMessage = null,
-                        feedbackMessage = "Activity controls updated"
+                        feedbackMessage = "Activity controls updated",
                     )
                 }
             }
@@ -701,7 +709,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isSaving = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -716,14 +724,15 @@ class ProfileHubStateHolder(
             it.copy(
                 isAgeVerificationMutating = true,
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
 
         when (
-            val result = repository.startAgeVerification(
-                StartAgeVerificationRequestDto(confirmedAdult = true)
-            )
+            val result =
+                repository.startAgeVerification(
+                    StartAgeVerificationRequestDto(confirmedAdult = true),
+                )
         ) {
             is AppResult.Success -> {
                 _state.update {
@@ -732,7 +741,7 @@ class ProfileHubStateHolder(
                         ageVerificationDialogVisible = false,
                         isAgeVerificationMutating = false,
                         errorMessage = null,
-                        feedbackMessage = result.value.message
+                        feedbackMessage = result.value.message,
                     )
                 }
             }
@@ -741,7 +750,7 @@ class ProfileHubStateHolder(
                 _state.update {
                     it.copy(
                         isAgeVerificationMutating = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -753,7 +762,7 @@ class ProfileHubStateHolder(
             it.copy(
                 draft = transform(it.draft),
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
     }
@@ -763,7 +772,7 @@ class ProfileHubStateHolder(
             it.copy(
                 privacyDraft = transform(it.privacyDraft),
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
     }
@@ -773,7 +782,7 @@ class ProfileHubStateHolder(
             it.copy(
                 activityDraft = transform(it.activityDraft),
                 errorMessage = null,
-                feedbackMessage = null
+                feedbackMessage = null,
             )
         }
     }

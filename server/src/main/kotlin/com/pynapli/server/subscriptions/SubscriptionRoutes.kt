@@ -15,8 +15,8 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
@@ -25,7 +25,7 @@ private val rtdnJson = Json { ignoreUnknownKeys = true }
 fun Application.configureSubscriptionRoutes(
     config: ServerConfig,
     authService: AuthService?,
-    subscriptionService: SubscriptionService?
+    subscriptionService: SubscriptionService?,
 ) {
     if (authService == null || subscriptionService == null) return
 
@@ -62,7 +62,7 @@ fun Application.configureSubscriptionRoutes(
 
 fun Application.configureSubscriptionAdminRoutes(
     config: ServerConfig,
-    subscriptionService: SubscriptionService?
+    subscriptionService: SubscriptionService?,
 ) {
     val adminApiToken = config.adminApiToken ?: return
     if (subscriptionService == null) return
@@ -74,10 +74,11 @@ fun Application.configureSubscriptionAdminRoutes(
             val limit = call.request.queryParameters["limit"]
             call.respond(
                 AdminEntitlementListDto(
-                    entitlements = subscriptionService
-                        .listStoredEntitlementsForUser(userIdText = userId, limitText = limit)
-                        .map { it.toDto() }
-                )
+                    entitlements =
+                        subscriptionService
+                            .listStoredEntitlementsForUser(userIdText = userId, limitText = limit)
+                            .map { it.toDto() },
+                ),
             )
         }
 
@@ -86,15 +87,16 @@ fun Application.configureSubscriptionAdminRoutes(
             val reason = call.requiredSubscriptionAdminReason()
             val request = call.receive<AdminEntitlementGrantRequestDto>()
             call.respond(
-                subscriptionService.grantStoredEntitlement(
-                    userIdText = request.userId,
-                    tierText = request.tier,
-                    sourceText = request.source,
-                    startsAtText = request.startsAt,
-                    endsAtText = request.endsAt,
-                    actorId = actorId,
-                    reason = reason
-                ).toDto()
+                subscriptionService
+                    .grantStoredEntitlement(
+                        userIdText = request.userId,
+                        tierText = request.tier,
+                        sourceText = request.source,
+                        startsAtText = request.startsAt,
+                        endsAtText = request.endsAt,
+                        actorId = actorId,
+                        reason = reason,
+                    ).toDto(),
             )
         }
 
@@ -103,20 +105,22 @@ fun Application.configureSubscriptionAdminRoutes(
             val reason = call.requiredSubscriptionAdminReason()
             val entitlementId = call.parameters["entitlementId"] ?: throw SubscriptionException("ENTITLEMENT_NOT_FOUND")
             call.respond(
-                subscriptionService.revokeStoredEntitlement(
-                    entitlementIdText = entitlementId,
-                    actorId = actorId,
-                    reason = reason
-                ).toDto()
+                subscriptionService
+                    .revokeStoredEntitlement(
+                        entitlementIdText = entitlementId,
+                        actorId = actorId,
+                        reason = reason,
+                    ).toDto(),
             )
         }
 
         post("/v1/admin/subscriptions/play-store/sync") {
             call.requireSubscriptionAdminActor(adminApiToken)
-            val limit = call.request.queryParameters["limit"]
-                ?.toIntOrNull()
-                ?.coerceIn(1, 500)
-                ?: config.playStoreSubscriptionSyncBatchSize
+            val limit =
+                call.request.queryParameters["limit"]
+                    ?.toIntOrNull()
+                    ?.coerceIn(1, 500)
+                    ?: config.playStoreSubscriptionSyncBatchSize
             call.respond(subscriptionService.syncDuePlayStoreSubscriptions(limit).toDto())
         }
     }
@@ -124,12 +128,12 @@ fun Application.configureSubscriptionAdminRoutes(
 
 fun Application.configurePlayStoreRtdnRoutes(
     config: ServerConfig,
-    subscriptionService: SubscriptionService?
+    subscriptionService: SubscriptionService?,
 ) {
     if (!config.playStoreRtdnEnabled || subscriptionService == null) return
     if (config.playStoreRtdnWebhookToken == null && config.playStoreRtdnOidcAudience == null) {
         throw IllegalStateException(
-            "Play Store RTDN requires PYNAPLI_PLAY_STORE_RTDN_WEBHOOK_TOKEN or PYNAPLI_PLAY_STORE_RTDN_OIDC_AUDIENCE."
+            "Play Store RTDN requires PYNAPLI_PLAY_STORE_RTDN_WEBHOOK_TOKEN or PYNAPLI_PLAY_STORE_RTDN_OIDC_AUDIENCE.",
         )
     }
 
@@ -140,7 +144,7 @@ fun Application.configurePlayStoreRtdnRoutes(
             call.respond(
                 subscriptionService
                     .handlePlayStoreRealTimeDeveloperNotification(request.toPlayStoreRtdnEnvelope(rtdnJson))
-                    .toDto()
+                    .toDto(),
             )
         }
     }
@@ -153,64 +157,71 @@ private fun ApplicationCall.requiredBearerToken(): String {
 }
 
 private fun ApplicationCall.requireSubscriptionAdminActor(expectedToken: String): String {
-    val suppliedToken = request.headers["X-Admin-Token"]
-        ?: request.headers[HttpHeaders.Authorization]
-            ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-            ?.substringAfter("Bearer ")
-            ?.trim()
-        ?: throw SubscriptionException("ADMIN_UNAUTHENTICATED")
+    val suppliedToken =
+        request.headers["X-Admin-Token"]
+            ?: request.headers[HttpHeaders.Authorization]
+                ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+                ?.substringAfter("Bearer ")
+                ?.trim()
+            ?: throw SubscriptionException("ADMIN_UNAUTHENTICATED")
 
     if (!MessageDigest.isEqual(
             expectedToken.toByteArray(StandardCharsets.UTF_8),
-            suppliedToken.toByteArray(StandardCharsets.UTF_8)
+            suppliedToken.toByteArray(StandardCharsets.UTF_8),
         )
     ) {
         throw SubscriptionException("ADMIN_FORBIDDEN")
     }
 
-    return request.headers["X-Admin-Id"]?.trim()
+    return request.headers["X-Admin-Id"]
+        ?.trim()
         ?.takeIf { it.isNotEmpty() }
         ?: throw SubscriptionException("INVALID_ADMIN_ACTOR")
 }
 
 private fun ApplicationCall.requiredSubscriptionAdminReason(): String =
-    request.headers["X-Admin-Reason"]?.trim()
+    request.headers["X-Admin-Reason"]
+        ?.trim()
         ?.takeIf { it.isNotEmpty() }
         ?: throw SubscriptionException("ADMIN_REASON_REQUIRED")
 
 private fun ApplicationCall.requirePlayStoreRtdnAuth(config: ServerConfig) {
     val configuredToken = config.playStoreRtdnWebhookToken
-    val suppliedStaticToken = request.headers["X-Pynapli-Webhook-Token"]
-        ?: request.queryParameters["token"]
+    val suppliedStaticToken =
+        request.headers["X-Pynapli-Webhook-Token"]
+            ?: request.queryParameters["token"]
     if (
         configuredToken != null &&
         suppliedStaticToken != null &&
         MessageDigest.isEqual(
             configuredToken.toByteArray(StandardCharsets.UTF_8),
-            suppliedStaticToken.toByteArray(StandardCharsets.UTF_8)
+            suppliedStaticToken.toByteArray(StandardCharsets.UTF_8),
         )
     ) {
         return
     }
 
     val audience = config.playStoreRtdnOidcAudience ?: throw SubscriptionException("RTDN_UNAUTHENTICATED")
-    val bearerToken = request.headers[HttpHeaders.Authorization]
-        ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-        ?.substringAfter("Bearer ")
-        ?.trim()
-        ?.takeIf { it.isNotEmpty() }
-        ?: throw SubscriptionException("RTDN_UNAUTHENTICATED")
+    val bearerToken =
+        request.headers[HttpHeaders.Authorization]
+            ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+            ?.substringAfter("Bearer ")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: throw SubscriptionException("RTDN_UNAUTHENTICATED")
 
-    val payload = runCatching {
-        TokenVerifier.newBuilder()
-            .setIssuer("https://accounts.google.com")
-            .setAudience(audience)
-            .build()
-            .verify(bearerToken)
-            .payload
-    }.getOrElse {
-        throw SubscriptionException("RTDN_FORBIDDEN")
-    }
+    val payload =
+        runCatching {
+            TokenVerifier
+                .newBuilder()
+                .setIssuer("https://accounts.google.com")
+                .setAudience(audience)
+                .build()
+                .verify(bearerToken)
+                .payload
+        }.getOrElse {
+            throw SubscriptionException("RTDN_FORBIDDEN")
+        }
 
     val expectedEmail = config.playStoreRtdnOidcServiceAccountEmail ?: return
     val actualEmail = payload["email"]?.toString()
@@ -230,7 +241,7 @@ data class PlayStoreSubscriptionSyncSummaryDto(
     val expired: Int,
     val revoked: Int,
     val invalid: Int,
-    val unavailable: Int
+    val unavailable: Int,
 )
 
 @Serializable
@@ -241,7 +252,7 @@ data class PlayStoreRtdnProcessingResultDto(
     val purchaseToken: String? = null,
     val productId: String? = null,
     val subscriptionStatus: String? = null,
-    val errorCode: String? = null
+    val errorCode: String? = null,
 )
 
 @Serializable
@@ -250,12 +261,12 @@ data class AdminEntitlementGrantRequestDto(
     val tier: String? = null,
     val source: String? = null,
     val startsAt: String? = null,
-    val endsAt: String? = null
+    val endsAt: String? = null,
 )
 
 @Serializable
 data class AdminEntitlementListDto(
-    val entitlements: List<AdminEntitlementDto>
+    val entitlements: List<AdminEntitlementDto>,
 )
 
 @Serializable
@@ -267,7 +278,7 @@ data class AdminEntitlementDto(
     val sourceId: String? = null,
     val startsAt: String,
     val endsAt: String? = null,
-    val status: String
+    val status: String,
 )
 
 private fun PlayStoreSubscriptionSyncSummary.toDto(): PlayStoreSubscriptionSyncSummaryDto =
@@ -280,7 +291,7 @@ private fun PlayStoreSubscriptionSyncSummary.toDto(): PlayStoreSubscriptionSyncS
         expired = expired,
         revoked = revoked,
         invalid = invalid,
-        unavailable = unavailable
+        unavailable = unavailable,
     )
 
 private fun PlayStoreRtdnProcessingResult.toDto(): PlayStoreRtdnProcessingResultDto =
@@ -291,7 +302,7 @@ private fun PlayStoreRtdnProcessingResult.toDto(): PlayStoreRtdnProcessingResult
         purchaseToken = purchaseToken,
         productId = productId,
         subscriptionStatus = subscriptionStatus,
-        errorCode = errorCode
+        errorCode = errorCode,
     )
 
 private fun StoredEntitlementRecord.toDto(): AdminEntitlementDto =
@@ -303,5 +314,5 @@ private fun StoredEntitlementRecord.toDto(): AdminEntitlementDto =
         sourceId = sourceId?.toString(),
         startsAt = startsAt.toString(),
         endsAt = endsAt?.toString(),
-        status = status
+        status = status,
     )

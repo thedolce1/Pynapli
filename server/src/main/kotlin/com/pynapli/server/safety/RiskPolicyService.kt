@@ -3,18 +3,15 @@ package com.pynapli.server.safety
 import java.util.UUID
 
 class RiskPolicyService(
-    private val loadRiskState: suspend (UUID) -> AccountRiskStateRecord?
+    private val loadRiskState: suspend (UUID) -> AccountRiskStateRecord?,
 ) {
     constructor(riskService: RiskService) : this(loadRiskState = { userId -> riskService.getState(userId) })
 
-    suspend fun isSocialActionRestricted(userId: UUID): Boolean =
-        loadRiskState(userId)?.tier in SOCIAL_ACTION_RESTRICTED_TIERS
+    suspend fun isSocialActionRestricted(userId: UUID): Boolean = loadRiskState(userId)?.tier in SOCIAL_ACTION_RESTRICTED_TIERS
 
-    suspend fun shouldHideFromDiscovery(userId: UUID): Boolean =
-        loadRiskState(userId)?.tier in DISCOVERY_SUPPRESSED_TIERS
+    suspend fun shouldHideFromDiscovery(userId: UUID): Boolean = loadRiskState(userId)?.tier in DISCOVERY_SUPPRESSED_TIERS
 
-    suspend fun shouldSuppressPassiveActivity(userId: UUID): Boolean =
-        shouldHideFromDiscovery(userId)
+    suspend fun shouldSuppressPassiveActivity(userId: UUID): Boolean = shouldHideFromDiscovery(userId)
 
     companion object {
         val SOCIAL_ACTION_RESTRICTED_TIERS = setOf("quarantine", "terminate")

@@ -11,7 +11,7 @@ internal object SubscriptionCatalog {
     fun inventory(): SubscriptionInventoryResponseDto =
         SubscriptionInventoryResponseDto(
             tiers = tiers(),
-            premiumProducts = premiumProducts()
+            premiumProducts = premiumProducts(),
         )
 
     private fun tiers(): List<SubscriptionTierDto> =
@@ -22,14 +22,15 @@ internal object SubscriptionCatalog {
                 monthlyPriceUsdCents = 0,
                 adSupported = true,
                 linkedPartnerIncluded = false,
-                features = listOf(
-                    "Basic grid",
-                    "Basic swipe",
-                    "Grid messaging",
-                    "Partner linking",
-                    "Private album basics",
-                    "Block and report"
-                )
+                features =
+                    listOf(
+                        "Basic grid",
+                        "Basic swipe",
+                        "Grid messaging",
+                        "Partner linking",
+                        "Private album basics",
+                        "Block and report",
+                    ),
             ),
             SubscriptionTierDto(
                 tier = SubscriptionTier.SOCIAL,
@@ -38,16 +39,17 @@ internal object SubscriptionCatalog {
                 adSupported = false,
                 linkedPartnerIncluded = true,
                 playStoreProductId = SubscriptionProductId.PLAY_SOCIAL_MONTHLY,
-                features = listOf(
-                    "No ads",
-                    "Expanded grid",
-                    "More swipe likes",
-                    "Rewind",
-                    "More Activity reveal",
-                    "Saved filters",
-                    "Travel preview",
-                    "Linked partner included"
-                )
+                features =
+                    listOf(
+                        "No ads",
+                        "Expanded grid",
+                        "More swipe likes",
+                        "Rewind",
+                        "More Activity reveal",
+                        "Saved filters",
+                        "Travel preview",
+                        "Linked partner included",
+                    ),
             ),
             SubscriptionTierDto(
                 tier = SubscriptionTier.SELECT,
@@ -56,18 +58,19 @@ internal object SubscriptionCatalog {
                 adSupported = false,
                 linkedPartnerIncluded = true,
                 playStoreProductId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
-                features = listOf(
-                    "Full activity reveal",
-                    "Advanced filters",
-                    "Incognito",
-                    "Travel mode",
-                    "Intro Notes",
-                    "Weekly Pineapple Likes",
-                    "Monthly Boost",
-                    "Daily curated Picks",
-                    "Linked partner included"
-                )
-            )
+                features =
+                    listOf(
+                        "Full activity reveal",
+                        "Advanced filters",
+                        "Incognito",
+                        "Travel mode",
+                        "Intro Notes",
+                        "Weekly Pineapple Likes",
+                        "Monthly Boost",
+                        "Daily curated Picks",
+                        "Linked partner included",
+                    ),
+            ),
         )
 
     private fun premiumProducts(): List<PremiumProductDto> =
@@ -80,11 +83,12 @@ internal object SubscriptionCatalog {
                 priceUsdCents = 299,
                 quantity = 1,
                 playStoreProductId = SubscriptionProductId.BOOST_SINGLE,
-                features = listOf(
-                    "30-minute visibility lift",
-                    "Respects blocks, privacy, and filters",
-                    "No guaranteed matches"
-                )
+                features =
+                    listOf(
+                        "30-minute visibility lift",
+                        "Respects blocks, privacy, and filters",
+                        "No guaranteed matches",
+                    ),
             ),
             PremiumProductDto(
                 productId = SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
@@ -94,11 +98,12 @@ internal object SubscriptionCatalog {
                 priceUsdCents = 399,
                 quantity = 5,
                 playStoreProductId = SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
-                features = listOf(
-                    "High-intent swipe signal",
-                    "Prioritized in Activity",
-                    "Dismissible by recipient"
-                )
+                features =
+                    listOf(
+                        "High-intent swipe signal",
+                        "Prioritized in Activity",
+                        "Dismissible by recipient",
+                    ),
             ),
             PremiumProductDto(
                 productId = SubscriptionProductId.INTRO_NOTES_THREE,
@@ -108,11 +113,12 @@ internal object SubscriptionCatalog {
                 priceUsdCents = 299,
                 quantity = 3,
                 playStoreProductId = SubscriptionProductId.INTRO_NOTES_THREE,
-                features = listOf(
-                    "140 characters max",
-                    "Does not open chat by itself",
-                    "Subject to recipient controls"
-                )
-            )
+                features =
+                    listOf(
+                        "140 characters max",
+                        "Does not open chat by itself",
+                        "Subject to recipient controls",
+                    ),
+            ),
         )
 }

@@ -8,55 +8,60 @@ import java.util.UUID
 import javax.sql.DataSource
 
 class JdbcAdminReportRepository(
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
 ) : AdminReportRepository {
     override suspend fun listReports(
         status: String,
         limit: Int,
         actorId: String,
-        reason: String
-    ): List<AdminReportRecord> = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
-                connection.insertAdminAuditLog(
-                    actorId = actorId,
-                    action = "reports.list",
-                    targetType = "safety_reports",
-                    targetId = null,
-                    reason = reason,
-                    metadataJson = """{"status":"$status","limit":$limit}"""
-                )
-                val reports = connection.selectReports(status, limit)
-                connection.commit()
-                reports
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
+        reason: String,
+    ): List<AdminReportRecord> =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val previousAutoCommit = connection.autoCommit
+                connection.autoCommit = false
+                try {
+                    connection.insertAdminAuditLog(
+                        actorId = actorId,
+                        action = "reports.list",
+                        targetType = "safety_reports",
+                        targetId = null,
+                        reason = reason,
+                        metadataJson = """{"status":"$status","limit":$limit}""",
+                    )
+                    val reports = connection.selectReports(status, limit)
+                    connection.commit()
+                    reports
+                } catch (error: Throwable) {
+                    connection.rollback()
+                    throw error
+                } finally {
+                    connection.autoCommit = previousAutoCommit
+                }
             }
         }
-    }
 
     override suspend fun updateReportStatus(
         reportId: UUID,
         status: String,
         actorId: String,
-        reason: String
-    ): AdminReportActionRecord? = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            connection.updateReportStatusWithAudit(
-                reportId = reportId,
-                status = status,
-                actorId = actorId,
-                reason = reason
-            )
+        reason: String,
+    ): AdminReportActionRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.updateReportStatusWithAudit(
+                    reportId = reportId,
+                    status = status,
+                    actorId = actorId,
+                    reason = reason,
+                )
+            }
         }
-    }
 
-    private fun Connection.selectReports(status: String, limit: Int): List<AdminReportRecord> =
+    private fun Connection.selectReports(
+        status: String,
+        limit: Int,
+    ): List<AdminReportRecord> =
         prepareStatement(
             """
             SELECT id,
@@ -81,7 +86,7 @@ class JdbcAdminReportRepository(
                 created_at ASC,
                 id ASC
             LIMIT ?
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setString(1, status)
             statement.setString(2, status)
@@ -97,31 +102,34 @@ class JdbcAdminReportRepository(
         reportId: UUID,
         status: String,
         actorId: String,
-        reason: String
+        reason: String,
     ): AdminReportActionRecord? {
         val previousAutoCommit = autoCommit
         autoCommit = false
         try {
-            val previousStatus = lockActionableReport(reportId) ?: run {
-                rollback()
-                return null
-            }
-            val action = updateReportStatus(reportId, status, reason) ?: run {
-                rollback()
-                return null
-            }
+            val previousStatus =
+                lockActionableReport(reportId) ?: run {
+                    rollback()
+                    return null
+                }
+            val action =
+                updateReportStatus(reportId, status, reason) ?: run {
+                    rollback()
+                    return null
+                }
             insertAdminAuditLog(
                 actorId = actorId,
                 action = "report.$status",
                 targetType = "safety_report",
                 targetId = reportId,
                 reason = reason,
-                metadataJson = """
+                metadataJson =
+                    """
                     {
                       "previousStatus":"$previousStatus",
                       "status":"$status"
                     }
-                """.trimIndent()
+                    """.trimIndent(),
             )
             commit()
             return action
@@ -141,7 +149,7 @@ class JdbcAdminReportRepository(
             WHERE id = ?
               AND status IN ('open', 'under_review')
             FOR UPDATE
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setObject(1, reportId)
             statement.executeQuery().use { rs ->
@@ -152,7 +160,7 @@ class JdbcAdminReportRepository(
     private fun Connection.updateReportStatus(
         reportId: UUID,
         status: String,
-        reason: String
+        reason: String,
     ): AdminReportActionRecord? =
         prepareStatement(
             """
@@ -167,7 +175,7 @@ class JdbcAdminReportRepository(
             WHERE id = ?
               AND status IN ('open', 'under_review')
             RETURNING id, status, updated_at
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setString(1, status)
             statement.setString(2, reason)
@@ -178,7 +186,7 @@ class JdbcAdminReportRepository(
                     AdminReportActionRecord(
                         reportId = rs.getObject("id", UUID::class.java),
                         status = rs.getString("status"),
-                        actedAt = rs.getTimestamp("updated_at").toInstant()
+                        actedAt = rs.getTimestamp("updated_at").toInstant(),
                     )
                 } else {
                     null
@@ -198,6 +206,6 @@ class JdbcAdminReportRepository(
             status = getString("status"),
             createdAt = getTimestamp("created_at").toInstant(),
             updatedAt = getTimestamp("updated_at").toInstant(),
-            reviewedAt = getTimestamp("reviewed_at")?.toInstant()
+            reviewedAt = getTimestamp("reviewed_at")?.toInstant(),
         )
 }

@@ -15,7 +15,7 @@ internal object SubscriptionEntitlementMapper {
             sourceUserId = record.sourceUserId,
             linkedPartnerUserId = record.linkedPartnerUserId,
             startsAt = record.startsAt,
-            endsAt = record.endsAt
+            endsAt = record.endsAt,
         )
 
     fun free(): SubscriptionEntitlementDto =
@@ -24,7 +24,7 @@ internal object SubscriptionEntitlementMapper {
             source = EntitlementSource.FREE,
             displayName = displayNameFor(SubscriptionTier.FREE),
             adSupported = true,
-            linkedPartnerIncluded = false
+            linkedPartnerIncluded = false,
         )
 
     private fun paidEntitlement(
@@ -34,7 +34,7 @@ internal object SubscriptionEntitlementMapper {
         sourceUserId: UUID,
         linkedPartnerUserId: UUID?,
         startsAt: Instant,
-        endsAt: Instant?
+        endsAt: Instant?,
     ): SubscriptionEntitlementDto =
         SubscriptionEntitlementDto(
             tier = tier,
@@ -46,7 +46,7 @@ internal object SubscriptionEntitlementMapper {
             sourceUserId = sourceUserId.toString(),
             linkedPartnerUserId = linkedPartnerUserId?.toString(),
             startsAt = startsAt.toString(),
-            endsAt = endsAt?.toString()
+            endsAt = endsAt?.toString(),
         )
 
     private fun displayNameFor(tier: String): String =

@@ -11,8 +11,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class MessageStreamClientTest {
-
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
 
     @Test
     fun backoffDelayGrowsExponentiallyAndCaps() {
@@ -26,85 +29,95 @@ class MessageStreamClientTest {
     }
 
     @Test
-    fun emitsDeltasFromConnectedSession() = runBlocking {
-        val session = ScriptedMessageSession(
-            scriptedReceives = listOf(
-                json.encodeToString(
-                    MessageDeltaDto.serializer(),
-                    MessageDeltaDto(
-                        type = MessageDeltaType.MESSAGE_CREATED,
-                        conversationId = "conversation-1",
-                        occurredAt = "2026-05-22T16:00:00Z",
-                        messageId = "message-1"
-                    )
-                ),
-                json.encodeToString(
-                    MessageDeltaDto.serializer(),
-                    MessageDeltaDto(
-                        type = MessageDeltaType.TYPING_STARTED,
-                        conversationId = "conversation-1",
-                        occurredAt = "2026-05-22T16:00:01Z",
-                        actorUserId = "target",
-                        actorDisplayName = "Maya",
-                        expiresAt = "2026-05-22T16:00:07Z"
-                    )
+    fun emitsDeltasFromConnectedSession() =
+        runBlocking {
+            val session =
+                ScriptedMessageSession(
+                    scriptedReceives =
+                        listOf(
+                            json.encodeToString(
+                                MessageDeltaDto.serializer(),
+                                MessageDeltaDto(
+                                    type = MessageDeltaType.MESSAGE_CREATED,
+                                    conversationId = "conversation-1",
+                                    occurredAt = "2026-05-22T16:00:00Z",
+                                    messageId = "message-1",
+                                ),
+                            ),
+                            json.encodeToString(
+                                MessageDeltaDto.serializer(),
+                                MessageDeltaDto(
+                                    type = MessageDeltaType.TYPING_STARTED,
+                                    conversationId = "conversation-1",
+                                    occurredAt = "2026-05-22T16:00:01Z",
+                                    actorUserId = "target",
+                                    actorDisplayName = "Maya",
+                                    expiresAt = "2026-05-22T16:00:07Z",
+                                ),
+                            ),
+                        ),
                 )
-            )
-        )
-        val factory = ScriptedMessageSessionFactory(sessions = listOf(session))
-        val client = MessageStreamClient(
-            sessionFactory = factory,
-            tokenProvider = StaticAccessTokenProvider("test-token"),
-            json = json
-        )
+            val factory = ScriptedMessageSessionFactory(sessions = listOf(session))
+            val client =
+                MessageStreamClient(
+                    sessionFactory = factory,
+                    tokenProvider = StaticAccessTokenProvider("test-token"),
+                    json = json,
+                )
 
-        val deltas = withTimeout(2_000) {
-            client.connect().take(2).toList()
+            val deltas =
+                withTimeout(2_000) {
+                    client.connect().take(2).toList()
+                }
+
+            assertEquals(listOf(MessageDeltaType.MESSAGE_CREATED, MessageDeltaType.TYPING_STARTED), deltas.map { it.type })
+            assertEquals(listOf("conversation-1", "conversation-1"), deltas.map { it.conversationId })
+            assertEquals("target", deltas.last().actorUserId)
+            assertEquals("Maya", deltas.last().actorDisplayName)
+            assertEquals("2026-05-22T16:00:07Z", deltas.last().expiresAt)
+            assertEquals("test-token", factory.tokensSeen.first())
         }
-
-        assertEquals(listOf(MessageDeltaType.MESSAGE_CREATED, MessageDeltaType.TYPING_STARTED), deltas.map { it.type })
-        assertEquals(listOf("conversation-1", "conversation-1"), deltas.map { it.conversationId })
-        assertEquals("target", deltas.last().actorUserId)
-        assertEquals("Maya", deltas.last().actorDisplayName)
-        assertEquals("2026-05-22T16:00:07Z", deltas.last().expiresAt)
-        assertEquals("test-token", factory.tokensSeen.first())
-    }
 
     @Test
-    fun reconnectsAfterTransientFailure() = runBlocking {
-        val firstSession = ScriptedMessageSession(scriptedReceives = emptyList())
-        val secondSession = ScriptedMessageSession(
-            scriptedReceives = listOf(
-                json.encodeToString(
-                    MessageDeltaDto.serializer(),
-                    MessageDeltaDto(
-                        type = MessageDeltaType.MESSAGE_DELETED,
-                        conversationId = "conversation-1",
-                        occurredAt = "2026-05-22T16:00:00Z",
-                        messageId = "message-1"
-                    )
+    fun reconnectsAfterTransientFailure() =
+        runBlocking {
+            val firstSession = ScriptedMessageSession(scriptedReceives = emptyList())
+            val secondSession =
+                ScriptedMessageSession(
+                    scriptedReceives =
+                        listOf(
+                            json.encodeToString(
+                                MessageDeltaDto.serializer(),
+                                MessageDeltaDto(
+                                    type = MessageDeltaType.MESSAGE_DELETED,
+                                    conversationId = "conversation-1",
+                                    occurredAt = "2026-05-22T16:00:00Z",
+                                    messageId = "message-1",
+                                ),
+                            ),
+                        ),
                 )
-            )
-        )
-        val factory = ScriptedMessageSessionFactory(sessions = listOf(firstSession, secondSession))
-        val client = MessageStreamClient(
-            sessionFactory = factory,
-            tokenProvider = StaticAccessTokenProvider("test-token"),
-            backoff = MessageStreamBackoff(initialDelayMillis = 10, maxDelayMillis = 20, factor = 1.0),
-            json = json
-        )
+            val factory = ScriptedMessageSessionFactory(sessions = listOf(firstSession, secondSession))
+            val client =
+                MessageStreamClient(
+                    sessionFactory = factory,
+                    tokenProvider = StaticAccessTokenProvider("test-token"),
+                    backoff = MessageStreamBackoff(initialDelayMillis = 10, maxDelayMillis = 20, factor = 1.0),
+                    json = json,
+                )
 
-        val deltas = withTimeout(3_000) {
-            client.connect().take(1).toList()
+            val deltas =
+                withTimeout(3_000) {
+                    client.connect().take(1).toList()
+                }
+
+            assertEquals(listOf(MessageDeltaType.MESSAGE_DELETED), deltas.map { it.type })
+            assertEquals(2, factory.connectInvocations)
         }
-
-        assertEquals(listOf(MessageDeltaType.MESSAGE_DELETED), deltas.map { it.type })
-        assertEquals(2, factory.connectInvocations)
-    }
 }
 
 private class ScriptedMessageSession(
-    private val scriptedReceives: List<String>
+    private val scriptedReceives: List<String>,
 ) : MessageStreamSession {
     private var receiveIndex = 0
 
@@ -119,7 +132,7 @@ private class ScriptedMessageSession(
 }
 
 private class ScriptedMessageSessionFactory(
-    private val sessions: List<ScriptedMessageSession>
+    private val sessions: List<ScriptedMessageSession>,
 ) : MessageStreamSessionFactory {
     val tokensSeen = mutableListOf<String>()
     var connectInvocations: Int = 0

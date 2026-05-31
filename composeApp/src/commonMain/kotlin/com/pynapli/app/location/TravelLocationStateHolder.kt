@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.update
  * sheet shows a paywall hint instead of the picker.
  */
 class TravelLocationStateHolder(
-    private val repository: TravelLocationRepository
+    private val repository: TravelLocationRepository,
 ) {
     private val _state = MutableStateFlow(TravelLocationUiState())
     val state: StateFlow<TravelLocationUiState> = _state.asStateFlow()
@@ -26,55 +26,62 @@ class TravelLocationStateHolder(
     suspend fun load() {
         _state.update { it.copy(isLoading = true, errorCode = null, errorMessage = null) }
         when (val result = repository.getCurrent()) {
-            is AppResult.Success -> _state.update {
-                it.copy(isLoading = false, current = result.value)
-            }
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    isLoading = false,
-                    errorCode = result.error.code,
-                    errorMessage = result.error.message
-                )
-            }
+            is AppResult.Success ->
+                _state.update {
+                    it.copy(isLoading = false, current = result.value)
+                }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        errorCode = result.error.code,
+                        errorMessage = result.error.message,
+                    )
+                }
         }
     }
 
     suspend fun setActive(city: TravelCityPreset) {
         _state.update { it.copy(isSaving = true, errorCode = null, errorMessage = null) }
-        val request = SetTravelLocationRequestDto(
-            latitude = city.latitude,
-            longitude = city.longitude,
-            city = city.city,
-            region = city.region,
-            country = city.country
-        )
+        val request =
+            SetTravelLocationRequestDto(
+                latitude = city.latitude,
+                longitude = city.longitude,
+                city = city.city,
+                region = city.region,
+                country = city.country,
+            )
         when (val result = repository.setActive(request)) {
-            is AppResult.Success -> _state.update {
-                it.copy(isSaving = false, current = result.value)
-            }
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    isSaving = false,
-                    errorCode = result.error.code,
-                    errorMessage = result.error.message
-                )
-            }
+            is AppResult.Success ->
+                _state.update {
+                    it.copy(isSaving = false, current = result.value)
+                }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        isSaving = false,
+                        errorCode = result.error.code,
+                        errorMessage = result.error.message,
+                    )
+                }
         }
     }
 
     suspend fun clear() {
         _state.update { it.copy(isSaving = true, errorCode = null, errorMessage = null) }
         when (val result = repository.clear()) {
-            is AppResult.Success -> _state.update {
-                it.copy(isSaving = false, current = null)
-            }
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    isSaving = false,
-                    errorCode = result.error.code,
-                    errorMessage = result.error.message
-                )
-            }
+            is AppResult.Success ->
+                _state.update {
+                    it.copy(isSaving = false, current = null)
+                }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        isSaving = false,
+                        errorCode = result.error.code,
+                        errorMessage = result.error.message,
+                    )
+                }
         }
     }
 
@@ -89,7 +96,7 @@ data class TravelLocationUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val errorCode: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 ) {
     val entitlementRequired: Boolean get() = errorCode == "ENTITLEMENT_REQUIRED"
     val isActive: Boolean get() = current != null
@@ -97,16 +104,19 @@ data class TravelLocationUiState(
 
 interface TravelLocationRepository {
     suspend fun getCurrent(): AppResult<TravelLocationDto?>
+
     suspend fun setActive(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto>
+
     suspend fun clear(): AppResult<Unit>
 }
 
 class ApiTravelLocationRepository(
-    private val apiClient: PynapliApiClient
+    private val apiClient: PynapliApiClient,
 ) : TravelLocationRepository {
     override suspend fun getCurrent(): AppResult<TravelLocationDto?> = apiClient.getTravelLocation()
-    override suspend fun setActive(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto> =
-        apiClient.setTravelLocation(request)
+
+    override suspend fun setActive(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto> = apiClient.setTravelLocation(request)
+
     override suspend fun clear(): AppResult<Unit> = apiClient.clearTravelLocation()
 }
 
@@ -125,26 +135,26 @@ data class TravelCityPreset(
     val region: String?,
     val country: String?,
     val latitude: Double,
-    val longitude: Double
+    val longitude: Double,
 ) {
     val displayName: String
         get() = listOfNotNull(city, country).joinToString(", ")
 }
 
 object TravelCityPresets {
-    val ALL: List<TravelCityPreset> = listOf(
-        TravelCityPreset("nyc", "New York", "NY", "United States", 40.7128, -74.0060),
-        TravelCityPreset("la", "Los Angeles", "CA", "United States", 34.0522, -118.2437),
-        TravelCityPreset("sf", "San Francisco", "CA", "United States", 37.7749, -122.4194),
-        TravelCityPreset("mia", "Miami", "FL", "United States", 25.7617, -80.1918),
-        TravelCityPreset("yyz", "Toronto", "ON", "Canada", 43.6532, -79.3832),
-        TravelCityPreset("lon", "London", null, "United Kingdom", 51.5074, -0.1278),
-        TravelCityPreset("ber", "Berlin", null, "Germany", 52.5200, 13.4050),
-        TravelCityPreset("par", "Paris", null, "France", 48.8566, 2.3522),
-        TravelCityPreset("tok", "Tokyo", null, "Japan", 35.6762, 139.6503),
-        TravelCityPreset("syd", "Sydney", "NSW", "Australia", -33.8688, 151.2093)
-    )
+    val ALL: List<TravelCityPreset> =
+        listOf(
+            TravelCityPreset("nyc", "New York", "NY", "United States", 40.7128, -74.0060),
+            TravelCityPreset("la", "Los Angeles", "CA", "United States", 34.0522, -118.2437),
+            TravelCityPreset("sf", "San Francisco", "CA", "United States", 37.7749, -122.4194),
+            TravelCityPreset("mia", "Miami", "FL", "United States", 25.7617, -80.1918),
+            TravelCityPreset("yyz", "Toronto", "ON", "Canada", 43.6532, -79.3832),
+            TravelCityPreset("lon", "London", null, "United Kingdom", 51.5074, -0.1278),
+            TravelCityPreset("ber", "Berlin", null, "Germany", 52.5200, 13.4050),
+            TravelCityPreset("par", "Paris", null, "France", 48.8566, 2.3522),
+            TravelCityPreset("tok", "Tokyo", null, "Japan", 35.6762, 139.6503),
+            TravelCityPreset("syd", "Sydney", "NSW", "Australia", -33.8688, 151.2093),
+        )
 
-    fun matchPreset(dto: TravelLocationDto): TravelCityPreset? =
-        ALL.firstOrNull { it.city.equals(dto.city, ignoreCase = true) }
+    fun matchPreset(dto: TravelLocationDto): TravelCityPreset? = ALL.firstOrNull { it.city.equals(dto.city, ignoreCase = true) }
 }

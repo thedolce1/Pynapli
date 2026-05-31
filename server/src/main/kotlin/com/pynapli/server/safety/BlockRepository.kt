@@ -8,17 +8,20 @@ interface BlockRepository {
         blockerUserId: UUID,
         blockedUserId: UUID,
         reason: String?,
-        blockIdFactory: () -> UUID = UUID::randomUUID
+        blockIdFactory: () -> UUID = UUID::randomUUID,
     ): BlockRecord
 
     suspend fun unblock(
         blockerUserId: UUID,
-        blockedUserId: UUID
+        blockedUserId: UUID,
     ): Boolean
 
     suspend fun listBlocks(blockerUserId: UUID): List<BlockSummaryRecord>
 
-    suspend fun isBlockedEitherWay(userIdA: UUID, userIdB: UUID): Boolean
+    suspend fun isBlockedEitherWay(
+        userIdA: UUID,
+        userIdB: UUID,
+    ): Boolean
 
     suspend fun listBlockedRelatedUserIds(userId: UUID): Set<UUID>
 }
@@ -28,12 +31,12 @@ data class BlockRecord(
     val blockerUserId: UUID,
     val blockedUserId: UUID,
     val reason: String?,
-    val createdAt: Instant
+    val createdAt: Instant,
 )
 
 data class BlockSummaryRecord(
     val blockedUserId: UUID,
     val blockedDisplayName: String?,
     val reason: String?,
-    val createdAt: Instant
+    val createdAt: Instant,
 )

@@ -10,24 +10,26 @@ import com.pynapli.shared.network.dto.SwipeCardDto
 import java.util.UUID
 
 internal class SwipeDtoMapper(
-    private val mediaAssetUrlResolver: MediaAssetUrlResolver?
+    private val mediaAssetUrlResolver: MediaAssetUrlResolver?,
 ) {
     fun cardToDto(
         card: SwipeCardRecord,
         rankToken: String,
         online: Boolean,
-        onlineUserIds: Set<UUID>
+        onlineUserIds: Set<UUID>,
     ): SwipeCardDto {
-        val resolvedPhotoUrls = if (mediaAssetUrlResolver == null) {
-            emptyList()
-        } else {
-            val sourceIds = if (card.thumbnailMediaAssetIds.isNotEmpty()) {
-                card.thumbnailMediaAssetIds
+        val resolvedPhotoUrls =
+            if (mediaAssetUrlResolver == null) {
+                emptyList()
             } else {
-                listOfNotNull(card.thumbnailMediaAssetId)
+                val sourceIds =
+                    if (card.thumbnailMediaAssetIds.isNotEmpty()) {
+                        card.thumbnailMediaAssetIds
+                    } else {
+                        listOfNotNull(card.thumbnailMediaAssetId)
+                    }
+                sourceIds.take(MAX_VISIBLE_PHOTOS).mapNotNull { mediaAssetUrlResolver.publicContentUrl(it) }
             }
-            sourceIds.take(MAX_VISIBLE_PHOTOS).mapNotNull { mediaAssetUrlResolver.publicContentUrl(it) }
-        }
         return SwipeCardDto(
             userId = card.userId.toString(),
             displayName = card.displayName,
@@ -36,21 +38,23 @@ internal class SwipeDtoMapper(
             distanceMeters = if (card.showDistance) card.distanceMeters.toPublicDistanceMeters() else null,
             photoUrl = resolvedPhotoUrls.firstOrNull(),
             photoUrls = resolvedPhotoUrls,
-            linkedPartner = card.linkedPartnerUserId?.let { partnerUserId ->
-                LinkedPartnerMiniDto(
-                    userId = partnerUserId.toString(),
-                    displayName = card.linkedPartnerDisplayName,
-                    thumbnailUrl = card.linkedPartnerThumbnailMediaAssetId
-                        ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-                    online = partnerUserId in onlineUserIds
-                )
-            },
+            linkedPartner =
+                card.linkedPartnerUserId?.let { partnerUserId ->
+                    LinkedPartnerMiniDto(
+                        userId = partnerUserId.toString(),
+                        displayName = card.linkedPartnerDisplayName,
+                        thumbnailUrl =
+                            card.linkedPartnerThumbnailMediaAssetId
+                                ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                        online = partnerUserId in onlineUserIds,
+                    )
+                },
             rankToken = rankToken,
             online = online,
             shortBio = card.bio.toShortBio(),
             tags = card.tags.toVisibleTags(),
             verified = card.verified,
-            visiting = card.visiting
+            visiting = card.visiting,
         )
     }
 
@@ -59,16 +63,17 @@ internal class SwipeDtoMapper(
             matchId = record.matchId.toString(),
             matchedUserId = record.matchedUserId.toString(),
             matchedDisplayName = record.matchedDisplayName,
-            matchedPhotoUrl = record.matchedThumbnailMediaAssetId
-                ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-            createdAt = record.createdAt.toString()
+            matchedPhotoUrl =
+                record.matchedThumbnailMediaAssetId
+                    ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+            createdAt = record.createdAt.toString(),
         )
 }
 
 internal fun SwipeActionRecord.toResponseDto(viewerUserId: UUID): SwipeActionResponseDto =
     SwipeActionResponseDto(
         recorded = true,
-        match = match?.toDto(viewerUserId)
+        match = match?.toDto(viewerUserId),
     )
 
 internal fun MatchRecord.toDto(viewerUserId: UUID): MatchDto =
@@ -77,7 +82,7 @@ internal fun MatchRecord.toDto(viewerUserId: UUID): MatchDto =
         matchedUserId = if (userA == viewerUserId) userB.toString() else userA.toString(),
         matchedDisplayName = null,
         matchedPhotoUrl = null,
-        createdAt = createdAt.toString()
+        createdAt = createdAt.toString(),
     )
 
 private fun String?.toShortBio(): String? {

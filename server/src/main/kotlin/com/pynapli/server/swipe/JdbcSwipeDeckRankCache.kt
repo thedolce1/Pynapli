@@ -8,17 +8,16 @@ import java.util.concurrent.ExecutionException
 
 internal class JdbcSwipeDeckRankCache(
     private val ttl: Duration,
-    private val maxEntries: Int
+    private val maxEntries: Int,
 ) {
     private val rows = ConcurrentHashMap<DeckRankCacheKey, CachedDeckRankRows>()
     private val inFlight = ConcurrentHashMap<DeckRankCacheKey, CompletableFuture<CachedDeckRankRows>>()
 
-    fun isEnabled(): Boolean =
-        !ttl.isZero && !ttl.isNegative && maxEntries > 0
+    fun isEnabled(): Boolean = !ttl.isZero && !ttl.isNegative && maxEntries > 0
 
     fun load(
         cacheKey: DeckRankCacheKey,
-        loader: () -> List<DeckRankRow>
+        loader: () -> List<DeckRankRow>,
     ): List<DeckRankRow> {
         val now = Instant.now()
         rows[cacheKey]?.let { cached ->
@@ -37,10 +36,11 @@ internal class JdbcSwipeDeckRankCache(
         }
 
         try {
-            val loaded = CachedDeckRankRows(
-                rows = loader(),
-                expiresAt = now.plus(ttl)
-            )
+            val loaded =
+                CachedDeckRankRows(
+                    rows = loader(),
+                    expiresAt = now.plus(ttl),
+                )
             rows[cacheKey] = loaded
             evict(now)
             newFuture.complete(loaded)

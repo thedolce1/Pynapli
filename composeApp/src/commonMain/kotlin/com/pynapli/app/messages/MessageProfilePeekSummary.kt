@@ -18,18 +18,19 @@ import com.pynapli.app.profile.ProfileDetailUiState
 @Composable
 internal fun ProfilePeekSummary(state: ProfileDetailUiState) {
     val profile = state.profile
-    val chips = listOfNotNull(
-        profile?.displayAge?.toString(),
-        profile?.relationshipContext?.displayToken(),
-        profile?.gender?.displayToken(),
-        profile?.orientation?.displayToken()
-    )
+    val chips =
+        listOfNotNull(
+            profile?.displayAge?.toString(),
+            profile?.relationshipContext?.displayToken(),
+            profile?.gender?.displayToken(),
+            profile?.orientation?.displayToken(),
+        )
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (chips.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 chips.forEach { label ->
                     ProfilePeekChip(label = label)
@@ -37,16 +38,17 @@ internal fun ProfilePeekSummary(state: ProfileDetailUiState) {
             }
         }
         Text(
-            text = profile?.discoveryStyle?.displayProfileSentence()
-                ?: "Open to a calm, respectful conversation.",
+            text =
+                profile?.discoveryStyle?.displayProfileSentence()
+                    ?: "Open to a calm, respectful conversation.",
             color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
         )
         profile?.linkedPartner?.displayName?.let { partnerName ->
             Text(
                 text = "Linked with $partnerName",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelMedium
+                style = MaterialTheme.typography.labelMedium,
             )
         }
     }
@@ -57,17 +59,18 @@ private fun ProfilePeekChip(label: String) {
     Surface(
         shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
-        )
+        border =
+            BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+            ),
     ) {
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
         )
     }
 }

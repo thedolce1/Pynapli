@@ -14,7 +14,7 @@ import io.ktor.server.routing.routing
 
 fun Application.configureLocationRoutes(
     authService: AuthService?,
-    locationService: LocationService?
+    locationService: LocationService?,
 ) {
     if (authService == null || locationService == null) return
 
@@ -32,4 +32,3 @@ private fun ApplicationCall.requiredBearerToken(): String {
     if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
     return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }
-

@@ -12,16 +12,22 @@ import javax.crypto.spec.SecretKeySpec
 
 class DiscoveryCursorCodec(
     secret: String,
-    private val json: Json = Json {
-        encodeDefaults = true
-        ignoreUnknownKeys = false
-    }
+    private val json: Json =
+        Json {
+            encodeDefaults = true
+            ignoreUnknownKeys = false
+        },
 ) {
-    private val secretBytes = secret.also { value ->
-        require(value.isNotBlank()) { "Discovery cursor secret must not be blank." }
-    }.toByteArray(StandardCharsets.UTF_8)
+    private val secretBytes =
+        secret
+            .also { value ->
+                require(value.isNotBlank()) { "Discovery cursor secret must not be blank." }
+            }.toByteArray(StandardCharsets.UTF_8)
 
-    fun encodeGridCursor(scopeHash: String, anchor: GridCursorAnchor): String =
+    fun encodeGridCursor(
+        scopeHash: String,
+        anchor: GridCursorAnchor,
+    ): String =
         encode(
             DiscoveryCursorPayload(
                 surface = SURFACE_GRID,
@@ -29,11 +35,14 @@ class DiscoveryCursorCodec(
                 boostBucket = anchor.boostBucket,
                 distanceBucketMeters = anchor.distanceBucketMeters,
                 userId = anchor.userId.toString(),
-                seenCount = anchor.seenCount
-            )
+                seenCount = anchor.seenCount,
+            ),
         )
 
-    fun decodeGridCursor(token: String, expectedScopeHash: String): GridCursorAnchor {
+    fun decodeGridCursor(
+        token: String,
+        expectedScopeHash: String,
+    ): GridCursorAnchor {
         val payload = decode(token)
         if (payload.surface != SURFACE_GRID || payload.version != VERSION || payload.scopeHash != expectedScopeHash) {
             throw DiscoveryCursorException()
@@ -42,10 +51,11 @@ class DiscoveryCursorCodec(
         return GridCursorAnchor(
             boostBucket = payload.boostBucket ?: throw DiscoveryCursorException(),
             distanceBucketMeters = payload.distanceBucketMeters ?: throw DiscoveryCursorException(),
-            userId = runCatching {
-                UUID.fromString(payload.userId ?: throw DiscoveryCursorException())
-            }.getOrElse { throw DiscoveryCursorException() },
-            seenCount = payload.seenCount ?: 0
+            userId =
+                runCatching {
+                    UUID.fromString(payload.userId ?: throw DiscoveryCursorException())
+                }.getOrElse { throw DiscoveryCursorException() },
+            seenCount = payload.seenCount ?: 0,
         )
     }
 
@@ -66,9 +76,10 @@ class DiscoveryCursorCodec(
         val suppliedSignature = runCatching { base64UrlDecode(parts[2]) }.getOrElse { throw DiscoveryCursorException() }
         if (!MessageDigest.isEqual(expectedSignature, suppliedSignature)) throw DiscoveryCursorException()
 
-        val payloadJson = runCatching {
-            String(base64UrlDecode(parts[1]), StandardCharsets.UTF_8)
-        }.getOrElse { throw DiscoveryCursorException() }
+        val payloadJson =
+            runCatching {
+                String(base64UrlDecode(parts[1]), StandardCharsets.UTF_8)
+            }.getOrElse { throw DiscoveryCursorException() }
 
         return runCatching {
             json.decodeFromString(DiscoveryCursorPayload.serializer(), payloadJson)
@@ -91,40 +102,39 @@ class DiscoveryCursorCodec(
             radiusMeters: Int,
             limit: Int,
             filters: DiscoveryFilters,
-            onlineOnly: Boolean
+            onlineOnly: Boolean,
         ): String {
-            val normalized = buildString {
-                append("grid:v1")
-                append("|viewer=").append(viewerUserId)
-                append("|radius=").append(radiusMeters)
-                append("|limit=").append(limit)
-                append("|minAge=").append(filters.minimumAge ?: "")
-                append("|maxAge=").append(filters.maximumAge ?: "")
-                append("|linkedOnly=").append(filters.linkedOnly ?: "")
-                append("|onlineOnly=").append(onlineOnly)
-                append("|verifiedOnly=").append(filters.verifiedOnly)
-                append("|facePhotoVerifiedOnly=").append(filters.facePhotoVerifiedOnly)
-                append("|ageVerifiedOnly=").append(filters.ageVerifiedOnly)
-                append("|relationshipContexts=")
-                append(filters.relationshipContexts.sorted().joinToString(","))
-                append("|discoveryStyles=")
-                append(filters.discoveryStyles.sorted().joinToString(","))
-                append("|lifestyleTags=")
-                append(filters.lifestyleTags.sorted().joinToString(","))
-                append("|logisticsTags=")
-                append(filters.logisticsTags.sorted().joinToString(","))
-                append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
-                append("|intents=")
-                append(filters.intents.sorted().joinToString(","))
-            }
+            val normalized =
+                buildString {
+                    append("grid:v1")
+                    append("|viewer=").append(viewerUserId)
+                    append("|radius=").append(radiusMeters)
+                    append("|limit=").append(limit)
+                    append("|minAge=").append(filters.minimumAge ?: "")
+                    append("|maxAge=").append(filters.maximumAge ?: "")
+                    append("|linkedOnly=").append(filters.linkedOnly ?: "")
+                    append("|onlineOnly=").append(onlineOnly)
+                    append("|verifiedOnly=").append(filters.verifiedOnly)
+                    append("|facePhotoVerifiedOnly=").append(filters.facePhotoVerifiedOnly)
+                    append("|ageVerifiedOnly=").append(filters.ageVerifiedOnly)
+                    append("|relationshipContexts=")
+                    append(filters.relationshipContexts.sorted().joinToString(","))
+                    append("|discoveryStyles=")
+                    append(filters.discoveryStyles.sorted().joinToString(","))
+                    append("|lifestyleTags=")
+                    append(filters.lifestyleTags.sorted().joinToString(","))
+                    append("|logisticsTags=")
+                    append(filters.logisticsTags.sorted().joinToString(","))
+                    append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
+                    append("|intents=")
+                    append(filters.intents.sorted().joinToString(","))
+                }
             return sha256Base64Url(normalized)
         }
 
-        private fun sha256Base64Url(value: String): String =
-            base64UrlEncode(MessageDigest.getInstance("SHA-256").digest(value.toByteArray(StandardCharsets.UTF_8)))
+        private fun sha256Base64Url(value: String): String = base64UrlEncode(MessageDigest.getInstance("SHA-256").digest(value.toByteArray(StandardCharsets.UTF_8)))
 
-        private fun base64UrlEncode(bytes: ByteArray): String =
-            Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+        private fun base64UrlEncode(bytes: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 
         private fun base64UrlDecode(value: String): ByteArray {
             val decoded = Base64.getUrlDecoder().decode(value)
@@ -146,5 +156,5 @@ private data class DiscoveryCursorPayload(
     val boostBucket: Int? = null,
     val distanceBucketMeters: Int? = null,
     val userId: String? = null,
-    val seenCount: Int? = null
+    val seenCount: Int? = null,
 )

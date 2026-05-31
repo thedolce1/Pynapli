@@ -12,32 +12,35 @@ import io.ktor.client.plugins.websocket.WebSockets
 fun buildAndroidPresenceStreamClient(
     websocketBaseUrl: String,
     tokenProvider: AccessTokenProvider,
-    backoff: PresenceStreamBackoff = PresenceStreamBackoff()
-): PresenceStreamClient = buildPresenceStreamClient(
-    websocketHttpClient = HttpClient(OkHttp) { install(WebSockets) },
-    websocketBaseUrl = websocketBaseUrl,
-    tokenProvider = tokenProvider,
-    backoff = backoff
-)
+    backoff: PresenceStreamBackoff = PresenceStreamBackoff(),
+): PresenceStreamClient =
+    buildPresenceStreamClient(
+        websocketHttpClient = HttpClient(OkHttp) { install(WebSockets) },
+        websocketBaseUrl = websocketBaseUrl,
+        tokenProvider = tokenProvider,
+        backoff = backoff,
+    )
 
 fun buildAndroidActivityStreamClient(
     websocketBaseUrl: String,
     tokenProvider: AccessTokenProvider,
-    backoff: ActivityStreamBackoff = ActivityStreamBackoff()
-): ActivityStreamClient = buildActivityStreamClient(
-    websocketHttpClient = HttpClient(OkHttp) { install(WebSockets) },
-    websocketBaseUrl = websocketBaseUrl,
-    tokenProvider = tokenProvider,
-    backoff = backoff
-)
+    backoff: ActivityStreamBackoff = ActivityStreamBackoff(),
+): ActivityStreamClient =
+    buildActivityStreamClient(
+        websocketHttpClient = HttpClient(OkHttp) { install(WebSockets) },
+        websocketBaseUrl = websocketBaseUrl,
+        tokenProvider = tokenProvider,
+        backoff = backoff,
+    )
 
 fun buildAndroidMessageStreamClient(
     websocketBaseUrl: String,
     tokenProvider: AccessTokenProvider,
-    backoff: MessageStreamBackoff = MessageStreamBackoff()
-): MessageStreamClient = buildMessageStreamClient(
-    websocketHttpClient = HttpClient(OkHttp) { install(WebSockets) },
-    websocketBaseUrl = websocketBaseUrl,
-    tokenProvider = tokenProvider,
-    backoff = backoff
-)
+    backoff: MessageStreamBackoff = MessageStreamBackoff(),
+): MessageStreamClient =
+    buildMessageStreamClient(
+        websocketHttpClient = HttpClient(OkHttp) { install(WebSockets) },
+        websocketBaseUrl = websocketBaseUrl,
+        tokenProvider = tokenProvider,
+        backoff = backoff,
+    )

@@ -21,7 +21,7 @@ fun Application.configureSafetyRoutes(
     authService: AuthService?,
     blockService: BlockService?,
     hiddenProfileService: HiddenProfileService?,
-    reportService: ReportService?
+    reportService: ReportService?,
 ) {
     if (authService == null || blockService == null || hiddenProfileService == null || reportService == null) return
 

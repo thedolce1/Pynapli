@@ -6,19 +6,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class RedisRateLimitRepository(
-    private val redisCache: RedisCache
+    private val redisCache: RedisCache,
 ) : RateLimitRepository {
-    override suspend fun increment(key: String, windowSeconds: Long): RateLimitCounter =
+    override suspend fun increment(
+        key: String,
+        windowSeconds: Long,
+    ): RateLimitCounter =
         withContext(Dispatchers.IO) {
-            val result = redisCache.commands.eval<List<Any>>(
-                RATE_LIMIT_SCRIPT,
-                ScriptOutputType.MULTI,
-                arrayOf(key),
-                windowSeconds.toString()
-            )
+            val result =
+                redisCache.commands.eval<List<Any>>(
+                    RATE_LIMIT_SCRIPT,
+                    ScriptOutputType.MULTI,
+                    arrayOf(key),
+                    windowSeconds.toString(),
+                )
             RateLimitCounter(
                 count = result[0].toLongValue(),
-                ttlSeconds = result[1].toLongValue().takeIf { it >= 0 } ?: windowSeconds
+                ttlSeconds = result[1].toLongValue().takeIf { it >= 0 } ?: windowSeconds,
             )
         }
 
@@ -30,7 +34,8 @@ class RedisRateLimitRepository(
         }
 
     companion object {
-        private val RATE_LIMIT_SCRIPT = """
+        private val RATE_LIMIT_SCRIPT =
+            """
             local count = redis.call('INCR', KEYS[1])
             if count == 1 then
                 redis.call('EXPIRE', KEYS[1], ARGV[1])
@@ -43,6 +48,6 @@ class RedisRateLimitRepository(
                 ttl = tonumber(ARGV[1])
             end
             return { count, ttl }
-        """.trimIndent()
+            """.trimIndent()
     }
 }

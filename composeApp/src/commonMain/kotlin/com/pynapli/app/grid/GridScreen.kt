@@ -35,7 +35,7 @@ fun GridScreen(
     gridState: LazyGridState = rememberLazyGridState(),
     onUseCurrentLocation: () -> Unit = {},
     onProfileIconClick: () -> Unit = {},
-    onOpenStore: () -> Unit = {}
+    onOpenStore: () -> Unit = {},
 ) {
     val state by stateHolder.state.collectAsState()
     val profileState by profileDetailStateHolder.state.collectAsState()
@@ -93,7 +93,7 @@ fun GridScreen(
         onUseCurrentLocation = onUseCurrentLocation,
         onProfileIconClick = onProfileIconClick,
         onOpenStore = onOpenStore,
-        modifier = modifier
+        modifier = modifier,
     )
 
     LaunchedEffect(profileState.blockedTargetUserId) {
@@ -128,7 +128,7 @@ fun GridScreen(
                     scope.launch {
                         conversationStateHolder.openDirect(
                             card = card,
-                            viewerUserId = viewerUserId
+                            viewerUserId = viewerUserId,
                         )
                     }
                 }
@@ -142,10 +142,11 @@ fun GridScreen(
             onReport = { category, note ->
                 scope.launch { profileDetailStateHolder.submitReport(category, note) }
             },
-            profileLinkAction = profileLinksState?.profileLinkActionFor(
-                targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id,
-                viewerUserId = viewerUserId
-            ),
+            profileLinkAction =
+                profileLinksState?.profileLinkActionFor(
+                    targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id,
+                    viewerUserId = viewerUserId,
+                ),
             onInviteProfileLink = {
                 val targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id
                 if (targetUserId != null) {
@@ -155,7 +156,7 @@ fun GridScreen(
             onOpenLinkedPartner = { partner ->
                 scope.launch { profileDetailStateHolder.openLinkedPartner(partner) }
             },
-            distanceUnit = distanceUnit
+            distanceUnit = distanceUnit,
         )
     }
 }

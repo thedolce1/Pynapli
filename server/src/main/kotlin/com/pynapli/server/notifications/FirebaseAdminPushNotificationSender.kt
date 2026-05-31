@@ -16,48 +16,51 @@ import java.io.FileInputStream
 import java.nio.charset.StandardCharsets
 
 class FirebaseAdminPushNotificationSender private constructor(
-    private val firebaseApp: FirebaseApp
+    private val firebaseApp: FirebaseApp,
 ) : PushNotificationSender {
     private val logger = LoggerFactory.getLogger(FirebaseAdminPushNotificationSender::class.java)
 
     override suspend fun send(
         target: PushDeliveryTarget,
-        notification: NotificationDeliveryRecord
-    ): PushSendResult = withContext(Dispatchers.IO) {
-        val message = Message.builder()
-            .setToken(target.deviceToken)
-            .setNotification(
-                Notification.builder()
-                    .setTitle(notification.title)
-                    .setBody(notification.body)
+        notification: NotificationDeliveryRecord,
+    ): PushSendResult =
+        withContext(Dispatchers.IO) {
+            val message =
+                Message
+                    .builder()
+                    .setToken(target.deviceToken)
+                    .setNotification(
+                        Notification
+                            .builder()
+                            .setTitle(notification.title)
+                            .setBody(notification.body)
+                            .build(),
+                    ).putAllData(notification.toDataPayload(target))
                     .build()
-            )
-            .putAllData(notification.toDataPayload(target))
-            .build()
 
-        runCatching {
-            FirebaseMessaging.getInstance(firebaseApp).send(message)
-        }.fold(
-            onSuccess = { messageId ->
-                logger.info(
-                    "FCM accepted notification={} kind={} platform={} device={} messageId={}",
-                    notification.notificationId,
-                    notification.kind,
-                    target.platform,
-                    target.deviceId,
-                    messageId
-                )
-                PushSendResult.accepted()
-            },
-            onFailure = { error ->
-                if (error is FirebaseMessagingException) {
-                    error.toPushSendResult()
-                } else {
-                    PushSendResult.retryableFailure(error.message ?: error::class.simpleName.orEmpty())
-                }
-            }
-        )
-    }
+            runCatching {
+                FirebaseMessaging.getInstance(firebaseApp).send(message)
+            }.fold(
+                onSuccess = { messageId ->
+                    logger.info(
+                        "FCM accepted notification={} kind={} platform={} device={} messageId={}",
+                        notification.notificationId,
+                        notification.kind,
+                        target.platform,
+                        target.deviceId,
+                        messageId,
+                    )
+                    PushSendResult.accepted()
+                },
+                onFailure = { error ->
+                    if (error is FirebaseMessagingException) {
+                        error.toPushSendResult()
+                    } else {
+                        PushSendResult.retryableFailure(error.message ?: error::class.simpleName.orEmpty())
+                    }
+                },
+            )
+        }
 
     private fun NotificationDeliveryRecord.toDataPayload(target: PushDeliveryTarget): Map<String, String> =
         buildMap {
@@ -84,29 +87,33 @@ class FirebaseAdminPushNotificationSender private constructor(
     companion object {
         private const val APP_NAME = "pynapli-server"
 
-        private val terminalErrorCodes = setOf(
-            "INVALID_ARGUMENT",
-            "UNREGISTERED",
-            "SENDER_ID_MISMATCH",
-            "THIRD_PARTY_AUTH_ERROR"
-        )
-
-        fun fromConfig(config: ServerConfig): FirebaseAdminPushNotificationSender {
-            val credentials = config.firebaseServiceAccountJson?.let { json ->
-                ByteArrayInputStream(json.toByteArray(StandardCharsets.UTF_8)).use(GoogleCredentials::fromStream)
-            } ?: config.firebaseServiceAccountPath?.let { path ->
-                FileInputStream(path).use(GoogleCredentials::fromStream)
-            } ?: throw IllegalStateException(
-                "Firebase push provider requires PYNAPLI_FIREBASE_SERVICE_ACCOUNT_PATH or PYNAPLI_FIREBASE_SERVICE_ACCOUNT_JSON."
+        private val terminalErrorCodes =
+            setOf(
+                "INVALID_ARGUMENT",
+                "UNREGISTERED",
+                "SENDER_ID_MISMATCH",
+                "THIRD_PARTY_AUTH_ERROR",
             )
 
-            val app = FirebaseApp.getApps().firstOrNull { it.name == APP_NAME }
-                ?: FirebaseApp.initializeApp(
-                    FirebaseOptions.builder()
-                        .setCredentials(credentials)
-                        .build(),
-                    APP_NAME
+        fun fromConfig(config: ServerConfig): FirebaseAdminPushNotificationSender {
+            val credentials =
+                config.firebaseServiceAccountJson?.let { json ->
+                    ByteArrayInputStream(json.toByteArray(StandardCharsets.UTF_8)).use(GoogleCredentials::fromStream)
+                } ?: config.firebaseServiceAccountPath?.let { path ->
+                    FileInputStream(path).use(GoogleCredentials::fromStream)
+                } ?: throw IllegalStateException(
+                    "Firebase push provider requires PYNAPLI_FIREBASE_SERVICE_ACCOUNT_PATH or PYNAPLI_FIREBASE_SERVICE_ACCOUNT_JSON.",
                 )
+
+            val app =
+                FirebaseApp.getApps().firstOrNull { it.name == APP_NAME }
+                    ?: FirebaseApp.initializeApp(
+                        FirebaseOptions
+                            .builder()
+                            .setCredentials(credentials)
+                            .build(),
+                        APP_NAME,
+                    )
             return FirebaseAdminPushNotificationSender(app)
         }
     }

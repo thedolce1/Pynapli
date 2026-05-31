@@ -19,5 +19,5 @@ fun Double.toPublicDistanceLabel(): String =
     formatDistanceForUnit(
         distanceMeters = toPublicDistanceMeters(),
         fallbackLabel = null,
-        distanceUnit = AppSettings.UNIT_METRIC
+        distanceUnit = AppSettings.UNIT_METRIC,
     ).orEmpty()

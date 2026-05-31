@@ -10,7 +10,7 @@ internal fun Connection.insertAdminAuditLog(
     targetType: String,
     targetId: UUID?,
     reason: String,
-    metadataJson: String
+    metadataJson: String,
 ) {
     prepareStatement(
         """
@@ -25,7 +25,7 @@ internal fun Connection.insertAdminAuditLog(
             metadata
         )
         VALUES (?, ?, 'bootstrap_admin', ?, ?, ?, ?, ?::jsonb)
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, UUID.randomUUID())
         statement.setString(2, actorId)

@@ -21,82 +21,88 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 class GridScreenVisualRegressionTest {
-
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun gridScreenKeepsPremiumDarkVisualSignature() = runComposeUiTest {
-        val cards = visualRegressionCards()
-        val gridStateHolder = GridStateHolder(StaticGridVisualRepository(cards))
-        val profileDetailStateHolder = ProfileDetailStateHolder(SamplePublicProfileRepository())
-        val gridState = LazyGridState()
+    fun gridScreenKeepsPremiumDarkVisualSignature() =
+        runComposeUiTest {
+            val cards = visualRegressionCards()
+            val gridStateHolder = GridStateHolder(StaticGridVisualRepository(cards))
+            val profileDetailStateHolder = ProfileDetailStateHolder(SamplePublicProfileRepository())
+            val gridState = LazyGridState()
 
-        setContent {
-            PynapliTheme(themeMode = "dark") {
-                Box(
-                    modifier = Modifier
-                        .size(width = 390.dp, height = 844.dp)
-                        .testTag(GRID_VISUAL_ROOT_TAG)
-                ) {
-                    GridScreen(
-                        stateHolder = gridStateHolder,
-                        profileDetailStateHolder = profileDetailStateHolder,
-                        profileImageUrl = null,
-                        gridState = gridState
-                    )
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(width = 390.dp, height = 844.dp)
+                                .testTag(GRID_VISUAL_ROOT_TAG),
+                    ) {
+                        GridScreen(
+                            stateHolder = gridStateHolder,
+                            profileDetailStateHolder = profileDetailStateHolder,
+                            profileImageUrl = null,
+                            gridState = gridState,
+                        )
+                    }
                 }
             }
+
+            waitUntil(timeoutMillis = 5_000) { gridStateHolder.state.value.cards.size == cards.size }
+            waitForIdle()
+
+            onNodeWithTag(GRID_VISUAL_ROOT_TAG)
+                .captureToImage()
+                .assertGridVisualSignature(label = "initial grid")
+
+            onNodeWithTag(GridFilterTags.OPEN_SHEET).performClick()
+            waitForIdle()
+
+            onNodeWithTag(GRID_VISUAL_ROOT_TAG)
+                .captureToImage()
+                .assertFilterSheetVisualSignature()
         }
-
-        waitUntil(timeoutMillis = 5_000) { gridStateHolder.state.value.cards.size == cards.size }
-        waitForIdle()
-
-        onNodeWithTag(GRID_VISUAL_ROOT_TAG)
-            .captureToImage()
-            .assertGridVisualSignature(label = "initial grid")
-
-        onNodeWithTag(GridFilterTags.OPEN_SHEET).performClick()
-        waitForIdle()
-
-        onNodeWithTag(GRID_VISUAL_ROOT_TAG)
-            .captureToImage()
-            .assertFilterSheetVisualSignature()
-    }
 }
 
 private const val GRID_VISUAL_ROOT_TAG = "grid-visual-root"
 
-private fun visualRegressionCards(): List<GridProfileCardUi> = (0 until 54).map { index ->
-    GridProfileCardUi(
-        id = "visual-card-$index",
-        displayName = when (index % 6) {
-            0 -> "Maya"
-            1 -> "Alex"
-            2 -> "Noa"
-            3 -> "Sage"
-            4 -> "Rae"
-            else -> "Quinn"
-        },
-        online = index % 2 == 0,
-        distanceLabel = "${index + 1} km",
-        tone = GridCardTone.entries[index % GridCardTone.entries.size],
-        linkedPartner = if (index % 5 == 0) {
-            GridLinkedPartnerUi(
-                userId = "partner-$index",
-                displayName = "Partner $index"
-            )
-        } else {
-            null
-        },
-        linkedPartnerTone = LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size],
-        distanceMeters = (index + 1) * 1_000
-    )
-}
+private fun visualRegressionCards(): List<GridProfileCardUi> =
+    (0 until 54).map { index ->
+        GridProfileCardUi(
+            id = "visual-card-$index",
+            displayName =
+                when (index % 6) {
+                    0 -> "Maya"
+                    1 -> "Alex"
+                    2 -> "Noa"
+                    3 -> "Sage"
+                    4 -> "Rae"
+                    else -> "Quinn"
+                },
+            online = index % 2 == 0,
+            distanceLabel = "${index + 1} km",
+            tone = GridCardTone.entries[index % GridCardTone.entries.size],
+            linkedPartner =
+                if (index % 5 == 0) {
+                    GridLinkedPartnerUi(
+                        userId = "partner-$index",
+                        displayName = "Partner $index",
+                    )
+                } else {
+                    null
+                },
+            linkedPartnerTone = LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size],
+            distanceMeters = (index + 1) * 1_000,
+        )
+    }
 
 private class StaticGridVisualRepository(
-    private val cards: List<GridProfileCardUi>
+    private val cards: List<GridProfileCardUi>,
 ) : GridFeedRepository {
-    override suspend fun loadGrid(filters: GridFilters, cursor: String?): GridFeedUi =
-        GridFeedUi(cards = cards, adSupported = false)
+    override suspend fun loadGrid(
+        filters: GridFilters,
+        cursor: String?,
+    ): GridFeedUi = GridFeedUi(cards = cards, adSupported = false)
 }
 
 private fun ImageBitmap.assertGridVisualSignature(label: String) {
@@ -163,12 +169,11 @@ private fun ImageBitmap.visualSignature(sampleStep: Int = 4): VisualSignature {
         brightRatio = bright.toFloat() / sampled,
         onlineGreenPixels = onlineGreen,
         goldPixels = gold,
-        sheetSurfaceRatio = sheetSurface.toFloat() / sampled
+        sheetSurfaceRatio = sheetSurface.toFloat() / sampled,
     )
 }
 
-private fun Color.luminanceApprox(): Float =
-    (0.2126f * red) + (0.7152f * green) + (0.0722f * blue)
+private fun Color.luminanceApprox(): Float = (0.2126f * red) + (0.7152f * green) + (0.0722f * blue)
 
 private data class VisualSignature(
     val sampledPixels: Int,
@@ -177,5 +182,5 @@ private data class VisualSignature(
     val brightRatio: Float,
     val onlineGreenPixels: Int,
     val goldPixels: Int,
-    val sheetSurfaceRatio: Float
+    val sheetSurfaceRatio: Float,
 )

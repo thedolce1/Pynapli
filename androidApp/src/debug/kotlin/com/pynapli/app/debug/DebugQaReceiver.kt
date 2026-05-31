@@ -6,7 +6,10 @@ import android.content.Context
 import android.content.Intent
 
 class DebugQaReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
         if (!DebugQaFlags.isDebuggable(context)) {
             setResultCode(Activity.RESULT_CANCELED)
             setResultData("debug QA receiver is unavailable for non-debuggable builds")
@@ -19,10 +22,12 @@ class DebugQaReceiver : BroadcastReceiver() {
             return
         }
 
-        val failures = intent
-            .getIntExtra(DebugQaFlags.EXTRA_FAIL_NEXT_SWIPE_ACTIONS, 0)
-            .coerceIn(0, MAX_DEBUG_FAILURES)
-        context.getSharedPreferences(DebugQaFlags.PREFS_NAME, Context.MODE_PRIVATE)
+        val failures =
+            intent
+                .getIntExtra(DebugQaFlags.EXTRA_FAIL_NEXT_SWIPE_ACTIONS, 0)
+                .coerceIn(0, MAX_DEBUG_FAILURES)
+        context
+            .getSharedPreferences(DebugQaFlags.PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putInt(DebugQaFlags.KEY_FAIL_NEXT_SWIPE_ACTIONS, failures)
             .commit()

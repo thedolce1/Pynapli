@@ -26,80 +26,86 @@ import kotlin.test.assertTrue
 class ConversationScreenInteractionTest {
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun conversationScreenUsesPremiumFullScreenSurface() = runComposeUiTest {
-        var backCount = 0
-        var sendCount = 0
-        val state = ConversationUiState(
-            viewerUserId = "viewer",
-            detail = ConversationDetailDto(
-                conversation = ConversationDto(
-                    conversationId = "conversation-1",
-                    kind = "direct",
-                    origin = "grid",
-                    participants = listOf(
-                        ConversationParticipantDto("viewer", "You", online = true),
-                        ConversationParticipantDto("mira", "Mira", online = true)
-                    ),
-                    unreadCount = 0,
-                    updatedAt = "2026-04-24T18:10:00Z"
-                ),
-                messages = listOf(
-                    MessageDto(
-                        messageId = "message-1",
-                        conversationId = "conversation-1",
-                        senderUserId = "mira",
-                        body = "Saw your King West tile.",
-                        createdAt = "2026-04-24T18:02:00Z",
-                        status = "visible",
-                        deliveryStatus = "read"
-                    ),
-                    MessageDto(
-                        messageId = "message-2",
-                        conversationId = "conversation-1",
-                        senderUserId = "viewer",
-                        body = "Returning the smile. Drinks this week?",
-                        createdAt = "2026-04-24T18:08:00Z",
-                        status = "visible",
-                        deliveryStatus = "read"
-                    )
+    fun conversationScreenUsesPremiumFullScreenSurface() =
+        runComposeUiTest {
+            var backCount = 0
+            var sendCount = 0
+            val state =
+                ConversationUiState(
+                    viewerUserId = "viewer",
+                    detail =
+                        ConversationDetailDto(
+                            conversation =
+                                ConversationDto(
+                                    conversationId = "conversation-1",
+                                    kind = "direct",
+                                    origin = "grid",
+                                    participants =
+                                        listOf(
+                                            ConversationParticipantDto("viewer", "You", online = true),
+                                            ConversationParticipantDto("mira", "Mira", online = true),
+                                        ),
+                                    unreadCount = 0,
+                                    updatedAt = "2026-04-24T18:10:00Z",
+                                ),
+                            messages =
+                                listOf(
+                                    MessageDto(
+                                        messageId = "message-1",
+                                        conversationId = "conversation-1",
+                                        senderUserId = "mira",
+                                        body = "Saw your King West tile.",
+                                        createdAt = "2026-04-24T18:02:00Z",
+                                        status = "visible",
+                                        deliveryStatus = "read",
+                                    ),
+                                    MessageDto(
+                                        messageId = "message-2",
+                                        conversationId = "conversation-1",
+                                        senderUserId = "viewer",
+                                        body = "Returning the smile. Drinks this week?",
+                                        createdAt = "2026-04-24T18:08:00Z",
+                                        status = "visible",
+                                        deliveryStatus = "read",
+                                    ),
+                                ),
+                        ),
+                    draft = "Thursday works.",
                 )
-            ),
-            draft = "Thursday works."
-        )
 
-        setContent {
-            PynapliTheme(themeMode = "dark") {
-                Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
-                    ConversationScreen(
-                        state = state,
-                        onBack = { backCount += 1 },
-                        onDraftChanged = {},
-                        onSend = { sendCount += 1 },
-                        onLoadOlder = {},
-                        onDeleteMessage = {}
-                    )
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        ConversationScreen(
+                            state = state,
+                            onBack = { backCount += 1 },
+                            onDraftChanged = {},
+                            onSend = { sendCount += 1 },
+                            onLoadOlder = {},
+                            onDeleteMessage = {},
+                        )
+                    }
                 }
             }
+
+            onNodeWithTag(ConversationTestTags.fullScreen).assertExists()
+            onNodeWithTag(ConversationTestTags.fullScreenHeader).assertExists()
+            onNodeWithText("Mira").assertExists()
+            onNodeWithText("Online").assertExists()
+            onNodeWithText("FROM GRID").assertExists()
+            onNodeWithText("APR 24").assertExists()
+            onNodeWithText("Saw your King West tile.").assertExists()
+            onNodeWithText("Returning the smile. Drinks this week?").assertExists()
+            onNodeWithTag(ConversationTestTags.fullScreen)
+                .captureToImage()
+                .assertConversationVisualSignature()
+
+            onNodeWithContentDescription("Back").performClick()
+            assertEquals(1, backCount)
+
+            onNodeWithContentDescription("Send message").performClick()
+            assertEquals(1, sendCount)
         }
-
-        onNodeWithTag(ConversationTestTags.fullScreen).assertExists()
-        onNodeWithTag(ConversationTestTags.fullScreenHeader).assertExists()
-        onNodeWithText("Mira").assertExists()
-        onNodeWithText("Online").assertExists()
-        onNodeWithText("FROM GRID").assertExists()
-        onNodeWithText("APR 24").assertExists()
-        onNodeWithText("Saw your King West tile.").assertExists()
-        onNodeWithText("Returning the smile. Drinks this week?").assertExists()
-        onNodeWithTag(ConversationTestTags.fullScreen)
-            .captureToImage()
-            .assertConversationVisualSignature()
-
-        onNodeWithContentDescription("Back").performClick()
-        assertEquals(1, backCount)
-
-        onNodeWithContentDescription("Send message").performClick()
-        assertEquals(1, sendCount)
-    }
 }
 
 private fun ImageBitmap.assertConversationVisualSignature() {
@@ -145,20 +151,18 @@ private fun ImageBitmap.conversationVisualSignature(sampleStep: Int = 4): Conver
         surfaceRatio = surface.toFloat() / sampled,
         goldPixels = gold,
         greenPixels = green,
-        brightRatio = bright.toFloat() / sampled
+        brightRatio = bright.toFloat() / sampled,
     )
 }
 
-private fun Color.luminanceApprox(): Float =
-    (0.2126f * red) + (0.7152f * green) + (0.0722f * blue)
+private fun Color.luminanceApprox(): Float = (0.2126f * red) + (0.7152f * green) + (0.0722f * blue)
 
-private fun Color.channelSpread(): Float =
-    maxOf(red, green, blue) - minOf(red, green, blue)
+private fun Color.channelSpread(): Float = maxOf(red, green, blue) - minOf(red, green, blue)
 
 private data class ConversationVisualSignature(
     val darkRatio: Float,
     val surfaceRatio: Float,
     val goldPixels: Int,
     val greenPixels: Int,
-    val brightRatio: Float
+    val brightRatio: Float,
 )

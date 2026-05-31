@@ -1,10 +1,10 @@
 package com.pynapli.server
 
-import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.account.configureAccountLifecycleRoutes
-import com.pynapli.server.activity.configureActivityStreamRoutes
 import com.pynapli.server.activity.configureActivityRoutes
+import com.pynapli.server.activity.configureActivityStreamRoutes
 import com.pynapli.server.auth.configureAuthRoutes
+import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.dependencies.ServerDependencies
 import com.pynapli.server.dependencies.closeDependenciesOnStop
 import com.pynapli.server.grid.configureGridRoutes
@@ -14,9 +14,9 @@ import com.pynapli.server.location.configureTravelLocationRoutes
 import com.pynapli.server.media.configureMediaRoutes
 import com.pynapli.server.messaging.configureMessageStreamRoutes
 import com.pynapli.server.messaging.configureMessagingRoutes
+import com.pynapli.server.moderation.configureAdminModerationRoutes
 import com.pynapli.server.moderation.configureAdminReportRoutes
 import com.pynapli.server.moderation.configureAdminRiskRoutes
-import com.pynapli.server.moderation.configureAdminModerationRoutes
 import com.pynapli.server.notifications.configureNotificationRoutes
 import com.pynapli.server.plugins.configureHTTP
 import com.pynapli.server.plugins.configureMonitoring
@@ -49,8 +49,8 @@ fun main() {
         factory = Netty,
         port = config.port,
         module = {
-        module(dependencies)
-        }
+            module(dependencies)
+        },
     ).start(wait = true)
 }
 
@@ -82,7 +82,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configurePresenceStreamRoutes(
         authService = dependencies.authService,
         broadcaster = dependencies.presenceBroadcaster,
-        blockRepository = dependencies.blockRepository
+        blockRepository = dependencies.blockRepository,
     )
     configureGridRoutes(dependencies.authService, dependencies.gridService, dependencies.requestProfilerFactory)
     configureSavedGridFilterRoutes(dependencies.authService, dependencies.savedGridFilterService)
@@ -96,23 +96,23 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureMediaRoutes(
         authService = dependencies.authService,
         mediaService = dependencies.mediaService,
-        localUploadStorage = dependencies.localMediaUploadStorage
+        localUploadStorage = dependencies.localMediaUploadStorage,
     )
     configureSafetyRoutes(
         authService = dependencies.authService,
         blockService = dependencies.blockService,
         hiddenProfileService = dependencies.hiddenProfileService,
-        reportService = dependencies.reportService
+        reportService = dependencies.reportService,
     )
     configureSwipeRoutes(
         authService = dependencies.authService,
         swipeService = dependencies.swipeService,
-        requestProfilerFactory = dependencies.requestProfilerFactory
+        requestProfilerFactory = dependencies.requestProfilerFactory,
     )
     configureSavedSwipeFilterRoutes(dependencies.authService, dependencies.savedSwipeFilterService)
     configureTopPicksRoutes(
         authService = dependencies.authService,
         topPicksService = dependencies.topPicksService,
-        requestProfilerFactory = dependencies.requestProfilerFactory
+        requestProfilerFactory = dependencies.requestProfilerFactory,
     )
 }

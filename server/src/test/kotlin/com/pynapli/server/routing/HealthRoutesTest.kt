@@ -13,35 +13,38 @@ import kotlin.test.assertTrue
 
 class HealthRoutesTest {
     @Test
-    fun healthReturnsOk() = testApplication {
-        application {
-            module(ServerDependencies.test(testConfig()))
+    fun healthReturnsOk() =
+        testApplication {
+            application {
+                module(ServerDependencies.test(testConfig()))
+            }
+
+            val response = client.get("/health")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.body<String>().contains("pynapli-api"))
         }
-
-        val response = client.get("/health")
-
-        assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.body<String>().contains("pynapli-api"))
-    }
 
     @Test
-    fun deepHealthReturnsOkWhenNoDependencyProbesAreConfigured() = testApplication {
-        application {
-            module(ServerDependencies.test(testConfig()))
+    fun deepHealthReturnsOkWhenNoDependencyProbesAreConfigured() =
+        testApplication {
+            application {
+                module(ServerDependencies.test(testConfig()))
+            }
+
+            val response = client.get("/health/deep")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.body<String>().contains("\"dependencies\":[]"))
         }
 
-        val response = client.get("/health/deep")
-
-        assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.body<String>().contains("\"dependencies\":[]"))
-    }
-
-    private fun testConfig(): ServerConfig = ServerConfig(
-        environment = "test",
-        port = 8080,
-        databaseUrl = "jdbc:postgresql://localhost:5432/pynapli_test",
-        databaseUser = "pynapli",
-        databasePassword = "pynapli_dev_password",
-        redisUrl = "redis://localhost:6379"
-    )
+    private fun testConfig(): ServerConfig =
+        ServerConfig(
+            environment = "test",
+            port = 8080,
+            databaseUrl = "jdbc:postgresql://localhost:5432/pynapli_test",
+            databaseUser = "pynapli",
+            databasePassword = "pynapli_dev_password",
+            redisUrl = "redis://localhost:6379",
+        )
 }

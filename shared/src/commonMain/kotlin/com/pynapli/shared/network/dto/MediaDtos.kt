@@ -12,7 +12,7 @@ data class CreateMediaUploadRequestDto(
     val contentType: String,
     val byteSize: Long,
     val pixelWidth: Int? = null,
-    val pixelHeight: Int? = null
+    val pixelHeight: Int? = null,
 )
 
 @Serializable
@@ -25,13 +25,13 @@ data class MediaUploadSlotDto(
     val storageProvider: String,
     val storageBucket: String,
     val storageObjectKey: String,
-    val expiresAt: String
+    val expiresAt: String,
 )
 
 @Serializable
 data class CompleteMediaUploadRequestDto(
     val albumId: String,
-    val sortOrder: Int = 0
+    val sortOrder: Int = 0,
 )
 
 @Serializable
@@ -39,13 +39,13 @@ data class MediaAlbumItemDto(
     val albumId: String,
     val mediaAsset: MediaAssetDto,
     val sortOrder: Int,
-    val addedAt: String
+    val addedAt: String,
 )
 
 @Serializable
 data class MediaAlbumItemsResponseDto(
     val album: MediaAlbumDto,
-    val items: List<MediaAlbumItemDto>
+    val items: List<MediaAlbumItemDto>,
 )
 
 @Serializable
@@ -56,7 +56,7 @@ data class MediaAlbumDto(
     val title: String,
     val visibilityStatus: String,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 @Serializable
@@ -65,12 +65,12 @@ data class MediaAlbumGrantDto(
     val granteeUserId: String,
     val granteeDisplayName: String? = null,
     val grantedAt: String,
-    val revokedAt: String? = null
+    val revokedAt: String? = null,
 )
 
 @Serializable
 data class MediaAlbumGrantsResponseDto(
-    val grants: List<MediaAlbumGrantDto>
+    val grants: List<MediaAlbumGrantDto>,
 )
 
 @Serializable
@@ -85,5 +85,5 @@ data class MediaAssetDto(
     val moderationStatus: String,
     val processingStatus: String,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )

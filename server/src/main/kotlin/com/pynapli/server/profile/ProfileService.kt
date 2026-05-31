@@ -34,32 +34,39 @@ class ProfileService(
     private val blockRepository: BlockRepository? = null,
     private val riskPolicyService: RiskPolicyService? = null,
     private val profileViewRecordScope: CoroutineScope? = null,
-    profileViewRecordConcurrency: Int = 4
+    profileViewRecordConcurrency: Int = 4,
 ) {
-    private val profileViewRecordSemaphore = profileViewRecordScope
-        ?.let { Semaphore(profileViewRecordConcurrency.coerceAtLeast(1)) }
+    private val profileViewRecordSemaphore =
+        profileViewRecordScope
+            ?.let { Semaphore(profileViewRecordConcurrency.coerceAtLeast(1)) }
 
-    suspend fun getMe(userId: UUID): MeDto =
-        repository.getMe(userId)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
+    suspend fun getMe(userId: UUID): MeDto = repository.getMe(userId)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
 
-    suspend fun getPublicProfile(viewerUserId: UUID, targetUserId: UUID): PublicProfileDto {
+    suspend fun getPublicProfile(
+        viewerUserId: UUID,
+        targetUserId: UUID,
+    ): PublicProfileDto {
         if (profile("profile.blockCheck") { blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) } == true) {
             throw ProfileException("PROFILE_NOT_FOUND")
         }
         if (profile("profile.riskCheck") { riskPolicyService?.shouldHideFromDiscovery(targetUserId) } == true) {
             throw ProfileException("PROFILE_NOT_FOUND")
         }
-        val profile = profile("profile.repository") {
-            repository.getPublicProfile(viewerUserId, targetUserId)?.toDto()
-        }
-            ?: throw ProfileException("PROFILE_NOT_FOUND")
+        val profile =
+            profile("profile.repository") {
+                repository.getPublicProfile(viewerUserId, targetUserId)?.toDto()
+            }
+                ?: throw ProfileException("PROFILE_NOT_FOUND")
         profile("profile.activityRecord") {
             recordProfileViewActivity(viewerUserId, targetUserId)
         }
         return profile
     }
 
-    private suspend fun recordProfileViewActivity(viewerUserId: UUID, targetUserId: UUID) {
+    private suspend fun recordProfileViewActivity(
+        viewerUserId: UUID,
+        targetUserId: UUID,
+    ) {
         val service = activityService ?: return
         val scope = profileViewRecordScope
         if (scope == null) {
@@ -82,7 +89,7 @@ class ProfileService(
     private suspend fun recordProfileViewActivityInline(
         service: ActivityService,
         viewerUserId: UUID,
-        targetUserId: UUID
+        targetUserId: UUID,
     ) {
         try {
             service.recordProfileView(viewerUserId, targetUserId)
@@ -93,17 +100,23 @@ class ProfileService(
                 "Failed to record profile-view activity for viewer {} target {}",
                 viewerUserId,
                 targetUserId,
-                error
+                error,
             )
         }
     }
 
-    suspend fun updateProfile(userId: UUID, request: UpdateProfileRequestDto): MeDto {
+    suspend fun updateProfile(
+        userId: UUID,
+        request: UpdateProfileRequestDto,
+    ): MeDto {
         val update = request.toProfileUpdate()
         return repository.updateProfile(userId, update)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
     }
 
-    suspend fun updateDiscoverySettings(userId: UUID, request: UpdateDiscoverySettingsRequestDto): MeDto {
+    suspend fun updateDiscoverySettings(
+        userId: UUID,
+        request: UpdateDiscoverySettingsRequestDto,
+    ): MeDto {
         val update = request.toDiscoverySettingsUpdate()
         return repository.updateDiscoverySettings(userId, update)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
     }
@@ -124,7 +137,7 @@ class ProfileService(
             allowFlirts = allowFlirts,
             allowIntroNotes = allowIntroNotes,
             allowAlbumRequests = allowAlbumRequests,
-            visibleWhileTraveling = visibleWhileTraveling
+            visibleWhileTraveling = visibleWhileTraveling,
         )
     }
 
@@ -134,15 +147,17 @@ class ProfileService(
             throw ProfileException("INVALID_DISPLAY_NAME")
         }
 
-        val parsedBirthdate = birthdate?.let {
-            runCatching { LocalDate.parse(it) }.getOrElse { throw ProfileException("INVALID_BIRTHDATE") }
-        }
-        val displayAge = parsedBirthdate?.let { birthdate ->
-            val age = Period.between(birthdate, LocalDate.now(clock)).years
-            if (age < 18) throw ProfileException("AGE_RESTRICTED")
-            if (age > 120) throw ProfileException("INVALID_BIRTHDATE")
-            age
-        }
+        val parsedBirthdate =
+            birthdate?.let {
+                runCatching { LocalDate.parse(it) }.getOrElse { throw ProfileException("INVALID_BIRTHDATE") }
+            }
+        val displayAge =
+            parsedBirthdate?.let { birthdate ->
+                val age = Period.between(birthdate, LocalDate.now(clock)).years
+                if (age < 18) throw ProfileException("AGE_RESTRICTED")
+                if (age > 120) throw ProfileException("INVALID_BIRTHDATE")
+                age
+            }
 
         val normalizedDiscoveryStyle = discoveryStyle?.trim()?.lowercase()
         if (normalizedDiscoveryStyle != null && normalizedDiscoveryStyle !in DISCOVERY_STYLES) {
@@ -157,80 +172,87 @@ class ProfileService(
             relationshipContext = relationshipContext.cleanOptional(40),
             discoveryStyle = normalizedDiscoveryStyle,
             displayAge = displayAge,
-            profileCompletenessScore = completeness(
-                displayName = trimmedName,
-                birthdate = parsedBirthdate,
-                gender = gender,
-                orientation = orientation,
-                relationshipContext = relationshipContext,
-                discoveryStyle = normalizedDiscoveryStyle
-            )
+            profileCompletenessScore =
+                completeness(
+                    displayName = trimmedName,
+                    birthdate = parsedBirthdate,
+                    gender = gender,
+                    orientation = orientation,
+                    relationshipContext = relationshipContext,
+                    discoveryStyle = normalizedDiscoveryStyle,
+                ),
         )
     }
 
-    private fun MeRecord.toDto(): MeDto = MeDto(
-        user = AuthUserDto(userId = userId.toString(), status = userStatus),
-        profile = profile.toDto(),
-        discoverySettings = discoverySettings.toDto()
-    )
+    private fun MeRecord.toDto(): MeDto =
+        MeDto(
+            user = AuthUserDto(userId = userId.toString(), status = userStatus),
+            profile = profile.toDto(),
+            discoverySettings = discoverySettings.toDto(),
+        )
 
-    private fun ProfileRecord.toDto(): ProfileDto = ProfileDto(
-        userId = userId.toString(),
-        displayName = displayName,
-        birthdate = birthdate?.toString(),
-        displayAge = displayAge,
-        gender = gender,
-        orientation = orientation,
-        relationshipContext = relationshipContext,
-        discoveryStyle = discoveryStyle,
-        profileCompletenessScore = profileCompletenessScore,
-        moderationStatus = moderationStatus,
-        visibilityStatus = visibilityStatus,
-        ageVerified = ageVerified
-    )
+    private fun ProfileRecord.toDto(): ProfileDto =
+        ProfileDto(
+            userId = userId.toString(),
+            displayName = displayName,
+            birthdate = birthdate?.toString(),
+            displayAge = displayAge,
+            gender = gender,
+            orientation = orientation,
+            relationshipContext = relationshipContext,
+            discoveryStyle = discoveryStyle,
+            profileCompletenessScore = profileCompletenessScore,
+            moderationStatus = moderationStatus,
+            visibilityStatus = visibilityStatus,
+            ageVerified = ageVerified,
+        )
 
-    private fun PublicProfileRecord.toDto(): PublicProfileDto = PublicProfileDto(
-        userId = userId.toString(),
-        displayName = displayName,
-        displayAge = displayAge,
-        gender = gender,
-        orientation = orientation,
-        relationshipContext = relationshipContext,
-        discoveryStyle = discoveryStyle,
-        distanceLabel = distanceMeters?.toPublicDistanceLabel(),
-        distanceMeters = distanceMeters?.toPublicDistanceMeters(),
-        profilePhotoUrl = profilePhotoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-        privateAlbumAccessStatus = privateAlbumAccessStatus,
-        linkedPartner = linkedPartnerUserId?.let { partnerUserId ->
-            LinkedPartnerMiniDto(
-                userId = partnerUserId.toString(),
-                displayName = linkedPartnerDisplayName,
-                thumbnailUrl = linkedPartnerThumbnailMediaAssetId
-                    ?.let { mediaAssetUrlResolver?.publicContentUrl(it) }
-            )
-        },
-        allowGridMessages = allowGridMessages,
-        allowFlirts = allowFlirts,
-        allowAlbumRequests = allowAlbumRequests
-    )
+    private fun PublicProfileRecord.toDto(): PublicProfileDto =
+        PublicProfileDto(
+            userId = userId.toString(),
+            displayName = displayName,
+            displayAge = displayAge,
+            gender = gender,
+            orientation = orientation,
+            relationshipContext = relationshipContext,
+            discoveryStyle = discoveryStyle,
+            distanceLabel = distanceMeters?.toPublicDistanceLabel(),
+            distanceMeters = distanceMeters?.toPublicDistanceMeters(),
+            profilePhotoUrl = profilePhotoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+            privateAlbumAccessStatus = privateAlbumAccessStatus,
+            linkedPartner =
+                linkedPartnerUserId?.let { partnerUserId ->
+                    LinkedPartnerMiniDto(
+                        userId = partnerUserId.toString(),
+                        displayName = linkedPartnerDisplayName,
+                        thumbnailUrl =
+                            linkedPartnerThumbnailMediaAssetId
+                                ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                    )
+                },
+            allowGridMessages = allowGridMessages,
+            allowFlirts = allowFlirts,
+            allowAlbumRequests = allowAlbumRequests,
+        )
 
-    private fun DiscoverySettingsRecord.toDto(): DiscoverySettingsDto = DiscoverySettingsDto(
-        gridVisible = gridVisible,
-        swipeVisible = swipeVisible,
-        eventsVisible = eventsVisible,
-        showDistance = showDistance,
-        showInViewedLists = showInViewedLists,
-        incognito = incognito,
-        allowGridMessages = allowGridMessages,
-        gridMessagePolicy = gridMessagePolicy,
-        allowFlirts = allowFlirts,
-        allowIntroNotes = allowIntroNotes,
-        allowAlbumRequests = allowAlbumRequests,
-        soloEnabled = soloEnabled,
-        togetherEnabled = togetherEnabled,
-        socialEnabled = socialEnabled,
-        visibleWhileTraveling = visibleWhileTraveling
-    )
+    private fun DiscoverySettingsRecord.toDto(): DiscoverySettingsDto =
+        DiscoverySettingsDto(
+            gridVisible = gridVisible,
+            swipeVisible = swipeVisible,
+            eventsVisible = eventsVisible,
+            showDistance = showDistance,
+            showInViewedLists = showInViewedLists,
+            incognito = incognito,
+            allowGridMessages = allowGridMessages,
+            gridMessagePolicy = gridMessagePolicy,
+            allowFlirts = allowFlirts,
+            allowIntroNotes = allowIntroNotes,
+            allowAlbumRequests = allowAlbumRequests,
+            soloEnabled = soloEnabled,
+            togetherEnabled = togetherEnabled,
+            socialEnabled = socialEnabled,
+            visibleWhileTraveling = visibleWhileTraveling,
+        )
 
     private fun String?.cleanOptional(maxLength: Int): String? {
         val value = this?.trim()?.takeIf { it.isNotEmpty() } ?: return null
@@ -244,7 +266,7 @@ class ProfileService(
         gender: String?,
         orientation: String?,
         relationshipContext: String?,
-        discoveryStyle: String?
+        discoveryStyle: String?,
     ): Int {
         var score = 0
         if (displayName != null) score += 20
@@ -263,4 +285,6 @@ class ProfileService(
     }
 }
 
-class ProfileException(val code: String) : RuntimeException(code)
+class ProfileException(
+    val code: String,
+) : RuntimeException(code)

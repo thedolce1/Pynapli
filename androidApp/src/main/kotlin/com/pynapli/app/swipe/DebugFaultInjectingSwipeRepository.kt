@@ -9,29 +9,29 @@ import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 
 class DebugFaultInjectingSwipeRepository(
     context: Context,
-    private val delegate: SwipeRepository
+    private val delegate: SwipeRepository,
 ) : SwipeRepository {
     private val appContext = context.applicationContext
     private val preferences by lazy {
         appContext.getSharedPreferences(DebugQaFlags.PREFS_NAME, Context.MODE_PRIVATE)
     }
 
-    override suspend fun loadDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckUi> =
-        delegate.loadDeck(request)
+    override suspend fun loadDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckUi> = delegate.loadDeck(request)
 
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
         if (DebugQaFlags.isDebuggable(appContext)) {
             val remainingFailures = preferences.getInt(DebugQaFlags.KEY_FAIL_NEXT_SWIPE_ACTIONS, 0)
             if (remainingFailures > 0) {
-                preferences.edit()
+                preferences
+                    .edit()
                     .putInt(DebugQaFlags.KEY_FAIL_NEXT_SWIPE_ACTIONS, remainingFailures - 1)
                     .commit()
                 return AppResult.Failure(
                     AppError(
                         code = "NETWORK_ERROR",
                         message = "Debug offline simulation.",
-                        recoverable = true
-                    )
+                        recoverable = true,
+                    ),
                 )
             }
         }
@@ -39,6 +39,5 @@ class DebugFaultInjectingSwipeRepository(
         return delegate.submitAction(action)
     }
 
-    override suspend fun rewind(): AppResult<SwipeRewindUi?> =
-        delegate.rewind()
+    override suspend fun rewind(): AppResult<SwipeRewindUi?> = delegate.rewind()
 }

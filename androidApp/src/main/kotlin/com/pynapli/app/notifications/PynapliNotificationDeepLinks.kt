@@ -13,15 +13,19 @@ object PynapliNotificationDeepLinks {
     const val EXTRA_ACTIVITY_EVENT_ID = "pynapli.deep_link.activity_event_id"
     const val EXTRA_CONVERSATION_ID = "pynapli.deep_link.conversation_id"
 
-    fun intentForNotification(context: Context, data: Map<String, String>): Intent {
+    fun intentForNotification(
+        context: Context,
+        data: Map<String, String>,
+    ): Intent {
         val payload = data["payload"].orEmpty().toJsonMap()
         val kind = data["kind"] ?: payload["kind"]
         val target = data["target"] ?: payload["target"] ?: targetForKind(kind)
         val activityTab = data["activityTab"] ?: payload["activityTab"] ?: activityTabForKind(kind)
         val activityEventId = data["activityEventId"] ?: payload["activityEventId"]
-        val conversationId = data["conversationId"]
-            ?: payload["conversationId"]
-            ?: if (kind == "message") data["subjectId"] else null
+        val conversationId =
+            data["conversationId"]
+                ?: payload["conversationId"]
+                ?: if (kind == "message") data["subjectId"] else null
 
         return Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -32,8 +36,7 @@ object PynapliNotificationDeepLinks {
         }
     }
 
-    fun targetFromIntent(intent: Intent): String? =
-        intent.getStringExtra(EXTRA_TARGET)
+    fun targetFromIntent(intent: Intent): String? = intent.getStringExtra(EXTRA_TARGET)
 
     fun activityTabFromIntent(intent: Intent): ActivityTabUi? =
         when (intent.getStringExtra(EXTRA_ACTIVITY_TAB)) {
@@ -47,11 +50,9 @@ object PynapliNotificationDeepLinks {
             else -> null
         }
 
-    fun activityEventIdFromIntent(intent: Intent): String? =
-        intent.getStringExtra(EXTRA_ACTIVITY_EVENT_ID)
+    fun activityEventIdFromIntent(intent: Intent): String? = intent.getStringExtra(EXTRA_ACTIVITY_EVENT_ID)
 
-    fun conversationIdFromIntent(intent: Intent): String? =
-        intent.getStringExtra(EXTRA_CONVERSATION_ID)
+    fun conversationIdFromIntent(intent: Intent): String? = intent.getStringExtra(EXTRA_CONVERSATION_ID)
 
     fun targetForKind(kind: String?): String =
         when (kind) {
@@ -60,7 +61,8 @@ object PynapliNotificationDeepLinks {
             "flirt",
             "profile_view",
             "album_request",
-            "partner_chat_invite" -> AppDeepLinkStateHolder.TARGET_ACTIVITY
+            "partner_chat_invite",
+            -> AppDeepLinkStateHolder.TARGET_ACTIVITY
             else -> AppDeepLinkStateHolder.TARGET_ACTIVITY
         }
 

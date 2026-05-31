@@ -22,7 +22,7 @@ import io.ktor.server.routing.routing
  */
 fun Application.configureTravelLocationRoutes(
     authService: AuthService?,
-    travelLocationService: TravelLocationService?
+    travelLocationService: TravelLocationService?,
 ) {
     if (authService == null || travelLocationService == null) return
 

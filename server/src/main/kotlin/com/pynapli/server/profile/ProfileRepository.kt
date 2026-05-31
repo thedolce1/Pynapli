@@ -6,18 +6,27 @@ import java.util.UUID
 interface ProfileRepository {
     suspend fun getMe(userId: UUID): MeRecord?
 
-    suspend fun getPublicProfile(viewerUserId: UUID, targetUserId: UUID): PublicProfileRecord?
+    suspend fun getPublicProfile(
+        viewerUserId: UUID,
+        targetUserId: UUID,
+    ): PublicProfileRecord?
 
-    suspend fun updateProfile(userId: UUID, update: ProfileUpdate): MeRecord?
+    suspend fun updateProfile(
+        userId: UUID,
+        update: ProfileUpdate,
+    ): MeRecord?
 
-    suspend fun updateDiscoverySettings(userId: UUID, update: DiscoverySettingsUpdate): MeRecord?
+    suspend fun updateDiscoverySettings(
+        userId: UUID,
+        update: DiscoverySettingsUpdate,
+    ): MeRecord?
 }
 
 data class MeRecord(
     val userId: UUID,
     val userStatus: String,
     val profile: ProfileRecord,
-    val discoverySettings: DiscoverySettingsRecord
+    val discoverySettings: DiscoverySettingsRecord,
 )
 
 data class ProfileRecord(
@@ -32,7 +41,7 @@ data class ProfileRecord(
     val profileCompletenessScore: Int,
     val moderationStatus: String,
     val visibilityStatus: String,
-    val ageVerified: Boolean = false
+    val ageVerified: Boolean = false,
 )
 
 data class DiscoverySettingsRecord(
@@ -50,7 +59,7 @@ data class DiscoverySettingsRecord(
     val soloEnabled: Boolean,
     val togetherEnabled: Boolean,
     val socialEnabled: Boolean,
-    val visibleWhileTraveling: Boolean
+    val visibleWhileTraveling: Boolean,
 )
 
 data class PublicProfileRecord(
@@ -69,7 +78,7 @@ data class PublicProfileRecord(
     val privateAlbumAccessStatus: String,
     val allowGridMessages: Boolean,
     val allowFlirts: Boolean,
-    val allowAlbumRequests: Boolean
+    val allowAlbumRequests: Boolean,
 )
 
 data class ProfileUpdate(
@@ -80,7 +89,7 @@ data class ProfileUpdate(
     val relationshipContext: String?,
     val discoveryStyle: String?,
     val displayAge: Int?,
-    val profileCompletenessScore: Int
+    val profileCompletenessScore: Int,
 )
 
 data class DiscoverySettingsUpdate(
@@ -93,5 +102,5 @@ data class DiscoverySettingsUpdate(
     val allowFlirts: Boolean?,
     val allowIntroNotes: Boolean?,
     val allowAlbumRequests: Boolean?,
-    val visibleWhileTraveling: Boolean?
+    val visibleWhileTraveling: Boolean?,
 )

@@ -31,27 +31,29 @@ internal fun ProfileHubTopBar(
     onBack: () -> Unit,
     actionCount: Int = 0,
     onNotificationsClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(top = 8.dp, bottom = 4.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(top = 8.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         IconButton(
             onClick = onBack,
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+            modifier =
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.onSurface
+                tint = MaterialTheme.colorScheme.onSurface,
             )
         }
         Text(
@@ -61,15 +63,16 @@ internal fun ProfileHubTopBar(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         if (onNotificationsClick != null) {
             IconButton(
                 onClick = onNotificationsClick,
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                modifier =
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
                 if (actionCount > 0) {
                     BadgedBox(
@@ -77,19 +80,19 @@ internal fun ProfileHubTopBar(
                             Badge {
                                 Text(text = if (actionCount > 9) "9+" else actionCount.toString())
                             }
-                        }
+                        },
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Notifications,
                             contentDescription = "Notifications",
-                            tint = MaterialTheme.colorScheme.onSurface
+                            tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 } else {
                     Icon(
                         imageVector = Icons.Filled.Notifications,
                         contentDescription = "Notifications",
-                        tint = MaterialTheme.colorScheme.onSurface
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }

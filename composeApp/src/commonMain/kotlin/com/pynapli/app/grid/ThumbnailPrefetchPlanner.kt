@@ -5,7 +5,7 @@ internal const val GRID_THUMBNAIL_PREFETCH_WINDOW = 12
 internal fun planThumbnailPrefetch(
     cards: List<GridProfileCardUi>,
     lastVisibleIndex: Int,
-    windowSize: Int = GRID_THUMBNAIL_PREFETCH_WINDOW
+    windowSize: Int = GRID_THUMBNAIL_PREFETCH_WINDOW,
 ): List<String> {
     if (cards.isEmpty() || windowSize <= 0) return emptyList()
     val from = (lastVisibleIndex + 1).coerceAtLeast(0)

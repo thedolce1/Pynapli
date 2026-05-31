@@ -10,49 +10,59 @@ interface NotificationRepository {
 
     suspend fun updatePreferences(
         userId: UUID,
-        update: NotificationPreferencesUpdate
+        update: NotificationPreferencesUpdate,
     ): NotificationPreferencesRecord?
 
     suspend fun upsertPushDevice(
         userId: UUID,
         registration: PushDeviceRegistration,
-        deviceIdFactory: () -> UUID
+        deviceIdFactory: () -> UUID,
     ): PushDeviceRecord
 
     suspend fun unregisterPushDevice(
         userId: UUID,
         platform: String,
-        deviceToken: String
+        deviceToken: String,
     ): Boolean
 
     suspend fun insertOutboxNotification(
         notification: NotificationOutboxInsert,
-        notificationIdFactory: () -> UUID
+        notificationIdFactory: () -> UUID,
     ): NotificationOutboxRecord?
 
     suspend fun hasRecentNotification(
         recipientUserId: UUID,
         kind: String,
         throttleKey: String,
-        since: Instant
+        since: Instant,
     ): Boolean
 
     suspend fun claimPendingNotifications(limit: Int): List<NotificationDeliveryRecord>
 
     suspend fun requeueStaleProcessingNotifications(
         staleBefore: Instant,
-        limit: Int
+        limit: Int,
     ): Int
 
     suspend fun listActivePushTargets(userId: UUID): List<PushDeliveryTarget>
 
     suspend fun markNotificationSent(notificationId: UUID): Boolean
 
-    suspend fun markNotificationSkipped(notificationId: UUID, reason: String): Boolean
+    suspend fun markNotificationSkipped(
+        notificationId: UUID,
+        reason: String,
+    ): Boolean
 
-    suspend fun markNotificationRetry(notificationId: UUID, retryAt: Instant, error: String): Boolean
+    suspend fun markNotificationRetry(
+        notificationId: UUID,
+        retryAt: Instant,
+        error: String,
+    ): Boolean
 
-    suspend fun markNotificationFailed(notificationId: UUID, error: String): Boolean
+    suspend fun markNotificationFailed(
+        notificationId: UUID,
+        error: String,
+    ): Boolean
 }
 
 data class NotificationPreferencesRecord(
@@ -68,7 +78,7 @@ data class NotificationPreferencesRecord(
     val quietHoursEnabled: Boolean,
     val quietHoursStartMinute: Int,
     val quietHoursEndMinute: Int,
-    val quietHoursTimezone: String
+    val quietHoursTimezone: String,
 )
 
 data class NotificationPreferencesUpdate(
@@ -83,7 +93,7 @@ data class NotificationPreferencesUpdate(
     val quietHoursEnabled: Boolean?,
     val quietHoursStartMinute: Int?,
     val quietHoursEndMinute: Int?,
-    val quietHoursTimezone: String?
+    val quietHoursTimezone: String?,
 )
 
 data class PushDeviceRegistration(
@@ -92,7 +102,7 @@ data class PushDeviceRegistration(
     val appVersion: String?,
     val locale: String?,
     val timezone: String?,
-    val notificationsEnabled: Boolean
+    val notificationsEnabled: Boolean,
 )
 
 data class PushDeviceRecord(
@@ -100,12 +110,12 @@ data class PushDeviceRecord(
     val userId: UUID,
     val platform: String,
     val notificationsEnabled: Boolean,
-    val lastSeenAt: Instant
+    val lastSeenAt: Instant,
 )
 
 data class NotificationDeliveryGate(
     val preferences: NotificationPreferencesRecord,
-    val activeDeviceCount: Int
+    val activeDeviceCount: Int,
 )
 
 data class NotificationOutboxInsert(
@@ -117,7 +127,7 @@ data class NotificationOutboxInsert(
     val throttleKey: String?,
     val title: String,
     val body: String,
-    val payloadJson: String
+    val payloadJson: String,
 )
 
 data class NotificationOutboxRecord(
@@ -125,7 +135,7 @@ data class NotificationOutboxRecord(
     val recipientUserId: UUID,
     val kind: String,
     val status: String,
-    val createdAt: Instant
+    val createdAt: Instant,
 )
 
 data class NotificationDeliveryRecord(
@@ -138,12 +148,12 @@ data class NotificationDeliveryRecord(
     val body: String,
     val payloadJson: String,
     val attemptCount: Int,
-    val createdAt: Instant
+    val createdAt: Instant,
 )
 
 data class PushDeliveryTarget(
     val deviceId: UUID,
     val userId: UUID,
     val platform: String,
-    val deviceToken: String
+    val deviceToken: String,
 )

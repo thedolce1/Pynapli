@@ -23,12 +23,12 @@ import androidx.compose.ui.unit.dp
 internal fun QuickFilterRow(
     filters: GridFilters,
     onToggled: (QuickFilterId) -> Unit,
-    onOpenSheet: () -> Unit
+    onOpenSheet: () -> Unit,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth().testTag(GridFilterTags.QUICK_ROW),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "filters-button") {
             FiltersOpenChip(activeCount = filters.activeCount, onClick = onOpenSheet)
@@ -37,7 +37,7 @@ internal fun QuickFilterRow(
             QuickToggleChip(
                 label = "Online",
                 active = filters.online,
-                onClick = { onToggled(QuickFilterId.Online) }
+                onClick = { onToggled(QuickFilterId.Online) },
             )
         }
         item(key = "nearby-radius") {
@@ -47,35 +47,38 @@ internal fun QuickFilterRow(
             QuickToggleChip(
                 label = "Singles",
                 active = filters.singles,
-                onClick = { onToggled(QuickFilterId.Singles) }
+                onClick = { onToggled(QuickFilterId.Singles) },
             )
         }
         item(key = QuickFilterId.Linked.name) {
             QuickToggleChip(
                 label = "Linked",
                 active = filters.linked,
-                onClick = { onToggled(QuickFilterId.Linked) }
+                onClick = { onToggled(QuickFilterId.Linked) },
             )
         }
         item(key = QuickFilterId.Verified.name) {
             QuickToggleChip(
                 label = "Verified",
                 active = filters.verified,
-                onClick = { onToggled(QuickFilterId.Verified) }
+                onClick = { onToggled(QuickFilterId.Verified) },
             )
         }
         item(key = QuickFilterId.Tonight.name) {
             QuickToggleChip(
                 label = "Tonight",
                 active = filters.tonightAvailable,
-                onClick = { onToggled(QuickFilterId.Tonight) }
+                onClick = { onToggled(QuickFilterId.Tonight) },
             )
         }
     }
 }
 
 @Composable
-private fun FiltersOpenChip(activeCount: Int, onClick: () -> Unit) {
+private fun FiltersOpenChip(
+    activeCount: Int,
+    onClick: () -> Unit,
+) {
     val label = if (activeCount == 0) "Filters" else "Filters · $activeCount"
     AssistChip(
         onClick = onClick,
@@ -84,19 +87,21 @@ private fun FiltersOpenChip(activeCount: Int, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Filled.FilterList,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(18.dp),
             )
         },
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            labelColor = MaterialTheme.colorScheme.onSurface,
-            leadingIconContentColor = MaterialTheme.colorScheme.primary
-        ),
-        border = AssistChipDefaults.assistChipBorder(
-            enabled = true,
-            borderColor = MaterialTheme.colorScheme.outline
-        ),
-        modifier = Modifier.testTag(GridFilterTags.OPEN_SHEET)
+        colors =
+            AssistChipDefaults.assistChipColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                labelColor = MaterialTheme.colorScheme.onSurface,
+                leadingIconContentColor = MaterialTheme.colorScheme.primary,
+            ),
+        border =
+            AssistChipDefaults.assistChipBorder(
+                enabled = true,
+                borderColor = MaterialTheme.colorScheme.outline,
+            ),
+        modifier = Modifier.testTag(GridFilterTags.OPEN_SHEET),
     )
 }
 
@@ -104,26 +109,31 @@ private fun FiltersOpenChip(activeCount: Int, onClick: () -> Unit) {
 private fun QuickToggleChip(
     label: String,
     active: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     AssistChip(
         onClick = onClick,
         label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            labelColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-        ),
-        border = AssistChipDefaults.assistChipBorder(
-            enabled = true,
-            borderColor = MaterialTheme.colorScheme.outline
-        )
+        colors =
+            AssistChipDefaults.assistChipColors(
+                containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                labelColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            ),
+        border =
+            AssistChipDefaults.assistChipBorder(
+                enabled = true,
+                borderColor = MaterialTheme.colorScheme.outline,
+            ),
     )
 }
 
 @Composable
-private fun NearbyRadiusChip(radiusMeters: Int, onClick: () -> Unit) {
+private fun NearbyRadiusChip(
+    radiusMeters: Int,
+    onClick: () -> Unit,
+) {
     val km = (radiusMeters + 500) / 1_000
-    val label = "≤ ${km} km"
+    val label = "≤ $km km"
     AssistChip(
         onClick = onClick,
         label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -131,18 +141,20 @@ private fun NearbyRadiusChip(radiusMeters: Int, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Filled.LocationOn,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(18.dp),
             )
         },
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            labelColor = MaterialTheme.colorScheme.onSurface,
-            leadingIconContentColor = MaterialTheme.colorScheme.primary
-        ),
-        border = AssistChipDefaults.assistChipBorder(
-            enabled = true,
-            borderColor = MaterialTheme.colorScheme.outline
-        )
+        colors =
+            AssistChipDefaults.assistChipColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                labelColor = MaterialTheme.colorScheme.onSurface,
+                leadingIconContentColor = MaterialTheme.colorScheme.primary,
+            ),
+        border =
+            AssistChipDefaults.assistChipBorder(
+                enabled = true,
+                borderColor = MaterialTheme.colorScheme.outline,
+            ),
     )
 }
 

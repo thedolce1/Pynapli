@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun StoreScreen(
     stateHolder: StoreStateHolder = rememberStoreStateHolder(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -43,13 +43,12 @@ fun StoreScreen(
         onPurchaseTier = { tier -> scope.launch { stateHolder.purchase(tier) } },
         onPurchaseProduct = { product -> scope.launch { stateHolder.purchaseProduct(product) } },
         onRestorePurchases = { scope.launch { stateHolder.restorePurchases() } },
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
 @Composable
-private fun rememberStoreStateHolder(): StoreStateHolder =
-    remember { StoreStateHolder(repository = SampleStoreRepository()) }
+private fun rememberStoreStateHolder(): StoreStateHolder = remember { StoreStateHolder(repository = SampleStoreRepository()) }
 
 @Composable
 private fun StoreScreenContent(
@@ -57,33 +56,35 @@ private fun StoreScreenContent(
     onPurchaseTier: (SubscriptionTierDto) -> Unit,
     onPurchaseProduct: (PremiumProductDto) -> Unit,
     onRestorePurchases: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         StoreHeader(
             entitlement = state.entitlement,
             isRestoringPurchases = state.isRestoringPurchases,
-            restoreEnabled = state.tiers.any { it.playStoreProductId != null } &&
-                !state.isLoading &&
-                !state.isRestoringPurchases &&
-                state.pendingPurchaseTier == null &&
-                state.pendingPurchaseProductId == null,
-            onRestorePurchases = onRestorePurchases
+            restoreEnabled =
+                state.tiers.any { it.playStoreProductId != null } &&
+                    !state.isLoading &&
+                    !state.isRestoringPurchases &&
+                    state.pendingPurchaseTier == null &&
+                    state.pendingPurchaseProductId == null,
+            onRestorePurchases = onRestorePurchases,
         )
         StoreMessageRow(
             message = state.purchaseMessage,
-            error = state.errorMessage.takeIf { state.tiers.isNotEmpty() }
+            error = state.errorMessage.takeIf { state.tiers.isNotEmpty() },
         )
 
         when {
             state.isLoading && state.tiers.isEmpty() -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
@@ -91,26 +92,28 @@ private fun StoreScreenContent(
 
             state.errorMessage != null && state.tiers.isEmpty() -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 28.dp),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 28.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = state.errorMessage,
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
 
             else -> {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .testTag(StoreTestTags.LIST),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .testTag(StoreTestTags.LIST),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item(key = "current-plan") {
                         CurrentPlanRow(entitlement = state.entitlement)
@@ -119,13 +122,13 @@ private fun StoreScreenContent(
                     item(key = "tiers-title") {
                         StoreSectionTitle(
                             title = "Plans",
-                            subtitle = "Safety stays free. Paid plans add reach, privacy, and insight."
+                            subtitle = "Safety stays free. Paid plans add reach, privacy, and insight.",
                         )
                     }
 
                     items(
                         items = state.tiers,
-                        key = { tier -> tier.tier }
+                        key = { tier -> tier.tier },
                     ) { tier ->
                         StoreTierRow(
                             tier = tier,
@@ -133,7 +136,7 @@ private fun StoreScreenContent(
                             pendingPurchaseTier = state.pendingPurchaseTier,
                             pendingPurchaseProductId = state.pendingPurchaseProductId,
                             isRestoringPurchases = state.isRestoringPurchases,
-                            onPurchaseTier = onPurchaseTier
+                            onPurchaseTier = onPurchaseTier,
                         )
                     }
 
@@ -141,14 +144,14 @@ private fun StoreScreenContent(
                         item(key = "products-title") {
                             StoreSectionTitle(
                                 title = "Boosts & extras",
-                                subtitle = "Optional accelerators. Blocks, privacy, and recipient controls still apply."
+                                subtitle = "Optional accelerators. Blocks, privacy, and recipient controls still apply.",
                             )
                         }
                     }
 
                     items(
                         items = state.premiumProducts,
-                        key = { product -> product.productId }
+                        key = { product -> product.productId },
                     ) { product ->
                         StoreProductRow(
                             product = product,
@@ -156,7 +159,7 @@ private fun StoreScreenContent(
                             pendingPurchaseProductId = state.pendingPurchaseProductId,
                             pendingPurchaseTier = state.pendingPurchaseTier,
                             isRestoringPurchases = state.isRestoringPurchases,
-                            onPurchaseProduct = onPurchaseProduct
+                            onPurchaseProduct = onPurchaseProduct,
                         )
                     }
                 }

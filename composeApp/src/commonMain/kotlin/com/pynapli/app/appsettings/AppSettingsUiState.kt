@@ -9,7 +9,7 @@ data class AppSettingsUiState(
     val draft: AppSettingsDraft = AppSettings().toDraft(),
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 )
 
 @Immutable
@@ -23,5 +23,5 @@ data class AppSettingsDraft(
     val quietHoursEnabled: Boolean = false,
     val quietHoursStartMinute: Int = AppSettings.DEFAULT_QUIET_HOURS_START_MINUTE,
     val quietHoursEndMinute: Int = AppSettings.DEFAULT_QUIET_HOURS_END_MINUTE,
-    val quietHoursTimezone: String = AppSettings.DEFAULT_QUIET_HOURS_TIMEZONE
+    val quietHoursTimezone: String = AppSettings.DEFAULT_QUIET_HOURS_TIMEZONE,
 )
