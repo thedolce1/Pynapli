@@ -1,14 +1,15 @@
 package com.pynapli.server.dependencies
 
+import com.google.auth.oauth2.ServiceAccountCredentials
+import com.pynapli.server.account.AccountLifecycleService
+import com.pynapli.server.account.JdbcAccountLifecycleRepository
 import com.pynapli.server.activity.ActivityBroadcaster
+import com.pynapli.server.activity.ActivityCursorCodec
 import com.pynapli.server.activity.ActivityRetentionService
 import com.pynapli.server.activity.ActivityRetentionWorker
 import com.pynapli.server.activity.ActivityService
-import com.pynapli.server.activity.ActivityCursorCodec
-import com.pynapli.server.activity.JdbcActivityRetentionRepository
 import com.pynapli.server.activity.JdbcActivityRepository
-import com.pynapli.server.account.AccountLifecycleService
-import com.pynapli.server.account.JdbcAccountLifecycleRepository
+import com.pynapli.server.activity.JdbcActivityRetentionRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.config.ServerConfig
@@ -22,6 +23,8 @@ import com.pynapli.server.location.JdbcLocationRepository
 import com.pynapli.server.location.JdbcTravelLocationRepository
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationService
+import com.pynapli.server.media.GcsV4MediaUploadSigner
+import com.pynapli.server.media.GcsV4SignedUrlFactory
 import com.pynapli.server.media.JdbcMediaRepository
 import com.pynapli.server.media.LocalDevMediaUploadSigner
 import com.pynapli.server.media.LocalMediaAssetUrlResolver
@@ -38,8 +41,8 @@ import com.pynapli.server.moderation.JdbcAdminReportRepository
 import com.pynapli.server.moderation.JdbcAdminRiskRepository
 import com.pynapli.server.moderation.JdbcMessageModerationRepository
 import com.pynapli.server.moderation.MessageModerationService
-import com.pynapli.server.notifications.JdbcNotificationRepository
 import com.pynapli.server.notifications.FirebaseAdminPushNotificationSender
+import com.pynapli.server.notifications.JdbcNotificationRepository
 import com.pynapli.server.notifications.LocalLoggingPushNotificationSender
 import com.pynapli.server.notifications.NotificationDispatchService
 import com.pynapli.server.notifications.NotificationDispatchWorker
@@ -50,12 +53,12 @@ import com.pynapli.server.presence.PresenceBroadcaster
 import com.pynapli.server.presence.PresenceOfflineScanner
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.presence.RedisPresenceRepository
-import com.pynapli.server.profiling.RequestProfilerFactory
 import com.pynapli.server.profile.JdbcProfileRepository
 import com.pynapli.server.profile.ProfileService
 import com.pynapli.server.profile.TonightAvailabilityService
 import com.pynapli.server.profilelink.JdbcProfileLinkRepository
 import com.pynapli.server.profilelink.ProfileLinkService
+import com.pynapli.server.profiling.RequestProfilerFactory
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockService
 import com.pynapli.server.safety.HiddenProfileRepository
@@ -69,9 +72,9 @@ import com.pynapli.server.safety.RedisRateLimitRepository
 import com.pynapli.server.safety.ReportService
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.safety.RiskService
-import com.pynapli.server.subscriptions.JdbcSubscriptionRepository
 import com.pynapli.server.subscriptions.DisabledPlayStorePurchaseVerifier
 import com.pynapli.server.subscriptions.GooglePlayStorePurchaseVerifier
+import com.pynapli.server.subscriptions.JdbcSubscriptionRepository
 import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.swipe.JdbcSavedSwipeFilterRepository
@@ -89,6 +92,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import java.io.ByteArrayInputStream
+import java.io.FileInputStream
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.time.Duration
 
@@ -133,7 +139,7 @@ class ServerDependencies(
     val accountLifecycleService: AccountLifecycleService?,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
     private val profileActivityScope: CoroutineScope? = null,
-    private val probes: List<DependencyProbe>
+    private val probes: List<DependencyProbe>,
 ) : AutoCloseable {
     suspend fun checkAll() = probes.map { it.check() }
 
@@ -154,232 +160,274 @@ class ServerDependencies(
         fun fromEnvironment(config: ServerConfig = ServerConfig.fromEnvironment()): ServerDependencies {
             val database = Database(config)
             val redisCache = RedisCache(config.redisUrl)
-            val requestProfilerFactory = RequestProfilerFactory(
-                enabled = config.apiProfilingEnabled,
-                headerRequired = config.apiProfilingHeaderRequired,
-                slowSpanThresholdMillis = config.apiProfilingSlowSpanThresholdMillis,
-                poolSnapshotProvider = database::poolSnapshot
-            )
+            val requestProfilerFactory =
+                RequestProfilerFactory(
+                    enabled = config.apiProfilingEnabled,
+                    headerRequired = config.apiProfilingHeaderRequired,
+                    slowSpanThresholdMillis = config.apiProfilingSlowSpanThresholdMillis,
+                    poolSnapshotProvider = database::poolSnapshot,
+                )
             val postgres = PostgresDependencyProbe(database)
             val redis = RedisDependencyProbe(redisCache)
             val profileActivityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             val authService = AuthService(JdbcAuthRepository(database.dataSource))
-            val accountLifecycleService = AccountLifecycleService(
-                JdbcAccountLifecycleRepository(database.dataSource)
-            )
+            val accountLifecycleService =
+                AccountLifecycleService(
+                    JdbcAccountLifecycleRepository(database.dataSource),
+                )
             val locationService = LocationService(JdbcLocationRepository(database.dataSource))
             val travelLocationRepository = JdbcTravelLocationRepository(database.dataSource)
             val presenceRepository = RedisPresenceRepository(redisCache)
             val presenceBroadcaster = PresenceBroadcaster()
             val onlinePresenceTracker = OnlinePresenceTracker()
-            val presenceService = PresenceService(
-                repository = presenceRepository,
-                broadcaster = presenceBroadcaster,
-                onlineTracker = onlinePresenceTracker
-            )
-            val presenceOfflineScanner = PresenceOfflineScanner(
-                tracker = onlinePresenceTracker,
-                repository = presenceRepository,
-                broadcaster = presenceBroadcaster
-            )
+            val presenceService =
+                PresenceService(
+                    repository = presenceRepository,
+                    broadcaster = presenceBroadcaster,
+                    onlineTracker = onlinePresenceTracker,
+                )
+            val presenceOfflineScanner =
+                PresenceOfflineScanner(
+                    tracker = onlinePresenceTracker,
+                    repository = presenceRepository,
+                    broadcaster = presenceBroadcaster,
+                )
             val mediaAssetUrlResolver: MediaAssetUrlResolver? =
                 if (config.mediaStorageProvider.equals("local", ignoreCase = true)) {
                     LocalMediaAssetUrlResolver(config.mediaUploadBaseUrl)
                 } else {
                     null
                 }
-            val localMediaUploadStorage = if (config.mediaStorageProvider.equals("local", ignoreCase = true)) {
-                LocalMediaUploadStorage(Path.of(config.mediaLocalUploadDirectory))
-            } else {
-                null
-            }
-            val uploadSigner = if (config.mediaStorageProvider.equals("local", ignoreCase = true)) {
-                LocalDevMediaUploadSigner(
-                    storageBucket = config.mediaStorageBucket,
-                    uploadBaseUrl = config.mediaUploadBaseUrl
-                )
-            } else {
-                StaticMediaUploadSigner(
-                    storageProvider = config.mediaStorageProvider,
-                    storageBucket = config.mediaStorageBucket,
-                    uploadBaseUrl = config.mediaUploadBaseUrl
-                )
-            }
+            val localMediaUploadStorage =
+                if (config.mediaStorageProvider.equals("local", ignoreCase = true)) {
+                    LocalMediaUploadStorage(Path.of(config.mediaLocalUploadDirectory))
+                } else {
+                    null
+                }
+            val uploadSigner =
+                when (config.mediaStorageProvider.lowercase()) {
+                    "local" ->
+                        LocalDevMediaUploadSigner(
+                            storageBucket = config.mediaStorageBucket,
+                            uploadBaseUrl = config.mediaUploadBaseUrl,
+                        )
+
+                    "gcs" ->
+                        GcsV4MediaUploadSigner(
+                            storageBucket = config.mediaStorageBucket,
+                            signedUrlFactory =
+                                GcsV4SignedUrlFactory(
+                                    credentials = loadMediaSigningCredentials(config),
+                                    region = config.mediaGcsSigningRegion,
+                                ),
+                        )
+
+                    else ->
+                        StaticMediaUploadSigner(
+                            storageProvider = config.mediaStorageProvider,
+                            storageBucket = config.mediaStorageBucket,
+                            uploadBaseUrl = config.mediaUploadBaseUrl,
+                        )
+                }
             val blockRepository = JdbcBlockRepository(database.dataSource)
             val blockService = BlockService(blockRepository)
             val hiddenProfileRepository = JdbcHiddenProfileRepository(database.dataSource)
             val hiddenProfileService = HiddenProfileService(hiddenProfileRepository)
             val riskService = RiskService(JdbcRiskRepository(database.dataSource))
             val riskPolicyService = RiskPolicyService(riskService)
-            val rateLimitService = RateLimitService(
-                repository = RedisRateLimitRepository(redisCache),
-                riskSignalPublisher = riskService
-            )
-            val reportService = ReportService(
-                repository = JdbcReportRepository(database.dataSource),
-                riskSignalPublisher = riskService,
-                rateLimitService = rateLimitService,
-                supportEmail = config.supportEmail
-            )
+            val rateLimitService =
+                RateLimitService(
+                    repository = RedisRateLimitRepository(redisCache),
+                    riskSignalPublisher = riskService,
+                )
+            val reportService =
+                ReportService(
+                    repository = JdbcReportRepository(database.dataSource),
+                    riskSignalPublisher = riskService,
+                    rateLimitService = rateLimitService,
+                    supportEmail = config.supportEmail,
+                )
             val notificationRepository = JdbcNotificationRepository(database.dataSource)
             val notificationService = NotificationService(notificationRepository)
             val activityBroadcaster = ActivityBroadcaster()
             val messageBroadcaster = MessageBroadcaster()
-            val notificationDispatchWorker = if (config.notificationDispatchEnabled) {
-                val pushNotificationSender = createPushNotificationSender(config)
-                NotificationDispatchWorker(
-                    service = NotificationDispatchService(
-                        repository = notificationRepository,
-                        sender = pushNotificationSender,
-                        maxAttempts = config.notificationMaxAttempts
-                    ),
-                    intervalMillis = config.notificationDispatchIntervalMillis,
-                    batchSize = config.notificationDispatchBatchSize
-                )
-            } else {
-                null
-            }
-            val mediaRepository = JdbcMediaRepository(database.dataSource)
-            val mediaService = MediaService(
-                repository = mediaRepository,
-                uploadSigner = uploadSigner,
-                devAutoApproveUploads = config.mediaDevAutoApproveUploads,
-                blockRepository = blockRepository
-            )
-            val subscriptionService = SubscriptionService(
-                repository = JdbcSubscriptionRepository(database.dataSource),
-                playStorePackageName = config.playStorePackageName,
-                playStorePurchaseVerifier = if (config.playStoreVerificationEnabled) {
-                    GooglePlayStorePurchaseVerifier.fromConfig(config)
+            val notificationDispatchWorker =
+                if (config.notificationDispatchEnabled) {
+                    val pushNotificationSender = createPushNotificationSender(config)
+                    NotificationDispatchWorker(
+                        service =
+                            NotificationDispatchService(
+                                repository = notificationRepository,
+                                sender = pushNotificationSender,
+                                maxAttempts = config.notificationMaxAttempts,
+                            ),
+                        intervalMillis = config.notificationDispatchIntervalMillis,
+                        batchSize = config.notificationDispatchBatchSize,
+                    )
                 } else {
-                    DisabledPlayStorePurchaseVerifier
-                },
-                playStoreSyncStaleAfter = Duration.ofHours(config.playStoreSubscriptionSyncStaleAfterHours),
-                playStoreSyncRenewalLookahead = Duration.ofHours(config.playStoreSubscriptionSyncRenewalLookaheadHours)
-            )
-            val travelLocationService = TravelLocationService(
-                repository = travelLocationRepository,
-                subscriptionService = subscriptionService,
-                // Production default is EmptyTravelRegionPolicy (no destinations
-                // require extra verification). Ops swaps via DI when the region
-                // safety review is in place — see TravelRegionPolicy.
-                viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource)
-            )
+                    null
+                }
+            val mediaRepository = JdbcMediaRepository(database.dataSource)
+            val mediaService =
+                MediaService(
+                    repository = mediaRepository,
+                    uploadSigner = uploadSigner,
+                    devAutoApproveUploads = config.mediaDevAutoApproveUploads,
+                    blockRepository = blockRepository,
+                )
+            val subscriptionService =
+                SubscriptionService(
+                    repository = JdbcSubscriptionRepository(database.dataSource),
+                    playStorePackageName = config.playStorePackageName,
+                    playStorePurchaseVerifier =
+                        if (config.playStoreVerificationEnabled) {
+                            GooglePlayStorePurchaseVerifier.fromConfig(config)
+                        } else {
+                            DisabledPlayStorePurchaseVerifier
+                        },
+                    playStoreSyncStaleAfter = Duration.ofHours(config.playStoreSubscriptionSyncStaleAfterHours),
+                    playStoreSyncRenewalLookahead =
+                        Duration.ofHours(config.playStoreSubscriptionSyncRenewalLookaheadHours),
+                )
+            val travelLocationService =
+                TravelLocationService(
+                    repository = travelLocationRepository,
+                    subscriptionService = subscriptionService,
+                    // Production default is EmptyTravelRegionPolicy (no destinations
+                    // require extra verification). Ops swaps via DI when the region
+                    // safety review is in place — see TravelRegionPolicy.
+                    viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
+                )
             val playStoreSubscriptionSyncWorker =
                 if (config.playStoreVerificationEnabled && config.playStoreSubscriptionSyncEnabled) {
                     PlayStoreSubscriptionSyncWorker(
                         service = subscriptionService,
                         intervalMillis = config.playStoreSubscriptionSyncIntervalMillis,
-                        batchSize = config.playStoreSubscriptionSyncBatchSize
+                        batchSize = config.playStoreSubscriptionSyncBatchSize,
                     )
                 } else {
                     null
                 }
-            val activityService = ActivityService(
-                repository = JdbcActivityRepository(database.dataSource),
-                mediaService = mediaService,
-                mediaAssetUrlResolver = mediaAssetUrlResolver,
-                blockRepository = blockRepository,
-                notificationPublisher = notificationService,
-                rateLimitService = rateLimitService,
-                riskPolicyService = riskPolicyService,
-                subscriptionService = subscriptionService,
-                activityBroadcaster = activityBroadcaster,
-                cursorCodec = ActivityCursorCodec(config.activityCursorSecret)
-            )
-            val activityRetentionWorker = if (config.activityRetentionEnabled) {
-                ActivityRetentionWorker(
-                    service = ActivityRetentionService(
-                        repository = JdbcActivityRetentionRepository(database.dataSource)
-                    ),
-                    intervalMillis = config.activityRetentionIntervalMillis
+            val activityService =
+                ActivityService(
+                    repository = JdbcActivityRepository(database.dataSource),
+                    mediaService = mediaService,
+                    mediaAssetUrlResolver = mediaAssetUrlResolver,
+                    blockRepository = blockRepository,
+                    notificationPublisher = notificationService,
+                    rateLimitService = rateLimitService,
+                    riskPolicyService = riskPolicyService,
+                    subscriptionService = subscriptionService,
+                    activityBroadcaster = activityBroadcaster,
+                    cursorCodec = ActivityCursorCodec(config.activityCursorSecret),
                 )
-            } else {
-                null
-            }
-            val profileService = ProfileService(
-                repository = JdbcProfileRepository(database.dataSource),
-                mediaAssetUrlResolver = mediaAssetUrlResolver,
-                activityService = activityService,
-                blockRepository = blockRepository,
-                riskPolicyService = riskPolicyService,
-                profileViewRecordScope = profileActivityScope,
-                profileViewRecordConcurrency = 4
-            )
-            val profileLinkService = ProfileLinkService(
-                repository = JdbcProfileLinkRepository(database.dataSource),
-                mediaAssetUrlResolver = mediaAssetUrlResolver,
-                blockRepository = blockRepository,
-                notificationPublisher = notificationService
-            )
-            val gridService = GridService(
-                repository = JdbcGridRepository(database.dataSource),
-                cursorCodec = DiscoveryCursorCodec(config.discoveryCursorSecret),
-                presenceService = presenceService,
-                mediaAssetUrlResolver = mediaAssetUrlResolver,
-                blockRepository = blockRepository,
-                hiddenProfileRepository = hiddenProfileRepository,
-                subscriptionService = subscriptionService,
-                viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
-                rateLimitService = rateLimitService
-            )
-            val savedGridFilterService = SavedGridFilterService(
-                repository = JdbcSavedGridFilterRepository(database.dataSource),
-                subscriptionService = subscriptionService,
-                viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource)
-            )
-            val savedSwipeFilterService = SavedSwipeFilterService(
-                repository = JdbcSavedSwipeFilterRepository(database.dataSource),
-                subscriptionService = subscriptionService,
-                viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource)
-            )
+            val activityRetentionWorker =
+                if (config.activityRetentionEnabled) {
+                    ActivityRetentionWorker(
+                        service =
+                            ActivityRetentionService(
+                                repository = JdbcActivityRetentionRepository(database.dataSource),
+                            ),
+                        intervalMillis = config.activityRetentionIntervalMillis,
+                    )
+                } else {
+                    null
+                }
+            val profileService =
+                ProfileService(
+                    repository = JdbcProfileRepository(database.dataSource),
+                    mediaAssetUrlResolver = mediaAssetUrlResolver,
+                    activityService = activityService,
+                    blockRepository = blockRepository,
+                    riskPolicyService = riskPolicyService,
+                    profileViewRecordScope = profileActivityScope,
+                    profileViewRecordConcurrency = 4,
+                )
+            val profileLinkService =
+                ProfileLinkService(
+                    repository = JdbcProfileLinkRepository(database.dataSource),
+                    mediaAssetUrlResolver = mediaAssetUrlResolver,
+                    blockRepository = blockRepository,
+                    notificationPublisher = notificationService,
+                )
+            val gridService =
+                GridService(
+                    repository = JdbcGridRepository(database.dataSource),
+                    cursorCodec = DiscoveryCursorCodec(config.discoveryCursorSecret),
+                    presenceService = presenceService,
+                    mediaAssetUrlResolver = mediaAssetUrlResolver,
+                    blockRepository = blockRepository,
+                    hiddenProfileRepository = hiddenProfileRepository,
+                    subscriptionService = subscriptionService,
+                    viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
+                    rateLimitService = rateLimitService,
+                )
+            val savedGridFilterService =
+                SavedGridFilterService(
+                    repository = JdbcSavedGridFilterRepository(database.dataSource),
+                    subscriptionService = subscriptionService,
+                    viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
+                )
+            val savedSwipeFilterService =
+                SavedSwipeFilterService(
+                    repository = JdbcSavedSwipeFilterRepository(database.dataSource),
+                    subscriptionService = subscriptionService,
+                    viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
+                )
             val tonightAvailabilityService = TonightAvailabilityService(database.dataSource)
-            val ageVerificationService = AgeVerificationService(
-                JdbcAgeVerificationRepository(database.dataSource)
-            )
+            val ageVerificationService =
+                AgeVerificationService(
+                    JdbcAgeVerificationRepository(database.dataSource),
+                )
             val messagingRepository = JdbcMessagingRepository(database.dataSource)
-            val messagingService = MessagingService(
-                repository = messagingRepository,
-                blockRepository = blockRepository,
-                notificationPublisher = notificationService,
-                messageBroadcaster = messageBroadcaster,
-                rateLimitService = rateLimitService,
-                messageReviewRiskSignalPublisher = riskService,
-                riskPolicyService = riskPolicyService,
-                subscriptionService = subscriptionService,
-                activityService = activityService
-            )
-            val messageModerationService = MessageModerationService(
-                JdbcMessageModerationRepository(database.dataSource)
-            )
-            val adminReportService = AdminReportService(
-                JdbcAdminReportRepository(database.dataSource)
-            )
-            val adminRiskService = AdminRiskService(
-                JdbcAdminRiskRepository(database.dataSource)
-            )
+            val messagingService =
+                MessagingService(
+                    repository = messagingRepository,
+                    blockRepository = blockRepository,
+                    notificationPublisher = notificationService,
+                    messageBroadcaster = messageBroadcaster,
+                    rateLimitService = rateLimitService,
+                    messageReviewRiskSignalPublisher = riskService,
+                    riskPolicyService = riskPolicyService,
+                    subscriptionService = subscriptionService,
+                    activityService = activityService,
+                )
+            val messageModerationService =
+                MessageModerationService(
+                    JdbcMessageModerationRepository(database.dataSource),
+                )
+            val adminReportService =
+                AdminReportService(
+                    JdbcAdminReportRepository(database.dataSource),
+                )
+            val adminRiskService =
+                AdminRiskService(
+                    JdbcAdminRiskRepository(database.dataSource),
+                )
             val swipeRepository = JdbcSwipeRepository(database.dataSource)
-            val swipeService = SwipeService(
-                repository = swipeRepository,
-                mediaAssetUrlResolver = mediaAssetUrlResolver,
-                blockRepository = blockRepository,
-                notificationPublisher = notificationService,
-                rateLimitService = rateLimitService,
-                riskPolicyService = riskPolicyService,
-                subscriptionService = subscriptionService,
-                presenceService = presenceService,
-                travelLocationRepository = travelLocationRepository,
-                deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret),
-                activityService = activityService
-            )
-            val topPicksService = TopPicksService(
-                topPicksRepository = JdbcTopPicksRepository(database.dataSource),
-                swipeRepository = swipeRepository,
-                subscriptionService = subscriptionService,
-                presenceService = presenceService,
-                mediaAssetUrlResolver = mediaAssetUrlResolver,
-                deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret)
-            )
+            val swipeService =
+                SwipeService(
+                    repository = swipeRepository,
+                    mediaAssetUrlResolver = mediaAssetUrlResolver,
+                    blockRepository = blockRepository,
+                    notificationPublisher = notificationService,
+                    rateLimitService = rateLimitService,
+                    riskPolicyService = riskPolicyService,
+                    subscriptionService = subscriptionService,
+                    presenceService = presenceService,
+                    travelLocationRepository = travelLocationRepository,
+                    deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret),
+                    activityService = activityService,
+                )
+            val topPicksService =
+                TopPicksService(
+                    topPicksRepository = JdbcTopPicksRepository(database.dataSource),
+                    swipeRepository = swipeRepository,
+                    subscriptionService = subscriptionService,
+                    presenceService = presenceService,
+                    mediaAssetUrlResolver = mediaAssetUrlResolver,
+                    deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret),
+                )
             return ServerDependencies(
                 config = config,
                 database = database,
@@ -421,7 +469,7 @@ class ServerDependencies(
                 accountLifecycleService = accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,
                 profileActivityScope = profileActivityScope,
-                probes = listOf(postgres, redis)
+                probes = listOf(postgres, redis),
             )
         }
 
@@ -430,9 +478,28 @@ class ServerDependencies(
                 "local" -> LocalLoggingPushNotificationSender()
                 "firebase", "fcm" -> FirebaseAdminPushNotificationSender.fromConfig(config)
                 else -> throw IllegalArgumentException(
-                    "Unsupported notification push provider: ${config.notificationPushProvider}"
+                    "Unsupported notification push provider: ${config.notificationPushProvider}",
                 )
             }
+
+        // GCS V4 signing needs a service-account private key. Prefer a media-specific service
+        // account (least privilege: storage object access only); fall back to the Firebase service
+        // account so a single-credential setup also works.
+        private fun loadMediaSigningCredentials(config: ServerConfig): ServiceAccountCredentials {
+            val json = config.mediaGcsSigningServiceAccountJson ?: config.firebaseServiceAccountJson
+            if (json != null) {
+                return ByteArrayInputStream(json.toByteArray(StandardCharsets.UTF_8))
+                    .use(ServiceAccountCredentials::fromStream)
+            }
+            val path = config.mediaGcsSigningServiceAccountPath ?: config.firebaseServiceAccountPath
+            if (path != null) {
+                return FileInputStream(path).use(ServiceAccountCredentials::fromStream)
+            }
+            throw IllegalStateException(
+                "GCS media storage requires PYNAPLI_MEDIA_GCS_SIGNING_SA_JSON/PATH " +
+                    "(or a Firebase service account) to sign upload URLs.",
+            )
+        }
 
         fun test(config: ServerConfig = ServerConfig.fromEnvironment()): ServerDependencies =
             ServerDependencies(
@@ -475,7 +542,7 @@ class ServerDependencies(
                 ageVerificationService = null,
                 accountLifecycleService = null,
                 requestProfilerFactory = RequestProfilerFactory.disabled(),
-                probes = emptyList()
+                probes = emptyList(),
             )
     }
 }
