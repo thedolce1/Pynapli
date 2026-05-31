@@ -6,10 +6,26 @@ import java.util.UUID
 
 class AccountLifecycleService(
     private val repository: AccountLifecycleRepository,
+    private val exportStorage: AccountExportStorage? = null,
 ) {
     suspend fun latestDataExportRequest(userId: UUID): AccountDataExportDto? = repository.latestDataExportRequest(userId)?.toDto()
 
     suspend fun requestDataExport(userId: UUID): AccountDataExportDto = repository.createDataExportRequest(userId).toDto()
+
+    /**
+     * Streams a finished export to its owner. Returns the archive only for a `ready` export owned by
+     * [userId]; any other case throws `EXPORT_NOT_FOUND` so existence isn't revealed to non-owners.
+     */
+    suspend fun downloadExport(
+        userId: UUID,
+        requestIdText: String,
+    ): ExportArchive {
+        val storage = exportStorage ?: throw AccountLifecycleException("EXPORT_NOT_FOUND")
+        val requestId = runCatching { UUID.fromString(requestIdText) }.getOrElse { throw AccountLifecycleException("INVALID_ID") }
+        val record = repository.exportRequestById(requestId) ?: throw AccountLifecycleException("EXPORT_NOT_FOUND")
+        if (record.userId != userId || record.status != "ready") throw AccountLifecycleException("EXPORT_NOT_FOUND")
+        return storage.read(requestId) ?: throw AccountLifecycleException("EXPORT_NOT_FOUND")
+    }
 
     suspend fun deleteAccount(
         userId: UUID,

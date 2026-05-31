@@ -6,6 +6,7 @@ internal fun accountLifecycleStatusFor(code: String): HttpStatusCode =
     when (code) {
         "ACCOUNT_ALREADY_DELETED" -> HttpStatusCode.Conflict
         "INVALID_ACCOUNT_DELETE_CONFIRMATION" -> HttpStatusCode.BadRequest
+        "EXPORT_NOT_FOUND" -> HttpStatusCode.NotFound
         else -> HttpStatusCode.BadRequest
     }
 

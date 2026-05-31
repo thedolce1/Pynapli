@@ -30,6 +30,9 @@ data class ServerConfig(
     val activityRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
     val mediaCleanupEnabled: Boolean = false,
     val mediaCleanupIntervalMillis: Long = 60 * 60 * 1_000L,
+    val accountDataExportEnabled: Boolean = false,
+    val accountDataExportIntervalMillis: Long = 60_000L,
+    val accountDataExportDirectory: String = ".pynapli-account-exports",
     val firebaseServiceAccountPath: String? = null,
     val firebaseServiceAccountJson: String? = null,
     val playStorePackageName: String = "com.pynapli.app",
@@ -160,6 +163,17 @@ data class ServerConfig(
                         ?.toLongOrNull()
                         ?.coerceAtLeast(60_000L)
                         ?: 60 * 60 * 1_000L,
+                accountDataExportEnabled =
+                    System.getenv("PYNAPLI_ACCOUNT_DATA_EXPORT_ENABLED")?.toBooleanStrictOrNull()
+                        ?: (environment == "local"),
+                accountDataExportIntervalMillis =
+                    System
+                        .getenv("PYNAPLI_ACCOUNT_DATA_EXPORT_INTERVAL_MS")
+                        ?.toLongOrNull()
+                        ?.coerceAtLeast(10_000L)
+                        ?: 60_000L,
+                accountDataExportDirectory =
+                    System.getenv("PYNAPLI_ACCOUNT_DATA_EXPORT_DIR") ?: ".pynapli-account-exports",
                 firebaseServiceAccountPath =
                     System
                         .getenv("PYNAPLI_FIREBASE_SERVICE_ACCOUNT_PATH")

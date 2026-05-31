@@ -59,6 +59,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.notificationDispatchWorker?.start()
     dependencies.activityRetentionWorker?.start()
     dependencies.mediaCleanupWorker?.start()
+    dependencies.accountDataExportWorker?.start()
     dependencies.playStoreSubscriptionSyncWorker?.start()
     dependencies.presenceOfflineScanner?.start()
     configureSerialization()

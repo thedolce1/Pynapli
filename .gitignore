@@ -39,6 +39,7 @@ service-account*.json
 
 # Local media upload sink
 .pynapli-local-media/
+.pynapli-account-exports/
 
 # Local server logs
 .pynapli-local-logs/

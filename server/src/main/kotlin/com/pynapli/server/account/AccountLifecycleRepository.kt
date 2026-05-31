@@ -9,6 +9,23 @@ interface AccountLifecycleRepository {
     suspend fun createDataExportRequest(userId: UUID): AccountDataExportRecord
 
     suspend fun deleteAccount(userId: UUID): AccountDeletionResult?
+
+    /** Atomically claims one `requested` export, moving it to `processing`. Null if none pending. */
+    suspend fun claimNextPendingExport(): AccountDataExportRecord?
+
+    suspend fun markExportReady(
+        requestId: UUID,
+        downloadUrl: String,
+        completedAt: Instant,
+        expiresAt: Instant,
+    ): AccountDataExportRecord?
+
+    suspend fun markExportFailed(
+        requestId: UUID,
+        errorMessage: String,
+    ): AccountDataExportRecord?
+
+    suspend fun exportRequestById(requestId: UUID): AccountDataExportRecord?
 }
 
 data class AccountDataExportRecord(

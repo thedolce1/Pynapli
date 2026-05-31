@@ -1,8 +1,12 @@
 package com.pynapli.server.dependencies
 
 import com.google.auth.oauth2.ServiceAccountCredentials
+import com.pynapli.server.account.AccountDataExportProcessor
+import com.pynapli.server.account.AccountDataExportWorker
 import com.pynapli.server.account.AccountLifecycleService
+import com.pynapli.server.account.JdbcAccountDataExportArchiver
 import com.pynapli.server.account.JdbcAccountLifecycleRepository
+import com.pynapli.server.account.LocalAccountExportStorage
 import com.pynapli.server.activity.ActivityBroadcaster
 import com.pynapli.server.activity.ActivityCursorCodec
 import com.pynapli.server.activity.ActivityRetentionService
@@ -123,6 +127,7 @@ class ServerDependencies(
     val activityService: ActivityService?,
     val activityRetentionWorker: ActivityRetentionWorker?,
     val mediaCleanupWorker: MediaCleanupWorker?,
+    val accountDataExportWorker: AccountDataExportWorker?,
     val notificationService: NotificationService?,
     val notificationDispatchWorker: NotificationDispatchWorker?,
     val blockService: BlockService?,
@@ -155,6 +160,7 @@ class ServerDependencies(
         runCatching { playStoreSubscriptionSyncWorker?.close() }
         runCatching { activityRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
+        runCatching { accountDataExportWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
         runCatching { profileActivityScope?.cancel() }
         probes.asReversed().forEach { probe ->
@@ -179,10 +185,31 @@ class ServerDependencies(
             val redis = RedisDependencyProbe(redisCache)
             val profileActivityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             val authService = AuthService(JdbcAuthRepository(database.dataSource))
+            val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource)
+            val accountExportStorage =
+                LocalAccountExportStorage(
+                    directory = Path.of(config.accountDataExportDirectory),
+                    downloadBaseUrl = config.mediaUploadBaseUrl,
+                )
             val accountLifecycleService =
                 AccountLifecycleService(
-                    JdbcAccountLifecycleRepository(database.dataSource),
+                    repository = accountLifecycleRepository,
+                    exportStorage = accountExportStorage,
                 )
+            val accountDataExportWorker =
+                if (config.accountDataExportEnabled) {
+                    AccountDataExportWorker(
+                        processor =
+                            AccountDataExportProcessor(
+                                repository = accountLifecycleRepository,
+                                archiver = JdbcAccountDataExportArchiver(database.dataSource),
+                                storage = accountExportStorage,
+                            ),
+                        intervalMillis = config.accountDataExportIntervalMillis,
+                    )
+                } else {
+                    null
+                }
             val locationService = LocationService(JdbcLocationRepository(database.dataSource))
             val travelLocationRepository = JdbcTravelLocationRepository(database.dataSource)
             val presenceRepository = RedisPresenceRepository(redisCache)
@@ -483,6 +510,7 @@ class ServerDependencies(
                 activityService = activityService,
                 activityRetentionWorker = activityRetentionWorker,
                 mediaCleanupWorker = mediaCleanupWorker,
+                accountDataExportWorker = accountDataExportWorker,
                 notificationService = notificationService,
                 notificationDispatchWorker = notificationDispatchWorker,
                 blockService = blockService,
@@ -558,6 +586,7 @@ class ServerDependencies(
                 activityService = null,
                 activityRetentionWorker = null,
                 mediaCleanupWorker = null,
+                accountDataExportWorker = null,
                 notificationService = null,
                 notificationDispatchWorker = null,
                 blockService = null,

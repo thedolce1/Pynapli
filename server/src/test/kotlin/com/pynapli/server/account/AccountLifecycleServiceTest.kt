@@ -87,4 +87,20 @@ private class FakeAccountLifecycleRepository(
         lastDeletedUserId = userId
         return deleteResult?.copy(userId = userId)
     }
+
+    override suspend fun claimNextPendingExport(): AccountDataExportRecord? = null
+
+    override suspend fun markExportReady(
+        requestId: UUID,
+        downloadUrl: String,
+        completedAt: Instant,
+        expiresAt: Instant,
+    ): AccountDataExportRecord? = null
+
+    override suspend fun markExportFailed(
+        requestId: UUID,
+        errorMessage: String,
+    ): AccountDataExportRecord? = null
+
+    override suspend fun exportRequestById(requestId: UUID): AccountDataExportRecord? = null
 }

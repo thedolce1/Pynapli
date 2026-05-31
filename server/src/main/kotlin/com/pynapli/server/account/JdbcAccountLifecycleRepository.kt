@@ -4,6 +4,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
 import java.sql.ResultSet
+import java.sql.Timestamp
+import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
@@ -48,6 +50,101 @@ class JdbcAccountLifecycleRepository(
                         statement.setObject(2, userId)
                         statement.executeQuery().use { rs ->
                             check(rs.next()) { "Data export request insert returned no row." }
+                            rs.toAccountDataExportRecord()
+                        }
+                    }
+            }
+        }
+
+    override suspend fun claimNextPendingExport(): AccountDataExportRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE account_data_export_requests
+                        SET status = 'processing'
+                        WHERE id = (
+                            SELECT id FROM account_data_export_requests
+                            WHERE status = 'requested'
+                            ORDER BY requested_at
+                            FOR UPDATE SKIP LOCKED
+                            LIMIT 1
+                        )
+                        RETURNING $EXPORT_COLUMNS
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.executeQuery().use { rs ->
+                            if (!rs.next()) return@withContext null
+                            rs.toAccountDataExportRecord()
+                        }
+                    }
+            }
+        }
+
+    override suspend fun markExportReady(
+        requestId: UUID,
+        downloadUrl: String,
+        completedAt: Instant,
+        expiresAt: Instant,
+    ): AccountDataExportRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE account_data_export_requests
+                        SET status = 'ready', completed_at = ?, expires_at = ?, download_url = ?, error_message = NULL
+                        WHERE id = ? AND status = 'processing'
+                        RETURNING $EXPORT_COLUMNS
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setTimestamp(1, Timestamp.from(completedAt))
+                        statement.setTimestamp(2, Timestamp.from(expiresAt))
+                        statement.setString(3, downloadUrl)
+                        statement.setObject(4, requestId)
+                        statement.executeQuery().use { rs ->
+                            if (!rs.next()) return@withContext null
+                            rs.toAccountDataExportRecord()
+                        }
+                    }
+            }
+        }
+
+    override suspend fun markExportFailed(
+        requestId: UUID,
+        errorMessage: String,
+    ): AccountDataExportRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE account_data_export_requests
+                        SET status = 'failed', error_message = ?
+                        WHERE id = ? AND status = 'processing'
+                        RETURNING $EXPORT_COLUMNS
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setString(1, errorMessage)
+                        statement.setObject(2, requestId)
+                        statement.executeQuery().use { rs ->
+                            if (!rs.next()) return@withContext null
+                            rs.toAccountDataExportRecord()
+                        }
+                    }
+            }
+        }
+
+    override suspend fun exportRequestById(requestId: UUID): AccountDataExportRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement("SELECT $EXPORT_COLUMNS FROM account_data_export_requests WHERE id = ?")
+                    .use { statement ->
+                        statement.setObject(1, requestId)
+                        statement.executeQuery().use { rs ->
+                            if (!rs.next()) return@withContext null
                             rs.toAccountDataExportRecord()
                         }
                     }
@@ -228,5 +325,7 @@ class JdbcAccountLifecycleRepository(
     companion object {
         private const val ACCOUNT_DELETION_RETENTION_NOTE =
             "Account removed from discovery and sessions revoked; safety and legal retention records preserved."
+        private const val EXPORT_COLUMNS =
+            "id, user_id, status, requested_at, completed_at, expires_at, download_url, error_message"
     }
 }

@@ -17,6 +17,8 @@ import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class AccountLifecycleRepositoryIntegrationTest {
     private lateinit var dataSource: HikariDataSource
@@ -64,6 +66,38 @@ class AccountLifecycleRepositoryIntegrationTest {
             assertEquals(created.id, latest?.id)
             assertEquals("requested", latest?.status)
             assertEquals(userId, latest?.userId)
+        }
+
+    @Test
+    fun claimBuildArchiveAndMarkReadyCompletesExport() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000912")
+            dataSource.insertUserWithProfile(userId, "Rae")
+            val repository = JdbcAccountLifecycleRepository(dataSource)
+            val archiver = JdbcAccountDataExportArchiver(dataSource)
+
+            repository.createDataExportRequest(userId)
+            val claimed = repository.claimNextPendingExport()
+            assertNotNull(claimed)
+            assertEquals("processing", claimed.status)
+
+            // Exercises the archiver SQL against the real schema (profiles/discovery_settings/messages/activity_events).
+            val archive = archiver.buildArchive(claimed.userId)
+            val json = archive.bytes.decodeToString()
+            assertTrue(json.contains(userId.toString()), "archive should include the user id")
+
+            val ready =
+                repository.markExportReady(
+                    requestId = claimed.id,
+                    downloadUrl = "https://dl.example/${claimed.id}",
+                    completedAt = Instant.now(),
+                    expiresAt = Instant.now().plusSeconds(600),
+                )
+            assertEquals("ready", ready?.status)
+            assertEquals("https://dl.example/${claimed.id}", ready?.downloadUrl)
+
+            // Nothing left to claim.
+            assertNull(repository.claimNextPendingExport())
         }
 
     @Test
