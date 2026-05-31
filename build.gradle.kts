@@ -10,6 +10,30 @@ plugins {
     alias(libs.plugins.ktor) apply false
     alias(libs.plugins.sqldelight) apply false
     alias(libs.plugins.google.services) apply false
+    alias(libs.plugins.spotless) apply false
+}
+
+// Spotless: Kotlin formatting gate. Adopted incrementally via `ratchetFrom` so only files
+// changed relative to origin/main are enforced — no big-bang reformat of the existing tree.
+// detekt is intentionally NOT added yet: no stable detekt release supports Kotlin 2.3 (only
+// 2.0.0-alpha), which the version policy in docs/OFFICIAL_TECH_REFERENCE_GUIDE.md disallows.
+allprojects {
+    apply(plugin = "com.diffplug.spotless")
+    val ktlintVersion =
+        rootProject.libs.versions.ktlint
+            .get()
+    extensions.configure<com.diffplug.gradle.spotless.SpotlessExtension> {
+        ratchetFrom = "origin/main"
+        kotlin {
+            target("src/**/*.kt")
+            targetExclude("**/build/**", "**/generated/**")
+            ktlint(ktlintVersion)
+        }
+        kotlinGradle {
+            target("*.gradle.kts")
+            ktlint(ktlintVersion)
+        }
+    }
 }
 
 tasks.register("printProjectStructure") {
@@ -22,7 +46,7 @@ tasks.register("printProjectStructure") {
             - :shared     Kotlin Multiplatform product logic, networking, storage contracts
             - :composeApp Compose Multiplatform app shell for Android and iOS
             - :server     Ktor backend authority
-            """.trimIndent()
+            """.trimIndent(),
         )
     }
 }

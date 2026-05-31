@@ -229,7 +229,7 @@ Initial GitHub Actions:
 - Build shared Kotlin
 - Build Ktor server
 - Run unit tests
-- Run detekt/ktlint if selected
+- Run Spotless/ktlint format check (detekt deferred — see `OFFICIAL_TECH_REFERENCE_GUIDE.md`)
 - Run backend integration tests
 - Build Android debug
 
@@ -241,6 +241,39 @@ Later:
 - Docker image build
 - Deploy staging
 - Database migration dry run
+
+### Current state (2026-05-31)
+
+`.github/workflows/ci.yml` runs two jobs on every push to `main`/`develop` and on every PR:
+
+- **Format (Spotless)** — `./gradlew spotlessCheck`. Uses `fetch-depth: 0` + an explicit
+  `git fetch origin main` so the Spotless `ratchetFrom = "origin/main"` ratchet can diff changed
+  files. (ktlint via Spotless; detekt deferred — see `OFFICIAL_TECH_REFERENCE_GUIDE.md`.)
+- **Verify (tests + assemble)** — `:shared:jvmTest :shared:testAndroidHostTest :server:test
+  :composeApp:testAndroidHostTest :composeApp:desktopTest :androidApp:assembleDebug`. Server
+  integration tests self-manage Postgres/Redis via Testcontainers (Docker is present on
+  `ubuntu-latest`), so no GitHub service containers are needed. Uploads test reports (always) and
+  the debug APK (on success) as artifacts.
+
+### Branch protection (apply once, founder action)
+
+Not yet applied. Run these with an admin token to require both checks and a passing PR before merge
+to `main` (job names are the status-check contexts):
+
+```bash
+gh api -X PUT repos/thedolce1/Pynapli/branches/main/protection \
+  -H "Accept: application/vnd.github+json" \
+  -f 'required_status_checks[strict]=true' \
+  -f 'required_status_checks[contexts][]=Format (Spotless)' \
+  -f 'required_status_checks[contexts][]=Verify (tests + assemble)' \
+  -f 'enforce_admins=true' \
+  -f 'required_pull_request_reviews[required_approving_review_count]=1' \
+  -f 'restrictions=' \
+  -f 'allow_force_pushes=false' \
+  -f 'allow_deletions=false'
+```
+
+After enabling, direct pushes to `main` are blocked; merge via PR once both checks are green.
 
 ## Docker
 
