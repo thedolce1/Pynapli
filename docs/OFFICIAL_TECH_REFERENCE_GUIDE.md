@@ -93,6 +93,24 @@ Use these for version compatibility:
 - Gradle Plugin Portal: https://plugins.gradle.org/
 - Kotlin libraries catalog: https://klibs.io/
 
+## Static Analysis And Formatting Tooling
+
+Current decision (2026-05-31):
+
+- **Spotless `8.6.0` + ktlint `1.7.1`** is the Kotlin format gate (`spotlessCheck`), wired into
+  `scripts/verify.ps1` and CI. Adoption is incremental via Spotless `ratchetFrom = "origin/main"`,
+  so only files changed relative to `main` are enforced — the existing tree is not reformatted in
+  one big-bang commit. ktlint is configured by the root `.editorconfig`
+  (`ktlint_code_style = ktlint_official`, `max_line_length = 120`, Compose function-naming
+  exemption).
+- **detekt is intentionally deferred** (documented exception per the "Rules For Using References"
+  policy above). As of 2026-05, no **stable** detekt release supports Kotlin 2.3 — only
+  `2.0.0-alpha.x` — and the version policy disallows alpha dependencies without a written reason.
+  Re-evaluate adding detekt once a stable Kotlin-2.3-compatible release ships. Compatibility table:
+  https://detekt.dev/docs/introduction/compatibility/
+- **Android Lint** (built into AGP, no extra dependency) is the planned static-analysis layer for
+  the Android-targeted modules, gated via per-module `lint-baseline.xml` so only new issues fail.
+
 ## Security Sources
 
 Use these for security requirements and review checklists:

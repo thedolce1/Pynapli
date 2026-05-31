@@ -1,0 +1,20 @@
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.{kt,kts}]
+max_line_length = 120
+ktlint_code_style = ktlint_official
+# Allow Compose @Composable functions to be PascalCase without ktlint flagging them.
+ktlint_function_naming_ignore_when_annotated_with = Composable, Preview
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
