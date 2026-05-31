@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Pynapli is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyle app. Four Gradle modules: `:shared`, `:composeApp`, `:androidApp`, `:server`. The iOS shell lives in `iosApp/` (Xcode project, not a Gradle module).
 
-The repo is in early scaffolding/MVP buildout. The root-level `*_SPEC.md` files are the canonical product and engineering specs. Read the relevant spec before changing a feature area — they encode rules that are not yet expressed in code.
+The repo is in early scaffolding/MVP buildout. The `docs/*_SPEC.md` files are the canonical product and engineering specs (all specs and design docs live under `docs/`). Read the relevant spec before changing a feature area — they encode rules that are not yet expressed in code.
 
 ## Common commands
 
@@ -44,7 +44,7 @@ Health checks: `GET http://localhost:8080/health` (process), `GET http://localho
 
 ## Architecture
 
-### Module ownership (enforced — see `PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md`)
+### Module ownership (enforced — see `docs/PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md`)
 
 - `:shared` — KMP product logic, DTOs, repository interfaces, Ktor *client*, validation, state holders, SQLDelight schema, `expect/actual` platform abstractions. Targets: `jvm`, `android` (`com.android.kotlin.multiplatform.library`), `iosX64`, `iosArm64`, `iosSimulatorArm64`. SQLDelight database `PynapliDatabase` lives in package `com.pynapli.shared.storage`. **Must not** contain Firebase/StoreKit/Play-Billing/raw OS calls — those are platform-specific.
 - `:composeApp` — Shared Compose UI (Android + iOS framework `PynapliCompose`, static). Screens consume UI state + callbacks; state holders live in `:shared` unless platform constraints force otherwise. **Screens must not call Ktor directly.**
@@ -80,7 +80,7 @@ Server rules: routes are thin, domain services enforce product rules, repositori
 
 Versioned under `/v1/`: `auth/email/{signup,login}`, `auth/{refresh,logout}`, `me`, `me/profile`, `profiles/{userId}`, `location/current`, `presence/heartbeat`, `grid/query`, `messages/threads[/{threadId}[/{read,messages}]]`, `media/uploads[/{assetId}/complete]`. Full list in `README.md`.
 
-## Version policy (load-bearing — see `OFFICIAL_TECH_REFERENCE_GUIDE.md`)
+## Version policy (load-bearing — see `docs/OFFICIAL_TECH_REFERENCE_GUIDE.md`)
 
 - **Use stable releases only.** No alpha/beta/RC/EAP/dev/preview versions without a written reason.
 - All external versions live in `gradle/libs.versions.toml`. Module build files reference catalog aliases — no inline version strings.
@@ -99,10 +99,10 @@ Versioned under `/v1/`: `auth/email/{signup,login}`, `auth/{refresh,logout}`, `m
 
 ## Specs to consult by area
 
-- Backend / API authority: `BACKEND_ARCHITECTURE_SPEC.md`, `API_CONTRACT_SPEC.md`, `DATA_MODEL_SPEC.md`
-- Mobile architecture: `MOBILE_APP_ARCHITECTURE_SPEC.md`
-- Module/dependency layout: `PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md`
-- Tech references and version policy: `OFFICIAL_TECH_REFERENCE_GUIDE.md`
-- Production gates / load / security: `PRODUCTION_READINESS_AND_QUALITY_SPEC.md`
-- Testing layers and release checklist: `TESTING_STRATEGY_SPEC.md`
-- Per-feature: `GRID_*`, `SWIPE_*`, `ACTIVITY_*`, `MESSAGING_*`, `MODERATION_*`, `MONETIZATION_*`, `PSYNC_*`, `PLAYING_TONIGHT_*`, etc.
+- Backend / API authority: `docs/BACKEND_ARCHITECTURE_SPEC.md`, `docs/API_CONTRACT_SPEC.md`, `docs/DATA_MODEL_SPEC.md`
+- Mobile architecture: `docs/MOBILE_APP_ARCHITECTURE_SPEC.md`
+- Module/dependency layout: `docs/PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md`
+- Tech references and version policy: `docs/OFFICIAL_TECH_REFERENCE_GUIDE.md`
+- Production gates / load / security: `docs/PRODUCTION_READINESS_AND_QUALITY_SPEC.md`
+- Testing layers and release checklist: `docs/TESTING_STRATEGY_SPEC.md`
+- Per-feature: `docs/GRID_*`, `docs/SWIPE_*`, `docs/ACTIVITY_*`, `docs/MESSAGING_*`, `docs/MODERATION_*`, `docs/MONETIZATION_*`, `docs/PSYNC_*`, `docs/PLAYING_TONIGHT_*`, etc.

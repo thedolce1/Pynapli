@@ -147,4 +147,4 @@ The mobile grid header profile icon opens the Albums screen for managing profile
 
 ## Specs
 
-The root `.md` files are the canonical product and engineering specs during early buildout.
+The product and engineering specs live in [`docs/`](docs/). They are the canonical references during early buildout.
