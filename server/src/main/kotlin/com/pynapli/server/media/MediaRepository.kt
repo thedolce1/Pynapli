@@ -27,6 +27,11 @@ interface MediaRepository {
         mediaAssetId: UUID,
     ): MediaAssetRecord?
 
+    suspend fun markAssetModerationRejected(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord?
+
     suspend fun addAssetToAlbum(
         ownerUserId: UUID,
         albumId: UUID,

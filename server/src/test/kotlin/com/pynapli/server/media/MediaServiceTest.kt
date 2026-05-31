@@ -72,6 +72,55 @@ class MediaServiceTest {
         }
 
     @Test
+    fun autoApproveScannerMakesUploadReadyAndApproved() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = AutoApproveMediaModerationScanner())
+
+            val item = service.uploadAndComplete(ownerId)
+
+            assertEquals("ready", item.mediaAsset.processingStatus)
+            assertEquals("approved", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun manualReviewScannerHoldsUploadPending() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = ManualReviewMediaModerationScanner())
+
+            val item = service.uploadAndComplete(ownerId)
+
+            assertEquals("uploaded", item.mediaAsset.processingStatus)
+            assertEquals("pending", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun rejectingScannerMarksUploadRejected() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val scanner =
+                object : MediaModerationScanner {
+                    override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision = MediaModerationDecision.Rejected("policy")
+                }
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = scanner)
+
+            val item = service.uploadAndComplete(ownerId)
+
+            assertEquals("rejected", item.mediaAsset.moderationStatus)
+        }
+
+    private suspend fun MediaService.uploadAndComplete(ownerId: UUID) =
+        createUploadSlot(
+            ownerId,
+            CreateMediaUploadRequestDto(albumKind = "private", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+        ).let { slot ->
+            completeUpload(ownerId, slot.mediaAsset.mediaAssetId, CompleteMediaUploadRequestDto(albumId = slot.album.albumId))
+        }
+
+    @Test
     fun createUploadSlotRejectsOversizedImages() =
         runBlocking {
             val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
@@ -151,7 +200,7 @@ class MediaServiceTest {
                 MediaService(
                     repository = repository,
                     uploadSigner = FixedMediaUploadSigner(),
-                    devAutoApproveUploads = true,
+                    moderationScanner = AutoApproveMediaModerationScanner(),
                 )
             val slot =
                 service.createUploadSlot(
@@ -432,6 +481,21 @@ private class InMemoryMediaRepository : MediaRepository {
         assets[mediaAssetId] = ready
         updateAlbumItems(ready)
         return ready
+    }
+
+    override suspend fun markAssetModerationRejected(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord? {
+        val asset = assets[mediaAssetId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null } ?: return null
+        val rejected =
+            asset.copy(
+                moderationStatus = "rejected",
+                processingStatus = "ready",
+            )
+        assets[mediaAssetId] = rejected
+        updateAlbumItems(rejected)
+        return rejected
     }
 
     override suspend fun addAssetToAlbum(
