@@ -86,4 +86,7 @@ data class MediaAssetDto(
     val processingStatus: String,
     val createdAt: String,
     val updatedAt: String,
+    // Server-issued content URL (a short-lived signed GET in production); null for local-dev where
+    // the client builds the URL itself. Authorized callers only — grant checks run before this is set.
+    val contentUrl: String? = null,
 )

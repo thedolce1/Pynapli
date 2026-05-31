@@ -19,6 +19,7 @@ class MediaService(
     private val uploadSigner: MediaUploadSigner,
     private val devAutoApproveUploads: Boolean = false,
     private val blockRepository: BlockRepository? = null,
+    private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
 ) {
     suspend fun createUploadSlot(
         ownerUserId: UUID,
@@ -268,6 +269,9 @@ class MediaService(
             processingStatus = processingStatus,
             createdAt = createdAt.toString(),
             updatedAt = updatedAt.toString(),
+            // Authorized callers only: album items are returned after grant checks, so attaching a
+            // signed content URL here does not leak access. Null for local-dev (client builds it).
+            contentUrl = mediaAssetUrlResolver?.publicContentUrl(mediaAssetId),
         )
 
     private fun String.toUuidOrThrow(): UUID = runCatching { UUID.fromString(this) }.getOrElse { throw MediaException("INVALID_ID") }

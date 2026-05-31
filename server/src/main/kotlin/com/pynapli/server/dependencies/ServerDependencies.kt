@@ -23,6 +23,7 @@ import com.pynapli.server.location.JdbcLocationRepository
 import com.pynapli.server.location.JdbcTravelLocationRepository
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationService
+import com.pynapli.server.media.GcsV4MediaAssetUrlResolver
 import com.pynapli.server.media.GcsV4MediaUploadSigner
 import com.pynapli.server.media.GcsV4SignedUrlFactory
 import com.pynapli.server.media.JdbcMediaRepository
@@ -192,11 +193,26 @@ class ServerDependencies(
                     repository = presenceRepository,
                     broadcaster = presenceBroadcaster,
                 )
-            val mediaAssetUrlResolver: MediaAssetUrlResolver? =
-                if (config.mediaStorageProvider.equals("local", ignoreCase = true)) {
-                    LocalMediaAssetUrlResolver(config.mediaUploadBaseUrl)
+            // One signing factory shared by the upload signer and the download resolver (gcs only).
+            val gcsSignedUrlFactory =
+                if (config.mediaStorageProvider.equals("gcs", ignoreCase = true)) {
+                    GcsV4SignedUrlFactory(
+                        credentials = loadMediaSigningCredentials(config),
+                        region = config.mediaGcsSigningRegion,
+                    )
                 } else {
                     null
+                }
+            val mediaAssetUrlResolver: MediaAssetUrlResolver? =
+                when (config.mediaStorageProvider.lowercase()) {
+                    "local" -> LocalMediaAssetUrlResolver(config.mediaUploadBaseUrl)
+                    "gcs" ->
+                        GcsV4MediaAssetUrlResolver(
+                            storageBucket = config.mediaStorageBucket,
+                            signedUrlFactory = gcsSignedUrlFactory!!,
+                        )
+
+                    else -> null
                 }
             val localMediaUploadStorage =
                 if (config.mediaStorageProvider.equals("local", ignoreCase = true)) {
@@ -215,11 +231,7 @@ class ServerDependencies(
                     "gcs" ->
                         GcsV4MediaUploadSigner(
                             storageBucket = config.mediaStorageBucket,
-                            signedUrlFactory =
-                                GcsV4SignedUrlFactory(
-                                    credentials = loadMediaSigningCredentials(config),
-                                    region = config.mediaGcsSigningRegion,
-                                ),
+                            signedUrlFactory = gcsSignedUrlFactory!!,
                         )
 
                     else ->
@@ -274,6 +286,7 @@ class ServerDependencies(
                     uploadSigner = uploadSigner,
                     devAutoApproveUploads = config.mediaDevAutoApproveUploads,
                     blockRepository = blockRepository,
+                    mediaAssetUrlResolver = mediaAssetUrlResolver,
                 )
             val subscriptionService =
                 SubscriptionService(

@@ -52,9 +52,17 @@ class StaticMediaUploadSigner(
 }
 
 /**
- * Production signer: issues GCS V4 signed `PUT` URLs via [GcsV4SignedUrlFactory]. The object layout
- * matches [StaticMediaUploadSigner] (`users/{owner}/{album}/{assetId}.{ext}`) so the stored asset
- * key and the signed URL agree. The client uploads with `PUT` + the declared `Content-Type`.
+ * Canonical GCS object key for an asset. Derivable from the asset id alone (no owner/album/ext in
+ * the path) so the download resolver can sign a GET without a DB lookup. Access is gated by the V4
+ * signature, not the path, and the per-asset row in `media_assets.storage_object_key` records this
+ * same key. Content-Type is carried by object metadata set at upload time, so no extension is
+ * needed for serving.
+ */
+internal fun mediaObjectKey(mediaAssetId: UUID): String = "media/$mediaAssetId"
+
+/**
+ * Production signer: issues GCS V4 signed `PUT` URLs via [GcsV4SignedUrlFactory] at [mediaObjectKey],
+ * so the stored asset key and the signed URL agree. The client uploads with `PUT` + `Content-Type`.
  */
 class GcsV4MediaUploadSigner(
     private val storageBucket: String,
@@ -67,7 +75,7 @@ class GcsV4MediaUploadSigner(
         albumKind: String,
         contentType: String,
     ): MediaUploadDestination {
-        val objectKey = "users/$ownerUserId/$albumKind/$mediaAssetId.${contentType.fileExtension()}"
+        val objectKey = mediaObjectKey(mediaAssetId)
         val signed =
             signedUrlFactory.sign(
                 method = "PUT",
