@@ -17,9 +17,9 @@ import java.util.UUID
 class MediaService(
     private val repository: MediaRepository,
     private val uploadSigner: MediaUploadSigner,
-    private val devAutoApproveUploads: Boolean = false,
     private val blockRepository: BlockRepository? = null,
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
+    private val moderationScanner: MediaModerationScanner = ManualReviewMediaModerationScanner(),
 ) {
     suspend fun createUploadSlot(
         ownerUserId: UUID,
@@ -103,11 +103,17 @@ class MediaService(
         val uploadedAsset =
             repository.markAssetUploaded(ownerUserId, mediaAssetId)
                 ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
+        // Moderation hook: decide visibility on upload-complete. Public discovery only surfaces
+        // ready+approved assets, so PendingReview/Rejected stay hidden until a moderator acts.
         val visibleAsset =
-            if (devAutoApproveUploads) {
-                repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
-            } else {
-                uploadedAsset
+            when (moderationScanner.scan(uploadedAsset)) {
+                MediaModerationDecision.Approved ->
+                    repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
+
+                is MediaModerationDecision.Rejected ->
+                    repository.markAssetModerationRejected(ownerUserId, mediaAssetId) ?: uploadedAsset
+
+                MediaModerationDecision.PendingReview -> uploadedAsset
             }
 
         return item.copy(mediaAsset = visibleAsset).toDto()

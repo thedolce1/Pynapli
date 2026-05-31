@@ -184,6 +184,50 @@ class JdbcMediaRepository(
             }
         }
 
+    override suspend fun markAssetModerationRejected(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE media_assets
+                        SET processing_status = 'ready',
+                            moderation_status = 'rejected',
+                            updated_at = now()
+                        WHERE id = ?
+                          AND owner_user_id = ?
+                          AND deleted_at IS NULL
+                          AND processing_status IN ('uploaded', 'processing', 'ready')
+                          AND moderation_status IN ('pending', 'approved')
+                        RETURNING id,
+                                  owner_user_id,
+                                  media_type,
+                                  storage_provider,
+                                  storage_bucket,
+                                  storage_object_key,
+                                  content_type,
+                                  byte_size,
+                                  pixel_width,
+                                  pixel_height,
+                                  moderation_status,
+                                  processing_status,
+                                  created_at,
+                                  updated_at,
+                                  deleted_at
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, mediaAssetId)
+                        statement.setObject(2, ownerUserId)
+                        statement.executeQuery().use { rs ->
+                            if (rs.next()) rs.toMediaAssetRecord() else null
+                        }
+                    }
+            }
+        }
+
     override suspend fun addAssetToAlbum(
         ownerUserId: UUID,
         albumId: UUID,

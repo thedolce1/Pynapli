@@ -23,6 +23,7 @@ import com.pynapli.server.location.JdbcLocationRepository
 import com.pynapli.server.location.JdbcTravelLocationRepository
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationService
+import com.pynapli.server.media.AutoApproveMediaModerationScanner
 import com.pynapli.server.media.GcsV4MediaAssetUrlResolver
 import com.pynapli.server.media.GcsV4MediaUploadSigner
 import com.pynapli.server.media.GcsV4SignedUrlFactory
@@ -30,6 +31,7 @@ import com.pynapli.server.media.JdbcMediaRepository
 import com.pynapli.server.media.LocalDevMediaUploadSigner
 import com.pynapli.server.media.LocalMediaAssetUrlResolver
 import com.pynapli.server.media.LocalMediaUploadStorage
+import com.pynapli.server.media.ManualReviewMediaModerationScanner
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.media.StaticMediaUploadSigner
@@ -284,9 +286,16 @@ class ServerDependencies(
                 MediaService(
                     repository = mediaRepository,
                     uploadSigner = uploadSigner,
-                    devAutoApproveUploads = config.mediaDevAutoApproveUploads,
                     blockRepository = blockRepository,
                     mediaAssetUrlResolver = mediaAssetUrlResolver,
+                    // Auto-approve in dev; hold for review otherwise. A real automated scanner can
+                    // replace ManualReview behind MediaModerationScanner without touching this wiring.
+                    moderationScanner =
+                        if (config.mediaDevAutoApproveUploads) {
+                            AutoApproveMediaModerationScanner()
+                        } else {
+                            ManualReviewMediaModerationScanner()
+                        },
                 )
             val subscriptionService =
                 SubscriptionService(
