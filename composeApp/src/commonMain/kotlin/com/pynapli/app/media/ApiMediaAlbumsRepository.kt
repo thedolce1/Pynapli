@@ -17,7 +17,11 @@ class ApiMediaAlbumsRepository(
                     result.value.items.map { item ->
                         item.toUi(
                             kind = kind,
-                            mediaUrl = apiClient.mediaAssetContentUrl(item.mediaAsset.mediaAssetId),
+                            // Prefer the server-issued (signed, in production) URL; fall back to the
+                            // local-dev content endpoint when the server did not supply one.
+                            mediaUrl =
+                                item.mediaAsset.contentUrl
+                                    ?: apiClient.mediaAssetContentUrl(item.mediaAsset.mediaAssetId),
                         )
                     },
                 )
@@ -62,7 +66,9 @@ class ApiMediaAlbumsRepository(
                         AppResult.Success(
                             result.value.toUi(
                                 kind = kind,
-                                mediaUrl = apiClient.mediaAssetContentUrl(result.value.mediaAsset.mediaAssetId),
+                                mediaUrl =
+                                    result.value.mediaAsset.contentUrl
+                                        ?: apiClient.mediaAssetContentUrl(result.value.mediaAsset.mediaAssetId),
                             ),
                         )
                     is AppResult.Failure -> result

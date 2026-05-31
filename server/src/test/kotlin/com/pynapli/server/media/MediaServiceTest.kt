@@ -40,6 +40,38 @@ class MediaServiceTest {
         }
 
     @Test
+    fun assetDtoCarriesResolverContentUrlWhenResolverPresent() =
+        runBlocking {
+            val resolver =
+                object : MediaAssetUrlResolver {
+                    override fun publicContentUrl(mediaAssetId: UUID): String = "https://signed.example/$mediaAssetId"
+                }
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), mediaAssetUrlResolver = resolver)
+
+            val slot =
+                service.createUploadSlot(
+                    UUID.randomUUID(),
+                    CreateMediaUploadRequestDto(albumKind = "private", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+                )
+
+            assertEquals("https://signed.example/${slot.mediaAsset.mediaAssetId}", slot.mediaAsset.contentUrl)
+        }
+
+    @Test
+    fun assetDtoHasNoContentUrlWithoutResolver() =
+        runBlocking {
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+
+            val slot =
+                service.createUploadSlot(
+                    UUID.randomUUID(),
+                    CreateMediaUploadRequestDto(albumKind = "private", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+                )
+
+            assertEquals(null, slot.mediaAsset.contentUrl)
+        }
+
+    @Test
     fun createUploadSlotRejectsOversizedImages() =
         runBlocking {
             val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
