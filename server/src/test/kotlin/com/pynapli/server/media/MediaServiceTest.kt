@@ -109,7 +109,7 @@ class MediaServiceTest {
 
             val item = service.uploadAndComplete(ownerId)
 
-            assertEquals("rejected", item.mediaAsset.moderationStatus)
+            assertEquals("removed", item.mediaAsset.moderationStatus)
         }
 
     private suspend fun MediaService.uploadAndComplete(ownerId: UUID) =
@@ -490,7 +490,7 @@ private class InMemoryMediaRepository : MediaRepository {
         val asset = assets[mediaAssetId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null } ?: return null
         val rejected =
             asset.copy(
-                moderationStatus = "rejected",
+                moderationStatus = "removed",
                 processingStatus = "ready",
             )
         assets[mediaAssetId] = rejected

@@ -11,6 +11,8 @@ import org.junit.BeforeClass
 import org.junit.Test
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
+import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
@@ -61,6 +63,60 @@ class MediaRepositoryIntegrationTest {
         assertTrue(dataSource.tableExists("media_album_access_grants"))
         assertTrue(dataSource.indexExists("idx_media_album_access_grants_active"))
     }
+
+    @Test
+    fun cleanupRemovesAbandonedAndRejectedButKeepsApproved() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000301")
+            val repository = JdbcMediaRepository(dataSource)
+            val cleanup = JdbcMediaCleanupRepository(dataSource)
+            dataSource.insertUser(ownerId)
+
+            val abandoned =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "abandoned"), { UUID.fromString("20000000-0000-0000-0000-000000000301") })
+            val approved =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "approved"), { UUID.fromString("20000000-0000-0000-0000-000000000302") })
+            repository.markAssetUploaded(ownerId, approved.mediaAssetId)
+            repository.markAssetReadyApproved(ownerId, approved.mediaAssetId)
+            val rejected =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "rejected"), { UUID.fromString("20000000-0000-0000-0000-000000000303") })
+            // Mirror the real flow: an asset is uploaded, then moderation rejects it
+            // (markAssetModerationRejected only transitions uploaded/processing/ready assets).
+            repository.markAssetUploaded(ownerId, rejected.mediaAssetId)
+            repository.markAssetModerationRejected(ownerId, rejected.mediaAssetId)
+
+            val cutoff = Instant.now().plus(Duration.ofHours(1))
+            val summary = cleanup.purgeStaleAssets(abandonedBefore = cutoff, rejectedBefore = cutoff, softDeletedBefore = cutoff)
+
+            assertEquals(1, summary.abandonedUploads)
+            assertEquals(1, summary.rejectedAssets)
+            assertEquals(0, summary.softDeletedAssets)
+            assertFalse(assetExists(abandoned.mediaAssetId))
+            assertFalse(assetExists(rejected.mediaAssetId))
+            assertTrue(assetExists(approved.mediaAssetId))
+        }
+
+    private fun sampleAssetCreate(
+        ownerId: UUID,
+        label: String,
+    ) = MediaAssetCreate(
+        mediaType = "image",
+        storageProvider = "gcs",
+        storageBucket = "pynapli-test-media",
+        storageObjectKey = "media/$label-$ownerId",
+        contentType = "image/jpeg",
+        byteSize = 1_024,
+        pixelWidth = 800,
+        pixelHeight = 600,
+    )
+
+    private fun assetExists(id: UUID): Boolean =
+        dataSource.connection.use { connection ->
+            connection.prepareStatement("SELECT 1 FROM media_assets WHERE id = ?").use { statement ->
+                statement.setObject(1, id)
+                statement.executeQuery().use { rs -> rs.next() }
+            }
+        }
 
     @Test
     fun privateAlbumRequiresGrantAndCanBeRevoked() =

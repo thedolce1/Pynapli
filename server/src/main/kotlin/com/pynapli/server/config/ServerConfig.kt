@@ -28,6 +28,8 @@ data class ServerConfig(
     val notificationPushProvider: String = "local",
     val activityRetentionEnabled: Boolean = false,
     val activityRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
+    val mediaCleanupEnabled: Boolean = false,
+    val mediaCleanupIntervalMillis: Long = 60 * 60 * 1_000L,
     val firebaseServiceAccountPath: String? = null,
     val firebaseServiceAccountJson: String? = null,
     val playStorePackageName: String = "com.pynapli.app",
@@ -146,6 +148,15 @@ data class ServerConfig(
                 activityRetentionIntervalMillis =
                     System
                         .getenv("PYNAPLI_ACTIVITY_RETENTION_INTERVAL_MS")
+                        ?.toLongOrNull()
+                        ?.coerceAtLeast(60_000L)
+                        ?: 60 * 60 * 1_000L,
+                mediaCleanupEnabled =
+                    System.getenv("PYNAPLI_MEDIA_CLEANUP_ENABLED")?.toBooleanStrictOrNull()
+                        ?: (environment == "local"),
+                mediaCleanupIntervalMillis =
+                    System
+                        .getenv("PYNAPLI_MEDIA_CLEANUP_INTERVAL_MS")
                         ?.toLongOrNull()
                         ?.coerceAtLeast(60_000L)
                         ?: 60 * 60 * 1_000L,
