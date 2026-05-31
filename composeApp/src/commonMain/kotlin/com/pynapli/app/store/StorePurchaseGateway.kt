@@ -14,15 +14,14 @@ interface StorePurchaseGateway {
 }
 
 class UnavailableStorePurchaseGateway : StorePurchaseGateway {
-    override suspend fun purchase(tier: SubscriptionTierDto): AppResult<StorePurchaseResult> =
-        storeFailure("BILLING_UNAVAILABLE", "Purchases are not available in this build.")
+    override suspend fun purchase(tier: SubscriptionTierDto): AppResult<StorePurchaseResult> = storeFailure("BILLING_UNAVAILABLE", "Purchases are not available in this build.")
 
-    override suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult> =
-        storeFailure("BILLING_UNAVAILABLE", "Purchases are not available in this build.")
+    override suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult> = storeFailure("BILLING_UNAVAILABLE", "Purchases are not available in this build.")
 
-    override suspend fun restorePurchases(): AppResult<StorePurchaseResult> =
-        storeFailure("BILLING_UNAVAILABLE", "Restore is not available in this build.")
+    override suspend fun restorePurchases(): AppResult<StorePurchaseResult> = storeFailure("BILLING_UNAVAILABLE", "Restore is not available in this build.")
 }
 
-internal fun storeFailure(code: String, message: String): AppResult.Failure =
-    AppResult.Failure(AppError(code = code, message = message))
+internal fun storeFailure(
+    code: String,
+    message: String,
+): AppResult.Failure = AppResult.Failure(AppError(code = code, message = message))

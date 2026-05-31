@@ -19,14 +19,15 @@ class NotificationDispatchService(
     private val repository: NotificationRepository,
     private val sender: PushNotificationSender,
     private val clock: Clock = Clock.systemUTC(),
-    private val maxAttempts: Int = 5
+    private val maxAttempts: Int = 5,
 ) {
     suspend fun dispatchPending(limit: Int = DEFAULT_LIMIT): NotificationDispatchSummary {
         val normalizedLimit = limit.coerceIn(1, MAX_LIMIT)
-        val recovered = repository.requeueStaleProcessingNotifications(
-            staleBefore = clock.instant().minusSeconds(PROCESSING_STALE_SECONDS),
-            limit = normalizedLimit
-        )
+        val recovered =
+            repository.requeueStaleProcessingNotifications(
+                staleBefore = clock.instant().minusSeconds(PROCESSING_STALE_SECONDS),
+                limit = normalizedLimit,
+            )
         val notifications = repository.claimPendingNotifications(normalizedLimit)
         var sent = 0
         var skipped = 0
@@ -48,18 +49,20 @@ class NotificationDispatchService(
             skipped = skipped,
             retried = retried,
             failed = failed,
-            recovered = recovered
+            recovered = recovered,
         )
     }
 
     private suspend fun dispatchOne(notification: NotificationDeliveryRecord): DispatchOutcome {
-        val quietHoursRelease = repository.getPreferences(notification.recipientUserId)
-            ?.quietHoursRelease(notification.kind, clock.instant())
+        val quietHoursRelease =
+            repository
+                .getPreferences(notification.recipientUserId)
+                ?.quietHoursRelease(notification.kind, clock.instant())
         if (quietHoursRelease != null) {
             repository.markNotificationRetry(
                 notificationId = notification.notificationId,
                 retryAt = quietHoursRelease,
-                error = QUIET_HOURS_ACTIVE
+                error = QUIET_HOURS_ACTIVE,
             )
             return DispatchOutcome.Retried
         }
@@ -70,11 +73,12 @@ class NotificationDispatchService(
             return DispatchOutcome.Skipped
         }
 
-        val results = targets.map { target ->
-            runCatching { sender.send(target, notification) }.getOrElse { error ->
-                PushSendResult.retryableFailure(error.message ?: error::class.simpleName.orEmpty())
+        val results =
+            targets.map { target ->
+                runCatching { sender.send(target, notification) }.getOrElse { error ->
+                    PushSendResult.retryableFailure(error.message ?: error::class.simpleName.orEmpty())
+                }
             }
-        }
 
         if (results.any { it.accepted }) {
             repository.markNotificationSent(notification.notificationId)
@@ -90,7 +94,7 @@ class NotificationDispatchService(
             repository.markNotificationRetry(
                 notificationId = notification.notificationId,
                 retryAt = clock.instant().plusSeconds(retryDelaySeconds(notification.attemptCount)),
-                error = error
+                error = error,
             )
             DispatchOutcome.Retried
         }
@@ -101,25 +105,30 @@ class NotificationDispatchService(
         return min(300L, 10L * (1L shl shift))
     }
 
-    private fun NotificationPreferencesRecord.quietHoursRelease(kind: String, now: Instant): Instant? {
+    private fun NotificationPreferencesRecord.quietHoursRelease(
+        kind: String,
+        now: Instant,
+    ): Instant? {
         if (!quietHoursEnabled || kind == NotificationKind.SYSTEM_SAFETY) return null
         if (quietHoursStartMinute == quietHoursEndMinute) return null
 
         val zone = runCatching { ZoneId.of(quietHoursTimezone) }.getOrElse { ZoneId.of("UTC") }
         val localNow = ZonedDateTime.ofInstant(now, zone)
         val minuteOfDay = localNow.hour * 60 + localNow.minute
-        val inQuietHours = if (quietHoursStartMinute < quietHoursEndMinute) {
-            minuteOfDay in quietHoursStartMinute until quietHoursEndMinute
-        } else {
-            minuteOfDay >= quietHoursStartMinute || minuteOfDay < quietHoursEndMinute
-        }
+        val inQuietHours =
+            if (quietHoursStartMinute < quietHoursEndMinute) {
+                minuteOfDay in quietHoursStartMinute until quietHoursEndMinute
+            } else {
+                minuteOfDay >= quietHoursStartMinute || minuteOfDay < quietHoursEndMinute
+            }
         if (!inQuietHours) return null
 
-        val releaseDate = if (quietHoursStartMinute < quietHoursEndMinute || minuteOfDay < quietHoursEndMinute) {
-            localNow.toLocalDate()
-        } else {
-            localNow.toLocalDate().plusDays(1)
-        }
+        val releaseDate =
+            if (quietHoursStartMinute < quietHoursEndMinute || minuteOfDay < quietHoursEndMinute) {
+                localNow.toLocalDate()
+            } else {
+                localNow.toLocalDate().plusDays(1)
+            }
         return releaseDate
             .atStartOfDay(zone)
             .plusMinutes(quietHoursEndMinute.toLong())
@@ -130,7 +139,7 @@ class NotificationDispatchService(
         Sent,
         Skipped,
         Retried,
-        Failed
+        Failed,
     }
 
     companion object {
@@ -145,7 +154,7 @@ class NotificationDispatchService(
 class NotificationDispatchWorker(
     private val service: NotificationDispatchService,
     private val intervalMillis: Long,
-    private val batchSize: Int
+    private val batchSize: Int,
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(NotificationDispatchWorker::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -153,27 +162,28 @@ class NotificationDispatchWorker(
 
     fun start() {
         if (job != null) return
-        job = scope.launch {
-            while (isActive) {
-                runCatching {
-                    val summary = service.dispatchPending(batchSize)
-                    if (summary.claimed > 0 || summary.recovered > 0) {
-                        logger.info(
-                            "Notification dispatch recovered={} claimed={} sent={} skipped={} retried={} failed={}",
-                            summary.recovered,
-                            summary.claimed,
-                            summary.sent,
-                            summary.skipped,
-                            summary.retried,
-                            summary.failed
-                        )
+        job =
+            scope.launch {
+                while (isActive) {
+                    runCatching {
+                        val summary = service.dispatchPending(batchSize)
+                        if (summary.claimed > 0 || summary.recovered > 0) {
+                            logger.info(
+                                "Notification dispatch recovered={} claimed={} sent={} skipped={} retried={} failed={}",
+                                summary.recovered,
+                                summary.claimed,
+                                summary.sent,
+                                summary.skipped,
+                                summary.retried,
+                                summary.failed,
+                            )
+                        }
+                    }.onFailure { error ->
+                        logger.warn("Notification dispatch failed", error)
                     }
-                }.onFailure { error ->
-                    logger.warn("Notification dispatch failed", error)
+                    delay(intervalMillis)
                 }
-                delay(intervalMillis)
             }
-        }
     }
 
     override fun close() {
@@ -184,7 +194,7 @@ class NotificationDispatchWorker(
 interface PushNotificationSender {
     suspend fun send(
         target: PushDeliveryTarget,
-        notification: NotificationDeliveryRecord
+        notification: NotificationDeliveryRecord,
     ): PushSendResult
 }
 
@@ -193,14 +203,14 @@ class LocalLoggingPushNotificationSender : PushNotificationSender {
 
     override suspend fun send(
         target: PushDeliveryTarget,
-        notification: NotificationDeliveryRecord
+        notification: NotificationDeliveryRecord,
     ): PushSendResult {
         logger.info(
             "Local push accepted notification={} kind={} platform={} device={}",
             notification.notificationId,
             notification.kind,
             target.platform,
-            target.deviceId
+            target.deviceId,
         )
         return PushSendResult.accepted()
     }
@@ -209,16 +219,14 @@ class LocalLoggingPushNotificationSender : PushNotificationSender {
 data class PushSendResult(
     val accepted: Boolean,
     val terminalFailure: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 ) {
     companion object {
         fun accepted(): PushSendResult = PushSendResult(accepted = true)
 
-        fun retryableFailure(errorMessage: String): PushSendResult =
-            PushSendResult(accepted = false, terminalFailure = false, errorMessage = errorMessage)
+        fun retryableFailure(errorMessage: String): PushSendResult = PushSendResult(accepted = false, terminalFailure = false, errorMessage = errorMessage)
 
-        fun terminalFailure(errorMessage: String): PushSendResult =
-            PushSendResult(accepted = false, terminalFailure = true, errorMessage = errorMessage)
+        fun terminalFailure(errorMessage: String): PushSendResult = PushSendResult(accepted = false, terminalFailure = true, errorMessage = errorMessage)
     }
 }
 
@@ -228,7 +236,7 @@ data class NotificationDispatchSummary(
     val skipped: Int,
     val retried: Int,
     val failed: Int,
-    val recovered: Int = 0
+    val recovered: Int = 0,
 ) {
     val completed: Int
         get() = sent + skipped + failed

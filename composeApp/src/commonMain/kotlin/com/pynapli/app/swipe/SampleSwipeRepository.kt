@@ -7,30 +7,32 @@ import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 
 class SampleSwipeRepository : SwipeRepository {
-    private val cards = mutableListOf(
-        SwipeCardDto(
-            userId = "sample-1",
-            displayName = "Maya",
-            displayAge = 31,
-            distanceLabel = "800 m",
-            distanceMeters = 800,
-            photoUrl = null,
-            linkedPartner = LinkedPartnerMiniDto(
-                userId = "sample-linked-1",
-                displayName = "Noa"
+    private val cards =
+        mutableListOf(
+            SwipeCardDto(
+                userId = "sample-1",
+                displayName = "Maya",
+                displayAge = 31,
+                distanceLabel = "800 m",
+                distanceMeters = 800,
+                photoUrl = null,
+                linkedPartner =
+                    LinkedPartnerMiniDto(
+                        userId = "sample-linked-1",
+                        displayName = "Noa",
+                    ),
+                rankToken = "swipe:sample:1",
             ),
-            rankToken = "swipe:sample:1"
-        ),
-        SwipeCardDto(
-            userId = "sample-2",
-            displayName = "Alex",
-            displayAge = 34,
-            distanceLabel = "1.2 km",
-            distanceMeters = 1_200,
-            photoUrl = null,
-            rankToken = "swipe:sample:2"
+            SwipeCardDto(
+                userId = "sample-2",
+                displayName = "Alex",
+                displayAge = 34,
+                distanceLabel = "1.2 km",
+                distanceMeters = 1_200,
+                photoUrl = null,
+                rankToken = "swipe:sample:2",
+            ),
         )
-    )
 
     override suspend fun loadDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckUi> =
         AppResult.Success(
@@ -39,9 +41,10 @@ class SampleSwipeRepository : SwipeRepository {
                 cards = cards.toList(),
                 nextCursor = null,
                 adSupported = true,
-                advancedFiltersApplied = request.lifestyleTags.isNotEmpty() ||
-                    request.logisticsTags.isNotEmpty()
-            )
+                advancedFiltersApplied =
+                    request.lifestyleTags.isNotEmpty() ||
+                        request.logisticsTags.isNotEmpty(),
+            ),
         )
 
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
@@ -49,6 +52,5 @@ class SampleSwipeRepository : SwipeRepository {
         return AppResult.Success(null)
     }
 
-    override suspend fun rewind(): AppResult<SwipeRewindUi?> =
-        AppResult.Success(null)
+    override suspend fun rewind(): AppResult<SwipeRewindUi?> = AppResult.Success(null)
 }

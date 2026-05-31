@@ -20,7 +20,7 @@ import io.ktor.server.routing.routing
 
 fun Application.configureNotificationRoutes(
     authService: AuthService?,
-    notificationService: NotificationService?
+    notificationService: NotificationService?,
 ) {
     if (authService == null || notificationService == null) return
 

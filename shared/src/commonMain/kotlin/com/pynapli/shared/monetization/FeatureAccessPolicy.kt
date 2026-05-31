@@ -1,6 +1,8 @@
 package com.pynapli.shared.monetization
 
-enum class PynapliFeature(val requiresPaidEntitlement: Boolean) {
+enum class PynapliFeature(
+    val requiresPaidEntitlement: Boolean,
+) {
     BlockUser(false),
     UnblockUser(false),
     ListBlocks(false),
@@ -18,26 +20,26 @@ enum class PynapliFeature(val requiresPaidEntitlement: Boolean) {
     IntroNote(true),
     PineappleLike(true),
     Boost(true),
-    RemoveAds(true)
+    RemoveAds(true),
 }
 
 object FeatureAccessPolicy {
-    val alwaysFreeSafetyFeatures: Set<PynapliFeature> = setOf(
-        PynapliFeature.BlockUser,
-        PynapliFeature.UnblockUser,
-        PynapliFeature.ListBlocks,
-        PynapliFeature.HideProfile,
-        PynapliFeature.UnhideProfile,
-        PynapliFeature.ListHiddenProfiles,
-        PynapliFeature.SubmitReport,
-        PynapliFeature.ListReports,
-        PynapliFeature.SupportContact,
-        PynapliFeature.SafetyCenter,
-        PynapliFeature.AgeVerification
-    )
+    val alwaysFreeSafetyFeatures: Set<PynapliFeature> =
+        setOf(
+            PynapliFeature.BlockUser,
+            PynapliFeature.UnblockUser,
+            PynapliFeature.ListBlocks,
+            PynapliFeature.HideProfile,
+            PynapliFeature.UnhideProfile,
+            PynapliFeature.ListHiddenProfiles,
+            PynapliFeature.SubmitReport,
+            PynapliFeature.ListReports,
+            PynapliFeature.SupportContact,
+            PynapliFeature.SafetyCenter,
+            PynapliFeature.AgeVerification,
+        )
 
-    fun requiresPaidEntitlement(feature: PynapliFeature): Boolean =
-        feature.requiresPaidEntitlement
+    fun requiresPaidEntitlement(feature: PynapliFeature): Boolean = feature.requiresPaidEntitlement
 
     fun requireAlwaysFreeSafetyFeature(feature: PynapliFeature) {
         check(feature in alwaysFreeSafetyFeatures && !requiresPaidEntitlement(feature)) {

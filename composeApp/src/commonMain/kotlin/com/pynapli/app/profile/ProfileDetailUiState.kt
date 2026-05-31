@@ -22,7 +22,7 @@ data class ProfileDetailUiState(
     val reportFeedback: String? = null,
     val blockedTargetUserId: String? = null,
     val hiddenTargetUserId: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 ) {
     val visible: Boolean
         get() = selectedCard != null

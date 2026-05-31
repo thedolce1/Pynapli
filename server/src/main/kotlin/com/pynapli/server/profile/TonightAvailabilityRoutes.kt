@@ -16,7 +16,7 @@ import io.ktor.server.routing.routing
 
 fun Application.configureTonightAvailabilityRoutes(
     authService: AuthService?,
-    service: TonightAvailabilityService?
+    service: TonightAvailabilityService?,
 ) {
     if (authService == null || service == null) return
 

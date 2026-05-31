@@ -5,7 +5,7 @@ import java.util.UUID
 
 internal fun Connection.findLatestRewindableAction(
     viewerUserId: UUID,
-    radiusMeters: Int
+    radiusMeters: Int,
 ): SwipeRewindCandidateRecord? =
     prepareStatement(
         """
@@ -167,7 +167,7 @@ internal fun Connection.findLatestRewindableAction(
           )
         ORDER BY sa.created_at DESC, sa.id DESC
         LIMIT 1
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, viewerUserId)
         statement.setObject(2, viewerUserId)
@@ -186,24 +186,26 @@ internal fun Connection.findLatestRewindableAction(
                     targetUserId = rs.getObject("target_user_id", UUID::class.java),
                     action = rs.getString("action"),
                     consumedInventoryId = rs.getObject("consumed_inventory_id", UUID::class.java),
-                    card = SwipeCardRecord(
-                        userId = rs.getObject("target_user_id", UUID::class.java),
-                        displayName = rs.getString("display_name"),
-                        displayAge = rs.getInt("display_age").takeUnless { rs.wasNull() },
-                        thumbnailMediaAssetId = rs.getObject("thumbnail_media_asset_id", UUID::class.java),
-                        showDistance = rs.getBoolean("show_distance"),
-                        distanceMeters = rs.getDouble("distance_meters"),
-                        linkedPartnerUserId = rs.getObject("linked_partner_user_id", UUID::class.java),
-                        linkedPartnerDisplayName = rs.getString("linked_partner_display_name"),
-                        linkedPartnerThumbnailMediaAssetId = rs.getObject(
-                            "linked_partner_thumbnail_media_asset_id",
-                            UUID::class.java
+                    card =
+                        SwipeCardRecord(
+                            userId = rs.getObject("target_user_id", UUID::class.java),
+                            displayName = rs.getString("display_name"),
+                            displayAge = rs.getInt("display_age").takeUnless { rs.wasNull() },
+                            thumbnailMediaAssetId = rs.getObject("thumbnail_media_asset_id", UUID::class.java),
+                            showDistance = rs.getBoolean("show_distance"),
+                            distanceMeters = rs.getDouble("distance_meters"),
+                            linkedPartnerUserId = rs.getObject("linked_partner_user_id", UUID::class.java),
+                            linkedPartnerDisplayName = rs.getString("linked_partner_display_name"),
+                            linkedPartnerThumbnailMediaAssetId =
+                                rs.getObject(
+                                    "linked_partner_thumbnail_media_asset_id",
+                                    UUID::class.java,
+                                ),
+                            bio = rs.getString("bio"),
+                            tags = rs.readStringArray("profile_tags"),
+                            verified = rs.getBoolean("verified"),
+                            visiting = rs.getBoolean("visiting"),
                         ),
-                        bio = rs.getString("bio"),
-                        tags = rs.readStringArray("profile_tags"),
-                        verified = rs.getBoolean("verified"),
-                        visiting = rs.getBoolean("visiting")
-                    )
                 )
             }
         }

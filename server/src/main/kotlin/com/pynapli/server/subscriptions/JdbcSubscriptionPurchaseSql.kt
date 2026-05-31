@@ -12,7 +12,7 @@ internal fun Connection.upsertDevSubscriptionPurchaseRecord(
     productId: String,
     tier: String,
     startsAt: Instant,
-    endsAt: Instant
+    endsAt: Instant,
 ): SubscriptionRecord =
     prepareStatement(UPSERT_DEV_SUBSCRIPTION_PURCHASE_QUERY).use { statement ->
         statement.setObject(1, UUID.randomUUID())
@@ -32,7 +32,7 @@ internal fun Connection.upsertDevSubscriptionPurchaseRecord(
 internal fun Connection.listPlayStoreSubscriptionsDueForVerificationRecords(
     staleBefore: Instant,
     renewalWindowEnd: Instant,
-    limit: Int
+    limit: Int,
 ): List<PlayStoreSubscriptionVerificationCandidate> =
     prepareStatement(LIST_PLAY_STORE_SUBSCRIPTIONS_DUE_FOR_VERIFICATION_QUERY).use { statement ->
         statement.setTimestamp(1, Timestamp.from(staleBefore))
@@ -48,7 +48,7 @@ internal fun Connection.listPlayStoreSubscriptionsDueForVerificationRecords(
     }
 
 internal fun Connection.findPlayStoreSubscriptionByPurchaseTokenRecord(
-    purchaseToken: String
+    purchaseToken: String,
 ): PlayStoreSubscriptionVerificationCandidate? =
     prepareStatement(FIND_PLAY_STORE_SUBSCRIPTION_BY_PURCHASE_TOKEN_QUERY).use { statement ->
         statement.setString(1, purchaseToken)
@@ -85,7 +85,7 @@ internal fun Connection.insertPlayStoreRtdnEventRecord(event: PlayStoreRtdnEvent
 internal fun Connection.updatePlayStoreRtdnEventStatusRecord(
     messageId: String,
     processingStatus: String,
-    errorCode: String?
+    errorCode: String?,
 ) {
     prepareStatement(UPDATE_PLAY_STORE_RTDN_EVENT_STATUS_QUERY).use { statement ->
         statement.setString(1, processingStatus)
@@ -100,7 +100,7 @@ internal fun Connection.upsertPendingPlayStoreSubscriptionPurchaseRecord(
     productId: String,
     purchaseToken: String,
     tier: String,
-    now: Instant
+    now: Instant,
 ): SubscriptionRecord =
     prepareStatement(UPSERT_PENDING_PLAY_STORE_PURCHASE_QUERY).use { statement ->
         statement.setObject(1, UUID.randomUUID())
@@ -131,7 +131,7 @@ internal fun Connection.upsertVerifiedPlayStoreSubscriptionPurchaseRecord(
     acknowledgedAt: Instant?,
     currentPeriodStart: Instant,
     currentPeriodEnd: Instant,
-    verifiedAt: Instant
+    verifiedAt: Instant,
 ): SubscriptionRecord =
     prepareStatement(UPSERT_VERIFIED_PLAY_STORE_PURCHASE_QUERY).use { statement ->
         statement.setObject(1, UUID.randomUUID())
@@ -160,7 +160,8 @@ internal fun Connection.upsertVerifiedPlayStoreSubscriptionPurchaseRecord(
         }
     }
 
-private val UPSERT_DEV_SUBSCRIPTION_PURCHASE_QUERY = """
+private val UPSERT_DEV_SUBSCRIPTION_PURCHASE_QUERY =
+    """
     INSERT INTO subscriptions (
         id,
         user_id,
@@ -188,9 +189,10 @@ private val UPSERT_DEV_SUBSCRIPTION_PURCHASE_QUERY = """
               status,
               current_period_start,
               current_period_end
-""".trimIndent()
+    """.trimIndent()
 
-private val LIST_PLAY_STORE_SUBSCRIPTIONS_DUE_FOR_VERIFICATION_QUERY = """
+private val LIST_PLAY_STORE_SUBSCRIPTIONS_DUE_FOR_VERIFICATION_QUERY =
+    """
     SELECT user_id AS subscription_user_id,
            external_product_id,
            external_subscription_id,
@@ -220,9 +222,10 @@ private val LIST_PLAY_STORE_SUBSCRIPTIONS_DUE_FOR_VERIFICATION_QUERY = """
         current_period_end ASC,
         id ASC
     LIMIT ?
-""".trimIndent()
+    """.trimIndent()
 
-private val FIND_PLAY_STORE_SUBSCRIPTION_BY_PURCHASE_TOKEN_QUERY = """
+private val FIND_PLAY_STORE_SUBSCRIPTION_BY_PURCHASE_TOKEN_QUERY =
+    """
     SELECT user_id AS subscription_user_id,
            external_product_id,
            external_subscription_id,
@@ -234,9 +237,10 @@ private val FIND_PLAY_STORE_SUBSCRIPTION_BY_PURCHASE_TOKEN_QUERY = """
     WHERE platform = 'play_store'
       AND external_subscription_id = ?
     LIMIT 1
-""".trimIndent()
+    """.trimIndent()
 
-private val INSERT_PLAY_STORE_RTDN_EVENT_QUERY = """
+private val INSERT_PLAY_STORE_RTDN_EVENT_QUERY =
+    """
     WITH inserted AS (
         INSERT INTO play_store_rtdn_events (
             id,
@@ -265,18 +269,20 @@ private val INSERT_PLAY_STORE_RTDN_EVENT_QUERY = """
         RETURNING 1
     )
     SELECT EXISTS(SELECT 1 FROM inserted)
-""".trimIndent()
+    """.trimIndent()
 
-private val UPDATE_PLAY_STORE_RTDN_EVENT_STATUS_QUERY = """
+private val UPDATE_PLAY_STORE_RTDN_EVENT_STATUS_QUERY =
+    """
     UPDATE play_store_rtdn_events
     SET processing_status = ?,
         error_code = ?,
         processed_at = now(),
         updated_at = now()
     WHERE message_id = ?
-""".trimIndent()
+    """.trimIndent()
 
-private val UPSERT_PENDING_PLAY_STORE_PURCHASE_QUERY = """
+private val UPSERT_PENDING_PLAY_STORE_PURCHASE_QUERY =
+    """
     INSERT INTO subscriptions (
         id,
         user_id,
@@ -314,9 +320,10 @@ private val UPSERT_PENDING_PLAY_STORE_PURCHASE_QUERY = """
               status,
               current_period_start,
               current_period_end
-""".trimIndent()
+    """.trimIndent()
 
-private val UPSERT_VERIFIED_PLAY_STORE_PURCHASE_QUERY = """
+private val UPSERT_VERIFIED_PLAY_STORE_PURCHASE_QUERY =
+    """
     INSERT INTO subscriptions (
         id,
         user_id,
@@ -368,4 +375,4 @@ private val UPSERT_VERIFIED_PLAY_STORE_PURCHASE_QUERY = """
               status,
               current_period_start,
               current_period_end
-""".trimIndent()
+    """.trimIndent()

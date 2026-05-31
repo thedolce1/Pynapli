@@ -37,13 +37,13 @@ internal fun SwipeFiltersSheet(
     savedState: SavedSwipeFiltersUiState = SavedSwipeFiltersUiState(),
     onSavePreset: (name: String, SwipeFilters) -> Unit = { _, _ -> },
     onApplySavedPreset: (SavedSwipeFilterDto) -> Unit = {},
-    onDeleteSavedPreset: (id: String) -> Unit = {}
+    onDeleteSavedPreset: (id: String) -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        modifier = Modifier.testTag(SwipeFilterTags.SHEET)
+        modifier = Modifier.testTag(SwipeFilterTags.SHEET),
     ) {
         SwipeFiltersSheetBody(
             initial = initial,
@@ -54,7 +54,7 @@ internal fun SwipeFiltersSheet(
             savedState = savedState,
             onSavePreset = onSavePreset,
             onApplySavedPreset = onApplySavedPreset,
-            onDeleteSavedPreset = onDeleteSavedPreset
+            onDeleteSavedPreset = onDeleteSavedPreset,
         )
     }
 }
@@ -69,35 +69,36 @@ internal fun SwipeFiltersSheetBody(
     savedState: SavedSwipeFiltersUiState = SavedSwipeFiltersUiState(),
     onSavePreset: (name: String, SwipeFilters) -> Unit = { _, _ -> },
     onApplySavedPreset: (SavedSwipeFilterDto) -> Unit = {},
-    onDeleteSavedPreset: (id: String) -> Unit = {}
+    onDeleteSavedPreset: (id: String) -> Unit = {},
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
     var saveName by remember { mutableStateOf("") }
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(top = 12.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(top = 12.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         SectionIntro(
             "These shape who shows up in your deck. Most filters are flexible; lock the " +
-                "ones that must apply. Locked filters may shrink your deck."
+                "ones that must apply. Locked filters may shrink your deck.",
         )
 
         SwipeSavedFiltersControls(
             savedState = savedState,
             onApplySavedPreset = onApplySavedPreset,
-            onDeleteSavedPreset = onDeleteSavedPreset
+            onDeleteSavedPreset = onDeleteSavedPreset,
         )
         SwipeWhoAgeDistanceFilters(
             draft = draft,
-            onDraftChange = { draft = it }
+            onDraftChange = { draft = it },
         )
         SwipeIntentAndVerifiedFilters(
             draft = draft,
-            onDraftChange = { draft = it }
+            onDraftChange = { draft = it },
         )
         SwipeAdvancedFilterControls(
             draft = draft,
@@ -105,7 +106,7 @@ internal fun SwipeFiltersSheetBody(
             onSubscribe = {
                 onDismiss()
                 onOpenStore()
-            }
+            },
         )
         SwipeSaveCurrentFilters(
             savedState = savedState,
@@ -113,13 +114,13 @@ internal fun SwipeFiltersSheetBody(
             draft = draft,
             onNameChange = { saveName = it },
             onSavePreset = onSavePreset,
-            onSaved = { saveName = "" }
+            onSaved = { saveName = "" },
         )
         SwipeFiltersFooter(
             draft = draft,
             onDismiss = onDismiss,
             onApply = onApply,
-            onClearAll = onClearAll
+            onClearAll = onClearAll,
         )
     }
 }

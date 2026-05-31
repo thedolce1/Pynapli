@@ -4,12 +4,11 @@ enum class PynapliEnvironment {
     Local,
     Dev,
     Staging,
-    Prod
+    Prod,
 }
 
 data class PynapliConfig(
     val environment: PynapliEnvironment,
     val apiBaseUrl: String,
-    val websocketBaseUrl: String
+    val websocketBaseUrl: String,
 )
-

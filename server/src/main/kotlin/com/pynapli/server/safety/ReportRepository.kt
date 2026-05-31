@@ -11,12 +11,12 @@ interface ReportRepository {
         targetId: String?,
         category: String,
         note: String?,
-        reportIdFactory: () -> UUID = UUID::randomUUID
+        reportIdFactory: () -> UUID = UUID::randomUUID,
     ): ReportRecord
 
     suspend fun listReportsByReporter(
         reporterUserId: UUID,
-        limit: Int
+        limit: Int,
     ): List<ReportHistoryRecord>
 }
 
@@ -29,7 +29,7 @@ data class ReportRecord(
     val category: String,
     val note: String?,
     val status: String,
-    val createdAt: Instant
+    val createdAt: Instant,
 )
 
 data class ReportHistoryRecord(
@@ -38,5 +38,5 @@ data class ReportHistoryRecord(
     val targetType: String,
     val category: String,
     val status: String,
-    val createdAt: Instant
+    val createdAt: Instant,
 )

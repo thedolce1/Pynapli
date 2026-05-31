@@ -16,7 +16,7 @@ internal fun Connection.insertMessage(
     body: String,
     moderationStatus: String,
     bodyFingerprint: String?,
-    safetyReason: String?
+    safetyReason: String?,
 ): MessageRecord =
     prepareStatement(
         """
@@ -31,7 +31,7 @@ internal fun Connection.insertMessage(
         )
         VALUES (?, ?, ?, ?, ?, ?, ?)
         RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, messageId)
         statement.setObject(2, conversationId)
@@ -43,22 +43,26 @@ internal fun Connection.insertMessage(
         statement.executeQuery().use { rs ->
             rs.next()
             rs.toMessageRecord(
-                deliveryStatus = if (moderationStatus == MessageModerationStatus.HELD) {
-                    DELIVERY_HELD_FOR_REVIEW
-                } else {
-                    DELIVERY_SENT
-                }
+                deliveryStatus =
+                    if (moderationStatus == MessageModerationStatus.HELD) {
+                        DELIVERY_HELD_FOR_REVIEW
+                    } else {
+                        DELIVERY_SENT
+                    },
             )
         }
     }
 
-internal fun Connection.touchConversationAt(conversationId: UUID, updatedAt: Instant) {
+internal fun Connection.touchConversationAt(
+    conversationId: UUID,
+    updatedAt: Instant,
+) {
     prepareStatement(
         """
         UPDATE conversations
         SET updated_at = ?
         WHERE id = ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setTimestamp(1, Timestamp.from(updatedAt))
         statement.setObject(2, conversationId)
@@ -66,7 +70,11 @@ internal fun Connection.touchConversationAt(conversationId: UUID, updatedAt: Ins
     }
 }
 
-internal fun Connection.markSenderReadAt(userId: UUID, conversationId: UUID, readAt: Instant) {
+internal fun Connection.markSenderReadAt(
+    userId: UUID,
+    conversationId: UUID,
+    readAt: Instant,
+) {
     prepareStatement(
         """
         UPDATE conversation_participants
@@ -75,7 +83,7 @@ internal fun Connection.markSenderReadAt(userId: UUID, conversationId: UUID, rea
           AND user_id = ?
           AND left_at IS NULL
           AND invitation_status = 'active'
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setTimestamp(1, Timestamp.from(readAt))
         statement.setObject(2, conversationId)
@@ -84,7 +92,10 @@ internal fun Connection.markSenderReadAt(userId: UUID, conversationId: UUID, rea
     }
 }
 
-internal fun Connection.deleteOwnVisibleMessage(userId: UUID, messageId: UUID): MessageRecord? =
+internal fun Connection.deleteOwnVisibleMessage(
+    userId: UUID,
+    messageId: UUID,
+): MessageRecord? =
     prepareStatement(
         """
         UPDATE messages
@@ -108,7 +119,7 @@ internal fun Connection.deleteOwnVisibleMessage(userId: UUID, messageId: UUID): 
                   created_at,
                   moderation_status,
                   deleted_at
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, messageId)
         statement.setObject(2, userId)
@@ -121,7 +132,7 @@ internal fun Connection.deleteOwnVisibleMessage(userId: UUID, messageId: UUID): 
 internal fun Connection.countRecentMessagesByFingerprint(
     userId: UUID,
     bodyFingerprint: String,
-    since: Instant
+    since: Instant,
 ): Int =
     prepareStatement(
         """
@@ -130,7 +141,7 @@ internal fun Connection.countRecentMessagesByFingerprint(
         WHERE sender_user_id = ?
           AND body_fingerprint = ?
           AND created_at >= ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.setString(2, bodyFingerprint)
@@ -141,7 +152,10 @@ internal fun Connection.countRecentMessagesByFingerprint(
         }
     }
 
-internal fun Connection.hasSentMessageInConversation(userId: UUID, conversationId: UUID): Boolean =
+internal fun Connection.hasSentMessageInConversation(
+    userId: UUID,
+    conversationId: UUID,
+): Boolean =
     prepareStatement(
         """
         SELECT EXISTS (
@@ -155,7 +169,7 @@ internal fun Connection.hasSentMessageInConversation(userId: UUID, conversationI
             WHERE m.conversation_id = ?
               AND m.sender_user_id = ?
         )
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.setObject(2, conversationId)
@@ -166,7 +180,10 @@ internal fun Connection.hasSentMessageInConversation(userId: UUID, conversationI
         }
     }
 
-internal fun Connection.leaveConversationParticipant(userId: UUID, conversationId: UUID): Int =
+internal fun Connection.leaveConversationParticipant(
+    userId: UUID,
+    conversationId: UUID,
+): Int =
     prepareStatement(
         """
         UPDATE conversation_participants
@@ -177,7 +194,7 @@ internal fun Connection.leaveConversationParticipant(userId: UUID, conversationI
           AND user_id = ?
           AND left_at IS NULL
           AND invitation_status IN ('active', 'invited')
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, conversationId)
         statement.setObject(2, userId)

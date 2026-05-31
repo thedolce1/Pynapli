@@ -49,21 +49,22 @@ internal fun NotificationCenterContent(
     onDeclinePartnerChatInvite: (String) -> Unit,
     onClearProfileLinkMessages: () -> Unit,
     onClearMessagesError: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val isEmpty = profileLinksState.incomingInvites.isEmpty() && partnerChatInvites.isEmpty()
 
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = ProfileSurfaceBottomPadding),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             ProfileHubTopBar(
                 title = "Notifications",
-                onBack = onBack
+                onBack = onBack,
             )
         }
 
@@ -72,7 +73,7 @@ internal fun NotificationCenterContent(
                 ProfileHubMessageBand(
                     message = message,
                     isError = true,
-                    onDismiss = onClearProfileLinkMessages
+                    onDismiss = onClearProfileLinkMessages,
                 )
             }
         }
@@ -82,7 +83,7 @@ internal fun NotificationCenterContent(
                 ProfileHubMessageBand(
                     message = message,
                     isError = true,
-                    onDismiss = onClearMessagesError
+                    onDismiss = onClearMessagesError,
                 )
             }
         }
@@ -101,7 +102,7 @@ internal fun NotificationCenterContent(
                             invite = invite,
                             isMutating = invite.linkId in profileLinksState.mutatingLinkIds,
                             onAccept = { onAcceptProfileLinkInvite(invite.linkId) },
-                            onDecline = { onDeclineProfileLinkInvite(invite.linkId) }
+                            onDecline = { onDeclineProfileLinkInvite(invite.linkId) },
                         )
                     }
                 }
@@ -117,7 +118,7 @@ internal fun NotificationCenterContent(
                             viewerUserId = viewerUserId,
                             isMutating = conversation.conversationId in messagesState.mutatingPartnerInviteConversationIds,
                             onAccept = { onAcceptPartnerChatInvite(conversation.conversationId) },
-                            onDecline = { onDeclinePartnerChatInvite(conversation.conversationId) }
+                            onDecline = { onDeclinePartnerChatInvite(conversation.conversationId) },
                         )
                     }
                 }
@@ -129,24 +130,25 @@ internal fun NotificationCenterContent(
 @Composable
 private fun EmptyActionCenter() {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
             text = "No action items",
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
         )
         Text(
             text = "Profile link and partner chat invites will appear here.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }
@@ -156,7 +158,7 @@ private fun ProfileLinkInviteRow(
     invite: ProfileLinkUi,
     isMutating: Boolean,
     onAccept: () -> Unit,
-    onDecline: () -> Unit
+    onDecline: () -> Unit,
 ) {
     ActionCenterRow(
         icon = Icons.Filled.People,
@@ -166,7 +168,7 @@ private fun ProfileLinkInviteRow(
         acceptLabel = "Accept",
         declineLabel = "Decline",
         onAccept = onAccept,
-        onDecline = onDecline
+        onDecline = onDecline,
     )
 }
 
@@ -176,7 +178,7 @@ private fun PartnerChatInviteRow(
     viewerUserId: String?,
     isMutating: Boolean,
     onAccept: () -> Unit,
-    onDecline: () -> Unit
+    onDecline: () -> Unit,
 ) {
     ActionCenterRow(
         icon = Icons.Filled.ChatBubble,
@@ -186,7 +188,7 @@ private fun PartnerChatInviteRow(
         acceptLabel = "Join",
         declineLabel = "Pass",
         onAccept = onAccept,
-        onDecline = onDecline
+        onDecline = onDecline,
     )
 }
 
@@ -199,36 +201,38 @@ private fun ActionCenterRow(
     acceptLabel: String,
     declineLabel: String,
     onAccept: () -> Unit,
-    onDecline: () -> Unit
+    onDecline: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
             }
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Text(
                     text = title,
@@ -236,20 +240,20 @@ private fun ActionCenterRow(
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = subtitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             if (isMutating) {
                 CircularProgressIndicator(
                     strokeWidth = 2.dp,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -257,17 +261,17 @@ private fun ActionCenterRow(
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(
                 onClick = onDecline,
-                enabled = !isMutating
+                enabled = !isMutating,
             ) {
                 Text(declineLabel)
             }
             TextButton(
                 onClick = onAccept,
-                enabled = !isMutating
+                enabled = !isMutating,
             ) {
                 Text(acceptLabel)
             }

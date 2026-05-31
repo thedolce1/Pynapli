@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.update
 class SwipeStateHolder(
     private val repository: SwipeRepository,
     private val actionIdFactory: () -> String = ::newSwipeActionId,
-    private val queueStore: SwipeActionQueueStore = NoOpSwipeActionQueueStore
+    private val queueStore: SwipeActionQueueStore = NoOpSwipeActionQueueStore,
 ) {
     private val _state = MutableStateFlow(SwipeUiState())
     val state: StateFlow<SwipeUiState> = _state.asStateFlow()
@@ -29,44 +29,49 @@ class SwipeStateHolder(
                 isPaging = false,
                 nextCursor = null,
                 errorCode = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
         when (val result = repository.loadDeck(swipeFilters.toSwipeDeckRequest())) {
-            is AppResult.Success -> _state.update {
-                it.copy(
-                    deckSessionId = result.value.deckSessionId,
-                    cards = result.value.cards.filterNotPending(),
-                    nextCursor = result.value.nextCursor,
-                    filters = it.filters.withPaidLocks(result.value.adSupported),
-                    adSupported = result.value.adSupported,
-                    paywallMessage = null,
-                    isLoading = false
-                )
-            }
-            is AppResult.Failure -> _state.update {
-                val entitlementRequired = result.error.code == "ENTITLEMENT_REQUIRED"
-                it.copy(
-                    isLoading = false,
-                    nextCursor = null,
-                    filters = if (entitlementRequired) {
-                        it.filters.withPaidLocks(adSupported = true).withActiveFilter(SwipeFilterType.ForYou)
-                    } else {
-                        it.filters
-                    },
-                    paywallMessage = if (entitlementRequired) {
-                        "Social or Select unlocks this swipe filter."
-                    } else {
-                        it.paywallMessage
-                    },
-                    errorCode = result.error.code,
-                    errorMessage = if (entitlementRequired && it.cards.isNotEmpty()) {
-                        null
-                    } else {
-                        result.error.message
-                    }
-                )
-            }
+            is AppResult.Success ->
+                _state.update {
+                    it.copy(
+                        deckSessionId = result.value.deckSessionId,
+                        cards = result.value.cards.filterNotPending(),
+                        nextCursor = result.value.nextCursor,
+                        filters = it.filters.withPaidLocks(result.value.adSupported),
+                        adSupported = result.value.adSupported,
+                        paywallMessage = null,
+                        isLoading = false,
+                    )
+                }
+            is AppResult.Failure ->
+                _state.update {
+                    val entitlementRequired = result.error.code == "ENTITLEMENT_REQUIRED"
+                    it.copy(
+                        isLoading = false,
+                        nextCursor = null,
+                        filters =
+                            if (entitlementRequired) {
+                                it.filters.withPaidLocks(adSupported = true).withActiveFilter(SwipeFilterType.ForYou)
+                            } else {
+                                it.filters
+                            },
+                        paywallMessage =
+                            if (entitlementRequired) {
+                                "Social or Select unlocks this swipe filter."
+                            } else {
+                                it.paywallMessage
+                            },
+                        errorCode = result.error.code,
+                        errorMessage =
+                            if (entitlementRequired && it.cards.isNotEmpty()) {
+                                null
+                            } else {
+                                result.error.message
+                            },
+                    )
+                }
         }
         if (pendingActions.isNotEmpty()) {
             flushPendingActions()
@@ -80,26 +85,29 @@ class SwipeStateHolder(
         if (current.cards.size >= LOAD_MORE_THRESHOLD) return
         _state.update { it.copy(isPaging = true) }
         when (val result = repository.loadDeck(current.swipeFilters.toSwipeDeckRequest(cursor = cursor))) {
-            is AppResult.Success -> _state.update { state ->
-                val existingIds = state.cards.mapTo(mutableSetOf()) { it.userId }
-                val pendingIds = pendingActions.mapTo(mutableSetOf()) { it.card.userId }
-                val appended = result.value.cards.filter { card ->
-                    card.userId !in existingIds && card.userId !in pendingIds
+            is AppResult.Success ->
+                _state.update { state ->
+                    val existingIds = state.cards.mapTo(mutableSetOf()) { it.userId }
+                    val pendingIds = pendingActions.mapTo(mutableSetOf()) { it.card.userId }
+                    val appended =
+                        result.value.cards.filter { card ->
+                            card.userId !in existingIds && card.userId !in pendingIds
+                        }
+                    state.copy(
+                        cards = state.cards + appended,
+                        deckSessionId = result.value.deckSessionId ?: state.deckSessionId,
+                        nextCursor = result.value.nextCursor,
+                        isPaging = false,
+                    )
                 }
-                state.copy(
-                    cards = state.cards + appended,
-                    deckSessionId = result.value.deckSessionId ?: state.deckSessionId,
-                    nextCursor = result.value.nextCursor,
-                    isPaging = false
-                )
-            }
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    isPaging = false,
-                    errorCode = result.error.code,
-                    errorMessage = result.error.message
-                )
-            }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        isPaging = false,
+                        errorCode = result.error.code,
+                        errorMessage = result.error.message,
+                    )
+                }
         }
     }
 
@@ -110,7 +118,7 @@ class SwipeStateHolder(
                 it.copy(
                     paywallMessage = "${selected.label} is included with Social or Select.",
                     errorCode = null,
-                    errorMessage = null
+                    errorMessage = null,
                 )
             }
             return
@@ -125,7 +133,7 @@ class SwipeStateHolder(
                 swipeFilters = type.toPresetFilters(),
                 paywallMessage = null,
                 errorCode = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
         load()
@@ -143,7 +151,7 @@ class SwipeStateHolder(
                 swipeFilters = filters,
                 paywallMessage = null,
                 errorCode = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
         load()
@@ -153,7 +161,10 @@ class SwipeStateHolder(
 
     suspend fun pass() = act(SwipeAction.PASS)
 
-    suspend fun submitIntroNote(card: SwipeCardDto, noteText: String) {
+    suspend fun submitIntroNote(
+        card: SwipeCardDto,
+        noteText: String,
+    ) {
         val trimmed = noteText.trim()
         when {
             trimmed.isBlank() -> {
@@ -168,12 +179,16 @@ class SwipeStateHolder(
         submitAction(card = card, action = SwipeAction.INTRO_NOTE, noteText = trimmed)
     }
 
-    suspend fun submitAction(card: SwipeCardDto, action: String, noteText: String? = null) {
+    suspend fun submitAction(
+        card: SwipeCardDto,
+        action: String,
+        noteText: String? = null,
+    ) {
         if (pendingActions.size >= MAX_PENDING_ACTIONS) {
             _state.update {
                 it.copy(
                     errorCode = "SWIPE_ACTION_QUEUE_FULL",
-                    errorMessage = "Reconnect to sync pending swipes before swiping more."
+                    errorMessage = "Reconnect to sync pending swipes before swiping more.",
                 )
             }
             return
@@ -181,13 +196,14 @@ class SwipeStateHolder(
 
         val deckSessionId = _state.value.deckSessionId
         if (_state.value.topCard?.userId != card.userId) return
-        val queuedAction = QueuedSwipeAction(
-            actionId = actionIdFactory(),
-            deckSessionId = deckSessionId,
-            card = card,
-            action = action,
-            noteText = noteText
-        )
+        val queuedAction =
+            QueuedSwipeAction(
+                actionId = actionIdFactory(),
+                deckSessionId = deckSessionId,
+                card = card,
+                action = action,
+                noteText = noteText,
+            )
         pendingActions += queuedAction
         persistPendingActions()
         _state.update { current ->
@@ -196,7 +212,7 @@ class SwipeStateHolder(
                 pendingActionCount = pendingActions.size,
                 paywallMessage = null,
                 errorCode = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
         flushPendingActions()
@@ -207,11 +223,12 @@ class SwipeStateHolder(
     }
 
     suspend fun rewind() {
-        val pendingAction = if (pendingActions.isNotEmpty()) {
-            pendingActions.removeAt(pendingActions.lastIndex)
-        } else {
-            null
-        }
+        val pendingAction =
+            if (pendingActions.isNotEmpty()) {
+                pendingActions.removeAt(pendingActions.lastIndex)
+            } else {
+                null
+            }
         if (pendingAction != null) {
             persistPendingActions()
             _state.update { current ->
@@ -221,7 +238,7 @@ class SwipeStateHolder(
                     isSubmitting = pendingActions.isNotEmpty(),
                     paywallMessage = null,
                     errorCode = null,
-                    errorMessage = null
+                    errorMessage = null,
                 )
             }
             return
@@ -232,45 +249,49 @@ class SwipeStateHolder(
                 isRewinding = true,
                 paywallMessage = null,
                 errorCode = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
         when (val result = repository.rewind()) {
-            is AppResult.Success -> _state.update { current ->
-                val rewind = result.value
-                if (rewind == null) {
-                    current.copy(
+            is AppResult.Success ->
+                _state.update { current ->
+                    val rewind = result.value
+                    if (rewind == null) {
+                        current.copy(
+                            isRewinding = false,
+                            errorCode = null,
+                            errorMessage = "Nothing to rewind.",
+                        )
+                    } else {
+                        current.copy(
+                            deckSessionId = rewind.deckSessionId.takeIf { it.isNotBlank() } ?: current.deckSessionId,
+                            cards = current.cards.withRestoredTopCard(rewind.card),
+                            isRewinding = false,
+                            paywallMessage = null,
+                            errorCode = null,
+                            errorMessage = null,
+                        )
+                    }
+                }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
                         isRewinding = false,
-                        errorCode = null,
-                        errorMessage = "Nothing to rewind."
-                    )
-                } else {
-                    current.copy(
-                        deckSessionId = rewind.deckSessionId.takeIf { it.isNotBlank() } ?: current.deckSessionId,
-                        cards = current.cards.withRestoredTopCard(rewind.card),
-                        isRewinding = false,
-                        paywallMessage = null,
-                        errorCode = null,
-                        errorMessage = null
+                        paywallMessage =
+                            if (result.error.code == "ENTITLEMENT_REQUIRED") {
+                                "Rewind is included with Social or Select."
+                            } else {
+                                it.paywallMessage
+                            },
+                        errorCode = result.error.code,
+                        errorMessage =
+                            if (result.error.code == "ENTITLEMENT_REQUIRED") {
+                                null
+                            } else {
+                                result.error.message
+                            },
                     )
                 }
-            }
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    isRewinding = false,
-                    paywallMessage = if (result.error.code == "ENTITLEMENT_REQUIRED") {
-                        "Rewind is included with Social or Select."
-                    } else {
-                        it.paywallMessage
-                    },
-                    errorCode = result.error.code,
-                    errorMessage = if (result.error.code == "ENTITLEMENT_REQUIRED") {
-                        null
-                    } else {
-                        result.error.message
-                    }
-                )
-            }
         }
     }
 
@@ -291,7 +312,7 @@ class SwipeStateHolder(
                                 pendingActionCount = pendingActions.size,
                                 errorCode = null,
                                 errorMessage = null,
-                                pendingMatch = result.value ?: current.pendingMatch
+                                pendingMatch = result.value ?: current.pendingMatch,
                             )
                         }
                     }
@@ -302,7 +323,7 @@ class SwipeStateHolder(
                                     isSubmitting = false,
                                     pendingActionCount = pendingActions.size,
                                     errorCode = result.error.code,
-                                    errorMessage = "Swipe saved. We will retry when the connection is back."
+                                    errorMessage = "Swipe saved. We will retry when the connection is back.",
                                 )
                             }
                             return
@@ -311,16 +332,17 @@ class SwipeStateHolder(
                         persistPendingActions()
                         _state.update {
                             it.copy(
-                                cards = if (it.cards.any { cardInDeck -> cardInDeck.userId == queued.card.userId }) {
-                                    it.cards
-                                } else {
-                                    listOf(queued.card) + it.cards
-                                },
+                                cards =
+                                    if (it.cards.any { cardInDeck -> cardInDeck.userId == queued.card.userId }) {
+                                        it.cards
+                                    } else {
+                                        listOf(queued.card) + it.cards
+                                    },
                                 isSubmitting = false,
                                 pendingActionCount = pendingActions.size,
                                 paywallMessage = queued.paywallMessageFor(result.error.code) ?: it.paywallMessage,
                                 errorCode = result.error.code,
-                                errorMessage = result.error.message
+                                errorMessage = result.error.message,
                             )
                         }
                         return
@@ -354,16 +376,18 @@ class SwipeStateHolder(
         val normalizedOwnerUserId = ownerUserId.normalizedOwnerUserId()
         if (restoredQueueOwnerUserId == normalizedOwnerUserId) return
         val ownerActions = queueStore.load(normalizedOwnerUserId)
-        val anonymousActions = if (normalizedOwnerUserId != null) {
-            queueStore.load(null)
-        } else {
-            emptyList()
-        }
+        val anonymousActions =
+            if (normalizedOwnerUserId != null) {
+                queueStore.load(null)
+            } else {
+                emptyList()
+            }
         restoredQueueOwnerUserId = normalizedOwnerUserId
         pendingActions.clear()
-        pendingActions += (ownerActions + anonymousActions)
-            .distinctBy { it.actionId }
-            .take(MAX_PENDING_ACTIONS)
+        pendingActions +=
+            (ownerActions + anonymousActions)
+                .distinctBy { it.actionId }
+                .take(MAX_PENDING_ACTIONS)
         if (normalizedOwnerUserId != null && anonymousActions.isNotEmpty()) {
             queueStore.clear(null)
             queueStore.save(normalizedOwnerUserId, pendingActions)
@@ -371,7 +395,7 @@ class SwipeStateHolder(
         _state.update {
             it.copy(
                 pendingActionCount = pendingActions.size,
-                isSubmitting = false
+                isSubmitting = false,
             )
         }
     }
@@ -393,6 +417,5 @@ class SwipeStateHolder(
         return filterNot { it.userId in pendingTargetIds }
     }
 
-    private fun String?.normalizedOwnerUserId(): String? =
-        this?.trim()?.takeIf { it.isNotEmpty() }
+    private fun String?.normalizedOwnerUserId(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 }

@@ -19,10 +19,10 @@ data class AccountDataExportRecord(
     val completedAt: Instant?,
     val expiresAt: Instant?,
     val downloadUrl: String?,
-    val errorMessage: String?
+    val errorMessage: String?,
 )
 
 data class AccountDeletionResult(
     val userId: UUID,
-    val revokedSessionCount: Int
+    val revokedSessionCount: Int,
 )

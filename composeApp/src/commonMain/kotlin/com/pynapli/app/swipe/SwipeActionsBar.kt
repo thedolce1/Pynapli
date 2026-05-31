@@ -36,12 +36,12 @@ internal fun SwipeActions(
     onPass: () -> Unit,
     onIntroNote: () -> Unit,
     onPineappleLike: () -> Unit,
-    onLike: () -> Unit
+    onLike: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp, alignment = Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         SwipeActionButton(
             enabled = rewindEnabled,
@@ -51,7 +51,7 @@ internal fun SwipeActions(
             contentDescription = "Rewind",
             background = MaterialTheme.colorScheme.surfaceVariant,
             iconTint = MaterialTheme.colorScheme.primary,
-            onClick = onRewind
+            onClick = onRewind,
         )
         SwipeActionButton(
             enabled = actionEnabled,
@@ -61,7 +61,7 @@ internal fun SwipeActions(
             contentDescription = "Pass",
             background = Color(0x33EE6650),
             iconTint = Color(0xFFE85A4A),
-            onClick = onPass
+            onClick = onPass,
         )
         SwipeActionButton(
             enabled = actionEnabled,
@@ -71,7 +71,7 @@ internal fun SwipeActions(
             contentDescription = "Intro Note",
             background = MaterialTheme.colorScheme.surfaceVariant,
             iconTint = MaterialTheme.colorScheme.primary,
-            onClick = onIntroNote
+            onClick = onIntroNote,
         )
         SwipeActionButton(
             enabled = actionEnabled,
@@ -81,7 +81,7 @@ internal fun SwipeActions(
             contentDescription = "Pineapple Like",
             background = Color(0x33F2B84B),
             iconTint = Color(0xFFF2B84B),
-            onClick = onPineappleLike
+            onClick = onPineappleLike,
         )
         SwipeActionButton(
             enabled = actionEnabled,
@@ -91,7 +91,7 @@ internal fun SwipeActions(
             contentDescription = "Like",
             background = Color(0x331FBF7B),
             iconTint = Color(0xFF1FBF7B),
-            onClick = onLike
+            onClick = onLike,
         )
     }
 }
@@ -105,33 +105,34 @@ private fun SwipeActionButton(
     contentDescription: String,
     background: Color,
     iconTint: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .size(56.dp)
-            .clip(CircleShape)
-            .background(background)
-            .border(1.dp, iconTint.copy(alpha = 0.45f), CircleShape),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(background)
+                .border(1.dp, iconTint.copy(alpha = 0.45f), CircleShape),
+        contentAlignment = Alignment.Center,
     ) {
         IconButton(
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.size(56.dp).testTag(testTag)
+            modifier = Modifier.size(56.dp).testTag(testTag),
         ) {
             if (isSubmitting) {
                 CircularProgressIndicator(
                     color = iconTint,
                     strokeWidth = 2.dp,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
                 )
             } else {
                 Icon(
                     imageVector = icon,
                     contentDescription = contentDescription,
                     tint = iconTint,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }

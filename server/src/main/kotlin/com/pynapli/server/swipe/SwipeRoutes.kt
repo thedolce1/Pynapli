@@ -21,61 +21,69 @@ import kotlinx.coroutines.withContext
 fun Application.configureSwipeRoutes(
     authService: AuthService?,
     swipeService: SwipeService?,
-    requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled()
+    requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
 ) {
     if (authService == null || swipeService == null) return
 
     routing {
         post("/v1/swipe/deck/query") {
             val profiler = requestProfilerFactory.start(call)
-            val response = withContext(profilerContextElement(profiler)) {
-                profiler.measure("swipe.route.deck.total") {
-                    val user = profiler.measure("swipe.route.deck.auth") {
-                        authService.authenticate(call.requiredBearerToken())
-                    }
-                    val request = profiler.measure("swipe.route.deck.receive") {
-                        call.receiveNullable<SwipeDeckRequestDto>() ?: SwipeDeckRequestDto()
-                    }
-                    profiler.measure("swipe.service.deck.total") {
-                        swipeService.queryDeck(user.id, request)
+            val response =
+                withContext(profilerContextElement(profiler)) {
+                    profiler.measure("swipe.route.deck.total") {
+                        val user =
+                            profiler.measure("swipe.route.deck.auth") {
+                                authService.authenticate(call.requiredBearerToken())
+                            }
+                        val request =
+                            profiler.measure("swipe.route.deck.receive") {
+                                call.receiveNullable<SwipeDeckRequestDto>() ?: SwipeDeckRequestDto()
+                            }
+                        profiler.measure("swipe.service.deck.total") {
+                            swipeService.queryDeck(user.id, request)
+                        }
                     }
                 }
-            }
             profiler.appendHeaders(call)
             call.respond(response)
         }
 
         post("/v1/swipe/actions") {
             val profiler = requestProfilerFactory.start(call)
-            val response = withContext(profilerContextElement(profiler)) {
-                profiler.measure("swipe.route.action.total") {
-                    val user = profiler.measure("swipe.route.action.auth") {
-                        authService.authenticate(call.requiredBearerToken())
-                    }
-                    val request = profiler.measure("swipe.route.action.receive") {
-                        call.receive<SwipeActionRequestDto>()
-                    }
-                    profiler.measure("swipe.service.action.total") {
-                        swipeService.submitAction(user.id, request)
+            val response =
+                withContext(profilerContextElement(profiler)) {
+                    profiler.measure("swipe.route.action.total") {
+                        val user =
+                            profiler.measure("swipe.route.action.auth") {
+                                authService.authenticate(call.requiredBearerToken())
+                            }
+                        val request =
+                            profiler.measure("swipe.route.action.receive") {
+                                call.receive<SwipeActionRequestDto>()
+                            }
+                        profiler.measure("swipe.service.action.total") {
+                            swipeService.submitAction(user.id, request)
+                        }
                     }
                 }
-            }
             profiler.appendHeaders(call)
             call.respond(response)
         }
 
         post("/v1/swipe/rewind") {
             val profiler = requestProfilerFactory.start(call)
-            val response = withContext(profilerContextElement(profiler)) {
-                profiler.measure("swipe.route.rewind.total") {
-                    val user = profiler.measure("swipe.route.rewind.auth") {
-                        authService.authenticate(call.requiredBearerToken())
-                    }
-                    profiler.measure("swipe.service.rewind.total") {
-                        swipeService.rewind(user.id)
+            val response =
+                withContext(profilerContextElement(profiler)) {
+                    profiler.measure("swipe.route.rewind.total") {
+                        val user =
+                            profiler.measure("swipe.route.rewind.auth") {
+                                authService.authenticate(call.requiredBearerToken())
+                            }
+                        profiler.measure("swipe.service.rewind.total") {
+                            swipeService.rewind(user.id)
+                        }
                     }
                 }
-            }
             profiler.appendHeaders(call)
             call.respond(response)
         }

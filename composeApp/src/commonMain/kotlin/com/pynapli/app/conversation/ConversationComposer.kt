@@ -31,24 +31,26 @@ import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
 internal fun TypingIndicator(participants: List<TypingParticipantUi>) {
     if (participants.isEmpty()) return
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(ConversationTestTags.typingIndicator),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag(ConversationTestTags.typingIndicator),
         shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f)
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 repeat(3) {
                     Box(
-                        modifier = Modifier
-                            .size(5.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
+                        modifier =
+                            Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
                     )
                 }
             }
@@ -56,7 +58,7 @@ internal fun TypingIndicator(participants: List<TypingParticipantUi>) {
                 text = participants.typingLabel(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 1
+                maxLines = 1,
             )
         }
     }
@@ -71,42 +73,47 @@ internal fun Composer(
     remainingCharacters: Int,
     errorMessage: String?,
     onDraftChanged: (String) -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
 ) {
     val showCharacterCount = draft.length >= MESSAGE_BODY_MAX_LENGTH - 200 || isOverLimit
-    val helperText = when {
-        errorMessage != null -> errorMessage
-        isOverLimit -> "${-remainingCharacters} characters over limit"
-        showCharacterCount -> "$remainingCharacters characters left"
-        else -> null
-    }
-    val helperColor = if (errorMessage != null || isOverLimit) {
-        MaterialTheme.colorScheme.error
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val helperText =
+        when {
+            errorMessage != null -> errorMessage
+            isOverLimit -> "${-remainingCharacters} characters over limit"
+            showCharacterCount -> "$remainingCharacters characters left"
+            else -> null
+        }
+    val helperColor =
+        if (errorMessage != null || isOverLimit) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
     val sendButtonActive = canSend || isSending
-    val sendButtonColor = if (sendButtonActive) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
-    val sendContentColor = if (sendButtonActive) {
-        MaterialTheme.colorScheme.onPrimary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val sendButtonColor =
+        if (sendButtonActive) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        }
+    val sendContentColor =
+        if (sendButtonActive) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             OutlinedTextField(
                 value = draft,
@@ -115,27 +122,28 @@ internal fun Composer(
                 isError = errorMessage != null || isOverLimit,
                 placeholder = { Text("Message") },
                 modifier = Modifier.weight(1f),
-                maxLines = 4
+                maxLines = 4,
             )
             IconButton(
                 onClick = onSend,
                 enabled = canSend,
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(sendButtonColor)
+                modifier =
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(sendButtonColor),
             ) {
                 if (isSending) {
                     CircularProgressIndicator(
                         color = sendContentColor,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(22.dp),
                     )
                 } else {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send message",
-                        tint = sendContentColor
+                        tint = sendContentColor,
                     )
                 }
             }
@@ -145,7 +153,7 @@ internal fun Composer(
                 text = text,
                 color = helperColor,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(start = 4.dp)
+                modifier = Modifier.padding(start = 4.dp),
             )
         }
     }

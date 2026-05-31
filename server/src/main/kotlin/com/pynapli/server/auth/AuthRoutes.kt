@@ -23,16 +23,16 @@ fun Application.configureAuthRoutes(authService: AuthService?) {
             post("/email/signup") {
                 call.respond(
                     authService.signupEmail(
-                        request = call.receive()
-                    )
+                        request = call.receive(),
+                    ),
                 )
             }
 
             post("/email/login") {
                 call.respond(
                     authService.loginEmail(
-                        request = call.receive()
-                    )
+                        request = call.receive(),
+                    ),
                 )
             }
 
@@ -46,29 +46,30 @@ fun Application.configureAuthRoutes(authService: AuthService?) {
                 call.respond(LogoutResponseDto(loggedOut = authService.logout(token)))
             }
         }
-
     }
 }
 
-private suspend fun AuthService.signupEmail(request: EmailSignupRequestDto) = signupEmail(
-    email = request.email,
-    password = request.password,
-    birthdate = request.birthdate,
-    confirmedAdult = request.confirmedAdult,
-    acceptedTerms = request.acceptedTerms,
-    acceptedPrivacy = request.acceptedPrivacy,
-    deviceId = request.deviceId,
-    platform = request.platform,
-    appVersion = request.appVersion
-)
+private suspend fun AuthService.signupEmail(request: EmailSignupRequestDto) =
+    signupEmail(
+        email = request.email,
+        password = request.password,
+        birthdate = request.birthdate,
+        confirmedAdult = request.confirmedAdult,
+        acceptedTerms = request.acceptedTerms,
+        acceptedPrivacy = request.acceptedPrivacy,
+        deviceId = request.deviceId,
+        platform = request.platform,
+        appVersion = request.appVersion,
+    )
 
-private suspend fun AuthService.loginEmail(request: EmailLoginRequestDto) = loginEmail(
-    email = request.email,
-    password = request.password,
-    deviceId = request.deviceId,
-    platform = request.platform,
-    appVersion = request.appVersion
-)
+private suspend fun AuthService.loginEmail(request: EmailLoginRequestDto) =
+    loginEmail(
+        email = request.email,
+        password = request.password,
+        deviceId = request.deviceId,
+        platform = request.platform,
+        appVersion = request.appVersion,
+    )
 
 private fun io.ktor.server.application.ApplicationCall.bearerToken(): String? {
     val value = request.headers[HttpHeaders.Authorization] ?: return null
@@ -76,17 +77,19 @@ private fun io.ktor.server.application.ApplicationCall.bearerToken(): String? {
     return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() }
 }
 
-fun authStatusFor(code: String): HttpStatusCode = when (code) {
-    "EMAIL_ALREADY_EXISTS" -> HttpStatusCode.Conflict
-    "INVALID_CREDENTIALS", "INVALID_REFRESH_TOKEN", "UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
-    "ACCOUNT_NOT_ACTIVE" -> HttpStatusCode.Forbidden
-    "INVALID_EMAIL",
-    "PASSWORD_TOO_SHORT",
-    "INVALID_BIRTHDATE",
-    "BIRTHDATE_REQUIRED",
-    "AGE_RESTRICTED",
-    "ADULT_CONFIRMATION_REQUIRED",
-    "TERMS_ACCEPTANCE_REQUIRED",
-    "PRIVACY_ACCEPTANCE_REQUIRED" -> HttpStatusCode.BadRequest
-    else -> HttpStatusCode.BadRequest
-}
+fun authStatusFor(code: String): HttpStatusCode =
+    when (code) {
+        "EMAIL_ALREADY_EXISTS" -> HttpStatusCode.Conflict
+        "INVALID_CREDENTIALS", "INVALID_REFRESH_TOKEN", "UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
+        "ACCOUNT_NOT_ACTIVE" -> HttpStatusCode.Forbidden
+        "INVALID_EMAIL",
+        "PASSWORD_TOO_SHORT",
+        "INVALID_BIRTHDATE",
+        "BIRTHDATE_REQUIRED",
+        "AGE_RESTRICTED",
+        "ADULT_CONFIRMATION_REQUIRED",
+        "TERMS_ACCEPTANCE_REQUIRED",
+        "PRIVACY_ACCEPTANCE_REQUIRED",
+        -> HttpStatusCode.BadRequest
+        else -> HttpStatusCode.BadRequest
+    }

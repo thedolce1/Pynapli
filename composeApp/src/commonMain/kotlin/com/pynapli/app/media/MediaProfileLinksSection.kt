@@ -18,7 +18,7 @@ internal fun LazyGridScope.profileLinksSection(
     onAccept: (String) -> Unit,
     onDecline: (String) -> Unit,
     onUnlink: () -> Unit,
-    onClearMessage: () -> Unit
+    onClearMessage: () -> Unit,
 ) {
     item(span = { GridItemSpan(maxLineSpan) }) {
         ProfileLinksSection(
@@ -26,7 +26,7 @@ internal fun LazyGridScope.profileLinksSection(
             onAccept = onAccept,
             onDecline = onDecline,
             onUnlink = onUnlink,
-            onClearMessage = onClearMessage
+            onClearMessage = onClearMessage,
         )
     }
 }
@@ -37,13 +37,14 @@ private fun ProfileLinksSection(
     onAccept: (String) -> Unit,
     onDecline: (String) -> Unit,
     onUnlink: () -> Unit,
-    onClearMessage: () -> Unit
+    onClearMessage: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 2.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ProfileLinksHeader()
 
@@ -51,14 +52,14 @@ private fun ProfileLinksSection(
             LinkMessageBand(
                 message = message,
                 isError = true,
-                onDismiss = onClearMessage
+                onDismiss = onClearMessage,
             )
         }
         state.feedbackMessage?.let { message ->
             LinkMessageBand(
                 message = message,
                 isError = false,
-                onDismiss = onClearMessage
+                onDismiss = onClearMessage,
             )
         }
 
@@ -67,13 +68,14 @@ private fun ProfileLinksSection(
                 state.incomingInvites.isEmpty() &&
                 state.outgoingInvites.isEmpty() -> LoadingLinkedProfileRow()
 
-            state.current != null -> ProfileLinkRow(
-                link = state.current,
-                statusLabel = "Active",
-                isBusy = state.current.linkId in state.mutatingLinkIds,
-                primaryActionLabel = "Unlink",
-                onPrimaryAction = onUnlink
-            )
+            state.current != null ->
+                ProfileLinkRow(
+                    link = state.current,
+                    statusLabel = "Active",
+                    isBusy = state.current.linkId in state.mutatingLinkIds,
+                    primaryActionLabel = "Unlink",
+                    onPrimaryAction = onUnlink,
+                )
 
             else -> EmptyLinkedProfileRow()
         }
@@ -83,14 +85,14 @@ private fun ProfileLinksSection(
                 text = "Invites to review",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(top = 2.dp)
+                modifier = Modifier.padding(top = 2.dp),
             )
             state.incomingInvites.forEach { invite ->
                 IncomingProfileLinkRow(
                     link = invite,
                     isBusy = invite.linkId in state.mutatingLinkIds,
                     onAccept = { onAccept(invite.linkId) },
-                    onDecline = { onDecline(invite.linkId) }
+                    onDecline = { onDecline(invite.linkId) },
                 )
             }
         }
@@ -100,7 +102,7 @@ private fun ProfileLinksSection(
                 text = "Sent invites",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(top = 2.dp)
+                modifier = Modifier.padding(top = 2.dp),
             )
             state.outgoingInvites.forEach { invite ->
                 ProfileLinkRow(
@@ -108,7 +110,7 @@ private fun ProfileLinksSection(
                     statusLabel = "Pending",
                     isBusy = false,
                     primaryActionLabel = null,
-                    onPrimaryAction = {}
+                    onPrimaryAction = {},
                 )
             }
         }

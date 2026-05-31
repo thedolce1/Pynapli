@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -15,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.lazy.grid.LazyGridState
 import com.pynapli.app.location.LocationUiState
 
 @Composable
@@ -27,13 +27,13 @@ internal fun GridBody(
     onProfileSelected: (GridProfileCardUi) -> Unit,
     onLoadMore: () -> Unit,
     onUseCurrentLocation: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     when {
         state.isRefreshing && state.cards.isEmpty() -> {
             Box(
                 modifier = modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
@@ -41,22 +41,23 @@ internal fun GridBody(
 
         state.errorCode == "LOCATION_REQUIRED" && state.cards.isEmpty() -> {
             Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 28.dp),
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 28.dp),
                 verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
                     text = "Use current location to load nearby profiles.",
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
                 )
                 Button(
                     onClick = onUseCurrentLocation,
                     enabled = !locationState.isUpdating,
-                    modifier = Modifier.padding(top = 14.dp)
+                    modifier = Modifier.padding(top = 14.dp),
                 ) {
                     Text(text = if (locationState.isUpdating) "Updating..." else "Use current location")
                 }
@@ -66,7 +67,7 @@ internal fun GridBody(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 10.dp)
+                        modifier = Modifier.padding(top = 10.dp),
                     )
                 }
             }
@@ -74,41 +75,43 @@ internal fun GridBody(
 
         state.errorMessage != null && state.cards.isEmpty() -> {
             Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp),
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp),
                 verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
                     text = state.errorMessage,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
                 )
             }
         }
 
         state.cards.isEmpty() && state.filters.isAnyActive -> {
             Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 28.dp),
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 28.dp),
                 verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
                     text = "No one matches these filters right now.",
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
                 )
                 Text(
                     text = "Try widening distance or clearing one filter.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
         }
@@ -122,7 +125,7 @@ internal fun GridBody(
                 onLoadMore = onLoadMore,
                 canLoadMore = state.nextCursor != null,
                 isLoadingMore = state.isLoadingMore,
-                modifier = modifier
+                modifier = modifier,
             )
         }
     }

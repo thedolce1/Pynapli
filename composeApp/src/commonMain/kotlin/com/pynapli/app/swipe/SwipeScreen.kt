@@ -32,7 +32,7 @@ fun SwipeScreen(
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
     topPicksStateHolder: TopPicksStateHolder? = null,
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val state by stateHolder.state.collectAsState()
     val profileState by profileDetailStateHolder.state.collectAsState()
@@ -41,7 +41,12 @@ fun SwipeScreen(
     val topPicksState by topPicksStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf(TopPicksUiState()) }
     val travelLocationState by travelLocationStateHolder?.state?.collectAsState()
-        ?: remember { mutableStateOf(com.pynapli.app.location.TravelLocationUiState()) }
+        ?: remember {
+            mutableStateOf(
+                com.pynapli.app.location
+                    .TravelLocationUiState(),
+            )
+        }
     val scope = rememberCoroutineScope()
     var requestedAction by remember { mutableStateOf<String?>(null) }
     var selectedProfileCard by remember { mutableStateOf<SwipeCardDto?>(null) }
@@ -127,24 +132,26 @@ fun SwipeScreen(
         },
         onPineappleLike = { requestedAction = SwipeAction.PINEAPPLE_LIKE },
         onLike = { requestedAction = SwipeAction.LIKE },
-        modifier = modifier
+        modifier = modifier,
     )
 
-    if (matchNotificationsEnabled) state.pendingMatch?.let { match ->
-        MatchOverlay(
-            match = match,
-            showDetails = notificationDetail == AppSettings.NOTIFICATION_STANDARD,
-            onDismiss = stateHolder::dismissMatch,
-            onMessage = {
-                stateHolder.dismissMatch()
-                scope.launch {
-                    conversationStateHolder.openSwipeMatch(
-                        match = match,
-                        viewerUserId = viewerUserId
-                    )
-                }
-            }
-        )
+    if (matchNotificationsEnabled) {
+        state.pendingMatch?.let { match ->
+            MatchOverlay(
+                match = match,
+                showDetails = notificationDetail == AppSettings.NOTIFICATION_STANDARD,
+                onDismiss = stateHolder::dismissMatch,
+                onMessage = {
+                    stateHolder.dismissMatch()
+                    scope.launch {
+                        conversationStateHolder.openSwipeMatch(
+                            match = match,
+                            viewerUserId = viewerUserId,
+                        )
+                    }
+                },
+            )
+        }
     }
 
     if (profileState.visible && (selectedProfileCard != null || profileActionMode == ProfileDetailActionMode.Grid)) {
@@ -164,7 +171,7 @@ fun SwipeScreen(
                     scope.launch {
                         conversationStateHolder.openDirect(
                             card = card,
-                            viewerUserId = viewerUserId
+                            viewerUserId = viewerUserId,
                         )
                     }
                 }
@@ -208,7 +215,7 @@ fun SwipeScreen(
                 profileActionMode = ProfileDetailActionMode.Grid
                 scope.launch { profileDetailStateHolder.openLinkedPartner(partner) }
             },
-            distanceUnit = distanceUnit
+            distanceUnit = distanceUnit,
         )
     }
 
@@ -228,7 +235,7 @@ fun SwipeScreen(
                     selectedProfileCard = null
                     profileActionMode = ProfileDetailActionMode.Grid
                     scope.launch { profileDetailStateHolder.openLinkedPartner(partner.toUi()) }
-                }
+                },
             )
         }
     }
@@ -260,7 +267,7 @@ fun SwipeScreen(
             },
             onDeleteSavedPreset = { id ->
                 scope.launch { savedSwipeFilterStateHolder?.delete(id) }
-            }
+            },
         )
     }
 
@@ -289,7 +296,7 @@ fun SwipeScreen(
             onOpenStore = {
                 travelSheetVisible = false
                 onOpenStore()
-            }
+            },
         )
     }
 
@@ -311,7 +318,7 @@ fun SwipeScreen(
                     introNoteCard = null
                     introNoteText = ""
                 }
-            }
+            },
         )
     }
 }

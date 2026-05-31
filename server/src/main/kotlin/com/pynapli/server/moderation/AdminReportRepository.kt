@@ -8,14 +8,14 @@ interface AdminReportRepository {
         status: String,
         limit: Int,
         actorId: String,
-        reason: String
+        reason: String,
     ): List<AdminReportRecord>
 
     suspend fun updateReportStatus(
         reportId: UUID,
         status: String,
         actorId: String,
-        reason: String
+        reason: String,
     ): AdminReportActionRecord?
 }
 
@@ -30,11 +30,11 @@ data class AdminReportRecord(
     val status: String,
     val createdAt: Instant,
     val updatedAt: Instant,
-    val reviewedAt: Instant?
+    val reviewedAt: Instant?,
 )
 
 data class AdminReportActionRecord(
     val reportId: UUID,
     val status: String,
-    val actedAt: Instant
+    val actedAt: Instant,
 )

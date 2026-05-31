@@ -43,31 +43,32 @@ internal fun SwipeScreenContent(
     onIntroNote: () -> Unit,
     onPineappleLike: () -> Unit,
     onLike: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag(SwipeTestTags.ROOT)
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 12.dp)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .testTag(SwipeTestTags.ROOT)
+                .background(MaterialTheme.colorScheme.background)
+                .statusBarsPadding()
+                .padding(horizontal = 18.dp, vertical = 12.dp),
     ) {
         SwipeHeader(
             activeFilterCount = state.swipeFilters.activeCount,
             travelCityName = travelCityName,
             onOpenFilters = onOpenFilters,
-            onOpenTravel = onOpenTravel
+            onOpenTravel = onOpenTravel,
         )
         Spacer(Modifier.height(10.dp))
         SwipeFilterRow(
             filters = state.filters,
-            onFilterSelected = onFilterSelected
+            onFilterSelected = onFilterSelected,
         )
         state.paywallMessage?.let { message ->
             SwipePaywallRow(
                 message = message,
-                onOpenStore = onOpenStore
+                onOpenStore = onOpenStore,
             )
         }
         if (AdPlacementPolicy.canShowAds(state.adSupported, AdPlacement.SwipeBetweenBatches)) {
@@ -76,7 +77,7 @@ internal fun SwipeScreenContent(
         if (topPicksState.items.isNotEmpty()) {
             TopPicksRow(
                 state = topPicksState,
-                onPickSelected = onTopPickSelected
+                onPickSelected = onTopPickSelected,
             )
         }
         Spacer(Modifier.height(10.dp))
@@ -91,9 +92,10 @@ internal fun SwipeScreenContent(
             onOpenProfile = onOpenProfile,
             onLinkedPartnerTap = onLinkedPartnerTap,
             onSwiped = onSwiped,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
         )
 
         Spacer(Modifier.height(16.dp))
@@ -104,7 +106,7 @@ internal fun SwipeScreenContent(
         if (state.pendingActionCount > 0) {
             SwipePendingSync(
                 count = state.pendingActionCount,
-                onRetry = onRetryPendingActions
+                onRetry = onRetryPendingActions,
             )
             Spacer(Modifier.height(8.dp))
         }
@@ -117,7 +119,7 @@ internal fun SwipeScreenContent(
             onPass = onPass,
             onIntroNote = onIntroNote,
             onPineappleLike = onPineappleLike,
-            onLike = onLike
+            onLike = onLike,
         )
     }
 }
@@ -133,11 +135,11 @@ private fun SwipeDeckArea(
     onOpenProfile: (SwipeCardDto) -> Unit,
     onLinkedPartnerTap: (SwipeCardDto) -> Unit,
     onSwiped: (SwipeCardDto, String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier,
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         when {
             state.isLoading && state.cards.isEmpty() -> {
@@ -146,7 +148,7 @@ private fun SwipeDeckArea(
             state.errorMessage != null && state.cards.isEmpty() && state.nextCursor == null -> {
                 SwipeError(
                     message = state.errorMessage,
-                    onRetry = onRetryDeck
+                    onRetry = onRetryDeck,
                 )
             }
             state.cards.isEmpty() && state.nextCursor != null -> {
@@ -156,7 +158,7 @@ private fun SwipeDeckArea(
                 EmptyDeck(
                     filtersActive = state.swipeFilters.isAnyActive,
                     onRefresh = onRetryDeck,
-                    onOpenFilters = onOpenFilters
+                    onOpenFilters = onOpenFilters,
                 )
             }
             else -> {
@@ -168,7 +170,7 @@ private fun SwipeDeckArea(
                     onActionConsumed = onActionConsumed,
                     onOpenProfile = onOpenProfile,
                     onLinkedPartnerTap = onLinkedPartnerTap,
-                    onSwiped = onSwiped
+                    onSwiped = onSwiped,
                 )
             }
         }

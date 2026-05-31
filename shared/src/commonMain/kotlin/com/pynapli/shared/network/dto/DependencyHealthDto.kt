@@ -7,13 +7,12 @@ data class DeepHealthDto(
     val status: String,
     val service: String,
     val environment: String,
-    val dependencies: List<DependencyHealthDto>
+    val dependencies: List<DependencyHealthDto>,
 )
 
 @Serializable
 data class DependencyHealthDto(
     val name: String,
     val status: String,
-    val detail: String? = null
+    val detail: String? = null,
 )
-

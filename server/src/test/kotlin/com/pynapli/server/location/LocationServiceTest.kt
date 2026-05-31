@@ -16,18 +16,19 @@ class LocationServiceTest {
             val userId = UUID.randomUUID()
             val service = LocationService(InMemoryLocationRepository())
 
-            val response = service.updateCurrentLocation(
-                userId,
-                UpdateCurrentLocationRequestDto(
-                    latitude = 45.5017,
-                    longitude = -73.5673,
-                    accuracyMeters = 30,
-                    source = "gps",
-                    city = "Montreal",
-                    region = "QC",
-                    country = "CA"
+            val response =
+                service.updateCurrentLocation(
+                    userId,
+                    UpdateCurrentLocationRequestDto(
+                        latitude = 45.5017,
+                        longitude = -73.5673,
+                        accuracyMeters = 30,
+                        source = "gps",
+                        city = "Montreal",
+                        region = "QC",
+                        country = "CA",
+                    ),
                 )
-            )
 
             assertEquals(30, response.accuracyMeters)
             assertEquals("gps", response.source)
@@ -38,44 +39,51 @@ class LocationServiceTest {
     }
 
     @Test
-    fun updateCurrentLocationRejectsInvalidLatitude() = runBlocking {
-        val service = LocationService(InMemoryLocationRepository())
+    fun updateCurrentLocationRejectsInvalidLatitude() =
+        runBlocking {
+            val service = LocationService(InMemoryLocationRepository())
 
-        val error = assertFailsWith<LocationException> {
-            service.updateCurrentLocation(
-                UUID.randomUUID(),
-                UpdateCurrentLocationRequestDto(
-                    latitude = 100.0,
-                    longitude = -73.5673,
-                    source = "gps"
-                )
-            )
+            val error =
+                assertFailsWith<LocationException> {
+                    service.updateCurrentLocation(
+                        UUID.randomUUID(),
+                        UpdateCurrentLocationRequestDto(
+                            latitude = 100.0,
+                            longitude = -73.5673,
+                            source = "gps",
+                        ),
+                    )
+                }
+
+            assertEquals("INVALID_LATITUDE", error.code)
         }
-
-        assertEquals("INVALID_LATITUDE", error.code)
-    }
 
     @Test
-    fun updateCurrentLocationRejectsInvalidSource() = runBlocking {
-        val service = LocationService(InMemoryLocationRepository())
+    fun updateCurrentLocationRejectsInvalidSource() =
+        runBlocking {
+            val service = LocationService(InMemoryLocationRepository())
 
-        val error = assertFailsWith<LocationException> {
-            service.updateCurrentLocation(
-                UUID.randomUUID(),
-                UpdateCurrentLocationRequestDto(
-                    latitude = 45.5017,
-                    longitude = -73.5673,
-                    source = "unknown"
-                )
-            )
+            val error =
+                assertFailsWith<LocationException> {
+                    service.updateCurrentLocation(
+                        UUID.randomUUID(),
+                        UpdateCurrentLocationRequestDto(
+                            latitude = 45.5017,
+                            longitude = -73.5673,
+                            source = "unknown",
+                        ),
+                    )
+                }
+
+            assertEquals("INVALID_LOCATION_SOURCE", error.code)
         }
-
-        assertEquals("INVALID_LOCATION_SOURCE", error.code)
-    }
 }
 
 private class InMemoryLocationRepository : LocationRepository {
-    override suspend fun upsertCurrentLocation(userId: UUID, update: LocationUpdate): CurrentLocationRecord =
+    override suspend fun upsertCurrentLocation(
+        userId: UUID,
+        update: LocationUpdate,
+    ): CurrentLocationRecord =
         CurrentLocationRecord(
             updatedAt = Instant.parse("2026-04-24T00:00:00Z"),
             accuracyMeters = update.accuracyMeters,
@@ -83,6 +91,6 @@ private class InMemoryLocationRepository : LocationRepository {
             geohash = update.geohash,
             city = update.city,
             region = update.region,
-            country = update.country
+            country = update.country,
         )
 }

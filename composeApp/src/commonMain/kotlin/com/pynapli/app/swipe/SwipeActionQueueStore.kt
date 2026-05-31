@@ -12,7 +12,10 @@ import kotlin.time.ExperimentalTime
 interface SwipeActionQueueStore {
     suspend fun load(ownerUserId: String?): List<QueuedSwipeAction>
 
-    suspend fun save(ownerUserId: String?, actions: List<QueuedSwipeAction>)
+    suspend fun save(
+        ownerUserId: String?,
+        actions: List<QueuedSwipeAction>,
+    )
 
     suspend fun clear(ownerUserId: String?)
 }
@@ -20,35 +23,46 @@ interface SwipeActionQueueStore {
 object NoOpSwipeActionQueueStore : SwipeActionQueueStore {
     override suspend fun load(ownerUserId: String?): List<QueuedSwipeAction> = emptyList()
 
-    override suspend fun save(ownerUserId: String?, actions: List<QueuedSwipeAction>) = Unit
+    override suspend fun save(
+        ownerUserId: String?,
+        actions: List<QueuedSwipeAction>,
+    ) = Unit
 
     override suspend fun clear(ownerUserId: String?) = Unit
 }
 
 class SqlDelightSwipeActionQueueStore(
     private val database: PynapliDatabase,
-    private val json: Json = PynapliJson
+    private val json: Json = PynapliJson,
 ) : SwipeActionQueueStore {
     override suspend fun load(ownerUserId: String?): List<QueuedSwipeAction> {
-        val value = database.appMetaQueries.selectByKey(ownerUserId.queueKey()).executeAsOneOrNull()?.value_
-            ?: return emptyList()
+        val value =
+            database.appMetaQueries
+                .selectByKey(ownerUserId.queueKey())
+                .executeAsOneOrNull()
+                ?.value_
+                ?: return emptyList()
         return runCatching {
             json.decodeFromString(SwipeActionQueuePayload.serializer(), value).actions.map { it.toQueuedAction() }
         }.getOrElse { emptyList() }
     }
 
-    override suspend fun save(ownerUserId: String?, actions: List<QueuedSwipeAction>) {
+    override suspend fun save(
+        ownerUserId: String?,
+        actions: List<QueuedSwipeAction>,
+    ) {
         if (actions.isEmpty()) {
             clear(ownerUserId)
             return
         }
-        val payload = SwipeActionQueuePayload(
-            actions = actions.map { it.toPersistedAction() }
-        )
+        val payload =
+            SwipeActionQueuePayload(
+                actions = actions.map { it.toPersistedAction() },
+            )
         database.appMetaQueries.upsert(
             key = ownerUserId.queueKey(),
             value_ = json.encodeToString(SwipeActionQueuePayload.serializer(), payload),
-            updated_at_epoch_ms = currentTimeMillis()
+            updated_at_epoch_ms = currentTimeMillis(),
         )
     }
 
@@ -60,36 +74,38 @@ class SqlDelightSwipeActionQueueStore(
         PersistedQueuedSwipeAction(
             actionId = actionId,
             deckSessionId = deckSessionId,
-            card = PersistedSwipeCard(
-                userId = card.userId,
-                displayName = card.displayName,
-                displayAge = card.displayAge,
-                distanceLabel = card.distanceLabel,
-                distanceMeters = card.distanceMeters,
-                photoUrl = card.photoUrl,
-                linkedPartner = card.linkedPartner,
-                rankToken = card.rankToken
-            ),
+            card =
+                PersistedSwipeCard(
+                    userId = card.userId,
+                    displayName = card.displayName,
+                    displayAge = card.displayAge,
+                    distanceLabel = card.distanceLabel,
+                    distanceMeters = card.distanceMeters,
+                    photoUrl = card.photoUrl,
+                    linkedPartner = card.linkedPartner,
+                    rankToken = card.rankToken,
+                ),
             action = action,
-            noteText = noteText
+            noteText = noteText,
         )
 
     private fun PersistedQueuedSwipeAction.toQueuedAction(): QueuedSwipeAction =
         QueuedSwipeAction(
             actionId = actionId,
             deckSessionId = deckSessionId,
-            card = SwipeCardDto(
-                userId = card.userId,
-                displayName = card.displayName,
-                displayAge = card.displayAge,
-                distanceLabel = card.distanceLabel,
-                distanceMeters = card.distanceMeters,
-                photoUrl = card.photoUrl,
-                linkedPartner = card.linkedPartner,
-                rankToken = card.rankToken
-            ),
+            card =
+                SwipeCardDto(
+                    userId = card.userId,
+                    displayName = card.displayName,
+                    displayAge = card.displayAge,
+                    distanceLabel = card.distanceLabel,
+                    distanceMeters = card.distanceMeters,
+                    photoUrl = card.photoUrl,
+                    linkedPartner = card.linkedPartner,
+                    rankToken = card.rankToken,
+                ),
             action = action,
-            noteText = noteText
+            noteText = noteText,
         )
 
     companion object {
@@ -108,7 +124,7 @@ class SqlDelightSwipeActionQueueStore(
 @Serializable
 private data class SwipeActionQueuePayload(
     val version: Int = 1,
-    val actions: List<PersistedQueuedSwipeAction>
+    val actions: List<PersistedQueuedSwipeAction>,
 )
 
 @Serializable
@@ -117,7 +133,7 @@ private data class PersistedQueuedSwipeAction(
     val deckSessionId: String?,
     val card: PersistedSwipeCard,
     val action: String,
-    val noteText: String?
+    val noteText: String?,
 )
 
 @Serializable
@@ -129,5 +145,5 @@ private data class PersistedSwipeCard(
     val distanceMeters: Int?,
     val photoUrl: String?,
     val linkedPartner: LinkedPartnerMiniDto?,
-    val rankToken: String
+    val rankToken: String,
 )

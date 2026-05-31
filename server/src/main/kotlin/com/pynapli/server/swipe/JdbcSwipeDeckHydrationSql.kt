@@ -5,10 +5,11 @@ import java.util.UUID
 
 internal fun Connection.hydrateDeckCards(
     viewerUserId: UUID,
-    userIds: List<UUID>
+    userIds: List<UUID>,
 ): Map<UUID, DeckHydration> {
     if (userIds.isEmpty()) return emptyMap()
-    val sql = """
+    val sql =
+        """
         SELECT u.id AS user_id,
                profile_photos.thumbnail_media_asset_id,
                profile_photos.media_asset_ids AS profile_photo_ids,
@@ -93,7 +94,7 @@ internal fun Connection.hydrateDeckCards(
             LIMIT 1
         ) linked_partner ON true
         WHERE u.id = ANY(?::uuid[])
-    """.trimIndent()
+        """.trimIndent()
 
     return prepareStatement(sql).use { statement ->
         val ids = createArrayOf("uuid", userIds.toTypedArray())
@@ -111,11 +112,12 @@ internal fun Connection.hydrateDeckCards(
                             thumbnailMediaAssetIds = rs.readUuidArray("profile_photo_ids"),
                             linkedPartnerUserId = rs.getObject("linked_partner_user_id", UUID::class.java),
                             linkedPartnerDisplayName = rs.getString("linked_partner_display_name"),
-                            linkedPartnerThumbnailMediaAssetId = rs.getObject(
-                                "linked_partner_thumbnail_media_asset_id",
-                                UUID::class.java
-                            )
-                        )
+                            linkedPartnerThumbnailMediaAssetId =
+                                rs.getObject(
+                                    "linked_partner_thumbnail_media_asset_id",
+                                    UUID::class.java,
+                                ),
+                        ),
                     )
                 }
             }

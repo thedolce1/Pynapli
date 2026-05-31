@@ -11,64 +11,70 @@ import com.pynapli.shared.network.dto.MessageDto
 class SampleConversationRepository : ConversationRepository {
     override suspend fun createDirectConversation(
         targetUserId: String,
-        origin: String
+        origin: String,
     ): AppResult<ConversationDetailDto> =
         AppResult.Success(
             ConversationDetailDto(
-                conversation = ConversationDto(
-                    conversationId = "sample-conversation",
-                    kind = "direct",
-                    origin = origin,
-                    participants = listOf(
-                        ConversationParticipantDto("viewer", "You"),
-                        ConversationParticipantDto(targetUserId, "Maya")
+                conversation =
+                    ConversationDto(
+                        conversationId = "sample-conversation",
+                        kind = "direct",
+                        origin = origin,
+                        participants =
+                            listOf(
+                                ConversationParticipantDto("viewer", "You"),
+                                ConversationParticipantDto(targetUserId, "Maya"),
+                            ),
+                        unreadCount = 0,
+                        updatedAt = "2026-04-24T18:00:00Z",
                     ),
-                    unreadCount = 0,
-                    updatedAt = "2026-04-24T18:00:00Z"
-                ),
-                messages = emptyList()
-            )
+                messages = emptyList(),
+            ),
         )
 
     override suspend fun getConversationDetail(
         conversationId: String,
-        before: String?
+        before: String?,
     ): AppResult<ConversationDetailDto> =
         AppResult.Success(
             ConversationDetailDto(
-                conversation = ConversationDto(
-                    conversationId = conversationId,
-                    kind = "direct",
-                    origin = "grid",
-                    participants = listOf(
-                        ConversationParticipantDto("viewer", "You"),
-                        ConversationParticipantDto("target", "Maya")
-                    ),
-                    lastMessage = MessageDto(
-                        messageId = "sample-message-1",
+                conversation =
+                    ConversationDto(
                         conversationId = conversationId,
-                        senderUserId = "target",
-                        body = "See you tonight",
-                        createdAt = "2026-04-24T18:00:00Z",
-                        status = "visible",
-                        deliveryStatus = "received"
+                        kind = "direct",
+                        origin = "grid",
+                        participants =
+                            listOf(
+                                ConversationParticipantDto("viewer", "You"),
+                                ConversationParticipantDto("target", "Maya"),
+                            ),
+                        lastMessage =
+                            MessageDto(
+                                messageId = "sample-message-1",
+                                conversationId = conversationId,
+                                senderUserId = "target",
+                                body = "See you tonight",
+                                createdAt = "2026-04-24T18:00:00Z",
+                                status = "visible",
+                                deliveryStatus = "received",
+                            ),
+                        unreadCount = 1,
+                        updatedAt = "2026-04-24T18:00:00Z",
                     ),
-                    unreadCount = 1,
-                    updatedAt = "2026-04-24T18:00:00Z"
-                ),
-                messages = listOf(
-                    MessageDto(
-                        messageId = "sample-message-1",
-                        conversationId = conversationId,
-                        senderUserId = "target",
-                        body = "See you tonight",
-                        createdAt = "2026-04-24T18:00:00Z",
-                        status = "visible",
-                        deliveryStatus = "received"
-                    )
-                ),
-                nextCursor = if (before == null) "sample-older-page" else null
-            )
+                messages =
+                    listOf(
+                        MessageDto(
+                            messageId = "sample-message-1",
+                            conversationId = conversationId,
+                            senderUserId = "target",
+                            body = "See you tonight",
+                            createdAt = "2026-04-24T18:00:00Z",
+                            status = "visible",
+                            deliveryStatus = "received",
+                        ),
+                    ),
+                nextCursor = if (before == null) "sample-older-page" else null,
+            ),
         )
 
     override suspend fun markConversationRead(conversationId: String): AppResult<ConversationDto> =
@@ -77,16 +83,20 @@ class SampleConversationRepository : ConversationRepository {
                 conversationId = conversationId,
                 kind = "direct",
                 origin = "grid",
-                participants = listOf(
-                    ConversationParticipantDto("viewer", "You"),
-                    ConversationParticipantDto("target", "Maya")
-                ),
+                participants =
+                    listOf(
+                        ConversationParticipantDto("viewer", "You"),
+                        ConversationParticipantDto("target", "Maya"),
+                    ),
                 unreadCount = 0,
-                updatedAt = "2026-04-24T18:00:00Z"
-            )
+                updatedAt = "2026-04-24T18:00:00Z",
+            ),
         )
 
-    override suspend fun sendMessage(conversationId: String, body: String): AppResult<MessageDto> =
+    override suspend fun sendMessage(
+        conversationId: String,
+        body: String,
+    ): AppResult<MessageDto> =
         AppResult.Success(
             MessageDto(
                 messageId = "sample-message",
@@ -95,12 +105,14 @@ class SampleConversationRepository : ConversationRepository {
                 body = body,
                 createdAt = "2026-04-24T18:00:00Z",
                 status = "visible",
-                deliveryStatus = "sent"
-            )
+                deliveryStatus = "sent",
+            ),
         )
 
-    override suspend fun sendTypingIndicator(conversationId: String, isTyping: Boolean): AppResult<Unit> =
-        AppResult.Success(Unit)
+    override suspend fun sendTypingIndicator(
+        conversationId: String,
+        isTyping: Boolean,
+    ): AppResult<Unit> = AppResult.Success(Unit)
 
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
         AppResult.Success(
@@ -112,8 +124,8 @@ class SampleConversationRepository : ConversationRepository {
                 createdAt = "2026-04-24T18:00:00Z",
                 status = "visible",
                 deliveryStatus = "deleted",
-                deletedAt = "2026-04-24T18:01:00Z"
-            )
+                deletedAt = "2026-04-24T18:01:00Z",
+            ),
         )
 
     override suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto> =
@@ -122,27 +134,25 @@ class SampleConversationRepository : ConversationRepository {
                 conversationId = conversationId,
                 kind = "group",
                 origin = "grid",
-                participants = listOf(
-                    ConversationParticipantDto("viewer", "You"),
-                    ConversationParticipantDto("target", "Maya"),
-                    ConversationParticipantDto(
-                        userId = "partner",
-                        displayName = "Partner",
-                        status = ConversationParticipantStatus.INVITED,
-                        invitedByUserId = "viewer"
-                    )
-                ),
+                participants =
+                    listOf(
+                        ConversationParticipantDto("viewer", "You"),
+                        ConversationParticipantDto("target", "Maya"),
+                        ConversationParticipantDto(
+                            userId = "partner",
+                            displayName = "Partner",
+                            status = ConversationParticipantStatus.INVITED,
+                            invitedByUserId = "viewer",
+                        ),
+                    ),
                 unreadCount = 0,
-                updatedAt = "2026-04-24T18:00:00Z"
-            )
+                updatedAt = "2026-04-24T18:00:00Z",
+            ),
         )
 
-    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> =
-        getConversationDetail(conversationId, before = null)
+    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> = getConversationDetail(conversationId, before = null)
 
-    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
-        AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
+    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
 
-    override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
-        AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.LEFT))
+    override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.LEFT))
 }

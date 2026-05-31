@@ -14,7 +14,7 @@ internal fun Connection.recordSwipeActionTransaction(
     consumedInventoryId: UUID?,
     travelLocationId: UUID?,
     matchIdFactory: () -> UUID,
-    afterInsert: Connection.() -> Unit = {}
+    afterInsert: Connection.() -> Unit = {},
 ): SwipeActionResult {
     val previousAutoCommit = autoCommit
     autoCommit = false
@@ -25,7 +25,7 @@ internal fun Connection.recordSwipeActionTransaction(
             return SwipeActionResult(
                 recorded = existing != null,
                 match = existing?.match,
-                newlyRecorded = false
+                newlyRecorded = false,
             )
         }
 
@@ -42,7 +42,10 @@ internal fun Connection.recordSwipeActionTransaction(
     }
 }
 
-internal fun Connection.findSwipeActionById(actionId: UUID, actorUserId: UUID): SwipeActionRecord? =
+internal fun Connection.findSwipeActionById(
+    actionId: UUID,
+    actorUserId: UUID,
+): SwipeActionRecord? =
     prepareStatement(
         """
         SELECT sa.id AS action_id,
@@ -64,7 +67,7 @@ internal fun Connection.findSwipeActionById(actionId: UUID, actorUserId: UUID): 
           )
         WHERE sa.id = ?
           AND sa.actor_user_id = ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, actionId)
         statement.setObject(2, actorUserId)
@@ -81,14 +84,15 @@ internal fun Connection.findSwipeActionById(actionId: UUID, actorUserId: UUID): 
                     noteText = rs.getString("note_text"),
                     createdAt = rs.getTimestamp("action_created_at").toInstant(),
                     rewoundAt = rs.getTimestamp("rewound_at")?.toInstant(),
-                    match = matchId?.let {
-                        MatchRecord(
-                            matchId = it,
-                            userA = rs.getObject("user_a", UUID::class.java),
-                            userB = rs.getObject("user_b", UUID::class.java),
-                            createdAt = rs.getTimestamp("match_created_at").toInstant()
-                        )
-                    }
+                    match =
+                        matchId?.let {
+                            MatchRecord(
+                                matchId = it,
+                                userA = rs.getObject("user_a", UUID::class.java),
+                                userB = rs.getObject("user_b", UUID::class.java),
+                                createdAt = rs.getTimestamp("match_created_at").toInstant(),
+                            )
+                        },
                 )
             }
         }
@@ -100,16 +104,17 @@ internal fun Connection.rewindSwipeActionTransaction(
     targetUserId: UUID,
     session: SwipeDeckSessionRecord,
     card: SwipeDeckSessionCardRecord,
-    rewoundAt: Instant
+    rewoundAt: Instant,
 ): Boolean {
     val previousAutoCommit = autoCommit
     autoCommit = false
     try {
-        val rewoundAction = markSwipeActionRewound(actionId, actorUserId, targetUserId, rewoundAt)
-            ?: run {
-                rollback()
-                return false
-            }
+        val rewoundAction =
+            markSwipeActionRewound(actionId, actorUserId, targetUserId, rewoundAt)
+                ?: run {
+                    rollback()
+                    return false
+                }
 
         refundPremiumInventory(rewoundAction.consumedInventoryId, rewoundAt)
         insertDeckSession(session)
@@ -131,72 +136,77 @@ private fun Connection.insertSwipeAction(
     action: String,
     noteText: String?,
     consumedInventoryId: UUID?,
-    travelLocationId: UUID?
-): Boolean = prepareStatement(
-    """
-    INSERT INTO swipe_actions (
-        id, actor_user_id, target_user_id, action,
-        note_text, consumed_inventory_id, travel_location_id
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT DO NOTHING
-    """.trimIndent()
-).use { statement ->
-    statement.setObject(1, actionId)
-    statement.setObject(2, actorUserId)
-    statement.setObject(3, targetUserId)
-    statement.setString(4, action)
-    statement.setString(5, noteText)
-    statement.setObject(6, consumedInventoryId)
-    statement.setObject(7, travelLocationId)
-    statement.executeUpdate() > 0
+    travelLocationId: UUID?,
+): Boolean =
+    prepareStatement(
+        """
+        INSERT INTO swipe_actions (
+            id, actor_user_id, target_user_id, action,
+            note_text, consumed_inventory_id, travel_location_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT DO NOTHING
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, actionId)
+        statement.setObject(2, actorUserId)
+        statement.setObject(3, targetUserId)
+        statement.setString(4, action)
+        statement.setString(5, noteText)
+        statement.setObject(6, consumedInventoryId)
+        statement.setObject(7, travelLocationId)
+        statement.executeUpdate() > 0
     }
 
 private fun Connection.markSwipeActionRewound(
     actionId: UUID,
     actorUserId: UUID,
     targetUserId: UUID,
-    rewoundAt: Instant
-): RewoundSwipeAction? = prepareStatement(
-    """
-    UPDATE swipe_actions sa
-    SET rewound_at = ?
-    WHERE sa.id = ?
-      AND sa.actor_user_id = ?
-      AND sa.target_user_id = ?
-      AND sa.rewound_at IS NULL
-      AND sa.action IN ('like', 'pass', 'pineapple_like')
-      AND NOT EXISTS (
-          SELECT 1
-          FROM matches m
-          WHERE (m.user_a = sa.actor_user_id AND m.user_b = sa.target_user_id)
-             OR (m.user_a = sa.target_user_id AND m.user_b = sa.actor_user_id)
-      )
-      AND NOT EXISTS (
-          SELECT 1
-          FROM safety_reports sr
-          WHERE sr.reporter_user_id = sa.actor_user_id
-            AND sr.reported_user_id = sa.target_user_id
-      )
-    RETURNING sa.consumed_inventory_id
-    """.trimIndent()
-).use { statement ->
-    statement.setTimestamp(1, Timestamp.from(rewoundAt))
-    statement.setObject(2, actionId)
-    statement.setObject(3, actorUserId)
-    statement.setObject(4, targetUserId)
-    statement.executeQuery().use { rs ->
-        if (rs.next()) {
-            RewoundSwipeAction(
-                consumedInventoryId = rs.getObject("consumed_inventory_id", UUID::class.java)
-            )
-        } else {
-            null
+    rewoundAt: Instant,
+): RewoundSwipeAction? =
+    prepareStatement(
+        """
+        UPDATE swipe_actions sa
+        SET rewound_at = ?
+        WHERE sa.id = ?
+          AND sa.actor_user_id = ?
+          AND sa.target_user_id = ?
+          AND sa.rewound_at IS NULL
+          AND sa.action IN ('like', 'pass', 'pineapple_like')
+          AND NOT EXISTS (
+              SELECT 1
+              FROM matches m
+              WHERE (m.user_a = sa.actor_user_id AND m.user_b = sa.target_user_id)
+                 OR (m.user_a = sa.target_user_id AND m.user_b = sa.actor_user_id)
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM safety_reports sr
+              WHERE sr.reporter_user_id = sa.actor_user_id
+                AND sr.reported_user_id = sa.target_user_id
+          )
+        RETURNING sa.consumed_inventory_id
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setTimestamp(1, Timestamp.from(rewoundAt))
+        statement.setObject(2, actionId)
+        statement.setObject(3, actorUserId)
+        statement.setObject(4, targetUserId)
+        statement.executeQuery().use { rs ->
+            if (rs.next()) {
+                RewoundSwipeAction(
+                    consumedInventoryId = rs.getObject("consumed_inventory_id", UUID::class.java),
+                )
+            } else {
+                null
+            }
         }
     }
-}
 
-private fun Connection.refundPremiumInventory(inventoryId: UUID?, rewoundAt: Instant) {
+private fun Connection.refundPremiumInventory(
+    inventoryId: UUID?,
+    rewoundAt: Instant,
+) {
     if (inventoryId == null) return
     prepareStatement(
         """
@@ -204,7 +214,7 @@ private fun Connection.refundPremiumInventory(inventoryId: UUID?, rewoundAt: Ins
         SET quantity = quantity + 1,
             updated_at = ?
         WHERE id = ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setTimestamp(1, Timestamp.from(rewoundAt))
         statement.setObject(2, inventoryId)
@@ -213,14 +223,14 @@ private fun Connection.refundPremiumInventory(inventoryId: UUID?, rewoundAt: Ins
 }
 
 private data class RewoundSwipeAction(
-    val consumedInventoryId: UUID?
+    val consumedInventoryId: UUID?,
 )
 
 private fun Connection.createMatchForMutualPositiveSwipe(
     actorUserId: UUID,
     targetUserId: UUID,
     action: String,
-    matchIdFactory: () -> UUID
+    matchIdFactory: () -> UUID,
 ): MatchRecord? {
     if (action !in POSITIVE_SWIPE_ACTIONS) return null
     return if (targetHasActivePositiveSwipe(targetUserId, actorUserId)) {
@@ -230,7 +240,10 @@ private fun Connection.createMatchForMutualPositiveSwipe(
     }
 }
 
-private fun Connection.targetHasActivePositiveSwipe(actorUserId: UUID, targetUserId: UUID): Boolean =
+private fun Connection.targetHasActivePositiveSwipe(
+    actorUserId: UUID,
+    targetUserId: UUID,
+): Boolean =
     prepareStatement(
         """
         -- 24h Like tail (SWIPE_IMPLEMENTATION_SPEC L353): a Like
@@ -251,7 +264,7 @@ private fun Connection.targetHasActivePositiveSwipe(actorUserId: UUID, targetUse
                   OR tl.active_until > now() - INTERVAL '24 hours'
               )
         )
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, actorUserId)
         statement.setObject(2, targetUserId)

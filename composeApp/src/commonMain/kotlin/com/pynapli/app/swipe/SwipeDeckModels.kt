@@ -9,13 +9,13 @@ data class SwipeDeckUi(
     val cards: List<SwipeCardDto>,
     val nextCursor: String? = null,
     val adSupported: Boolean = false,
-    val advancedFiltersApplied: Boolean = false
+    val advancedFiltersApplied: Boolean = false,
 )
 
 @Immutable
 data class SwipeRewindUi(
     val deckSessionId: String,
-    val card: SwipeCardDto
+    val card: SwipeCardDto,
 )
 
 @Immutable
@@ -24,5 +24,5 @@ data class QueuedSwipeAction(
     val deckSessionId: String?,
     val card: SwipeCardDto,
     val action: String,
-    val noteText: String? = null
+    val noteText: String? = null,
 )

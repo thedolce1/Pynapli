@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
 
 fun Application.configureAdminModerationRoutes(
     config: ServerConfig,
-    moderationService: MessageModerationService?
+    moderationService: MessageModerationService?,
 ) {
     val adminApiToken = config.adminApiToken ?: return
     if (moderationService == null) return
@@ -23,39 +23,44 @@ fun Application.configureAdminModerationRoutes(
             get {
                 val actor = call.requireAdminActor(adminApiToken)
                 val reason = call.requiredAdminReason()
-                val items = moderationService.listOpenMessageReviews(
-                    limitText = call.request.queryParameters["limit"],
-                    actorId = actor.actorId,
-                    reason = reason
-                )
+                val items =
+                    moderationService.listOpenMessageReviews(
+                        limitText = call.request.queryParameters["limit"],
+                        actorId = actor.actorId,
+                        reason = reason,
+                    )
                 call.respond(AdminMessageReviewQueueDto(items = items.map { it.toDto() }))
             }
 
             post("/{messageId}/release") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val messageId = call.parameters["messageId"] ?: throw ModerationException("INVALID_ID")
-                val request = call.receiveNullable<AdminMessageReviewActionRequestDto>()
-                    ?: throw ModerationException("MODERATION_REASON_REQUIRED")
+                val request =
+                    call.receiveNullable<AdminMessageReviewActionRequestDto>()
+                        ?: throw ModerationException("MODERATION_REASON_REQUIRED")
                 call.respond(
-                    moderationService.releaseHeldMessage(
-                        messageIdText = messageId,
-                        actorId = actor.actorId,
-                        reason = request.reason
-                    ).toDto()
+                    moderationService
+                        .releaseHeldMessage(
+                            messageIdText = messageId,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
                 )
             }
 
             post("/{messageId}/remove") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val messageId = call.parameters["messageId"] ?: throw ModerationException("INVALID_ID")
-                val request = call.receiveNullable<AdminMessageReviewActionRequestDto>()
-                    ?: throw ModerationException("MODERATION_REASON_REQUIRED")
+                val request =
+                    call.receiveNullable<AdminMessageReviewActionRequestDto>()
+                        ?: throw ModerationException("MODERATION_REASON_REQUIRED")
                 call.respond(
-                    moderationService.removeHeldMessage(
-                        messageIdText = messageId,
-                        actorId = actor.actorId,
-                        reason = request.reason
-                    ).toDto()
+                    moderationService
+                        .removeHeldMessage(
+                            messageIdText = messageId,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
                 )
             }
         }
@@ -64,7 +69,7 @@ fun Application.configureAdminModerationRoutes(
 
 @Serializable
 data class AdminMessageReviewQueueDto(
-    val items: List<AdminMessageReviewItemDto>
+    val items: List<AdminMessageReviewItemDto>,
 )
 
 @Serializable
@@ -77,12 +82,12 @@ data class AdminMessageReviewItemDto(
     val safetyReason: String,
     val queueStatus: String,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 @Serializable
 data class AdminMessageReviewActionRequestDto(
-    val reason: String? = null
+    val reason: String? = null,
 )
 
 @Serializable
@@ -92,7 +97,7 @@ data class AdminMessageReviewActionDto(
     val senderUserId: String,
     val messageStatus: String,
     val queueStatus: String,
-    val reviewedAt: String
+    val reviewedAt: String,
 )
 
 private fun MessageReviewRecord.toDto(): AdminMessageReviewItemDto =
@@ -105,7 +110,7 @@ private fun MessageReviewRecord.toDto(): AdminMessageReviewItemDto =
         safetyReason = safetyReason,
         queueStatus = queueStatus,
         createdAt = createdAt.toString(),
-        updatedAt = updatedAt.toString()
+        updatedAt = updatedAt.toString(),
     )
 
 private fun MessageReviewActionRecord.toDto(): AdminMessageReviewActionDto =
@@ -115,5 +120,5 @@ private fun MessageReviewActionRecord.toDto(): AdminMessageReviewActionDto =
         senderUserId = senderUserId.toString(),
         messageStatus = messageStatus,
         queueStatus = queueStatus,
-        reviewedAt = reviewedAt.toString()
+        reviewedAt = reviewedAt.toString(),
     )

@@ -8,8 +8,8 @@ import com.pynapli.shared.network.dto.MEDIA_VIDEO_MAX_BYTES
 import com.pynapli.shared.network.dto.MediaAlbumDto
 import com.pynapli.shared.network.dto.MediaAlbumGrantDto
 import com.pynapli.shared.network.dto.MediaAlbumGrantsResponseDto
-import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAlbumItemDto
+import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAssetDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
 import java.util.UUID
@@ -18,11 +18,11 @@ class MediaService(
     private val repository: MediaRepository,
     private val uploadSigner: MediaUploadSigner,
     private val devAutoApproveUploads: Boolean = false,
-    private val blockRepository: BlockRepository? = null
+    private val blockRepository: BlockRepository? = null,
 ) {
     suspend fun createUploadSlot(
         ownerUserId: UUID,
-        request: CreateMediaUploadRequestDto
+        request: CreateMediaUploadRequestDto,
     ): MediaUploadSlotDto {
         val albumKind = request.albumKind.trim().lowercase()
         if (albumKind !in ALBUM_KINDS) throw MediaException("INVALID_MEDIA_ALBUM_KIND")
@@ -38,32 +38,36 @@ class MediaService(
         request.pixelWidth?.let { if (it <= 0) throw MediaException("INVALID_MEDIA_DIMENSIONS") }
         request.pixelHeight?.let { if (it <= 0) throw MediaException("INVALID_MEDIA_DIMENSIONS") }
 
-        val album = repository.ensureAlbum(
-            ownerUserId = ownerUserId,
-            kind = albumKind,
-            title = albumKind.defaultTitle()
-        )
+        val album =
+            repository.ensureAlbum(
+                ownerUserId = ownerUserId,
+                kind = albumKind,
+                title = albumKind.defaultTitle(),
+            )
         val mediaAssetId = UUID.randomUUID()
-        val destination = uploadSigner.createUploadDestination(
-            ownerUserId = ownerUserId,
-            mediaAssetId = mediaAssetId,
-            albumKind = albumKind,
-            contentType = contentType
-        )
-        val asset = repository.createAsset(
-            ownerUserId = ownerUserId,
-            create = MediaAssetCreate(
-                mediaType = mediaType,
-                storageProvider = destination.storageProvider,
-                storageBucket = destination.storageBucket,
-                storageObjectKey = destination.storageObjectKey,
+        val destination =
+            uploadSigner.createUploadDestination(
+                ownerUserId = ownerUserId,
+                mediaAssetId = mediaAssetId,
+                albumKind = albumKind,
                 contentType = contentType,
-                byteSize = request.byteSize,
-                pixelWidth = request.pixelWidth,
-                pixelHeight = request.pixelHeight
-            ),
-            assetIdFactory = { mediaAssetId }
-        )
+            )
+        val asset =
+            repository.createAsset(
+                ownerUserId = ownerUserId,
+                create =
+                    MediaAssetCreate(
+                        mediaType = mediaType,
+                        storageProvider = destination.storageProvider,
+                        storageBucket = destination.storageBucket,
+                        storageObjectKey = destination.storageObjectKey,
+                        contentType = contentType,
+                        byteSize = request.byteSize,
+                        pixelWidth = request.pixelWidth,
+                        pixelHeight = request.pixelHeight,
+                    ),
+                assetIdFactory = { mediaAssetId },
+            )
 
         return MediaUploadSlotDto(
             mediaAsset = asset.toDto(),
@@ -74,84 +78,90 @@ class MediaService(
             storageProvider = destination.storageProvider,
             storageBucket = destination.storageBucket,
             storageObjectKey = destination.storageObjectKey,
-            expiresAt = destination.expiresAt.toString()
+            expiresAt = destination.expiresAt.toString(),
         )
     }
 
     suspend fun completeUpload(
         ownerUserId: UUID,
         mediaAssetIdText: String,
-        request: CompleteMediaUploadRequestDto
+        request: CompleteMediaUploadRequestDto,
     ): MediaAlbumItemDto {
         val mediaAssetId = mediaAssetIdText.toUuidOrThrow()
         val albumId = request.albumId.toUuidOrThrow()
         if (request.sortOrder < 0) throw MediaException("INVALID_MEDIA_SORT_ORDER")
 
-        val item = repository.addAssetToAlbum(
-            ownerUserId = ownerUserId,
-            albumId = albumId,
-            mediaAssetId = mediaAssetId,
-            sortOrder = request.sortOrder
-        ) ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
+        val item =
+            repository.addAssetToAlbum(
+                ownerUserId = ownerUserId,
+                albumId = albumId,
+                mediaAssetId = mediaAssetId,
+                sortOrder = request.sortOrder,
+            ) ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
 
-        val uploadedAsset = repository.markAssetUploaded(ownerUserId, mediaAssetId)
-            ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
-        val visibleAsset = if (devAutoApproveUploads) {
-            repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
-        } else {
-            uploadedAsset
-        }
+        val uploadedAsset =
+            repository.markAssetUploaded(ownerUserId, mediaAssetId)
+                ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
+        val visibleAsset =
+            if (devAutoApproveUploads) {
+                repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
+            } else {
+                uploadedAsset
+            }
 
         return item.copy(mediaAsset = visibleAsset).toDto()
     }
 
     suspend fun listOwnAlbum(
         ownerUserId: UUID,
-        albumKindText: String
+        albumKindText: String,
     ): MediaAlbumItemsResponseDto {
         val albumKind = albumKindText.trim().lowercase()
         if (albumKind !in ALBUM_KINDS) throw MediaException("INVALID_MEDIA_ALBUM_KIND")
 
-        val album = repository.ensureAlbum(
-            ownerUserId = ownerUserId,
-            kind = albumKind,
-            title = albumKind.defaultTitle()
-        )
-        val items = repository.listAlbumItemsForViewer(
-            viewerUserId = ownerUserId,
-            albumId = album.albumId
-        ) ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
+        val album =
+            repository.ensureAlbum(
+                ownerUserId = ownerUserId,
+                kind = albumKind,
+                title = albumKind.defaultTitle(),
+            )
+        val items =
+            repository.listAlbumItemsForViewer(
+                viewerUserId = ownerUserId,
+                albumId = album.albumId,
+            ) ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
 
         return MediaAlbumItemsResponseDto(
             album = album.toDto(),
-            items = items.map { item -> item.toDto() }
+            items = items.map { item -> item.toDto() },
         )
     }
 
     suspend fun listPrivateAlbumForViewer(
         viewerUserId: UUID,
-        ownerUserIdText: String
+        ownerUserIdText: String,
     ): MediaAlbumItemsResponseDto {
         val ownerUserId = ownerUserIdText.toUuidOrThrow()
         if (blockRepository?.isBlockedEitherWay(viewerUserId, ownerUserId) == true) {
             throw MediaException("MEDIA_ALBUM_NOT_FOUND")
         }
-        val result = repository.listAlbumItemsForViewer(
-            viewerUserId = viewerUserId,
-            ownerUserId = ownerUserId,
-            kind = "private"
-        ) ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
+        val result =
+            repository.listAlbumItemsForViewer(
+                viewerUserId = viewerUserId,
+                ownerUserId = ownerUserId,
+                kind = "private",
+            ) ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
 
         val (album, items) = result
         return MediaAlbumItemsResponseDto(
             album = album.toDto(),
-            items = items.map { item -> item.toDto() }
+            items = items.map { item -> item.toDto() },
         )
     }
 
     suspend fun requestPrivateAlbumAccess(
         requesterUserId: UUID,
-        ownerUserId: UUID
+        ownerUserId: UUID,
     ): Boolean {
         if (requesterUserId == ownerUserId) throw MediaException("INVALID_ALBUM_REQUEST_TARGET")
         if (blockRepository?.isBlockedEitherWay(requesterUserId, ownerUserId) == true) {
@@ -159,66 +169,70 @@ class MediaService(
         }
         return repository.requestAlbumAccess(
             ownerUserId = ownerUserId,
-            requesterUserId = requesterUserId
+            requesterUserId = requesterUserId,
         ) != null
     }
 
     suspend fun decidePrivateAlbumAccessRequest(
         ownerUserId: UUID,
         requesterUserId: UUID,
-        approved: Boolean
+        approved: Boolean,
     ): String {
-        val request = repository.decideAlbumAccessRequest(
-            ownerUserId = ownerUserId,
-            requesterUserId = requesterUserId,
-            approved = approved,
-            decidedByUserId = ownerUserId
-        ) ?: throw MediaException("ALBUM_REQUEST_NOT_FOUND")
+        val request =
+            repository.decideAlbumAccessRequest(
+                ownerUserId = ownerUserId,
+                requesterUserId = requesterUserId,
+                approved = approved,
+                decidedByUserId = ownerUserId,
+            ) ?: throw MediaException("ALBUM_REQUEST_NOT_FOUND")
         return request.status
     }
 
     suspend fun listOwnPrivateAlbumGrants(
-        ownerUserId: UUID
+        ownerUserId: UUID,
     ): MediaAlbumGrantsResponseDto {
         val grants = repository.listPrivateAlbumGrantsForOwner(ownerUserId)
         return MediaAlbumGrantsResponseDto(
-            grants = grants.map { record ->
-                MediaAlbumGrantDto(
-                    albumId = record.albumId.toString(),
-                    granteeUserId = record.granteeUserId.toString(),
-                    granteeDisplayName = record.granteeDisplayName,
-                    grantedAt = record.grantedAt.toString(),
-                    revokedAt = null
-                )
-            }
+            grants =
+                grants.map { record ->
+                    MediaAlbumGrantDto(
+                        albumId = record.albumId.toString(),
+                        granteeUserId = record.granteeUserId.toString(),
+                        granteeDisplayName = record.granteeDisplayName,
+                        grantedAt = record.grantedAt.toString(),
+                        revokedAt = null,
+                    )
+                },
         )
     }
 
     suspend fun revokePrivateAlbumAccess(
         ownerUserId: UUID,
-        granteeUserIdText: String
+        granteeUserIdText: String,
     ): MediaAlbumGrantDto {
         val granteeUserId = granteeUserIdText.toUuidOrThrow()
         if (granteeUserId == ownerUserId) throw MediaException("MEDIA_GRANT_NOT_FOUND")
 
-        val album = repository.ensureAlbum(
-            ownerUserId = ownerUserId,
-            kind = "private",
-            title = "Private album"
-        )
-        val revoked = repository.revokeAlbumAccess(
-            ownerUserId = ownerUserId,
-            albumId = album.albumId,
-            granteeUserId = granteeUserId,
-            revokedByUserId = ownerUserId
-        ) ?: throw MediaException("MEDIA_GRANT_NOT_FOUND")
+        val album =
+            repository.ensureAlbum(
+                ownerUserId = ownerUserId,
+                kind = "private",
+                title = "Private album",
+            )
+        val revoked =
+            repository.revokeAlbumAccess(
+                ownerUserId = ownerUserId,
+                albumId = album.albumId,
+                granteeUserId = granteeUserId,
+                revokedByUserId = ownerUserId,
+            ) ?: throw MediaException("MEDIA_GRANT_NOT_FOUND")
 
         return MediaAlbumGrantDto(
             albumId = revoked.albumId.toString(),
             granteeUserId = revoked.granteeUserId.toString(),
             granteeDisplayName = null,
             grantedAt = revoked.grantedAt.toString(),
-            revokedAt = revoked.revokedAt?.toString()
+            revokedAt = revoked.revokedAt?.toString(),
         )
     }
 
@@ -227,7 +241,7 @@ class MediaService(
             albumId = albumId.toString(),
             mediaAsset = mediaAsset.toDto(),
             sortOrder = sortOrder,
-            addedAt = addedAt.toString()
+            addedAt = addedAt.toString(),
         )
 
     private fun MediaAlbumRecord.toDto(): MediaAlbumDto =
@@ -238,7 +252,7 @@ class MediaService(
             title = title,
             visibilityStatus = visibilityStatus,
             createdAt = createdAt.toString(),
-            updatedAt = updatedAt.toString()
+            updatedAt = updatedAt.toString(),
         )
 
     private fun MediaAssetRecord.toDto(): MediaAssetDto =
@@ -253,32 +267,36 @@ class MediaService(
             moderationStatus = moderationStatus,
             processingStatus = processingStatus,
             createdAt = createdAt.toString(),
-            updatedAt = updatedAt.toString()
+            updatedAt = updatedAt.toString(),
         )
 
-    private fun String.toUuidOrThrow(): UUID =
-        runCatching { UUID.fromString(this) }.getOrElse { throw MediaException("INVALID_ID") }
+    private fun String.toUuidOrThrow(): UUID = runCatching { UUID.fromString(this) }.getOrElse { throw MediaException("INVALID_ID") }
 
-    private fun String.maxBytes(): Long = when (this) {
-        "image" -> MEDIA_IMAGE_MAX_BYTES
-        "video" -> MEDIA_VIDEO_MAX_BYTES
-        else -> 0
-    }
+    private fun String.maxBytes(): Long =
+        when (this) {
+            "image" -> MEDIA_IMAGE_MAX_BYTES
+            "video" -> MEDIA_VIDEO_MAX_BYTES
+            else -> 0
+        }
 
-    private fun String.defaultTitle(): String = when (this) {
-        "profile" -> "Profile photos"
-        "private" -> "Private album"
-        else -> "Media"
-    }
+    private fun String.defaultTitle(): String =
+        when (this) {
+            "profile" -> "Profile photos"
+            "private" -> "Private album"
+            else -> "Media"
+        }
 
     companion object {
         private val ALBUM_KINDS = setOf("profile", "private")
         private val MEDIA_TYPES = setOf("image", "video")
-        private val CONTENT_TYPES = mapOf(
-            "image" to setOf("image/jpeg", "image/png", "image/webp"),
-            "video" to setOf("video/mp4", "video/quicktime")
-        )
+        private val CONTENT_TYPES =
+            mapOf(
+                "image" to setOf("image/jpeg", "image/png", "image/webp"),
+                "video" to setOf("video/mp4", "video/quicktime"),
+            )
     }
 }
 
-class MediaException(val code: String) : RuntimeException(code)
+class MediaException(
+    val code: String,
+) : RuntimeException(code)

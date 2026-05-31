@@ -23,22 +23,23 @@ object ReportCategory {
     const val PRIVATE_INFO_DOXXING = "private_info_doxxing"
     const val OTHER = "other"
 
-    val ALL: List<String> = listOf(
-        UNDERAGE_USER,
-        HARASSMENT_OR_THREATS,
-        EXPLICIT_PUBLIC_CONTENT,
-        SPAM_OR_FAKE_PROFILE,
-        IMPERSONATION,
-        SOLICITATION,
-        NON_CONSENSUAL_CONTENT,
-        PRIVATE_INFO_DOXXING,
-        OTHER
-    )
+    val ALL: List<String> =
+        listOf(
+            UNDERAGE_USER,
+            HARASSMENT_OR_THREATS,
+            EXPLICIT_PUBLIC_CONTENT,
+            SPAM_OR_FAKE_PROFILE,
+            IMPERSONATION,
+            SOLICITATION,
+            NON_CONSENSUAL_CONTENT,
+            PRIVATE_INFO_DOXXING,
+            OTHER,
+        )
 }
 
 @Serializable
 data class BlockUserRequestDto(
-    val reason: String? = null
+    val reason: String? = null,
 )
 
 @Serializable
@@ -46,24 +47,24 @@ data class BlockSummaryDto(
     val blockedUserId: String,
     val blockedDisplayName: String? = null,
     val reason: String? = null,
-    val createdAt: String
+    val createdAt: String,
 )
 
 @Serializable
 data class BlocksListDto(
-    val blocks: List<BlockSummaryDto>
+    val blocks: List<BlockSummaryDto>,
 )
 
 @Serializable
 data class HiddenProfileSummaryDto(
     val hiddenUserId: String,
     val hiddenDisplayName: String? = null,
-    val createdAt: String
+    val createdAt: String,
 )
 
 @Serializable
 data class HiddenProfilesListDto(
-    val hiddenProfiles: List<HiddenProfileSummaryDto>
+    val hiddenProfiles: List<HiddenProfileSummaryDto>,
 )
 
 @Serializable
@@ -72,7 +73,7 @@ data class CreateReportRequestDto(
     val targetType: String,
     val targetId: String? = null,
     val category: String,
-    val note: String? = null
+    val note: String? = null,
 )
 
 @Serializable
@@ -83,7 +84,7 @@ data class ReportDto(
     val targetId: String? = null,
     val category: String,
     val status: String,
-    val createdAt: String
+    val createdAt: String,
 )
 
 @Serializable
@@ -93,17 +94,17 @@ data class ReportHistoryItemDto(
     val targetType: String,
     val category: String,
     val status: String,
-    val createdAt: String
+    val createdAt: String,
 )
 
 @Serializable
 data class ReportHistoryListDto(
-    val reports: List<ReportHistoryItemDto>
+    val reports: List<ReportHistoryItemDto>,
 )
 
 @Serializable
 data class SupportContactDto(
     val email: String,
     val subject: String,
-    val body: String
+    val body: String,
 )

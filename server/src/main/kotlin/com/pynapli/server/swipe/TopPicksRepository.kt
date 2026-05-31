@@ -9,7 +9,10 @@ interface TopPicksRepository {
      * along with its ordered cards. Null if no active session exists — the service
      * generates a fresh one in that case.
      */
-    suspend fun findCurrentSession(userId: UUID, now: Instant): TopPickSessionWithCards?
+    suspend fun findCurrentSession(
+        userId: UUID,
+        now: Instant,
+    ): TopPickSessionWithCards?
 
     /**
      * Persists a freshly-generated session + its cards in a single transaction.
@@ -23,7 +26,7 @@ interface TopPicksRepository {
         deckSessionId: UUID,
         generatedAt: Instant,
         expiresAt: Instant,
-        cards: List<TopPickCardInsert>
+        cards: List<TopPickCardInsert>,
     ): TopPickSessionWithCards
 }
 
@@ -32,7 +35,7 @@ data class TopPickSessionRecord(
     val userId: UUID,
     val deckSessionId: UUID,
     val generatedAt: Instant,
-    val expiresAt: Instant
+    val expiresAt: Instant,
 )
 
 data class TopPickCardRecord(
@@ -41,7 +44,7 @@ data class TopPickCardRecord(
     val targetUserId: UUID,
     val position: Int,
     val cardTokenHash: String,
-    val dealtAt: Instant
+    val dealtAt: Instant,
 )
 
 data class TopPickCardInsert(
@@ -49,10 +52,10 @@ data class TopPickCardInsert(
     val targetUserId: UUID,
     val position: Int,
     val cardTokenHash: String,
-    val dealtAt: Instant
+    val dealtAt: Instant,
 )
 
 data class TopPickSessionWithCards(
     val session: TopPickSessionRecord,
-    val cards: List<TopPickCardRecord>
+    val cards: List<TopPickCardRecord>,
 )

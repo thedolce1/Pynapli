@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 class TonightAvailabilityStateHolder(
-    private val repository: TonightAvailabilityRepository
+    private val repository: TonightAvailabilityRepository,
 ) {
     private val _state = MutableStateFlow(TonightAvailabilityUiState())
     val state: StateFlow<TonightAvailabilityUiState> = _state.asStateFlow()
@@ -46,22 +46,25 @@ data class TonightAvailabilityUiState(
     val availableUntil: String? = null,
     val isLoading: Boolean = false,
     val isMutating: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 ) {
     val isCurrentlyAvailable: Boolean get() = availableUntil != null
 }
 
 interface TonightAvailabilityRepository {
     suspend fun current(): AppResult<TonightAvailabilityDto>
+
     suspend fun set(request: SetTonightAvailableRequestDto): AppResult<TonightAvailabilityDto>
+
     suspend fun clear(): AppResult<TonightAvailabilityDto>
 }
 
 class ApiTonightAvailabilityRepository(
-    private val apiClient: PynapliApiClient
+    private val apiClient: PynapliApiClient,
 ) : TonightAvailabilityRepository {
     override suspend fun current(): AppResult<TonightAvailabilityDto> = apiClient.getTonightAvailability()
-    override suspend fun set(request: SetTonightAvailableRequestDto): AppResult<TonightAvailabilityDto> =
-        apiClient.setTonightAvailability(request)
+
+    override suspend fun set(request: SetTonightAvailableRequestDto): AppResult<TonightAvailabilityDto> = apiClient.setTonightAvailability(request)
+
     override suspend fun clear(): AppResult<TonightAvailabilityDto> = apiClient.clearTonightAvailability()
 }

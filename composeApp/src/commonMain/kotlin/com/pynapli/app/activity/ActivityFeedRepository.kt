@@ -9,7 +9,7 @@ interface ActivityFeedRepository {
     suspend fun loadActivity(
         tab: ActivityTabUi,
         cursor: String? = null,
-        limit: Int = ActivityFeedUi.DEFAULT_PAGE_SIZE
+        limit: Int = ActivityFeedUi.DEFAULT_PAGE_SIZE,
     ): AppResult<ActivityFeedUi>
 
     suspend fun loadSummary(): AppResult<ActivitySummaryUi>
@@ -20,6 +20,6 @@ interface ActivityFeedRepository {
 
     suspend fun respondToAlbumRequest(
         eventId: String,
-        approve: Boolean
+        approve: Boolean,
     ): AppResult<RespondAlbumAccessResponseDto>
 }

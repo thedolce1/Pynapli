@@ -19,7 +19,7 @@ internal object JdbcActivityRowMappers {
             distanceMeters = distanceMeters,
             albumRequestStatus = rs.getString("album_request_status"),
             matchId = rs.getString("match_id"),
-            conversationId = rs.getString("conversation_id")
+            conversationId = rs.getString("conversation_id"),
         )
     }
 
@@ -31,6 +31,6 @@ internal object JdbcActivityRowMappers {
             matchCount = rs.getInt("match_count"),
             albumRequestCount = rs.getInt("album_request_count"),
             partnerInviteCount = rs.getInt("partner_invite_count"),
-            latestBadgeOccurredAt = rs.getTimestamp("latest_badge_occurred_at")?.toInstant()
+            latestBadgeOccurredAt = rs.getTimestamp("latest_badge_occurred_at")?.toInstant(),
         )
 }

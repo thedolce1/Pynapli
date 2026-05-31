@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 class AppSettingsStateHolder(
-    private val repository: AppSettingsRepository
+    private val repository: AppSettingsRepository,
 ) {
     private val _state = MutableStateFlow(AppSettingsUiState())
     val state: StateFlow<AppSettingsUiState> = _state.asStateFlow()
@@ -23,15 +23,14 @@ class AppSettingsStateHolder(
                         settings = settings,
                         draft = settings.toDraft(),
                         isLoading = false,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
-            }
-            .onFailure { error ->
+            }.onFailure { error ->
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "Could not load app settings."
+                        errorMessage = error.message ?: "Could not load app settings.",
                     )
                 }
             }
@@ -41,7 +40,7 @@ class AppSettingsStateHolder(
         _state.update {
             it.copy(
                 draft = it.settings.toDraft(),
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -50,8 +49,7 @@ class AppSettingsStateHolder(
 
     fun updateDistanceUnit(value: String) = updateDraft { it.copy(distanceUnit = value.normalizedDistanceUnit()) }
 
-    fun updateNotificationDetail(value: String) =
-        updateDraft { it.copy(notificationDetail = value.normalizedNotificationDetail()) }
+    fun updateNotificationDetail(value: String) = updateDraft { it.copy(notificationDetail = value.normalizedNotificationDetail()) }
 
     fun updateMessageNotifications(value: Boolean) = updateDraft { it.copy(messageNotifications = value) }
 
@@ -61,10 +59,13 @@ class AppSettingsStateHolder(
 
     fun updateQuietHoursEnabled(value: Boolean) = updateDraft { it.copy(quietHoursEnabled = value) }
 
-    fun updateQuietHoursWindow(startMinute: Int, endMinute: Int) = updateDraft {
+    fun updateQuietHoursWindow(
+        startMinute: Int,
+        endMinute: Int,
+    ) = updateDraft {
         it.copy(
             quietHoursStartMinute = startMinute.normalizedQuietHoursMinute(AppSettings.DEFAULT_QUIET_HOURS_START_MINUTE),
-            quietHoursEndMinute = endMinute.normalizedQuietHoursMinute(AppSettings.DEFAULT_QUIET_HOURS_END_MINUTE)
+            quietHoursEndMinute = endMinute.normalizedQuietHoursMinute(AppSettings.DEFAULT_QUIET_HOURS_END_MINUTE),
         )
     }
 
@@ -89,7 +90,7 @@ class AppSettingsStateHolder(
                         settings = settings,
                         draft = settings.toDraft(),
                         isSaving = false,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
                 true
@@ -98,11 +99,11 @@ class AppSettingsStateHolder(
                 _state.update {
                     it.copy(
                         isSaving = false,
-                        errorMessage = error.message ?: "Could not save app settings."
+                        errorMessage = error.message ?: "Could not save app settings.",
                     )
                 }
                 false
-            }
+            },
         )
     }
 
@@ -110,7 +111,7 @@ class AppSettingsStateHolder(
         _state.update {
             it.copy(
                 draft = transform(it.draft),
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }

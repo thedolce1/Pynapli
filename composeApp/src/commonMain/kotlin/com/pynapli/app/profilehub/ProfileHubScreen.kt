@@ -44,7 +44,7 @@ fun ProfileHubScreen(
     onClearProfileLinkMessages: () -> Unit,
     onClearMessagesError: () -> Unit,
     onLogout: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val state by stateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -71,7 +71,7 @@ fun ProfileHubScreen(
             onRelationshipContextChanged = stateHolder::updateRelationshipContext,
             onDiscoveryStyleChanged = stateHolder::updateDiscoveryStyle,
             onSave = { scope.launch { stateHolder.saveDraft() } },
-            modifier = modifier
+            modifier = modifier,
         )
     } else if (state.privacyVisible) {
         PrivacyDiscoveryContent(
@@ -82,7 +82,7 @@ fun ProfileHubScreen(
             onShowDistanceChanged = stateHolder::updateShowDistance,
             onVisibleWhileTravelingChanged = stateHolder::updateVisibleWhileTraveling,
             onSave = { scope.launch { stateHolder.savePrivacySettings() } },
-            modifier = modifier
+            modifier = modifier,
         )
     } else if (state.activityVisible) {
         ActivityControlsContent(
@@ -95,7 +95,7 @@ fun ProfileHubScreen(
             onAllowIntroNotesChanged = stateHolder::updateAllowIntroNotes,
             onAllowAlbumRequestsChanged = stateHolder::updateAllowAlbumRequests,
             onSave = { scope.launch { stateHolder.saveActivityControls() } },
-            modifier = modifier
+            modifier = modifier,
         )
     } else if (state.appSettingsVisible) {
         AppSettingsContent(
@@ -117,7 +117,7 @@ fun ProfileHubScreen(
                     }
                 }
             },
-            modifier = modifier
+            modifier = modifier,
         )
     } else if (state.notificationCenterVisible) {
         NotificationCenterContent(
@@ -132,7 +132,7 @@ fun ProfileHubScreen(
             onDeclinePartnerChatInvite = onDeclinePartnerChatInvite,
             onClearProfileLinkMessages = onClearProfileLinkMessages,
             onClearMessagesError = onClearMessagesError,
-            modifier = modifier
+            modifier = modifier,
         )
     } else if (state.safetyCenterVisible) {
         ProfileHubSafetyCenterContent(
@@ -142,7 +142,7 @@ fun ProfileHubScreen(
             onUnhideProfile = { userId -> scope.launch { stateHolder.unhideProfile(userId) } },
             onContactSupport = { contact -> runCatching { uriHandler.openUri(contact.toMailtoUri()) } },
             onClearMessage = stateHolder::clearMessage,
-            modifier = modifier
+            modifier = modifier,
         )
     } else {
         ProfileHubContent(
@@ -175,7 +175,7 @@ fun ProfileHubScreen(
             },
             onLogoutClick = { showLogoutConfirm = true },
             onClearMessage = stateHolder::clearMessage,
-            modifier = modifier
+            modifier = modifier,
         )
     }
 
@@ -184,7 +184,7 @@ fun ProfileHubScreen(
             state = state,
             onDismiss = stateHolder::dismissAgeVerification,
             onEditProfile = stateHolder::openEditor,
-            onStart = { scope.launch { stateHolder.startAgeVerification() } }
+            onStart = { scope.launch { stateHolder.startAgeVerification() } },
         )
     }
 
@@ -198,7 +198,7 @@ fun ProfileHubScreen(
                     onClick = {
                         showLogoutConfirm = false
                         onLogout()
-                    }
+                    },
                 ) {
                     Text("Log out")
                 }
@@ -207,7 +207,7 @@ fun ProfileHubScreen(
                 TextButton(onClick = { showLogoutConfirm = false }) {
                     Text("Cancel")
                 }
-            }
+            },
         )
     }
 
@@ -230,28 +230,33 @@ fun ProfileHubScreen(
                         onLogout()
                     }
                 }
-            }
+            },
         )
     }
 }
 
-private fun SupportContactDto.toMailtoUri(): String =
-    "mailto:$email?subject=${subject.mailtoEncode()}&body=${body.mailtoEncode()}"
+private fun SupportContactDto.toMailtoUri(): String = "mailto:$email?subject=${subject.mailtoEncode()}&body=${body.mailtoEncode()}"
 
-private fun String.mailtoEncode(): String = buildString {
-    for (char in this@mailtoEncode) {
-        when {
-            char.isLetterOrDigit() -> append(char)
-            char == '-' || char == '_' || char == '.' || char == '~' -> append(char)
-            char == ' ' -> append("%20")
-            char == '\n' -> append("%0A")
-            else -> {
-                append('%')
-                append(char.code.toString(16).uppercase().padStart(2, '0'))
+private fun String.mailtoEncode(): String =
+    buildString {
+        for (char in this@mailtoEncode) {
+            when {
+                char.isLetterOrDigit() -> append(char)
+                char == '-' || char == '_' || char == '.' || char == '~' -> append(char)
+                char == ' ' -> append("%20")
+                char == '\n' -> append("%0A")
+                else -> {
+                    append('%')
+                    append(
+                        char.code
+                            .toString(16)
+                            .uppercase()
+                            .padStart(2, '0'),
+                    )
+                }
             }
         }
     }
-}
 
 @Composable
 private fun DeleteAccountDialog(
@@ -259,7 +264,7 @@ private fun DeleteAccountDialog(
     isDeleting: Boolean,
     onConfirmationChanged: (String) -> Unit,
     onDismiss: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -267,7 +272,7 @@ private fun DeleteAccountDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "Your profile will be removed from Grid, Swipe, events, viewed lists, and active sessions. Safety and legal retention records may be preserved."
+                    text = "Your profile will be removed from Grid, Swipe, events, viewed lists, and active sessions. Safety and legal retention records may be preserved.",
                 )
                 OutlinedTextField(
                     value = confirmation,
@@ -275,14 +280,14 @@ private fun DeleteAccountDialog(
                     label = { Text("Type DELETE") },
                     singleLine = true,
                     enabled = !isDeleting,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = onDelete,
-                enabled = !isDeleting && confirmation.trim() == "DELETE"
+                enabled = !isDeleting && confirmation.trim() == "DELETE",
             ) {
                 Text(if (isDeleting) "Deleting" else "Delete")
             }
@@ -290,11 +295,11 @@ private fun DeleteAccountDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                enabled = !isDeleting
+                enabled = !isDeleting,
             ) {
                 Text("Cancel")
             }
-        }
+        },
     )
 }
 
@@ -303,7 +308,7 @@ private fun AgeVerificationDialog(
     state: ProfileHubUiState,
     onDismiss: () -> Unit,
     onEditProfile: () -> Unit,
-    onStart: () -> Unit
+    onStart: () -> Unit,
 ) {
     val profile = state.me?.profile
     val status = state.ageVerificationStatus?.status
@@ -316,12 +321,13 @@ private fun AgeVerificationDialog(
         title = { Text("Age verification") },
         text = {
             Text(
-                text = when {
-                    alreadyVerified -> "Your age verification is complete."
-                    pending -> "Your age verification is pending review."
-                    !hasBirthdate -> "Add your birthdate in Edit profile before starting age verification."
-                    else -> "Age verification unlocks age-gated lifestyle filters. By continuing, you confirm you are 18 or older. Only the result and review status are stored."
-                }
+                text =
+                    when {
+                        alreadyVerified -> "Your age verification is complete."
+                        pending -> "Your age verification is pending review."
+                        !hasBirthdate -> "Add your birthdate in Edit profile before starting age verification."
+                        else -> "Age verification unlocks age-gated lifestyle filters. By continuing, you confirm you are 18 or older. Only the result and review status are stored."
+                    },
             )
         },
         confirmButton = {
@@ -337,7 +343,7 @@ private fun AgeVerificationDialog(
                 else -> {
                     Button(
                         onClick = onStart,
-                        enabled = !state.isAgeVerificationMutating
+                        enabled = !state.isAgeVerificationMutating,
                     ) {
                         Text(if (state.isAgeVerificationMutating) "Starting" else "Confirm & start")
                     }
@@ -348,6 +354,6 @@ private fun AgeVerificationDialog(
             if (!alreadyVerified && !pending) {
                 TextButton(onClick = onDismiss) { Text("Cancel") }
             }
-        }
+        },
     )
 }

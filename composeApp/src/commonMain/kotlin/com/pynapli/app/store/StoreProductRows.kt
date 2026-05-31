@@ -31,39 +31,39 @@ internal fun StoreTierRow(
     pendingPurchaseTier: String?,
     pendingPurchaseProductId: String?,
     isRestoringPurchases: Boolean,
-    onPurchaseTier: (SubscriptionTierDto) -> Unit
+    onPurchaseTier: (SubscriptionTierDto) -> Unit,
 ) {
     val isCurrent = tier.tier == currentTier
     val isFree = tier.tier == SubscriptionTier.FREE
     val purchaseInFlight = pendingPurchaseTier != null || pendingPurchaseProductId != null || isRestoringPurchases
     val isPurchasing = pendingPurchaseTier == tier.tier
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                if (isCurrent) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
-                }
-            )
-            .border(
-                width = 1.dp,
-                color = if (isCurrent) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                } else {
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                },
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    if (isCurrent) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+                    },
+                ).border(
+                    width = 1.dp,
+                    color =
+                        if (isCurrent) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                        } else {
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                        },
+                    shape = RoundedCornerShape(8.dp),
+                ).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -72,12 +72,12 @@ internal fun StoreTierRow(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = tier.monthlyPriceUsdCents.monthlyPriceLabel(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
             if (isCurrent) {
@@ -92,10 +92,11 @@ internal fun StoreTierRow(
                 Button(
                     onClick = { onPurchaseTier(tier) },
                     enabled = !purchaseInFlight && tier.playStoreProductId != null,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
                 ) {
                     Text(if (isPurchasing) "Opening" else "Choose")
                 }
@@ -107,14 +108,15 @@ internal fun StoreTierRow(
         }
 
         StoreFeatureRow(
-            label = if (tier.linkedPartnerIncluded) {
-                "Linked partner included"
-            } else {
-                "Single account entitlement"
-            }
+            label =
+                if (tier.linkedPartnerIncluded) {
+                    "Linked partner included"
+                } else {
+                    "Single account entitlement"
+                },
         )
         StoreFeatureRow(
-            label = if (tier.adSupported) "Ad-supported" else "No ads"
+            label = if (tier.adSupported) "Ad-supported" else "No ads",
         )
     }
 }
@@ -126,27 +128,27 @@ internal fun StoreProductRow(
     pendingPurchaseProductId: String?,
     pendingPurchaseTier: String?,
     isRestoringPurchases: Boolean,
-    onPurchaseProduct: (PremiumProductDto) -> Unit
+    onPurchaseProduct: (PremiumProductDto) -> Unit,
 ) {
     val purchaseInFlight = pendingPurchaseProductId != null || pendingPurchaseTier != null || isRestoringPurchases
     val isPurchasing = pendingPurchaseProductId == product.productId
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
+                    shape = RoundedCornerShape(8.dp),
+                ).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -155,30 +157,31 @@ internal fun StoreProductRow(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = product.description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = "Balance: $balance",
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
+                    maxLines = 1,
                 )
             }
             Button(
                 onClick = { onPurchaseProduct(product) },
                 enabled = !purchaseInFlight,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
             ) {
                 Text(if (isPurchasing) "Adding" else product.priceUsdCents.storePriceLabel(product.quantity))
             }

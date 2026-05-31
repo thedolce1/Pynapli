@@ -8,7 +8,7 @@ import kotlin.math.sqrt
 data class DeviceLocation(
     val latitude: Double,
     val longitude: Double,
-    val accuracyMeters: Int?
+    val accuracyMeters: Int?,
 )
 
 internal fun DeviceLocation.distanceMetersTo(other: DeviceLocation): Double {
@@ -16,8 +16,9 @@ internal fun DeviceLocation.distanceMetersTo(other: DeviceLocation): Double {
     val lat2 = other.latitude.toRadians()
     val deltaLat = (other.latitude - latitude).toRadians()
     val deltaLon = (other.longitude - longitude).toRadians()
-    val a = sin(deltaLat / 2) * sin(deltaLat / 2) +
-        cos(lat1) * cos(lat2) * sin(deltaLon / 2) * sin(deltaLon / 2)
+    val a =
+        sin(deltaLat / 2) * sin(deltaLat / 2) +
+            cos(lat1) * cos(lat2) * sin(deltaLon / 2) * sin(deltaLon / 2)
     return EARTH_RADIUS_METERS * 2 * atan2(sqrt(a), sqrt(1 - a))
 }
 

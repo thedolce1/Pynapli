@@ -37,12 +37,13 @@ internal fun GridFiltersSheet(
     onApplySavedPreset: (com.pynapli.shared.network.dto.SavedGridFilterDto) -> Unit = {},
     onDeleteSavedPreset: (id: String) -> Unit = {},
     onSetTonightAvailable: () -> Unit = {},
-    onClearTonightAvailable: () -> Unit = {}
+    onClearTonightAvailable: () -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val initialDraft = remember(initial, lifestyleFiltersAllowed) {
-        initial.withLifestyleAccess(lifestyleFiltersAllowed)
-    }
+    val initialDraft =
+        remember(initial, lifestyleFiltersAllowed) {
+            initial.withLifestyleAccess(lifestyleFiltersAllowed)
+        }
     var draft by remember(initialDraft) { mutableStateOf(initialDraft) }
     var saveName by remember { mutableStateOf("") }
     var glossaryVisible by remember { mutableStateOf(false) }
@@ -50,40 +51,43 @@ internal fun GridFiltersSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        modifier = Modifier.testTag(GridFilterTags.SHEET)
+        modifier = Modifier.testTag(GridFilterTags.SHEET),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(top = 12.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 12.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             if (savedState.items.isNotEmpty() || savedState.entitlementRequired) {
                 SectionTitle("Saved")
                 SavedFiltersSection(
                     state = savedState,
                     onApply = { dto ->
-                        draft = GridFilters.fromGridQueryRequest(dto.payload)
-                            .withLifestyleAccess(lifestyleFiltersAllowed)
+                        draft =
+                            GridFilters
+                                .fromGridQueryRequest(dto.payload)
+                                .withLifestyleAccess(lifestyleFiltersAllowed)
                         onApplySavedPreset(dto)
                     },
-                    onDelete = onDeleteSavedPreset
+                    onDelete = onDeleteSavedPreset,
                 )
             }
 
             SectionTitle("Distance")
             DistanceSection(
                 radiusMeters = draft.radiusMeters,
-                onChange = { meters -> draft = draft.copy(radiusMeters = meters) }
+                onChange = { meters -> draft = draft.copy(radiusMeters = meters) },
             )
 
             SectionTitle("Age")
             AgeSection(
                 minimumAge = draft.minimumAge,
                 maximumAge = draft.maximumAge,
-                onChange = { lo, hi -> draft = draft.copy(minimumAge = lo, maximumAge = hi) }
+                onChange = { lo, hi -> draft = draft.copy(minimumAge = lo, maximumAge = hi) },
             )
 
             SectionTitle("Presence")
@@ -91,12 +95,12 @@ internal fun GridFiltersSheet(
                 online = draft.online,
                 tonightAvailable = draft.tonightAvailable,
                 onOnlineToggle = { draft = draft.copy(online = !draft.online) },
-                onTonightToggle = { draft = draft.copy(tonightAvailable = !draft.tonightAvailable) }
+                onTonightToggle = { draft = draft.copy(tonightAvailable = !draft.tonightAvailable) },
             )
             TonightAvailabilityRow(
                 state = tonightState,
                 onSet = onSetTonightAvailable,
-                onClear = onClearTonightAvailable
+                onClear = onClearTonightAvailable,
             )
 
             SectionTitle("Who")
@@ -106,7 +110,7 @@ internal fun GridFiltersSheet(
                 partnered = draft.partnered,
                 onTogglesChanged = { singles, linked, partnered ->
                     draft = draft.copy(singles = singles, linked = linked, partnered = partnered)
-                }
+                },
             )
 
             SectionTitle("Trust")
@@ -116,36 +120,36 @@ internal fun GridFiltersSheet(
                 ageVerified = draft.ageVerified,
                 onTogglesChanged = { v, fp, av ->
                     draft = draft.copy(verified = v, facePhotoVerified = fp, ageVerified = av)
-                }
+                },
             )
 
             SectionTitle("Intent")
             IntentSection(
                 selected = draft.discoveryStyles,
-                onChange = { draft = draft.copy(discoveryStyles = it) }
+                onChange = { draft = draft.copy(discoveryStyles = it) },
             )
             IntentExtendedSection(
                 selected = draft.intents,
-                onChange = { draft = draft.copy(intents = it) }
+                onChange = { draft = draft.copy(intents = it) },
             )
 
             if (lifestyleFiltersAllowed) {
                 LifestyleSectionHeader(onOpenGlossary = { glossaryVisible = true })
                 LifestyleSection(
                     selected = draft.lifestyleTags,
-                    onChange = { draft = draft.copy(lifestyleTags = it) }
+                    onChange = { draft = draft.copy(lifestyleTags = it) },
                 )
             } else {
                 SectionTitle("Lifestyle")
                 ComingSoonSection(
-                    message = "Verify your age in profile settings to access lifestyle filters."
+                    message = "Verify your age in profile settings to access lifestyle filters.",
                 )
             }
 
             SectionTitle("Logistics")
             LogisticsSection(
                 selected = draft.logisticsTags,
-                onChange = { draft = draft.copy(logisticsTags = it) }
+                onChange = { draft = draft.copy(logisticsTags = it) },
             )
 
             if (!savedState.entitlementRequired) {
@@ -159,25 +163,26 @@ internal fun GridFiltersSheet(
                             onSavePreset(saveName, draft.withLifestyleAccess(lifestyleFiltersAllowed))
                             saveName = ""
                         }
-                    }
+                    },
                 )
             }
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 TextButton(
                     onClick = onClearAll,
-                    modifier = Modifier.testTag(GridFilterTags.CLEAR_ALL)
+                    modifier = Modifier.testTag(GridFilterTags.CLEAR_ALL),
                 ) { Text(text = "Clear all") }
                 Box(modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = onDismiss) { Text(text = "Cancel") }
                 androidx.compose.material3.Button(
                     onClick = { onApply(draft.withLifestyleAccess(lifestyleFiltersAllowed)) },
-                    modifier = Modifier.testTag(GridFilterTags.APPLY)
+                    modifier = Modifier.testTag(GridFilterTags.APPLY),
                 ) { Text(text = "Apply") }
             }
         }
@@ -188,5 +193,4 @@ internal fun GridFiltersSheet(
     }
 }
 
-private fun GridFilters.withLifestyleAccess(allowed: Boolean): GridFilters =
-    if (allowed) this else copy(lifestyleTags = emptySet())
+private fun GridFilters.withLifestyleAccess(allowed: Boolean): GridFilters = if (allowed) this else copy(lifestyleTags = emptySet())

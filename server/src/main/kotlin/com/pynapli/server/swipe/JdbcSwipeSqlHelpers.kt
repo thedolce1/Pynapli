@@ -6,7 +6,10 @@ import java.sql.ResultSet
 import java.sql.Types
 import java.util.UUID
 
-internal fun PreparedStatement.setNullableUuid(index: Int, value: UUID?) {
+internal fun PreparedStatement.setNullableUuid(
+    index: Int,
+    value: UUID?,
+) {
     if (value == null) {
         setNull(index, Types.OTHER)
     } else {
@@ -35,11 +38,10 @@ internal fun ResultSet.readDeckRankRow(): DeckRankRow =
         showDistance = getBoolean("show_distance"),
         distanceMeters = getDouble("distance_meters"),
         isBoosted = getBoolean("is_boosted"),
-        softScore = getInt("soft_score")
+        softScore = getInt("soft_score"),
     )
 
-internal fun DiscoveryFilters.isRankCacheEligible(): Boolean =
-    linkedOnly == null
+internal fun DiscoveryFilters.isRankCacheEligible(): Boolean = linkedOnly == null
 
 internal fun DiscoveryFilters.rankCacheKey(): String =
     buildString {
@@ -70,7 +72,10 @@ internal fun DiscoveryFilters.rankCacheKey(): String =
         append(verifiedPreferred)
     }
 
-internal fun nearestCandidateWindowLimit(limit: Int, filters: DiscoveryFilters): Int {
+internal fun nearestCandidateWindowLimit(
+    limit: Int,
+    filters: DiscoveryFilters,
+): Int {
     val multiplier = if (filters.hasAdvancedFilters || filters.verifiedPreferred) 20 else 8
     return (limit * multiplier).coerceIn(limit, 1_500)
 }

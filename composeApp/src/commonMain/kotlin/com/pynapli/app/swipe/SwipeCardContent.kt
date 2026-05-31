@@ -29,21 +29,22 @@ import com.pynapli.shared.network.dto.SwipeCardDto
 internal fun BoxScope.SwipeCardPhotos(
     isTop: Boolean,
     resolvedPhotos: List<String>,
-    pagerState: PagerState
+    pagerState: PagerState,
 ) {
     if (isTop && resolvedPhotos.size > 1) {
         HorizontalPager(
             state = pagerState,
             userScrollEnabled = false,
-            modifier = Modifier
-                .fillMaxSize()
-                .testTag(SwipeTestTags.PHOTO_CAROUSEL)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .testTag(SwipeTestTags.PHOTO_CAROUSEL),
         ) { page ->
             AsyncImage(
                 model = resolvedPhotos[page],
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         }
     } else {
@@ -52,7 +53,7 @@ internal fun BoxScope.SwipeCardPhotos(
                 model = url,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }
@@ -60,9 +61,10 @@ internal fun BoxScope.SwipeCardPhotos(
         PhotoCarouselIndicators(
             count = resolvedPhotos.size,
             currentPage = pagerState.currentPage,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 12.dp, start = 18.dp, end = 18.dp)
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 12.dp, start = 18.dp, end = 18.dp),
         )
     }
 }
@@ -70,19 +72,19 @@ internal fun BoxScope.SwipeCardPhotos(
 @Composable
 internal fun BoxScope.SwipeCardFooter(
     card: SwipeCardDto,
-    distanceLabel: String?
+    distanceLabel: String?,
 ) {
     Column(
-        modifier = Modifier
-            .align(Alignment.BottomStart)
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color.Transparent, Color(0xE6000000))
-                )
-            )
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier =
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Color(0xE6000000)),
+                    ),
+                ).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (card.online) {
@@ -95,7 +97,7 @@ internal fun BoxScope.SwipeCardFooter(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
+                modifier = Modifier.weight(1f, fill = false),
             )
             if (card.verified) {
                 SwipeVerifiedBadge()
@@ -107,7 +109,7 @@ internal fun BoxScope.SwipeCardFooter(
                 Text(
                     text = "$age",
                     color = Color(0xFFEDEDED),
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
         }
@@ -115,7 +117,7 @@ internal fun BoxScope.SwipeCardFooter(
             Text(
                 text = distance,
                 color = Color(0xFFCFCFCF),
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
         card.shortBio?.takeIf { it.isNotBlank() }?.let { bio ->
@@ -125,17 +127,19 @@ internal fun BoxScope.SwipeCardFooter(
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(SwipeTestTags.SHORT_BIO)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .testTag(SwipeTestTags.SHORT_BIO),
             )
         }
         if (card.tags.isNotEmpty()) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(SwipeTestTags.TAGS_ROW),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .testTag(SwipeTestTags.TAGS_ROW),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 card.tags.forEach { tag ->
                     SwipeTagChip(label = tag)

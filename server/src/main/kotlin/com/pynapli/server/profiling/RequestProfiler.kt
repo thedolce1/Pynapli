@@ -12,14 +12,14 @@ data class DatabasePoolSnapshot(
     val totalConnections: Int,
     val threadsAwaitingConnection: Int,
     val maximumPoolSize: Int,
-    val minimumIdle: Int
+    val minimumIdle: Int,
 )
 
 class RequestProfilerFactory(
     private val enabled: Boolean,
     private val headerRequired: Boolean,
     private val slowSpanThresholdMillis: Double,
-    private val poolSnapshotProvider: () -> DatabasePoolSnapshot?
+    private val poolSnapshotProvider: () -> DatabasePoolSnapshot?,
 ) {
     fun start(call: ApplicationCall): RequestProfiler {
         val requested = !headerRequired || call.request.headers[PROFILE_REQUEST_HEADER].isProfilingEnabledHeader()
@@ -27,7 +27,7 @@ class RequestProfilerFactory(
             RequestProfiler(
                 enabled = true,
                 slowSpanThresholdMillis = slowSpanThresholdMillis,
-                poolSnapshotProvider = poolSnapshotProvider
+                poolSnapshotProvider = poolSnapshotProvider,
             )
         } else {
             RequestProfiler.disabled()
@@ -45,7 +45,7 @@ class RequestProfilerFactory(
                 enabled = false,
                 headerRequired = true,
                 slowSpanThresholdMillis = 0.0,
-                poolSnapshotProvider = { null }
+                poolSnapshotProvider = { null },
             )
     }
 }
@@ -53,13 +53,13 @@ class RequestProfilerFactory(
 class RequestProfiler(
     val enabled: Boolean,
     private val slowSpanThresholdMillis: Double,
-    private val poolSnapshotProvider: () -> DatabasePoolSnapshot?
+    private val poolSnapshotProvider: () -> DatabasePoolSnapshot?,
 ) {
     private val spans = Collections.synchronizedList(mutableListOf<RequestProfileSpan>())
 
     suspend fun <T> measure(
         name: String,
-        block: suspend () -> T
+        block: suspend () -> T,
     ): T {
         if (!enabled) return block()
         val startedAt = System.nanoTime()
@@ -72,7 +72,7 @@ class RequestProfiler(
 
     fun <T> measureBlocking(
         name: String,
-        block: () -> T
+        block: () -> T,
     ): T {
         if (!enabled) return block()
         val startedAt = System.nanoTime()
@@ -90,7 +90,10 @@ class RequestProfiler(
         poolHeaderValue()?.let { call.response.headers.append(RequestProfilerFactory.PROFILE_POOL_HEADER, it) }
     }
 
-    private fun record(name: String, startedAt: Long) {
+    private fun record(
+        name: String,
+        startedAt: Long,
+    ) {
         val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000.0
         spans += RequestProfileSpan(name = name, millis = elapsedMillis)
     }
@@ -122,7 +125,7 @@ class RequestProfiler(
             "total=${snapshot.totalConnections}",
             "waiting=${snapshot.threadsAwaitingConnection}",
             "max=${snapshot.maximumPoolSize}",
-            "minIdle=${snapshot.minimumIdle}"
+            "minIdle=${snapshot.minimumIdle}",
         ).joinToString(",")
     }
 
@@ -131,33 +134,30 @@ class RequestProfiler(
             RequestProfiler(
                 enabled = false,
                 slowSpanThresholdMillis = 0.0,
-                poolSnapshotProvider = { null }
+                poolSnapshotProvider = { null },
             )
     }
 }
 
 suspend fun <T> profile(
     name: String,
-    block: suspend () -> T
+    block: suspend () -> T,
 ): T = currentProfiler.get()?.measure(name, block) ?: block()
 
 fun <T> profileBlocking(
     name: String,
-    block: () -> T
+    block: () -> T,
 ): T = currentProfiler.get()?.measureBlocking(name, block) ?: block()
 
-fun profilerContextElement(profiler: RequestProfiler): ThreadContextElement<RequestProfiler?> =
-    currentProfiler.asContextElement(profiler.takeIf { it.enabled })
+fun profilerContextElement(profiler: RequestProfiler): ThreadContextElement<RequestProfiler?> = currentProfiler.asContextElement(profiler.takeIf { it.enabled })
 
-private fun String?.isProfilingEnabledHeader(): Boolean =
-    equals("true", ignoreCase = true) || this == "1" || equals("yes", ignoreCase = true)
+private fun String?.isProfilingEnabledHeader(): Boolean = equals("true", ignoreCase = true) || this == "1" || equals("yes", ignoreCase = true)
 
-private fun formatMillis(value: Double): String =
-    String.format(Locale.US, "%.1f", value)
+private fun formatMillis(value: Double): String = String.format(Locale.US, "%.1f", value)
 
 private data class RequestProfileSpan(
     val name: String,
-    val millis: Double
+    val millis: Double,
 )
 
 private class RequestProfileAggregate {

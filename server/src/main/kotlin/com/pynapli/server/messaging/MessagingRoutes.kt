@@ -18,7 +18,7 @@ import io.ktor.server.routing.routing
 
 fun Application.configureMessagingRoutes(
     authService: AuthService?,
-    messagingService: MessagingService?
+    messagingService: MessagingService?,
 ) {
     if (authService == null || messagingService == null) return
 
@@ -49,8 +49,8 @@ fun Application.configureMessagingRoutes(
                         userId = user.id,
                         conversationIdText = threadId,
                         beforeCursorText = call.request.queryParameters["before"],
-                        limitText = call.request.queryParameters["limit"]
-                    )
+                        limitText = call.request.queryParameters["limit"],
+                    ),
                 )
             }
 

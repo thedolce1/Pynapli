@@ -21,7 +21,7 @@ import java.util.UUID
 fun Application.configureProfileRoutes(
     authService: AuthService?,
     profileService: ProfileService?,
-    requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled()
+    requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
 ) {
     if (authService == null || profileService == null) return
 
@@ -45,20 +45,23 @@ fun Application.configureProfileRoutes(
 
         get("/v1/profiles/{userId}") {
             val profiler = requestProfilerFactory.start(call)
-            val response = withContext(profilerContextElement(profiler)) {
-                profiler.measure("profile.route.total") {
-                    val user = profiler.measure("profile.route.auth") {
-                        authService.authenticate(call.requiredBearerToken())
-                    }
-                    val targetUserId = profiler.measure("profile.route.params") {
-                        call.parameters["userId"]?.toUuidOrNull()
-                            ?: throw ProfileException("PROFILE_NOT_FOUND")
-                    }
-                    profiler.measure("profile.service.total") {
-                        profileService.getPublicProfile(user.id, targetUserId)
+            val response =
+                withContext(profilerContextElement(profiler)) {
+                    profiler.measure("profile.route.total") {
+                        val user =
+                            profiler.measure("profile.route.auth") {
+                                authService.authenticate(call.requiredBearerToken())
+                            }
+                        val targetUserId =
+                            profiler.measure("profile.route.params") {
+                                call.parameters["userId"]?.toUuidOrNull()
+                                    ?: throw ProfileException("PROFILE_NOT_FOUND")
+                            }
+                        profiler.measure("profile.service.total") {
+                            profileService.getPublicProfile(user.id, targetUserId)
+                        }
                     }
                 }
-            }
             profiler.appendHeaders(call)
             call.respond(response)
         }
@@ -71,5 +74,4 @@ private fun ApplicationCall.requiredBearerToken(): String {
     return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }
 
-private fun String.toUuidOrNull(): UUID? =
-    runCatching { UUID.fromString(this) }.getOrNull()
+private fun String.toUuidOrNull(): UUID? = runCatching { UUID.fromString(this) }.getOrNull()

@@ -11,10 +11,11 @@ internal fun ConversationDto.titleFor(viewerUserId: String?): String =
         .joinToString(", ") { participant -> participant.displayName }
         .ifBlank { participants.firstOrNull()?.displayName ?: "Conversation" }
 
-internal val visibleConversationParticipantStatuses = setOf(
-    ConversationParticipantStatus.ACTIVE,
-    ConversationParticipantStatus.INVITED
-)
+internal val visibleConversationParticipantStatuses =
+    setOf(
+        ConversationParticipantStatus.ACTIVE,
+        ConversationParticipantStatus.INVITED,
+    )
 
 internal fun ConversationUiState.partnerInviteAcceptedFeedback(detail: ConversationDetailDto): String =
     when {

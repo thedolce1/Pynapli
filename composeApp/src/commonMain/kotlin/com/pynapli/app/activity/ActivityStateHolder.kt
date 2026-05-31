@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 class ActivityStateHolder(
-    private val repository: ActivityFeedRepository
+    private val repository: ActivityFeedRepository,
 ) {
     private val _state = MutableStateFlow(ActivityUiState(isLoading = true))
     val state: StateFlow<ActivityUiState> = _state.asStateFlow()
@@ -40,7 +40,7 @@ class ActivityStateHolder(
                 gatedCount = 0,
                 focusedEventId = null,
                 actionFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
         refresh(showLoading = true, surfaceErrors = true, markLoadedItemsSeen = true)
@@ -53,7 +53,7 @@ class ActivityStateHolder(
     private suspend fun refresh(
         showLoading: Boolean,
         surfaceErrors: Boolean,
-        markLoadedItemsSeen: Boolean
+        markLoadedItemsSeen: Boolean,
     ) {
         val generation = ++refreshGeneration
         if (showLoading) {
@@ -61,7 +61,7 @@ class ActivityStateHolder(
                 current.copy(
                     isLoading = true,
                     isLoadingMore = false,
-                    errorMessage = null
+                    errorMessage = null,
                 )
             }
         }
@@ -84,7 +84,7 @@ class ActivityStateHolder(
                             gatedCount = result.value.gatedCount,
                             isLoading = false,
                             isLoadingMore = false,
-                            errorMessage = null
+                            errorMessage = null,
                         )
                     }
                 }
@@ -103,11 +103,12 @@ class ActivityStateHolder(
                         current.copy(
                             isLoading = false,
                             isLoadingMore = false,
-                            errorMessage = if (surfaceErrors || current.items.isEmpty()) {
-                                result.error.message
-                            } else {
-                                current.errorMessage
-                            }
+                            errorMessage =
+                                if (surfaceErrors || current.items.isEmpty()) {
+                                    result.error.message
+                                } else {
+                                    current.errorMessage
+                                },
                         )
                     }
                 }
@@ -142,7 +143,7 @@ class ActivityStateHolder(
                             revealLimit = result.value.revealLimit,
                             gatedCount = result.value.gatedCount,
                             isLoadingMore = false,
-                            errorMessage = null
+                            errorMessage = null,
                         )
                     }
                     markEventsSeen(appendedEventIds)
@@ -153,7 +154,7 @@ class ActivityStateHolder(
                         if (existing.selectedTab != current.selectedTab) return@update existing
                         existing.copy(
                             isLoadingMore = false,
-                            errorMessage = result.error.message
+                            errorMessage = result.error.message,
                         )
                     }
                 }
@@ -163,12 +164,15 @@ class ActivityStateHolder(
         }
     }
 
-    suspend fun respondToAlbumRequest(eventId: String, approve: Boolean) {
+    suspend fun respondToAlbumRequest(
+        eventId: String,
+        approve: Boolean,
+    ) {
         _state.update { current ->
             current.copy(
                 pendingAlbumActionEventId = eventId,
                 actionFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -176,19 +180,21 @@ class ActivityStateHolder(
             is AppResult.Success -> {
                 _state.update { current ->
                     current.copy(
-                        items = current.items.map { item ->
-                            if (item.eventId == eventId) {
-                                item.copy(albumRequestStatus = result.value.status)
-                            } else {
-                                item
-                            }
-                        },
+                        items =
+                            current.items.map { item ->
+                                if (item.eventId == eventId) {
+                                    item.copy(albumRequestStatus = result.value.status)
+                                } else {
+                                    item
+                                }
+                            },
                         pendingAlbumActionEventId = null,
-                        actionFeedback = if (result.value.status == "approved") {
-                            "Album access granted"
-                        } else {
-                            "Album request denied"
-                        }
+                        actionFeedback =
+                            if (result.value.status == "approved") {
+                                "Album access granted"
+                            } else {
+                                "Album request denied"
+                            },
                     )
                 }
                 refreshSummary(surfaceErrors = false)
@@ -198,7 +204,7 @@ class ActivityStateHolder(
                 _state.update { current ->
                     current.copy(
                         pendingAlbumActionEventId = null,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -210,7 +216,7 @@ class ActivityStateHolder(
             current.copy(
                 pendingDismissEventId = eventId,
                 actionFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -220,7 +226,7 @@ class ActivityStateHolder(
                     current.copy(
                         items = current.items.filterNot { it.eventId == result.value.eventId },
                         pendingDismissEventId = null,
-                        actionFeedback = "Activity dismissed"
+                        actionFeedback = "Activity dismissed",
                     )
                 }
                 refreshSummary(surfaceErrors = false)
@@ -230,7 +236,7 @@ class ActivityStateHolder(
                 _state.update { current ->
                     current.copy(
                         pendingDismissEventId = null,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -245,7 +251,8 @@ class ActivityStateHolder(
         }
         when (repository.markActivitySeen(uniqueEventIds)) {
             is AppResult.Success,
-            is AppResult.Failure -> refreshSummary(surfaceErrors = false)
+            is AppResult.Failure,
+            -> refreshSummary(surfaceErrors = false)
         }
     }
 
@@ -255,7 +262,7 @@ class ActivityStateHolder(
                 _state.update { current ->
                     current.copy(
                         summary = result.value,
-                        errorMessage = if (surfaceErrors) null else current.errorMessage
+                        errorMessage = if (surfaceErrors) null else current.errorMessage,
                     )
                 }
             }

@@ -20,7 +20,7 @@ data class NotificationPreferencesDto(
     val quietHoursEnabled: Boolean = false,
     val quietHoursStartMinute: Int = 1320,
     val quietHoursEndMinute: Int = 480,
-    val quietHoursTimezone: String = "UTC"
+    val quietHoursTimezone: String = "UTC",
 )
 
 @Serializable
@@ -36,7 +36,7 @@ data class UpdateNotificationPreferencesRequestDto(
     val quietHoursEnabled: Boolean? = null,
     val quietHoursStartMinute: Int? = null,
     val quietHoursEndMinute: Int? = null,
-    val quietHoursTimezone: String? = null
+    val quietHoursTimezone: String? = null,
 )
 
 @Serializable
@@ -46,13 +46,13 @@ data class RegisterPushDeviceRequestDto(
     val appVersion: String? = null,
     val locale: String? = null,
     val timezone: String? = null,
-    val notificationsEnabled: Boolean = true
+    val notificationsEnabled: Boolean = true,
 )
 
 @Serializable
 data class UnregisterPushDeviceRequestDto(
     val platform: String,
-    val deviceToken: String
+    val deviceToken: String,
 )
 
 @Serializable
@@ -60,10 +60,10 @@ data class PushDeviceDto(
     val deviceId: String,
     val platform: String,
     val notificationsEnabled: Boolean,
-    val lastSeenAt: String
+    val lastSeenAt: String,
 )
 
 @Serializable
 data class PushDeviceRegistrationResponseDto(
-    val device: PushDeviceDto
+    val device: PushDeviceDto,
 )

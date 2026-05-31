@@ -40,30 +40,31 @@ fun AuthScreen(
     onModeSelected: (AuthMode) -> Unit,
     onSubmit: () -> Unit,
     onDevLogin: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 28.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .statusBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = "Pynapli",
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = if (state.mode == AuthMode.SignIn) "Sign in" else "Create account",
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
         )
 
         Spacer(modifier = Modifier.height(28.dp))
@@ -76,7 +77,7 @@ fun AuthScreen(
             enabled = !state.isSubmitting,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             colors = authTextFieldColors(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -90,7 +91,7 @@ fun AuthScreen(
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             colors = authTextFieldColors(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
 
         if (state.mode == AuthMode.CreateAccount) {
@@ -105,7 +106,7 @@ fun AuthScreen(
                 enabled = !state.isSubmitting,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 colors = authTextFieldColors(),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -113,20 +114,21 @@ fun AuthScreen(
             Row(
                 verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Checkbox(
                     checked = state.acceptedAgeAndTerms,
                     onCheckedChange = onAcceptedAgeAndTermsChanged,
-                    enabled = !state.isSubmitting
+                    enabled = !state.isSubmitting,
                 )
                 Text(
                     text = "I confirm I am 18 or older and accept the Terms and Privacy Policy.",
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(top = 12.dp)
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .padding(top = 12.dp),
                 )
             }
         }
@@ -138,7 +140,7 @@ fun AuthScreen(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
         }
 
@@ -147,13 +149,13 @@ fun AuthScreen(
         Button(
             onClick = onSubmit,
             enabled = !state.isSubmitting,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             if (state.isSubmitting) {
                 CircularProgressIndicator(
                     color = MaterialTheme.colorScheme.onPrimary,
                     strokeWidth = 2.dp,
-                    modifier = Modifier.padding(vertical = 2.dp)
+                    modifier = Modifier.padding(vertical = 2.dp),
                 )
             } else {
                 Text(if (state.mode == AuthMode.SignIn) "Sign in" else "Create account")
@@ -165,15 +167,15 @@ fun AuthScreen(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             TextButton(
                 onClick = {
                     onModeSelected(
-                        if (state.mode == AuthMode.SignIn) AuthMode.CreateAccount else AuthMode.SignIn
+                        if (state.mode == AuthMode.SignIn) AuthMode.CreateAccount else AuthMode.SignIn,
                     )
                 },
-                enabled = !state.isSubmitting
+                enabled = !state.isSubmitting,
             ) {
                 Text(if (state.mode == AuthMode.SignIn) "Create account" else "Sign in")
             }
@@ -183,7 +185,7 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(6.dp))
             TextButton(
                 onClick = login,
-                enabled = !state.isSubmitting
+                enabled = !state.isSubmitting,
             ) {
                 Text("Dev login")
             }
@@ -192,12 +194,13 @@ fun AuthScreen(
 }
 
 @Composable
-private fun authTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-    focusedBorderColor = MaterialTheme.colorScheme.primary,
-    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-    focusedLabelColor = MaterialTheme.colorScheme.primary,
-    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    cursorColor = MaterialTheme.colorScheme.primary
-)
+private fun authTextFieldColors() =
+    OutlinedTextFieldDefaults.colors(
+        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+        focusedLabelColor = MaterialTheme.colorScheme.primary,
+        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        cursorColor = MaterialTheme.colorScheme.primary,
+    )

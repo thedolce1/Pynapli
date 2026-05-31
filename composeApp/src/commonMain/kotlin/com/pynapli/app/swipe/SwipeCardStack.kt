@@ -18,17 +18,17 @@ internal fun SwipeCardStack(
     onActionConsumed: () -> Unit,
     onOpenProfile: (SwipeCardDto) -> Unit,
     onLinkedPartnerTap: (SwipeCardDto) -> Unit,
-    onSwiped: (SwipeCardDto, String) -> Unit
+    onSwiped: (SwipeCardDto, String) -> Unit,
 ) {
     val visibleStack = cards.take(3)
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
     ) {
         val density = LocalDensity.current
         val widthPx = with(density) { maxWidth.toPx() }
         Box(
             modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             visibleStack.asReversed().forEachIndexed { reverseIndex, card ->
                 val depth = visibleStack.lastIndex - reverseIndex
@@ -43,7 +43,7 @@ internal fun SwipeCardStack(
                     onActionConsumed = onActionConsumed,
                     onOpenProfile = onOpenProfile,
                     onLinkedPartnerTap = onLinkedPartnerTap,
-                    onSwiped = onSwiped
+                    onSwiped = onSwiped,
                 )
             }
         }

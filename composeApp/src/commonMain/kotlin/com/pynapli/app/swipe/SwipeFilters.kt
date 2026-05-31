@@ -38,7 +38,7 @@ data class SwipeFilters(
     val intents: Set<Intent> = emptySet(),
     val lifestyleTags: Set<LifestyleTag> = emptySet(),
     val logisticsTags: Set<LogisticsTag> = emptySet(),
-    val dealbreakers: Set<String> = emptySet()
+    val dealbreakers: Set<String> = emptySet(),
 ) {
     val activeCount: Int
         get() {
@@ -67,14 +67,16 @@ data class SwipeFilters(
      * reject with `ENTITLEMENT_REQUIRED`.
      */
     val requiresAdvancedEntitlement: Boolean
-        get() = lifestyleTags.isNotEmpty() ||
-            logisticsTags.any { it != LogisticsTag.PublicMeetFirst }
+        get() =
+            lifestyleTags.isNotEmpty() ||
+                logisticsTags.any { it != LogisticsTag.PublicMeetFirst }
 
     fun toSwipeDeckRequest(cursor: String? = null): SwipeDeckRequestDto {
-        val contexts = buildList {
-            if (singles) add(SINGLES_CONTEXT)
-            if (partnered) add(PARTNERED_CONTEXT)
-        }
+        val contexts =
+            buildList {
+                if (singles) add(SINGLES_CONTEXT)
+                if (partnered) add(PARTNERED_CONTEXT)
+            }
         return SwipeDeckRequestDto(
             radiusMeters = radiusMeters,
             limit = PAGE_SIZE,
@@ -91,7 +93,7 @@ data class SwipeFilters(
             lifestyleTags = lifestyleTags.map { it.serverValue },
             logisticsTags = logisticsTags.map { it.serverValue },
             dealbreakers = dealbreakers,
-            verifiedPreferred = verifiedPreferred
+            verifiedPreferred = verifiedPreferred,
         )
     }
 
@@ -125,9 +127,10 @@ data class SwipeFilters(
             val lifestyleByValue = LifestyleTag.entries.associateBy { it.serverValue }
             val logisticsByValue = LogisticsTag.entries.associateBy { it.serverValue }
             val intentByValue = Intent.entries.associateBy { it.serverValue }
-            val dealbreakers = request.dealbreakers
-                .filter { it in SwipeDealbreakerKey.ALL }
-                .toSet()
+            val dealbreakers =
+                request.dealbreakers
+                    .filter { it in SwipeDealbreakerKey.ALL }
+                    .toSet()
             return SwipeFilters(
                 singles = SINGLES_CONTEXT in contexts,
                 partnered = PARTNERED_CONTEXT in contexts,
@@ -143,7 +146,7 @@ data class SwipeFilters(
                 intents = request.intents.mapNotNull { intentByValue[it] }.toSet(),
                 lifestyleTags = request.lifestyleTags.mapNotNull { lifestyleByValue[it] }.toSet(),
                 logisticsTags = request.logisticsTags.mapNotNull { logisticsByValue[it] }.toSet(),
-                dealbreakers = dealbreakers
+                dealbreakers = dealbreakers,
             )
         }
     }

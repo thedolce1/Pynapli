@@ -8,28 +8,25 @@ import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profile.SamplePublicProfileRepository
 
 @Composable
-internal fun rememberGridStateHolder(): GridStateHolder {
-    return remember {
+internal fun rememberGridStateHolder(): GridStateHolder =
+    remember {
         GridStateHolder(
-            repository = SampleGridFeedRepository()
+            repository = SampleGridFeedRepository(),
         )
     }
-}
 
 @Composable
-internal fun rememberProfileDetailStateHolder(): ProfileDetailStateHolder {
-    return remember {
+internal fun rememberProfileDetailStateHolder(): ProfileDetailStateHolder =
+    remember {
         ProfileDetailStateHolder(
-            repository = SamplePublicProfileRepository()
+            repository = SamplePublicProfileRepository(),
         )
     }
-}
 
 @Composable
-internal fun rememberConversationStateHolder(): ConversationStateHolder {
-    return remember {
+internal fun rememberConversationStateHolder(): ConversationStateHolder =
+    remember {
         ConversationStateHolder(
-            repository = SampleConversationRepository()
+            repository = SampleConversationRepository(),
         )
     }
-}

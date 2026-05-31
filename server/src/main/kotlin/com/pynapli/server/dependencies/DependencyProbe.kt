@@ -7,4 +7,3 @@ interface DependencyProbe : AutoCloseable {
 
     suspend fun check(): DependencyHealthDto
 }
-

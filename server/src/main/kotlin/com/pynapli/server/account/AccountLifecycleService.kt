@@ -5,26 +5,28 @@ import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import java.util.UUID
 
 class AccountLifecycleService(
-    private val repository: AccountLifecycleRepository
+    private val repository: AccountLifecycleRepository,
 ) {
-    suspend fun latestDataExportRequest(userId: UUID): AccountDataExportDto? =
-        repository.latestDataExportRequest(userId)?.toDto()
+    suspend fun latestDataExportRequest(userId: UUID): AccountDataExportDto? = repository.latestDataExportRequest(userId)?.toDto()
 
-    suspend fun requestDataExport(userId: UUID): AccountDataExportDto =
-        repository.createDataExportRequest(userId).toDto()
+    suspend fun requestDataExport(userId: UUID): AccountDataExportDto = repository.createDataExportRequest(userId).toDto()
 
-    suspend fun deleteAccount(userId: UUID, confirmation: String): DeleteAccountResponseDto {
+    suspend fun deleteAccount(
+        userId: UUID,
+        confirmation: String,
+    ): DeleteAccountResponseDto {
         if (confirmation.trim() != DELETE_CONFIRMATION) {
             throw AccountLifecycleException("INVALID_ACCOUNT_DELETE_CONFIRMATION")
         }
 
-        val result = repository.deleteAccount(userId)
-            ?: throw AccountLifecycleException("ACCOUNT_ALREADY_DELETED")
+        val result =
+            repository.deleteAccount(userId)
+                ?: throw AccountLifecycleException("ACCOUNT_ALREADY_DELETED")
 
         return DeleteAccountResponseDto(
             deleted = true,
             revokedSessionCount = result.revokedSessionCount,
-            message = "Your account has been deleted and removed from discovery."
+            message = "Your account has been deleted and removed from discovery.",
         )
     }
 
@@ -36,10 +38,13 @@ class AccountLifecycleService(
             completedAt = completedAt?.toString(),
             expiresAt = expiresAt?.toString(),
             downloadUrl = downloadUrl,
-            message = messageForExportStatus(status, errorMessage)
+            message = messageForExportStatus(status, errorMessage),
         )
 
-    private fun messageForExportStatus(status: String, errorMessage: String?): String =
+    private fun messageForExportStatus(
+        status: String,
+        errorMessage: String?,
+    ): String =
         when (status) {
             "requested" -> "Your data export request has been received."
             "processing" -> "Your data export is being prepared."
@@ -54,4 +59,6 @@ class AccountLifecycleService(
     }
 }
 
-class AccountLifecycleException(val code: String) : RuntimeException(code)
+class AccountLifecycleException(
+    val code: String,
+) : RuntimeException(code)

@@ -1,25 +1,40 @@
 package com.pynapli.server.subscriptions
 
 import com.pynapli.shared.network.dto.EntitlementSource
-import java.time.Instant
 import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 
 interface SubscriptionRepository {
-    suspend fun findBestActiveEntitlement(userId: UUID, now: Instant): ActiveEntitlementRecord? =
+    suspend fun findBestActiveEntitlement(
+        userId: UUID,
+        now: Instant,
+    ): ActiveEntitlementRecord? =
         listOfNotNull(
             findBestActiveOwnSubscription(userId, now)?.toActiveEntitlementRecord(),
             findBestActiveStoredEntitlement(userId, now)?.toActiveEntitlementRecord(),
-            findBestActiveLinkedPartnerSubscription(userId, now)?.toActiveEntitlementRecord()
+            findBestActiveLinkedPartnerSubscription(userId, now)?.toActiveEntitlementRecord(),
         ).maxWithOrNull(activeEntitlementComparator())
 
-    suspend fun findBestActiveOwnSubscription(userId: UUID, now: Instant): SubscriptionRecord?
+    suspend fun findBestActiveOwnSubscription(
+        userId: UUID,
+        now: Instant,
+    ): SubscriptionRecord?
 
-    suspend fun findBestActiveLinkedPartnerSubscription(userId: UUID, now: Instant): LinkedPartnerSubscriptionRecord?
+    suspend fun findBestActiveLinkedPartnerSubscription(
+        userId: UUID,
+        now: Instant,
+    ): LinkedPartnerSubscriptionRecord?
 
-    suspend fun findBestActiveStoredEntitlement(userId: UUID, now: Instant): StoredEntitlementRecord?
+    suspend fun findBestActiveStoredEntitlement(
+        userId: UUID,
+        now: Instant,
+    ): StoredEntitlementRecord?
 
-    suspend fun listStoredEntitlementsForUser(userId: UUID, limit: Int): List<StoredEntitlementRecord> = emptyList()
+    suspend fun listStoredEntitlementsForUser(
+        userId: UUID,
+        limit: Int,
+    ): List<StoredEntitlementRecord> = emptyList()
 
     suspend fun grantStoredEntitlement(
         userId: UUID,
@@ -28,18 +43,24 @@ interface SubscriptionRepository {
         startsAt: Instant,
         endsAt: Instant?,
         actorId: String,
-        reason: String
+        reason: String,
     ): StoredEntitlementRecord? = null
 
     suspend fun revokeStoredEntitlement(
         entitlementId: UUID,
         actorId: String,
-        reason: String
+        reason: String,
     ): StoredEntitlementRecord? = null
 
-    suspend fun consumeIntroNoteInventory(userId: UUID, now: Instant): Boolean
+    suspend fun consumeIntroNoteInventory(
+        userId: UUID,
+        now: Instant,
+    ): Boolean
 
-    suspend fun consumePineappleLikeInventory(userId: UUID, now: Instant): Boolean = false
+    suspend fun consumePineappleLikeInventory(
+        userId: UUID,
+        now: Instant,
+    ): Boolean = false
 
     /**
      * Variant of `consumePineappleLikeInventory` that returns the `premium_inventory.id`
@@ -47,18 +68,25 @@ interface SubscriptionRepository {
      * rewind path refund the exact row atomically (`refundInventoryById`). Default
      * impl falls back to the Boolean method so unrelated test stubs keep compiling.
      */
-    suspend fun consumePineappleLikeInventoryReturningId(userId: UUID, now: Instant): UUID? =
-        if (consumePineappleLikeInventory(userId, now)) UUID.randomUUID() else null
+    suspend fun consumePineappleLikeInventoryReturningId(
+        userId: UUID,
+        now: Instant,
+    ): UUID? = if (consumePineappleLikeInventory(userId, now)) UUID.randomUUID() else null
 
     /**
      * Increment a specific `premium_inventory` row's quantity by 1. Used by the
      * Pineapple Like rewind path to refund the exact row that was decremented when
      * the action was originally recorded. Returns true if the row was updated.
      */
-    suspend fun refundInventoryById(inventoryId: UUID, now: Instant): Boolean = false
+    suspend fun refundInventoryById(
+        inventoryId: UUID,
+        now: Instant,
+    ): Boolean = false
 
-    suspend fun listPremiumInventoryBalances(userId: UUID, now: Instant): List<PremiumInventoryBalanceRecord> =
-        emptyList()
+    suspend fun listPremiumInventoryBalances(
+        userId: UUID,
+        now: Instant,
+    ): List<PremiumInventoryBalanceRecord> = emptyList()
 
     suspend fun grantPremiumInventory(
         userId: UUID,
@@ -66,13 +94,13 @@ interface SubscriptionRepository {
         quantity: Int,
         source: String,
         expiresAt: Instant?,
-        now: Instant
+        now: Instant,
     ): PremiumInventoryBalanceRecord? = null
 
     suspend fun activateBoost(
         userId: UUID,
         now: Instant,
-        duration: Duration
+        duration: Duration,
     ): BoostActivationResult? = null
 
     suspend fun upsertDevSubscriptionPurchase(
@@ -80,17 +108,17 @@ interface SubscriptionRepository {
         productId: String,
         tier: String,
         startsAt: Instant,
-        endsAt: Instant
+        endsAt: Instant,
     ): SubscriptionRecord = throw SubscriptionException("DEV_STORE_PURCHASE_UNAVAILABLE")
 
     suspend fun listPlayStoreSubscriptionsDueForVerification(
         staleBefore: Instant,
         renewalWindowEnd: Instant,
-        limit: Int
+        limit: Int,
     ): List<PlayStoreSubscriptionVerificationCandidate> = emptyList()
 
     suspend fun findPlayStoreSubscriptionByPurchaseToken(
-        purchaseToken: String
+        purchaseToken: String,
     ): PlayStoreSubscriptionVerificationCandidate? = null
 
     suspend fun insertPlayStoreRtdnEvent(event: PlayStoreRtdnEventInsert): Boolean = true
@@ -98,7 +126,7 @@ interface SubscriptionRepository {
     suspend fun updatePlayStoreRtdnEventStatus(
         messageId: String,
         processingStatus: String,
-        errorCode: String? = null
+        errorCode: String? = null,
     ) = Unit
 
     suspend fun upsertPendingPlayStoreSubscriptionPurchase(
@@ -106,7 +134,7 @@ interface SubscriptionRepository {
         productId: String,
         purchaseToken: String,
         tier: String,
-        now: Instant
+        now: Instant,
     ): SubscriptionRecord = throw SubscriptionException("SUBSCRIPTION_PURCHASE_SYNC_UNAVAILABLE")
 
     suspend fun upsertVerifiedPlayStoreSubscriptionPurchase(
@@ -121,7 +149,7 @@ interface SubscriptionRepository {
         acknowledgedAt: Instant?,
         currentPeriodStart: Instant,
         currentPeriodEnd: Instant,
-        verifiedAt: Instant
+        verifiedAt: Instant,
     ): SubscriptionRecord = throw SubscriptionException("SUBSCRIPTION_PURCHASE_SYNC_UNAVAILABLE")
 }
 
@@ -131,7 +159,7 @@ data class SubscriptionRecord(
     val tier: String,
     val status: String,
     val currentPeriodStart: Instant,
-    val currentPeriodEnd: Instant
+    val currentPeriodEnd: Instant,
 )
 
 data class PlayStoreSubscriptionVerificationCandidate(
@@ -141,7 +169,7 @@ data class PlayStoreSubscriptionVerificationCandidate(
     val tier: String,
     val status: String,
     val currentPeriodStart: Instant,
-    val currentPeriodEnd: Instant
+    val currentPeriodEnd: Instant,
 )
 
 data class PlayStoreRtdnEventInsert(
@@ -152,13 +180,13 @@ data class PlayStoreRtdnEventInsert(
     val purchaseToken: String?,
     val productId: String?,
     val eventTime: Instant?,
-    val rawPayload: String
+    val rawPayload: String,
 )
 
 data class LinkedPartnerSubscriptionRecord(
     val subscription: SubscriptionRecord,
     val linkedPartnerUserId: UUID,
-    val partnerLinkId: UUID
+    val partnerLinkId: UUID,
 )
 
 data class ActiveEntitlementRecord(
@@ -168,7 +196,7 @@ data class ActiveEntitlementRecord(
     val sourceUserId: UUID,
     val linkedPartnerUserId: UUID?,
     val startsAt: Instant,
-    val endsAt: Instant?
+    val endsAt: Instant?,
 )
 
 data class StoredEntitlementRecord(
@@ -179,7 +207,7 @@ data class StoredEntitlementRecord(
     val sourceId: UUID?,
     val startsAt: Instant,
     val endsAt: Instant?,
-    val status: String = "active"
+    val status: String = "active",
 )
 
 data class BoostActivationRecord(
@@ -189,18 +217,18 @@ data class BoostActivationRecord(
     val source: String,
     val startsAt: Instant,
     val endsAt: Instant,
-    val status: String
+    val status: String,
 )
 
 data class BoostActivationResult(
     val activation: BoostActivationRecord,
-    val consumedInventory: Boolean
+    val consumedInventory: Boolean,
 )
 
 data class PremiumInventoryBalanceRecord(
     val inventoryType: String,
     val quantity: Int,
-    val nextExpiresAt: Instant?
+    val nextExpiresAt: Instant?,
 )
 
 private fun SubscriptionRecord.toActiveEntitlementRecord(): ActiveEntitlementRecord =
@@ -211,7 +239,7 @@ private fun SubscriptionRecord.toActiveEntitlementRecord(): ActiveEntitlementRec
         sourceUserId = userId,
         linkedPartnerUserId = null,
         startsAt = currentPeriodStart,
-        endsAt = currentPeriodEnd
+        endsAt = currentPeriodEnd,
     )
 
 private fun LinkedPartnerSubscriptionRecord.toActiveEntitlementRecord(): ActiveEntitlementRecord =
@@ -222,7 +250,7 @@ private fun LinkedPartnerSubscriptionRecord.toActiveEntitlementRecord(): ActiveE
         sourceUserId = linkedPartnerUserId,
         linkedPartnerUserId = linkedPartnerUserId,
         startsAt = subscription.currentPeriodStart,
-        endsAt = subscription.currentPeriodEnd
+        endsAt = subscription.currentPeriodEnd,
     )
 
 private fun StoredEntitlementRecord.toActiveEntitlementRecord(): ActiveEntitlementRecord =
@@ -233,7 +261,7 @@ private fun StoredEntitlementRecord.toActiveEntitlementRecord(): ActiveEntitleme
         sourceUserId = userId,
         linkedPartnerUserId = null,
         startsAt = startsAt,
-        endsAt = endsAt
+        endsAt = endsAt,
     )
 
 private fun activeEntitlementComparator(): Comparator<ActiveEntitlementRecord> =

@@ -9,52 +9,58 @@ import kotlin.test.assertFailsWith
 
 class AccountLifecycleServiceTest {
     @Test
-    fun requestDataExportReturnsRequestedStatusMessage() = runBlocking {
-        val userId = UUID.fromString("00000000-0000-0000-0000-000000000901")
-        val repository = FakeAccountLifecycleRepository()
-        val service = AccountLifecycleService(repository)
+    fun requestDataExportReturnsRequestedStatusMessage() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000901")
+            val repository = FakeAccountLifecycleRepository()
+            val service = AccountLifecycleService(repository)
 
-        val result = service.requestDataExport(userId)
+            val result = service.requestDataExport(userId)
 
-        assertEquals("requested", result.status)
-        assertEquals("Your data export request has been received.", result.message)
-        assertEquals(userId, repository.lastExportUserId)
-    }
-
-    @Test
-    fun deleteAccountRequiresExplicitConfirmation() = runBlocking {
-        val repository = FakeAccountLifecycleRepository()
-        val service = AccountLifecycleService(repository)
-
-        val error = assertFailsWith<AccountLifecycleException> {
-            service.deleteAccount(UUID.randomUUID(), "delete")
+            assertEquals("requested", result.status)
+            assertEquals("Your data export request has been received.", result.message)
+            assertEquals(userId, repository.lastExportUserId)
         }
 
-        assertEquals("INVALID_ACCOUNT_DELETE_CONFIRMATION", error.code)
-        assertEquals(null, repository.lastDeletedUserId)
-    }
+    @Test
+    fun deleteAccountRequiresExplicitConfirmation() =
+        runBlocking {
+            val repository = FakeAccountLifecycleRepository()
+            val service = AccountLifecycleService(repository)
+
+            val error =
+                assertFailsWith<AccountLifecycleException> {
+                    service.deleteAccount(UUID.randomUUID(), "delete")
+                }
+
+            assertEquals("INVALID_ACCOUNT_DELETE_CONFIRMATION", error.code)
+            assertEquals(null, repository.lastDeletedUserId)
+        }
 
     @Test
-    fun deleteAccountReturnsRevokedSessionCount() = runBlocking {
-        val userId = UUID.fromString("00000000-0000-0000-0000-000000000902")
-        val repository = FakeAccountLifecycleRepository(
-            deleteResult = AccountDeletionResult(userId = userId, revokedSessionCount = 3)
-        )
-        val service = AccountLifecycleService(repository)
+    fun deleteAccountReturnsRevokedSessionCount() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000902")
+            val repository =
+                FakeAccountLifecycleRepository(
+                    deleteResult = AccountDeletionResult(userId = userId, revokedSessionCount = 3),
+                )
+            val service = AccountLifecycleService(repository)
 
-        val result = service.deleteAccount(userId, "DELETE")
+            val result = service.deleteAccount(userId, "DELETE")
 
-        assertEquals(true, result.deleted)
-        assertEquals(3, result.revokedSessionCount)
-        assertEquals(userId, repository.lastDeletedUserId)
-    }
+            assertEquals(true, result.deleted)
+            assertEquals(3, result.revokedSessionCount)
+            assertEquals(userId, repository.lastDeletedUserId)
+        }
 }
 
 private class FakeAccountLifecycleRepository(
-    private val deleteResult: AccountDeletionResult? = AccountDeletionResult(
-        userId = UUID.fromString("00000000-0000-0000-0000-000000000999"),
-        revokedSessionCount = 1
-    )
+    private val deleteResult: AccountDeletionResult? =
+        AccountDeletionResult(
+            userId = UUID.fromString("00000000-0000-0000-0000-000000000999"),
+            revokedSessionCount = 1,
+        ),
 ) : AccountLifecycleRepository {
     var lastExportUserId: UUID? = null
         private set
@@ -73,7 +79,7 @@ private class FakeAccountLifecycleRepository(
             completedAt = null,
             expiresAt = null,
             downloadUrl = null,
-            errorMessage = null
+            errorMessage = null,
         )
     }
 

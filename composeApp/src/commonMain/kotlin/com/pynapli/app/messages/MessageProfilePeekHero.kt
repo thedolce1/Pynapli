@@ -37,74 +37,82 @@ internal fun ProfilePeekHero(
     online: Boolean,
     distanceLabel: String?,
     photoUrl: String?,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(330.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                Brush.linearGradient(
-                    listOf(Color(0xFF1F3630), Color(0xFF111214))
-                )
-            )
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.64f), RoundedCornerShape(8.dp))
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(330.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    Brush.linearGradient(
+                        listOf(Color(0xFF1F3630), Color(0xFF111214)),
+                    ),
+                ).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.64f), RoundedCornerShape(8.dp)),
     ) {
         if (photoUrl != null) {
             AsyncImage(
                 model = photoUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().height(330.dp)
+                modifier = Modifier.fillMaxWidth().height(330.dp),
             )
         } else {
             Text(
-                text = displayName.firstOrNull()?.uppercaseChar()?.toString().orEmpty(),
+                text =
+                    displayName
+                        .firstOrNull()
+                        ?.uppercaseChar()
+                        ?.toString()
+                        .orEmpty(),
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.align(Alignment.Center)
+                modifier = Modifier.align(Alignment.Center),
             )
         }
 
         Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.58f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.68f)
-                    )
-                )
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            0.58f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = 0.68f),
+                        ),
+                    ),
         )
 
         IconButton(
             onClick = onDismiss,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(10.dp)
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.56f))
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp)
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.56f)),
         ) {
             Icon(
                 imageVector = Icons.Filled.Close,
                 contentDescription = "Close profile",
-                tint = MaterialTheme.colorScheme.onSurface
+                tint = MaterialTheme.colorScheme.onSurface,
             )
         }
 
         Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier =
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = displayName,
@@ -112,39 +120,40 @@ internal fun ProfilePeekHero(
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 displayAge?.let { age ->
                     Text(
                         text = age.toString(),
                         color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 if (online) {
                     Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF13E58A))
+                        modifier =
+                            Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF13E58A)),
                     )
                     Text(
                         text = "Online",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
                 distanceLabel?.let { distance ->
                     Text(
                         text = if (online) "- $distance" else distance,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }

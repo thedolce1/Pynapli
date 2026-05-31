@@ -19,7 +19,7 @@ import java.util.UUID
 
 fun Application.configureActivityRoutes(
     authService: AuthService?,
-    activityService: ActivityService?
+    activityService: ActivityService?,
 ) {
     if (authService == null || activityService == null) return
 
@@ -34,8 +34,8 @@ fun Application.configureActivityRoutes(
                     recipientUserId = user.id,
                     limit = limit ?: 50,
                     tabText = tab,
-                    cursorText = cursor
-                )
+                    cursorText = cursor,
+                ),
             )
         }
 
@@ -52,31 +52,35 @@ fun Application.configureActivityRoutes(
 
         post("/v1/activity/{eventId}/dismiss") {
             val user = authService.authenticate(call.requiredBearerToken())
-            val eventId = call.parameters["eventId"]?.toUuidOrNull()
-                ?: throw ActivityException("ACTIVITY_EVENT_NOT_FOUND")
+            val eventId =
+                call.parameters["eventId"]?.toUuidOrNull()
+                    ?: throw ActivityException("ACTIVITY_EVENT_NOT_FOUND")
             call.respond(activityService.dismissActivityEvent(user.id, eventId))
         }
 
         post("/v1/activity/flirts") {
             val user = authService.authenticate(call.requiredBearerToken())
             val request = call.receive<SendFlirtRequestDto>()
-            val targetUserId = request.targetUserId.toUuidOrNull()
-                ?: throw ActivityException("INVALID_FLIRT_TARGET")
+            val targetUserId =
+                request.targetUserId.toUuidOrNull()
+                    ?: throw ActivityException("INVALID_FLIRT_TARGET")
             call.respond(activityService.sendFlirt(user.id, targetUserId))
         }
 
         post("/v1/activity/album-requests") {
             val user = authService.authenticate(call.requiredBearerToken())
             val request = call.receive<RequestAlbumAccessRequestDto>()
-            val targetUserId = request.targetUserId.toUuidOrNull()
-                ?: throw ActivityException("INVALID_ALBUM_REQUEST_TARGET")
+            val targetUserId =
+                request.targetUserId.toUuidOrNull()
+                    ?: throw ActivityException("INVALID_ALBUM_REQUEST_TARGET")
             call.respond(activityService.requestAlbumAccess(user.id, targetUserId))
         }
 
         post("/v1/activity/album-requests/{eventId}/respond") {
             val user = authService.authenticate(call.requiredBearerToken())
-            val eventId = call.parameters["eventId"]?.toUuidOrNull()
-                ?: throw ActivityException("ALBUM_REQUEST_NOT_FOUND")
+            val eventId =
+                call.parameters["eventId"]?.toUuidOrNull()
+                    ?: throw ActivityException("ALBUM_REQUEST_NOT_FOUND")
             val request = call.receive<RespondAlbumAccessRequestDto>()
             call.respond(activityService.respondToAlbumAccessRequest(user.id, eventId, request.approve))
         }
@@ -89,5 +93,4 @@ private fun ApplicationCall.requiredBearerToken(): String {
     return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }
 
-private fun String.toUuidOrNull(): UUID? =
-    runCatching { UUID.fromString(this) }.getOrNull()
+private fun String.toUuidOrNull(): UUID? = runCatching { UUID.fromString(this) }.getOrNull()

@@ -19,7 +19,7 @@ data class GridQueryRequestDto(
     val lifestyleTags: List<String> = emptyList(),
     val logisticsTags: List<String> = emptyList(),
     val tonightAvailableOnly: Boolean = false,
-    val intents: List<String> = emptyList()
+    val intents: List<String> = emptyList(),
 )
 
 @Serializable
@@ -29,7 +29,7 @@ data class GridQueryResponseDto(
     val adSupported: Boolean = false,
     val advancedFiltersApplied: Boolean = false,
     val resultLimitReached: Boolean = false,
-    val resultLimitTier: String? = null
+    val resultLimitTier: String? = null,
 )
 
 @Serializable
@@ -44,7 +44,7 @@ data class GridCardDto(
     val rankToken: String,
     // SWIPE_IMPLEMENTATION_SPEC L348: target has an active travel mode row, so
     // they're virtually in the viewer's area rather than physically there.
-    val visiting: Boolean = false
+    val visiting: Boolean = false,
 )
 
 @Serializable
@@ -52,7 +52,7 @@ data class LinkedPartnerMiniDto(
     val userId: String,
     val displayName: String? = null,
     val thumbnailUrl: String? = null,
-    val online: Boolean = false
+    val online: Boolean = false,
 )
 
 @Serializable
@@ -61,26 +61,26 @@ data class SavedGridFilterDto(
     val name: String,
     val payload: GridQueryRequestDto,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 @Serializable
 data class SavedGridFiltersListDto(
-    val items: List<SavedGridFilterDto>
+    val items: List<SavedGridFilterDto>,
 )
 
 @Serializable
 data class CreateSavedGridFilterRequestDto(
     val name: String,
-    val payload: GridQueryRequestDto
+    val payload: GridQueryRequestDto,
 )
 
 @Serializable
 data class SetTonightAvailableRequestDto(
-    val durationHours: Int? = null
+    val durationHours: Int? = null,
 )
 
 @Serializable
 data class TonightAvailabilityDto(
-    val availableUntil: String?
+    val availableUntil: String?,
 )

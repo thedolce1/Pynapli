@@ -34,18 +34,19 @@ import coil3.compose.AsyncImage
 @Composable
 internal fun SwipeTagChip(label: String) {
     Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(Color(0x33FFFFFF))
-            .border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(50))
-            .padding(horizontal = 8.dp, vertical = 3.dp)
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(50))
+                .background(Color(0x33FFFFFF))
+                .border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(50))
+                .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
         Text(
             text = label,
             color = Color.White,
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -54,22 +55,24 @@ internal fun SwipeTagChip(label: String) {
 internal fun PhotoCarouselIndicators(
     count: Int,
     currentPage: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag(SwipeTestTags.PHOTO_CAROUSEL_INDICATORS),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .testTag(SwipeTestTags.PHOTO_CAROUSEL_INDICATORS),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         repeat(count) { index ->
             val active = index == currentPage
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(if (active) Color(0xCCFFFFFF) else Color(0x40FFFFFF))
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (active) Color(0xCCFFFFFF) else Color(0x40FFFFFF)),
             )
         }
     }
@@ -78,12 +81,13 @@ internal fun PhotoCarouselIndicators(
 @Composable
 internal fun SwipeOnlineDot(modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier
-            .testTag(SwipeTestTags.ONLINE_DOT)
-            .size(10.dp)
-            .clip(CircleShape)
-            .background(Color(0xFF13E58A))
-            .border(1.dp, Color(0xFF050505), CircleShape)
+        modifier =
+            modifier
+                .testTag(SwipeTestTags.ONLINE_DOT)
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF13E58A))
+                .border(1.dp, Color(0xFF050505), CircleShape),
     )
 }
 
@@ -93,9 +97,10 @@ internal fun SwipeVerifiedBadge(modifier: Modifier = Modifier) {
         imageVector = Icons.Filled.CheckCircle,
         contentDescription = "Verified",
         tint = Color(0xFF52A8FF),
-        modifier = modifier
-            .testTag(SwipeTestTags.VERIFIED_BADGE)
-            .size(18.dp)
+        modifier =
+            modifier
+                .testTag(SwipeTestTags.VERIFIED_BADGE)
+                .size(18.dp),
     )
 }
 
@@ -109,11 +114,12 @@ internal fun SwipeVisitingPill(modifier: Modifier = Modifier) {
         color = Color.White,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
-        modifier = modifier
-            .testTag(SwipeTestTags.VISITING_PILL)
-            .clip(RoundedCornerShape(6.dp))
-            .background(Color(0xCC4E342E))
-            .padding(horizontal = 6.dp, vertical = 2.dp)
+        modifier =
+            modifier
+                .testTag(SwipeTestTags.VISITING_PILL)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xCC4E342E))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
 
@@ -122,36 +128,39 @@ internal fun SwipeLinkedPartnerBadge(
     thumbnailUrl: String?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
 ) {
-    val baseModifier = modifier
-        .testTag(SwipeTestTags.LINKED_PARTNER_BADGE)
-        .size(34.dp)
-        .clip(CircleShape)
-    val tappableModifier = if (onClick != null && enabled) {
-        baseModifier.clickable(onClick = onClick)
-    } else {
-        baseModifier
-    }
+    val baseModifier =
+        modifier
+            .testTag(SwipeTestTags.LINKED_PARTNER_BADGE)
+            .size(34.dp)
+            .clip(CircleShape)
+    val tappableModifier =
+        if (onClick != null && enabled) {
+            baseModifier.clickable(onClick = onClick)
+        } else {
+            baseModifier
+        }
     Box(
-        modifier = tappableModifier
-            .background(Color(0xCC1B1B1B))
-            .border(1.dp, Color(0xCCFFFFFF), CircleShape),
-        contentAlignment = Alignment.Center
+        modifier =
+            tappableModifier
+                .background(Color(0xCC1B1B1B))
+                .border(1.dp, Color(0xCCFFFFFF), CircleShape),
+        contentAlignment = Alignment.Center,
     ) {
         if (thumbnailUrl != null) {
             AsyncImage(
                 model = thumbnailUrl,
                 contentDescription = "Linked partner",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             Icon(
                 imageVector = Icons.Filled.Person,
                 contentDescription = "Linked partner",
                 tint = Color.White,
-                modifier = Modifier.size(19.dp)
+                modifier = Modifier.size(19.dp),
             )
         }
     }

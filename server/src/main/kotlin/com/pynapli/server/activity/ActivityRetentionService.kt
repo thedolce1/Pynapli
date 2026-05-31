@@ -13,10 +13,9 @@ import java.time.Instant
 
 class ActivityRetentionService(
     private val repository: ActivityRetentionRepository,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
 ) {
-    suspend fun applyProductVisibleRetention(): ActivityRetentionSummary =
-        repository.hideExpiredProductVisibleEvents(clock.instant())
+    suspend fun applyProductVisibleRetention(): ActivityRetentionSummary = repository.hideExpiredProductVisibleEvents(clock.instant())
 }
 
 interface ActivityRetentionRepository {
@@ -25,12 +24,12 @@ interface ActivityRetentionRepository {
 
 data class ActivityRetentionSummary(
     val hiddenTotal: Int,
-    val hiddenByType: Map<String, Int>
+    val hiddenByType: Map<String, Int>,
 )
 
 class ActivityRetentionWorker(
     private val service: ActivityRetentionService,
-    private val intervalMillis: Long
+    private val intervalMillis: Long,
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(ActivityRetentionWorker::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -38,23 +37,24 @@ class ActivityRetentionWorker(
 
     fun start() {
         if (job != null) return
-        job = scope.launch {
-            while (isActive) {
-                runCatching {
-                    val summary = service.applyProductVisibleRetention()
-                    if (summary.hiddenTotal > 0) {
-                        logger.info(
-                            "Activity retention hid product-visible events total={} byType={}",
-                            summary.hiddenTotal,
-                            summary.hiddenByType
-                        )
+        job =
+            scope.launch {
+                while (isActive) {
+                    runCatching {
+                        val summary = service.applyProductVisibleRetention()
+                        if (summary.hiddenTotal > 0) {
+                            logger.info(
+                                "Activity retention hid product-visible events total={} byType={}",
+                                summary.hiddenTotal,
+                                summary.hiddenByType,
+                            )
+                        }
+                    }.onFailure { error ->
+                        logger.warn("Activity retention failed", error)
                     }
-                }.onFailure { error ->
-                    logger.warn("Activity retention failed", error)
+                    delay(intervalMillis)
                 }
-                delay(intervalMillis)
             }
-        }
     }
 
     override fun close() {

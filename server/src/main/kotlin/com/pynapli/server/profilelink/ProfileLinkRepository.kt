@@ -12,30 +12,36 @@ interface ProfileLinkRepository {
 
     suspend fun getPendingInvitationForRecipient(
         recipientUserId: UUID,
-        linkId: UUID
+        linkId: UUID,
     ): PendingProfileLinkInvitationRecord?
 
-    suspend fun findPendingBetween(userIdA: UUID, userIdB: UUID): PendingProfileLinkInvitationRecord?
+    suspend fun findPendingBetween(
+        userIdA: UUID,
+        userIdB: UUID,
+    ): PendingProfileLinkInvitationRecord?
 
     suspend fun findRecentUnlinkForEitherUser(
         userIdA: UUID,
         userIdB: UUID,
-        since: Instant
+        since: Instant,
     ): ProfileLinkCooldownRecord?
 
     suspend fun createInvitation(
         requesterUserId: UUID,
         targetUserId: UUID,
-        linkIdFactory: () -> UUID = UUID::randomUUID
+        linkIdFactory: () -> UUID = UUID::randomUUID,
     ): ProfileLinkRecord
 
     suspend fun acceptInvitation(
         recipientUserId: UUID,
         linkId: UUID,
-        reciprocalLinkIdFactory: () -> UUID = UUID::randomUUID
+        reciprocalLinkIdFactory: () -> UUID = UUID::randomUUID,
     ): ProfileLinkAcceptOutcome
 
-    suspend fun declineInvitation(recipientUserId: UUID, linkId: UUID): Boolean
+    suspend fun declineInvitation(
+        recipientUserId: UUID,
+        linkId: UUID,
+    ): Boolean
 
     suspend fun unlinkCurrent(userId: UUID): Boolean
 }
@@ -43,7 +49,7 @@ interface ProfileLinkRepository {
 data class ProfileLinksSummaryRecord(
     val current: ProfileLinkRecord?,
     val incomingInvites: List<ProfileLinkRecord>,
-    val outgoingInvites: List<ProfileLinkRecord>
+    val outgoingInvites: List<ProfileLinkRecord>,
 )
 
 data class ProfileLinkRecord(
@@ -55,23 +61,23 @@ data class ProfileLinkRecord(
     val direction: String,
     val createdAt: Instant,
     val acceptedAt: Instant?,
-    val unlinkedAt: Instant?
+    val unlinkedAt: Instant?,
 )
 
 data class PendingProfileLinkInvitationRecord(
     val linkId: UUID,
     val requesterUserId: UUID,
-    val recipientUserId: UUID
+    val recipientUserId: UUID,
 )
 
 data class ProfileLinkCooldownRecord(
     val userId: UUID,
     val linkedUserId: UUID,
-    val unlinkedAt: Instant
+    val unlinkedAt: Instant,
 )
 
 enum class ProfileLinkAcceptOutcome {
     Accepted,
     NotFound,
-    AlreadyLinked
+    AlreadyLinked,
 }

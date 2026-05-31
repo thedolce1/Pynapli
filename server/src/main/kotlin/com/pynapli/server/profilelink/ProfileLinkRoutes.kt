@@ -17,7 +17,7 @@ import io.ktor.server.routing.routing
 
 fun Application.configureProfileLinkRoutes(
     authService: AuthService?,
-    profileLinkService: ProfileLinkService?
+    profileLinkService: ProfileLinkService?,
 ) {
     if (authService == null || profileLinkService == null) return
 

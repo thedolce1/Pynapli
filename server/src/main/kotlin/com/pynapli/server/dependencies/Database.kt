@@ -7,28 +7,32 @@ import com.zaxxer.hikari.HikariDataSource
 import org.flywaydb.core.Flyway
 import javax.sql.DataSource
 
-class Database(config: ServerConfig) : AutoCloseable {
-    val dataSource: DataSource = HikariDataSource(
-        HikariConfig().apply {
-            jdbcUrl = config.databaseUrl
-            username = config.databaseUser
-            password = config.databasePassword
-            maximumPoolSize = config.databaseMaximumPoolSize
-            minimumIdle = config.databaseMinimumIdle.coerceAtMost(config.databaseMaximumPoolSize)
-            connectionTimeout = config.databaseConnectionTimeoutMillis
-            validationTimeout = 3_000
-            poolName = "pynapli-postgres"
-            // pgjdbc batched-insert rewrite. Bundles consecutive
-            // `INSERT INTO t VALUES (?, ...)` calls in a JDBC batch into a single
-            // multi-row `INSERT INTO t VALUES (?, ...), (?, ...), (?, ...)` round
-            // trip. Big win for the swipe deck card insert path (32 rows per
-            // deck page). Docs: https://jdbc.postgresql.org/documentation/use/
-            addDataSourceProperty("reWriteBatchedInserts", "true")
-        }
-    )
+class Database(
+    config: ServerConfig,
+) : AutoCloseable {
+    val dataSource: DataSource =
+        HikariDataSource(
+            HikariConfig().apply {
+                jdbcUrl = config.databaseUrl
+                username = config.databaseUser
+                password = config.databasePassword
+                maximumPoolSize = config.databaseMaximumPoolSize
+                minimumIdle = config.databaseMinimumIdle.coerceAtMost(config.databaseMaximumPoolSize)
+                connectionTimeout = config.databaseConnectionTimeoutMillis
+                validationTimeout = 3_000
+                poolName = "pynapli-postgres"
+                // pgjdbc batched-insert rewrite. Bundles consecutive
+                // `INSERT INTO t VALUES (?, ...)` calls in a JDBC batch into a single
+                // multi-row `INSERT INTO t VALUES (?, ...), (?, ...), (?, ...)` round
+                // trip. Big win for the swipe deck card insert path (32 rows per
+                // deck page). Docs: https://jdbc.postgresql.org/documentation/use/
+                addDataSourceProperty("reWriteBatchedInserts", "true")
+            },
+        )
 
     init {
-        Flyway.configure()
+        Flyway
+            .configure()
             .dataSource(dataSource)
             .locations("classpath:db/migration")
             .load()
@@ -44,7 +48,7 @@ class Database(config: ServerConfig) : AutoCloseable {
             totalConnections = pool.totalConnections,
             threadsAwaitingConnection = pool.threadsAwaitingConnection,
             maximumPoolSize = hikariDataSource.maximumPoolSize,
-            minimumIdle = hikariDataSource.minimumIdle
+            minimumIdle = hikariDataSource.minimumIdle,
         )
     }
 

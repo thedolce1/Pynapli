@@ -38,57 +38,63 @@ fun MessageProfilePeekSheet(
     onSpark: () -> Unit,
     onRequestAlbum: () -> Unit,
     distanceUnit: String = AppSettings.UNIT_METRIC,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val card = state.selectedCard ?: return
     val profile = state.profile
     val displayName = profile?.displayName ?: card.displayName
     val displayAge = profile?.displayAge
-    val distanceLabel = formatDistanceForUnit(
-        distanceMeters = profile?.distanceMeters ?: card.distanceMeters,
-        fallbackLabel = profile?.distanceLabel ?: card.distanceLabel,
-        distanceUnit = distanceUnit
-    )
+    val distanceLabel =
+        formatDistanceForUnit(
+            distanceMeters = profile?.distanceMeters ?: card.distanceMeters,
+            fallbackLabel = profile?.distanceLabel ?: card.distanceLabel,
+            distanceUnit = distanceUnit,
+        )
     val photoUrl = profile?.profilePhotoUrl ?: card.thumbnailUrl
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.58f))
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.58f)),
     ) {
         Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .fillMaxHeight(0.9f)
-                .padding(horizontal = 8.dp),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.9f)
+                    .padding(horizontal = 8.dp),
             shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
             color = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.46f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.46f)),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 10.dp, bottom = 8.dp),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp, bottom = 8.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Box(
-                        modifier = Modifier
-                            .width(48.dp)
-                            .height(5.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.74f))
+                        modifier =
+                            Modifier
+                                .width(48.dp)
+                                .height(5.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.74f)),
                     )
                 }
 
                 Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     ProfilePeekHero(
                         displayName = displayName,
@@ -96,16 +102,17 @@ fun MessageProfilePeekSheet(
                         online = card.online,
                         distanceLabel = distanceLabel,
                         photoUrl = photoUrl,
-                        onDismiss = onDismiss
+                        onDismiss = onDismiss,
                     )
 
                     when {
                         state.isLoading -> {
                             Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(120.dp),
-                                contentAlignment = Alignment.Center
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(120.dp),
+                                contentAlignment = Alignment.Center,
                             ) {
                                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                             }
@@ -115,7 +122,7 @@ fun MessageProfilePeekSheet(
                             Text(
                                 text = state.errorMessage,
                                 color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         }
 
@@ -142,11 +149,12 @@ fun MessageProfilePeekSheet(
                         onMessage = onMessage,
                         onSpark = onSpark,
                         onRequestAlbum = onRequestAlbum,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.98f))
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                            .navigationBarsPadding()
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.98f))
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                                .navigationBarsPadding(),
                     )
                 }
             }

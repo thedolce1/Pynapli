@@ -9,18 +9,19 @@ import kotlin.coroutines.resume
 
 class AndroidFirebasePushTokenProvider(
     context: Context,
-    private val fallbackProvider: PushTokenProvider = AndroidDevPushTokenProvider(context)
+    private val fallbackProvider: PushTokenProvider = AndroidDevPushTokenProvider(context),
 ) : PushTokenProvider {
     private val appContext = context.applicationContext
 
     override suspend fun currentToken(): String? {
-        val firebaseToken = runCatching {
-            if (FirebaseApp.getApps(appContext).isEmpty()) {
-                null
-            } else {
-                FirebaseMessaging.getInstance().token.awaitOrNull()
-            }
-        }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+        val firebaseToken =
+            runCatching {
+                if (FirebaseApp.getApps(appContext).isEmpty()) {
+                    null
+                } else {
+                    FirebaseMessaging.getInstance().token.awaitOrNull()
+                }
+            }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
 
         return firebaseToken ?: fallbackProvider.currentToken()
     }

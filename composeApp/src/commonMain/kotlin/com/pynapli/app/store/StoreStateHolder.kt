@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.update
 
 class StoreStateHolder(
     private val repository: StoreRepository,
-    private val purchaseGateway: StorePurchaseGateway = UnavailableStorePurchaseGateway()
+    private val purchaseGateway: StorePurchaseGateway = UnavailableStorePurchaseGateway(),
 ) {
     private val _state = MutableStateFlow(StoreUiState(isLoading = true))
     val state: StateFlow<StoreUiState> = _state.asStateFlow()
@@ -19,23 +19,25 @@ class StoreStateHolder(
     suspend fun load() {
         _state.update { it.copy(isLoading = true, errorMessage = null) }
         when (val result = repository.loadStore()) {
-            is AppResult.Success -> _state.update {
-                it.copy(
-                    tiers = result.value.tiers.sortedBy { tier -> tier.tier.sortOrder() },
-                    premiumProducts = result.value.premiumProducts,
-                    balances = result.value.balances,
-                    entitlement = result.value.entitlement,
-                    isLoading = false,
-                    errorMessage = null
-                )
-            }
+            is AppResult.Success ->
+                _state.update {
+                    it.copy(
+                        tiers = result.value.tiers.sortedBy { tier -> tier.tier.sortOrder() },
+                        premiumProducts = result.value.premiumProducts,
+                        balances = result.value.balances,
+                        entitlement = result.value.entitlement,
+                        isLoading = false,
+                        errorMessage = null,
+                    )
+                }
 
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    isLoading = false,
-                    errorMessage = result.error.message
-                )
-            }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = result.error.message,
+                    )
+                }
         }
     }
 
@@ -49,7 +51,7 @@ class StoreStateHolder(
             it.copy(
                 pendingPurchaseTier = tier.tier,
                 purchaseMessage = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -60,7 +62,7 @@ class StoreStateHolder(
                         pendingPurchaseTier = null,
                         pendingPurchaseProductId = null,
                         purchaseMessage = result.value.message,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
                 if (result.value.refreshEntitlement) {
@@ -68,14 +70,15 @@ class StoreStateHolder(
                 }
             }
 
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    pendingPurchaseTier = null,
-                    pendingPurchaseProductId = null,
-                    errorMessage = result.error.message,
-                    purchaseMessage = null
-                )
-            }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        pendingPurchaseTier = null,
+                        pendingPurchaseProductId = null,
+                        errorMessage = result.error.message,
+                        purchaseMessage = null,
+                    )
+                }
         }
     }
 
@@ -88,7 +91,7 @@ class StoreStateHolder(
             it.copy(
                 pendingPurchaseProductId = product.productId,
                 purchaseMessage = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -98,7 +101,7 @@ class StoreStateHolder(
                     it.copy(
                         pendingPurchaseProductId = null,
                         purchaseMessage = result.value.message,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
                 if (result.value.refreshEntitlement) {
@@ -106,13 +109,14 @@ class StoreStateHolder(
                 }
             }
 
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    pendingPurchaseProductId = null,
-                    errorMessage = result.error.message,
-                    purchaseMessage = null
-                )
-            }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        pendingPurchaseProductId = null,
+                        errorMessage = result.error.message,
+                        purchaseMessage = null,
+                    )
+                }
         }
     }
 
@@ -125,7 +129,7 @@ class StoreStateHolder(
             it.copy(
                 isRestoringPurchases = true,
                 purchaseMessage = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -135,7 +139,7 @@ class StoreStateHolder(
                     it.copy(
                         isRestoringPurchases = false,
                         purchaseMessage = result.value.message,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
                 if (result.value.refreshEntitlement) {
@@ -143,13 +147,14 @@ class StoreStateHolder(
                 }
             }
 
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    isRestoringPurchases = false,
-                    errorMessage = result.error.message,
-                    purchaseMessage = null
-                )
-            }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        isRestoringPurchases = false,
+                        errorMessage = result.error.message,
+                        purchaseMessage = null,
+                    )
+                }
         }
     }
 }

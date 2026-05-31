@@ -11,7 +11,7 @@ interface RiskRepository {
         reason: String,
         delta: Int,
         metadataJson: String = "{}",
-        eventIdFactory: () -> UUID = UUID::randomUUID
+        eventIdFactory: () -> UUID = UUID::randomUUID,
     ): RiskMutationRecord
 
     suspend fun getState(userId: UUID): AccountRiskStateRecord?
@@ -19,7 +19,7 @@ interface RiskRepository {
 
 data class RiskMutationRecord(
     val event: RiskEventRecord,
-    val state: AccountRiskStateRecord
+    val state: AccountRiskStateRecord,
 )
 
 data class AccountRiskStateRecord(
@@ -28,7 +28,7 @@ data class AccountRiskStateRecord(
     val tier: String,
     val lastEventAt: Instant?,
     val lastReviewedAt: Instant?,
-    val updatedAt: Instant
+    val updatedAt: Instant,
 )
 
 data class RiskEventRecord(
@@ -41,5 +41,5 @@ data class RiskEventRecord(
     val scoreAfter: Int,
     val tierAfter: String,
     val metadataJson: String,
-    val createdAt: Instant
+    val createdAt: Instant,
 )

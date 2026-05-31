@@ -38,37 +38,38 @@ internal fun ActivityRow(
     onAlbumRequestDecision: (String, Boolean) -> Unit,
     onOpenMatch: (ActivityEventDto) -> Unit,
     onOpenPartnerChatInvite: (String) -> Unit,
-    onDismissEvent: (String) -> Unit
+    onDismissEvent: (String) -> Unit,
 ) {
-    val distanceLabel = formatDistanceForUnit(
-        distanceMeters = item.distanceMeters,
-        fallbackLabel = item.distanceLabel,
-        distanceUnit = distanceUnit
-    )
+    val distanceLabel =
+        formatDistanceForUnit(
+            distanceMeters = item.distanceMeters,
+            fallbackLabel = item.distanceLabel,
+            distanceUnit = distanceUnit,
+        )
     val isNew = item.isUnreadBadgeActivity()
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                if (focused) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                } else if (isNew) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
-                } else {
-                    Color.Transparent
-                }
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    if (focused) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                    } else if (isNew) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
+                    } else {
+                        Color.Transparent
+                    },
+                ).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ActivityAvatar(photoUrl = item.actorPhotoUrl)
         Column(modifier = Modifier.weight(1f)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = item.actorDisplayName,
@@ -77,7 +78,7 @@ internal fun ActivityRow(
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 if (isNew) {
                     ActivityNewPill()
@@ -86,13 +87,13 @@ internal fun ActivityRow(
                     text = item.occurredAt.compactTimeLabel(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1
+                    maxLines = 1,
                 )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = item.activityText(),
@@ -100,14 +101,14 @@ internal fun ActivityRow(
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 distanceLabel?.let { distance ->
                     Text(
                         text = distance,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1
+                        maxLines = 1,
                     )
                 }
             }
@@ -116,33 +117,34 @@ internal fun ActivityRow(
                 pendingAction = pendingAction,
                 expanded = albumReviewExpanded,
                 onReviewAlbumRequest = onReviewAlbumRequest,
-                onAlbumRequestDecision = onAlbumRequestDecision
+                onAlbumRequestDecision = onAlbumRequestDecision,
             )
             ActivityPrimaryAction(
                 item = item,
                 onOpenMatch = onOpenMatch,
-                onOpenPartnerChatInvite = onOpenPartnerChatInvite
+                onOpenPartnerChatInvite = onOpenPartnerChatInvite,
             )
         }
         IconButton(
             onClick = { onDismissEvent(item.eventId) },
             enabled = !pendingDismiss,
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
+            modifier =
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape),
         ) {
             if (pendingDismiss) {
                 CircularProgressIndicator(
                     color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 2.dp,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
             } else {
                 Icon(
                     imageVector = Icons.Filled.Close,
                     contentDescription = "Dismiss activity",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }

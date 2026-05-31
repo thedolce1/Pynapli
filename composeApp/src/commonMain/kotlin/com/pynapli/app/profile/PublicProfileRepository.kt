@@ -18,7 +18,10 @@ interface PublicProfileRepository {
 
     suspend fun loadPrivateAlbum(userId: String): AppResult<List<MediaAlbumItemUi>>
 
-    suspend fun blockUser(userId: String, reason: String?): AppResult<BlockSummaryDto>
+    suspend fun blockUser(
+        userId: String,
+        reason: String?,
+    ): AppResult<BlockSummaryDto>
 
     suspend fun hideProfile(userId: String): AppResult<HiddenProfileSummaryDto>
 
@@ -26,6 +29,6 @@ interface PublicProfileRepository {
         userId: String,
         targetType: String,
         category: String,
-        note: String?
+        note: String?,
     ): AppResult<ReportDto>
 }

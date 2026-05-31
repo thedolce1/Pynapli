@@ -6,6 +6,5 @@ import kotlinx.serialization.Serializable
 data class HealthDto(
     val status: String,
     val service: String,
-    val environment: String
+    val environment: String,
 )
-

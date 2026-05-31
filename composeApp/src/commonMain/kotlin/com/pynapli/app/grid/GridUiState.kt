@@ -16,7 +16,7 @@ data class GridUiState(
     val adSupported: Boolean = false,
     val paywallMessage: String? = null,
     val errorCode: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 )
 
 @Immutable
@@ -35,7 +35,7 @@ data class GridFilters(
     val tonightAvailable: Boolean = false,
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
-    val maximumAge: Int? = null
+    val maximumAge: Int? = null,
 ) {
     val activeCount: Int
         get() {
@@ -60,14 +60,16 @@ data class GridFilters(
     val isAnyActive: Boolean get() = activeCount > 0
 
     val requiresAdvancedEntitlement: Boolean
-        get() = lifestyleTags.isNotEmpty() ||
-            logisticsTags.any { it != LogisticsTag.PublicMeetFirst }
+        get() =
+            lifestyleTags.isNotEmpty() ||
+                logisticsTags.any { it != LogisticsTag.PublicMeetFirst }
 
     fun toGridQueryRequest(cursor: String?): GridQueryRequestDto {
-        val contexts = buildList {
-            if (singles) add(SINGLES_CONTEXT)
-            if (partnered) add(PARTNERED_CONTEXT)
-        }
+        val contexts =
+            buildList {
+                if (singles) add(SINGLES_CONTEXT)
+                if (partnered) add(PARTNERED_CONTEXT)
+            }
         return GridQueryRequestDto(
             radiusMeters = radiusMeters,
             limit = PAGE_SIZE,
@@ -84,7 +86,7 @@ data class GridFilters(
             lifestyleTags = lifestyleTags.map { it.serverValue },
             logisticsTags = logisticsTags.map { it.serverValue },
             tonightAvailableOnly = tonightAvailable,
-            intents = intents.map { it.serverValue }
+            intents = intents.map { it.serverValue },
         )
     }
 
@@ -126,7 +128,7 @@ data class GridFilters(
                 tonightAvailable = request.tonightAvailableOnly,
                 radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
                 minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
-                maximumAge = request.maximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE)
+                maximumAge = request.maximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
             )
         }
     }
@@ -142,7 +144,7 @@ enum class QuickFilterId {
     Singles,
     Linked,
     Verified,
-    Tonight
+    Tonight,
 }
 
 /**
@@ -150,25 +152,31 @@ enum class QuickFilterId {
  * (V3 migration). Ask-in-chat is intentionally omitted from the grid filter UI —
  * it's a profile-level preference, not a discovery filter the viewer chooses.
  */
-enum class DiscoveryStyle(val serverValue: String, val label: String) {
+enum class DiscoveryStyle(
+    val serverValue: String,
+    val label: String,
+) {
     Solo("solo", "Solo"),
     Together("together", "Together"),
     OpenToBoth("both", "Open to both"),
-    Social("social", "Social")
+    Social("social", "Social"),
 }
 
 /**
  * Additional intent tokens beyond `discovery_style`. Stored in `profiles.intents`
  * and overlap-matched. Spec: FILTERS_SPEC L114-138.
  */
-enum class Intent(val serverValue: String, val label: String) {
+enum class Intent(
+    val serverValue: String,
+    val label: String,
+) {
     Dating("dating", "Dating"),
     ChatFirst("chat_first", "Chat first"),
     Events("events", "Events"),
     OpenToSingles("open_to_singles", "Open to singles"),
     OpenToCouples("open_to_couples", "Open to couples"),
     OpenToLinkedPartners("open_to_linked_partners", "Open to linked partners"),
-    OpenToGroups("open_to_groups", "Open to groups")
+    OpenToGroups("open_to_groups", "Open to groups"),
 }
 
 /**
@@ -181,7 +189,10 @@ enum class Intent(val serverValue: String, val label: String) {
  * the viewer is age-verified, and Ktor rejects crafted lifestyle filter payloads
  * from unverified viewers.
  */
-enum class LifestyleTag(val serverValue: String, val label: String) {
+enum class LifestyleTag(
+    val serverValue: String,
+    val label: String,
+) {
     SoftSwap("soft_swap", "Soft swap"),
     FullSwap("full_swap", "Full swap"),
     SameRoom("same_room", "Same-room"),
@@ -191,19 +202,22 @@ enum class LifestyleTag(val serverValue: String, val label: String) {
     KinkFriendly("kink_friendly", "Kink-friendly"),
     VanillaSocial("vanilla_social", "Vanilla/social"),
     Enm("enm", "ENM"),
-    Swinging("swinging", "Swinging")
+    Swinging("swinging", "Swinging"),
 }
 
 /**
  * Logistics tags (FILTERS_SPEC L170-184). Self-declared by the profile owner
  * and filterable as hard "has X" overlap on `profiles.logistics_tags`.
  */
-enum class LogisticsTag(val serverValue: String, val label: String) {
+enum class LogisticsTag(
+    val serverValue: String,
+    val label: String,
+) {
     Hosts("hosts", "Hosts"),
     Travels("travels", "Travels"),
     HotelFriendly("hotel_friendly", "Hotel-friendly"),
     PublicMeetFirst("public_meet_first", "Public meet first"),
-    ClubEventOnly("club_event_only", "Club/event only")
+    ClubEventOnly("club_event_only", "Club/event only"),
 }
 
 @Immutable
@@ -219,14 +233,14 @@ data class GridProfileCardUi(
     val distanceMeters: Int? = null,
     // SWIPE_IMPLEMENTATION_SPEC L348: target is virtually in the viewer's area
     // via passport/travel mode.
-    val visiting: Boolean = false
+    val visiting: Boolean = false,
 )
 
 @Immutable
 data class GridLinkedPartnerUi(
     val userId: String,
     val displayName: String? = null,
-    val thumbnailUrl: String? = null
+    val thumbnailUrl: String? = null,
 )
 
 enum class GridCardTone {
@@ -241,7 +255,7 @@ enum class GridCardTone {
     Cocoa,
     Moss,
     Stone,
-    Midnight
+    Midnight,
 }
 
 enum class LinkedPartnerTone {
@@ -249,24 +263,26 @@ enum class LinkedPartnerTone {
     Gold,
     Pink,
     Teal,
-    Sun
+    Sun,
 }
 
-internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi = GridProfileCardUi(
-    id = userId,
-    displayName = displayName,
-    thumbnailUrl = thumbnailUrl,
-    online = online,
-    distanceLabel = distanceLabel,
-    tone = GridCardTone.entries[index % GridCardTone.entries.size],
-    linkedPartner = linkedPartner?.toUi(),
-    linkedPartnerTone = linkedPartner?.let { LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size] },
-    distanceMeters = distanceMeters,
-    visiting = visiting
-)
+internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi =
+    GridProfileCardUi(
+        id = userId,
+        displayName = displayName,
+        thumbnailUrl = thumbnailUrl,
+        online = online,
+        distanceLabel = distanceLabel,
+        tone = GridCardTone.entries[index % GridCardTone.entries.size],
+        linkedPartner = linkedPartner?.toUi(),
+        linkedPartnerTone = linkedPartner?.let { LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size] },
+        distanceMeters = distanceMeters,
+        visiting = visiting,
+    )
 
-internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi = GridLinkedPartnerUi(
-    userId = userId,
-    displayName = displayName,
-    thumbnailUrl = thumbnailUrl
-)
+internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi =
+    GridLinkedPartnerUi(
+        userId = userId,
+        displayName = displayName,
+        thumbnailUrl = thumbnailUrl,
+    )

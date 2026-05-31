@@ -33,48 +33,48 @@ internal fun SwipeHeader(
     activeFilterCount: Int,
     travelCityName: String?,
     onOpenFilters: () -> Unit,
-    onOpenTravel: () -> Unit
+    onOpenTravel: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
             imageVector = Icons.Filled.Style,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(24.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Swipe",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = if (travelCityName != null) "Travel: $travelCityName" else "Pass or like nearby profiles",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
             )
         }
         TextButton(
             onClick = onOpenTravel,
-            modifier = Modifier.testTag(TravelModeTags.OPEN_SHEET)
+            modifier = Modifier.testTag(TravelModeTags.OPEN_SHEET),
         ) {
             Text(
                 text = travelCityName ?: "Travel",
-                maxLines = 1
+                maxLines = 1,
             )
         }
         TextButton(
             onClick = onOpenFilters,
-            modifier = Modifier.testTag(SwipeFilterTags.OPEN_SHEET)
+            modifier = Modifier.testTag(SwipeFilterTags.OPEN_SHEET),
         ) {
             Text(
                 text = if (activeFilterCount > 0) "Filters ($activeFilterCount)" else "Filters",
-                maxLines = 1
+                maxLines = 1,
             )
         }
     }
@@ -83,12 +83,12 @@ internal fun SwipeHeader(
 @Composable
 internal fun SwipeFilterRow(
     filters: List<SwipeFilterUi>,
-    onFilterSelected: (SwipeFilterType) -> Unit
+    onFilterSelected: (SwipeFilterType) -> Unit,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         filters.forEach { filter ->
             item(key = filter.type.name) {
@@ -98,41 +98,47 @@ internal fun SwipeFilterRow(
                         Text(
                             text = filter.label,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
                         )
                     },
-                    leadingIcon = if (filter.locked) {
-                        {
-                            Icon(
-                                imageVector = Icons.Filled.Lock,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = if (filter.active) {
-                            MaterialTheme.colorScheme.primary
+                    leadingIcon =
+                        if (filter.locked) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Filled.Lock,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant
+                            null
                         },
-                        labelColor = when {
-                            filter.active -> MaterialTheme.colorScheme.onPrimary
-                            filter.locked -> MaterialTheme.colorScheme.onSurfaceVariant
-                            else -> MaterialTheme.colorScheme.onSurface
-                        },
-                        leadingIconContentColor = if (filter.active) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    ),
-                    border = AssistChipDefaults.assistChipBorder(
-                        enabled = true,
-                        borderColor = MaterialTheme.colorScheme.outline
-                    )
+                    colors =
+                        AssistChipDefaults.assistChipColors(
+                            containerColor =
+                                if (filter.active) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                            labelColor =
+                                when {
+                                    filter.active -> MaterialTheme.colorScheme.onPrimary
+                                    filter.locked -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                },
+                            leadingIconContentColor =
+                                if (filter.active) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                        ),
+                    border =
+                        AssistChipDefaults.assistChipBorder(
+                            enabled = true,
+                            borderColor = MaterialTheme.colorScheme.outline,
+                        ),
                 )
             }
         }
@@ -142,23 +148,24 @@ internal fun SwipeFilterRow(
 @Composable
 internal fun SwipePaywallRow(
     message: String,
-    onOpenStore: () -> Unit
+    onOpenStore: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(
             imageVector = Icons.Filled.Lock,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(18.dp),
         )
         Text(
             text = message,
@@ -166,7 +173,7 @@ internal fun SwipePaywallRow(
             style = MaterialTheme.typography.bodySmall,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         TextButton(onClick = onOpenStore) {
             Text(text = "Social", maxLines = 1)

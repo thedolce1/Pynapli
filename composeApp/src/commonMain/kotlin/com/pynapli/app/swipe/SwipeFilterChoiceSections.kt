@@ -22,7 +22,7 @@ internal fun WhoSection(
     singles: Boolean,
     linked: Boolean,
     partnered: Boolean,
-    onTogglesChanged: (Boolean, Boolean, Boolean) -> Unit
+    onTogglesChanged: (Boolean, Boolean, Boolean) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SwipeSheetChip(label = "Singles", active = singles) {
@@ -41,7 +41,7 @@ internal fun WhoSection(
 internal fun AgeSection(
     minimumAge: Int?,
     maximumAge: Int?,
-    onChange: (Int?, Int?) -> Unit
+    onChange: (Int?, Int?) -> Unit,
 ) {
     val lo = (minimumAge ?: SwipeFilters.MIN_FILTER_AGE).coerceAtLeast(SwipeFilters.MIN_FILTER_AGE)
     val hi = (maximumAge ?: SwipeFilters.MAX_FILTER_AGE).coerceAtMost(SwipeFilters.MAX_FILTER_AGE)
@@ -50,7 +50,7 @@ internal fun AgeSection(
         Text(
             text = if (isUnbounded) "Any age" else "$lo – $hi",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         RangeSlider(
             value = lo.toFloat()..hi.toFloat(),
@@ -63,24 +63,27 @@ internal fun AgeSection(
                     onChange(newLo, newHi)
                 }
             },
-            valueRange = SwipeFilters.MIN_FILTER_AGE.toFloat()..SwipeFilters.MAX_FILTER_AGE.toFloat()
+            valueRange = SwipeFilters.MIN_FILTER_AGE.toFloat()..SwipeFilters.MAX_FILTER_AGE.toFloat(),
         )
     }
 }
 
 @Composable
-internal fun DistanceSection(radiusMeters: Int, onChange: (Int) -> Unit) {
+internal fun DistanceSection(
+    radiusMeters: Int,
+    onChange: (Int) -> Unit,
+) {
     val km = (radiusMeters + 500) / 1_000
     Column {
         Text(
             text = "Within $km km",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Slider(
             value = radiusMeters.toFloat(),
             onValueChange = { value -> onChange(value.toInt()) },
-            valueRange = SwipeFilters.MIN_RADIUS_METERS.toFloat()..SwipeFilters.MAX_RADIUS_METERS.toFloat()
+            valueRange = SwipeFilters.MIN_RADIUS_METERS.toFloat()..SwipeFilters.MAX_RADIUS_METERS.toFloat(),
         )
     }
 }
@@ -88,12 +91,12 @@ internal fun DistanceSection(radiusMeters: Int, onChange: (Int) -> Unit) {
 @Composable
 internal fun IntentStylesSection(
     selected: Set<DiscoveryStyle>,
-    onChange: (Set<DiscoveryStyle>) -> Unit
+    onChange: (Set<DiscoveryStyle>) -> Unit,
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         DiscoveryStyle.entries.forEach { style ->
             val active = style in selected
@@ -107,12 +110,12 @@ internal fun IntentStylesSection(
 @Composable
 internal fun IntentExtendedSection(
     selected: Set<Intent>,
-    onChange: (Set<Intent>) -> Unit
+    onChange: (Set<Intent>) -> Unit,
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Intent.entries.forEach { intent ->
             val active = intent in selected
@@ -127,7 +130,7 @@ internal fun IntentExtendedSection(
 internal fun VerifiedModeSection(
     verifiedOnly: Boolean,
     verifiedPreferred: Boolean,
-    onChange: (only: Boolean, preferred: Boolean) -> Unit
+    onChange: (only: Boolean, preferred: Boolean) -> Unit,
 ) {
     // Three mutually exclusive options per FILTERS_SPEC L344-352.
     val noPreference = !verifiedOnly && !verifiedPreferred
@@ -148,7 +151,7 @@ internal fun VerifiedModeSection(
 internal fun FacePhotoAndAgeVerifiedSection(
     facePhotoVerified: Boolean,
     ageVerified: Boolean,
-    onChange: (face: Boolean, ageVerified: Boolean) -> Unit
+    onChange: (face: Boolean, ageVerified: Boolean) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SwipeSheetChip(label = "Face photo verified", active = facePhotoVerified) {
@@ -163,12 +166,12 @@ internal fun FacePhotoAndAgeVerifiedSection(
 @Composable
 internal fun LifestyleTagsSection(
     selected: Set<LifestyleTag>,
-    onChange: (Set<LifestyleTag>) -> Unit
+    onChange: (Set<LifestyleTag>) -> Unit,
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         LifestyleTag.entries.forEach { tag ->
             val active = tag in selected
@@ -182,12 +185,12 @@ internal fun LifestyleTagsSection(
 @Composable
 internal fun LogisticsTagsSection(
     selected: Set<LogisticsTag>,
-    onChange: (Set<LogisticsTag>) -> Unit
+    onChange: (Set<LogisticsTag>) -> Unit,
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         LogisticsTag.entries.forEach { tag ->
             val active = tag in selected

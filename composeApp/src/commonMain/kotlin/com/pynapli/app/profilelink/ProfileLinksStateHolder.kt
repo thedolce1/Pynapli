@@ -22,7 +22,7 @@ data class ProfileLinksUiState(
     val feedbackMessage: String? = null,
     val feedbackTargetUserId: String? = null,
     val errorMessage: String? = null,
-    val errorTargetUserId: String? = null
+    val errorTargetUserId: String? = null,
 ) {
     fun pendingInviteWith(userId: String): ProfileLinkUi? =
         incomingInvites.firstOrNull { it.otherUserId == userId }
@@ -39,14 +39,14 @@ data class ProfileLinkUi(
     val direction: String,
     val createdAt: String,
     val acceptedAt: String?,
-    val unlinkedAt: String?
+    val unlinkedAt: String?,
 ) {
     val displayLabel: String
         get() = otherDisplayName?.takeIf { it.isNotBlank() } ?: "User ${otherUserId.take(8)}"
 }
 
 class ProfileLinksStateHolder(
-    private val repository: ProfileLinksRepository
+    private val repository: ProfileLinksRepository,
 ) {
     private val _state = MutableStateFlow(ProfileLinksUiState())
     val state: StateFlow<ProfileLinksUiState> = _state.asStateFlow()
@@ -61,7 +61,7 @@ class ProfileLinksStateHolder(
                     existing.withSummary(result.value).copy(
                         isLoading = false,
                         feedbackMessage = null,
-                        feedbackTargetUserId = null
+                        feedbackTargetUserId = null,
                     )
                 }
             }
@@ -71,7 +71,7 @@ class ProfileLinksStateHolder(
                     it.copy(
                         isLoading = false,
                         errorMessage = result.error.message,
-                        errorTargetUserId = null
+                        errorTargetUserId = null,
                     )
                 }
             }
@@ -88,7 +88,7 @@ class ProfileLinksStateHolder(
                 feedbackMessage = null,
                 feedbackTargetUserId = null,
                 errorMessage = null,
-                errorTargetUserId = null
+                errorTargetUserId = null,
             )
         }
 
@@ -98,7 +98,7 @@ class ProfileLinksStateHolder(
                     existing.withSummary(result.value).copy(
                         submittingTargetUserIds = existing.submittingTargetUserIds - cleanTargetUserId,
                         feedbackMessage = "Link invite sent",
-                        feedbackTargetUserId = cleanTargetUserId
+                        feedbackTargetUserId = cleanTargetUserId,
                     )
                 }
             }
@@ -108,7 +108,7 @@ class ProfileLinksStateHolder(
                     existing.copy(
                         submittingTargetUserIds = existing.submittingTargetUserIds - cleanTargetUserId,
                         errorMessage = result.error.message,
-                        errorTargetUserId = cleanTargetUserId
+                        errorTargetUserId = cleanTargetUserId,
                     )
                 }
             }
@@ -119,7 +119,7 @@ class ProfileLinksStateHolder(
         mutateLink(
             linkId = linkId,
             successMessage = "Profiles linked",
-            call = repository::acceptInvitation
+            call = repository::acceptInvitation,
         )
     }
 
@@ -127,7 +127,7 @@ class ProfileLinksStateHolder(
         mutateLink(
             linkId = linkId,
             successMessage = "Invite declined",
-            call = repository::declineInvitation
+            call = repository::declineInvitation,
         )
     }
 
@@ -136,7 +136,7 @@ class ProfileLinksStateHolder(
         mutateLink(
             linkId = linkId,
             successMessage = "Profiles unlinked",
-            call = { repository.unlinkCurrent() }
+            call = { repository.unlinkCurrent() },
         )
     }
 
@@ -146,7 +146,7 @@ class ProfileLinksStateHolder(
                 feedbackMessage = null,
                 feedbackTargetUserId = null,
                 errorMessage = null,
-                errorTargetUserId = null
+                errorTargetUserId = null,
             )
         }
     }
@@ -158,7 +158,7 @@ class ProfileLinksStateHolder(
     private suspend fun mutateLink(
         linkId: String,
         successMessage: String,
-        call: suspend (String) -> AppResult<ProfileLinksSummaryDto>
+        call: suspend (String) -> AppResult<ProfileLinksSummaryDto>,
     ) {
         if (linkId in state.value.mutatingLinkIds) return
         _state.update { existing ->
@@ -167,7 +167,7 @@ class ProfileLinksStateHolder(
                 feedbackMessage = null,
                 feedbackTargetUserId = null,
                 errorMessage = null,
-                errorTargetUserId = null
+                errorTargetUserId = null,
             )
         }
 
@@ -177,7 +177,7 @@ class ProfileLinksStateHolder(
                     existing.withSummary(result.value).copy(
                         mutatingLinkIds = existing.mutatingLinkIds - linkId,
                         feedbackMessage = successMessage,
-                        feedbackTargetUserId = null
+                        feedbackTargetUserId = null,
                     )
                 }
             }
@@ -187,7 +187,7 @@ class ProfileLinksStateHolder(
                     existing.copy(
                         mutatingLinkIds = existing.mutatingLinkIds - linkId,
                         errorMessage = result.error.message,
-                        errorTargetUserId = null
+                        errorTargetUserId = null,
                     )
                 }
             }
@@ -200,7 +200,7 @@ class ProfileLinksStateHolder(
             incomingInvites = summary.incomingInvites.map { it.toUi() },
             outgoingInvites = summary.outgoingInvites.map { it.toUi() },
             errorMessage = null,
-            errorTargetUserId = null
+            errorTargetUserId = null,
         )
 }
 
@@ -217,22 +217,17 @@ interface ProfileLinksRepository {
 }
 
 class ApiProfileLinksRepository(
-    private val apiClient: PynapliApiClient
+    private val apiClient: PynapliApiClient,
 ) : ProfileLinksRepository {
-    override suspend fun loadSummary(): AppResult<ProfileLinksSummaryDto> =
-        apiClient.listProfileLinks()
+    override suspend fun loadSummary(): AppResult<ProfileLinksSummaryDto> = apiClient.listProfileLinks()
 
-    override suspend fun createInvitation(targetUserId: String): AppResult<ProfileLinksSummaryDto> =
-        apiClient.createProfileLinkInvitation(CreateProfileLinkInvitationRequestDto(targetUserId = targetUserId))
+    override suspend fun createInvitation(targetUserId: String): AppResult<ProfileLinksSummaryDto> = apiClient.createProfileLinkInvitation(CreateProfileLinkInvitationRequestDto(targetUserId = targetUserId))
 
-    override suspend fun acceptInvitation(linkId: String): AppResult<ProfileLinksSummaryDto> =
-        apiClient.acceptProfileLinkInvitation(linkId)
+    override suspend fun acceptInvitation(linkId: String): AppResult<ProfileLinksSummaryDto> = apiClient.acceptProfileLinkInvitation(linkId)
 
-    override suspend fun declineInvitation(linkId: String): AppResult<ProfileLinksSummaryDto> =
-        apiClient.declineProfileLinkInvitation(linkId)
+    override suspend fun declineInvitation(linkId: String): AppResult<ProfileLinksSummaryDto> = apiClient.declineProfileLinkInvitation(linkId)
 
-    override suspend fun unlinkCurrent(): AppResult<ProfileLinksSummaryDto> =
-        apiClient.unlinkCurrentProfileLink()
+    override suspend fun unlinkCurrent(): AppResult<ProfileLinksSummaryDto> = apiClient.unlinkCurrentProfileLink()
 }
 
 private fun ProfileLinkDto.toUi(): ProfileLinkUi =
@@ -245,5 +240,5 @@ private fun ProfileLinkDto.toUi(): ProfileLinkUi =
         direction = direction,
         createdAt = createdAt,
         acceptedAt = acceptedAt,
-        unlinkedAt = unlinkedAt
+        unlinkedAt = unlinkedAt,
     )

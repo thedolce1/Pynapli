@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 class ConversationStateHolder(
-    private val repository: ConversationRepository
+    private val repository: ConversationRepository,
 ) {
     private val _state = MutableStateFlow(ConversationUiState())
     val state: StateFlow<ConversationUiState> = _state.asStateFlow()
@@ -20,12 +20,15 @@ class ConversationStateHolder(
     private var lastTypingActive: Boolean = false
     private var lastTypingSentAtMillis: Long = 0L
 
-    suspend fun openDirect(card: GridProfileCardUi, viewerUserId: String?) {
+    suspend fun openDirect(
+        card: GridProfileCardUi,
+        viewerUserId: String?,
+    ) {
         _state.update {
             ConversationUiState(
                 selectedCard = card,
                 viewerUserId = viewerUserId,
-                isOpening = true
+                isOpening = true,
             )
         }
 
@@ -37,7 +40,7 @@ class ConversationStateHolder(
                         detail = detail,
                         isOpening = false,
                         partnerInviteFeedback = null,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -46,19 +49,22 @@ class ConversationStateHolder(
                 _state.update { current ->
                     current.copy(
                         isOpening = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
         }
     }
 
-    suspend fun openSwipeMatch(match: MatchDto, viewerUserId: String?) {
+    suspend fun openSwipeMatch(
+        match: MatchDto,
+        viewerUserId: String?,
+    ) {
         _state.update {
             ConversationUiState(
                 titleOverride = match.matchedDisplayName ?: "Match",
                 viewerUserId = viewerUserId,
-                isOpening = true
+                isOpening = true,
             )
         }
 
@@ -71,7 +77,7 @@ class ConversationStateHolder(
                         titleOverride = detail.conversation.titleFor(viewerUserId),
                         isOpening = false,
                         partnerInviteFeedback = null,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -80,23 +86,27 @@ class ConversationStateHolder(
                 _state.update { current ->
                     current.copy(
                         isOpening = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
         }
     }
 
-    suspend fun openConversation(conversation: ConversationDto, viewerUserId: String?) {
+    suspend fun openConversation(
+        conversation: ConversationDto,
+        viewerUserId: String?,
+    ) {
         _state.update {
             ConversationUiState(
                 titleOverride = conversation.titleFor(viewerUserId),
                 viewerUserId = viewerUserId,
-                detail = ConversationDetailDto(
-                    conversation = conversation,
-                    messages = emptyList()
-                ),
-                isOpening = true
+                detail =
+                    ConversationDetailDto(
+                        conversation = conversation,
+                        messages = emptyList(),
+                    ),
+                isOpening = true,
             )
         }
 
@@ -109,7 +119,7 @@ class ConversationStateHolder(
                         titleOverride = detail.conversation.titleFor(viewerUserId),
                         isOpening = false,
                         partnerInviteFeedback = null,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -118,7 +128,7 @@ class ConversationStateHolder(
                 _state.update { current ->
                     current.copy(
                         isOpening = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -128,13 +138,13 @@ class ConversationStateHolder(
     suspend fun openConversationById(
         conversationId: String,
         viewerUserId: String?,
-        title: String = "Conversation"
+        title: String = "Conversation",
     ) {
         _state.update {
             ConversationUiState(
                 titleOverride = title,
                 viewerUserId = viewerUserId,
-                isOpening = true
+                isOpening = true,
             )
         }
 
@@ -147,7 +157,7 @@ class ConversationStateHolder(
                         titleOverride = detail.conversation.titleFor(viewerUserId),
                         isOpening = false,
                         partnerInviteFeedback = null,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -156,7 +166,7 @@ class ConversationStateHolder(
                 _state.update { current ->
                     current.copy(
                         isOpening = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -180,7 +190,7 @@ class ConversationStateHolder(
                             detail = detail.withMergedMessagesFrom(existingDetail),
                             titleOverride = detail.conversation.titleFor(existing.viewerUserId),
                             partnerInviteFeedback = if (silent) existing.partnerInviteFeedback else null,
-                            errorMessage = null
+                            errorMessage = null,
                         )
                     }
                 }
@@ -197,7 +207,10 @@ class ConversationStateHolder(
     }
 
     suspend fun refreshOpenConversationIfConversationId(conversationId: String) {
-        if (state.value.detail?.conversation?.conversationId == conversationId) {
+        if (state.value.detail
+                ?.conversation
+                ?.conversationId == conversationId
+        ) {
             refreshOpenConversation()
         }
     }
@@ -220,7 +233,7 @@ class ConversationStateHolder(
                         existing.copy(
                             detail = existingDetail.withPrependedPage(result.value),
                             isLoadingOlder = false,
-                            errorMessage = null
+                            errorMessage = null,
                         )
                     }
                 }
@@ -230,7 +243,7 @@ class ConversationStateHolder(
                 _state.update { existing ->
                     existing.copy(
                         isLoadingOlder = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -241,12 +254,15 @@ class ConversationStateHolder(
         _state.update { current ->
             current.copy(
                 draft = value,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
 
-    suspend fun sendTypingSignal(isTyping: Boolean, force: Boolean = false) {
+    suspend fun sendTypingSignal(
+        isTyping: Boolean,
+        force: Boolean = false,
+    ) {
         val current = state.value
         val conversationId = current.detail?.conversation?.conversationId ?: return
         if (!current.visible || current.isOpening || current.isViewerInvited) return
@@ -281,30 +297,43 @@ class ConversationStateHolder(
         conversationId: String,
         actorUserId: String?,
         actorDisplayName: String?,
-        expiresAt: String?
+        expiresAt: String?,
     ) {
         val userId = actorUserId ?: return
         val current = state.value
         if (current.detail?.conversation?.conversationId != conversationId || userId == current.viewerUserId) return
-        val expiresAtMillis = expiresAt?.let { parseInstantMillis(it) }
-            ?: (currentTimeMillis() + TYPING_INDICATOR_TTL_MS)
-        val displayName = actorDisplayName?.takeIf { it.isNotBlank() }
-            ?: current.detail.conversation.participants.firstOrNull { it.userId == userId }?.displayName
-            ?: "Someone"
+        val expiresAtMillis =
+            expiresAt?.let { parseInstantMillis(it) }
+                ?: (currentTimeMillis() + TYPING_INDICATOR_TTL_MS)
+        val displayName =
+            actorDisplayName?.takeIf { it.isNotBlank() }
+                ?: current.detail.conversation.participants
+                    .firstOrNull { it.userId == userId }
+                    ?.displayName
+                ?: "Someone"
 
         _state.update { existing ->
             existing.copy(
-                typingParticipants = (
-                    existing.typingParticipants.filterNot { it.userId == userId } +
-                        TypingParticipantUi(userId, displayName, expiresAtMillis)
-                    ).sortedBy { it.displayName }
+                typingParticipants =
+                    (
+                        existing.typingParticipants.filterNot { it.userId == userId } +
+                            TypingParticipantUi(userId, displayName, expiresAtMillis)
+                    ).sortedBy { it.displayName },
             )
         }
     }
 
-    fun applyTypingStopped(conversationId: String, actorUserId: String?) {
+    fun applyTypingStopped(
+        conversationId: String,
+        actorUserId: String?,
+    ) {
         val userId = actorUserId ?: return
-        if (state.value.detail?.conversation?.conversationId != conversationId) return
+        if (state.value.detail
+                ?.conversation
+                ?.conversationId != conversationId
+        ) {
+            return
+        }
         _state.update { existing ->
             existing.copy(typingParticipants = existing.typingParticipants.filterNot { it.userId == userId })
         }
@@ -326,7 +355,7 @@ class ConversationStateHolder(
             it.copy(
                 isInvitingPartner = true,
                 partnerInviteFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -339,7 +368,7 @@ class ConversationStateHolder(
                         titleOverride = result.value.titleFor(existing.viewerUserId),
                         isInvitingPartner = false,
                         partnerInviteFeedback = "Partner invited",
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -349,7 +378,7 @@ class ConversationStateHolder(
                     existing.copy(
                         isInvitingPartner = false,
                         partnerInviteFeedback = null,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -365,7 +394,7 @@ class ConversationStateHolder(
             it.copy(
                 isRespondingToInvite = true,
                 partnerInviteFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -378,7 +407,7 @@ class ConversationStateHolder(
                         titleOverride = detail.conversation.titleFor(existing.viewerUserId),
                         isRespondingToInvite = false,
                         partnerInviteFeedback = current.partnerInviteAcceptedFeedback(detail),
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -388,7 +417,7 @@ class ConversationStateHolder(
                     existing.copy(
                         isRespondingToInvite = false,
                         partnerInviteFeedback = null,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -404,7 +433,7 @@ class ConversationStateHolder(
             it.copy(
                 isRespondingToInvite = true,
                 partnerInviteFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -421,7 +450,7 @@ class ConversationStateHolder(
                     existing.copy(
                         isRespondingToInvite = false,
                         partnerInviteFeedback = null,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -437,7 +466,7 @@ class ConversationStateHolder(
                         titleOverride = detailResult.value.conversation.titleFor(existing.viewerUserId),
                         isRespondingToInvite = false,
                         partnerInviteFeedback = "Invite declined",
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -447,7 +476,7 @@ class ConversationStateHolder(
                     existing.copy(
                         isRespondingToInvite = false,
                         partnerInviteFeedback = null,
-                        errorMessage = detailResult.error.message
+                        errorMessage = detailResult.error.message,
                     )
                 }
             }
@@ -463,7 +492,7 @@ class ConversationStateHolder(
             it.copy(
                 isLeaving = true,
                 partnerInviteFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -474,7 +503,7 @@ class ConversationStateHolder(
                     existing.copy(
                         isLeaving = false,
                         partnerInviteFeedback = null,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -512,7 +541,7 @@ class ConversationStateHolder(
                         detail = updatedDetail,
                         draft = "",
                         isSending = false,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -521,7 +550,7 @@ class ConversationStateHolder(
                 _state.update { existing ->
                     existing.copy(
                         isSending = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -539,7 +568,7 @@ class ConversationStateHolder(
             existing.copy(
                 isDeletingMessageIds = existing.isDeletingMessageIds + messageId,
                 partnerInviteFeedback = null,
-                errorMessage = null
+                errorMessage = null,
             )
         }
 
@@ -549,7 +578,7 @@ class ConversationStateHolder(
                     existing.copy(
                         detail = existing.detail?.withUpdatedMessage(result.value),
                         isDeletingMessageIds = existing.isDeletingMessageIds - messageId,
-                        errorMessage = null
+                        errorMessage = null,
                     )
                 }
             }
@@ -558,7 +587,7 @@ class ConversationStateHolder(
                 _state.update { existing ->
                     existing.copy(
                         isDeletingMessageIds = existing.isDeletingMessageIds - messageId,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -571,5 +600,4 @@ class ConversationStateHolder(
         lastTypingSentAtMillis = 0L
         _state.value = ConversationUiState()
     }
-
 }

@@ -39,7 +39,7 @@ internal fun MessageList(
     isDeletingMessageIds: Set<String>,
     onLoadOlder: () -> Unit,
     onDeleteMessage: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
     val lastMessageId = messages.lastOrNull()?.messageId
@@ -52,18 +52,18 @@ internal fun MessageList(
 
     Column(
         modifier = modifier.verticalScroll(scrollState),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (hasOlderMessages) {
             TextButton(
                 onClick = onLoadOlder,
                 enabled = !isLoadingOlder,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                modifier = Modifier.align(Alignment.CenterHorizontally),
             ) {
                 if (isLoadingOlder) {
                     CircularProgressIndicator(
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                 } else {
                     Text(text = "Older messages")
@@ -76,7 +76,7 @@ internal fun MessageList(
                 text = "No messages yet.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(vertical = 18.dp)
+                modifier = Modifier.padding(vertical = 18.dp),
             )
         } else {
             val lastOwnMessageId = messages.lastOrNull { message -> message.senderUserId == viewerUserId }?.messageId
@@ -94,7 +94,7 @@ internal fun MessageList(
                     senderDisplayName = senderDisplayNames[message.senderUserId],
                     showDeliveryStatus = mine && message.messageId == lastOwnMessageId,
                     isDeleting = message.messageId in isDeletingMessageIds,
-                    onDeleteMessage = onDeleteMessage
+                    onDeleteMessage = onDeleteMessage,
                 )
             }
         }
@@ -104,17 +104,18 @@ internal fun MessageList(
 @Composable
 private fun DayDivider(label: String) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+        horizontalArrangement = Arrangement.Center,
     ) {
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
     }
 }
@@ -126,55 +127,60 @@ private fun MessageBubble(
     senderDisplayName: String?,
     showDeliveryStatus: Boolean,
     isDeleting: Boolean,
-    onDeleteMessage: (String) -> Unit
+    onDeleteMessage: (String) -> Unit,
 ) {
     val deleted = message.deletedAt != null
     val timeLabel = message.createdAt.messageTimeLabel()
-    val bubbleText = if (deleted) {
-        "${if (mine) "You" else senderDisplayName ?: "Someone"} deleted a message"
-    } else {
-        message.body
-    }
-    val bubbleColor = when {
-        deleted -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)
-        mine -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
-    val textColor = when {
-        deleted -> MaterialTheme.colorScheme.onSurfaceVariant
-        mine -> MaterialTheme.colorScheme.onPrimary
-        else -> MaterialTheme.colorScheme.onSurface
-    }
+    val bubbleText =
+        if (deleted) {
+            "${if (mine) "You" else senderDisplayName ?: "Someone"} deleted a message"
+        } else {
+            message.body
+        }
+    val bubbleColor =
+        when {
+            deleted -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)
+            mine -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.surfaceVariant
+        }
+    val textColor =
+        when {
+            deleted -> MaterialTheme.colorScheme.onSurfaceVariant
+            mine -> MaterialTheme.colorScheme.onPrimary
+            else -> MaterialTheme.colorScheme.onSurface
+        }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start
+        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth(0.86f),
-            horizontalAlignment = if (mine) Alignment.End else Alignment.Start
+            modifier =
+                Modifier
+                    .fillMaxWidth(0.86f),
+            horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
         ) {
             Text(
                 text = bubbleText,
                 color = textColor,
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .widthIn(max = 312.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(bubbleColor)
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                modifier =
+                    Modifier
+                        .widthIn(max = 312.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(bubbleColor)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
             )
             Row(
                 modifier = Modifier.padding(top = 2.dp, end = if (mine) 2.dp else 0.dp, start = if (mine) 0.dp else 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (timeLabel.isNotEmpty()) {
                     Text(
                         text = timeLabel,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
                 if (mine) {
@@ -183,7 +189,7 @@ private fun MessageBubble(
                             Text(
                                 text = label,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelSmall
+                                style = MaterialTheme.typography.labelSmall,
                             )
                         }
                     }
@@ -192,21 +198,22 @@ private fun MessageBubble(
                     IconButton(
                         onClick = { onDeleteMessage(message.messageId) },
                         enabled = !isDeleting,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .testTag(ConversationTestTags.deleteMessage(message.messageId))
+                        modifier =
+                            Modifier
+                                .size(32.dp)
+                                .testTag(ConversationTestTags.deleteMessage(message.messageId)),
                     ) {
                         if (isDeleting) {
                             CircularProgressIndicator(
                                 strokeWidth = 2.dp,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(14.dp),
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Filled.Delete,
                                 contentDescription = "Delete message",
                                 modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }

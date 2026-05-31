@@ -8,7 +8,7 @@ internal const val SWIPE_TOP_CARD_PHOTO_PREFETCH = 5
 internal fun planSwipeImagePrefetch(
     cards: List<SwipeCardDto>,
     windowSize: Int = SWIPE_IMAGE_PREFETCH_WINDOW,
-    topCardPhotoCount: Int = SWIPE_TOP_CARD_PHOTO_PREFETCH
+    topCardPhotoCount: Int = SWIPE_TOP_CARD_PHOTO_PREFETCH,
 ): List<String> {
     if (cards.isEmpty() || windowSize <= 0) return emptyList()
     val seen = LinkedHashSet<String>()

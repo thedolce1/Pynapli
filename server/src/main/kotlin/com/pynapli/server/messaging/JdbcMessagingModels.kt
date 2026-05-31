@@ -4,16 +4,16 @@ internal enum class ParticipantStatus {
     None,
     Active,
     Invited,
-    Inactive
+    Inactive,
 }
 
 internal enum class PartnerInviteUserRole {
     None,
     InvitedPartner,
-    ThirdPartyApprover
+    ThirdPartyApprover,
 }
 
 internal data class GridMessagePolicy(
     val allowGridMessages: Boolean,
-    val gridMessagePolicy: String
+    val gridMessagePolicy: String,
 )

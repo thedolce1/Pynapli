@@ -13,7 +13,7 @@ internal fun Connection.queryDeckRank(
     userSpecificViewerId: UUID?,
     forcedTargetUserIds: Set<UUID> = emptySet(),
     useNearestCandidateWindow: Boolean = false,
-    includeTravelLocations: Boolean = true
+    includeTravelLocations: Boolean = true,
 ): List<DeckRankRow> {
     if (forcedTargetUserIds.isNotEmpty()) {
         return queryDeckRankForcedTargets(
@@ -24,18 +24,19 @@ internal fun Connection.queryDeckRank(
             excludedTargetUserIds = excludedTargetUserIds,
             userSpecificViewerId = userSpecificViewerId,
             forcedTargetUserIds = forcedTargetUserIds,
-            includeTravelLocations = includeTravelLocations
+            includeTravelLocations = includeTravelLocations,
         )
     }
     if (useNearestCandidateWindow) {
-        val nearestRows = queryDeckRankNearestWindow(
-            viewerUserId = viewerUserId,
-            radiusMeters = radiusMeters,
-            limit = limit,
-            filters = filters,
-            excludedTargetUserIds = excludedTargetUserIds,
-            userSpecificViewerId = userSpecificViewerId
-        )
+        val nearestRows =
+            queryDeckRankNearestWindow(
+                viewerUserId = viewerUserId,
+                radiusMeters = radiusMeters,
+                limit = limit,
+                filters = filters,
+                excludedTargetUserIds = excludedTargetUserIds,
+                userSpecificViewerId = userSpecificViewerId,
+            )
         if (nearestRows.size >= limit) {
             return nearestRows
         }
@@ -53,7 +54,8 @@ internal fun Connection.queryDeckRank(
     //   - The previous `u.id ASC` tiebreaker is dropped; ST_Distance ties
     //     on real coordinates are vanishingly rare and the tiebreaker
     //     defeats the KNN index scan.
-    val sql = """
+    val sql =
+        """
         WITH viewer_location AS (
             -- Passport/travel mode (SWIPE_IMPLEMENTATION_SPEC L339-354): an
             -- active travel_locations row overrides GPS for deck ranking.
@@ -189,56 +191,57 @@ internal fun Connection.queryDeckRank(
         -- ST_DWithin filter above, which IS index-driven.
         ORDER BY soft_score DESC, v.geom <-> COALESCE(target_travel.geom, ul.geom)
         LIMIT ?
-    """.trimIndent()
+        """.trimIndent()
 
-    val rankedByDistance = prepareStatement(sql).use { statement ->
-        val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
-        val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
-        val intents = createArrayOf("text", filters.intents.toTypedArray())
-        val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
-        val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
-        val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
-        val forcedIds = createArrayOf("uuid", forcedTargetUserIds.toTypedArray())
-        statement.setObject(1, viewerUserId)
-        // $2: verifiedPreferred soft_score signal (SELECT). Placed early in the SQL
-        // text so the SELECT param appears before the WHERE/ORDER BY params.
-        statement.setBoolean(2, filters.verifiedPreferred)
-        statement.setNullableUuid(3, userSpecificViewerId)
-        statement.setNullableUuid(4, userSpecificViewerId)
-        // $5 + $6: ST_DWithin radius bound twice - once against target's
-        // real GPS, once against target's travel point.
-        statement.setDouble(5, radiusMeters.toDouble())
-        statement.setDouble(6, radiusMeters.toDouble())
-        statement.setObject(7, filters.minimumAge)
-        statement.setObject(8, filters.minimumAge)
-        statement.setObject(9, filters.maximumAge)
-        statement.setObject(10, filters.maximumAge)
-        statement.setArray(11, contexts)
-        statement.setArray(12, contexts)
-        statement.setBoolean(13, filters.verifiedOnly)
-        statement.setBoolean(14, filters.facePhotoVerifiedOnly)
-        statement.setBoolean(15, filters.ageVerifiedOnly)
-        statement.setArray(16, styles)
-        statement.setArray(17, styles)
-        statement.setArray(18, intents)
-        statement.setArray(19, intents)
-        statement.setArray(20, lifestyleTags)
-        statement.setArray(21, lifestyleTags)
-        statement.setArray(22, logisticsTags)
-        statement.setArray(23, logisticsTags)
-        statement.setObject(24, filters.linkedOnly)
-        statement.setObject(25, filters.linkedOnly)
-        statement.setObject(26, viewerUserId)
-        statement.setObject(27, viewerUserId)
-        statement.setNullableUuid(28, userSpecificViewerId)
-        statement.setNullableUuid(29, userSpecificViewerId)
-        statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
-        statement.setArray(31, excludedIds)
-        statement.setBoolean(32, forcedTargetUserIds.isNotEmpty())
-        statement.setArray(33, forcedIds)
-        statement.setInt(34, limit)
-        statement.executeDeckRankRows()
-    }
+    val rankedByDistance =
+        prepareStatement(sql).use { statement ->
+            val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
+            val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
+            val intents = createArrayOf("text", filters.intents.toTypedArray())
+            val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
+            val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+            val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
+            val forcedIds = createArrayOf("uuid", forcedTargetUserIds.toTypedArray())
+            statement.setObject(1, viewerUserId)
+            // $2: verifiedPreferred soft_score signal (SELECT). Placed early in the SQL
+            // text so the SELECT param appears before the WHERE/ORDER BY params.
+            statement.setBoolean(2, filters.verifiedPreferred)
+            statement.setNullableUuid(3, userSpecificViewerId)
+            statement.setNullableUuid(4, userSpecificViewerId)
+            // $5 + $6: ST_DWithin radius bound twice - once against target's
+            // real GPS, once against target's travel point.
+            statement.setDouble(5, radiusMeters.toDouble())
+            statement.setDouble(6, radiusMeters.toDouble())
+            statement.setObject(7, filters.minimumAge)
+            statement.setObject(8, filters.minimumAge)
+            statement.setObject(9, filters.maximumAge)
+            statement.setObject(10, filters.maximumAge)
+            statement.setArray(11, contexts)
+            statement.setArray(12, contexts)
+            statement.setBoolean(13, filters.verifiedOnly)
+            statement.setBoolean(14, filters.facePhotoVerifiedOnly)
+            statement.setBoolean(15, filters.ageVerifiedOnly)
+            statement.setArray(16, styles)
+            statement.setArray(17, styles)
+            statement.setArray(18, intents)
+            statement.setArray(19, intents)
+            statement.setArray(20, lifestyleTags)
+            statement.setArray(21, lifestyleTags)
+            statement.setArray(22, logisticsTags)
+            statement.setArray(23, logisticsTags)
+            statement.setObject(24, filters.linkedOnly)
+            statement.setObject(25, filters.linkedOnly)
+            statement.setObject(26, viewerUserId)
+            statement.setObject(27, viewerUserId)
+            statement.setNullableUuid(28, userSpecificViewerId)
+            statement.setNullableUuid(29, userSpecificViewerId)
+            statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(31, excludedIds)
+            statement.setBoolean(32, forcedTargetUserIds.isNotEmpty())
+            statement.setArray(33, forcedIds)
+            statement.setInt(34, limit)
+            statement.executeDeckRankRows()
+        }
 
     // Boosted users float to the head of the page, preserving distance order
     // within each bucket. Stable sort: boosted=true first, then SQL order.

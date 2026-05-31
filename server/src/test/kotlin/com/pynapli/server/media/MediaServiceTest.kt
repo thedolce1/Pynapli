@@ -12,256 +12,291 @@ import kotlin.test.assertFailsWith
 
 class MediaServiceTest {
     @Test
-    fun createUploadSlotCreatesAlbumAssetAndDestination() = runBlocking {
-        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000001")
-        val repository = InMemoryMediaRepository()
-        val service = MediaService(repository, FixedMediaUploadSigner())
+    fun createUploadSlotCreatesAlbumAssetAndDestination() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+            val repository = InMemoryMediaRepository()
+            val service = MediaService(repository, FixedMediaUploadSigner())
 
-        val slot = service.createUploadSlot(
-            ownerId,
-            CreateMediaUploadRequestDto(
-                albumKind = "private",
-                mediaType = "image",
-                contentType = "image/jpeg",
-                byteSize = 1_024,
-                pixelWidth = 800,
-                pixelHeight = 600
-            )
-        )
-
-        assertEquals("private", slot.album.kind)
-        assertEquals("image", slot.mediaAsset.mediaType)
-        assertEquals("pending_upload", slot.mediaAsset.processingStatus)
-        assertEquals("PUT", slot.uploadMethod)
-        assertEquals("image/jpeg", slot.uploadHeaders["Content-Type"])
-        assertEquals("users/$ownerId/private/${slot.mediaAsset.mediaAssetId}.jpg", slot.storageObjectKey)
-    }
-
-    @Test
-    fun createUploadSlotRejectsOversizedImages() = runBlocking {
-        val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
-
-        val error = assertFailsWith<MediaException> {
-            service.createUploadSlot(
-                UUID.randomUUID(),
-                CreateMediaUploadRequestDto(
-                    albumKind = "private",
-                    mediaType = "image",
-                    contentType = "image/jpeg",
-                    byteSize = MEDIA_IMAGE_MAX_BYTES + 1
+            val slot =
+                service.createUploadSlot(
+                    ownerId,
+                    CreateMediaUploadRequestDto(
+                        albumKind = "private",
+                        mediaType = "image",
+                        contentType = "image/jpeg",
+                        byteSize = 1_024,
+                        pixelWidth = 800,
+                        pixelHeight = 600,
+                    ),
                 )
-            )
+
+            assertEquals("private", slot.album.kind)
+            assertEquals("image", slot.mediaAsset.mediaType)
+            assertEquals("pending_upload", slot.mediaAsset.processingStatus)
+            assertEquals("PUT", slot.uploadMethod)
+            assertEquals("image/jpeg", slot.uploadHeaders["Content-Type"])
+            assertEquals("users/$ownerId/private/${slot.mediaAsset.mediaAssetId}.jpg", slot.storageObjectKey)
         }
 
-        assertEquals("MEDIA_FILE_TOO_LARGE", error.code)
-    }
+    @Test
+    fun createUploadSlotRejectsOversizedImages() =
+        runBlocking {
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.createUploadSlot(
+                        UUID.randomUUID(),
+                        CreateMediaUploadRequestDto(
+                            albumKind = "private",
+                            mediaType = "image",
+                            contentType = "image/jpeg",
+                            byteSize = MEDIA_IMAGE_MAX_BYTES + 1,
+                        ),
+                    )
+                }
+
+            assertEquals("MEDIA_FILE_TOO_LARGE", error.code)
+        }
 
     @Test
-    fun createUploadSlotRejectsUnsupportedContentType() = runBlocking {
-        val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+    fun createUploadSlotRejectsUnsupportedContentType() =
+        runBlocking {
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
 
-        val error = assertFailsWith<MediaException> {
-            service.createUploadSlot(
-                UUID.randomUUID(),
-                CreateMediaUploadRequestDto(
-                    albumKind = "private",
-                    mediaType = "image",
-                    contentType = "image/gif",
-                    byteSize = 1_024
+            val error =
+                assertFailsWith<MediaException> {
+                    service.createUploadSlot(
+                        UUID.randomUUID(),
+                        CreateMediaUploadRequestDto(
+                            albumKind = "private",
+                            mediaType = "image",
+                            contentType = "image/gif",
+                            byteSize = 1_024,
+                        ),
+                    )
+                }
+
+            assertEquals("INVALID_MEDIA_CONTENT_TYPE", error.code)
+        }
+
+    @Test
+    fun completeUploadMarksAssetUploadedAndAttachesToAlbum() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000002")
+            val repository = InMemoryMediaRepository()
+            val service = MediaService(repository, FixedMediaUploadSigner())
+            val slot =
+                service.createUploadSlot(
+                    ownerId,
+                    CreateMediaUploadRequestDto(
+                        albumKind = "profile",
+                        mediaType = "image",
+                        contentType = "image/webp",
+                        byteSize = 2_048,
+                    ),
                 )
-            )
+
+            val item =
+                service.completeUpload(
+                    ownerId,
+                    slot.mediaAsset.mediaAssetId,
+                    CompleteMediaUploadRequestDto(albumId = slot.album.albumId, sortOrder = 3),
+                )
+
+            assertEquals(slot.album.albumId, item.albumId)
+            assertEquals("uploaded", item.mediaAsset.processingStatus)
+            assertEquals(3, item.sortOrder)
         }
 
-        assertEquals("INVALID_MEDIA_CONTENT_TYPE", error.code)
-    }
-
     @Test
-    fun completeUploadMarksAssetUploadedAndAttachesToAlbum() = runBlocking {
-        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000002")
-        val repository = InMemoryMediaRepository()
-        val service = MediaService(repository, FixedMediaUploadSigner())
-        val slot = service.createUploadSlot(
-            ownerId,
-            CreateMediaUploadRequestDto(
-                albumKind = "profile",
-                mediaType = "image",
-                contentType = "image/webp",
-                byteSize = 2_048
-            )
-        )
+    fun completeUploadCanAutoApproveInLocalDevelopment() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000009")
+            val repository = InMemoryMediaRepository()
+            val service =
+                MediaService(
+                    repository = repository,
+                    uploadSigner = FixedMediaUploadSigner(),
+                    devAutoApproveUploads = true,
+                )
+            val slot =
+                service.createUploadSlot(
+                    ownerId,
+                    CreateMediaUploadRequestDto(
+                        albumKind = "profile",
+                        mediaType = "image",
+                        contentType = "image/jpeg",
+                        byteSize = 2_048,
+                    ),
+                )
 
-        val item = service.completeUpload(
-            ownerId,
-            slot.mediaAsset.mediaAssetId,
-            CompleteMediaUploadRequestDto(albumId = slot.album.albumId, sortOrder = 3)
-        )
+            val item =
+                service.completeUpload(
+                    ownerId,
+                    slot.mediaAsset.mediaAssetId,
+                    CompleteMediaUploadRequestDto(albumId = slot.album.albumId),
+                )
 
-        assertEquals(slot.album.albumId, item.albumId)
-        assertEquals("uploaded", item.mediaAsset.processingStatus)
-        assertEquals(3, item.sortOrder)
-    }
-
-    @Test
-    fun completeUploadCanAutoApproveInLocalDevelopment() = runBlocking {
-        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000009")
-        val repository = InMemoryMediaRepository()
-        val service = MediaService(
-            repository = repository,
-            uploadSigner = FixedMediaUploadSigner(),
-            devAutoApproveUploads = true
-        )
-        val slot = service.createUploadSlot(
-            ownerId,
-            CreateMediaUploadRequestDto(
-                albumKind = "profile",
-                mediaType = "image",
-                contentType = "image/jpeg",
-                byteSize = 2_048
-            )
-        )
-
-        val item = service.completeUpload(
-            ownerId,
-            slot.mediaAsset.mediaAssetId,
-            CompleteMediaUploadRequestDto(albumId = slot.album.albumId)
-        )
-
-        assertEquals("approved", item.mediaAsset.moderationStatus)
-        assertEquals("ready", item.mediaAsset.processingStatus)
-    }
-
-    @Test
-    fun listOwnAlbumReturnsUploadedItemsNewestSortOrder() = runBlocking {
-        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000005")
-        val repository = InMemoryMediaRepository()
-        val service = MediaService(repository, FixedMediaUploadSigner())
-        val slot = service.createUploadSlot(
-            ownerId,
-            CreateMediaUploadRequestDto(
-                albumKind = "profile",
-                mediaType = "image",
-                contentType = "image/jpeg",
-                byteSize = 2_048
-            )
-        )
-        service.completeUpload(
-            ownerId,
-            slot.mediaAsset.mediaAssetId,
-            CompleteMediaUploadRequestDto(albumId = slot.album.albumId, sortOrder = 2)
-        )
-
-        val album = service.listOwnAlbum(ownerId, "profile")
-
-        assertEquals(slot.album.albumId, album.album.albumId)
-        assertEquals("profile", album.album.kind)
-        assertEquals(1, album.items.size)
-        assertEquals(slot.mediaAsset.mediaAssetId, album.items.single().mediaAsset.mediaAssetId)
-        assertEquals("uploaded", album.items.single().mediaAsset.processingStatus)
-        assertEquals(2, album.items.single().sortOrder)
-    }
-
-    @Test
-    fun listOwnPrivateAlbumGrantsReturnsActiveGranteesNewestFirst() = runBlocking {
-        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000010")
-        val granteeA = UUID.fromString("00000000-0000-0000-0000-0000000000a1")
-        val granteeB = UUID.fromString("00000000-0000-0000-0000-0000000000a2")
-        val repository = InMemoryMediaRepository()
-        val service = MediaService(repository, FixedMediaUploadSigner())
-        repository.setDisplayName(granteeA, "Alex")
-        repository.setDisplayName(granteeB, "Maya")
-        service.requestPrivateAlbumAccess(granteeA, ownerId)
-        service.requestPrivateAlbumAccess(granteeB, ownerId)
-        service.decidePrivateAlbumAccessRequest(ownerId, granteeA, approved = true)
-        service.decidePrivateAlbumAccessRequest(ownerId, granteeB, approved = true)
-
-        val response = service.listOwnPrivateAlbumGrants(ownerId)
-
-        assertEquals(2, response.grants.size)
-        val displayNames = response.grants.map { grant -> grant.granteeDisplayName }.toSet()
-        assertEquals(setOf("Alex", "Maya"), displayNames)
-        response.grants.forEach { grant -> assertEquals(null, grant.revokedAt) }
-    }
-
-    @Test
-    fun listOwnPrivateAlbumGrantsExcludesRevokedGrants() = runBlocking {
-        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000020")
-        val granteeId = UUID.fromString("00000000-0000-0000-0000-0000000000b1")
-        val repository = InMemoryMediaRepository()
-        val service = MediaService(repository, FixedMediaUploadSigner())
-        service.requestPrivateAlbumAccess(granteeId, ownerId)
-        service.decidePrivateAlbumAccessRequest(ownerId, granteeId, approved = true)
-        service.revokePrivateAlbumAccess(ownerId, granteeId.toString())
-
-        val response = service.listOwnPrivateAlbumGrants(ownerId)
-
-        assertEquals(0, response.grants.size)
-    }
-
-    @Test
-    fun revokePrivateAlbumAccessMarksGrantRevoked() = runBlocking {
-        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000030")
-        val granteeId = UUID.fromString("00000000-0000-0000-0000-0000000000c1")
-        val repository = InMemoryMediaRepository()
-        val service = MediaService(repository, FixedMediaUploadSigner())
-        service.requestPrivateAlbumAccess(granteeId, ownerId)
-        service.decidePrivateAlbumAccessRequest(ownerId, granteeId, approved = true)
-
-        val revoked = service.revokePrivateAlbumAccess(ownerId, granteeId.toString())
-
-        assertEquals(granteeId.toString(), revoked.granteeUserId)
-        assertEquals(false, revoked.revokedAt.isNullOrEmpty())
-    }
-
-    @Test
-    fun revokePrivateAlbumAccessFailsWhenNoActiveGrant() = runBlocking {
-        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000040")
-        val granteeId = UUID.fromString("00000000-0000-0000-0000-0000000000d1")
-        val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
-
-        val error = assertFailsWith<MediaException> {
-            service.revokePrivateAlbumAccess(ownerId, granteeId.toString())
+            assertEquals("approved", item.mediaAsset.moderationStatus)
+            assertEquals("ready", item.mediaAsset.processingStatus)
         }
 
-        assertEquals("MEDIA_GRANT_NOT_FOUND", error.code)
-    }
-
     @Test
-    fun revokePrivateAlbumAccessRejectsSelfTarget() = runBlocking {
-        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000050")
-        val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
-
-        val error = assertFailsWith<MediaException> {
-            service.revokePrivateAlbumAccess(ownerId, ownerId.toString())
-        }
-
-        assertEquals("MEDIA_GRANT_NOT_FOUND", error.code)
-    }
-
-    @Test
-    fun completeUploadRejectsAlbumsOwnedBySomeoneElse() = runBlocking {
-        val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000003")
-        val otherUserId = UUID.fromString("00000000-0000-0000-0000-000000000004")
-        val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
-        val slot = service.createUploadSlot(
-            ownerId,
-            CreateMediaUploadRequestDto(
-                albumKind = "private",
-                mediaType = "image",
-                contentType = "image/png",
-                byteSize = 2_048
-            )
-        )
-
-        val error = assertFailsWith<MediaException> {
+    fun listOwnAlbumReturnsUploadedItemsNewestSortOrder() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000005")
+            val repository = InMemoryMediaRepository()
+            val service = MediaService(repository, FixedMediaUploadSigner())
+            val slot =
+                service.createUploadSlot(
+                    ownerId,
+                    CreateMediaUploadRequestDto(
+                        albumKind = "profile",
+                        mediaType = "image",
+                        contentType = "image/jpeg",
+                        byteSize = 2_048,
+                    ),
+                )
             service.completeUpload(
-                otherUserId,
+                ownerId,
                 slot.mediaAsset.mediaAssetId,
-                CompleteMediaUploadRequestDto(albumId = slot.album.albumId)
+                CompleteMediaUploadRequestDto(albumId = slot.album.albumId, sortOrder = 2),
             )
+
+            val album = service.listOwnAlbum(ownerId, "profile")
+
+            assertEquals(slot.album.albumId, album.album.albumId)
+            assertEquals("profile", album.album.kind)
+            assertEquals(1, album.items.size)
+            assertEquals(
+                slot.mediaAsset.mediaAssetId,
+                album.items
+                    .single()
+                    .mediaAsset.mediaAssetId,
+            )
+            assertEquals(
+                "uploaded",
+                album.items
+                    .single()
+                    .mediaAsset.processingStatus,
+            )
+            assertEquals(2, album.items.single().sortOrder)
         }
 
-        assertEquals("MEDIA_ALBUM_NOT_FOUND", error.code)
-    }
+    @Test
+    fun listOwnPrivateAlbumGrantsReturnsActiveGranteesNewestFirst() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000010")
+            val granteeA = UUID.fromString("00000000-0000-0000-0000-0000000000a1")
+            val granteeB = UUID.fromString("00000000-0000-0000-0000-0000000000a2")
+            val repository = InMemoryMediaRepository()
+            val service = MediaService(repository, FixedMediaUploadSigner())
+            repository.setDisplayName(granteeA, "Alex")
+            repository.setDisplayName(granteeB, "Maya")
+            service.requestPrivateAlbumAccess(granteeA, ownerId)
+            service.requestPrivateAlbumAccess(granteeB, ownerId)
+            service.decidePrivateAlbumAccessRequest(ownerId, granteeA, approved = true)
+            service.decidePrivateAlbumAccessRequest(ownerId, granteeB, approved = true)
+
+            val response = service.listOwnPrivateAlbumGrants(ownerId)
+
+            assertEquals(2, response.grants.size)
+            val displayNames = response.grants.map { grant -> grant.granteeDisplayName }.toSet()
+            assertEquals(setOf("Alex", "Maya"), displayNames)
+            response.grants.forEach { grant -> assertEquals(null, grant.revokedAt) }
+        }
+
+    @Test
+    fun listOwnPrivateAlbumGrantsExcludesRevokedGrants() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000020")
+            val granteeId = UUID.fromString("00000000-0000-0000-0000-0000000000b1")
+            val repository = InMemoryMediaRepository()
+            val service = MediaService(repository, FixedMediaUploadSigner())
+            service.requestPrivateAlbumAccess(granteeId, ownerId)
+            service.decidePrivateAlbumAccessRequest(ownerId, granteeId, approved = true)
+            service.revokePrivateAlbumAccess(ownerId, granteeId.toString())
+
+            val response = service.listOwnPrivateAlbumGrants(ownerId)
+
+            assertEquals(0, response.grants.size)
+        }
+
+    @Test
+    fun revokePrivateAlbumAccessMarksGrantRevoked() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000030")
+            val granteeId = UUID.fromString("00000000-0000-0000-0000-0000000000c1")
+            val repository = InMemoryMediaRepository()
+            val service = MediaService(repository, FixedMediaUploadSigner())
+            service.requestPrivateAlbumAccess(granteeId, ownerId)
+            service.decidePrivateAlbumAccessRequest(ownerId, granteeId, approved = true)
+
+            val revoked = service.revokePrivateAlbumAccess(ownerId, granteeId.toString())
+
+            assertEquals(granteeId.toString(), revoked.granteeUserId)
+            assertEquals(false, revoked.revokedAt.isNullOrEmpty())
+        }
+
+    @Test
+    fun revokePrivateAlbumAccessFailsWhenNoActiveGrant() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000040")
+            val granteeId = UUID.fromString("00000000-0000-0000-0000-0000000000d1")
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.revokePrivateAlbumAccess(ownerId, granteeId.toString())
+                }
+
+            assertEquals("MEDIA_GRANT_NOT_FOUND", error.code)
+        }
+
+    @Test
+    fun revokePrivateAlbumAccessRejectsSelfTarget() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000050")
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.revokePrivateAlbumAccess(ownerId, ownerId.toString())
+                }
+
+            assertEquals("MEDIA_GRANT_NOT_FOUND", error.code)
+        }
+
+    @Test
+    fun completeUploadRejectsAlbumsOwnedBySomeoneElse() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000003")
+            val otherUserId = UUID.fromString("00000000-0000-0000-0000-000000000004")
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+            val slot =
+                service.createUploadSlot(
+                    ownerId,
+                    CreateMediaUploadRequestDto(
+                        albumKind = "private",
+                        mediaType = "image",
+                        contentType = "image/png",
+                        byteSize = 2_048,
+                    ),
+                )
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.completeUpload(
+                        otherUserId,
+                        slot.mediaAsset.mediaAssetId,
+                        CompleteMediaUploadRequestDto(albumId = slot.album.albumId),
+                    )
+                }
+
+            assertEquals("MEDIA_ALBUM_NOT_FOUND", error.code)
+        }
 }
 
 private class FixedMediaUploadSigner : MediaUploadSigner {
@@ -269,14 +304,15 @@ private class FixedMediaUploadSigner : MediaUploadSigner {
         ownerUserId: UUID,
         mediaAssetId: UUID,
         albumKind: String,
-        contentType: String
+        contentType: String,
     ): MediaUploadDestination {
-        val extension = when (contentType) {
-            "image/jpeg" -> "jpg"
-            "image/png" -> "png"
-            "image/webp" -> "webp"
-            else -> "bin"
-        }
+        val extension =
+            when (contentType) {
+                "image/jpeg" -> "jpg"
+                "image/png" -> "png"
+                "image/webp" -> "webp"
+                else -> "bin"
+            }
         val objectKey = "users/$ownerUserId/$albumKind/$mediaAssetId.$extension"
         return MediaUploadDestination(
             storageProvider = "gcs",
@@ -285,7 +321,7 @@ private class FixedMediaUploadSigner : MediaUploadSigner {
             uploadUrl = "https://storage.example/$objectKey",
             uploadMethod = "PUT",
             uploadHeaders = mapOf("Content-Type" to contentType),
-            expiresAt = Instant.parse("2026-04-24T18:10:00Z")
+            expiresAt = Instant.parse("2026-04-24T18:10:00Z"),
         )
     }
 }
@@ -303,7 +339,7 @@ private class InMemoryMediaRepository : MediaRepository {
         ownerUserId: UUID,
         kind: String,
         title: String,
-        albumIdFactory: () -> UUID
+        albumIdFactory: () -> UUID,
     ): MediaAlbumRecord =
         albums.values.firstOrNull { album -> album.ownerUserId == ownerUserId && album.kind == kind && album.deletedAt == null }
             ?: MediaAlbumRecord(
@@ -314,13 +350,13 @@ private class InMemoryMediaRepository : MediaRepository {
                 visibilityStatus = "visible",
                 createdAt = now,
                 updatedAt = now,
-                deletedAt = null
+                deletedAt = null,
             ).also { album -> albums[album.albumId] = album }
 
     override suspend fun createAsset(
         ownerUserId: UUID,
         create: MediaAssetCreate,
-        assetIdFactory: () -> UUID
+        assetIdFactory: () -> UUID,
     ): MediaAssetRecord =
         MediaAssetRecord(
             mediaAssetId = assetIdFactory(),
@@ -337,10 +373,13 @@ private class InMemoryMediaRepository : MediaRepository {
             processingStatus = "pending_upload",
             createdAt = now,
             updatedAt = now,
-            deletedAt = null
+            deletedAt = null,
         ).also { asset -> assets[asset.mediaAssetId] = asset }
 
-    override suspend fun markAssetUploaded(ownerUserId: UUID, mediaAssetId: UUID): MediaAssetRecord? {
+    override suspend fun markAssetUploaded(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord? {
         val asset = assets[mediaAssetId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null } ?: return null
         val uploaded = asset.copy(processingStatus = "uploaded")
         assets[mediaAssetId] = uploaded
@@ -348,12 +387,16 @@ private class InMemoryMediaRepository : MediaRepository {
         return uploaded
     }
 
-    override suspend fun markAssetReadyApproved(ownerUserId: UUID, mediaAssetId: UUID): MediaAssetRecord? {
+    override suspend fun markAssetReadyApproved(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord? {
         val asset = assets[mediaAssetId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null } ?: return null
-        val ready = asset.copy(
-            moderationStatus = "approved",
-            processingStatus = "ready"
-        )
+        val ready =
+            asset.copy(
+                moderationStatus = "approved",
+                processingStatus = "ready",
+            )
         assets[mediaAssetId] = ready
         updateAlbumItems(ready)
         return ready
@@ -363,7 +406,7 @@ private class InMemoryMediaRepository : MediaRepository {
         ownerUserId: UUID,
         albumId: UUID,
         mediaAssetId: UUID,
-        sortOrder: Int
+        sortOrder: Int,
     ): MediaAlbumItemRecord? {
         val album = albums[albumId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null } ?: return null
         val asset = assets[mediaAssetId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null } ?: return null
@@ -372,11 +415,14 @@ private class InMemoryMediaRepository : MediaRepository {
             mediaAsset = asset,
             sortOrder = sortOrder,
             addedAt = now,
-            removedAt = null
+            removedAt = null,
         ).also { item -> items[albumId to mediaAssetId] = item }
     }
 
-    override suspend fun listAlbumItemsForViewer(viewerUserId: UUID, albumId: UUID): List<MediaAlbumItemRecord>? =
+    override suspend fun listAlbumItemsForViewer(
+        viewerUserId: UUID,
+        albumId: UUID,
+    ): List<MediaAlbumItemRecord>? =
         if (hasAlbumAccess(viewerUserId, albumId)) {
             items.values.filter { item -> item.albumId == albumId && item.removedAt == null }
         } else {
@@ -386,11 +432,12 @@ private class InMemoryMediaRepository : MediaRepository {
     override suspend fun listAlbumItemsForViewer(
         viewerUserId: UUID,
         ownerUserId: UUID,
-        kind: String
+        kind: String,
     ): Pair<MediaAlbumRecord, List<MediaAlbumItemRecord>>? {
-        val album = albums.values.firstOrNull { album ->
-            album.ownerUserId == ownerUserId && album.kind == kind && album.deletedAt == null
-        } ?: return null
+        val album =
+            albums.values.firstOrNull { album ->
+                album.ownerUserId == ownerUserId && album.kind == kind && album.deletedAt == null
+            } ?: return null
         val albumItems = listAlbumItemsForViewer(viewerUserId, album.albumId) ?: return null
         return album to albumItems
     }
@@ -398,7 +445,7 @@ private class InMemoryMediaRepository : MediaRepository {
     override suspend fun requestAlbumAccess(
         ownerUserId: UUID,
         requesterUserId: UUID,
-        requestIdFactory: () -> UUID
+        requestIdFactory: () -> UUID,
     ): MediaAlbumAccessRequestRecord? {
         if (ownerUserId == requesterUserId) return null
         val album = ensureAlbum(ownerUserId, "private", "Private album")
@@ -411,7 +458,7 @@ private class InMemoryMediaRepository : MediaRepository {
                 status = "pending",
                 requestedAt = now,
                 decidedAt = null,
-                decidedByUserId = null
+                decidedByUserId = null,
             ).also { request -> accessRequests[ownerUserId to requesterUserId] = request }
     }
 
@@ -419,21 +466,22 @@ private class InMemoryMediaRepository : MediaRepository {
         ownerUserId: UUID,
         requesterUserId: UUID,
         approved: Boolean,
-        decidedByUserId: UUID
+        decidedByUserId: UUID,
     ): MediaAlbumAccessRequestRecord? {
         val request = accessRequests[ownerUserId to requesterUserId]?.takeIf { it.status == "pending" } ?: return null
-        val decided = request.copy(
-            status = if (approved) "approved" else "denied",
-            decidedAt = now,
-            decidedByUserId = decidedByUserId
-        )
+        val decided =
+            request.copy(
+                status = if (approved) "approved" else "denied",
+                decidedAt = now,
+                decidedByUserId = decidedByUserId,
+            )
         accessRequests[ownerUserId to requesterUserId] = decided
         if (approved) {
             grantAlbumAccess(
                 ownerUserId = ownerUserId,
                 albumId = request.albumId,
                 granteeUserId = requesterUserId,
-                grantedByUserId = decidedByUserId
+                grantedByUserId = decidedByUserId,
             )
         }
         return decided
@@ -443,7 +491,7 @@ private class InMemoryMediaRepository : MediaRepository {
         ownerUserId: UUID,
         albumId: UUID,
         granteeUserId: UUID,
-        grantedByUserId: UUID
+        grantedByUserId: UUID,
     ): MediaAlbumAccessGrantRecord? =
         albums[albumId]?.takeIf { it.ownerUserId == ownerUserId && it.kind == "private" }?.let {
             MediaAlbumAccessGrantRecord(
@@ -453,7 +501,7 @@ private class InMemoryMediaRepository : MediaRepository {
                 grantedByUserId = grantedByUserId,
                 grantedAt = now,
                 revokedAt = null,
-                revokedByUserId = null
+                revokedByUserId = null,
             ).also { grant -> grants[albumId to granteeUserId] = grant }
         }
 
@@ -461,17 +509,21 @@ private class InMemoryMediaRepository : MediaRepository {
         ownerUserId: UUID,
         albumId: UUID,
         granteeUserId: UUID,
-        revokedByUserId: UUID
+        revokedByUserId: UUID,
     ): MediaAlbumAccessGrantRecord? {
-        val grant = grants[albumId to granteeUserId]?.takeIf {
-            it.ownerUserId == ownerUserId && it.revokedAt == null
-        } ?: return null
+        val grant =
+            grants[albumId to granteeUserId]?.takeIf {
+                it.ownerUserId == ownerUserId && it.revokedAt == null
+            } ?: return null
         val revoked = grant.copy(revokedAt = now, revokedByUserId = revokedByUserId)
         grants[albumId to granteeUserId] = revoked
         return revoked
     }
 
-    override suspend fun hasAlbumAccess(viewerUserId: UUID, albumId: UUID): Boolean {
+    override suspend fun hasAlbumAccess(
+        viewerUserId: UUID,
+        albumId: UUID,
+    ): Boolean {
         val album = albums[albumId] ?: return false
         return album.ownerUserId == viewerUserId ||
             album.kind == "profile" ||
@@ -479,30 +531,33 @@ private class InMemoryMediaRepository : MediaRepository {
     }
 
     override suspend fun listPrivateAlbumGrantsForOwner(
-        ownerUserId: UUID
+        ownerUserId: UUID,
     ): List<MediaAlbumGrantSummaryRecord> {
-        val album = albums.values.firstOrNull { album ->
-            album.ownerUserId == ownerUserId && album.kind == "private" && album.deletedAt == null
-        } ?: return emptyList()
+        val album =
+            albums.values.firstOrNull { album ->
+                album.ownerUserId == ownerUserId && album.kind == "private" && album.deletedAt == null
+            } ?: return emptyList()
         return grants.values
             .filter { grant ->
                 grant.albumId == album.albumId &&
                     grant.ownerUserId == ownerUserId &&
                     grant.revokedAt == null
-            }
-            .sortedWith(compareByDescending<MediaAlbumAccessGrantRecord> { it.grantedAt }.thenBy { it.granteeUserId })
+            }.sortedWith(compareByDescending<MediaAlbumAccessGrantRecord> { it.grantedAt }.thenBy { it.granteeUserId })
             .map { grant ->
                 MediaAlbumGrantSummaryRecord(
                     albumId = grant.albumId,
                     ownerUserId = grant.ownerUserId,
                     granteeUserId = grant.granteeUserId,
                     granteeDisplayName = displayNamesByUserId[grant.granteeUserId],
-                    grantedAt = grant.grantedAt
+                    grantedAt = grant.grantedAt,
                 )
             }
     }
 
-    fun setDisplayName(userId: UUID, displayName: String?) {
+    fun setDisplayName(
+        userId: UUID,
+        displayName: String?,
+    ) {
         if (displayName == null) {
             displayNamesByUserId.remove(userId)
         } else {

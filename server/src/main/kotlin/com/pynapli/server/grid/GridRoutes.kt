@@ -18,26 +18,29 @@ import kotlinx.coroutines.withContext
 fun Application.configureGridRoutes(
     authService: AuthService?,
     gridService: GridService?,
-    requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled()
+    requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
 ) {
     if (authService == null || gridService == null) return
 
     routing {
         post("/v1/grid/query") {
             val profiler = requestProfilerFactory.start(call)
-            val response = withContext(profilerContextElement(profiler)) {
-                profiler.measure("grid.route.total") {
-                    val user = profiler.measure("grid.route.auth") {
-                        authService.authenticate(call.requiredBearerToken())
-                    }
-                    val request = profiler.measure("grid.route.receive") {
-                        call.receive<GridQueryRequestDto>()
-                    }
-                    profiler.measure("grid.service.total") {
-                        gridService.queryGrid(user.id, request)
+            val response =
+                withContext(profilerContextElement(profiler)) {
+                    profiler.measure("grid.route.total") {
+                        val user =
+                            profiler.measure("grid.route.auth") {
+                                authService.authenticate(call.requiredBearerToken())
+                            }
+                        val request =
+                            profiler.measure("grid.route.receive") {
+                                call.receive<GridQueryRequestDto>()
+                            }
+                        profiler.measure("grid.service.total") {
+                            gridService.queryGrid(user.id, request)
+                        }
                     }
                 }
-            }
             profiler.appendHeaders(call)
             call.respond(response)
         }

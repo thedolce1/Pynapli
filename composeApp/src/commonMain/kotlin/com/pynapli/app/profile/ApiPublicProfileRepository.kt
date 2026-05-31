@@ -17,49 +17,48 @@ import com.pynapli.shared.network.dto.SendFlirtRequestDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
 
 class ApiPublicProfileRepository(
-    private val apiClient: PynapliApiClient
+    private val apiClient: PynapliApiClient,
 ) : PublicProfileRepository {
-    override suspend fun loadProfile(userId: String): AppResult<PublicProfileDto> =
-        apiClient.getPublicProfile(userId)
+    override suspend fun loadProfile(userId: String): AppResult<PublicProfileDto> = apiClient.getPublicProfile(userId)
 
-    override suspend fun sendFlirt(userId: String): AppResult<SendFlirtResponseDto> =
-        apiClient.sendFlirt(SendFlirtRequestDto(targetUserId = userId))
+    override suspend fun sendFlirt(userId: String): AppResult<SendFlirtResponseDto> = apiClient.sendFlirt(SendFlirtRequestDto(targetUserId = userId))
 
-    override suspend fun requestAlbumAccess(userId: String): AppResult<RequestAlbumAccessResponseDto> =
-        apiClient.requestAlbumAccess(RequestAlbumAccessRequestDto(targetUserId = userId))
+    override suspend fun requestAlbumAccess(userId: String): AppResult<RequestAlbumAccessResponseDto> = apiClient.requestAlbumAccess(RequestAlbumAccessRequestDto(targetUserId = userId))
 
     override suspend fun loadPrivateAlbum(userId: String): AppResult<List<MediaAlbumItemUi>> =
         when (val result = apiClient.listUserPrivateAlbum(userId)) {
-            is AppResult.Success -> AppResult.Success(
-                result.value.items.map { item ->
-                    item.toPrivateAlbumUi(
-                        mediaUrl = apiClient.mediaAssetContentUrl(item.mediaAsset.mediaAssetId)
-                    )
-                }
-            )
+            is AppResult.Success ->
+                AppResult.Success(
+                    result.value.items.map { item ->
+                        item.toPrivateAlbumUi(
+                            mediaUrl = apiClient.mediaAssetContentUrl(item.mediaAsset.mediaAssetId),
+                        )
+                    },
+                )
 
             is AppResult.Failure -> result
         }
 
-    override suspend fun blockUser(userId: String, reason: String?): AppResult<BlockSummaryDto> =
-        apiClient.blockUser(userId, BlockUserRequestDto(reason = reason))
+    override suspend fun blockUser(
+        userId: String,
+        reason: String?,
+    ): AppResult<BlockSummaryDto> = apiClient.blockUser(userId, BlockUserRequestDto(reason = reason))
 
-    override suspend fun hideProfile(userId: String): AppResult<HiddenProfileSummaryDto> =
-        apiClient.hideProfile(userId)
+    override suspend fun hideProfile(userId: String): AppResult<HiddenProfileSummaryDto> = apiClient.hideProfile(userId)
 
     override suspend fun submitReport(
         userId: String,
         targetType: String,
         category: String,
-        note: String?
+        note: String?,
     ): AppResult<ReportDto> =
         apiClient.submitReport(
             CreateReportRequestDto(
                 reportedUserId = userId,
                 targetType = targetType,
                 category = category,
-                note = note
-            )
+                note = note,
+            ),
         )
 }
 
@@ -74,5 +73,5 @@ private fun MediaAlbumItemDto.toPrivateAlbumUi(mediaUrl: String? = null): MediaA
         moderationStatus = mediaAsset.moderationStatus,
         sortOrder = sortOrder,
         createdAt = addedAt,
-        mediaUrl = mediaUrl
+        mediaUrl = mediaUrl,
     )

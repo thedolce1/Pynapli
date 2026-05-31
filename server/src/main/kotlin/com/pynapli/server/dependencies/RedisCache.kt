@@ -5,7 +5,7 @@ import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.sync.RedisCommands
 
 class RedisCache(
-    redisUrl: String
+    redisUrl: String,
 ) : AutoCloseable {
     private val client: RedisClient = RedisClient.create(redisUrl)
     private val connection: StatefulRedisConnection<String, String> = client.connect()

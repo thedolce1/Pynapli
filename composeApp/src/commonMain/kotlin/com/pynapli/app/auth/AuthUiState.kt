@@ -13,7 +13,7 @@ data class AuthUiState(
     val isCheckingSession: Boolean = true,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
-    val session: StoredSession? = null
+    val session: StoredSession? = null,
 ) {
     val authenticated: Boolean
         get() = session != null
@@ -21,11 +21,11 @@ data class AuthUiState(
 
 enum class AuthMode {
     SignIn,
-    CreateAccount
+    CreateAccount,
 }
 
 @Immutable
 data class DevLoginCredentials(
     val email: String,
-    val password: String
+    val password: String,
 )

@@ -17,7 +17,7 @@ import io.ktor.server.routing.routing
 
 fun Application.configureSavedGridFilterRoutes(
     authService: AuthService?,
-    savedGridFilterService: SavedGridFilterService?
+    savedGridFilterService: SavedGridFilterService?,
 ) {
     if (authService == null || savedGridFilterService == null) return
 
@@ -36,8 +36,9 @@ fun Application.configureSavedGridFilterRoutes(
 
         delete("/v1/me/grid-filters/{id}") {
             val user = authService.authenticate(call.requiredBearerToken())
-            val id = call.parameters["id"]?.takeIf { it.isNotBlank() }
-                ?: throw SavedGridFilterException("INVALID_SAVED_FILTER_ID")
+            val id =
+                call.parameters["id"]?.takeIf { it.isNotBlank() }
+                    ?: throw SavedGridFilterException("INVALID_SAVED_FILTER_ID")
             val removed = savedGridFilterService.delete(user.id, id)
             if (removed) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound)
         }

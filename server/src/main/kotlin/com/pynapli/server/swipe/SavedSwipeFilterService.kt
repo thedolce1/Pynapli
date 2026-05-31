@@ -27,19 +27,18 @@ class SavedSwipeFilterService(
     private val subscriptionService: SubscriptionService? = null,
     private val viewerTrustRepository: GridViewerTrustRepository? = null,
     private val json: Json = Json,
-    private val idFactory: () -> UUID = UUID::randomUUID
+    private val idFactory: () -> UUID = UUID::randomUUID,
 ) {
-
     suspend fun list(viewerUserId: UUID): SavedSwipeFiltersListDto {
         requireEntitlement(viewerUserId)
         return SavedSwipeFiltersListDto(
-            items = repository.list(viewerUserId).map { it.toDto() }
+            items = repository.list(viewerUserId).map { it.toDto() },
         )
     }
 
     suspend fun create(
         viewerUserId: UUID,
-        request: CreateSavedSwipeFilterRequestDto
+        request: CreateSavedSwipeFilterRequestDto,
     ): SavedSwipeFilterDto {
         requireEntitlement(viewerUserId)
         val name = request.name.trim()
@@ -52,27 +51,33 @@ class SavedSwipeFilterService(
         if (repository.countForUser(viewerUserId) >= MAX_PRESETS_PER_USER) {
             throw SavedSwipeFilterException("SAVED_FILTER_LIMIT_REACHED")
         }
-        val payloadJson = json.encodeToString(
-            SwipeDeckRequestDto.serializer(),
-            request.payload.normalized()
-        )
-        val record = try {
-            repository.create(
-                id = idFactory(),
-                userId = viewerUserId,
-                name = name,
-                payloadJson = payloadJson
+        val payloadJson =
+            json.encodeToString(
+                SwipeDeckRequestDto.serializer(),
+                request.payload.normalized(),
             )
-        } catch (_: SavedSwipeFilterDuplicateNameException) {
-            throw SavedSwipeFilterException("SAVED_FILTER_NAME_TAKEN")
-        }
+        val record =
+            try {
+                repository.create(
+                    id = idFactory(),
+                    userId = viewerUserId,
+                    name = name,
+                    payloadJson = payloadJson,
+                )
+            } catch (_: SavedSwipeFilterDuplicateNameException) {
+                throw SavedSwipeFilterException("SAVED_FILTER_NAME_TAKEN")
+            }
         return record.toDto()
     }
 
-    suspend fun delete(viewerUserId: UUID, idText: String): Boolean {
+    suspend fun delete(
+        viewerUserId: UUID,
+        idText: String,
+    ): Boolean {
         requireEntitlement(viewerUserId)
-        val id = runCatching { UUID.fromString(idText) }
-            .getOrElse { throw SavedSwipeFilterException("INVALID_SAVED_FILTER_ID") }
+        val id =
+            runCatching { UUID.fromString(idText) }
+                .getOrElse { throw SavedSwipeFilterException("INVALID_SAVED_FILTER_ID") }
         return repository.delete(viewerUserId, id)
     }
 
@@ -104,10 +109,13 @@ class SavedSwipeFilterService(
             lifestyleTags = payload.lifestyleTags,
             logisticsTags = payload.logisticsTags,
             intents = payload.intents,
-            verifiedPreferred = payload.verifiedPreferred
+            verifiedPreferred = payload.verifiedPreferred,
         ) { _ -> SavedSwipeFilterException("INVALID_SAVED_FILTER_PAYLOAD") }
 
-    private suspend fun requireLifestyleFilterAccess(viewerUserId: UUID, filters: DiscoveryFilters) {
+    private suspend fun requireLifestyleFilterAccess(
+        viewerUserId: UUID,
+        filters: DiscoveryFilters,
+    ) {
         if (filters.lifestyleTags.isEmpty()) return
         val verified = viewerTrustRepository?.isAgeVerified(viewerUserId) ?: true
         if (!verified) throw SavedSwipeFilterException("AGE_VERIFICATION_REQUIRED")
@@ -120,13 +128,14 @@ class SavedSwipeFilterService(
      */
     private fun SwipeDeckRequestDto.normalized(): SwipeDeckRequestDto = copy(cursor = null)
 
-    private fun SavedSwipeFilterRecord.toDto(): SavedSwipeFilterDto = SavedSwipeFilterDto(
-        id = id.toString(),
-        name = name,
-        payload = json.decodeFromString(SwipeDeckRequestDto.serializer(), payloadJson),
-        createdAt = createdAt.toString(),
-        updatedAt = updatedAt.toString()
-    )
+    private fun SavedSwipeFilterRecord.toDto(): SavedSwipeFilterDto =
+        SavedSwipeFilterDto(
+            id = id.toString(),
+            name = name,
+            payload = json.decodeFromString(SwipeDeckRequestDto.serializer(), payloadJson),
+            createdAt = createdAt.toString(),
+            updatedAt = updatedAt.toString(),
+        )
 
     companion object {
         const val MAX_NAME_LENGTH: Int = 60
@@ -134,4 +143,6 @@ class SavedSwipeFilterService(
     }
 }
 
-class SavedSwipeFilterException(val code: String) : RuntimeException(code)
+class SavedSwipeFilterException(
+    val code: String,
+) : RuntimeException(code)

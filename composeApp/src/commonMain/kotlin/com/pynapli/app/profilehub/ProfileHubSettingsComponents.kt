@@ -27,7 +27,7 @@ internal fun ProfileTextField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
-    supportingText: String? = null
+    supportingText: String? = null,
 ) {
     OutlinedTextField(
         value = value,
@@ -35,9 +35,10 @@ internal fun ProfileTextField(
         label = { Text(label) },
         supportingText = supportingText?.let { { Text(it) } },
         singleLine = true,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 5.dp),
     )
 }
 
@@ -46,20 +47,21 @@ internal fun ProfileHubSaveButton(
     label: String,
     isSaving: Boolean,
     onSave: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Button(
         onClick = onSave,
         enabled = !isSaving,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
     ) {
         if (isSaving) {
             CircularProgressIndicator(
                 color = MaterialTheme.colorScheme.onPrimary,
                 strokeWidth = 2.dp,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(18.dp),
             )
         } else {
             Text(label)
@@ -72,32 +74,34 @@ internal fun DiscoveryStyleRow(
     label: String,
     value: String,
     selected: Boolean,
-    onSelected: (String) -> Unit
+    onSelected: (String) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onSelected(value) }
-            .padding(horizontal = 12.dp, vertical = 13.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onSelected(value) }
+                .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(
-            modifier = Modifier
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                .border(
-                    width = 1.dp,
-                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    shape = CircleShape
-                )
+            modifier =
+                Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .border(
+                        width = 1.dp,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        shape = CircleShape,
+                    ),
         )
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
     }
 }

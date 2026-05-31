@@ -36,39 +36,40 @@ internal fun ProfilePeekActions(
     onMessage: () -> Unit,
     onSpark: () -> Unit,
     onRequestAlbum: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = onMessage,
                 enabled = canMessage,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Icon(
                     imageVector = Icons.Filled.ChatBubble,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
                 Text(
                     text = "Message",
-                    modifier = Modifier.padding(start = 8.dp)
+                    modifier = Modifier.padding(start = 8.dp),
                 )
             }
             IconButton(
                 onClick = {},
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                modifier =
+                    Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
                 Icon(
                     imageVector = Icons.Filled.MoreHoriz,
                     contentDescription = "Profile options",
-                    tint = MaterialTheme.colorScheme.onSurface
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -77,7 +78,7 @@ internal fun ProfilePeekActions(
             OutlinedButton(
                 onClick = onSpark,
                 enabled = canSpark && !isSparkLoading,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 if (isSparkLoading) {
                     CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
@@ -85,18 +86,18 @@ internal fun ProfilePeekActions(
                     Icon(
                         imageVector = Icons.Filled.FavoriteBorder,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                 }
                 Text(
                     text = "Spark",
-                    modifier = Modifier.padding(start = 8.dp)
+                    modifier = Modifier.padding(start = 8.dp),
                 )
             }
             OutlinedButton(
                 onClick = onRequestAlbum,
                 enabled = canRequestAlbum && albumStatus != "pending" && !isAlbumLoading,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 if (isAlbumLoading) {
                     CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
@@ -104,16 +105,17 @@ internal fun ProfilePeekActions(
                     Icon(
                         imageVector = Icons.Filled.PhotoLibrary,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                 }
                 Text(
-                    text = when (albumStatus) {
-                        "granted" -> "View"
-                        "pending" -> "Pending"
-                        else -> "Request"
-                    },
-                    modifier = Modifier.padding(start = 8.dp)
+                    text =
+                        when (albumStatus) {
+                            "granted" -> "View"
+                            "pending" -> "Pending"
+                            else -> "Request"
+                        },
+                    modifier = Modifier.padding(start = 8.dp),
                 )
             }
         }
@@ -126,6 +128,6 @@ internal fun FeedbackText(text: String) {
         text = text,
         color = MaterialTheme.colorScheme.primary,
         style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold
+        fontWeight = FontWeight.SemiBold,
     )
 }

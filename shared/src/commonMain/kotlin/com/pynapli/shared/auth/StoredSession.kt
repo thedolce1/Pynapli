@@ -4,5 +4,5 @@ data class StoredSession(
     val accessToken: String,
     val refreshToken: String,
     val userId: String,
-    val userStatus: String
+    val userStatus: String,
 )

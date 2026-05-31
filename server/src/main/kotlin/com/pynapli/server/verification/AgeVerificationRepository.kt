@@ -11,7 +11,10 @@ interface AgeVerificationRepository {
 
     suspend fun findById(verificationId: UUID): AgeVerificationRecord?
 
-    suspend fun findByProviderReference(provider: String, providerReference: String): AgeVerificationRecord?
+    suspend fun findByProviderReference(
+        provider: String,
+        providerReference: String,
+    ): AgeVerificationRecord?
 
     suspend fun createPending(
         verificationId: UUID,
@@ -20,7 +23,7 @@ interface AgeVerificationRepository {
         method: String,
         provider: String,
         providerReference: String?,
-        requestedAt: Instant
+        requestedAt: Instant,
     ): AgeVerificationRecord
 
     suspend fun recordCallback(
@@ -35,7 +38,7 @@ interface AgeVerificationRepository {
         expiresAt: Instant?,
         reviewerId: String,
         reason: String?,
-        reviewedAt: Instant
+        reviewedAt: Instant,
     ): AgeVerificationRecord
 
     suspend fun review(
@@ -45,14 +48,14 @@ interface AgeVerificationRepository {
         expiresAt: Instant?,
         reviewerId: String,
         reason: String?,
-        reviewedAt: Instant
+        reviewedAt: Instant,
     ): AgeVerificationRecord?
 }
 
 data class AgeVerificationProfileState(
     val userId: UUID,
     val birthdate: LocalDate?,
-    val ageVerifiedAt: Instant?
+    val ageVerifiedAt: Instant?,
 )
 
 data class AgeVerificationRecord(
@@ -68,5 +71,5 @@ data class AgeVerificationRecord(
     val expiresAt: Instant?,
     val reviewedAt: Instant?,
     val reviewerId: String?,
-    val reviewReason: String?
+    val reviewReason: String?,
 )

@@ -16,7 +16,7 @@ internal fun Connection.loadActiveLinkedPartnerUserId(userId: UUID): UUID? =
           AND upl.status = 'active'
           AND upl.unlinked_at IS NULL
         LIMIT 1
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.executeQuery().use { rs ->

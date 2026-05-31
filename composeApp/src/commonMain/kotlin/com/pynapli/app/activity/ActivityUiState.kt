@@ -19,7 +19,7 @@ data class ActivityUiState(
     val pendingDismissEventId: String? = null,
     val focusedEventId: String? = null,
     val actionFeedback: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 ) {
     val visibleItems: List<ActivityEventDto>
         get() = items
@@ -37,25 +37,26 @@ data class ActivitySummaryUi(
     val matchCount: Int,
     val albumRequestCount: Int,
     val partnerInviteCount: Int,
-    val latestBadgeOccurredAt: String?
+    val latestBadgeOccurredAt: String?,
 ) {
     companion object {
-        val Empty = ActivitySummaryUi(
-            badgeCount = 0,
-            profileViewCount = 0,
-            flirtCount = 0,
-            likeCount = 0,
-            matchCount = 0,
-            albumRequestCount = 0,
-            partnerInviteCount = 0,
-            latestBadgeOccurredAt = null
-        )
+        val Empty =
+            ActivitySummaryUi(
+                badgeCount = 0,
+                profileViewCount = 0,
+                flirtCount = 0,
+                likeCount = 0,
+                matchCount = 0,
+                albumRequestCount = 0,
+                partnerInviteCount = 0,
+                latestBadgeOccurredAt = null,
+            )
     }
 }
 
 enum class ActivityTabUi(
     val label: String,
-    val apiValue: String
+    val apiValue: String,
 ) {
     All("All", "all"),
     Views("Views", "views"),
@@ -63,7 +64,7 @@ enum class ActivityTabUi(
     Likes("Likes", "likes"),
     Matches("Matches", "matches"),
     Albums("Albums", "albums"),
-    Invites("Invites", "invites")
+    Invites("Invites", "invites"),
 }
 
 @Immutable
@@ -73,7 +74,7 @@ data class ActivityFeedUi(
     val adSupported: Boolean = false,
     val entitlementTier: String? = null,
     val revealLimit: Int? = null,
-    val gatedCount: Int = 0
+    val gatedCount: Int = 0,
 ) {
     companion object {
         const val DEFAULT_PAGE_SIZE = 30

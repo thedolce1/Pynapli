@@ -4,7 +4,7 @@ import com.pynapli.shared.network.ActivityStreamClient
 
 class ActivityRealtimeCoordinator(
     private val client: ActivityStreamClient,
-    private val activityStateHolder: ActivityStateHolder
+    private val activityStateHolder: ActivityStateHolder,
 ) {
     suspend fun run() {
         client.connect().collect {

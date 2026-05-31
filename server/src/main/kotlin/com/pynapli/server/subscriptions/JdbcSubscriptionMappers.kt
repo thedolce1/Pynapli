@@ -10,7 +10,7 @@ internal fun ResultSet.toSubscriptionRecord(): SubscriptionRecord =
         tier = getString("tier"),
         status = getString("status"),
         currentPeriodStart = getTimestamp("current_period_start").toInstant(),
-        currentPeriodEnd = getTimestamp("current_period_end").toInstant()
+        currentPeriodEnd = getTimestamp("current_period_end").toInstant(),
     )
 
 internal fun ResultSet.toPlayStoreSubscriptionVerificationCandidate(): PlayStoreSubscriptionVerificationCandidate =
@@ -21,7 +21,7 @@ internal fun ResultSet.toPlayStoreSubscriptionVerificationCandidate(): PlayStore
         tier = getString("tier"),
         status = getString("status"),
         currentPeriodStart = getTimestamp("current_period_start").toInstant(),
-        currentPeriodEnd = getTimestamp("current_period_end").toInstant()
+        currentPeriodEnd = getTimestamp("current_period_end").toInstant(),
     )
 
 internal fun ResultSet.toStoredEntitlementRecord(): StoredEntitlementRecord =
@@ -33,7 +33,7 @@ internal fun ResultSet.toStoredEntitlementRecord(): StoredEntitlementRecord =
         sourceId = getObject("source_id", UUID::class.java),
         startsAt = getTimestamp("starts_at").toInstant(),
         endsAt = getTimestamp("ends_at")?.toInstant(),
-        status = getString("status")
+        status = getString("status"),
     )
 
 internal fun ResultSet.toActiveEntitlementRecord(): ActiveEntitlementRecord =
@@ -44,7 +44,7 @@ internal fun ResultSet.toActiveEntitlementRecord(): ActiveEntitlementRecord =
         sourceUserId = getObject("source_user_id", UUID::class.java),
         linkedPartnerUserId = getObject("linked_partner_user_id", UUID::class.java),
         startsAt = getTimestamp("starts_at").toInstant(),
-        endsAt = getTimestamp("ends_at")?.toInstant()
+        endsAt = getTimestamp("ends_at")?.toInstant(),
     )
 
 internal fun ResultSet.toBoostActivationRecord(): BoostActivationRecord =
@@ -55,12 +55,12 @@ internal fun ResultSet.toBoostActivationRecord(): BoostActivationRecord =
         source = getString("source"),
         startsAt = getTimestamp("starts_at").toInstant(),
         endsAt = getTimestamp("ends_at").toInstant(),
-        status = getString("status")
+        status = getString("status"),
     )
 
 internal fun ResultSet.toPremiumInventoryBalanceRecord(): PremiumInventoryBalanceRecord =
     PremiumInventoryBalanceRecord(
         inventoryType = getString("inventory_type"),
         quantity = getInt("quantity"),
-        nextExpiresAt = getTimestamp("next_expires_at")?.toInstant()
+        nextExpiresAt = getTimestamp("next_expires_at")?.toInstant(),
     )

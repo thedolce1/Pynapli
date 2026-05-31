@@ -9,7 +9,7 @@ import java.util.UUID
 import javax.sql.DataSource
 
 class JdbcRiskRepository(
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
 ) : RiskRepository {
     override suspend fun recordEvent(
         userId: UUID,
@@ -18,57 +18,64 @@ class JdbcRiskRepository(
         reason: String,
         delta: Int,
         metadataJson: String,
-        eventIdFactory: () -> UUID
-    ): RiskMutationRecord = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
-                val state = connection.upsertRiskState(userId, delta)
-                val event = connection.insertRiskEvent(
-                    id = eventIdFactory(),
-                    userId = userId,
-                    actorUserId = actorUserId,
-                    source = source,
-                    reason = reason,
-                    delta = delta,
-                    state = state,
-                    metadataJson = metadataJson
-                )
-                connection.commit()
-                RiskMutationRecord(event = event, state = state)
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
-            }
-        }
-    }
-
-    override suspend fun getState(userId: UUID): AccountRiskStateRecord? = withContext(Dispatchers.IO) {
-        dataSource.connection.use { connection ->
-            connection.prepareStatement(
-                """
-                SELECT user_id,
-                       score,
-                       tier,
-                       last_event_at,
-                       last_reviewed_at,
-                       updated_at
-                FROM account_risk_states
-                WHERE user_id = ?
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, userId)
-                statement.executeQuery().use { rs ->
-                    if (rs.next()) rs.toRiskStateRecord() else null
+        eventIdFactory: () -> UUID,
+    ): RiskMutationRecord =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val previousAutoCommit = connection.autoCommit
+                connection.autoCommit = false
+                try {
+                    val state = connection.upsertRiskState(userId, delta)
+                    val event =
+                        connection.insertRiskEvent(
+                            id = eventIdFactory(),
+                            userId = userId,
+                            actorUserId = actorUserId,
+                            source = source,
+                            reason = reason,
+                            delta = delta,
+                            state = state,
+                            metadataJson = metadataJson,
+                        )
+                    connection.commit()
+                    RiskMutationRecord(event = event, state = state)
+                } catch (error: Throwable) {
+                    connection.rollback()
+                    throw error
+                } finally {
+                    connection.autoCommit = previousAutoCommit
                 }
             }
         }
-    }
 
-    private fun Connection.upsertRiskState(userId: UUID, delta: Int): AccountRiskStateRecord {
+    override suspend fun getState(userId: UUID): AccountRiskStateRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT user_id,
+                               score,
+                               tier,
+                               last_event_at,
+                               last_reviewed_at,
+                               updated_at
+                        FROM account_risk_states
+                        WHERE user_id = ?
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, userId)
+                        statement.executeQuery().use { rs ->
+                            if (rs.next()) rs.toRiskStateRecord() else null
+                        }
+                    }
+            }
+        }
+
+    private fun Connection.upsertRiskState(
+        userId: UUID,
+        delta: Int,
+    ): AccountRiskStateRecord {
         val insertScore = "GREATEST(0, LEAST(100, payload.delta))"
         val updateScore = "GREATEST(0, LEAST(100, account_risk_states.score + (SELECT delta FROM payload)))"
         return prepareStatement(
@@ -101,7 +108,7 @@ class JdbcRiskRepository(
                       last_event_at,
                       last_reviewed_at,
                       updated_at
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setObject(1, userId)
             statement.setInt(2, delta)
@@ -120,7 +127,7 @@ class JdbcRiskRepository(
         reason: String,
         delta: Int,
         state: AccountRiskStateRecord,
-        metadataJson: String
+        metadataJson: String,
     ): RiskEventRecord =
         prepareStatement(
             """
@@ -146,7 +153,7 @@ class JdbcRiskRepository(
                       tier_after,
                       metadata::text AS metadata_json,
                       created_at
-            """.trimIndent()
+            """.trimIndent(),
         ).use { statement ->
             statement.setObject(1, id)
             statement.setObject(2, userId)
@@ -170,7 +177,7 @@ class JdbcRiskRepository(
             tier = getString("tier"),
             lastEventAt = getTimestampOrNull("last_event_at")?.toInstant(),
             lastReviewedAt = getTimestampOrNull("last_reviewed_at")?.toInstant(),
-            updatedAt = getTimestamp("updated_at").toInstant()
+            updatedAt = getTimestamp("updated_at").toInstant(),
         )
 
     private fun ResultSet.toRiskEventRecord(): RiskEventRecord =
@@ -184,11 +191,10 @@ class JdbcRiskRepository(
             scoreAfter = getInt("score_after"),
             tierAfter = getString("tier_after"),
             metadataJson = getString("metadata_json"),
-            createdAt = getTimestamp("created_at").toInstant()
+            createdAt = getTimestamp("created_at").toInstant(),
         )
 
-    private fun ResultSet.getTimestampOrNull(column: String): Timestamp? =
-        getTimestamp(column).takeUnless { wasNull() }
+    private fun ResultSet.getTimestampOrNull(column: String): Timestamp? = getTimestamp(column).takeUnless { wasNull() }
 
     private fun riskTierCase(scoreExpression: String): String =
         """

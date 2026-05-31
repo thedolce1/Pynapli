@@ -10,10 +10,13 @@ interface SavedGridFilterRepository {
         id: UUID,
         userId: UUID,
         name: String,
-        payloadJson: String
+        payloadJson: String,
     ): SavedGridFilterRecord
 
-    suspend fun delete(userId: UUID, id: UUID): Boolean
+    suspend fun delete(
+        userId: UUID,
+        id: UUID,
+    ): Boolean
 
     suspend fun countForUser(userId: UUID): Int
 }
@@ -24,5 +27,5 @@ data class SavedGridFilterRecord(
     val name: String,
     val payloadJson: String,
     val createdAt: Instant,
-    val updatedAt: Instant
+    val updatedAt: Instant,
 )

@@ -24,32 +24,34 @@ internal fun ProfileEditContent(
     onRelationshipContextChanged: (String) -> Unit,
     onDiscoveryStyleChanged: (String) -> Unit,
     onSave: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         ProfileHubTopBar(
             title = "Edit profile",
             onBack = onBack,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             state.errorMessage?.let { message ->
                 item {
                     ProfileHubMessageBand(
                         message = message,
                         isError = true,
-                        onDismiss = { }
+                        onDismiss = { },
                     )
                 }
             }
@@ -59,28 +61,28 @@ internal fun ProfileEditContent(
                     ProfileTextField(
                         value = state.draft.displayName,
                         onValueChange = onDisplayNameChanged,
-                        label = "Display name"
+                        label = "Display name",
                     )
                     ProfileTextField(
                         value = state.draft.birthdate,
                         onValueChange = onBirthdateChanged,
                         label = "Birthdate",
-                        supportingText = "YYYY-MM-DD"
+                        supportingText = "YYYY-MM-DD",
                     )
                     ProfileTextField(
                         value = state.draft.gender,
                         onValueChange = onGenderChanged,
-                        label = "Gender"
+                        label = "Gender",
                     )
                     ProfileTextField(
                         value = state.draft.orientation,
                         onValueChange = onOrientationChanged,
-                        label = "Orientation"
+                        label = "Orientation",
                     )
                     ProfileTextField(
                         value = state.draft.relationshipContext,
                         onValueChange = onRelationshipContextChanged,
-                        label = "Relationship context"
+                        label = "Relationship context",
                     )
                 }
             }
@@ -92,7 +94,7 @@ internal fun ProfileEditContent(
                             label = option.label,
                             value = option.value,
                             selected = state.draft.discoveryStyle == option.value,
-                            onSelected = onDiscoveryStyleChanged
+                            onSelected = onDiscoveryStyleChanged,
                         )
                     }
                 }
@@ -102,7 +104,7 @@ internal fun ProfileEditContent(
         ProfileHubSaveButton(
             label = "Save profile",
             isSaving = state.isSaving,
-            onSave = onSave
+            onSave = onSave,
         )
     }
 }

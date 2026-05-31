@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 internal fun LazyGridScope.privateGrantsSection(
     grants: List<MediaPrivateGrantUi>,
     revokingGranteeIds: Set<String>,
-    onRevokeGrant: (String) -> Unit
+    onRevokeGrant: (String) -> Unit,
 ) {
     item(span = { GridItemSpan(maxLineSpan) }) {
         PrivateGrantsSectionHeader()
@@ -48,12 +48,12 @@ internal fun LazyGridScope.privateGrantsSection(
     items(
         items = grants,
         key = { grant -> grant.granteeUserId },
-        span = { GridItemSpan(maxLineSpan) }
+        span = { GridItemSpan(maxLineSpan) },
     ) { grant ->
         PrivateGrantRow(
             grant = grant,
             isRevoking = grant.granteeUserId in revokingGranteeIds,
-            onRevoke = { onRevokeGrant(grant.granteeUserId) }
+            onRevoke = { onRevokeGrant(grant.granteeUserId) },
         )
     }
 }
@@ -61,23 +61,24 @@ internal fun LazyGridScope.privateGrantsSection(
 @Composable
 private fun PrivateGrantsSectionHeader() {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp, bottom = 2.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
             imageVector = Icons.Filled.People,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(18.dp),
         )
         Text(
             text = "Granted access",
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -86,29 +87,31 @@ private fun PrivateGrantsSectionHeader() {
 private fun PrivateGrantRow(
     grant: MediaPrivateGrantUi,
     isRevoking: Boolean,
-    onRevoke: () -> Unit
+    onRevoke: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Filled.Lock,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(16.dp),
             )
         }
         Text(
@@ -117,13 +120,13 @@ private fun PrivateGrantRow(
             style = MaterialTheme.typography.bodyLarge,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         if (isRevoking) {
             CircularProgressIndicator(
                 color = MaterialTheme.colorScheme.error,
                 strokeWidth = 2.dp,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(18.dp),
             )
         } else {
             TextButton(onClick = onRevoke) {
@@ -131,13 +134,13 @@ private fun PrivateGrantRow(
                     imageVector = Icons.Filled.PersonOff,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(16.dp),
                 )
                 Text(
                     text = "Revoke",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(start = 4.dp)
+                    modifier = Modifier.padding(start = 4.dp),
                 )
             }
         }
@@ -150,6 +153,6 @@ private fun EmptyGrantsRow() {
         text = "No one has access to your private album.",
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
+        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
     )
 }

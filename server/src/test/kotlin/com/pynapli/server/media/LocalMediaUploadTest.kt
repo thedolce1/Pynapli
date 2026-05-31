@@ -15,18 +15,20 @@ class LocalMediaUploadTest {
     fun localDevSignerReturnsEmulatorReachableUploadUrl() {
         val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000101")
         val mediaAssetId = UUID.fromString("20000000-0000-0000-0000-000000000001")
-        val signer = LocalDevMediaUploadSigner(
-            storageBucket = "pynapli-local-media",
-            uploadBaseUrl = "http://10.0.2.2:8080",
-            clock = fixedClock
-        )
+        val signer =
+            LocalDevMediaUploadSigner(
+                storageBucket = "pynapli-local-media",
+                uploadBaseUrl = "http://10.0.2.2:8080",
+                clock = fixedClock,
+            )
 
-        val destination = signer.createUploadDestination(
-            ownerUserId = ownerId,
-            mediaAssetId = mediaAssetId,
-            albumKind = "private",
-            contentType = "image/webp"
-        )
+        val destination =
+            signer.createUploadDestination(
+                ownerUserId = ownerId,
+                mediaAssetId = mediaAssetId,
+                albumKind = "private",
+                contentType = "image/webp",
+            )
 
         assertEquals("local", destination.storageProvider)
         assertEquals("pynapli-local-media", destination.storageBucket)
@@ -46,11 +48,12 @@ class LocalMediaUploadTest {
         try {
             val storage = LocalMediaUploadStorage(root, fixedClock)
 
-            val record = storage.saveUpload(
-                mediaAssetIdText = mediaAssetId.toString(),
-                contentType = "image/png",
-                bytes = bytes
-            )
+            val record =
+                storage.saveUpload(
+                    mediaAssetIdText = mediaAssetId.toString(),
+                    contentType = "image/png",
+                    bytes = bytes,
+                )
 
             assertEquals(mediaAssetId, record.mediaAssetId)
             assertEquals(bytes.size, record.byteSize)

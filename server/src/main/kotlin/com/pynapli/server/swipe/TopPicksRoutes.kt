@@ -16,23 +16,25 @@ import kotlinx.coroutines.withContext
 fun Application.configureTopPicksRoutes(
     authService: AuthService?,
     topPicksService: TopPicksService?,
-    requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled()
+    requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
 ) {
     if (authService == null || topPicksService == null) return
 
     routing {
         get("/v1/swipe/picks") {
             val profiler = requestProfilerFactory.start(call)
-            val response = withContext(profilerContextElement(profiler)) {
-                profiler.measure("swipe.route.picks.total") {
-                    val user = profiler.measure("swipe.route.picks.auth") {
-                        authService.authenticate(call.requiredBearerToken())
-                    }
-                    profiler.measure("swipe.service.picks.total") {
-                        topPicksService.getCurrentPicks(user.id)
+            val response =
+                withContext(profilerContextElement(profiler)) {
+                    profiler.measure("swipe.route.picks.total") {
+                        val user =
+                            profiler.measure("swipe.route.picks.auth") {
+                                authService.authenticate(call.requiredBearerToken())
+                            }
+                        profiler.measure("swipe.service.picks.total") {
+                            topPicksService.getCurrentPicks(user.id)
+                        }
                     }
                 }
-            }
             profiler.appendHeaders(call)
             call.respond(response)
         }

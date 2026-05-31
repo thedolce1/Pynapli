@@ -7,9 +7,12 @@ import com.pynapli.shared.network.dto.HiddenProfilesListDto
 import java.util.UUID
 
 class HiddenProfileService(
-    private val repository: HiddenProfileRepository
+    private val repository: HiddenProfileRepository,
 ) {
-    suspend fun hideProfile(hiderUserId: UUID, targetUserIdText: String): HiddenProfileSummaryDto {
+    suspend fun hideProfile(
+        hiderUserId: UUID,
+        targetUserIdText: String,
+    ): HiddenProfileSummaryDto {
         FeatureAccessPolicy.requireAlwaysFreeSafetyFeature(PynapliFeature.HideProfile)
         val targetUserId = targetUserIdText.toHiddenProfileUuidOrThrow()
         if (targetUserId == hiderUserId) throw SafetyException("HIDE_SELF_FORBIDDEN")
@@ -18,11 +21,14 @@ class HiddenProfileService(
         return HiddenProfileSummaryDto(
             hiddenUserId = record.hiddenUserId.toString(),
             hiddenDisplayName = null,
-            createdAt = record.createdAt.toString()
+            createdAt = record.createdAt.toString(),
         )
     }
 
-    suspend fun unhideProfile(hiderUserId: UUID, targetUserIdText: String): Boolean {
+    suspend fun unhideProfile(
+        hiderUserId: UUID,
+        targetUserIdText: String,
+    ): Boolean {
         FeatureAccessPolicy.requireAlwaysFreeSafetyFeature(PynapliFeature.UnhideProfile)
         val targetUserId = targetUserIdText.toHiddenProfileUuidOrThrow()
         if (targetUserId == hiderUserId) throw SafetyException("HIDE_SELF_FORBIDDEN")
@@ -32,13 +38,14 @@ class HiddenProfileService(
     suspend fun listHiddenProfiles(hiderUserId: UUID): HiddenProfilesListDto {
         FeatureAccessPolicy.requireAlwaysFreeSafetyFeature(PynapliFeature.ListHiddenProfiles)
         return HiddenProfilesListDto(
-            hiddenProfiles = repository.listHiddenProfiles(hiderUserId).map { record ->
-                HiddenProfileSummaryDto(
-                    hiddenUserId = record.hiddenUserId.toString(),
-                    hiddenDisplayName = record.hiddenDisplayName,
-                    createdAt = record.createdAt.toString()
-                )
-            }
+            hiddenProfiles =
+                repository.listHiddenProfiles(hiderUserId).map { record ->
+                    HiddenProfileSummaryDto(
+                        hiddenUserId = record.hiddenUserId.toString(),
+                        hiddenDisplayName = record.hiddenDisplayName,
+                        createdAt = record.createdAt.toString(),
+                    )
+                },
         )
     }
 }

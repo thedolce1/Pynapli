@@ -15,14 +15,17 @@ interface TravelLocationRepository {
     suspend fun setActive(
         userId: UUID,
         request: TravelLocationUpsert,
-        now: Instant
+        now: Instant,
     ): TravelLocationRecord
 
     /**
      * Marks the user's currently active travel row as cleared. Returns true if
      * a row was cleared, false if there was nothing active.
      */
-    suspend fun clearActive(userId: UUID, now: Instant): Boolean
+    suspend fun clearActive(
+        userId: UUID,
+        now: Instant,
+    ): Boolean
 
     /**
      * Count of travel_locations rows the user has created on or after [since].
@@ -30,7 +33,10 @@ interface TravelLocationRepository {
      * Social viewers are limited to N activations per 30 days; Select viewers
      * skip this check.
      */
-    suspend fun countActivationsSince(userId: UUID, since: Instant): Int
+    suspend fun countActivationsSince(
+        userId: UUID,
+        since: Instant,
+    ): Int
 }
 
 data class TravelLocationUpsert(
@@ -38,7 +44,7 @@ data class TravelLocationUpsert(
     val longitude: Double,
     val city: String,
     val region: String?,
-    val country: String?
+    val country: String?,
 )
 
 data class TravelLocationRecord(
@@ -51,5 +57,5 @@ data class TravelLocationRecord(
     val longitude: Double,
     val activeFrom: Instant,
     val activeUntil: Instant?,
-    val status: String
+    val status: String,
 )

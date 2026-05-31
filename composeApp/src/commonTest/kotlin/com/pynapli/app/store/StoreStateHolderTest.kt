@@ -16,70 +16,76 @@ import kotlin.test.assertNull
 
 class StoreStateHolderTest {
     @Test
-    fun purchaseClearsPendingAndRefreshesEntitlement() = runBlocking {
-        val repository = FakeStoreRepository(
-            firstEntitlementTier = SubscriptionTier.FREE,
-            refreshedEntitlementTier = SubscriptionTier.SELECT
-        )
-        val gateway = FakeStorePurchaseGateway()
-        val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
+    fun purchaseClearsPendingAndRefreshesEntitlement() =
+        runBlocking {
+            val repository =
+                FakeStoreRepository(
+                    firstEntitlementTier = SubscriptionTier.FREE,
+                    refreshedEntitlementTier = SubscriptionTier.SELECT,
+                )
+            val gateway = FakeStorePurchaseGateway()
+            val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
 
-        stateHolder.load()
-        stateHolder.purchase(selectTier())
+            stateHolder.load()
+            stateHolder.purchase(selectTier())
 
-        val state = stateHolder.state.value
-        assertEquals(2, repository.loadCount)
-        assertEquals(1, gateway.purchaseCount)
-        assertNull(state.pendingPurchaseTier)
-        assertNull(state.pendingPurchaseProductId)
-        assertEquals("Purchase sent for verification.", state.purchaseMessage)
-        assertEquals(SubscriptionTier.SELECT, state.currentTier)
-    }
-
-    @Test
-    fun productPurchaseClearsPendingAndRefreshesBalances() = runBlocking {
-        val repository = FakeStoreRepository(
-            firstEntitlementTier = SubscriptionTier.SELECT,
-            refreshedEntitlementTier = SubscriptionTier.SELECT
-        )
-        val gateway = FakeStorePurchaseGateway()
-        val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
-
-        stateHolder.load()
-        stateHolder.purchaseProduct(boostProduct())
-
-        val state = stateHolder.state.value
-        assertEquals(2, repository.loadCount)
-        assertEquals(1, gateway.productPurchaseCount)
-        assertNull(state.pendingPurchaseProductId)
-        assertEquals("Inventory added.", state.purchaseMessage)
-        assertEquals(1, state.balanceFor(PremiumInventoryType.BOOST))
-    }
+            val state = stateHolder.state.value
+            assertEquals(2, repository.loadCount)
+            assertEquals(1, gateway.purchaseCount)
+            assertNull(state.pendingPurchaseTier)
+            assertNull(state.pendingPurchaseProductId)
+            assertEquals("Purchase sent for verification.", state.purchaseMessage)
+            assertEquals(SubscriptionTier.SELECT, state.currentTier)
+        }
 
     @Test
-    fun restoreClearsPendingAndRefreshesEntitlement() = runBlocking {
-        val repository = FakeStoreRepository(
-            firstEntitlementTier = SubscriptionTier.FREE,
-            refreshedEntitlementTier = SubscriptionTier.SOCIAL
-        )
-        val gateway = FakeStorePurchaseGateway()
-        val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
+    fun productPurchaseClearsPendingAndRefreshesBalances() =
+        runBlocking {
+            val repository =
+                FakeStoreRepository(
+                    firstEntitlementTier = SubscriptionTier.SELECT,
+                    refreshedEntitlementTier = SubscriptionTier.SELECT,
+                )
+            val gateway = FakeStorePurchaseGateway()
+            val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
 
-        stateHolder.load()
-        stateHolder.restorePurchases()
+            stateHolder.load()
+            stateHolder.purchaseProduct(boostProduct())
 
-        val state = stateHolder.state.value
-        assertEquals(2, repository.loadCount)
-        assertEquals(1, gateway.restoreCount)
-        assertEquals(false, state.isRestoringPurchases)
-        assertEquals("Subscription restored.", state.purchaseMessage)
-        assertEquals(SubscriptionTier.SOCIAL, state.currentTier)
-    }
+            val state = stateHolder.state.value
+            assertEquals(2, repository.loadCount)
+            assertEquals(1, gateway.productPurchaseCount)
+            assertNull(state.pendingPurchaseProductId)
+            assertEquals("Inventory added.", state.purchaseMessage)
+            assertEquals(1, state.balanceFor(PremiumInventoryType.BOOST))
+        }
+
+    @Test
+    fun restoreClearsPendingAndRefreshesEntitlement() =
+        runBlocking {
+            val repository =
+                FakeStoreRepository(
+                    firstEntitlementTier = SubscriptionTier.FREE,
+                    refreshedEntitlementTier = SubscriptionTier.SOCIAL,
+                )
+            val gateway = FakeStorePurchaseGateway()
+            val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
+
+            stateHolder.load()
+            stateHolder.restorePurchases()
+
+            val state = stateHolder.state.value
+            assertEquals(2, repository.loadCount)
+            assertEquals(1, gateway.restoreCount)
+            assertEquals(false, state.isRestoringPurchases)
+            assertEquals("Subscription restored.", state.purchaseMessage)
+            assertEquals(SubscriptionTier.SOCIAL, state.currentTier)
+        }
 }
 
 private class FakeStoreRepository(
     private val firstEntitlementTier: String,
-    private val refreshedEntitlementTier: String
+    private val refreshedEntitlementTier: String,
 ) : StoreRepository {
     var loadCount = 0
         private set
@@ -91,13 +97,14 @@ private class FakeStoreRepository(
             StoreUi(
                 tiers = listOf(selectTier()),
                 premiumProducts = listOf(boostProduct()),
-                balances = if (loadCount == 1) {
-                    emptyList()
-                } else {
-                    listOf(PremiumInventoryBalanceDto(PremiumInventoryType.BOOST, quantity = 1))
-                },
-                entitlement = entitlement(tier)
-            )
+                balances =
+                    if (loadCount == 1) {
+                        emptyList()
+                    } else {
+                        listOf(PremiumInventoryBalanceDto(PremiumInventoryType.BOOST, quantity = 1))
+                    },
+                entitlement = entitlement(tier),
+            ),
         )
     }
 }
@@ -134,7 +141,7 @@ private fun selectTier(): SubscriptionTierDto =
         adSupported = false,
         linkedPartnerIncluded = true,
         features = listOf("Intro Notes"),
-        playStoreProductId = "pynapli_select_monthly"
+        playStoreProductId = "pynapli_select_monthly",
     )
 
 private fun boostProduct(): PremiumProductDto =
@@ -145,7 +152,7 @@ private fun boostProduct(): PremiumProductDto =
         description = "Increase visibility for 30 minutes.",
         priceUsdCents = 299,
         quantity = 1,
-        features = listOf("Visibility lift")
+        features = listOf("Visibility lift"),
     )
 
 private fun entitlement(tier: String): SubscriptionEntitlementDto =
@@ -154,5 +161,5 @@ private fun entitlement(tier: String): SubscriptionEntitlementDto =
         source = if (tier == SubscriptionTier.FREE) EntitlementSource.FREE else EntitlementSource.OWN_SUBSCRIPTION,
         displayName = if (tier == SubscriptionTier.FREE) "Pynapli Free" else "Pynapli Select",
         adSupported = tier == SubscriptionTier.FREE,
-        linkedPartnerIncluded = tier != SubscriptionTier.FREE
+        linkedPartnerIncluded = tier != SubscriptionTier.FREE,
     )

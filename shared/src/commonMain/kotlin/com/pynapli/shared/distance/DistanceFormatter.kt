@@ -6,7 +6,7 @@ import kotlin.math.roundToInt
 fun formatDistanceForUnit(
     distanceMeters: Int?,
     fallbackLabel: String?,
-    distanceUnit: String
+    distanceUnit: String,
 ): String? {
     val meters = distanceMeters ?: return fallbackLabel
     return when (distanceUnit) {

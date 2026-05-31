@@ -3,47 +3,49 @@ package com.pynapli.server.moderation
 import java.util.UUID
 
 class MessageModerationService(
-    private val repository: MessageModerationRepository
+    private val repository: MessageModerationRepository,
 ) {
     suspend fun listOpenMessageReviews(
         limitText: String?,
         actorId: String,
-        reason: String
+        reason: String,
     ): List<MessageReviewRecord> {
-        val limit = limitText?.takeIf { it.isNotBlank() }?.toIntOrNull()
-            ?.takeIf { it in 1..MAX_REVIEW_LIMIT }
-            ?: if (limitText.isNullOrBlank()) DEFAULT_REVIEW_LIMIT else throw ModerationException("INVALID_REVIEW_LIMIT")
+        val limit =
+            limitText
+                ?.takeIf { it.isNotBlank() }
+                ?.toIntOrNull()
+                ?.takeIf { it in 1..MAX_REVIEW_LIMIT }
+                ?: if (limitText.isNullOrBlank()) DEFAULT_REVIEW_LIMIT else throw ModerationException("INVALID_REVIEW_LIMIT")
         return repository.listOpenMessageReviews(
             limit = limit,
             actorId = actorId.normalizedActorIdOrThrow(),
-            reason = reason.normalizedReasonOrThrow()
+            reason = reason.normalizedReasonOrThrow(),
         )
     }
 
     suspend fun releaseHeldMessage(
         messageIdText: String,
         actorId: String,
-        reason: String?
+        reason: String?,
     ): MessageReviewActionRecord =
         repository.releaseHeldMessage(
             messageId = messageIdText.toUuidOrThrow(),
             actorId = actorId.normalizedActorIdOrThrow(),
-            reason = reason.normalizedReasonOrThrow()
+            reason = reason.normalizedReasonOrThrow(),
         ) ?: throw ModerationException("MESSAGE_REVIEW_NOT_FOUND")
 
     suspend fun removeHeldMessage(
         messageIdText: String,
         actorId: String,
-        reason: String?
+        reason: String?,
     ): MessageReviewActionRecord =
         repository.removeHeldMessage(
             messageId = messageIdText.toUuidOrThrow(),
             actorId = actorId.normalizedActorIdOrThrow(),
-            reason = reason.normalizedReasonOrThrow()
+            reason = reason.normalizedReasonOrThrow(),
         ) ?: throw ModerationException("MESSAGE_REVIEW_NOT_FOUND")
 
-    private fun String.toUuidOrThrow(): UUID =
-        runCatching { UUID.fromString(this) }.getOrElse { throw ModerationException("INVALID_ID") }
+    private fun String.toUuidOrThrow(): UUID = runCatching { UUID.fromString(this) }.getOrElse { throw ModerationException("INVALID_ID") }
 
     private fun String.normalizedActorIdOrThrow(): String {
         val normalized = trim()
@@ -64,4 +66,6 @@ class MessageModerationService(
     }
 }
 
-class ModerationException(val code: String) : RuntimeException(code)
+class ModerationException(
+    val code: String,
+) : RuntimeException(code)

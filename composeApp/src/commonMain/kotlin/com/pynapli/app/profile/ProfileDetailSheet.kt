@@ -33,7 +33,7 @@ import com.pynapli.shared.settings.AppSettings
 enum class ProfileDetailActionMode {
     Grid,
     SwipeUnmatched,
-    SwipeMatched
+    SwipeMatched,
 }
 
 data class ProfileLinkActionState(
@@ -41,7 +41,7 @@ data class ProfileLinkActionState(
     val enabled: Boolean,
     val isSubmitting: Boolean,
     val feedbackMessage: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,16 +64,17 @@ fun ProfileDetailSheet(
     onInviteProfileLink: () -> Unit = {},
     onOpenLinkedPartner: (GridLinkedPartnerUi) -> Unit = {},
     distanceUnit: String = AppSettings.UNIT_METRIC,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val card = state.selectedCard ?: return
     val profile = state.profile
     val displayName = profile?.displayName ?: card.displayName
-    val distanceLabel = formatDistanceForUnit(
-        distanceMeters = profile?.distanceMeters ?: card.distanceMeters,
-        fallbackLabel = profile?.distanceLabel ?: card.distanceLabel,
-        distanceUnit = distanceUnit
-    )
+    val distanceLabel =
+        formatDistanceForUnit(
+            distanceMeters = profile?.distanceMeters ?: card.distanceMeters,
+            fallbackLabel = profile?.distanceLabel ?: card.distanceLabel,
+            distanceUnit = distanceUnit,
+        )
     val profilePhotoUrl = profile?.profilePhotoUrl ?: card.thumbnailUrl
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBlockConfirm by remember { mutableStateOf(false) }
@@ -85,14 +86,15 @@ fun ProfileDetailSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = modifier
+        modifier = modifier,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             ProfileHero(
                 displayName = displayName,
@@ -102,16 +104,17 @@ fun ProfileDetailSheet(
                 onDismiss = onDismiss,
                 onHideClick = { showHideConfirm = true },
                 onBlockClick = { showBlockConfirm = true },
-                onReportClick = { showReportDialog = true }
+                onReportClick = { showReportDialog = true },
             )
 
             when {
                 state.isLoading -> {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 20.dp),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 20.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
@@ -121,7 +124,7 @@ fun ProfileDetailSheet(
                     Text(
                         text = state.errorMessage,
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
 
@@ -130,7 +133,7 @@ fun ProfileDetailSheet(
                     LinkedPartnerSection(
                         linkedPartner = profile.linkedPartner,
                         cardLinkedPartner = card.linkedPartner,
-                        onOpenLinkedPartner = onOpenLinkedPartner
+                        onOpenLinkedPartner = onOpenLinkedPartner,
                     )
                     when (actionMode) {
                         ProfileDetailActionMode.Grid -> {
@@ -149,7 +152,7 @@ fun ProfileDetailSheet(
                                 onSpark = onSpark,
                                 onRequestAlbum = onRequestAlbum,
                                 onViewPrivateAlbum = onViewPrivateAlbum,
-                                onInviteProfileLink = onInviteProfileLink
+                                onInviteProfileLink = onInviteProfileLink,
                             )
                         }
 
@@ -157,7 +160,7 @@ fun ProfileDetailSheet(
                             SwipeProfileActions(
                                 isSubmitting = isSwipeSubmitting,
                                 onPass = onSwipePass,
-                                onLike = onSwipeLike
+                                onLike = onSwipeLike,
                             )
                         }
 
@@ -168,24 +171,24 @@ fun ProfileDetailSheet(
                     state.reportFeedback?.let { feedback ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Check,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(16.dp),
                             )
                             Text(
                                 text = feedback,
                                 color = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.bodySmall
+                                style = MaterialTheme.typography.bodySmall,
                             )
                         }
                     }
                     PrivateAlbumPreview(
                         items = state.privateAlbumItems,
-                        isLoading = state.isLoadingPrivateAlbum
+                        isLoading = state.isLoadingPrivateAlbum,
                     )
                 }
             }
@@ -200,7 +203,7 @@ fun ProfileDetailSheet(
                 showBlockConfirm = false
                 onBlock(reason)
             },
-            onDismiss = { showBlockConfirm = false }
+            onDismiss = { showBlockConfirm = false },
         )
     }
 
@@ -212,7 +215,7 @@ fun ProfileDetailSheet(
                 showHideConfirm = false
                 onHide()
             },
-            onDismiss = { showHideConfirm = false }
+            onDismiss = { showHideConfirm = false },
         )
     }
 
@@ -223,7 +226,7 @@ fun ProfileDetailSheet(
                 showReportDialog = false
                 onReport(category, note)
             },
-            onDismiss = { showReportDialog = false }
+            onDismiss = { showReportDialog = false },
         )
     }
 }

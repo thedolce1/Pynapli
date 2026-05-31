@@ -38,24 +38,25 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun ActivityGateRow(
     gatedCount: Int,
-    onOpenStore: () -> Unit
+    onOpenStore: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.42f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f))
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.42f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
             imageVector = Icons.Filled.Lock,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(20.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -64,14 +65,14 @@ internal fun ActivityGateRow(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = "Select unlocks the full Activity feed.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
         TextButton(onClick = onOpenStore) {
@@ -83,18 +84,19 @@ internal fun ActivityGateRow(
 @Composable
 internal fun ActivityAdSlot() {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
-            .padding(vertical = 14.dp),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+                .padding(vertical = 14.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = "Sponsored",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelMedium
+            style = MaterialTheme.typography.labelMedium,
         )
     }
 }
@@ -102,7 +104,7 @@ internal fun ActivityAdSlot() {
 @Composable
 internal fun ActivityInlineMessage(
     message: String?,
-    isError: Boolean
+    isError: Boolean,
 ) {
     if (message == null) return
     Text(
@@ -111,21 +113,22 @@ internal fun ActivityInlineMessage(
         style = MaterialTheme.typography.bodySmall,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
     )
 }
 
 @Composable
 internal fun ActivityTabRow(
     selectedTab: ActivityTabUi,
-    onTabSelected: (ActivityTabUi) -> Unit
+    onTabSelected: (ActivityTabUi) -> Unit,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ActivityTabUi.entries.forEach { tab ->
             item(key = tab.name) {
@@ -135,25 +138,29 @@ internal fun ActivityTabRow(
                         Text(
                             text = tab.label,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
                         )
                     },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = if (tab == selectedTab) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        },
-                        labelColor = if (tab == selectedTab) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
-                    ),
-                    border = AssistChipDefaults.assistChipBorder(
-                        enabled = true,
-                        borderColor = MaterialTheme.colorScheme.outline
-                    )
+                    colors =
+                        AssistChipDefaults.assistChipColors(
+                            containerColor =
+                                if (tab == selectedTab) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                            labelColor =
+                                if (tab == selectedTab) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                        ),
+                    border =
+                        AssistChipDefaults.assistChipBorder(
+                            enabled = true,
+                            borderColor = MaterialTheme.colorScheme.outline,
+                        ),
                 )
             }
         }
@@ -163,35 +170,37 @@ internal fun ActivityTabRow(
 @Composable
 internal fun ActivityHeader(
     loading: Boolean,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             text = "Activity",
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         IconButton(
             onClick = onRefresh,
             enabled = !loading,
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+            modifier =
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Icon(
                 imageVector = Icons.Filled.Refresh,
                 contentDescription = "Refresh activity",
-                tint = MaterialTheme.colorScheme.onSurface
+                tint = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
@@ -200,25 +209,27 @@ internal fun ActivityHeader(
 @Composable
 internal fun ActivityLoadMoreRow(
     loading: Boolean,
-    onLoadMore: () -> Unit
+    onLoadMore: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center,
     ) {
         OutlinedButton(
             onClick = onLoadMore,
-            enabled = !loading
+            enabled = !loading,
         ) {
             if (loading) {
                 CircularProgressIndicator(
                     color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 2.dp,
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .size(16.dp)
+                    modifier =
+                        Modifier
+                            .padding(end = 8.dp)
+                            .size(16.dp),
                 )
             }
             Text(text = if (loading) "Loading" else "Load more", maxLines = 1)
@@ -229,26 +240,27 @@ internal fun ActivityLoadMoreRow(
 @Composable
 internal fun EmptyActivityState(
     label: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier.padding(horizontal = 28.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }
 
-internal fun ActivityTabUi.emptyLabel(): String = when (this) {
-    ActivityTabUi.All -> "No activity yet."
-    ActivityTabUi.Views -> "No views yet."
-    ActivityTabUi.Flirts -> "No flirts yet."
-    ActivityTabUi.Likes -> "No likes yet."
-    ActivityTabUi.Matches -> "No matches yet."
-    ActivityTabUi.Albums -> "No album requests yet."
-    ActivityTabUi.Invites -> "No invites yet."
-}
+internal fun ActivityTabUi.emptyLabel(): String =
+    when (this) {
+        ActivityTabUi.All -> "No activity yet."
+        ActivityTabUi.Views -> "No views yet."
+        ActivityTabUi.Flirts -> "No flirts yet."
+        ActivityTabUi.Likes -> "No likes yet."
+        ActivityTabUi.Matches -> "No matches yet."
+        ActivityTabUi.Albums -> "No album requests yet."
+        ActivityTabUi.Invites -> "No invites yet."
+    }

@@ -7,8 +7,7 @@ interface MediaAssetUrlResolver {
 }
 
 class LocalMediaAssetUrlResolver(
-    private val uploadBaseUrl: String
+    private val uploadBaseUrl: String,
 ) : MediaAssetUrlResolver {
-    override fun publicContentUrl(mediaAssetId: UUID): String =
-        "${uploadBaseUrl.trimEnd('/')}/v1/media/uploads/local/$mediaAssetId"
+    override fun publicContentUrl(mediaAssetId: UUID): String = "${uploadBaseUrl.trimEnd('/')}/v1/media/uploads/local/$mediaAssetId"
 }

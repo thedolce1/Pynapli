@@ -13,17 +13,20 @@ enum class AdPlacement {
     ReportFlow,
     BlockFlow,
     SafetyFlow,
-    VerificationFlow
+    VerificationFlow,
 }
 
 object AdPlacementPolicy {
-    fun canShowAds(adSupported: Boolean, placement: AdPlacement): Boolean =
-        adSupported && placement in allowedPlacements
+    fun canShowAds(
+        adSupported: Boolean,
+        placement: AdPlacement,
+    ): Boolean = adSupported && placement in allowedPlacements
 
-    private val allowedPlacements = setOf(
-        AdPlacement.GridBetweenPages,
-        AdPlacement.SwipeBetweenBatches,
-        AdPlacement.StoreTab,
-        AdPlacement.NonSensitiveEmptyState
-    )
+    private val allowedPlacements =
+        setOf(
+            AdPlacement.GridBetweenPages,
+            AdPlacement.SwipeBetweenBatches,
+            AdPlacement.StoreTab,
+            AdPlacement.NonSensitiveEmptyState,
+        )
 }

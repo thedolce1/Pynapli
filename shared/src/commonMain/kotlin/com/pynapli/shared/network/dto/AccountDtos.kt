@@ -10,17 +10,17 @@ data class AccountDataExportDto(
     val completedAt: String? = null,
     val expiresAt: String? = null,
     val downloadUrl: String? = null,
-    val message: String
+    val message: String,
 )
 
 @Serializable
 data class DeleteAccountRequestDto(
-    val confirmation: String
+    val confirmation: String,
 )
 
 @Serializable
 data class DeleteAccountResponseDto(
     val deleted: Boolean,
     val revokedSessionCount: Int,
-    val message: String
+    val message: String,
 )

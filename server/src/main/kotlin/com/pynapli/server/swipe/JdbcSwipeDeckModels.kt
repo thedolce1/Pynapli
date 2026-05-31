@@ -14,7 +14,7 @@ internal data class DeckRankRow(
     val showDistance: Boolean,
     val distanceMeters: Double,
     val isBoosted: Boolean,
-    val softScore: Int
+    val softScore: Int,
 )
 
 internal data class DeckHydration(
@@ -22,22 +22,22 @@ internal data class DeckHydration(
     val thumbnailMediaAssetIds: List<UUID>,
     val linkedPartnerUserId: UUID?,
     val linkedPartnerDisplayName: String?,
-    val linkedPartnerThumbnailMediaAssetId: UUID?
+    val linkedPartnerThumbnailMediaAssetId: UUID?,
 )
 
 internal data class DeckLocationCacheKey(
     val longitudeE3: Int,
-    val latitudeE3: Int
+    val latitudeE3: Int,
 )
 
 internal data class DeckRankCacheKey(
     val location: DeckLocationCacheKey,
     val radiusMeters: Int,
     val filterKey: String,
-    val window: Int
+    val window: Int,
 )
 
 internal data class CachedDeckRankRows(
     val rows: List<DeckRankRow>,
-    val expiresAt: Instant
+    val expiresAt: Instant,
 )

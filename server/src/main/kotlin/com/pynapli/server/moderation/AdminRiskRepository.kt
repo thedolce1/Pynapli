@@ -8,39 +8,39 @@ interface AdminRiskRepository {
         tierFilter: String,
         limit: Int,
         actorId: String,
-        reason: String
+        reason: String,
     ): List<AdminRiskStateRecord>
 
     suspend fun listRiskEvents(
         userId: UUID,
         limit: Int,
         actorId: String,
-        reason: String
+        reason: String,
     ): List<AdminRiskEventRecord>
 
     suspend fun setRiskTier(
         userId: UUID,
         tier: String,
         actorId: String,
-        reason: String
+        reason: String,
     ): AdminRiskActionRecord?
 
     suspend fun markRiskReviewed(
         userId: UUID,
         actorId: String,
-        reason: String
+        reason: String,
     ): AdminRiskActionRecord?
 
     suspend fun lockAccount(
         userId: UUID,
         actorId: String,
-        reason: String
+        reason: String,
     ): AdminRiskActionRecord?
 
     suspend fun banAccount(
         userId: UUID,
         actorId: String,
-        reason: String
+        reason: String,
     ): AdminRiskActionRecord?
 }
 
@@ -51,7 +51,7 @@ data class AdminRiskStateRecord(
     val tier: String,
     val lastEventAt: Instant?,
     val lastReviewedAt: Instant?,
-    val updatedAt: Instant
+    val updatedAt: Instant,
 )
 
 data class AdminRiskEventRecord(
@@ -64,7 +64,7 @@ data class AdminRiskEventRecord(
     val scoreAfter: Int,
     val tierAfter: String,
     val metadataJson: String,
-    val createdAt: Instant
+    val createdAt: Instant,
 )
 
 data class AdminRiskActionRecord(
@@ -73,5 +73,5 @@ data class AdminRiskActionRecord(
     val tier: String,
     val lastReviewedAt: Instant?,
     val updatedAt: Instant,
-    val accountStatus: String? = null
+    val accountStatus: String? = null,
 )

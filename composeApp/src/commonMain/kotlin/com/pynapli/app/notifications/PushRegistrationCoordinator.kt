@@ -14,39 +14,45 @@ class PushRegistrationCoordinator(
     private val appVersion: String,
     private val localeProvider: () -> String?,
     private val timezoneProvider: () -> String?,
-    private val notificationsAllowed: () -> Boolean = { true }
+    private val notificationsAllowed: () -> Boolean = { true },
 ) {
-    suspend fun syncAuthenticatedDevice(userId: String?, settings: AppSettings) {
+    suspend fun syncAuthenticatedDevice(
+        userId: String?,
+        settings: AppSettings,
+    ) {
         val currentUserId = userId?.trim()?.takeIf { it.isNotEmpty() } ?: return
         val token = tokenProvider.currentToken()?.trim()?.takeIf { it.isNotEmpty() } ?: return
-        val registration = PushDeviceRegistration(
-            platform = platform,
-            deviceToken = token,
-            appVersion = appVersion,
-            locale = localeProvider()?.trim()?.takeIf { it.isNotEmpty() },
-            timezone = timezoneProvider()?.trim()?.takeIf { it.isNotEmpty() },
-            notificationsEnabled = settings.pushNotificationsEnabled && notificationsAllowed()
-        )
+        val registration =
+            PushDeviceRegistration(
+                platform = platform,
+                deviceToken = token,
+                appVersion = appVersion,
+                locale = localeProvider()?.trim()?.takeIf { it.isNotEmpty() },
+                timezone = timezoneProvider()?.trim()?.takeIf { it.isNotEmpty() },
+                notificationsEnabled = settings.pushNotificationsEnabled && notificationsAllowed(),
+            )
         val fingerprint = registration.fingerprint(currentUserId)
         if (registrationStore.currentFingerprint() == fingerprint) return
 
         when (repository.register(registration)) {
-            is AppResult.Success -> registrationStore.save(
-                PushRegistrationSnapshot(
-                    fingerprint = fingerprint,
-                    platform = platform,
-                    deviceToken = token
+            is AppResult.Success ->
+                registrationStore.save(
+                    PushRegistrationSnapshot(
+                        fingerprint = fingerprint,
+                        platform = platform,
+                        deviceToken = token,
+                    ),
                 )
-            )
             is AppResult.Failure -> Unit
         }
     }
 
     suspend fun unregisterCurrentDevice() {
         val snapshot = registrationStore.currentSnapshot()
-        val token = tokenProvider.currentToken()?.trim()?.takeIf { it.isNotEmpty() }
-            ?: snapshot?.deviceToken
-            ?: return
+        val token =
+            tokenProvider.currentToken()?.trim()?.takeIf { it.isNotEmpty() }
+                ?: snapshot?.deviceToken
+                ?: return
         val unregisterPlatform = snapshot?.platform ?: platform
 
         when (repository.unregister(unregisterPlatform, token)) {
@@ -76,7 +82,7 @@ interface PushRegistrationStore {
 data class PushRegistrationSnapshot(
     val fingerprint: String,
     val platform: String,
-    val deviceToken: String
+    val deviceToken: String,
 )
 
 data class PushDeviceRegistration(
@@ -85,41 +91,48 @@ data class PushDeviceRegistration(
     val appVersion: String?,
     val locale: String?,
     val timezone: String?,
-    val notificationsEnabled: Boolean
+    val notificationsEnabled: Boolean,
 )
 
 interface PushDeviceRegistrationRepository {
     suspend fun register(registration: PushDeviceRegistration): AppResult<Unit>
 
-    suspend fun unregister(platform: String, deviceToken: String): AppResult<Unit>
+    suspend fun unregister(
+        platform: String,
+        deviceToken: String,
+    ): AppResult<Unit>
 }
 
 class ApiPushDeviceRegistrationRepository(
-    private val apiClient: PynapliApiClient
+    private val apiClient: PynapliApiClient,
 ) : PushDeviceRegistrationRepository {
     override suspend fun register(registration: PushDeviceRegistration): AppResult<Unit> =
         when (
-            val result = apiClient.registerPushDevice(
-                RegisterPushDeviceRequestDto(
-                    platform = registration.platform,
-                    deviceToken = registration.deviceToken,
-                    appVersion = registration.appVersion,
-                    locale = registration.locale,
-                    timezone = registration.timezone,
-                    notificationsEnabled = registration.notificationsEnabled
+            val result =
+                apiClient.registerPushDevice(
+                    RegisterPushDeviceRequestDto(
+                        platform = registration.platform,
+                        deviceToken = registration.deviceToken,
+                        appVersion = registration.appVersion,
+                        locale = registration.locale,
+                        timezone = registration.timezone,
+                        notificationsEnabled = registration.notificationsEnabled,
+                    ),
                 )
-            )
         ) {
             is AppResult.Success -> AppResult.Success(Unit)
             is AppResult.Failure -> result
         }
 
-    override suspend fun unregister(platform: String, deviceToken: String): AppResult<Unit> =
+    override suspend fun unregister(
+        platform: String,
+        deviceToken: String,
+    ): AppResult<Unit> =
         apiClient.unregisterPushDevice(
             UnregisterPushDeviceRequestDto(
                 platform = platform,
-                deviceToken = deviceToken
-            )
+                deviceToken = deviceToken,
+            ),
         )
 }
 
@@ -131,5 +144,5 @@ private fun PushDeviceRegistration.fingerprint(userId: String): String =
         appVersion.orEmpty(),
         locale.orEmpty(),
         timezone.orEmpty(),
-        notificationsEnabled.toString()
+        notificationsEnabled.toString(),
     ).joinToString(separator = "\u001f")

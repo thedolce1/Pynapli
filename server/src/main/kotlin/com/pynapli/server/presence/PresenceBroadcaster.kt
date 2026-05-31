@@ -6,12 +6,13 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 class PresenceBroadcaster(
-    extraBufferCapacity: Int = DEFAULT_BUFFER_CAPACITY
+    extraBufferCapacity: Int = DEFAULT_BUFFER_CAPACITY,
 ) {
-    private val _deltas = MutableSharedFlow<PresenceDeltaDto>(
-        replay = 0,
-        extraBufferCapacity = extraBufferCapacity
-    )
+    private val _deltas =
+        MutableSharedFlow<PresenceDeltaDto>(
+            replay = 0,
+            extraBufferCapacity = extraBufferCapacity,
+        )
     val deltas: SharedFlow<PresenceDeltaDto> = _deltas.asSharedFlow()
 
     suspend fun emit(delta: PresenceDeltaDto) {

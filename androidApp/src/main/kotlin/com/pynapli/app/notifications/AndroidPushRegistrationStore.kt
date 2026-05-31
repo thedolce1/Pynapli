@@ -3,7 +3,7 @@ package com.pynapli.app.notifications
 import android.content.Context
 
 class AndroidPushRegistrationStore(
-    context: Context
+    context: Context,
 ) : PushRegistrationStore {
     private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
@@ -14,12 +14,13 @@ class AndroidPushRegistrationStore(
         return PushRegistrationSnapshot(
             fingerprint = fingerprint,
             platform = platform,
-            deviceToken = token
+            deviceToken = token,
         )
     }
 
     override fun save(snapshot: PushRegistrationSnapshot) {
-        preferences.edit()
+        preferences
+            .edit()
             .putString(KEY_FINGERPRINT, snapshot.fingerprint)
             .putString(KEY_PLATFORM, snapshot.platform)
             .putString(KEY_DEVICE_TOKEN, snapshot.deviceToken)
@@ -27,7 +28,8 @@ class AndroidPushRegistrationStore(
     }
 
     override fun clear() {
-        preferences.edit()
+        preferences
+            .edit()
             .remove(KEY_FINGERPRINT)
             .remove(KEY_PLATFORM)
             .remove(KEY_DEVICE_TOKEN)

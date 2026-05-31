@@ -24,7 +24,7 @@ internal fun Connection.loadAsset(mediaAssetId: UUID): MediaAssetRecord? =
                deleted_at
         FROM media_assets
         WHERE id = ?
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, mediaAssetId)
         statement.executeQuery().use { rs ->
@@ -39,7 +39,7 @@ internal fun ResultSet.toMediaAlbumItemRecord(connection: Connection): MediaAlbu
         mediaAsset = requireNotNull(connection.loadAsset(mediaAssetId)),
         sortOrder = getInt("sort_order"),
         addedAt = getTimestamp("added_at").toInstant(),
-        removedAt = getTimestamp("removed_at")?.toInstant()
+        removedAt = getTimestamp("removed_at")?.toInstant(),
     )
 }
 
@@ -59,7 +59,7 @@ internal fun ResultSet.toMediaAssetRecord(): MediaAssetRecord =
         processingStatus = getString("processing_status"),
         createdAt = getTimestamp("created_at").toInstant(),
         updatedAt = getTimestamp("updated_at").toInstant(),
-        deletedAt = getTimestamp("deleted_at")?.toInstant()
+        deletedAt = getTimestamp("deleted_at")?.toInstant(),
     )
 
 internal fun ResultSet.toMediaAlbumRecord(): MediaAlbumRecord =
@@ -71,7 +71,7 @@ internal fun ResultSet.toMediaAlbumRecord(): MediaAlbumRecord =
         visibilityStatus = getString("visibility_status"),
         createdAt = getTimestamp("created_at").toInstant(),
         updatedAt = getTimestamp("updated_at").toInstant(),
-        deletedAt = getTimestamp("deleted_at")?.toInstant()
+        deletedAt = getTimestamp("deleted_at")?.toInstant(),
     )
 
 internal fun ResultSet.toMediaAlbumAccessGrantRecord(): MediaAlbumAccessGrantRecord =
@@ -82,7 +82,7 @@ internal fun ResultSet.toMediaAlbumAccessGrantRecord(): MediaAlbumAccessGrantRec
         grantedByUserId = getObject("granted_by_user_id", UUID::class.java),
         grantedAt = getTimestamp("granted_at").toInstant(),
         revokedAt = getTimestamp("revoked_at")?.toInstant(),
-        revokedByUserId = getObject("revoked_by_user_id", UUID::class.java)
+        revokedByUserId = getObject("revoked_by_user_id", UUID::class.java),
     )
 
 internal fun ResultSet.toMediaAlbumAccessRequestRecord(): MediaAlbumAccessRequestRecord =
@@ -94,5 +94,5 @@ internal fun ResultSet.toMediaAlbumAccessRequestRecord(): MediaAlbumAccessReques
         status = getString("status"),
         requestedAt = getTimestamp("requested_at").toInstant(),
         decidedAt = getTimestamp("decided_at")?.toInstant(),
-        decidedByUserId = getObject("decided_by_user_id", UUID::class.java)
+        decidedByUserId = getObject("decided_by_user_id", UUID::class.java),
     )

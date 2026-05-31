@@ -35,22 +35,25 @@ import kotlin.coroutines.resume
 class AndroidPlayBillingPurchaseGateway(
     context: Context,
     private val apiClient: PynapliApiClient,
-    private val packageNameProvider: () -> String
-) : StorePurchaseGateway, PurchasesUpdatedListener {
+    private val packageNameProvider: () -> String,
+) : StorePurchaseGateway,
+    PurchasesUpdatedListener {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var activityRef = WeakReference<Activity?>(null)
     private var pendingPurchase: PendingPurchase? = null
 
-    private val billingClient: BillingClient = BillingClient.newBuilder(appContext)
-        .setListener(this)
-        .enablePendingPurchases(
-            PendingPurchasesParams.newBuilder()
-                .enableOneTimeProducts()
-                .build()
-        )
-        .enableAutoServiceReconnection()
-        .build()
+    private val billingClient: BillingClient =
+        BillingClient
+            .newBuilder(appContext)
+            .setListener(this)
+            .enablePendingPurchases(
+                PendingPurchasesParams
+                    .newBuilder()
+                    .enableOneTimeProducts()
+                    .build(),
+            ).enableAutoServiceReconnection()
+            .build()
 
     fun attachActivity(activity: Activity) {
         activityRef = WeakReference(activity)
@@ -63,13 +66,15 @@ class AndroidPlayBillingPurchaseGateway(
     }
 
     override suspend fun purchase(tier: SubscriptionTierDto): AppResult<StorePurchaseResult> {
-        val productId = tier.playStoreProductId
-            ?: return billingFailure("BILLING_PRODUCT_UNAVAILABLE", "This subscription is not available yet.")
+        val productId =
+            tier.playStoreProductId
+                ?: return billingFailure("BILLING_PRODUCT_UNAVAILABLE", "This subscription is not available yet.")
         if (tier.tier == SubscriptionTier.FREE) {
             return billingFailure("BILLING_FREE_TIER", "Free does not need checkout.")
         }
-        val activity = activityRef.get()
-            ?: return billingFailure("BILLING_ACTIVITY_UNAVAILABLE", "Purchases are not available right now.")
+        val activity =
+            activityRef.get()
+                ?: return billingFailure("BILLING_ACTIVITY_UNAVAILABLE", "Purchases are not available right now.")
         if (pendingPurchase != null) {
             return billingFailure("BILLING_PURCHASE_IN_PROGRESS", "A purchase is already in progress.")
         }
@@ -82,45 +87,49 @@ class AndroidPlayBillingPurchaseGateway(
         val productDetailsResult = queryProductDetails(productId)
         if (productDetailsResult is AppResult.Failure) return productDetailsResult
         val productDetails = (productDetailsResult as AppResult.Success).value
-        val offerToken = productDetails.subscriptionOfferDetails
-            ?.firstOrNull()
-            ?.offerToken
-            ?: return billingFailure("BILLING_OFFER_UNAVAILABLE", "This subscription offer is not available yet.")
+        val offerToken =
+            productDetails.subscriptionOfferDetails
+                ?.firstOrNull()
+                ?.offerToken
+                ?: return billingFailure("BILLING_OFFER_UNAVAILABLE", "This subscription offer is not available yet.")
 
         val deferred = CompletableDeferred<AppResult<StorePurchaseResult>>()
-        pendingPurchase = PendingPurchase(
-            tier = tier.tier,
-            productId = productId,
-            deferred = deferred
-        )
-
-        val params = BillingFlowParams.newBuilder()
-            .setProductDetailsParamsList(
-                listOf(
-                    BillingFlowParams.ProductDetailsParams.newBuilder()
-                        .setProductDetails(productDetails)
-                        .setOfferToken(offerToken)
-                        .build()
-                )
+        pendingPurchase =
+            PendingPurchase(
+                tier = tier.tier,
+                productId = productId,
+                deferred = deferred,
             )
-            .build()
 
-        val launchResult = withContext(Dispatchers.Main.immediate) {
-            billingClient.launchBillingFlow(activity, params)
-        }
+        val params =
+            BillingFlowParams
+                .newBuilder()
+                .setProductDetailsParamsList(
+                    listOf(
+                        BillingFlowParams.ProductDetailsParams
+                            .newBuilder()
+                            .setProductDetails(productDetails)
+                            .setOfferToken(offerToken)
+                            .build(),
+                    ),
+                ).build()
+
+        val launchResult =
+            withContext(Dispatchers.Main.immediate) {
+                billingClient.launchBillingFlow(activity, params)
+            }
         if (launchResult.responseCode != BillingClient.BillingResponseCode.OK) {
             pendingPurchase = null
             return billingFailure(
                 code = "BILLING_LAUNCH_FAILED",
-                message = launchResult.debugMessage.ifBlank { "Google Play checkout could not be opened." }
+                message = launchResult.debugMessage.ifBlank { "Google Play checkout could not be opened." },
             )
         }
 
         return deferred.await()
     }
 
-    override suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult> =
-        billingFailure("BILLING_PRODUCT_UNAVAILABLE", "This item is not available in Google Play yet.")
+    override suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult> = billingFailure("BILLING_PRODUCT_UNAVAILABLE", "This item is not available in Google Play yet.")
 
     override suspend fun restorePurchases(): AppResult<StorePurchaseResult> {
         if (pendingPurchase != null) {
@@ -131,7 +140,7 @@ class AndroidPlayBillingPurchaseGateway(
         if (connection.responseCode != BillingClient.BillingResponseCode.OK) {
             return billingFailure(
                 code = "BILLING_UNAVAILABLE",
-                message = connection.debugMessage.ifBlank { "Google Play Billing is unavailable." }
+                message = connection.debugMessage.ifBlank { "Google Play Billing is unavailable." },
             )
         }
 
@@ -144,13 +153,14 @@ class AndroidPlayBillingPurchaseGateway(
             val hasPending = purchases.any { it.purchaseState == Purchase.PurchaseState.PENDING }
             return AppResult.Success(
                 StorePurchaseResult(
-                    message = if (hasPending) {
-                        "Purchase is pending in Google Play."
-                    } else {
-                        "No active Google Play subscriptions found."
-                    },
-                    refreshEntitlement = !hasPending
-                )
+                    message =
+                        if (hasPending) {
+                            "Purchase is pending in Google Play."
+                        } else {
+                            "No active Google Play subscriptions found."
+                        },
+                    refreshEntitlement = !hasPending,
+                ),
             )
         }
 
@@ -164,25 +174,27 @@ class AndroidPlayBillingPurchaseGateway(
 
         return AppResult.Success(
             StorePurchaseResult(
-                message = if (restoredCount == 1) {
-                    "Subscription restored."
-                } else {
-                    "Subscriptions restored."
-                },
-                refreshEntitlement = true
-            )
+                message =
+                    if (restoredCount == 1) {
+                        "Subscription restored."
+                    } else {
+                        "Subscriptions restored."
+                    },
+                refreshEntitlement = true,
+            ),
         )
     }
 
     override fun onPurchasesUpdated(
         billingResult: BillingResult,
-        purchases: MutableList<Purchase>?
+        purchases: MutableList<Purchase>?,
     ) {
         val pending = pendingPurchase ?: return
         when (billingResult.responseCode) {
             BillingClient.BillingResponseCode.OK -> {
-                val purchase = purchases
-                    ?.firstOrNull { purchase -> pending.productId in purchase.products }
+                val purchase =
+                    purchases
+                        ?.firstOrNull { purchase -> pending.productId in purchase.products }
                 if (purchase == null) {
                     pending.completeFailure("BILLING_PURCHASE_NOT_FOUND", "Purchase details were not returned.")
                     return
@@ -199,7 +211,7 @@ class AndroidPlayBillingPurchaseGateway(
             else -> {
                 pending.completeFailure(
                     code = "BILLING_PURCHASE_FAILED",
-                    message = billingResult.debugMessage.ifBlank { "Purchase could not be completed." }
+                    message = billingResult.debugMessage.ifBlank { "Purchase could not be completed." },
                 )
             }
         }
@@ -210,35 +222,40 @@ class AndroidPlayBillingPurchaseGateway(
             return AppResult.Success(
                 StorePurchaseResult(
                     message = "Purchase is pending in Google Play.",
-                    refreshEntitlement = false
-                )
+                    refreshEntitlement = false,
+                ),
             )
         }
         if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) {
             return billingFailure("BILLING_PURCHASE_NOT_COMPLETED", "Purchase was not completed.")
         }
 
-        val productId = purchase.products.firstOrNull()
-            ?: return billingFailure("BILLING_PURCHASE_NOT_FOUND", "Purchase details were not returned.")
+        val productId =
+            purchase.products.firstOrNull()
+                ?: return billingFailure("BILLING_PURCHASE_NOT_FOUND", "Purchase details were not returned.")
         return when (
-            val result = apiClient.submitPlayStoreSubscriptionPurchase(
-                SubmitPlayStoreSubscriptionPurchaseRequestDto(
-                    productId = productId,
-                    purchaseToken = purchase.purchaseToken,
-                    packageName = packageNameProvider()
+            val result =
+                apiClient.submitPlayStoreSubscriptionPurchase(
+                    SubmitPlayStoreSubscriptionPurchaseRequestDto(
+                        productId = productId,
+                        purchaseToken = purchase.purchaseToken,
+                        packageName = packageNameProvider(),
+                    ),
                 )
-            )
         ) {
-            is AppResult.Success -> AppResult.Success(
-                StorePurchaseResult(
-                    message = when (result.value.status) {
-                        SubscriptionPurchaseSyncStatus.ACTIVE,
-                        SubscriptionPurchaseSyncStatus.ALREADY_ACTIVE -> "Subscription active."
-                        else -> "Purchase received. Verification is pending."
-                    },
-                    refreshEntitlement = true
+            is AppResult.Success ->
+                AppResult.Success(
+                    StorePurchaseResult(
+                        message =
+                            when (result.value.status) {
+                                SubscriptionPurchaseSyncStatus.ACTIVE,
+                                SubscriptionPurchaseSyncStatus.ALREADY_ACTIVE,
+                                -> "Subscription active."
+                                else -> "Purchase received. Verification is pending."
+                            },
+                        refreshEntitlement = true,
+                    ),
                 )
-            )
 
             is AppResult.Failure -> result
         }
@@ -246,7 +263,8 @@ class AndroidPlayBillingPurchaseGateway(
 
     private suspend fun ensureConnected(): BillingResult {
         if (billingClient.isReady) {
-            return BillingResult.newBuilder()
+            return BillingResult
+                .newBuilder()
                 .setResponseCode(BillingClient.BillingResponseCode.OK)
                 .build()
         }
@@ -261,38 +279,41 @@ class AndroidPlayBillingPurchaseGateway(
                     override fun onBillingServiceDisconnected() {
                         if (continuation.isActive) {
                             continuation.resume(
-                                BillingResult.newBuilder()
+                                BillingResult
+                                    .newBuilder()
                                     .setResponseCode(BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
                                     .setDebugMessage("Google Play Billing disconnected.")
-                                    .build()
+                                    .build(),
                             )
                         }
                     }
-                }
+                },
             )
         }
     }
 
     private suspend fun queryProductDetails(productId: String): AppResult<ProductDetails> =
         suspendCancellableCoroutine { continuation ->
-            val query = QueryProductDetailsParams.newBuilder()
-                .setProductList(
-                    listOf(
-                        QueryProductDetailsParams.Product.newBuilder()
-                            .setProductId(productId)
-                            .setProductType(BillingClient.ProductType.SUBS)
-                            .build()
-                    )
-                )
-                .build()
+            val query =
+                QueryProductDetailsParams
+                    .newBuilder()
+                    .setProductList(
+                        listOf(
+                            QueryProductDetailsParams.Product
+                                .newBuilder()
+                                .setProductId(productId)
+                                .setProductType(BillingClient.ProductType.SUBS)
+                                .build(),
+                        ),
+                    ).build()
 
             billingClient.queryProductDetailsAsync(query) { billingResult, result ->
                 if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
                     continuation.resume(
                         billingFailure(
                             code = "BILLING_PRODUCT_QUERY_FAILED",
-                            message = billingResult.debugMessage.ifBlank { "Subscription details could not be loaded." }
-                        )
+                            message = billingResult.debugMessage.ifBlank { "Subscription details could not be loaded." },
+                        ),
                     )
                     return@queryProductDetailsAsync
                 }
@@ -302,26 +323,29 @@ class AndroidPlayBillingPurchaseGateway(
                         billingFailure("BILLING_PRODUCT_UNAVAILABLE", "This subscription is not available yet.")
                     } else {
                         AppResult.Success(productDetails)
-                    }
+                    },
                 )
             }
         }
 
     private suspend fun querySubscriptionPurchases(): AppResult<List<Purchase>> =
         suspendCancellableCoroutine { continuation ->
-            val query = QueryPurchasesParams.newBuilder()
-                .setProductType(BillingClient.ProductType.SUBS)
-                .build()
+            val query =
+                QueryPurchasesParams
+                    .newBuilder()
+                    .setProductType(BillingClient.ProductType.SUBS)
+                    .build()
 
             billingClient.queryPurchasesAsync(query) { billingResult, purchases ->
                 if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
                     continuation.resume(
                         billingFailure(
                             code = "BILLING_RESTORE_FAILED",
-                            message = billingResult.debugMessage.ifBlank {
-                                "Google Play subscriptions could not be restored."
-                            }
-                        )
+                            message =
+                                billingResult.debugMessage.ifBlank {
+                                    "Google Play subscriptions could not be restored."
+                                },
+                        ),
                     )
                     return@queryPurchasesAsync
                 }
@@ -339,21 +363,27 @@ class AndroidPlayBillingPurchaseGateway(
         }
     }
 
-    private fun PendingPurchase.completeFailure(code: String, message: String) {
+    private fun PendingPurchase.completeFailure(
+        code: String,
+        message: String,
+    ) {
         complete(billingFailure(code, message))
     }
 
-    private fun billingFailure(code: String, message: String): AppResult.Failure =
+    private fun billingFailure(
+        code: String,
+        message: String,
+    ): AppResult.Failure =
         AppResult.Failure(
             AppError(
                 code = code,
-                message = message.ifBlank { "Purchase could not be completed." }
-            )
+                message = message.ifBlank { "Purchase could not be completed." },
+            ),
         )
 
     private data class PendingPurchase(
         val tier: String,
         val productId: String,
-        val deferred: CompletableDeferred<AppResult<StorePurchaseResult>>
+        val deferred: CompletableDeferred<AppResult<StorePurchaseResult>>,
     )
 }

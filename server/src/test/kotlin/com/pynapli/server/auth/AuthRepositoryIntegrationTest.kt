@@ -25,17 +25,19 @@ class AuthRepositoryIntegrationTest {
 
     @Before
     fun setUp() {
-        dataSource = HikariDataSource(
-            HikariConfig().apply {
-                jdbcUrl = postgres.jdbcUrl
-                username = postgres.username
-                password = postgres.password
-                maximumPoolSize = 2
-                poolName = "pynapli-auth-test"
-            }
-        )
+        dataSource =
+            HikariDataSource(
+                HikariConfig().apply {
+                    jdbcUrl = postgres.jdbcUrl
+                    username = postgres.username
+                    password = postgres.password
+                    maximumPoolSize = 2
+                    poolName = "pynapli-auth-test"
+                },
+            )
 
-        Flyway.configure()
+        Flyway
+            .configure()
             .dataSource(dataSource)
             .locations("classpath:db/migration")
             .cleanDisabled(false)
@@ -62,45 +64,49 @@ class AuthRepositoryIntegrationTest {
     }
 
     @Test
-    fun createEmailUserPersistsAgeGateAndProfileBirthdate() = runBlocking {
-        val userId = UUID.fromString("00000000-0000-0000-0000-000000000801")
-        val acceptedAt = Instant.parse("2026-05-13T12:00:00Z")
+    fun createEmailUserPersistsAgeGateAndProfileBirthdate() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000801")
+            val acceptedAt = Instant.parse("2026-05-13T12:00:00Z")
 
-        val user = JdbcAuthRepository(dataSource).createEmailUser(
-            userId = userId,
-            identityId = UUID.fromString("00000000-0000-0000-0000-000000000802"),
-            emailHash = "email-hash-801",
-            passwordHash = PasswordHash(hash = "hash", salt = "salt", iterations = 1),
-            birthdate = LocalDate.parse("1990-05-13"),
-            displayAge = 36,
-            adultConfirmedAt = acceptedAt,
-            termsAcceptedAt = acceptedAt,
-            termsVersion = "2026-05-13",
-            privacyAcceptedAt = acceptedAt,
-            privacyVersion = "2026-05-13"
-        )
-        val stored = dataSource.signupSnapshot(userId)
+            val user =
+                JdbcAuthRepository(dataSource).createEmailUser(
+                    userId = userId,
+                    identityId = UUID.fromString("00000000-0000-0000-0000-000000000802"),
+                    emailHash = "email-hash-801",
+                    passwordHash = PasswordHash(hash = "hash", salt = "salt", iterations = 1),
+                    birthdate = LocalDate.parse("1990-05-13"),
+                    displayAge = 36,
+                    adultConfirmedAt = acceptedAt,
+                    termsAcceptedAt = acceptedAt,
+                    termsVersion = "2026-05-13",
+                    privacyAcceptedAt = acceptedAt,
+                    privacyVersion = "2026-05-13",
+                )
+            val stored = dataSource.signupSnapshot(userId)
 
-        assertEquals(userId, user.id)
-        assertEquals("active", user.status)
-        assertNotNull(stored)
-        assertEquals(LocalDate.parse("1990-05-13"), stored.birthdate)
-        assertEquals(36, stored.displayAge)
-        assertEquals(25, stored.profileCompletenessScore)
-        assertEquals(acceptedAt, stored.adultConfirmedAt)
-        assertEquals("2026-05-13", stored.termsVersion)
-        assertEquals("2026-05-13", stored.privacyVersion)
-    }
+            assertEquals(userId, user.id)
+            assertEquals("active", user.status)
+            assertNotNull(stored)
+            assertEquals(LocalDate.parse("1990-05-13"), stored.birthdate)
+            assertEquals(36, stored.displayAge)
+            assertEquals(25, stored.profileCompletenessScore)
+            assertEquals(acceptedAt, stored.adultConfirmedAt)
+            assertEquals("2026-05-13", stored.termsVersion)
+            assertEquals("2026-05-13", stored.privacyVersion)
+        }
 
     companion object {
-        private val postgisImage = DockerImageName
-            .parse("postgis/postgis:16-3.4")
-            .asCompatibleSubstituteFor("postgres")
-        private val postgres = PostgreSQLContainer<Nothing>(postgisImage).apply {
-            withDatabaseName("pynapli_auth_test")
-            withUsername("pynapli")
-            withPassword("pynapli_test_password")
-        }
+        private val postgisImage =
+            DockerImageName
+                .parse("postgis/postgis:16-3.4")
+                .asCompatibleSubstituteFor("postgres")
+        private val postgres =
+            PostgreSQLContainer<Nothing>(postgisImage).apply {
+                withDatabaseName("pynapli_auth_test")
+                withUsername("pynapli")
+                withPassword("pynapli_test_password")
+            }
 
         @JvmStatic
         @BeforeClass
@@ -122,57 +128,62 @@ private data class SignupSnapshot(
     val profileCompletenessScore: Int,
     val adultConfirmedAt: Instant,
     val termsVersion: String,
-    val privacyVersion: String
+    val privacyVersion: String,
 )
 
 private fun DataSource.signupSnapshot(userId: UUID): SignupSnapshot? =
     connection.use { connection ->
-        connection.prepareStatement(
-            """
-            SELECT p.birthdate,
-                   p.display_age,
-                   p.profile_completeness_score,
-                   u.adult_confirmed_at,
-                   u.terms_version,
-                   u.privacy_version
-            FROM users u
-            JOIN profiles p ON p.user_id = u.id
-            WHERE u.id = ?
-            """.trimIndent()
-        ).use { statement ->
-            statement.setObject(1, userId)
-            statement.executeQuery().use { rs ->
-                if (!rs.next()) return@use null
-                SignupSnapshot(
-                    birthdate = rs.getDate("birthdate").toLocalDate(),
-                    displayAge = rs.getInt("display_age"),
-                    profileCompletenessScore = rs.getInt("profile_completeness_score"),
-                    adultConfirmedAt = rs.getTimestamp("adult_confirmed_at").toInstant(),
-                    termsVersion = rs.getString("terms_version"),
-                    privacyVersion = rs.getString("privacy_version")
-                )
+        connection
+            .prepareStatement(
+                """
+                SELECT p.birthdate,
+                       p.display_age,
+                       p.profile_completeness_score,
+                       u.adult_confirmed_at,
+                       u.terms_version,
+                       u.privacy_version
+                FROM users u
+                JOIN profiles p ON p.user_id = u.id
+                WHERE u.id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeQuery().use { rs ->
+                    if (!rs.next()) return@use null
+                    SignupSnapshot(
+                        birthdate = rs.getDate("birthdate").toLocalDate(),
+                        displayAge = rs.getInt("display_age"),
+                        profileCompletenessScore = rs.getInt("profile_completeness_score"),
+                        adultConfirmedAt = rs.getTimestamp("adult_confirmed_at").toInstant(),
+                        termsVersion = rs.getString("terms_version"),
+                        privacyVersion = rs.getString("privacy_version"),
+                    )
+                }
             }
-        }
     }
 
-private fun DataSource.columnExists(tableName: String, columnName: String): Boolean =
+private fun DataSource.columnExists(
+    tableName: String,
+    columnName: String,
+): Boolean =
     connection.use { connection ->
-        connection.prepareStatement(
-            """
-            SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.columns
-                WHERE table_name = ? AND column_name = ?
-            )
-            """.trimIndent()
-        ).use { statement ->
-            statement.setString(1, tableName)
-            statement.setString(2, columnName)
-            statement.executeQuery().use { rs ->
-                rs.next()
-                rs.getBoolean(1)
+        connection
+            .prepareStatement(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_name = ? AND column_name = ?
+                )
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setString(1, tableName)
+                statement.setString(2, columnName)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getBoolean(1)
+                }
             }
-        }
     }
 
 private fun DataSource.indexExists(indexName: String): Boolean =

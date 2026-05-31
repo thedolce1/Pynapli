@@ -51,32 +51,34 @@ internal fun TravelModeSheet(
     onDismiss: () -> Unit,
     onPickCity: (TravelCityPreset) -> Unit,
     onClear: () -> Unit,
-    onOpenStore: () -> Unit
+    onOpenStore: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        modifier = Modifier.testTag(TravelModeTags.SHEET)
+        modifier = Modifier.testTag(TravelModeTags.SHEET),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(top = 12.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 12.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
                 text = "Travel mode",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "Set a city and your deck shows people there. " +
-                    "One location at a time. Clear it to go back to local.",
+                text =
+                    "Set a city and your deck shows people there. " +
+                        "One location at a time. Clear it to go back to local.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             if (state.entitlementRequired) {
@@ -86,13 +88,13 @@ internal fun TravelModeSheet(
                     Text(
                         text = "Currently in ${dto.city}",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     TravelCityPresets.ALL.forEach { preset ->
                         val active = state.current?.city?.equals(preset.city, ignoreCase = true) == true
@@ -102,35 +104,46 @@ internal fun TravelModeSheet(
                                 Text(
                                     text = preset.displayName,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = if (active) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceVariant,
-                                labelColor = if (active) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier.testTag(TravelModeTags.cityTag(preset.id))
+                            colors =
+                                AssistChipDefaults.assistChipColors(
+                                    containerColor =
+                                        if (active) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                        },
+                                    labelColor =
+                                        if (active) {
+                                            MaterialTheme.colorScheme.onPrimary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                ),
+                            modifier = Modifier.testTag(TravelModeTags.cityTag(preset.id)),
                         )
                     }
                 }
             }
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (state.isActive && !state.entitlementRequired) {
                     TextButton(
                         onClick = onClear,
-                        modifier = Modifier.testTag(TravelModeTags.CLEAR)
+                        modifier = Modifier.testTag(TravelModeTags.CLEAR),
                     ) { Text(text = "Clear travel mode") }
                 }
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
+                androidx.compose.foundation.layout
+                    .Spacer(modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = onDismiss) { Text(text = "Close") }
             }
         }
@@ -140,20 +153,21 @@ internal fun TravelModeSheet(
 @Composable
 private fun TravelPaywallBanner(onSubscribe: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .testTag(TravelModeTags.PAYWALL),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .testTag(TravelModeTags.PAYWALL),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(
             imageVector = Icons.Filled.Lock,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(18.dp),
         )
         Text(
             text = "Travel mode is included with Pynapli Select.",
@@ -161,11 +175,11 @@ private fun TravelPaywallBanner(onSubscribe: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.weight(1f),
             maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
         Button(
             onClick = onSubscribe,
-            modifier = Modifier.testTag(TravelModeTags.PAYWALL_SUBSCRIBE)
+            modifier = Modifier.testTag(TravelModeTags.PAYWALL_SUBSCRIBE),
         ) { Text(text = "Subscribe", maxLines = 1) }
     }
 }

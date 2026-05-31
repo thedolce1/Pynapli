@@ -8,77 +8,77 @@ interface MediaRepository {
         ownerUserId: UUID,
         kind: String,
         title: String,
-        albumIdFactory: () -> UUID = UUID::randomUUID
+        albumIdFactory: () -> UUID = UUID::randomUUID,
     ): MediaAlbumRecord
 
     suspend fun createAsset(
         ownerUserId: UUID,
         create: MediaAssetCreate,
-        assetIdFactory: () -> UUID = UUID::randomUUID
+        assetIdFactory: () -> UUID = UUID::randomUUID,
     ): MediaAssetRecord
 
     suspend fun markAssetUploaded(
         ownerUserId: UUID,
-        mediaAssetId: UUID
+        mediaAssetId: UUID,
     ): MediaAssetRecord?
 
     suspend fun markAssetReadyApproved(
         ownerUserId: UUID,
-        mediaAssetId: UUID
+        mediaAssetId: UUID,
     ): MediaAssetRecord?
 
     suspend fun addAssetToAlbum(
         ownerUserId: UUID,
         albumId: UUID,
         mediaAssetId: UUID,
-        sortOrder: Int
+        sortOrder: Int,
     ): MediaAlbumItemRecord?
 
     suspend fun requestAlbumAccess(
         ownerUserId: UUID,
         requesterUserId: UUID,
-        requestIdFactory: () -> UUID = UUID::randomUUID
+        requestIdFactory: () -> UUID = UUID::randomUUID,
     ): MediaAlbumAccessRequestRecord?
 
     suspend fun decideAlbumAccessRequest(
         ownerUserId: UUID,
         requesterUserId: UUID,
         approved: Boolean,
-        decidedByUserId: UUID = ownerUserId
+        decidedByUserId: UUID = ownerUserId,
     ): MediaAlbumAccessRequestRecord?
 
     suspend fun listAlbumItemsForViewer(
         viewerUserId: UUID,
-        albumId: UUID
+        albumId: UUID,
     ): List<MediaAlbumItemRecord>?
 
     suspend fun listAlbumItemsForViewer(
         viewerUserId: UUID,
         ownerUserId: UUID,
-        kind: String
+        kind: String,
     ): Pair<MediaAlbumRecord, List<MediaAlbumItemRecord>>?
 
     suspend fun grantAlbumAccess(
         ownerUserId: UUID,
         albumId: UUID,
         granteeUserId: UUID,
-        grantedByUserId: UUID = ownerUserId
+        grantedByUserId: UUID = ownerUserId,
     ): MediaAlbumAccessGrantRecord?
 
     suspend fun revokeAlbumAccess(
         ownerUserId: UUID,
         albumId: UUID,
         granteeUserId: UUID,
-        revokedByUserId: UUID = ownerUserId
+        revokedByUserId: UUID = ownerUserId,
     ): MediaAlbumAccessGrantRecord?
 
     suspend fun listPrivateAlbumGrantsForOwner(
-        ownerUserId: UUID
+        ownerUserId: UUID,
     ): List<MediaAlbumGrantSummaryRecord>
 
     suspend fun hasAlbumAccess(
         viewerUserId: UUID,
-        albumId: UUID
+        albumId: UUID,
     ): Boolean
 }
 
@@ -90,7 +90,7 @@ data class MediaAssetCreate(
     val contentType: String,
     val byteSize: Long,
     val pixelWidth: Int? = null,
-    val pixelHeight: Int? = null
+    val pixelHeight: Int? = null,
 )
 
 data class MediaAssetRecord(
@@ -108,7 +108,7 @@ data class MediaAssetRecord(
     val processingStatus: String,
     val createdAt: Instant,
     val updatedAt: Instant,
-    val deletedAt: Instant?
+    val deletedAt: Instant?,
 )
 
 data class MediaAlbumRecord(
@@ -119,7 +119,7 @@ data class MediaAlbumRecord(
     val visibilityStatus: String,
     val createdAt: Instant,
     val updatedAt: Instant,
-    val deletedAt: Instant?
+    val deletedAt: Instant?,
 )
 
 data class MediaAlbumItemRecord(
@@ -127,7 +127,7 @@ data class MediaAlbumItemRecord(
     val mediaAsset: MediaAssetRecord,
     val sortOrder: Int,
     val addedAt: Instant,
-    val removedAt: Instant?
+    val removedAt: Instant?,
 )
 
 data class MediaAlbumAccessRequestRecord(
@@ -138,7 +138,7 @@ data class MediaAlbumAccessRequestRecord(
     val status: String,
     val requestedAt: Instant,
     val decidedAt: Instant?,
-    val decidedByUserId: UUID?
+    val decidedByUserId: UUID?,
 )
 
 data class MediaAlbumAccessGrantRecord(
@@ -148,7 +148,7 @@ data class MediaAlbumAccessGrantRecord(
     val grantedByUserId: UUID,
     val grantedAt: Instant,
     val revokedAt: Instant?,
-    val revokedByUserId: UUID?
+    val revokedByUserId: UUID?,
 )
 
 data class MediaAlbumGrantSummaryRecord(
@@ -156,5 +156,5 @@ data class MediaAlbumGrantSummaryRecord(
     val ownerUserId: UUID,
     val granteeUserId: UUID,
     val granteeDisplayName: String?,
-    val grantedAt: Instant
+    val grantedAt: Instant,
 )

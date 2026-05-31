@@ -7,7 +7,7 @@ import java.time.Instant
 import javax.sql.DataSource
 
 class JdbcActivityRetentionRepository(
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
 ) : ActivityRetentionRepository {
     override suspend fun hideExpiredProductVisibleEvents(now: Instant): ActivityRetentionSummary =
         withContext(Dispatchers.IO) {
@@ -29,7 +29,7 @@ class JdbcActivityRetentionRepository(
                         }
                         ActivityRetentionSummary(
                             hiddenTotal = hiddenTotal,
-                            hiddenByType = hiddenByType.toSortedMap()
+                            hiddenByType = hiddenByType.toSortedMap(),
                         )
                     }
                 }
@@ -37,7 +37,8 @@ class JdbcActivityRetentionRepository(
         }
 
     companion object {
-        private val HIDE_EXPIRED_EVENTS_QUERY = """
+        private val HIDE_EXPIRED_EVENTS_QUERY =
+            """
             UPDATE activity_events
             SET visibility_status = 'hidden',
                 deleted_at = COALESCE(deleted_at, ?),
@@ -51,6 +52,6 @@ class JdbcActivityRetentionRepository(
                   OR (event_type IN ('album_request', 'partner_chat_invite') AND occurred_at < (?::timestamptz - interval '90 days'))
               )
             RETURNING event_type
-        """.trimIndent()
+            """.trimIndent()
     }
 }

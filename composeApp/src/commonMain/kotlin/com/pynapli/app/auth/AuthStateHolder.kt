@@ -11,7 +11,7 @@ class AuthStateHolder(
     private val authRepository: AuthRepository,
     private val platform: String,
     private val appVersion: String,
-    private val beforeLogout: suspend () -> Unit = {}
+    private val beforeLogout: suspend () -> Unit = {},
 ) {
     private val _state = MutableStateFlow(AuthUiState())
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
@@ -21,7 +21,7 @@ class AuthStateHolder(
         _state.update { current ->
             current.copy(
                 isCheckingSession = false,
-                session = session
+                session = session,
             )
         }
     }
@@ -49,7 +49,7 @@ class AuthStateHolder(
                 password = "",
                 birthdate = if (mode == AuthMode.SignIn) "" else current.birthdate,
                 acceptedAgeAndTerms = if (mode == AuthMode.SignIn) false else current.acceptedAgeAndTerms,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }
@@ -63,7 +63,7 @@ class AuthStateHolder(
             password = current.password,
             birthdate = current.birthdate,
             acceptedAgeAndTerms = current.acceptedAgeAndTerms,
-            mode = current.mode
+            mode = current.mode,
         )
     }
 
@@ -75,7 +75,7 @@ class AuthStateHolder(
             password = credentials.password,
             birthdate = "",
             acceptedAgeAndTerms = false,
-            mode = AuthMode.SignIn
+            mode = AuthMode.SignIn,
         )
     }
 
@@ -84,7 +84,7 @@ class AuthStateHolder(
         password: String,
         birthdate: String,
         acceptedAgeAndTerms: Boolean,
-        mode: AuthMode
+        mode: AuthMode,
     ) {
         val normalizedEmail = email.trim()
         val cleanBirthdate = birthdate.trim()
@@ -111,22 +111,24 @@ class AuthStateHolder(
                 email = normalizedEmail,
                 birthdate = cleanBirthdate.takeIf { _ -> mode == AuthMode.CreateAccount } ?: it.birthdate,
                 isSubmitting = true,
-                errorMessage = null
+                errorMessage = null,
             )
         }
-        val result = when (mode) {
-            AuthMode.SignIn -> authRepository.loginEmail(normalizedEmail, password, platform, appVersion)
-            AuthMode.CreateAccount -> authRepository.signupEmail(
-                email = normalizedEmail,
-                password = password,
-                birthdate = cleanBirthdate,
-                confirmedAdult = acceptedAgeAndTerms,
-                acceptedTerms = acceptedAgeAndTerms,
-                acceptedPrivacy = acceptedAgeAndTerms,
-                platform = platform,
-                appVersion = appVersion
-            )
-        }
+        val result =
+            when (mode) {
+                AuthMode.SignIn -> authRepository.loginEmail(normalizedEmail, password, platform, appVersion)
+                AuthMode.CreateAccount ->
+                    authRepository.signupEmail(
+                        email = normalizedEmail,
+                        password = password,
+                        birthdate = cleanBirthdate,
+                        confirmedAdult = acceptedAgeAndTerms,
+                        acceptedTerms = acceptedAgeAndTerms,
+                        acceptedPrivacy = acceptedAgeAndTerms,
+                        platform = platform,
+                        appVersion = appVersion,
+                    )
+            }
 
         when (result) {
             is AppResult.Success -> {
@@ -135,7 +137,7 @@ class AuthStateHolder(
                         password = "",
                         isSubmitting = false,
                         errorMessage = null,
-                        session = result.value
+                        session = result.value,
                     )
                 }
             }
@@ -144,7 +146,7 @@ class AuthStateHolder(
                 _state.update {
                     it.copy(
                         isSubmitting = false,
-                        errorMessage = result.error.message
+                        errorMessage = result.error.message,
                     )
                 }
             }
@@ -160,7 +162,7 @@ class AuthStateHolder(
                 password = "",
                 birthdate = "",
                 acceptedAgeAndTerms = false,
-                errorMessage = null
+                errorMessage = null,
             )
         }
     }

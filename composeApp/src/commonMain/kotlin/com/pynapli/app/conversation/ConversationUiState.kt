@@ -11,7 +11,7 @@ import com.pynapli.shared.network.dto.PartnerChatInviteStatus
 data class TypingParticipantUi(
     val userId: String,
     val displayName: String,
-    val expiresAtMillis: Long
+    val expiresAtMillis: Long,
 )
 
 @Immutable
@@ -30,7 +30,7 @@ data class ConversationUiState(
     val isDeletingMessageIds: Set<String> = emptySet(),
     val typingParticipants: List<TypingParticipantUi> = emptyList(),
     val partnerInviteFeedback: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 ) {
     val visible: Boolean
         get() = selectedCard != null || titleOverride != null || detail != null || isOpening
@@ -45,9 +45,14 @@ data class ConversationUiState(
         get() = draftLength > MESSAGE_BODY_MAX_LENGTH
 
     val viewerParticipantStatus: String?
-        get() = viewerUserId?.let { userId ->
-            detail?.conversation?.participants?.firstOrNull { participant -> participant.userId == userId }?.status
-        }
+        get() =
+            viewerUserId?.let { userId ->
+                detail
+                    ?.conversation
+                    ?.participants
+                    ?.firstOrNull { participant -> participant.userId == userId }
+                    ?.status
+            }
 
     val isViewerInvited: Boolean
         get() = viewerParticipantStatus == ConversationParticipantStatus.INVITED
@@ -68,13 +73,14 @@ data class ConversationUiState(
         }
 
     val canSend: Boolean
-        get() = detail != null &&
-            !isViewerInvited &&
-            draft.trim().isNotEmpty() &&
-            !draftOverLimit &&
-            !isOpening &&
-            !isSending &&
-            !isRespondingToInvite &&
-            !isLeaving &&
-            isDeletingMessageIds.isEmpty()
+        get() =
+            detail != null &&
+                !isViewerInvited &&
+                draft.trim().isNotEmpty() &&
+                !draftOverLimit &&
+                !isOpening &&
+                !isSending &&
+                !isRespondingToInvite &&
+                !isLeaving &&
+                isDeletingMessageIds.isEmpty()
 }

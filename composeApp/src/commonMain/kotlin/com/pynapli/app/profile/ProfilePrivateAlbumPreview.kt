@@ -31,37 +31,39 @@ import com.pynapli.app.media.MediaAlbumItemUi
 @Composable
 internal fun PrivateAlbumPreview(
     items: List<MediaAlbumItemUi>,
-    isLoading: Boolean
+    isLoading: Boolean,
 ) {
     when {
         isLoading -> {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 18.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 CircularProgressIndicator(
                     color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 2.dp,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
                 Text(
                     text = "Loading private album",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
 
         items.isNotEmpty() -> {
             FlowRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 18.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 18.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items.forEach { item ->
                     PrivateAlbumTile(item = item)
@@ -74,28 +76,30 @@ internal fun PrivateAlbumPreview(
 @Composable
 private fun PrivateAlbumTile(item: MediaAlbumItemUi) {
     Box(
-        modifier = Modifier
-            .size(96.dp)
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF2B2622))
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+        modifier =
+            Modifier
+                .size(96.dp)
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF2B2622))
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
     ) {
         if (item.mediaUrl != null && item.mediaType == "image") {
             AsyncImage(
                 model = item.mediaUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             Icon(
                 imageVector = Icons.Filled.PhotoLibrary,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(24.dp)
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .size(24.dp),
             )
         }
     }

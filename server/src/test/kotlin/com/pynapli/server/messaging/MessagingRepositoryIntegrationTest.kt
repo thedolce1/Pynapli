@@ -1,9 +1,9 @@
 package com.pynapli.server.messaging
 
-import com.zaxxer.hikari.HikariConfig
-import com.zaxxer.hikari.HikariDataSource
 import com.pynapli.server.moderation.JdbcMessageModerationRepository
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
 import org.junit.After
@@ -24,17 +24,19 @@ class MessagingRepositoryIntegrationTest {
 
     @Before
     fun setUp() {
-        dataSource = HikariDataSource(
-            HikariConfig().apply {
-                jdbcUrl = postgres.jdbcUrl
-                username = postgres.username
-                password = postgres.password
-                maximumPoolSize = 2
-                poolName = "pynapli-messaging-test"
-            }
-        )
+        dataSource =
+            HikariDataSource(
+                HikariConfig().apply {
+                    jdbcUrl = postgres.jdbcUrl
+                    username = postgres.username
+                    password = postgres.password
+                    maximumPoolSize = 2
+                    poolName = "pynapli-messaging-test"
+                },
+            )
 
-        Flyway.configure()
+        Flyway
+            .configure()
             .dataSource(dataSource)
             .locations("classpath:db/migration")
             .cleanDisabled(false)
@@ -51,500 +53,557 @@ class MessagingRepositoryIntegrationTest {
     }
 
     @Test
-    fun swipeOriginConversationRequiresMatch() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000801")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000802")
-        dataSource.insertUserWithProfile(viewer, "Viewer")
-        dataSource.insertUserWithProfile(target, "Target")
-        val repository = JdbcMessagingRepository(dataSource)
+    fun swipeOriginConversationRequiresMatch() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000801")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000802")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
 
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = viewer,
-            targetUserId = target,
-            origin = "swipe"
-        )
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "swipe",
+                )
 
-        assertNull(conversation)
-    }
-
-    @Test
-    fun swipeOriginConversationIsAllowedForMutualMatch() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000811")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000812")
-        dataSource.insertUserWithProfile(viewer, "Viewer")
-        dataSource.insertUserWithProfile(target, "Target")
-        dataSource.insertMatch(viewer, target)
-        val repository = JdbcMessagingRepository(dataSource)
-
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = viewer,
-            targetUserId = target,
-            origin = "swipe"
-        )
-
-        val created = assertNotNull(conversation)
-        assertEquals("swipe", created.origin)
-        assertEquals(setOf(viewer, target), created.participants.map { it.userId }.toSet())
-    }
+            assertNull(conversation)
+        }
 
     @Test
-    fun introNoteOriginIsRejectedUntilEntitlementExists() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000821")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000822")
-        dataSource.insertUserWithProfile(viewer, "Viewer")
-        dataSource.insertUserWithProfile(target, "Target")
-        val repository = JdbcMessagingRepository(dataSource)
+    fun swipeOriginConversationIsAllowedForMutualMatch() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000811")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000812")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.insertMatch(viewer, target)
+            val repository = JdbcMessagingRepository(dataSource)
 
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = viewer,
-            targetUserId = target,
-            origin = "intro_note"
-        )
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "swipe",
+                )
 
-        assertNull(conversation)
-    }
-
-    @Test
-    fun gridOriginConversationRespectsMatchesOnlyPolicy() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000831")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000832")
-        dataSource.insertUserWithProfile(viewer, "Viewer")
-        dataSource.insertUserWithProfile(target, "Target")
-        dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "matches_only")
-        val repository = JdbcMessagingRepository(dataSource)
-
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = viewer,
-            targetUserId = target,
-            origin = "grid"
-        )
-
-        assertNull(conversation)
-    }
+            val created = assertNotNull(conversation)
+            assertEquals("swipe", created.origin)
+            assertEquals(setOf(viewer, target), created.participants.map { it.userId }.toSet())
+        }
 
     @Test
-    fun gridOriginConversationAllowsMatchesOnlyPolicyForMutualMatch() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000841")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000842")
-        dataSource.insertUserWithProfile(viewer, "Viewer")
-        dataSource.insertUserWithProfile(target, "Target")
-        dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "matches_only")
-        dataSource.insertMatch(viewer, target)
-        val repository = JdbcMessagingRepository(dataSource)
+    fun introNoteOriginIsRejectedUntilEntitlementExists() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000821")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000822")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
 
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = viewer,
-            targetUserId = target,
-            origin = "grid"
-        )
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "intro_note",
+                )
 
-        val created = assertNotNull(conversation)
-        assertEquals("grid", created.origin)
-    }
-
-    @Test
-    fun heldFirstMessageIsQueuedAndHiddenFromRecipientThreadList() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000851")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000852")
-        dataSource.insertUserWithProfile(viewer, "Viewer")
-        dataSource.insertUserWithProfile(target, "Target")
-        val repository = JdbcMessagingRepository(dataSource)
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = viewer,
-            targetUserId = target,
-            origin = "grid"
-        )!!
-
-        val held = repository.sendMessage(
-            userId = viewer,
-            conversationId = conversation.conversationId,
-            body = "Find me at https://example.com",
-            moderationStatus = MessageModerationStatus.HELD,
-            bodyFingerprint = "held-message-fingerprint",
-            safetyReason = MessageSafetyReason.LINK_FIRST_MESSAGE
-        )!!
-
-        assertEquals("held", held.status)
-        assertEquals("held_for_review", held.deliveryStatus)
-        assertEquals(1, dataSource.countMessageReviewQueueRows(held.messageId))
-        assertEquals(1, repository.listConversations(viewer, limit = 10).size)
-        assertEquals(emptyList(), repository.listConversations(target, limit = 10))
-        assertEquals(1, repository.getConversationDetail(viewer, conversation.conversationId, limit = 10)?.messages?.size)
-        assertEquals(emptyList(), repository.getConversationDetail(target, conversation.conversationId, limit = 10)?.messages)
-    }
+            assertNull(conversation)
+        }
 
     @Test
-    fun releasedHeldMessageSurfacesForRecipientAndWritesAuditRows() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000861")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000862")
-        dataSource.insertUserWithProfile(viewer, "Viewer")
-        dataSource.insertUserWithProfile(target, "Target")
-        val repository = JdbcMessagingRepository(dataSource)
-        val moderationRepository = JdbcMessageModerationRepository(dataSource)
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = viewer,
-            targetUserId = target,
-            origin = "grid"
-        )!!
-        val held = repository.sendMessage(
-            userId = viewer,
-            conversationId = conversation.conversationId,
-            body = "Find me at https://example.com",
-            moderationStatus = MessageModerationStatus.HELD,
-            bodyFingerprint = "released-message-fingerprint",
-            safetyReason = MessageSafetyReason.LINK_FIRST_MESSAGE
-        )!!
+    fun gridOriginConversationRespectsMatchesOnlyPolicy() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000831")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000832")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "matches_only")
+            val repository = JdbcMessagingRepository(dataSource)
 
-        val queueItems = moderationRepository.listOpenMessageReviews(
-            limit = 10,
-            actorId = "moderator-1",
-            reason = "reviewing held first messages"
-        )
-        assertEquals(listOf(held.messageId), queueItems.map { it.messageId })
-        assertEquals(emptyList(), repository.listConversations(target, limit = 10))
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "grid",
+                )
 
-        val action = moderationRepository.releaseHeldMessage(
-            messageId = held.messageId,
-            actorId = "moderator-1",
-            reason = "false positive"
-        )
-
-        assertNotNull(action)
-        assertEquals("visible", action.messageStatus)
-        assertEquals("released", action.queueStatus)
-        assertEquals("released", dataSource.messageReviewQueueStatus(held.messageId))
-        assertEquals(1, repository.listConversations(target, limit = 10).size)
-        assertEquals(
-            listOf("visible"),
-            repository.getConversationDetail(target, conversation.conversationId, limit = 10)
-                ?.messages
-                ?.map { it.status }
-        )
-        assertEquals(1, dataSource.countAdminAuditRows("message_review_queue.list"))
-        assertEquals(1, dataSource.countAdminAuditRows("message_review.release"))
-    }
+            assertNull(conversation)
+        }
 
     @Test
-    fun removedHeldMessageStaysHiddenAndWritesAuditRow() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000871")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000872")
-        dataSource.insertUserWithProfile(viewer, "Viewer")
-        dataSource.insertUserWithProfile(target, "Target")
-        val repository = JdbcMessagingRepository(dataSource)
-        val moderationRepository = JdbcMessageModerationRepository(dataSource)
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = viewer,
-            targetUserId = target,
-            origin = "grid"
-        )!!
-        val held = repository.sendMessage(
-            userId = viewer,
-            conversationId = conversation.conversationId,
-            body = "Find me at https://example.com",
-            moderationStatus = MessageModerationStatus.HELD,
-            bodyFingerprint = "removed-message-fingerprint",
-            safetyReason = MessageSafetyReason.LINK_FIRST_MESSAGE
-        )!!
+    fun gridOriginConversationAllowsMatchesOnlyPolicyForMutualMatch() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000841")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000842")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "matches_only")
+            dataSource.insertMatch(viewer, target)
+            val repository = JdbcMessagingRepository(dataSource)
 
-        val action = moderationRepository.removeHeldMessage(
-            messageId = held.messageId,
-            actorId = "moderator-1",
-            reason = "external link spam"
-        )
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "grid",
+                )
 
-        assertNotNull(action)
-        assertEquals("removed", action.messageStatus)
-        assertEquals("removed", action.queueStatus)
-        assertEquals("removed", dataSource.messageReviewQueueStatus(held.messageId))
-        assertEquals(emptyList(), repository.listConversations(target, limit = 10))
-        assertEquals(
-            emptyList(),
-            repository.getConversationDetail(viewer, conversation.conversationId, limit = 10)?.messages
-        )
-        assertEquals(
-            emptyList(),
-            repository.getConversationDetail(target, conversation.conversationId, limit = 10)?.messages
-        )
-        assertEquals(1, dataSource.countAdminAuditRows("message_review.remove"))
-    }
+            val created = assertNotNull(conversation)
+            assertEquals("grid", created.origin)
+        }
 
     @Test
-    fun deletingOwnVisibleMessageKeepsPlaceholderForParticipants() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000875")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000876")
-        dataSource.insertUserWithProfile(viewer, "Viewer")
-        dataSource.insertUserWithProfile(target, "Target")
-        val repository = JdbcMessagingRepository(dataSource)
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = viewer,
-            targetUserId = target,
-            origin = "grid"
-        )!!
-        val message = repository.sendMessage(
-            userId = viewer,
-            conversationId = conversation.conversationId,
-            body = "Delete this",
-            moderationStatus = MessageModerationStatus.VISIBLE,
-            bodyFingerprint = "delete-visible-message",
-            safetyReason = null
-        )!!
+    fun heldFirstMessageIsQueuedAndHiddenFromRecipientThreadList() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000851")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000852")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "grid",
+                )!!
 
-        val deleted = repository.deleteOwnMessage(viewer, message.messageId)
-        val viewerMessages = repository.getConversationDetail(viewer, conversation.conversationId, limit = 10)?.messages
-        val targetMessages = repository.getConversationDetail(target, conversation.conversationId, limit = 10)?.messages
+            val held =
+                repository.sendMessage(
+                    userId = viewer,
+                    conversationId = conversation.conversationId,
+                    body = "Find me at https://example.com",
+                    moderationStatus = MessageModerationStatus.HELD,
+                    bodyFingerprint = "held-message-fingerprint",
+                    safetyReason = MessageSafetyReason.LINK_FIRST_MESSAGE,
+                )!!
 
-        assertNotNull(deleted)
-        assertEquals("", deleted.body)
-        assertEquals("deleted", deleted.deliveryStatus)
-        assertNotNull(deleted.deletedAt)
-        assertEquals(listOf(""), viewerMessages?.map { it.body })
-        assertEquals(listOf("deleted"), viewerMessages?.map { it.deliveryStatus })
-        assertEquals(listOf(""), targetMessages?.map { it.body })
-        assertEquals(listOf("deleted"), targetMessages?.map { it.deliveryStatus })
-        assertNull(repository.deleteOwnMessage(target, message.messageId))
-    }
+            assertEquals("held", held.status)
+            assertEquals("held_for_review", held.deliveryStatus)
+            assertEquals(1, dataSource.countMessageReviewQueueRows(held.messageId))
+            assertEquals(1, repository.listConversations(viewer, limit = 10).size)
+            assertEquals(emptyList(), repository.listConversations(target, limit = 10))
+            assertEquals(1, repository.getConversationDetail(viewer, conversation.conversationId, limit = 10)?.messages?.size)
+            assertEquals(emptyList(), repository.getConversationDetail(target, conversation.conversationId, limit = 10)?.messages)
+        }
 
     @Test
-    fun deletingHeldMessageIsRejectedSoModerationReviewRemainsIntact() = runBlocking {
-        val viewer = UUID.fromString("00000000-0000-0000-0000-000000000877")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000878")
-        dataSource.insertUserWithProfile(viewer, "Viewer")
-        dataSource.insertUserWithProfile(target, "Target")
-        val repository = JdbcMessagingRepository(dataSource)
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = viewer,
-            targetUserId = target,
-            origin = "grid"
-        )!!
-        val held = repository.sendMessage(
-            userId = viewer,
-            conversationId = conversation.conversationId,
-            body = "Find me at https://example.com",
-            moderationStatus = MessageModerationStatus.HELD,
-            bodyFingerprint = "held-delete-attempt",
-            safetyReason = MessageSafetyReason.LINK_FIRST_MESSAGE
-        )!!
+    fun releasedHeldMessageSurfacesForRecipientAndWritesAuditRows() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000861")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000862")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
+            val moderationRepository = JdbcMessageModerationRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "grid",
+                )!!
+            val held =
+                repository.sendMessage(
+                    userId = viewer,
+                    conversationId = conversation.conversationId,
+                    body = "Find me at https://example.com",
+                    moderationStatus = MessageModerationStatus.HELD,
+                    bodyFingerprint = "released-message-fingerprint",
+                    safetyReason = MessageSafetyReason.LINK_FIRST_MESSAGE,
+                )!!
 
-        assertNull(repository.deleteOwnMessage(viewer, held.messageId))
-        assertEquals(1, dataSource.countMessageReviewQueueRows(held.messageId))
-    }
+            val queueItems =
+                moderationRepository.listOpenMessageReviews(
+                    limit = 10,
+                    actorId = "moderator-1",
+                    reason = "reviewing held first messages",
+                )
+            assertEquals(listOf(held.messageId), queueItems.map { it.messageId })
+            assertEquals(emptyList(), repository.listConversations(target, limit = 10))
 
-    @Test
-    fun partnerChatInviteRequiresPartnerAndThirdPartyConsent() = runBlocking {
-        val inviter = UUID.fromString("00000000-0000-0000-0000-000000000881")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000882")
-        val partner = UUID.fromString("00000000-0000-0000-0000-000000000883")
-        dataSource.insertUserWithProfile(inviter, "Inviter")
-        dataSource.insertUserWithProfile(target, "Target")
-        dataSource.insertUserWithProfile(partner, "Partner")
-        val repository = JdbcMessagingRepository(dataSource)
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = inviter,
-            targetUserId = target,
-            origin = "grid"
-        )!!
+            val action =
+                moderationRepository.releaseHeldMessage(
+                    messageId = held.messageId,
+                    actorId = "moderator-1",
+                    reason = "false positive",
+                )
 
-        val invited = repository.inviteLinkedPartner(
-            inviterUserId = inviter,
-            conversationId = conversation.conversationId,
-            partnerUserId = partner
-        ) as PartnerInviteResult.Invited
-
-        assertEquals("pending", invited.conversation.partnerInvite?.partnerStatus)
-        assertEquals("pending", invited.conversation.partnerInvite?.thirdPartyStatus)
-
-        val partnerAccepted = repository.acceptPartnerInvite(partner, conversation.conversationId)!!
-        assertEquals("accepted", partnerAccepted.conversation.partnerInvite?.partnerStatus)
-        assertEquals("pending", partnerAccepted.conversation.partnerInvite?.thirdPartyStatus)
-        assertNull(
-            repository.sendMessage(
-                userId = partner,
-                conversationId = conversation.conversationId,
-                body = "Too soon",
-                moderationStatus = MessageModerationStatus.VISIBLE,
-                bodyFingerprint = null,
-                safetyReason = null
+            assertNotNull(action)
+            assertEquals("visible", action.messageStatus)
+            assertEquals("released", action.queueStatus)
+            assertEquals("released", dataSource.messageReviewQueueStatus(held.messageId))
+            assertEquals(1, repository.listConversations(target, limit = 10).size)
+            assertEquals(
+                listOf("visible"),
+                repository
+                    .getConversationDetail(target, conversation.conversationId, limit = 10)
+                    ?.messages
+                    ?.map { it.status },
             )
-        )
-
-        val targetApproved = repository.acceptPartnerInvite(target, conversation.conversationId)!!
-        assertEquals(null, targetApproved.conversation.partnerInvite)
-        assertEquals(
-            ConversationParticipantStatus.ACTIVE,
-            targetApproved.conversation.participants.first { it.userId == partner }.status
-        )
-        assertNotNull(
-            repository.sendMessage(
-                userId = partner,
-                conversationId = conversation.conversationId,
-                body = "Joining",
-                moderationStatus = MessageModerationStatus.VISIBLE,
-                bodyFingerprint = null,
-                safetyReason = null
-            )
-        )
-        Unit
-    }
+            assertEquals(1, dataSource.countAdminAuditRows("message_review_queue.list"))
+            assertEquals(1, dataSource.countAdminAuditRows("message_review.release"))
+        }
 
     @Test
-    fun thirdPartyDeclineStartsPartnerInviteCooldown() = runBlocking {
-        val inviter = UUID.fromString("00000000-0000-0000-0000-000000000891")
-        val target = UUID.fromString("00000000-0000-0000-0000-000000000892")
-        val partner = UUID.fromString("00000000-0000-0000-0000-000000000893")
-        dataSource.insertUserWithProfile(inviter, "Inviter")
-        dataSource.insertUserWithProfile(target, "Target")
-        dataSource.insertUserWithProfile(partner, "Partner")
-        val repository = JdbcMessagingRepository(dataSource)
-        val conversation = repository.getOrCreateDirectConversation(
-            viewerUserId = inviter,
-            targetUserId = target,
-            origin = "grid"
-        )!!
-        repository.inviteLinkedPartner(
-            inviterUserId = inviter,
-            conversationId = conversation.conversationId,
-            partnerUserId = partner
-        )
+    fun removedHeldMessageStaysHiddenAndWritesAuditRow() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000871")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000872")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
+            val moderationRepository = JdbcMessageModerationRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "grid",
+                )!!
+            val held =
+                repository.sendMessage(
+                    userId = viewer,
+                    conversationId = conversation.conversationId,
+                    body = "Find me at https://example.com",
+                    moderationStatus = MessageModerationStatus.HELD,
+                    bodyFingerprint = "removed-message-fingerprint",
+                    safetyReason = MessageSafetyReason.LINK_FIRST_MESSAGE,
+                )!!
 
-        assertEquals(true, repository.declinePartnerInvite(target, conversation.conversationId))
+            val action =
+                moderationRepository.removeHeldMessage(
+                    messageId = held.messageId,
+                    actorId = "moderator-1",
+                    reason = "external link spam",
+                )
 
-        val retry = repository.inviteLinkedPartner(
-            inviterUserId = inviter,
-            conversationId = conversation.conversationId,
-            partnerUserId = partner
-        )
-        assertEquals(PartnerInviteResult.CooldownActive, retry)
-        assertEquals(null, repository.getConversationDetail(partner, conversation.conversationId, limit = 10))
-    }
+            assertNotNull(action)
+            assertEquals("removed", action.messageStatus)
+            assertEquals("removed", action.queueStatus)
+            assertEquals("removed", dataSource.messageReviewQueueStatus(held.messageId))
+            assertEquals(emptyList(), repository.listConversations(target, limit = 10))
+            assertEquals(
+                emptyList(),
+                repository.getConversationDetail(viewer, conversation.conversationId, limit = 10)?.messages,
+            )
+            assertEquals(
+                emptyList(),
+                repository.getConversationDetail(target, conversation.conversationId, limit = 10)?.messages,
+            )
+            assertEquals(1, dataSource.countAdminAuditRows("message_review.remove"))
+        }
 
-    private fun DataSource.insertUserWithProfile(userId: UUID, displayName: String) {
+    @Test
+    fun deletingOwnVisibleMessageKeepsPlaceholderForParticipants() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000875")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000876")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "grid",
+                )!!
+            val message =
+                repository.sendMessage(
+                    userId = viewer,
+                    conversationId = conversation.conversationId,
+                    body = "Delete this",
+                    moderationStatus = MessageModerationStatus.VISIBLE,
+                    bodyFingerprint = "delete-visible-message",
+                    safetyReason = null,
+                )!!
+
+            val deleted = repository.deleteOwnMessage(viewer, message.messageId)
+            val viewerMessages = repository.getConversationDetail(viewer, conversation.conversationId, limit = 10)?.messages
+            val targetMessages = repository.getConversationDetail(target, conversation.conversationId, limit = 10)?.messages
+
+            assertNotNull(deleted)
+            assertEquals("", deleted.body)
+            assertEquals("deleted", deleted.deliveryStatus)
+            assertNotNull(deleted.deletedAt)
+            assertEquals(listOf(""), viewerMessages?.map { it.body })
+            assertEquals(listOf("deleted"), viewerMessages?.map { it.deliveryStatus })
+            assertEquals(listOf(""), targetMessages?.map { it.body })
+            assertEquals(listOf("deleted"), targetMessages?.map { it.deliveryStatus })
+            assertNull(repository.deleteOwnMessage(target, message.messageId))
+        }
+
+    @Test
+    fun deletingHeldMessageIsRejectedSoModerationReviewRemainsIntact() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000877")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000878")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "grid",
+                )!!
+            val held =
+                repository.sendMessage(
+                    userId = viewer,
+                    conversationId = conversation.conversationId,
+                    body = "Find me at https://example.com",
+                    moderationStatus = MessageModerationStatus.HELD,
+                    bodyFingerprint = "held-delete-attempt",
+                    safetyReason = MessageSafetyReason.LINK_FIRST_MESSAGE,
+                )!!
+
+            assertNull(repository.deleteOwnMessage(viewer, held.messageId))
+            assertEquals(1, dataSource.countMessageReviewQueueRows(held.messageId))
+        }
+
+    @Test
+    fun partnerChatInviteRequiresPartnerAndThirdPartyConsent() =
+        runBlocking {
+            val inviter = UUID.fromString("00000000-0000-0000-0000-000000000881")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000882")
+            val partner = UUID.fromString("00000000-0000-0000-0000-000000000883")
+            dataSource.insertUserWithProfile(inviter, "Inviter")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.insertUserWithProfile(partner, "Partner")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = inviter,
+                    targetUserId = target,
+                    origin = "grid",
+                )!!
+
+            val invited =
+                repository.inviteLinkedPartner(
+                    inviterUserId = inviter,
+                    conversationId = conversation.conversationId,
+                    partnerUserId = partner,
+                ) as PartnerInviteResult.Invited
+
+            assertEquals("pending", invited.conversation.partnerInvite?.partnerStatus)
+            assertEquals("pending", invited.conversation.partnerInvite?.thirdPartyStatus)
+
+            val partnerAccepted = repository.acceptPartnerInvite(partner, conversation.conversationId)!!
+            assertEquals("accepted", partnerAccepted.conversation.partnerInvite?.partnerStatus)
+            assertEquals("pending", partnerAccepted.conversation.partnerInvite?.thirdPartyStatus)
+            assertNull(
+                repository.sendMessage(
+                    userId = partner,
+                    conversationId = conversation.conversationId,
+                    body = "Too soon",
+                    moderationStatus = MessageModerationStatus.VISIBLE,
+                    bodyFingerprint = null,
+                    safetyReason = null,
+                ),
+            )
+
+            val targetApproved = repository.acceptPartnerInvite(target, conversation.conversationId)!!
+            assertEquals(null, targetApproved.conversation.partnerInvite)
+            assertEquals(
+                ConversationParticipantStatus.ACTIVE,
+                targetApproved.conversation.participants
+                    .first { it.userId == partner }
+                    .status,
+            )
+            assertNotNull(
+                repository.sendMessage(
+                    userId = partner,
+                    conversationId = conversation.conversationId,
+                    body = "Joining",
+                    moderationStatus = MessageModerationStatus.VISIBLE,
+                    bodyFingerprint = null,
+                    safetyReason = null,
+                ),
+            )
+            Unit
+        }
+
+    @Test
+    fun thirdPartyDeclineStartsPartnerInviteCooldown() =
+        runBlocking {
+            val inviter = UUID.fromString("00000000-0000-0000-0000-000000000891")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000892")
+            val partner = UUID.fromString("00000000-0000-0000-0000-000000000893")
+            dataSource.insertUserWithProfile(inviter, "Inviter")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.insertUserWithProfile(partner, "Partner")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = inviter,
+                    targetUserId = target,
+                    origin = "grid",
+                )!!
+            repository.inviteLinkedPartner(
+                inviterUserId = inviter,
+                conversationId = conversation.conversationId,
+                partnerUserId = partner,
+            )
+
+            assertEquals(true, repository.declinePartnerInvite(target, conversation.conversationId))
+
+            val retry =
+                repository.inviteLinkedPartner(
+                    inviterUserId = inviter,
+                    conversationId = conversation.conversationId,
+                    partnerUserId = partner,
+                )
+            assertEquals(PartnerInviteResult.CooldownActive, retry)
+            assertEquals(null, repository.getConversationDetail(partner, conversation.conversationId, limit = 10))
+        }
+
+    private fun DataSource.insertUserWithProfile(
+        userId: UUID,
+        displayName: String,
+    ) {
         connection.use { connection ->
-            connection.prepareStatement(
-                """
-                INSERT INTO users (id, status)
-                VALUES (?, 'active')
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, userId)
-                statement.executeUpdate()
-            }
-            connection.prepareStatement(
-                """
-                INSERT INTO profiles (user_id, display_name, moderation_status, visibility_status)
-                VALUES (?, ?, 'approved', 'visible')
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, userId)
-                statement.setString(2, displayName)
-                statement.executeUpdate()
-            }
-            connection.prepareStatement(
-                """
-                INSERT INTO discovery_settings (user_id)
-                VALUES (?)
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, userId)
-                statement.executeUpdate()
-            }
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO users (id, status)
+                    VALUES (?, 'active')
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeUpdate()
+                }
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO profiles (user_id, display_name, moderation_status, visibility_status)
+                    VALUES (?, ?, 'approved', 'visible')
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.setString(2, displayName)
+                    statement.executeUpdate()
+                }
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO discovery_settings (user_id)
+                    VALUES (?)
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeUpdate()
+                }
         }
     }
 
-    private fun DataSource.insertMatch(userA: UUID, userB: UUID) {
+    private fun DataSource.insertMatch(
+        userA: UUID,
+        userB: UUID,
+    ) {
         val (left, right) = if (userA.compareTo(userB) < 0) userA to userB else userB to userA
         connection.use { connection ->
-            connection.prepareStatement(
-                """
-                INSERT INTO matches (id, user_a, user_b)
-                VALUES (?, ?, ?)
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, UUID.randomUUID())
-                statement.setObject(2, left)
-                statement.setObject(3, right)
-                statement.executeUpdate()
-            }
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO matches (id, user_a, user_b)
+                    VALUES (?, ?, ?)
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, left)
+                    statement.setObject(3, right)
+                    statement.executeUpdate()
+                }
         }
     }
 
-    private fun DataSource.setGridMessagePolicy(userId: UUID, allowGridMessages: Boolean, policy: String) {
+    private fun DataSource.setGridMessagePolicy(
+        userId: UUID,
+        allowGridMessages: Boolean,
+        policy: String,
+    ) {
         connection.use { connection ->
-            connection.prepareStatement(
-                """
-                UPDATE discovery_settings
-                SET allow_grid_messages = ?,
-                    grid_message_policy = ?
-                WHERE user_id = ?
-                """.trimIndent()
-            ).use { statement ->
-                statement.setBoolean(1, allowGridMessages)
-                statement.setString(2, policy)
-                statement.setObject(3, userId)
-                statement.executeUpdate()
-            }
+            connection
+                .prepareStatement(
+                    """
+                    UPDATE discovery_settings
+                    SET allow_grid_messages = ?,
+                        grid_message_policy = ?
+                    WHERE user_id = ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setBoolean(1, allowGridMessages)
+                    statement.setString(2, policy)
+                    statement.setObject(3, userId)
+                    statement.executeUpdate()
+                }
         }
     }
 
     private fun DataSource.countMessageReviewQueueRows(messageId: UUID): Int =
         connection.use { connection ->
-            connection.prepareStatement(
-                """
-                SELECT COUNT(*) AS row_count
-                FROM message_review_queue
-                WHERE message_id = ?
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, messageId)
-                statement.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getInt("row_count")
+            connection
+                .prepareStatement(
+                    """
+                    SELECT COUNT(*) AS row_count
+                    FROM message_review_queue
+                    WHERE message_id = ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, messageId)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getInt("row_count")
+                    }
                 }
-            }
         }
 
     private fun DataSource.messageReviewQueueStatus(messageId: UUID): String? =
         connection.use { connection ->
-            connection.prepareStatement(
-                """
-                SELECT status
-                FROM message_review_queue
-                WHERE message_id = ?
-                """.trimIndent()
-            ).use { statement ->
-                statement.setObject(1, messageId)
-                statement.executeQuery().use { rs ->
-                    if (rs.next()) rs.getString("status") else null
+            connection
+                .prepareStatement(
+                    """
+                    SELECT status
+                    FROM message_review_queue
+                    WHERE message_id = ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, messageId)
+                    statement.executeQuery().use { rs ->
+                        if (rs.next()) rs.getString("status") else null
+                    }
                 }
-            }
         }
 
     private fun DataSource.countAdminAuditRows(action: String): Int =
         connection.use { connection ->
-            connection.prepareStatement(
-                """
-                SELECT COUNT(*) AS row_count
-                FROM admin_audit_log
-                WHERE action = ?
-                """.trimIndent()
-            ).use { statement ->
-                statement.setString(1, action)
-                statement.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getInt("row_count")
+            connection
+                .prepareStatement(
+                    """
+                    SELECT COUNT(*) AS row_count
+                    FROM admin_audit_log
+                    WHERE action = ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setString(1, action)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getInt("row_count")
+                    }
                 }
-            }
         }
 
     companion object {
-        private val postgisImage = DockerImageName
-            .parse("postgis/postgis:16-3.4")
-            .asCompatibleSubstituteFor("postgres")
+        private val postgisImage =
+            DockerImageName
+                .parse("postgis/postgis:16-3.4")
+                .asCompatibleSubstituteFor("postgres")
 
-        private val postgres = PostgreSQLContainer<Nothing>(postgisImage).apply {
-            withDatabaseName("pynapli_messaging_test")
-            withUsername("pynapli")
-            withPassword("pynapli_test_password")
-        }
+        private val postgres =
+            PostgreSQLContainer<Nothing>(postgisImage).apply {
+                withDatabaseName("pynapli_messaging_test")
+                withUsername("pynapli")
+                withPassword("pynapli_test_password")
+            }
 
         @JvmStatic
         @BeforeClass

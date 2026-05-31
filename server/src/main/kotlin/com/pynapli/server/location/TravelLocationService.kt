@@ -27,9 +27,8 @@ class TravelLocationService(
     private val subscriptionService: SubscriptionService? = null,
     private val regionPolicy: TravelRegionPolicy = EmptyTravelRegionPolicy,
     private val viewerTrustRepository: GridViewerTrustRepository? = null,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
 ) {
-
     /**
      * Returns the viewer's current travel location, or null if none active.
      * Free-tier callers get null rather than an exception so the client can
@@ -43,17 +42,19 @@ class TravelLocationService(
 
     suspend fun set(
         viewerUserId: UUID,
-        request: SetTravelLocationRequestDto
+        request: SetTravelLocationRequestDto,
     ): TravelLocationDto {
         requireTravelTier(viewerUserId, applyRateLimit = true)
         val city = request.city.trim()
         if (city.isEmpty() || city.length > MAX_CITY_LENGTH) {
             throw TravelLocationException("INVALID_TRAVEL_CITY")
         }
-        val region = request.region?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_REGION_LENGTH }
-            ?: run { if (request.region.isNullOrEmpty()) null else throw TravelLocationException("INVALID_TRAVEL_REGION") }
-        val country = request.country?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_COUNTRY_LENGTH }
-            ?: run { if (request.country.isNullOrEmpty()) null else throw TravelLocationException("INVALID_TRAVEL_COUNTRY") }
+        val region =
+            request.region?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_REGION_LENGTH }
+                ?: run { if (request.region.isNullOrEmpty()) null else throw TravelLocationException("INVALID_TRAVEL_REGION") }
+        val country =
+            request.country?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_COUNTRY_LENGTH }
+                ?: run { if (request.country.isNullOrEmpty()) null else throw TravelLocationException("INVALID_TRAVEL_COUNTRY") }
         if (request.latitude !in MIN_LATITUDE..MAX_LATITUDE) {
             throw TravelLocationException("INVALID_TRAVEL_COORDINATES")
         }
@@ -72,17 +73,19 @@ class TravelLocationService(
                 if (!verified) throw TravelLocationException("AGE_VERIFICATION_REQUIRED")
             }
         }
-        val record = repository.setActive(
-            userId = viewerUserId,
-            request = TravelLocationUpsert(
-                latitude = request.latitude,
-                longitude = request.longitude,
-                city = city,
-                region = region,
-                country = country
-            ),
-            now = clock.instant()
-        )
+        val record =
+            repository.setActive(
+                userId = viewerUserId,
+                request =
+                    TravelLocationUpsert(
+                        latitude = request.latitude,
+                        longitude = request.longitude,
+                        city = city,
+                        region = region,
+                        country = country,
+                    ),
+                now = clock.instant(),
+            )
         return record.toDto()
     }
 
@@ -109,16 +112,20 @@ class TravelLocationService(
      * `clear()` only applies the tier gate, not the rate limit — Social users
      * who are mid-preview should always be able to exit travel mode.
      */
-    private suspend fun requireTravelTier(viewerUserId: UUID, applyRateLimit: Boolean) {
+    private suspend fun requireTravelTier(
+        viewerUserId: UUID,
+        applyRateLimit: Boolean,
+    ) {
         val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
         when (policy.tier) {
             SubscriptionTier.SELECT -> Unit
             SubscriptionTier.SOCIAL -> {
                 if (!applyRateLimit) return
-                val recent = repository.countActivationsSince(
-                    userId = viewerUserId,
-                    since = clock.instant().minus(SOCIAL_PREVIEW_WINDOW)
-                )
+                val recent =
+                    repository.countActivationsSince(
+                        userId = viewerUserId,
+                        since = clock.instant().minus(SOCIAL_PREVIEW_WINDOW),
+                    )
                 if (recent >= SOCIAL_PREVIEW_ACTIVATIONS_PER_WINDOW) {
                     throw TravelLocationException("TRAVEL_PREVIEW_RATE_LIMITED")
                 }
@@ -127,16 +134,17 @@ class TravelLocationService(
         }
     }
 
-    private fun TravelLocationRecord.toDto(): TravelLocationDto = TravelLocationDto(
-        city = city,
-        region = region,
-        country = country,
-        latitude = latitude,
-        longitude = longitude,
-        activeFrom = activeFrom.toString(),
-        activeUntil = activeUntil?.toString(),
-        status = status
-    )
+    private fun TravelLocationRecord.toDto(): TravelLocationDto =
+        TravelLocationDto(
+            city = city,
+            region = region,
+            country = country,
+            latitude = latitude,
+            longitude = longitude,
+            activeFrom = activeFrom.toString(),
+            activeUntil = activeUntil?.toString(),
+            status = status,
+        )
 
     companion object {
         /**
@@ -157,4 +165,6 @@ class TravelLocationService(
     }
 }
 
-class TravelLocationException(val code: String) : RuntimeException(code)
+class TravelLocationException(
+    val code: String,
+) : RuntimeException(code)

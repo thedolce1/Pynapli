@@ -23,15 +23,16 @@ import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
-private val streamJson = Json {
-    ignoreUnknownKeys = true
-    encodeDefaults = true
-}
+private val streamJson =
+    Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
 
 fun Application.configurePresenceStreamRoutes(
     authService: AuthService?,
     broadcaster: PresenceBroadcaster?,
-    blockRepository: BlockRepository?
+    blockRepository: BlockRepository?,
 ) {
     if (authService == null || broadcaster == null || blockRepository == null) return
 
@@ -41,47 +42,50 @@ fun Application.configurePresenceStreamRoutes(
 
     routing {
         webSocket("/v1/presence/stream") {
-            val token = call.request.headers[HttpHeaders.Authorization]
-                ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-                ?.substringAfter("Bearer ")
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
+            val token =
+                call.request.headers[HttpHeaders.Authorization]
+                    ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+                    ?.substringAfter("Bearer ")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
             if (token == null) {
                 close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "UNAUTHENTICATED"))
                 return@webSocket
             }
 
-            val viewerId = try {
-                authService.authenticate(token).id
-            } catch (e: AuthException) {
-                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, e.code))
-                return@webSocket
-            }
+            val viewerId =
+                try {
+                    authService.authenticate(token).id
+                } catch (e: AuthException) {
+                    close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, e.code))
+                    return@webSocket
+                }
 
             val subscription = AtomicReference<Set<UUID>>(emptySet())
 
-            val emitterJob = launch {
-                broadcaster.deltas
-                    .filter { delta ->
-                        val targetId = runCatching { UUID.fromString(delta.userId) }.getOrNull() ?: return@filter false
-                        targetId in subscription.get() &&
-                            !blockRepository.isBlockedEitherWay(viewerId, targetId)
-                    }
-                    .collect { delta ->
-                        runCatching {
-                            send(streamJson.encodeToString(PresenceDeltaDto.serializer(), delta))
-                        }.onFailure { error ->
-                            logger.debug("Failed to send presence delta to viewer={}: {}", viewerId, error.message)
+            val emitterJob =
+                launch {
+                    broadcaster.deltas
+                        .filter { delta ->
+                            val targetId = runCatching { UUID.fromString(delta.userId) }.getOrNull() ?: return@filter false
+                            targetId in subscription.get() &&
+                                !blockRepository.isBlockedEitherWay(viewerId, targetId)
+                        }.collect { delta ->
+                            runCatching {
+                                send(streamJson.encodeToString(PresenceDeltaDto.serializer(), delta))
+                            }.onFailure { error ->
+                                logger.debug("Failed to send presence delta to viewer={}: {}", viewerId, error.message)
+                            }
                         }
-                    }
-            }
+                }
 
             try {
                 for (frame in incoming) {
                     if (frame !is Frame.Text) continue
-                    val payload = runCatching {
-                        streamJson.decodeFromString(PresenceStreamSubscribeDto.serializer(), frame.readText())
-                    }.getOrNull() ?: continue
+                    val payload =
+                        runCatching {
+                            streamJson.decodeFromString(PresenceStreamSubscribeDto.serializer(), frame.readText())
+                        }.getOrNull() ?: continue
                     val parsed = payload.userIds.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }.toSet()
                     subscription.set(parsed)
                 }

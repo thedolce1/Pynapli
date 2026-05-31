@@ -9,19 +9,25 @@ import com.pynapli.shared.network.dto.MessageDto
 interface ConversationRepository {
     suspend fun createDirectConversation(
         targetUserId: String,
-        origin: String = "grid"
+        origin: String = "grid",
     ): AppResult<ConversationDetailDto>
 
     suspend fun getConversationDetail(
         conversationId: String,
-        before: String? = null
+        before: String? = null,
     ): AppResult<ConversationDetailDto>
 
     suspend fun markConversationRead(conversationId: String): AppResult<ConversationDto>
 
-    suspend fun sendMessage(conversationId: String, body: String): AppResult<MessageDto>
+    suspend fun sendMessage(
+        conversationId: String,
+        body: String,
+    ): AppResult<MessageDto>
 
-    suspend fun sendTypingIndicator(conversationId: String, isTyping: Boolean): AppResult<Unit>
+    suspend fun sendTypingIndicator(
+        conversationId: String,
+        isTyping: Boolean,
+    ): AppResult<Unit>
 
     suspend fun deleteMessage(messageId: String): AppResult<MessageDto>
 

@@ -11,7 +11,7 @@ data class AppDeepLinkCommand(
     val target: String,
     val activityTab: ActivityTabUi? = null,
     val activityEventId: String? = null,
-    val conversationId: String? = null
+    val conversationId: String? = null,
 )
 
 class AppDeepLinkStateHolder {
@@ -19,21 +19,26 @@ class AppDeepLinkStateHolder {
     private val _state = MutableStateFlow<AppDeepLinkCommand?>(null)
     val state: StateFlow<AppDeepLinkCommand?> = _state.asStateFlow()
 
-    fun openActivity(tab: ActivityTabUi? = null, eventId: String? = null) {
-        _state.value = AppDeepLinkCommand(
-            commandId = ++nextCommandId,
-            target = TARGET_ACTIVITY,
-            activityTab = tab,
-            activityEventId = eventId
-        )
+    fun openActivity(
+        tab: ActivityTabUi? = null,
+        eventId: String? = null,
+    ) {
+        _state.value =
+            AppDeepLinkCommand(
+                commandId = ++nextCommandId,
+                target = TARGET_ACTIVITY,
+                activityTab = tab,
+                activityEventId = eventId,
+            )
     }
 
     fun openMessages(conversationId: String? = null) {
-        _state.value = AppDeepLinkCommand(
-            commandId = ++nextCommandId,
-            target = TARGET_MESSAGES,
-            conversationId = conversationId
-        )
+        _state.value =
+            AppDeepLinkCommand(
+                commandId = ++nextCommandId,
+                target = TARGET_MESSAGES,
+                conversationId = conversationId,
+            )
     }
 
     fun markHandled(commandId: Long) {

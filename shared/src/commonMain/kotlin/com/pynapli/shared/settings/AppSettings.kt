@@ -13,7 +13,7 @@ data class AppSettings(
     val quietHoursEnabled: Boolean = false,
     val quietHoursStartMinute: Int = DEFAULT_QUIET_HOURS_START_MINUTE,
     val quietHoursEndMinute: Int = DEFAULT_QUIET_HOURS_END_MINUTE,
-    val quietHoursTimezone: String = DEFAULT_QUIET_HOURS_TIMEZONE
+    val quietHoursTimezone: String = DEFAULT_QUIET_HOURS_TIMEZONE,
 ) {
     companion object {
         const val THEME_DARK = "dark"

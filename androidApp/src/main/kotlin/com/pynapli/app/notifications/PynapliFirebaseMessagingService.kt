@@ -22,28 +22,32 @@ class PynapliFirebaseMessagingService : FirebaseMessagingService() {
         val notificationManager = getSystemService(NotificationManager::class.java)
         ensureNotificationChannel(notificationManager)
 
-        val launchIntent = PynapliNotificationDeepLinks.intentForNotification(
-            context = this,
-            data = message.data
-        )
-        val requestCode = (message.data["notificationId"] ?: message.messageId ?: message.sentTime.toString())
-            .hashCode()
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            requestCode,
-            launchIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val launchIntent =
+            PynapliNotificationDeepLinks.intentForNotification(
+                context = this,
+                data = message.data,
+            )
+        val requestCode =
+            (message.data["notificationId"] ?: message.messageId ?: message.sentTime.toString())
+                .hashCode()
+        val pendingIntent =
+            PendingIntent.getActivity(
+                this,
+                requestCode,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
 
-        val notification = notificationBuilder()
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(message.notification?.title ?: titleForKind(message.data["kind"]))
-            .setContentText(message.notification?.body ?: bodyForKind(message.data["kind"]))
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setShowWhen(true)
-            .setCategory(Notification.CATEGORY_SOCIAL)
-            .build()
+        val notification =
+            notificationBuilder()
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(message.notification?.title ?: titleForKind(message.data["kind"]))
+                .setContentText(message.notification?.body ?: bodyForKind(message.data["kind"]))
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setShowWhen(true)
+                .setCategory(Notification.CATEGORY_SOCIAL)
+                .build()
 
         notificationManager.notify(requestCode, notification)
     }
@@ -61,13 +65,14 @@ class PynapliFirebaseMessagingService : FirebaseMessagingService() {
         val existing = notificationManager.getNotificationChannel(CHANNEL_SOCIAL)
         if (existing != null) return
 
-        val channel = NotificationChannel(
-            CHANNEL_SOCIAL,
-            "Activity and messages",
-            NotificationManager.IMPORTANCE_DEFAULT
-        ).apply {
-            description = "Social activity, matches, and message notifications"
-        }
+        val channel =
+            NotificationChannel(
+                CHANNEL_SOCIAL,
+                "Activity and messages",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = "Social activity, matches, and message notifications"
+            }
         notificationManager.createNotificationChannel(channel)
     }
 
@@ -93,7 +98,8 @@ class PynapliFirebaseMessagingService : FirebaseMessagingService() {
             "flirt",
             "profile_view",
             "album_request",
-            "partner_chat_invite" -> "Open Activity"
+            "partner_chat_invite",
+            -> "Open Activity"
             else -> "Open Pynapli"
         }
 

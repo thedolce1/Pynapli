@@ -10,9 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,8 +22,8 @@ import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthScreen
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
-import com.pynapli.app.conversation.ConversationSheet
 import com.pynapli.app.conversation.ConversationScreen
+import com.pynapli.app.conversation.ConversationSheet
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.design.PynapliTheme
 import com.pynapli.app.grid.GridScreen
@@ -71,7 +71,7 @@ fun PynapliApp(
     deepLinkStateHolder: AppDeepLinkStateHolder? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
-    devLoginCredentials: DevLoginCredentials? = null
+    devLoginCredentials: DevLoginCredentials? = null,
 ) {
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
 
@@ -167,7 +167,7 @@ fun PynapliApp(
                             conversationStateHolder.openConversationById(
                                 conversationId = conversationId,
                                 viewerUserId = authState.session?.userId,
-                                title = "Conversation"
+                                title = "Conversation",
                             )
                         }
                     }
@@ -198,7 +198,7 @@ fun PynapliApp(
         LaunchedEffect(
             authState.authenticated,
             appSettingsState.settings.activityNotifications,
-            activityStateHolder
+            activityStateHolder,
         ) {
             if (authState.authenticated && appSettingsState.settings.activityNotifications) {
                 activityStateHolder.refreshSilently()
@@ -212,7 +212,7 @@ fun PynapliApp(
         LaunchedEffect(
             conversationState.detail?.conversation?.conversationId,
             conversationState.visible,
-            conversationStateHolder
+            conversationStateHolder,
         ) {
             if (conversationState.visible && conversationState.detail != null) {
                 while (true) {
@@ -228,12 +228,13 @@ fun PynapliApp(
             authState.authenticated,
             appSettingsState.settings.messageNotifications,
             appSettingsState.settings.notificationDetail,
-            authState.session?.userId
+            authState.session?.userId,
         ) {
             if (!authState.authenticated) return@LaunchedEffect
-            val currentUnread = messagesState.conversations.associate { conversation ->
-                conversation.conversationId to conversation.unreadCount
-            }
+            val currentUnread =
+                messagesState.conversations.associate { conversation ->
+                    conversation.conversationId to conversation.unreadCount
+                }
             val previousUnread = messageUnreadSnapshot
             if (previousUnread == null) {
                 messageUnreadSnapshot = currentUnread
@@ -241,14 +242,16 @@ fun PynapliApp(
             }
 
             if (appSettingsState.settings.messageNotifications) {
-                val updatedConversation = messagesState.conversations.firstOrNull { conversation ->
-                    conversation.unreadCount > (previousUnread[conversation.conversationId] ?: 0)
-                }
+                val updatedConversation =
+                    messagesState.conversations.firstOrNull { conversation ->
+                        conversation.unreadCount > (previousUnread[conversation.conversationId] ?: 0)
+                    }
                 if (updatedConversation != null) {
-                    activeNotification = updatedConversation.toMessageNotification(
-                        viewerUserId = authState.session?.userId,
-                        settings = appSettingsState.settings
-                    )
+                    activeNotification =
+                        updatedConversation.toMessageNotification(
+                            viewerUserId = authState.session?.userId,
+                            settings = appSettingsState.settings,
+                        )
                 }
             }
             messageUnreadSnapshot = currentUnread
@@ -258,7 +261,7 @@ fun PynapliApp(
             activityState.items,
             authState.authenticated,
             appSettingsState.settings.activityNotifications,
-            appSettingsState.settings.notificationDetail
+            appSettingsState.settings.notificationDetail,
         ) {
             if (!authState.authenticated) return@LaunchedEffect
             val currentIds = activityState.items.mapTo(mutableSetOf()) { item -> item.eventId }
@@ -288,13 +291,14 @@ fun PynapliApp(
 
         if (authState.isCheckingSession) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
             ) {
                 Text(
                     text = "Pynapli",
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
             return@PynapliTheme
@@ -311,9 +315,10 @@ fun PynapliApp(
                 onSubmit = {
                     scope.launch { authStateHolder.submit() }
                 },
-                onDevLogin = devLoginCredentials?.let { credentials ->
-                    { scope.launch { authStateHolder.submitDevLogin(credentials) } }
-                }
+                onDevLogin =
+                    devLoginCredentials?.let { credentials ->
+                        { scope.launch { authStateHolder.submitDevLogin(credentials) } }
+                    },
             )
             return@PynapliTheme
         }
@@ -369,16 +374,21 @@ fun PynapliApp(
             if (selectedTab != PynapliTab.Messages) return@LaunchedEffect
             val blockedId = profileDetailStateHolder.consumeBlockedTargetUserId() ?: return@LaunchedEffect
             profileDetailStateHolder.dismiss()
-            if (conversationState.detail?.conversation?.participants?.any { participant -> participant.userId == blockedId } == true) {
+            if (conversationState.detail
+                    ?.conversation
+                    ?.participants
+                    ?.any { participant -> participant.userId == blockedId } == true
+            ) {
                 dismissConversation()
             }
             messagesStateHolder.refreshSilently()
         }
 
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 val profileImageUrl = mediaAlbumsState.primaryOwnerProfilePhotoUrl()
@@ -422,7 +432,7 @@ fun PynapliApp(
                             profileSurface = ProfileSurface.None
                             scope.launch { authStateHolder.logout() }
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
                 } else if (profileSurface == ProfileSurface.MediaAlbums) {
                     MediaAlbumsScreen(
@@ -430,119 +440,126 @@ fun PynapliApp(
                         profileLinksStateHolder = profileLinksStateHolder,
                         onBack = { profileSurface = ProfileSurface.Hub },
                         onPickMedia = onPickMediaForAlbum,
-                        modifier = Modifier.weight(1f)
-                    )
-                } else when (selectedTab) {
-                    PynapliTab.Grid -> GridScreen(
                         modifier = Modifier.weight(1f),
-                        stateHolder = gridStateHolder,
-                        profileDetailStateHolder = profileDetailStateHolder,
-                        conversationStateHolder = conversationStateHolder,
-                        viewerUserId = authState.session?.userId,
-                        locationState = locationState,
-                        profileImageUrl = profileImageUrl,
-                        profileLinksStateHolder = profileLinksStateHolder,
-                        savedGridFilterStateHolder = savedGridFilterStateHolder,
-                        tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
-                        lifestyleFiltersAllowed = profileHubState.me?.profile?.ageVerified == true,
-                        distanceUnit = distanceUnit,
-                        onUseCurrentLocation = onUseCurrentLocation,
-                        onProfileIconClick = { profileSurface = ProfileSurface.Hub },
-                        onOpenStore = { selectedTab = PynapliTab.Store }
                     )
-
-                    PynapliTab.Messages -> {
-                        if (conversationState.visible) {
-                            ConversationScreen(
+                } else {
+                    when (selectedTab) {
+                        PynapliTab.Grid ->
+                            GridScreen(
                                 modifier = Modifier.weight(1f),
-                                state = conversationState,
-                                onBack = dismissConversation,
+                                stateHolder = gridStateHolder,
+                                profileDetailStateHolder = profileDetailStateHolder,
+                                conversationStateHolder = conversationStateHolder,
+                                viewerUserId = authState.session?.userId,
+                                locationState = locationState,
+                                profileImageUrl = profileImageUrl,
+                                profileLinksStateHolder = profileLinksStateHolder,
+                                savedGridFilterStateHolder = savedGridFilterStateHolder,
+                                tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
+                                lifestyleFiltersAllowed = profileHubState.me?.profile?.ageVerified == true,
+                                distanceUnit = distanceUnit,
+                                onUseCurrentLocation = onUseCurrentLocation,
                                 onProfileIconClick = { profileSurface = ProfileSurface.Hub },
-                                onOpenParticipantProfile = { participant ->
+                                onOpenStore = { selectedTab = PynapliTab.Store },
+                            )
+
+                        PynapliTab.Messages -> {
+                            if (conversationState.visible) {
+                                ConversationScreen(
+                                    modifier = Modifier.weight(1f),
+                                    state = conversationState,
+                                    onBack = dismissConversation,
+                                    onProfileIconClick = { profileSurface = ProfileSurface.Hub },
+                                    onOpenParticipantProfile = { participant ->
+                                        scope.launch {
+                                            profileDetailStateHolder.open(participant.toConversationProfileCardUi())
+                                        }
+                                    },
+                                    onDraftChanged = onConversationDraftChanged,
+                                    onSend = onConversationSend,
+                                    onLoadOlder = onConversationLoadOlder,
+                                    linkedPartnerUserId = profileLinksState.current?.otherUserId,
+                                    onInvitePartner = onConversationInvitePartner,
+                                    onAcceptInvite = onConversationAcceptInvite,
+                                    onDeclineInvite = onConversationDeclineInvite,
+                                    onLeaveConversation = onConversationLeave,
+                                    onDeleteMessage = onConversationDeleteMessage,
+                                )
+                            } else {
+                                MessagesScreen(
+                                    modifier = Modifier.weight(1f),
+                                    stateHolder = messagesStateHolder,
+                                    viewerUserId = authState.session?.userId,
+                                    onProfileIconClick = { profileSurface = ProfileSurface.Hub },
+                                    onThreadSelected = { conversation ->
+                                        messagesStateHolder.markConversationReadLocal(conversation.conversationId)
+                                        scope.launch {
+                                            conversationStateHolder.openConversation(
+                                                conversation = conversation,
+                                                viewerUserId = authState.session?.userId,
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                        }
+
+                        PynapliTab.Activity ->
+                            ActivityScreen(
+                                modifier = Modifier.weight(1f),
+                                stateHolder = activityStateHolder,
+                                distanceUnit = distanceUnit,
+                                onOpenStore = { selectedTab = PynapliTab.Store },
+                                onOpenMatch = { event ->
                                     scope.launch {
-                                        profileDetailStateHolder.open(participant.toConversationProfileCardUi())
+                                        conversationStateHolder.openSwipeMatch(
+                                            match =
+                                                MatchDto(
+                                                    matchId = event.matchId ?: event.eventId,
+                                                    matchedUserId = event.actorUserId,
+                                                    matchedDisplayName = event.actorDisplayName,
+                                                    matchedPhotoUrl = event.actorPhotoUrl,
+                                                    createdAt = event.occurredAt,
+                                                ),
+                                            viewerUserId = authState.session?.userId,
+                                        )
+                                        messagesStateHolder.refreshSilently()
                                     }
                                 },
-                                onDraftChanged = onConversationDraftChanged,
-                                onSend = onConversationSend,
-                                onLoadOlder = onConversationLoadOlder,
-                                linkedPartnerUserId = profileLinksState.current?.otherUserId,
-                                onInvitePartner = onConversationInvitePartner,
-                                onAcceptInvite = onConversationAcceptInvite,
-                                onDeclineInvite = onConversationDeclineInvite,
-                                onLeaveConversation = onConversationLeave,
-                                onDeleteMessage = onConversationDeleteMessage
-                            )
-                        } else {
-                            MessagesScreen(
-                                modifier = Modifier.weight(1f),
-                                stateHolder = messagesStateHolder,
-                                viewerUserId = authState.session?.userId,
-                                onProfileIconClick = { profileSurface = ProfileSurface.Hub },
-                                onThreadSelected = { conversation ->
-                                    messagesStateHolder.markConversationReadLocal(conversation.conversationId)
+                                onOpenPartnerChatInvite = { conversationId ->
                                     scope.launch {
-                                        conversationStateHolder.openConversation(
-                                            conversation = conversation,
-                                            viewerUserId = authState.session?.userId
+                                        conversationStateHolder.openConversationById(
+                                            conversationId = conversationId,
+                                            viewerUserId = authState.session?.userId,
+                                            title = "Chat invite",
                                         )
+                                        messagesStateHolder.refreshSilently()
                                     }
-                                }
+                                },
                             )
-                        }
+
+                        PynapliTab.Swipe ->
+                            SwipeScreen(
+                                modifier = Modifier.weight(1f),
+                                stateHolder = swipeStateHolder,
+                                profileDetailStateHolder = profileDetailStateHolder,
+                                conversationStateHolder = conversationStateHolder,
+                                viewerUserId = authState.session?.userId,
+                                distanceUnit = distanceUnit,
+                                matchNotificationsEnabled = appSettingsState.settings.matchNotifications,
+                                notificationDetail = appSettingsState.settings.notificationDetail,
+                                onOpenStore = { selectedTab = PynapliTab.Store },
+                                savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
+                                topPicksStateHolder = topPicksStateHolder,
+                                travelLocationStateHolder = travelLocationStateHolder,
+                            )
+
+                        PynapliTab.Store ->
+                            StoreScreen(
+                                modifier = Modifier.weight(1f),
+                                stateHolder = storeStateHolder,
+                            )
                     }
-
-                    PynapliTab.Activity -> ActivityScreen(
-                        modifier = Modifier.weight(1f),
-                        stateHolder = activityStateHolder,
-                        distanceUnit = distanceUnit,
-                        onOpenStore = { selectedTab = PynapliTab.Store },
-                        onOpenMatch = { event ->
-                            scope.launch {
-                                conversationStateHolder.openSwipeMatch(
-                                    match = MatchDto(
-                                        matchId = event.matchId ?: event.eventId,
-                                        matchedUserId = event.actorUserId,
-                                        matchedDisplayName = event.actorDisplayName,
-                                        matchedPhotoUrl = event.actorPhotoUrl,
-                                        createdAt = event.occurredAt
-                                    ),
-                                    viewerUserId = authState.session?.userId
-                                )
-                                messagesStateHolder.refreshSilently()
-                            }
-                        },
-                        onOpenPartnerChatInvite = { conversationId ->
-                            scope.launch {
-                                conversationStateHolder.openConversationById(
-                                    conversationId = conversationId,
-                                    viewerUserId = authState.session?.userId,
-                                    title = "Chat invite"
-                                )
-                                messagesStateHolder.refreshSilently()
-                            }
-                        }
-                    )
-
-                    PynapliTab.Swipe -> SwipeScreen(
-                        modifier = Modifier.weight(1f),
-                        stateHolder = swipeStateHolder,
-                        profileDetailStateHolder = profileDetailStateHolder,
-                        conversationStateHolder = conversationStateHolder,
-                        viewerUserId = authState.session?.userId,
-                        distanceUnit = distanceUnit,
-                        matchNotificationsEnabled = appSettingsState.settings.matchNotifications,
-                        notificationDetail = appSettingsState.settings.notificationDetail,
-                        onOpenStore = { selectedTab = PynapliTab.Store },
-                        savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
-                        topPicksStateHolder = topPicksStateHolder,
-                        travelLocationStateHolder = travelLocationStateHolder
-                    )
-
-                    PynapliTab.Store -> StoreScreen(
-                        modifier = Modifier.weight(1f),
-                        stateHolder = storeStateHolder
-                    )
                 }
 
                 PynapliBottomNavigation(
@@ -555,7 +572,7 @@ fun PynapliApp(
                         }
                         profileSurface = ProfileSurface.None
                         selectedTab = it
-                    }
+                    },
                 )
             }
 
@@ -570,7 +587,7 @@ fun PynapliApp(
                         }
                         activeNotification = null
                     },
-                    modifier = Modifier.align(Alignment.TopCenter)
+                    modifier = Modifier.align(Alignment.TopCenter),
                 )
             }
         }
@@ -586,7 +603,7 @@ fun PynapliApp(
                 onRequestAlbum = {
                     scope.launch { profileDetailStateHolder.requestAlbumAccess() }
                 },
-                distanceUnit = appSettingsState.settings.distanceUnit
+                distanceUnit = appSettingsState.settings.distanceUnit,
             )
         }
 
@@ -602,7 +619,7 @@ fun PynapliApp(
                 onAcceptInvite = onConversationAcceptInvite,
                 onDeclineInvite = onConversationDeclineInvite,
                 onLeaveConversation = onConversationLeave,
-                onDeleteMessage = onConversationDeleteMessage
+                onDeleteMessage = onConversationDeleteMessage,
             )
         }
     }
@@ -617,5 +634,5 @@ private const val IN_APP_NOTIFICATION_DURATION_MS = 4_000L
 private enum class ProfileSurface {
     None,
     Hub,
-    MediaAlbums
+    MediaAlbums,
 }

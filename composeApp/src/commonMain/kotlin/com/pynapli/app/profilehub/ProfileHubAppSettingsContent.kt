@@ -28,32 +28,34 @@ internal fun AppSettingsContent(
     onQuietHoursWindowChanged: (Int, Int) -> Unit,
     onClearError: () -> Unit,
     onSave: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         ProfileHubTopBar(
             title = "App settings",
             onBack = onBack,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             state.errorMessage?.let { message ->
                 item {
                     ProfileHubMessageBand(
                         message = message,
                         isError = true,
-                        onDismiss = onClearError
+                        onDismiss = onClearError,
                     )
                 }
             }
@@ -65,7 +67,7 @@ internal fun AppSettingsContent(
                             label = option.label,
                             value = option.value,
                             selected = state.draft.themeMode == option.value,
-                            onSelected = onThemeModeChanged
+                            onSelected = onThemeModeChanged,
                         )
                     }
                 }
@@ -78,7 +80,7 @@ internal fun AppSettingsContent(
                             label = option.label,
                             value = option.value,
                             selected = state.draft.distanceUnit == option.value,
-                            onSelected = onDistanceUnitChanged
+                            onSelected = onDistanceUnitChanged,
                         )
                     }
                 }
@@ -91,41 +93,42 @@ internal fun AppSettingsContent(
                             label = option.label,
                             value = option.value,
                             selected = state.draft.notificationDetail == option.value,
-                            onSelected = onNotificationDetailChanged
+                            onSelected = onNotificationDetailChanged,
                         )
                     }
                     PrivacyToggleRow(
                         label = "Messages",
                         value = if (state.draft.messageNotifications) "On" else "Off",
                         checked = state.draft.messageNotifications,
-                        onCheckedChange = onMessageNotificationsChanged
+                        onCheckedChange = onMessageNotificationsChanged,
                     )
                     PrivacyToggleRow(
                         label = "Matches",
                         value = if (state.draft.matchNotifications) "On" else "Off",
                         checked = state.draft.matchNotifications,
-                        onCheckedChange = onMatchNotificationsChanged
+                        onCheckedChange = onMatchNotificationsChanged,
                     )
                     PrivacyToggleRow(
                         label = "Activity",
                         value = if (state.draft.activityNotifications) "On" else "Off",
                         checked = state.draft.activityNotifications,
-                        onCheckedChange = onActivityNotificationsChanged
+                        onCheckedChange = onActivityNotificationsChanged,
                     )
                     PrivacyToggleRow(
                         label = "Quiet hours",
                         value = quietHoursSummary(state.draft),
                         checked = state.draft.quietHoursEnabled,
-                        onCheckedChange = onQuietHoursEnabledChanged
+                        onCheckedChange = onQuietHoursEnabledChanged,
                     )
                     if (state.draft.quietHoursEnabled) {
                         quietHoursOptions.forEach { option ->
                             DiscoveryStyleRow(
                                 label = option.label,
                                 value = option.value,
-                                selected = state.draft.quietHoursStartMinute == option.startMinute &&
-                                    state.draft.quietHoursEndMinute == option.endMinute,
-                                onSelected = { onQuietHoursWindowChanged(option.startMinute, option.endMinute) }
+                                selected =
+                                    state.draft.quietHoursStartMinute == option.startMinute &&
+                                        state.draft.quietHoursEndMinute == option.endMinute,
+                                onSelected = { onQuietHoursWindowChanged(option.startMinute, option.endMinute) },
                             )
                         }
                     }
@@ -136,7 +139,7 @@ internal fun AppSettingsContent(
         ProfileHubSaveButton(
             label = "Save settings",
             isSaving = state.isSaving,
-            onSave = onSave
+            onSave = onSave,
         )
     }
 }

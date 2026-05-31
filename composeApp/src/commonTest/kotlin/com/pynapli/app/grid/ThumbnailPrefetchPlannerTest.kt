@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ThumbnailPrefetchPlannerTest {
-
     @Test
     fun emptyCardsReturnsEmpty() {
         assertTrue(planThumbnailPrefetch(emptyList(), lastVisibleIndex = -1).isEmpty())
@@ -19,7 +18,7 @@ class ThumbnailPrefetchPlannerTest {
 
         assertEquals(
             listOf("https://cdn/6.jpg", "https://cdn/7.jpg", "https://cdn/8.jpg", "https://cdn/9.jpg"),
-            urls
+            urls,
         )
     }
 
@@ -32,12 +31,13 @@ class ThumbnailPrefetchPlannerTest {
 
     @Test
     fun skipsCardsWithoutThumbnailUrl() {
-        val cards = listOf(
-            card("0", thumbnail = "https://cdn/0.jpg"),
-            card("1", thumbnail = null),
-            card("2", thumbnail = "https://cdn/2.jpg"),
-            card("3", thumbnail = null)
-        )
+        val cards =
+            listOf(
+                card("0", thumbnail = "https://cdn/0.jpg"),
+                card("1", thumbnail = null),
+                card("2", thumbnail = "https://cdn/2.jpg"),
+                card("3", thumbnail = null),
+            )
 
         val urls = planThumbnailPrefetch(cards, lastVisibleIndex = -1, windowSize = 10)
 
@@ -46,11 +46,12 @@ class ThumbnailPrefetchPlannerTest {
 
     @Test
     fun deduplicatesRepeatedUrls() {
-        val cards = listOf(
-            card("a", thumbnail = "https://cdn/shared.jpg"),
-            card("b", thumbnail = "https://cdn/shared.jpg"),
-            card("c", thumbnail = "https://cdn/other.jpg")
-        )
+        val cards =
+            listOf(
+                card("a", thumbnail = "https://cdn/shared.jpg"),
+                card("b", thumbnail = "https://cdn/shared.jpg"),
+                card("c", thumbnail = "https://cdn/other.jpg"),
+            )
 
         val urls = planThumbnailPrefetch(cards, lastVisibleIndex = -1, windowSize = 10)
 
@@ -65,7 +66,7 @@ class ThumbnailPrefetchPlannerTest {
 
         assertEquals(
             listOf("https://cdn/5.jpg", "https://cdn/6.jpg", "https://cdn/7.jpg"),
-            urls
+            urls,
         )
     }
 
@@ -76,12 +77,16 @@ class ThumbnailPrefetchPlannerTest {
         assertTrue(planThumbnailPrefetch(cards, lastVisibleIndex = 0, windowSize = -3).isEmpty())
     }
 
-    private fun card(id: String, thumbnail: String?): GridProfileCardUi = GridProfileCardUi(
-        id = id,
-        displayName = "User $id",
-        thumbnailUrl = thumbnail,
-        online = false,
-        distanceLabel = null,
-        tone = GridCardTone.Warm
-    )
+    private fun card(
+        id: String,
+        thumbnail: String?,
+    ): GridProfileCardUi =
+        GridProfileCardUi(
+            id = id,
+            displayName = "User $id",
+            thumbnailUrl = thumbnail,
+            online = false,
+            distanceLabel = null,
+            tone = GridCardTone.Warm,
+        )
 }

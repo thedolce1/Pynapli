@@ -38,7 +38,7 @@ internal fun LinkedPartnerPreviewDialog(
     partnerThumbnailUrl: String?,
     partnerOnline: Boolean,
     onDismiss: () -> Unit,
-    onViewProfile: () -> Unit
+    onViewProfile: () -> Unit,
 ) {
     val resolvedPartnerName = partnerDisplayName?.takeIf { it.isNotBlank() } ?: "their partner"
     AlertDialog(
@@ -48,58 +48,60 @@ internal fun LinkedPartnerPreviewDialog(
             Text(
                 text = "Linked with $resolvedPartnerName",
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), CircleShape),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), CircleShape),
+                        contentAlignment = Alignment.Center,
                     ) {
                         if (partnerThumbnailUrl != null) {
                             AsyncImage(
                                 model = partnerThumbnailUrl,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Filled.Person,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(32.dp),
                             )
                         }
                     }
                     Text(
-                        text = "$resolvedPartnerName is the linked partner of $cardDisplayName. " +
-                            "Swipe stays on $cardDisplayName.",
+                        text =
+                            "$resolvedPartnerName is the linked partner of $cardDisplayName. " +
+                                "Swipe stays on $cardDisplayName.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
                 }
                 if (partnerOnline) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.testTag(SwipeTestTags.LINKED_PARTNER_PREVIEW_ONLINE)
+                        modifier = Modifier.testTag(SwipeTestTags.LINKED_PARTNER_PREVIEW_ONLINE),
                     ) {
                         SwipeOnlineDot()
                         Text(
                             text = "Active now",
                             color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.labelMedium
+                            style = MaterialTheme.typography.labelMedium,
                         )
                     }
                 }
@@ -108,7 +110,7 @@ internal fun LinkedPartnerPreviewDialog(
         confirmButton = {
             Button(
                 onClick = onViewProfile,
-                modifier = Modifier.testTag(SwipeTestTags.LINKED_PARTNER_PREVIEW_VIEW_PROFILE)
+                modifier = Modifier.testTag(SwipeTestTags.LINKED_PARTNER_PREVIEW_VIEW_PROFILE),
             ) {
                 Text("View profile")
             }
@@ -117,7 +119,7 @@ internal fun LinkedPartnerPreviewDialog(
             TextButton(onClick = onDismiss) {
                 Text("Close")
             }
-        }
+        },
     )
 }
 
@@ -128,7 +130,7 @@ internal fun IntroNoteDialog(
     isSubmitting: Boolean,
     onNoteTextChanged: (String) -> Unit,
     onDismiss: () -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
 ) {
     val trimmed = noteText.trim()
     val canSend = trimmed.isNotEmpty() && trimmed.length <= INTRO_NOTE_UI_MAX_LENGTH && !isSubmitting
@@ -138,7 +140,7 @@ internal fun IntroNoteDialog(
             Text(
                 text = "Intro Note",
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         },
         text = {
@@ -146,7 +148,7 @@ internal fun IntroNoteDialog(
                 Text(
                     text = "Send a short note to $displayName before matching.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedTextField(
                     value = noteText,
@@ -154,21 +156,21 @@ internal fun IntroNoteDialog(
                     enabled = !isSubmitting,
                     maxLines = 4,
                     singleLine = false,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
                     text = "${trimmed.length}/$INTRO_NOTE_UI_MAX_LENGTH",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelSmall,
                     textAlign = TextAlign.End,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = onSend,
-                enabled = canSend
+                enabled = canSend,
             ) {
                 Text(text = if (isSubmitting) "Sending" else "Send")
             }
@@ -176,11 +178,11 @@ internal fun IntroNoteDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                enabled = !isSubmitting
+                enabled = !isSubmitting,
             ) {
                 Text("Cancel")
             }
-        }
+        },
     )
 }
 

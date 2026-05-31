@@ -6,7 +6,7 @@ import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 @Composable
 internal fun SwipeIntentAndVerifiedFilters(
     draft: SwipeFilters,
-    onDraftChange: (SwipeFilters) -> Unit
+    onDraftChange: (SwipeFilters) -> Unit,
 ) {
     SectionTitle("Intent")
     SubsectionHeader(
@@ -17,25 +17,27 @@ internal fun SwipeIntentAndVerifiedFilters(
         onLockChange = { locked ->
             onDraftChange(
                 draft.copy(
-                    dealbreakers = toggleDealbreaker(
-                        draft.dealbreakers,
-                        SwipeDealbreakerKey.DISCOVERY_STYLES,
-                        locked
-                    )
-                )
+                    dealbreakers =
+                        toggleDealbreaker(
+                            draft.dealbreakers,
+                            SwipeDealbreakerKey.DISCOVERY_STYLES,
+                            locked,
+                        ),
+                ),
             )
-        }
+        },
     )
     IntentStylesSection(
         selected = draft.discoveryStyles,
         onChange = { styles ->
-            val dealbreakers = if (styles.isEmpty()) {
-                draft.dealbreakers - SwipeDealbreakerKey.DISCOVERY_STYLES
-            } else {
-                draft.dealbreakers
-            }
+            val dealbreakers =
+                if (styles.isEmpty()) {
+                    draft.dealbreakers - SwipeDealbreakerKey.DISCOVERY_STYLES
+                } else {
+                    draft.dealbreakers
+                }
             onDraftChange(draft.copy(discoveryStyles = styles, dealbreakers = dealbreakers))
-        }
+        },
     )
     SubsectionHeader(
         title = "Looking for",
@@ -45,25 +47,27 @@ internal fun SwipeIntentAndVerifiedFilters(
         onLockChange = { locked ->
             onDraftChange(
                 draft.copy(
-                    dealbreakers = toggleDealbreaker(
-                        draft.dealbreakers,
-                        SwipeDealbreakerKey.INTENTS,
-                        locked
-                    )
-                )
+                    dealbreakers =
+                        toggleDealbreaker(
+                            draft.dealbreakers,
+                            SwipeDealbreakerKey.INTENTS,
+                            locked,
+                        ),
+                ),
             )
-        }
+        },
     )
     IntentExtendedSection(
         selected = draft.intents,
         onChange = { intents ->
-            val dealbreakers = if (intents.isEmpty()) {
-                draft.dealbreakers - SwipeDealbreakerKey.INTENTS
-            } else {
-                draft.dealbreakers
-            }
+            val dealbreakers =
+                if (intents.isEmpty()) {
+                    draft.dealbreakers - SwipeDealbreakerKey.INTENTS
+                } else {
+                    draft.dealbreakers
+                }
             onDraftChange(draft.copy(intents = intents, dealbreakers = dealbreakers))
-        }
+        },
     )
 
     SectionHeader(
@@ -74,31 +78,33 @@ internal fun SwipeIntentAndVerifiedFilters(
         onLockChange = { locked ->
             onDraftChange(
                 draft.copy(
-                    dealbreakers = toggleDealbreaker(
-                        draft.dealbreakers,
-                        SwipeDealbreakerKey.VERIFIED,
-                        locked
-                    )
-                )
+                    dealbreakers =
+                        toggleDealbreaker(
+                            draft.dealbreakers,
+                            SwipeDealbreakerKey.VERIFIED,
+                            locked,
+                        ),
+                ),
             )
-        }
+        },
     )
     VerifiedModeSection(
         verifiedOnly = draft.verifiedOnly,
         verifiedPreferred = draft.verifiedPreferred,
         onChange = { only, preferred ->
-            val dealbreakers = if (!only) {
-                draft.dealbreakers - SwipeDealbreakerKey.VERIFIED
-            } else {
-                draft.dealbreakers
-            }
+            val dealbreakers =
+                if (!only) {
+                    draft.dealbreakers - SwipeDealbreakerKey.VERIFIED
+                } else {
+                    draft.dealbreakers
+                }
             onDraftChange(
                 draft.copy(
                     verifiedOnly = only,
                     verifiedPreferred = preferred,
-                    dealbreakers = dealbreakers
-                )
+                    dealbreakers = dealbreakers,
+                ),
             )
-        }
+        },
     )
 }

@@ -13,7 +13,7 @@ internal fun Connection.ensureNotificationPreferences(userId: UUID) {
         WHERE id = ?
           AND deleted_at IS NULL
         ON CONFLICT (user_id) DO NOTHING
-        """.trimIndent()
+        """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.executeUpdate()
@@ -34,7 +34,7 @@ internal fun ResultSet.toNotificationPreferencesRecord(): NotificationPreference
         quietHoursEnabled = getBoolean("quiet_hours_enabled"),
         quietHoursStartMinute = getInt("quiet_hours_start_minute"),
         quietHoursEndMinute = getInt("quiet_hours_end_minute"),
-        quietHoursTimezone = getString("quiet_hours_timezone")
+        quietHoursTimezone = getString("quiet_hours_timezone"),
     )
 
 internal fun ResultSet.toPushDeviceRecord(): PushDeviceRecord =
@@ -43,7 +43,7 @@ internal fun ResultSet.toPushDeviceRecord(): PushDeviceRecord =
         userId = getObject("user_id", UUID::class.java),
         platform = getString("platform"),
         notificationsEnabled = getBoolean("notifications_enabled"),
-        lastSeenAt = getTimestamp("last_seen_at").toInstant()
+        lastSeenAt = getTimestamp("last_seen_at").toInstant(),
     )
 
 internal fun ResultSet.toNotificationOutboxRecord(): NotificationOutboxRecord =
@@ -52,7 +52,7 @@ internal fun ResultSet.toNotificationOutboxRecord(): NotificationOutboxRecord =
         recipientUserId = getObject("recipient_user_id", UUID::class.java),
         kind = getString("kind"),
         status = getString("status"),
-        createdAt = getTimestamp("created_at").toInstant()
+        createdAt = getTimestamp("created_at").toInstant(),
     )
 
 internal fun ResultSet.toNotificationDeliveryRecord(): NotificationDeliveryRecord =
@@ -66,7 +66,7 @@ internal fun ResultSet.toNotificationDeliveryRecord(): NotificationDeliveryRecor
         body = getString("body"),
         payloadJson = getString("payload_json"),
         attemptCount = getInt("attempt_count"),
-        createdAt = getTimestamp("created_at").toInstant()
+        createdAt = getTimestamp("created_at").toInstant(),
     )
 
 internal fun ResultSet.toPushDeliveryTarget(): PushDeliveryTarget =
@@ -74,7 +74,7 @@ internal fun ResultSet.toPushDeliveryTarget(): PushDeliveryTarget =
         deviceId = getObject("id", UUID::class.java),
         userId = getObject("user_id", UUID::class.java),
         platform = getString("platform"),
-        deviceToken = getString("device_token")
+        deviceToken = getString("device_token"),
     )
 
 internal fun <T> Connection.withNotificationTransaction(block: () -> T): T {

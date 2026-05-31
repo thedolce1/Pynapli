@@ -15,7 +15,6 @@ import com.pynapli.shared.storage.PynapliDatabase
  * separately — Windows/Linux CI can't drive an iOS simulator.
  */
 object IosSwipeFactory {
-
     /**
      * Builds a `SwipeActionQueueStore` backed by the shared `PynapliDatabase`.
      * Pass an explicit database when the host app already owns the instance
@@ -34,9 +33,10 @@ object IosSwipeFactory {
      */
     fun createSwipeStateHolder(
         repository: SwipeRepository,
-        database: PynapliDatabase? = null
-    ): SwipeStateHolder = SwipeStateHolder(
-        repository = repository,
-        queueStore = createSwipeActionQueueStore(database)
-    )
+        database: PynapliDatabase? = null,
+    ): SwipeStateHolder =
+        SwipeStateHolder(
+            repository = repository,
+            queueStore = createSwipeActionQueueStore(database),
+        )
 }

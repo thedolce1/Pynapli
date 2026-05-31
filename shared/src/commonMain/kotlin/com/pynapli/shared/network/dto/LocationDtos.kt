@@ -10,7 +10,7 @@ data class UpdateCurrentLocationRequestDto(
     val source: String,
     val city: String? = null,
     val region: String? = null,
-    val country: String? = null
+    val country: String? = null,
 )
 
 @Serializable
@@ -21,7 +21,7 @@ data class CurrentLocationDto(
     val geohash: String?,
     val city: String?,
     val region: String?,
-    val country: String?
+    val country: String?,
 )
 
 // Passport/travel mode (DATA_MODEL_SPEC L286-301, SWIPE_IMPLEMENTATION_SPEC L339-354).
@@ -34,7 +34,7 @@ data class SetTravelLocationRequestDto(
     val longitude: Double,
     val city: String,
     val region: String? = null,
-    val country: String? = null
+    val country: String? = null,
 )
 
 @Serializable
@@ -46,7 +46,7 @@ data class TravelLocationDto(
     val longitude: Double,
     val activeFrom: String,
     val activeUntil: String? = null,
-    val status: String
+    val status: String,
 )
 
 object TravelLocationStatus {
@@ -54,4 +54,3 @@ object TravelLocationStatus {
     const val CLEARED = "cleared"
     const val EXPIRED = "expired"
 }
-

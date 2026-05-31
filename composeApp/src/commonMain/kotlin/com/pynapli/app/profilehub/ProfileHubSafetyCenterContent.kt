@@ -19,13 +19,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -50,19 +50,20 @@ internal fun ProfileHubSafetyCenterContent(
     onUnhideProfile: (String) -> Unit,
     onContactSupport: (SupportContactDto) -> Unit,
     onClearMessage: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = ProfileSurfaceBottomPadding),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             ProfileHubTopBar(
                 title = "Safety center",
-                onBack = onBack
+                onBack = onBack,
             )
         }
 
@@ -71,7 +72,7 @@ internal fun ProfileHubSafetyCenterContent(
                 ProfileHubMessageBand(
                     message = message,
                     isError = true,
-                    onDismiss = onClearMessage
+                    onDismiss = onClearMessage,
                 )
             }
         }
@@ -81,7 +82,7 @@ internal fun ProfileHubSafetyCenterContent(
                 ProfileHubMessageBand(
                     message = message,
                     isError = false,
-                    onDismiss = onClearMessage
+                    onDismiss = onClearMessage,
                 )
             }
         }
@@ -91,32 +92,32 @@ internal fun ProfileHubSafetyCenterContent(
                 SafetyCenterInfoRow(
                     icon = Icons.Filled.VerifiedUser,
                     label = "Consent and boundaries",
-                    value = "Only continue when everyone is clear and comfortable."
+                    value = "Only continue when everyone is clear and comfortable.",
                 )
                 SafetyCenterInfoRow(
                     icon = Icons.Filled.Block,
                     label = "Block and report",
-                    value = "Blocking removes contact. Reporting sends context for review."
+                    value = "Blocking removes contact. Reporting sends context for review.",
                 )
                 SafetyCenterInfoRow(
                     icon = Icons.Filled.LocationOn,
                     label = "Location privacy",
-                    value = "Use distance controls and pause discovery when needed."
+                    value = "Use distance controls and pause discovery when needed.",
                 )
                 SafetyCenterInfoRow(
                     icon = Icons.Filled.PhotoLibrary,
                     label = "Private albums",
-                    value = "Grant intentionally. Revoke access any time."
+                    value = "Grant intentionally. Revoke access any time.",
                 )
                 SafetyCenterInfoRow(
                     icon = Icons.Filled.People,
                     label = "Partner links",
-                    value = "Your messages, albums, and Activity stay yours."
+                    value = "Your messages, albums, and Activity stay yours.",
                 )
                 SafetyCenterInfoRow(
                     icon = Icons.Filled.ChatBubble,
                     label = "Support",
-                    value = state.supportContact?.email ?: "Support contact is loading."
+                    value = state.supportContact?.email ?: "Support contact is loading.",
                 )
             }
         }
@@ -128,7 +129,7 @@ internal fun ProfileHubSafetyCenterContent(
                         SafetyCenterInfoRow(
                             icon = Icons.Filled.Security,
                             label = "Loading",
-                            value = "Checking your block list."
+                            value = "Checking your block list.",
                         )
                     }
 
@@ -136,7 +137,7 @@ internal fun ProfileHubSafetyCenterContent(
                         SafetyCenterInfoRow(
                             icon = Icons.Filled.Lock,
                             label = "No blocked users",
-                            value = "Blocked accounts will appear here."
+                            value = "Blocked accounts will appear here.",
                         )
                     }
 
@@ -148,12 +149,12 @@ internal fun ProfileHubSafetyCenterContent(
         if (!state.isBlocksLoading && state.blockedUsers.isNotEmpty()) {
             items(
                 items = state.blockedUsers,
-                key = { it.blockedUserId }
+                key = { it.blockedUserId },
             ) { blockedUser ->
                 BlockedUserRow(
                     blockedUser = blockedUser,
                     isUnblocking = state.unblockingUserId == blockedUser.blockedUserId,
-                    onUnblockUser = onUnblockUser
+                    onUnblockUser = onUnblockUser,
                 )
             }
         }
@@ -165,7 +166,7 @@ internal fun ProfileHubSafetyCenterContent(
                         SafetyCenterInfoRow(
                             icon = Icons.Filled.VisibilityOff,
                             label = "Loading",
-                            value = "Checking profiles hidden from discovery."
+                            value = "Checking profiles hidden from discovery.",
                         )
                     }
 
@@ -173,7 +174,7 @@ internal fun ProfileHubSafetyCenterContent(
                         SafetyCenterInfoRow(
                             icon = Icons.Filled.VisibilityOff,
                             label = "No hidden profiles",
-                            value = "Hidden profiles will not appear in your Grid or Swipe deck."
+                            value = "Hidden profiles will not appear in your Grid or Swipe deck.",
                         )
                     }
 
@@ -185,19 +186,19 @@ internal fun ProfileHubSafetyCenterContent(
         if (!state.isHiddenProfilesLoading && state.hiddenProfiles.isNotEmpty()) {
             items(
                 items = state.hiddenProfiles,
-                key = { it.hiddenUserId }
+                key = { it.hiddenUserId },
             ) { hiddenProfile ->
                 HiddenProfileRow(
                     hiddenProfile = hiddenProfile,
                     isUnhiding = state.unhidingUserId == hiddenProfile.hiddenUserId,
-                    onUnhideProfile = onUnhideProfile
+                    onUnhideProfile = onUnhideProfile,
                 )
             }
         }
 
         profileHubSafetyReportsSection(
             state = state,
-            onContactSupport = onContactSupport
+            onContactSupport = onContactSupport,
         )
     }
 }
@@ -206,19 +207,20 @@ internal fun ProfileHubSafetyCenterContent(
 internal fun SafetyCenterInfoRow(
     icon: ImageVector,
     label: String,
-    value: String
+    value: String,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 13.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SafetyIcon(icon = icon)
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Text(
                 text = label,
@@ -226,14 +228,14 @@ internal fun SafetyCenterInfoRow(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = value,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -243,44 +245,46 @@ internal fun SafetyCenterInfoRow(
 private fun BlockedUserRow(
     blockedUser: BlockSummaryDto,
     isUnblocking: Boolean,
-    onUnblockUser: (String) -> Unit
+    onUnblockUser: (String) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-            .clickable(enabled = !isUnblocking) { onUnblockUser(blockedUser.blockedUserId) }
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                .clickable(enabled = !isUnblocking) { onUnblockUser(blockedUser.blockedUserId) }
+                .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SafetyIcon(icon = Icons.Filled.Block)
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Text(
-                text = blockedUser.blockedDisplayName?.takeIf { it.isNotBlank() }
-                    ?: "Member ${blockedUser.blockedUserId.take(8)}",
+                text =
+                    blockedUser.blockedDisplayName?.takeIf { it.isNotBlank() }
+                        ?: "Member ${blockedUser.blockedUserId.take(8)}",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = blockedUser.createdAt.take(10).takeIf { it.isNotBlank() } ?: "Blocked",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
         TextButton(
             onClick = { onUnblockUser(blockedUser.blockedUserId) },
-            enabled = !isUnblocking
+            enabled = !isUnblocking,
         ) {
             Text(if (isUnblocking) "Unblocking" else "Unblock")
         }
@@ -291,44 +295,46 @@ private fun BlockedUserRow(
 private fun HiddenProfileRow(
     hiddenProfile: HiddenProfileSummaryDto,
     isUnhiding: Boolean,
-    onUnhideProfile: (String) -> Unit
+    onUnhideProfile: (String) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-            .clickable(enabled = !isUnhiding) { onUnhideProfile(hiddenProfile.hiddenUserId) }
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                .clickable(enabled = !isUnhiding) { onUnhideProfile(hiddenProfile.hiddenUserId) }
+                .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SafetyIcon(icon = Icons.Filled.VisibilityOff)
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Text(
-                text = hiddenProfile.hiddenDisplayName?.takeIf { it.isNotBlank() }
-                    ?: "Member ${hiddenProfile.hiddenUserId.take(8)}",
+                text =
+                    hiddenProfile.hiddenDisplayName?.takeIf { it.isNotBlank() }
+                        ?: "Member ${hiddenProfile.hiddenUserId.take(8)}",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = hiddenProfile.createdAt.take(10).takeIf { it.isNotBlank() } ?: "Hidden",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
         TextButton(
             onClick = { onUnhideProfile(hiddenProfile.hiddenUserId) },
-            enabled = !isUnhiding
+            enabled = !isUnhiding,
         ) {
             Text(if (isUnhiding) "Unhiding" else "Unhide")
         }
@@ -338,17 +344,18 @@ private fun HiddenProfileRow(
 @Composable
 internal fun SafetyIcon(icon: ImageVector) {
     Box(
-        modifier = Modifier
-            .size(34.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(18.dp),
         )
     }
 }

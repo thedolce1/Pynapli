@@ -17,7 +17,7 @@ object ProfileLinkDirection {
 
 @Serializable
 data class CreateProfileLinkInvitationRequestDto(
-    val targetUserId: String
+    val targetUserId: String,
 )
 
 @Serializable
@@ -30,12 +30,12 @@ data class ProfileLinkDto(
     val direction: String,
     val createdAt: String,
     val acceptedAt: String? = null,
-    val unlinkedAt: String? = null
+    val unlinkedAt: String? = null,
 )
 
 @Serializable
 data class ProfileLinksSummaryDto(
     val current: ProfileLinkDto? = null,
     val incomingInvites: List<ProfileLinkDto> = emptyList(),
-    val outgoingInvites: List<ProfileLinkDto> = emptyList()
+    val outgoingInvites: List<ProfileLinkDto> = emptyList(),
 )

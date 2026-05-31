@@ -11,14 +11,14 @@ import java.util.UUID
 
 class LocalMediaUploadStorage(
     rootDirectory: Path,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     private val rootDirectory = rootDirectory.toAbsolutePath().normalize()
 
     fun saveUpload(
         mediaAssetIdText: String,
         contentType: String?,
-        bytes: ByteArray
+        bytes: ByteArray,
     ): LocalMediaUploadRecord {
         val mediaAssetId = mediaAssetIdText.toUuidOrThrow()
         if (bytes.isEmpty()) throw MediaException("INVALID_MEDIA_BYTE_SIZE")
@@ -40,14 +40,14 @@ class LocalMediaUploadStorage(
             },
             CREATE,
             TRUNCATE_EXISTING,
-            WRITE
+            WRITE,
         )
 
         return LocalMediaUploadRecord(
             mediaAssetId = mediaAssetId,
             dataPath = dataPath,
             metadataPath = metadataPath,
-            byteSize = bytes.size
+            byteSize = bytes.size,
         )
     }
 
@@ -56,25 +56,26 @@ class LocalMediaUploadStorage(
         val paths = mediaAssetId.localPaths()
         if (!Files.exists(paths.dataPath)) throw MediaException("MEDIA_ASSET_NOT_FOUND")
 
-        val metadata = if (Files.exists(paths.metadataPath)) {
-            Files.readAllLines(paths.metadataPath)
-                .mapNotNull { line ->
-                    val separator = line.indexOf('=')
-                    if (separator <= 0) {
-                        null
-                    } else {
-                        line.substring(0, separator) to line.substring(separator + 1)
-                    }
-                }
-                .toMap()
-        } else {
-            emptyMap()
-        }
+        val metadata =
+            if (Files.exists(paths.metadataPath)) {
+                Files
+                    .readAllLines(paths.metadataPath)
+                    .mapNotNull { line ->
+                        val separator = line.indexOf('=')
+                        if (separator <= 0) {
+                            null
+                        } else {
+                            line.substring(0, separator) to line.substring(separator + 1)
+                        }
+                    }.toMap()
+            } else {
+                emptyMap()
+            }
 
         return LocalMediaUploadContent(
             mediaAssetId = mediaAssetId,
             contentType = metadata["contentType"] ?: "application/octet-stream",
-            bytes = Files.readAllBytes(paths.dataPath)
+            bytes = Files.readAllBytes(paths.dataPath),
         )
     }
 
@@ -82,25 +83,24 @@ class LocalMediaUploadStorage(
         val assetDirectory = rootDirectory.resolve(toString().take(2)).normalize()
         return LocalMediaUploadPaths(
             dataPath = assetDirectory.resolve("$this.bin"),
-            metadataPath = assetDirectory.resolve("$this.meta")
+            metadataPath = assetDirectory.resolve("$this.meta"),
         )
     }
 
-    private fun String.toUuidOrThrow(): UUID =
-        runCatching { UUID.fromString(this) }.getOrElse { throw MediaException("INVALID_ID") }
+    private fun String.toUuidOrThrow(): UUID = runCatching { UUID.fromString(this) }.getOrElse { throw MediaException("INVALID_ID") }
 }
 
 data class LocalMediaUploadRecord(
     val mediaAssetId: UUID,
     val dataPath: Path,
     val metadataPath: Path,
-    val byteSize: Int
+    val byteSize: Int,
 )
 
 data class LocalMediaUploadContent(
     val mediaAssetId: UUID,
     val contentType: String,
-    val bytes: ByteArray
+    val bytes: ByteArray,
 ) {
     override fun equals(other: Any?): Boolean =
         other is LocalMediaUploadContent &&
@@ -118,5 +118,5 @@ data class LocalMediaUploadContent(
 
 private data class LocalMediaUploadPaths(
     val dataPath: Path,
-    val metadataPath: Path
+    val metadataPath: Path,
 )

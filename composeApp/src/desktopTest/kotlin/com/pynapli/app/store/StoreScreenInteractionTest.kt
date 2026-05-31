@@ -27,35 +27,36 @@ import kotlin.test.assertEquals
 class StoreScreenInteractionTest {
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun storeShowsPlansProductsAndRefreshesInventoryAfterPurchase() = runComposeUiTest {
-        val repository = RefreshingStoreRepository()
-        val gateway = RecordingStorePurchaseGateway()
-        val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
+    fun storeShowsPlansProductsAndRefreshesInventoryAfterPurchase() =
+        runComposeUiTest {
+            val repository = RefreshingStoreRepository()
+            val gateway = RecordingStorePurchaseGateway()
+            val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
 
-        setContent {
-            PynapliTheme(themeMode = "dark") {
-                Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
-                    StoreScreen(stateHolder = stateHolder)
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        StoreScreen(stateHolder = stateHolder)
+                    }
                 }
             }
+
+            waitUntil(timeoutMillis = 5_000) { repository.loadCount == 1 }
+            onNodeWithText("Plans").assertExists()
+            onNodeWithText("Pynapli Select").assertExists()
+            onNodeWithTag(StoreTestTags.LIST).performScrollToNode(hasText("Boosts & extras"))
+            onNodeWithText("Boosts & extras").assertExists()
+            onNodeWithText("Boost").assertExists()
+            onNodeWithText("Balance: 0").assertExists()
+
+            onNodeWithText("\$2.99").performClick()
+            waitUntil(timeoutMillis = 5_000) { gateway.productPurchaseCount == 1 }
+            waitUntil(timeoutMillis = 5_000) { stateHolder.state.value.balanceFor(PremiumInventoryType.BOOST) == 1 }
+
+            assertEquals(2, repository.loadCount)
+            onNodeWithText("Boost added.").assertExists()
+            onNodeWithText("Balance: 1").assertExists()
         }
-
-        waitUntil(timeoutMillis = 5_000) { repository.loadCount == 1 }
-        onNodeWithText("Plans").assertExists()
-        onNodeWithText("Pynapli Select").assertExists()
-        onNodeWithTag(StoreTestTags.LIST).performScrollToNode(hasText("Boosts & extras"))
-        onNodeWithText("Boosts & extras").assertExists()
-        onNodeWithText("Boost").assertExists()
-        onNodeWithText("Balance: 0").assertExists()
-
-        onNodeWithText("\$2.99").performClick()
-        waitUntil(timeoutMillis = 5_000) { gateway.productPurchaseCount == 1 }
-        waitUntil(timeoutMillis = 5_000) { stateHolder.state.value.balanceFor(PremiumInventoryType.BOOST) == 1 }
-
-        assertEquals(2, repository.loadCount)
-        onNodeWithText("Boost added.").assertExists()
-        onNodeWithText("Balance: 1").assertExists()
-    }
 }
 
 private class RefreshingStoreRepository : StoreRepository {
@@ -68,13 +69,14 @@ private class RefreshingStoreRepository : StoreRepository {
             StoreUi(
                 tiers = listOf(freeTier(), socialTier(), selectTier()),
                 premiumProducts = listOf(boostProduct()),
-                balances = if (loadCount > 1) {
-                    listOf(PremiumInventoryBalanceDto(PremiumInventoryType.BOOST, quantity = 1))
-                } else {
-                    emptyList()
-                },
-                entitlement = entitlement()
-            )
+                balances =
+                    if (loadCount > 1) {
+                        listOf(PremiumInventoryBalanceDto(PremiumInventoryType.BOOST, quantity = 1))
+                    } else {
+                        emptyList()
+                    },
+                entitlement = entitlement(),
+            ),
         )
     }
 }
@@ -83,16 +85,14 @@ private class RecordingStorePurchaseGateway : StorePurchaseGateway {
     var productPurchaseCount = 0
         private set
 
-    override suspend fun purchase(tier: SubscriptionTierDto): AppResult<StorePurchaseResult> =
-        AppResult.Success(StorePurchaseResult(message = "${tier.displayName} active."))
+    override suspend fun purchase(tier: SubscriptionTierDto): AppResult<StorePurchaseResult> = AppResult.Success(StorePurchaseResult(message = "${tier.displayName} active."))
 
     override suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult> {
         productPurchaseCount += 1
         return AppResult.Success(StorePurchaseResult(message = "${product.displayName} added."))
     }
 
-    override suspend fun restorePurchases(): AppResult<StorePurchaseResult> =
-        AppResult.Success(StorePurchaseResult(message = "Store refreshed."))
+    override suspend fun restorePurchases(): AppResult<StorePurchaseResult> = AppResult.Success(StorePurchaseResult(message = "Store refreshed."))
 }
 
 private fun freeTier(): SubscriptionTierDto =
@@ -102,7 +102,7 @@ private fun freeTier(): SubscriptionTierDto =
         monthlyPriceUsdCents = 0,
         adSupported = true,
         linkedPartnerIncluded = false,
-        features = listOf("Grid browsing", "Swipe matching")
+        features = listOf("Grid browsing", "Swipe matching"),
     )
 
 private fun socialTier(): SubscriptionTierDto =
@@ -113,7 +113,7 @@ private fun socialTier(): SubscriptionTierDto =
         adSupported = false,
         linkedPartnerIncluded = true,
         features = listOf("No ads", "Saved filters"),
-        playStoreProductId = SubscriptionProductId.PLAY_SOCIAL_MONTHLY
+        playStoreProductId = SubscriptionProductId.PLAY_SOCIAL_MONTHLY,
     )
 
 private fun selectTier(): SubscriptionTierDto =
@@ -124,7 +124,7 @@ private fun selectTier(): SubscriptionTierDto =
         adSupported = false,
         linkedPartnerIncluded = true,
         features = listOf("Full Activity reveal", "Intro Notes"),
-        playStoreProductId = SubscriptionProductId.PLAY_SELECT_MONTHLY
+        playStoreProductId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
     )
 
 private fun boostProduct(): PremiumProductDto =
@@ -135,7 +135,7 @@ private fun boostProduct(): PremiumProductDto =
         description = "Increase visibility for 30 minutes.",
         priceUsdCents = 299,
         quantity = 1,
-        features = listOf("30-minute visibility lift")
+        features = listOf("30-minute visibility lift"),
     )
 
 private fun entitlement(): SubscriptionEntitlementDto =
@@ -144,5 +144,5 @@ private fun entitlement(): SubscriptionEntitlementDto =
         source = EntitlementSource.FREE,
         displayName = "Pynapli Free",
         adSupported = true,
-        linkedPartnerIncluded = false
+        linkedPartnerIncluded = false,
     )

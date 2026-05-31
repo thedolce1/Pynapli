@@ -8,7 +8,7 @@ import com.pynapli.shared.network.dto.EmailSignupRequestDto
 
 class AuthRepository(
     private val apiClient: PynapliApiClient,
-    private val sessionStore: SessionStore
+    private val sessionStore: SessionStore,
 ) {
     suspend fun currentSession(): StoredSession? = sessionStore.currentSession()
 
@@ -31,16 +31,17 @@ class AuthRepository(
         email: String,
         password: String,
         platform: String,
-        appVersion: String
+        appVersion: String,
     ): AppResult<StoredSession> {
-        val result = apiClient.emailLogin(
-            EmailLoginRequestDto(
-                email = email,
-                password = password,
-                platform = platform,
-                appVersion = appVersion
+        val result =
+            apiClient.emailLogin(
+                EmailLoginRequestDto(
+                    email = email,
+                    password = password,
+                    platform = platform,
+                    appVersion = appVersion,
+                ),
             )
-        )
         return result.persistSession()
     }
 
@@ -52,20 +53,21 @@ class AuthRepository(
         acceptedTerms: Boolean,
         acceptedPrivacy: Boolean,
         platform: String,
-        appVersion: String
+        appVersion: String,
     ): AppResult<StoredSession> {
-        val result = apiClient.emailSignup(
-            EmailSignupRequestDto(
-                email = email,
-                password = password,
-                birthdate = birthdate,
-                confirmedAdult = confirmedAdult,
-                acceptedTerms = acceptedTerms,
-                acceptedPrivacy = acceptedPrivacy,
-                platform = platform,
-                appVersion = appVersion
+        val result =
+            apiClient.emailSignup(
+                EmailSignupRequestDto(
+                    email = email,
+                    password = password,
+                    birthdate = birthdate,
+                    confirmedAdult = confirmedAdult,
+                    acceptedTerms = acceptedTerms,
+                    acceptedPrivacy = acceptedPrivacy,
+                    platform = platform,
+                    appVersion = appVersion,
+                ),
             )
-        )
         return result.persistSession()
     }
 
@@ -84,19 +86,21 @@ class AuthRepository(
             is AppResult.Failure -> this
         }
 
-    private fun AuthSessionDto.toStoredSession(): StoredSession = StoredSession(
-        accessToken = accessToken,
-        refreshToken = refreshToken,
-        userId = user.userId,
-        userStatus = user.status
-    )
+    private fun AuthSessionDto.toStoredSession(): StoredSession =
+        StoredSession(
+            accessToken = accessToken,
+            refreshToken = refreshToken,
+            userId = user.userId,
+            userStatus = user.status,
+        )
 
     private companion object {
-        private val terminalAuthErrorCodes = setOf(
-            "UNAUTHENTICATED",
-            "INVALID_REFRESH_TOKEN",
-            "ACCOUNT_NOT_ACTIVE",
-            "HTTP_401"
-        )
+        private val terminalAuthErrorCodes =
+            setOf(
+                "UNAUTHENTICATED",
+                "INVALID_REFRESH_TOKEN",
+                "ACCOUNT_NOT_ACTIVE",
+                "HTTP_401",
+            )
     }
 }

@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.update
  * "no presets" state.
  */
 class SavedSwipeFilterStateHolder(
-    private val repository: SavedSwipeFilterRepository
+    private val repository: SavedSwipeFilterRepository,
 ) {
     private val _state = MutableStateFlow(SavedSwipeFiltersUiState())
     val state: StateFlow<SavedSwipeFiltersUiState> = _state.asStateFlow()
@@ -26,28 +26,33 @@ class SavedSwipeFilterStateHolder(
     suspend fun load() {
         _state.update { it.copy(isLoading = true, errorMessage = null, errorCode = null) }
         when (val result = repository.list()) {
-            is AppResult.Success -> _state.update {
-                it.copy(isLoading = false, items = result.value)
-            }
-            is AppResult.Failure -> _state.update {
-                val entitlement = result.error.code == "ENTITLEMENT_REQUIRED"
-                it.copy(
-                    isLoading = false,
-                    items = if (entitlement) emptyList() else it.items,
-                    errorCode = result.error.code,
-                    errorMessage = if (entitlement) null else result.error.message
-                )
-            }
+            is AppResult.Success ->
+                _state.update {
+                    it.copy(isLoading = false, items = result.value)
+                }
+            is AppResult.Failure ->
+                _state.update {
+                    val entitlement = result.error.code == "ENTITLEMENT_REQUIRED"
+                    it.copy(
+                        isLoading = false,
+                        items = if (entitlement) emptyList() else it.items,
+                        errorCode = result.error.code,
+                        errorMessage = if (entitlement) null else result.error.message,
+                    )
+                }
         }
     }
 
-    suspend fun save(name: String, filters: SwipeFilters) {
+    suspend fun save(
+        name: String,
+        filters: SwipeFilters,
+    ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) {
             _state.update {
                 it.copy(
                     errorCode = "INVALID_SAVED_FILTER_NAME",
-                    errorMessage = "Name a saved filter before saving."
+                    errorMessage = "Name a saved filter before saving.",
                 )
             }
             return
@@ -55,42 +60,47 @@ class SavedSwipeFilterStateHolder(
         _state.update { it.copy(isSaving = true, errorMessage = null, errorCode = null) }
         val payload = filters.toSwipeDeckRequest(cursor = null)
         when (
-            val result = repository.create(
-                CreateSavedSwipeFilterRequestDto(name = trimmed, payload = payload)
-            )
+            val result =
+                repository.create(
+                    CreateSavedSwipeFilterRequestDto(name = trimmed, payload = payload),
+                )
         ) {
-            is AppResult.Success -> _state.update {
-                it.copy(
-                    isSaving = false,
-                    items = (it.items + result.value).sortedByDescending { dto -> dto.createdAt }
-                )
-            }
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    isSaving = false,
-                    errorCode = result.error.code,
-                    errorMessage = result.error.message
-                )
-            }
+            is AppResult.Success ->
+                _state.update {
+                    it.copy(
+                        isSaving = false,
+                        items = (it.items + result.value).sortedByDescending { dto -> dto.createdAt },
+                    )
+                }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        isSaving = false,
+                        errorCode = result.error.code,
+                        errorMessage = result.error.message,
+                    )
+                }
         }
     }
 
     suspend fun delete(id: String) {
         _state.update { it.copy(deletingId = id, errorMessage = null, errorCode = null) }
         when (val result = repository.delete(id)) {
-            is AppResult.Success -> _state.update {
-                it.copy(
-                    deletingId = null,
-                    items = it.items.filterNot { dto -> dto.id == id }
-                )
-            }
-            is AppResult.Failure -> _state.update {
-                it.copy(
-                    deletingId = null,
-                    errorCode = result.error.code,
-                    errorMessage = result.error.message
-                )
-            }
+            is AppResult.Success ->
+                _state.update {
+                    it.copy(
+                        deletingId = null,
+                        items = it.items.filterNot { dto -> dto.id == id },
+                    )
+                }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        deletingId = null,
+                        errorCode = result.error.code,
+                        errorMessage = result.error.message,
+                    )
+                }
         }
     }
 
@@ -106,19 +116,21 @@ data class SavedSwipeFiltersUiState(
     val isSaving: Boolean = false,
     val deletingId: String? = null,
     val errorCode: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 ) {
     val entitlementRequired: Boolean get() = errorCode == "ENTITLEMENT_REQUIRED"
 }
 
 interface SavedSwipeFilterRepository {
     suspend fun list(): AppResult<List<SavedSwipeFilterDto>>
+
     suspend fun create(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto>
+
     suspend fun delete(id: String): AppResult<Unit>
 }
 
 class ApiSavedSwipeFilterRepository(
-    private val apiClient: PynapliApiClient
+    private val apiClient: PynapliApiClient,
 ) : SavedSwipeFilterRepository {
     override suspend fun list(): AppResult<List<SavedSwipeFilterDto>> =
         when (val result = apiClient.listSavedSwipeFilters()) {
@@ -126,8 +138,7 @@ class ApiSavedSwipeFilterRepository(
             is AppResult.Failure -> result
         }
 
-    override suspend fun create(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto> =
-        apiClient.createSavedSwipeFilter(request)
+    override suspend fun create(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto> = apiClient.createSavedSwipeFilter(request)
 
     override suspend fun delete(id: String): AppResult<Unit> = apiClient.deleteSavedSwipeFilter(id)
 }

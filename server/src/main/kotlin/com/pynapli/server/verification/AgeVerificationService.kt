@@ -1,10 +1,10 @@
 package com.pynapli.server.verification
 
+import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationMethodDto
 import com.pynapli.shared.network.dto.AgeVerificationRequirementsDto
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
-import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import java.time.Clock
 import java.time.Instant
@@ -14,7 +14,7 @@ import java.util.UUID
 
 class AgeVerificationService(
     private val repository: AgeVerificationRepository,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     suspend fun requirements(userId: UUID): AgeVerificationRequirementsDto {
         val profile = repository.getProfileState(userId) ?: throw VerificationException("PROFILE_NOT_FOUND")
@@ -23,8 +23,9 @@ class AgeVerificationService(
             required = profile.ageVerifiedAt == null,
             enhancedRequired = false,
             acceptedMethods = listOf(AgeVerificationMethodDto(METHOD_MANUAL_REVIEW, "Manual review")),
-            status = latest?.toDto(profile.ageVerifiedAt)
-                ?: profile.ageVerifiedAt?.let { verifiedProfileStatus(it) }
+            status =
+                latest?.toDto(profile.ageVerifiedAt)
+                    ?: profile.ageVerifiedAt?.let { verifiedProfileStatus(it) },
         )
     }
 
@@ -34,11 +35,14 @@ class AgeVerificationService(
             ?: profile.ageVerifiedAt?.let { verifiedProfileStatus(it) }
             ?: AgeVerificationStatusDto(
                 status = STATUS_NOT_STARTED,
-                message = "Age verification has not started."
+                message = "Age verification has not started.",
             )
     }
 
-    suspend fun start(userId: UUID, request: StartAgeVerificationRequestDto): AgeVerificationStatusDto {
+    suspend fun start(
+        userId: UUID,
+        request: StartAgeVerificationRequestDto,
+    ): AgeVerificationStatusDto {
         val profile = repository.getProfileState(userId) ?: throw VerificationException("PROFILE_NOT_FOUND")
         val latest = repository.latestForUser(userId)
 
@@ -52,45 +56,51 @@ class AgeVerificationService(
 
         if (latest?.status == STATUS_PENDING) return latest.toDto(profile.ageVerifiedAt)
 
-        val method = request.method?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: METHOD_MANUAL_REVIEW
+        val method =
+            request.method
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf { it.isNotEmpty() } ?: METHOD_MANUAL_REVIEW
         if (method != METHOD_MANUAL_REVIEW) throw VerificationException("INVALID_VERIFICATION_METHOD")
 
-        val record = repository.createPending(
-            verificationId = UUID.randomUUID(),
-            userId = userId,
-            market = request.market.cleanMarket(),
-            method = method,
-            provider = PROVIDER_INTERNAL_MANUAL,
-            providerReference = null,
-            requestedAt = clock.instant()
-        )
+        val record =
+            repository.createPending(
+                verificationId = UUID.randomUUID(),
+                userId = userId,
+                market = request.market.cleanMarket(),
+                method = method,
+                provider = PROVIDER_INTERNAL_MANUAL,
+                providerReference = null,
+                requestedAt = clock.instant(),
+            )
         return record.toDto(profile.ageVerifiedAt)
     }
 
     suspend fun review(
         verificationIdText: String,
         request: AdminAgeVerificationReviewRequestDto,
-        actorId: String
+        actorId: String,
     ): AgeVerificationStatusDto {
         val verificationId = verificationIdText.toUuidOrThrow()
         val normalizedStatus = request.status.normalizeReviewStatus()
         val now = clock.instant()
-        val record = repository.review(
-            verificationId = verificationId,
-            status = normalizedStatus,
-            verifiedAt = now.takeIf { normalizedStatus == STATUS_VERIFIED },
-            expiresAt = null,
-            reviewerId = actorId,
-            reason = request.reason.cleanReason(),
-            reviewedAt = now
-        ) ?: throw VerificationException("VERIFICATION_NOT_FOUND")
+        val record =
+            repository.review(
+                verificationId = verificationId,
+                status = normalizedStatus,
+                verifiedAt = now.takeIf { normalizedStatus == STATUS_VERIFIED },
+                expiresAt = null,
+                reviewerId = actorId,
+                reason = request.reason.cleanReason(),
+                reviewedAt = now,
+            ) ?: throw VerificationException("VERIFICATION_NOT_FOUND")
         return record.toDto(if (normalizedStatus == STATUS_VERIFIED) now else null)
     }
 
     suspend fun callback(
         request: AgeVerificationCallbackRequestDto,
         actorId: String,
-        fallbackReason: String?
+        fallbackReason: String?,
     ): AgeVerificationStatusDto {
         val normalizedStatus = request.status.normalizeReviewStatus()
         val provider = request.provider.cleanProvider()
@@ -99,24 +109,26 @@ class AgeVerificationService(
         val userId = existing?.userId ?: request.userId?.toUuidOrThrow() ?: throw VerificationException("INVALID_VERIFICATION_CALLBACK")
         val profile = repository.getProfileState(userId) ?: throw VerificationException("PROFILE_NOT_FOUND")
         val verificationId = existing?.id ?: request.verificationId?.toUuidOrThrow() ?: UUID.randomUUID()
-        val verifiedAt = request.verifiedAt?.toInstantOrThrow()
-            ?: clock.instant().takeIf { normalizedStatus == STATUS_VERIFIED }
+        val verifiedAt =
+            request.verifiedAt?.toInstantOrThrow()
+                ?: clock.instant().takeIf { normalizedStatus == STATUS_VERIFIED }
         val expiresAt = request.expiresAt?.toInstantOrThrow()
 
-        val record = repository.recordCallback(
-            verificationId = verificationId,
-            userId = userId,
-            market = DEFAULT_MARKET,
-            method = METHOD_PROVIDER_CALLBACK,
-            provider = provider,
-            providerReference = providerReference,
-            status = normalizedStatus,
-            verifiedAt = verifiedAt,
-            expiresAt = expiresAt,
-            reviewerId = actorId,
-            reason = request.reason.cleanReason() ?: fallbackReason.cleanReason(),
-            reviewedAt = clock.instant()
-        )
+        val record =
+            repository.recordCallback(
+                verificationId = verificationId,
+                userId = userId,
+                market = DEFAULT_MARKET,
+                method = METHOD_PROVIDER_CALLBACK,
+                provider = provider,
+                providerReference = providerReference,
+                status = normalizedStatus,
+                verifiedAt = verifiedAt,
+                expiresAt = expiresAt,
+                reviewerId = actorId,
+                reason = request.reason.cleanReason() ?: fallbackReason.cleanReason(),
+                reviewedAt = clock.instant(),
+            )
         return record.toDto(if (normalizedStatus == STATUS_VERIFIED) verifiedAt else profile.ageVerifiedAt)
     }
 
@@ -130,7 +142,7 @@ class AgeVerificationService(
             requestedAt = requestedAt.toString(),
             verifiedAt = effectiveVerifiedAt?.toString(),
             expiresAt = expiresAt?.toString(),
-            message = messageFor(effectiveStatus)
+            message = messageFor(effectiveStatus),
         )
     }
 
@@ -142,17 +154,14 @@ class AgeVerificationService(
             requestedAt = null,
             verifiedAt = verifiedAt.toString(),
             expiresAt = null,
-            message = messageFor(STATUS_VERIFIED)
+            message = messageFor(STATUS_VERIFIED),
         )
 
-    private fun isAdult(birthdate: LocalDate): Boolean =
-        Period.between(birthdate, LocalDate.now(clock)).years >= 18
+    private fun isAdult(birthdate: LocalDate): Boolean = Period.between(birthdate, LocalDate.now(clock)).years >= 18
 
-    private fun String?.cleanMarket(): String =
-        this?.trim()?.lowercase()?.takeIf { it.matches(SAFE_TOKEN_REGEX) } ?: DEFAULT_MARKET
+    private fun String?.cleanMarket(): String = this?.trim()?.lowercase()?.takeIf { it.matches(SAFE_TOKEN_REGEX) } ?: DEFAULT_MARKET
 
-    private fun String?.cleanProvider(): String =
-        this?.trim()?.lowercase()?.takeIf { it.matches(SAFE_TOKEN_REGEX) } ?: PROVIDER_CALLBACK
+    private fun String?.cleanProvider(): String = this?.trim()?.lowercase()?.takeIf { it.matches(SAFE_TOKEN_REGEX) } ?: PROVIDER_CALLBACK
 
     private fun String?.cleanReason(): String? {
         val value = this?.trim()?.takeIf { it.isNotEmpty() } ?: return null
@@ -167,18 +176,17 @@ class AgeVerificationService(
             else -> throw VerificationException("INVALID_VERIFICATION_STATUS")
         }
 
-    private fun String.toUuidOrThrow(): UUID =
-        runCatching { UUID.fromString(this) }.getOrElse { throw VerificationException("INVALID_VERIFICATION_ID") }
+    private fun String.toUuidOrThrow(): UUID = runCatching { UUID.fromString(this) }.getOrElse { throw VerificationException("INVALID_VERIFICATION_ID") }
 
-    private fun String.toInstantOrThrow(): Instant =
-        runCatching { Instant.parse(this) }.getOrElse { throw VerificationException("INVALID_VERIFICATION_CALLBACK") }
+    private fun String.toInstantOrThrow(): Instant = runCatching { Instant.parse(this) }.getOrElse { throw VerificationException("INVALID_VERIFICATION_CALLBACK") }
 
-    private fun messageFor(status: String): String = when (status) {
-        STATUS_VERIFIED -> "Age verification is complete."
-        STATUS_PENDING -> "Age verification is pending review."
-        STATUS_REJECTED -> "Age verification was not approved."
-        else -> "Age verification has not started."
-    }
+    private fun messageFor(status: String): String =
+        when (status) {
+            STATUS_VERIFIED -> "Age verification is complete."
+            STATUS_PENDING -> "Age verification is pending review."
+            STATUS_REJECTED -> "Age verification was not approved."
+            else -> "Age verification has not started."
+        }
 
     companion object {
         private const val DEFAULT_MARKET = "default"
@@ -194,4 +202,6 @@ class AgeVerificationService(
     }
 }
 
-class VerificationException(val code: String) : RuntimeException(code)
+class VerificationException(
+    val code: String,
+) : RuntimeException(code)

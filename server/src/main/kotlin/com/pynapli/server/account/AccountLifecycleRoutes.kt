@@ -16,7 +16,7 @@ import io.ktor.server.routing.routing
 
 fun Application.configureAccountLifecycleRoutes(
     authService: AuthService?,
-    accountLifecycleService: AccountLifecycleService?
+    accountLifecycleService: AccountLifecycleService?,
 ) {
     if (authService == null || accountLifecycleService == null) return
 

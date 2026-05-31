@@ -6,30 +6,34 @@ import com.pynapli.shared.network.dto.MessageDto
 
 internal fun ConversationDetailDto.withAppendedMessage(message: MessageDto): ConversationDetailDto =
     copy(
-        conversation = conversation.copy(
-            lastMessage = message,
-            unreadCount = 0,
-            updatedAt = message.createdAt
-        ),
-        messages = messages + message
+        conversation =
+            conversation.copy(
+                lastMessage = message,
+                unreadCount = 0,
+                updatedAt = message.createdAt,
+            ),
+        messages = messages + message,
     )
 
 internal fun ConversationDetailDto.withUpdatedMessage(message: MessageDto): ConversationDetailDto =
     copy(
-        conversation = conversation.copy(
-            lastMessage = if (conversation.lastMessage?.messageId == message.messageId) {
-                message
-            } else {
-                conversation.lastMessage
-            }
-        ),
-        messages = messages.map { existing ->
-            if (existing.messageId == message.messageId) message else existing
-        }
+        conversation =
+            conversation.copy(
+                lastMessage =
+                    if (conversation.lastMessage?.messageId == message.messageId) {
+                        message
+                    } else {
+                        conversation.lastMessage
+                    },
+            ),
+        messages =
+            messages.map { existing ->
+                if (existing.messageId == message.messageId) message else existing
+            },
     )
 
 internal suspend fun ConversationDetailDto.withReadConversation(
-    repository: ConversationRepository
+    repository: ConversationRepository,
 ): ConversationDetailDto =
     when (val readResult = repository.markConversationRead(conversation.conversationId)) {
         is AppResult.Success -> copy(conversation = readResult.value)
@@ -40,13 +44,13 @@ internal fun ConversationDetailDto.withPrependedPage(page: ConversationDetailDto
     copy(
         conversation = page.conversation,
         messages = mergeMessages(page.messages + messages),
-        nextCursor = page.nextCursor
+        nextCursor = page.nextCursor,
     )
 
 internal fun ConversationDetailDto.withMergedMessagesFrom(existing: ConversationDetailDto): ConversationDetailDto =
     copy(
         messages = mergeMessages(existing.messages + messages),
-        nextCursor = existing.nextCursor ?: nextCursor
+        nextCursor = existing.nextCursor ?: nextCursor,
     )
 
 private fun mergeMessages(messages: List<MessageDto>): List<MessageDto> =

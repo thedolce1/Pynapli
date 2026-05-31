@@ -28,7 +28,7 @@ import kotlinx.serialization.json.Json
 data class PresenceStreamBackoff(
     val initialDelayMillis: Long = 1_000L,
     val maxDelayMillis: Long = 30_000L,
-    val factor: Double = 2.0
+    val factor: Double = 2.0,
 ) {
     fun delayMillisFor(attempt: Int): Long {
         if (attempt <= 0) return initialDelayMillis
@@ -43,7 +43,9 @@ data class PresenceStreamBackoff(
 
 interface PresenceStreamSession {
     suspend fun send(text: String)
+
     suspend fun receiveText(): String?
+
     suspend fun close()
 }
 
@@ -55,97 +57,104 @@ class PresenceStreamClient(
     private val sessionFactory: PresenceStreamSessionFactory,
     private val tokenProvider: AccessTokenProvider,
     private val backoff: PresenceStreamBackoff = PresenceStreamBackoff(),
-    private val json: Json = PynapliJson
+    private val json: Json = PynapliJson,
 ) {
-    fun connect(userIds: Flow<Set<String>>): Flow<PresenceDeltaDto> = flow {
-        var attempt = 0
-        while (currentCoroutineContext().isActive) {
-            val token = tokenProvider.accessToken()
-            if (token.isNullOrEmpty()) {
-                delay(backoff.delayMillisFor(attempt))
-                attempt += 1
-                continue
-            }
-            val session = try {
-                sessionFactory.connect(token)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Throwable) {
-                delay(backoff.delayMillisFor(attempt))
-                attempt += 1
-                continue
-            }
-            attempt = 0
-            try {
-                coroutineScope {
-                    val senderJob = launch {
-                        userIds.collect { ids ->
-                            val payload = json.encodeToString(
-                                PresenceStreamSubscribeDto.serializer(),
-                                PresenceStreamSubscribeDto(userIds = ids.toList())
-                            )
-                            session.send(payload)
-                        }
-                    }
-                    try {
-                        while (true) {
-                            val text = session.receiveText() ?: break
-                            val delta = runCatching {
-                                json.decodeFromString(PresenceDeltaDto.serializer(), text)
-                            }.getOrNull() ?: continue
-                            emit(delta)
-                        }
-                    } finally {
-                        senderJob.cancel()
-                    }
+    fun connect(userIds: Flow<Set<String>>): Flow<PresenceDeltaDto> =
+        flow {
+            var attempt = 0
+            while (currentCoroutineContext().isActive) {
+                val token = tokenProvider.accessToken()
+                if (token.isNullOrEmpty()) {
+                    delay(backoff.delayMillisFor(attempt))
+                    attempt += 1
+                    continue
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Throwable) {
-                // Fall through to reconnect path.
-            } finally {
-                runCatching { session.close() }
+                val session =
+                    try {
+                        sessionFactory.connect(token)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Throwable) {
+                        delay(backoff.delayMillisFor(attempt))
+                        attempt += 1
+                        continue
+                    }
+                attempt = 0
+                try {
+                    coroutineScope {
+                        val senderJob =
+                            launch {
+                                userIds.collect { ids ->
+                                    val payload =
+                                        json.encodeToString(
+                                            PresenceStreamSubscribeDto.serializer(),
+                                            PresenceStreamSubscribeDto(userIds = ids.toList()),
+                                        )
+                                    session.send(payload)
+                                }
+                            }
+                        try {
+                            while (true) {
+                                val text = session.receiveText() ?: break
+                                val delta =
+                                    runCatching {
+                                        json.decodeFromString(PresenceDeltaDto.serializer(), text)
+                                    }.getOrNull() ?: continue
+                                emit(delta)
+                            }
+                        } finally {
+                            senderJob.cancel()
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Throwable) {
+                    // Fall through to reconnect path.
+                } finally {
+                    runCatching { session.close() }
+                }
             }
         }
-    }
 }
 
 class KtorPresenceStreamSessionFactory(
     private val httpClient: HttpClient,
     private val streamUrl: String,
-    private val sessionScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val sessionScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : PresenceStreamSessionFactory {
     override suspend fun connect(token: String): PresenceStreamSession {
         val outgoing = Channel<String>(capacity = Channel.BUFFERED)
         val incoming = Channel<String>(capacity = Channel.BUFFERED)
         val ready = CompletableDeferred<Unit>()
-        val sessionJob: Job = sessionScope.launch {
-            try {
-                httpClient.webSocket(
-                    urlString = streamUrl,
-                    request = { header(HttpHeaders.Authorization, "Bearer $token") }
-                ) {
-                    ready.complete(Unit)
-                    val sender = launch {
-                        outgoing.consumeEach { text -> send(Frame.Text(text)) }
-                    }
-                    try {
-                        for (frame in this.incoming) {
-                            if (frame is Frame.Text) incoming.send(frame.readText())
+        val sessionJob: Job =
+            sessionScope.launch {
+                try {
+                    httpClient.webSocket(
+                        urlString = streamUrl,
+                        request = { header(HttpHeaders.Authorization, "Bearer $token") },
+                    ) {
+                        ready.complete(Unit)
+                        val sender =
+                            launch {
+                                outgoing.consumeEach { text -> send(Frame.Text(text)) }
+                            }
+                        try {
+                            for (frame in this.incoming) {
+                                if (frame is Frame.Text) incoming.send(frame.readText())
+                            }
+                        } finally {
+                            sender.cancel()
                         }
-                    } finally {
-                        sender.cancel()
                     }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    if (!ready.isCompleted) ready.completeExceptionally(e)
+                } finally {
+                    outgoing.close()
+                    incoming.close()
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                if (!ready.isCompleted) ready.completeExceptionally(e)
-            } finally {
-                outgoing.close()
-                incoming.close()
             }
-        }
         ready.await()
         return ChannelPresenceStreamSession(outgoing = outgoing, incoming = incoming, job = sessionJob)
     }
@@ -154,14 +163,13 @@ class KtorPresenceStreamSessionFactory(
 private class ChannelPresenceStreamSession(
     private val outgoing: Channel<String>,
     private val incoming: Channel<String>,
-    private val job: Job
+    private val job: Job,
 ) : PresenceStreamSession {
     override suspend fun send(text: String) {
         outgoing.send(text)
     }
 
-    override suspend fun receiveText(): String? =
-        runCatching { incoming.receive() }.getOrNull()
+    override suspend fun receiveText(): String? = runCatching { incoming.receive() }.getOrNull()
 
     override suspend fun close() {
         outgoing.close()
@@ -178,12 +186,14 @@ fun buildPresenceStreamClient(
     websocketHttpClient: HttpClient,
     websocketBaseUrl: String,
     tokenProvider: AccessTokenProvider,
-    backoff: PresenceStreamBackoff = PresenceStreamBackoff()
-): PresenceStreamClient = PresenceStreamClient(
-    sessionFactory = KtorPresenceStreamSessionFactory(
-        httpClient = websocketHttpClient,
-        streamUrl = websocketBaseUrl.trimEnd('/') + "/v1/presence/stream"
-    ),
-    tokenProvider = tokenProvider,
-    backoff = backoff
-)
+    backoff: PresenceStreamBackoff = PresenceStreamBackoff(),
+): PresenceStreamClient =
+    PresenceStreamClient(
+        sessionFactory =
+            KtorPresenceStreamSessionFactory(
+                httpClient = websocketHttpClient,
+                streamUrl = websocketBaseUrl.trimEnd('/') + "/v1/presence/stream",
+            ),
+        tokenProvider = tokenProvider,
+        backoff = backoff,
+    )
