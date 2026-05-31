@@ -80,6 +80,9 @@ class MediaRepositoryIntegrationTest {
             repository.markAssetReadyApproved(ownerId, approved.mediaAssetId)
             val rejected =
                 repository.createAsset(ownerId, sampleAssetCreate(ownerId, "rejected"), { UUID.fromString("20000000-0000-0000-0000-000000000303") })
+            // Mirror the real flow: an asset is uploaded, then moderation rejects it
+            // (markAssetModerationRejected only transitions uploaded/processing/ready assets).
+            repository.markAssetUploaded(ownerId, rejected.mediaAssetId)
             repository.markAssetModerationRejected(ownerId, rejected.mediaAssetId)
 
             val cutoff = Instant.now().plus(Duration.ofHours(1))

@@ -51,7 +51,7 @@ class JdbcMediaCleanupRepository(
         private val DELETE_REJECTED =
             """
             DELETE FROM media_assets
-            WHERE moderation_status = 'rejected'
+            WHERE moderation_status = 'removed'
               AND updated_at < ?
             """.trimIndent()
 

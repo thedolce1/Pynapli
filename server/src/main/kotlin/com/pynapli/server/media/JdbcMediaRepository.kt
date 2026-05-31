@@ -195,7 +195,7 @@ class JdbcMediaRepository(
                         """
                         UPDATE media_assets
                         SET processing_status = 'ready',
-                            moderation_status = 'rejected',
+                            moderation_status = 'removed',
                             updated_at = now()
                         WHERE id = ?
                           AND owner_user_id = ?
