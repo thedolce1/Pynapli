@@ -27,12 +27,15 @@ import com.pynapli.server.media.AutoApproveMediaModerationScanner
 import com.pynapli.server.media.GcsV4MediaAssetUrlResolver
 import com.pynapli.server.media.GcsV4MediaUploadSigner
 import com.pynapli.server.media.GcsV4SignedUrlFactory
+import com.pynapli.server.media.JdbcMediaCleanupRepository
 import com.pynapli.server.media.JdbcMediaRepository
 import com.pynapli.server.media.LocalDevMediaUploadSigner
 import com.pynapli.server.media.LocalMediaAssetUrlResolver
 import com.pynapli.server.media.LocalMediaUploadStorage
 import com.pynapli.server.media.ManualReviewMediaModerationScanner
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.media.MediaCleanupService
+import com.pynapli.server.media.MediaCleanupWorker
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.media.StaticMediaUploadSigner
 import com.pynapli.server.messaging.JdbcMessagingRepository
@@ -119,6 +122,7 @@ class ServerDependencies(
     val adminRiskService: AdminRiskService?,
     val activityService: ActivityService?,
     val activityRetentionWorker: ActivityRetentionWorker?,
+    val mediaCleanupWorker: MediaCleanupWorker?,
     val notificationService: NotificationService?,
     val notificationDispatchWorker: NotificationDispatchWorker?,
     val blockService: BlockService?,
@@ -150,6 +154,7 @@ class ServerDependencies(
         runCatching { presenceOfflineScanner?.close() }
         runCatching { playStoreSubscriptionSyncWorker?.close() }
         runCatching { activityRetentionWorker?.close() }
+        runCatching { mediaCleanupWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
         runCatching { profileActivityScope?.cancel() }
         probes.asReversed().forEach { probe ->
@@ -355,6 +360,15 @@ class ServerDependencies(
                 } else {
                     null
                 }
+            val mediaCleanupWorker =
+                if (config.mediaCleanupEnabled) {
+                    MediaCleanupWorker(
+                        service = MediaCleanupService(JdbcMediaCleanupRepository(database.dataSource)),
+                        intervalMillis = config.mediaCleanupIntervalMillis,
+                    )
+                } else {
+                    null
+                }
             val profileService =
                 ProfileService(
                     repository = JdbcProfileRepository(database.dataSource),
@@ -468,6 +482,7 @@ class ServerDependencies(
                 adminRiskService = adminRiskService,
                 activityService = activityService,
                 activityRetentionWorker = activityRetentionWorker,
+                mediaCleanupWorker = mediaCleanupWorker,
                 notificationService = notificationService,
                 notificationDispatchWorker = notificationDispatchWorker,
                 blockService = blockService,
@@ -542,6 +557,7 @@ class ServerDependencies(
                 adminRiskService = null,
                 activityService = null,
                 activityRetentionWorker = null,
+                mediaCleanupWorker = null,
                 notificationService = null,
                 notificationDispatchWorker = null,
                 blockService = null,
