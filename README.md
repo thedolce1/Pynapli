@@ -147,4 +147,4 @@ The mobile grid header profile icon opens the Albums screen for managing profile
 
 ## Specs
 
-The product and engineering specs live in [`docs/`](docs/). They are the canonical references during early buildout.
+The product and engineering specs live in [`docs/`](docs/) — see the [docs index](docs/README.md) for a grouped list of every spec. They are the canonical references during early buildout.
