@@ -164,6 +164,107 @@ class AgeVerificationServiceTest {
             assertEquals("provider-ref-1", repository.records.single().providerReference)
         }
 
+    @Test
+    fun requirementsAdvertisesOnlyManualReviewWithoutProvider() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service =
+                AgeVerificationService(
+                    InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01"))),
+                    clock,
+                )
+
+            val requirements = service.requirements(userId)
+
+            assertEquals(1, requirements.acceptedMethods.size)
+            assertEquals("manual_review", requirements.acceptedMethods.single().method)
+        }
+
+    @Test
+    fun startRejectsProviderMethodWhenNoProviderConfigured() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service =
+                AgeVerificationService(
+                    InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01"))),
+                    clock,
+                )
+
+            val error =
+                assertFailsWith<VerificationException> {
+                    service.start(
+                        userId,
+                        StartAgeVerificationRequestDto(confirmedAdult = true, method = "provider_hosted"),
+                    )
+                }
+
+            assertEquals("INVALID_VERIFICATION_METHOD", error.code)
+        }
+
+    @Test
+    fun requirementsAdvertisesProviderMethodWhenConfigured() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service =
+                AgeVerificationService(
+                    InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01"))),
+                    clock,
+                    provider = testProvider(),
+                )
+
+            val requirements = service.requirements(userId)
+
+            assertEquals(2, requirements.acceptedMethods.size)
+            assertEquals(
+                listOf("manual_review", "provider_hosted"),
+                requirements.acceptedMethods.map { it.method },
+            )
+            assertEquals("Persona ID", requirements.acceptedMethods[1].label)
+        }
+
+    @Test
+    fun startWithProviderMethodReturnsPendingRedirectAndPersistsProvider() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01")))
+            val service = AgeVerificationService(repository, clock, provider = testProvider())
+
+            val status =
+                service.start(
+                    userId,
+                    StartAgeVerificationRequestDto(confirmedAdult = true, method = "provider_hosted"),
+                )
+
+            assertEquals("pending", status.status)
+            assertNotNull(status.redirectUrl)
+            assertNotNull(status.providerReference)
+            val record = repository.records.single()
+            assertEquals("provider_hosted", record.method)
+            assertEquals("persona", record.provider)
+            assertEquals(status.providerReference, record.providerReference)
+        }
+
+    @Test
+    fun manualReviewStillWorksWithProviderConfigured() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01")))
+            val service = AgeVerificationService(repository, clock, provider = testProvider())
+
+            val status = service.start(userId, StartAgeVerificationRequestDto(confirmedAdult = true))
+
+            assertEquals("pending", status.status)
+            assertEquals(null, status.redirectUrl)
+            assertEquals("manual_review", repository.records.single().method)
+        }
+
+    private fun testProvider(): AgeVerificationProvider =
+        RedirectAgeVerificationProvider(
+            providerName = "persona",
+            label = "Persona ID",
+            redirectBaseUrl = "https://verify.example.com/start",
+        )
+
     private fun profile(
         userId: UUID,
         birthdate: LocalDate?,

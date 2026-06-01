@@ -59,6 +59,13 @@ data class ServerConfig(
     val playStoreRtdnOidcAudience: String? = null,
     val playStoreRtdnOidcServiceAccountEmail: String? = null,
     val devStorePurchasesEnabled: Boolean = false,
+    // Pluggable age-verification provider. When ageVerificationProvider + redirect base URL are both
+    // set, the server advertises a provider-hosted method alongside manual review and mints a redirect
+    // session on start(). The provider confirms the outcome later via the verification callback. Real
+    // provider integrations (handshake/webhook) are an ops step; the default impl is dependency-free.
+    val ageVerificationProvider: String? = null,
+    val ageVerificationProviderLabel: String = "Identity provider",
+    val ageVerificationProviderRedirectBaseUrl: String? = null,
     val adminApiToken: String? = null,
     val supportEmail: String = "support@pynapli.com",
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
@@ -274,6 +281,22 @@ data class ServerConfig(
                         .getenv("PYNAPLI_DEV_STORE_PURCHASES_ENABLED")
                         ?.toBooleanStrictOrNull()
                         ?: (environment == "local"),
+                ageVerificationProvider =
+                    System
+                        .getenv("PYNAPLI_AGE_VERIFICATION_PROVIDER")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() },
+                ageVerificationProviderLabel =
+                    System
+                        .getenv("PYNAPLI_AGE_VERIFICATION_PROVIDER_LABEL")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: "Identity provider",
+                ageVerificationProviderRedirectBaseUrl =
+                    System
+                        .getenv("PYNAPLI_AGE_VERIFICATION_PROVIDER_REDIRECT_BASE_URL")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() },
                 adminApiToken =
                     System
                         .getenv("PYNAPLI_ADMIN_API_TOKEN")

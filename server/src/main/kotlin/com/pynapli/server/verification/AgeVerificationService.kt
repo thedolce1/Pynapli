@@ -15,14 +15,20 @@ import java.util.UUID
 class AgeVerificationService(
     private val repository: AgeVerificationRepository,
     private val clock: Clock = Clock.systemUTC(),
+    private val provider: AgeVerificationProvider? = null,
 ) {
     suspend fun requirements(userId: UUID): AgeVerificationRequirementsDto {
         val profile = repository.getProfileState(userId) ?: throw VerificationException("PROFILE_NOT_FOUND")
         val latest = repository.latestForUser(userId)
+        val acceptedMethods =
+            buildList {
+                add(AgeVerificationMethodDto(METHOD_MANUAL_REVIEW, "Manual review"))
+                provider?.let { add(AgeVerificationMethodDto(it.methodKey, it.label)) }
+            }
         return AgeVerificationRequirementsDto(
             required = profile.ageVerifiedAt == null,
             enhancedRequired = false,
-            acceptedMethods = listOf(AgeVerificationMethodDto(METHOD_MANUAL_REVIEW, "Manual review")),
+            acceptedMethods = acceptedMethods,
             status =
                 latest?.toDto(profile.ageVerifiedAt)
                     ?: profile.ageVerifiedAt?.let { verifiedProfileStatus(it) },
@@ -61,13 +67,35 @@ class AgeVerificationService(
                 ?.trim()
                 ?.lowercase()
                 ?.takeIf { it.isNotEmpty() } ?: METHOD_MANUAL_REVIEW
+        val market = request.market.cleanMarket()
+
+        if (provider != null && method == provider.methodKey) {
+            val session = provider.startSession(userId, market)
+            val record =
+                repository.createPending(
+                    verificationId = UUID.randomUUID(),
+                    userId = userId,
+                    market = market,
+                    method = method,
+                    provider = provider.providerName,
+                    providerReference = session.providerReference,
+                    requestedAt = clock.instant(),
+                )
+            return record
+                .toDto(profile.ageVerifiedAt)
+                .copy(
+                    redirectUrl = session.redirectUrl,
+                    providerReference = session.providerReference,
+                )
+        }
+
         if (method != METHOD_MANUAL_REVIEW) throw VerificationException("INVALID_VERIFICATION_METHOD")
 
         val record =
             repository.createPending(
                 verificationId = UUID.randomUUID(),
                 userId = userId,
-                market = request.market.cleanMarket(),
+                market = market,
                 method = method,
                 provider = PROVIDER_INTERNAL_MANUAL,
                 providerReference = null,
