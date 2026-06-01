@@ -33,3 +33,25 @@ class GcsV4MediaAssetUrlResolver(
                 ttl = ttl,
             ).url
 }
+
+/**
+ * Production download resolver that serves media through a **Cloud CDN**-backed bucket via a
+ * short-lived Cloud CDN signed URL (see [CdnSignedUrlFactory]). The asset is reached at
+ * `{cdnBaseUrl}/{mediaObjectKey}` so the edge caches it; the signature, not the path, is the access
+ * gate, and callers still gate *who* receives a URL (e.g. private-album grant checks). Prefer this
+ * over [GcsV4MediaAssetUrlResolver] when a CDN is provisioned, for cheaper, lower-latency delivery.
+ */
+class CdnMediaAssetUrlResolver(
+    cdnBaseUrl: String,
+    private val signedUrlFactory: CdnSignedUrlFactory,
+    private val ttl: Duration = Duration.ofMinutes(15),
+) : MediaAssetUrlResolver {
+    private val normalizedBaseUrl = cdnBaseUrl.trimEnd('/')
+
+    override fun publicContentUrl(mediaAssetId: UUID): String =
+        signedUrlFactory
+            .sign(
+                baseUrl = "$normalizedBaseUrl/${mediaObjectKey(mediaAssetId)}",
+                ttl = ttl,
+            ).url
+}

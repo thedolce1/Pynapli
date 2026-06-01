@@ -24,6 +24,8 @@ import com.pynapli.server.location.JdbcTravelLocationRepository
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationService
 import com.pynapli.server.media.AutoApproveMediaModerationScanner
+import com.pynapli.server.media.CdnMediaAssetUrlResolver
+import com.pynapli.server.media.CdnSignedUrlFactory
 import com.pynapli.server.media.CloudVisionMediaModerationScanner
 import com.pynapli.server.media.GcsV4MediaAssetUrlResolver
 import com.pynapli.server.media.GcsV4MediaUploadSigner
@@ -222,14 +224,38 @@ class ServerDependencies(
                 } else {
                     null
                 }
+            // CDN signed-URL factory for the "cdn" delivery path (gcs storage only). Built only when
+            // the CDN base URL + key name + key are all configured; otherwise delivery falls back to
+            // direct GCS V4 signed URLs below.
+            val cdnSignedUrlFactory =
+                if (config.mediaStorageProvider.equals("gcs", ignoreCase = true) &&
+                    config.mediaDeliveryProvider.equals("cdn", ignoreCase = true) &&
+                    !config.mediaCdnBaseUrl.isNullOrBlank() &&
+                    !config.mediaCdnSigningKeyName.isNullOrBlank() &&
+                    !config.mediaCdnSigningKeyBase64Url.isNullOrBlank()
+                ) {
+                    CdnSignedUrlFactory(
+                        keyName = config.mediaCdnSigningKeyName,
+                        base64UrlKey = config.mediaCdnSigningKeyBase64Url,
+                    )
+                } else {
+                    null
+                }
             val mediaAssetUrlResolver: MediaAssetUrlResolver? =
                 when (config.mediaStorageProvider.lowercase()) {
                     "local" -> LocalMediaAssetUrlResolver(config.mediaUploadBaseUrl)
                     "gcs" ->
-                        GcsV4MediaAssetUrlResolver(
-                            storageBucket = config.mediaStorageBucket,
-                            signedUrlFactory = gcsSignedUrlFactory!!,
-                        )
+                        if (cdnSignedUrlFactory != null) {
+                            CdnMediaAssetUrlResolver(
+                                cdnBaseUrl = config.mediaCdnBaseUrl!!,
+                                signedUrlFactory = cdnSignedUrlFactory,
+                            )
+                        } else {
+                            GcsV4MediaAssetUrlResolver(
+                                storageBucket = config.mediaStorageBucket,
+                                signedUrlFactory = gcsSignedUrlFactory!!,
+                            )
+                        }
 
                     else -> null
                 }
