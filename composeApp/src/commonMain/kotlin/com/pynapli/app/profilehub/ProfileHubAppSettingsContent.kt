@@ -24,6 +24,10 @@ internal fun AppSettingsContent(
     onMessageNotificationsChanged: (Boolean) -> Unit,
     onMatchNotificationsChanged: (Boolean) -> Unit,
     onActivityNotificationsChanged: (Boolean) -> Unit,
+    onFlirtNotificationsChanged: (Boolean) -> Unit,
+    onAlbumRequestNotificationsChanged: (Boolean) -> Unit,
+    onPartnerInviteNotificationsChanged: (Boolean) -> Unit,
+    onSystemSafetyNotificationsChanged: (Boolean) -> Unit,
     onQuietHoursEnabledChanged: (Boolean) -> Unit,
     onQuietHoursWindowChanged: (Int, Int) -> Unit,
     onClearError: () -> Unit,
@@ -113,6 +117,30 @@ internal fun AppSettingsContent(
                         value = if (state.draft.activityNotifications) "On" else "Off",
                         checked = state.draft.activityNotifications,
                         onCheckedChange = onActivityNotificationsChanged,
+                    )
+                    PrivacyToggleRow(
+                        label = "Flirts",
+                        value = if (state.draft.flirtNotifications) "On" else "Off",
+                        checked = state.draft.flirtNotifications,
+                        onCheckedChange = onFlirtNotificationsChanged,
+                    )
+                    PrivacyToggleRow(
+                        label = "Album requests",
+                        value = if (state.draft.albumRequestNotifications) "On" else "Off",
+                        checked = state.draft.albumRequestNotifications,
+                        onCheckedChange = onAlbumRequestNotificationsChanged,
+                    )
+                    PrivacyToggleRow(
+                        label = "Partner invites",
+                        value = if (state.draft.partnerInviteNotifications) "On" else "Off",
+                        checked = state.draft.partnerInviteNotifications,
+                        onCheckedChange = onPartnerInviteNotificationsChanged,
+                    )
+                    PrivacyToggleRow(
+                        label = "System & safety",
+                        value = if (state.draft.systemSafetyNotifications) "On" else "Off",
+                        checked = state.draft.systemSafetyNotifications,
+                        onCheckedChange = onSystemSafetyNotificationsChanged,
                     )
                     PrivacyToggleRow(
                         label = "Quiet hours",
