@@ -196,9 +196,10 @@ Account deletion should:
 Current MVP implementation:
 
 - Users can request deletion from Profile/Settings by typing `DELETE`.
-- The server marks the account deleted, hides the profile, disables discovery flags, clears active travel visibility, revokes sessions, and records a deletion event.
-- Safety/moderation/legal-retention rows are preserved as soft-retention records until formal retention schedules are finalized.
-- Users can request a data export from Profile/Settings; production archive generation and download delivery are still to be defined.
+- The server marks the account deleted, hides the profile, disables discovery flags, clears active travel visibility, and revokes sessions.
+- **Right-to-erasure (GDPR/CCPA):** in the same transaction the server now scrubs PII — nulls the account email/phone/Firebase hashes, clears auth credentials and tombstones the provider subject, anonymizes profile fields (display name, bio, birthdate, gender, orientation), hard-deletes the exact stored location, soft-deletes owned media, and ends partner links + linked-partner subscription benefits on both sides.
+- Safety/moderation/legal-retention rows (reports, the account-deletion audit event) are preserved as soft-retention records until formal retention schedules are finalized.
+- Users can request a data export from Profile/Settings; the server generates a JSON archive and serves an owner-only signed download URL.
 
 ## Children
 
@@ -218,6 +219,7 @@ Security contact placeholder:
 
 - [x] Privacy controls exist in settings.
 - [x] Account deletion exists as a server-authoritative soft-delete path.
+- [x] Account deletion erases/anonymizes PII (identity hashes, credentials, profile fields, exact location, owned media) and ends partner links + linked-partner benefits, while preserving safety/legal audit rows.
 - [ ] Partial: data export request exists; production archive generation/download process is not complete.
 - [ ] Analytics redaction rules implemented.
 - [ ] Crash reporting redaction rules implemented.

@@ -68,6 +68,14 @@ class JdbcAccountLifecycleRepository(
                     hideProfile(connection, userId)
                     removeFromDiscovery(connection, userId)
                     clearActiveTravelLocation(connection, userId)
+                    // GDPR/CCPA erasure: scrub PII while preserving safety/legal audit rows.
+                    anonymizeUserIdentity(connection, userId)
+                    anonymizeAuthIdentities(connection, userId)
+                    anonymizeProfile(connection, userId)
+                    val purgedLocationCount = purgeExactLocation(connection, userId)
+                    val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
+                    val endedBenefitCount = endLinkedPartnerBenefits(connection, userId)
+                    val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                     val revokedSessionCount = revokeSessions(connection, userId)
                     recordDeletionEvent(connection, userId, revokedSessionCount)
 
@@ -75,6 +83,10 @@ class JdbcAccountLifecycleRepository(
                     AccountDeletionResult(
                         userId = userId,
                         revokedSessionCount = revokedSessionCount,
+                        purgedLocationCount = purgedLocationCount,
+                        endedPartnerLinkCount = endedPartnerLinkCount,
+                        endedPartnerBenefitCount = endedBenefitCount,
+                        softDeletedMediaCount = softDeletedMediaCount,
                     )
                 } catch (error: Throwable) {
                     connection.rollback()
@@ -167,6 +179,166 @@ class JdbcAccountLifecycleRepository(
             ).use { statement ->
                 statement.setObject(1, userId)
                 statement.executeUpdate()
+            }
+    }
+
+    /**
+     * Erase account-level identity PII: null the email/phone/firebase hashes (all nullable + unique)
+     * so the person can't be re-identified from the row and a future signup with the same email is
+     * not blocked. The user row itself is retained (soft-deleted) for referential integrity of any
+     * preserved safety/legal records.
+     */
+    private fun anonymizeUserIdentity(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection
+            .prepareStatement(
+                """
+                UPDATE users
+                SET email_hash = NULL,
+                    phone_hash = NULL,
+                    firebase_uid = NULL,
+                    updated_at = now()
+                WHERE id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeUpdate()
+            }
+    }
+
+    /**
+     * Erase auth credentials: drop the password hash/salt/iterations and replace the unique
+     * provider_subject (NOT NULL) with a per-identity tombstone so the original subject (e.g. the
+     * email/Firebase subject) is unrecoverable while the unique constraint stays satisfied.
+     */
+    private fun anonymizeAuthIdentities(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection
+            .prepareStatement(
+                """
+                UPDATE auth_identities
+                SET provider_subject = 'deleted:' || id,
+                    password_hash = NULL,
+                    password_salt = NULL,
+                    password_iterations = NULL
+                WHERE user_id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeUpdate()
+            }
+    }
+
+    /** Anonymize free-text and identifying profile fields; structure/audit columns are left intact. */
+    private fun anonymizeProfile(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection
+            .prepareStatement(
+                """
+                UPDATE profiles
+                SET display_name = NULL,
+                    bio = NULL,
+                    birthdate = NULL,
+                    gender = NULL,
+                    orientation = NULL,
+                    updated_at = now()
+                WHERE user_id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeUpdate()
+            }
+    }
+
+    /** Hard-delete the exact stored location — the most sensitive PII, with no retention basis. */
+    private fun purgeExactLocation(
+        connection: Connection,
+        userId: UUID,
+    ): Int {
+        connection
+            .prepareStatement(
+                """
+                DELETE FROM user_locations
+                WHERE user_id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                return statement.executeUpdate()
+            }
+    }
+
+    /** End any active partner links on either side so the deleted user is no longer linked. */
+    private fun endActivePartnerLinks(
+        connection: Connection,
+        userId: UUID,
+    ): Int {
+        connection
+            .prepareStatement(
+                """
+                UPDATE user_profile_links
+                SET status = 'unlinked',
+                    unlinked_at = COALESCE(unlinked_at, now()),
+                    updated_at = now()
+                WHERE (user_id = ? OR linked_user_id = ?)
+                  AND status IN ('pending', 'active')
+                  AND unlinked_at IS NULL
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.setObject(2, userId)
+                return statement.executeUpdate()
+            }
+    }
+
+    /**
+     * End linked-partner subscription benefits on either side: a deleted subscriber stops granting,
+     * and a deleted beneficiary stops receiving. Mirrors the MONETIZATION_SPEC "benefit ends when
+     * the link ends" rule.
+     */
+    private fun endLinkedPartnerBenefits(
+        connection: Connection,
+        userId: UUID,
+    ): Int {
+        connection
+            .prepareStatement(
+                """
+                UPDATE linked_partner_benefits
+                SET status = 'ended',
+                    ends_at = COALESCE(ends_at, now()),
+                    updated_at = now()
+                WHERE (subscriber_user_id = ? OR beneficiary_user_id = ?)
+                  AND status = 'active'
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.setObject(2, userId)
+                return statement.executeUpdate()
+            }
+    }
+
+    /** Soft-delete the user's media assets so their objects stop surfacing and the cleanup worker can purge them. */
+    private fun softDeleteOwnedMedia(
+        connection: Connection,
+        userId: UUID,
+    ): Int {
+        connection
+            .prepareStatement(
+                """
+                UPDATE media_assets
+                SET deleted_at = COALESCE(deleted_at, now()),
+                    updated_at = now()
+                WHERE owner_user_id = ?
+                  AND deleted_at IS NULL
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                return statement.executeUpdate()
             }
     }
 

@@ -17,6 +17,7 @@ import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class AccountLifecycleRepositoryIntegrationTest {
     private lateinit var dataSource: HikariDataSource
@@ -75,11 +76,15 @@ class AccountLifecycleRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(reporterId, "Reporter")
             dataSource.insertActiveSession(userId)
             dataSource.insertActiveTravelLocation(userId)
+            dataSource.insertCurrentLocation(userId)
+            dataSource.insertMediaAsset(userId)
+            dataSource.insertActivePartnerLinkWithBenefit(subscriberId = userId, beneficiaryId = reporterId)
             dataSource.insertSafetyReport(reporterId, userId)
             val repository = JdbcAccountLifecycleRepository(dataSource)
 
             val result = repository.deleteAccount(userId)
 
+            // Discovery removal + session revoke (existing behavior).
             assertEquals(1, result?.revokedSessionCount)
             assertEquals("deleted", dataSource.stringValue("SELECT status FROM users WHERE id = ?", userId))
             assertNotNull(dataSource.timestampValue("SELECT deleted_at FROM users WHERE id = ?", userId))
@@ -89,6 +94,29 @@ class AccountLifecycleRepositoryIntegrationTest {
             assertEquals(false, dataSource.booleanValue("SELECT events_visible FROM discovery_settings WHERE user_id = ?", userId))
             assertEquals("cleared", dataSource.stringValue("SELECT status FROM travel_locations WHERE user_id = ?", userId))
             assertNotNull(dataSource.timestampValue("SELECT revoked_at FROM user_sessions WHERE user_id = ?", userId))
+
+            // GDPR/CCPA erasure: identity + profile PII scrubbed.
+            assertNull(dataSource.stringValue("SELECT email_hash FROM users WHERE id = ?", userId))
+            assertNull(dataSource.stringValue("SELECT password_hash FROM auth_identities WHERE user_id = ?", userId))
+            assertEquals(
+                "deleted:",
+                dataSource.stringValue("SELECT left(provider_subject, 8) FROM auth_identities WHERE user_id = ?", userId),
+            )
+            assertNull(dataSource.stringValue("SELECT display_name FROM profiles WHERE user_id = ?", userId))
+            assertNull(dataSource.stringValue("SELECT bio FROM profiles WHERE user_id = ?", userId))
+            assertNull(dataSource.timestampValue("SELECT birthdate FROM profiles WHERE user_id = ?", userId))
+
+            // Exact location purged; media soft-deleted; partner link + benefit ended.
+            assertEquals(0, dataSource.intValue("SELECT count(*) FROM user_locations WHERE user_id = ?", userId))
+            assertEquals(1, result?.purgedLocationCount)
+            assertNotNull(dataSource.timestampValue("SELECT deleted_at FROM media_assets WHERE owner_user_id = ?", userId))
+            assertEquals(1, result?.softDeletedMediaCount)
+            assertEquals("unlinked", dataSource.stringValue("SELECT status FROM user_profile_links WHERE user_id = ?", userId))
+            assertEquals(1, result?.endedPartnerLinkCount)
+            assertEquals("ended", dataSource.stringValue("SELECT status FROM linked_partner_benefits WHERE subscriber_user_id = ?", userId))
+            assertEquals(1, result?.endedPartnerBenefitCount)
+
+            // Safety/legal records preserved.
             assertEquals(1, dataSource.intValue("SELECT count(*) FROM safety_reports WHERE reported_user_id = ?", userId))
             assertEquals(1, dataSource.intValue("SELECT count(*) FROM account_deletion_events WHERE user_id = ?", userId))
         }
@@ -101,18 +129,31 @@ class AccountLifecycleRepositoryIntegrationTest {
             connection
                 .prepareStatement(
                     """
-                    INSERT INTO users (id, status)
-                    VALUES (?, 'active')
+                    INSERT INTO users (id, email_hash, status)
+                    VALUES (?, ?, 'active')
                     """.trimIndent(),
                 ).use { statement ->
                     statement.setObject(1, userId)
+                    statement.setString(2, "email-hash-$userId")
                     statement.executeUpdate()
                 }
             connection
                 .prepareStatement(
                     """
-                    INSERT INTO profiles (user_id, display_name, moderation_status, visibility_status)
-                    VALUES (?, ?, 'approved', 'visible')
+                    INSERT INTO auth_identities (id, user_id, provider, provider_subject, password_hash, password_salt, password_iterations)
+                    VALUES (?, ?, 'email', ?, 'pw-hash', 'pw-salt', 100000)
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, userId)
+                    statement.setString(3, "subject-$userId")
+                    statement.executeUpdate()
+                }
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO profiles (user_id, display_name, bio, birthdate, gender, orientation, moderation_status, visibility_status)
+                    VALUES (?, ?, 'My bio', DATE '1990-01-01', 'nonbinary', 'queer', 'approved', 'visible')
                     """.trimIndent(),
                 ).use { statement ->
                     statement.setObject(1, userId)
@@ -197,6 +238,76 @@ class AccountLifecycleRepositoryIntegrationTest {
                     statement.setObject(1, UUID.randomUUID())
                     statement.setObject(2, reporterId)
                     statement.setObject(3, reportedId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
+    private fun DataSource.insertCurrentLocation(userId: UUID) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO user_locations (user_id, geom, geohash, city, location_source)
+                    VALUES (?, ST_SetSRID(ST_MakePoint(-79.3832, 43.6532), 4326), 'dpz8', 'Toronto', 'gps')
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
+    private fun DataSource.insertMediaAsset(userId: UUID) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO media_assets (
+                        id, owner_user_id, media_type, storage_provider, storage_bucket,
+                        storage_object_key, content_type, byte_size, processing_status, moderation_status
+                    )
+                    VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved')
+                    """.trimIndent(),
+                ).use { statement ->
+                    val assetId = UUID.randomUUID()
+                    statement.setObject(1, assetId)
+                    statement.setObject(2, userId)
+                    statement.setString(3, "media/$assetId")
+                    statement.executeUpdate()
+                }
+        }
+    }
+
+    private fun DataSource.insertActivePartnerLinkWithBenefit(
+        subscriberId: UUID,
+        beneficiaryId: UUID,
+    ) {
+        connection.use { connection ->
+            val linkId = UUID.randomUUID()
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO user_profile_links (id, user_id, linked_user_id, status, accepted_at)
+                    VALUES (?, ?, ?, 'active', now())
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, linkId)
+                    statement.setObject(2, subscriberId)
+                    statement.setObject(3, beneficiaryId)
+                    statement.executeUpdate()
+                }
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO linked_partner_benefits (id, subscriber_user_id, beneficiary_user_id, partner_link_id, tier, status)
+                    VALUES (?, ?, ?, ?, 'select', 'active')
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, subscriberId)
+                    statement.setObject(3, beneficiaryId)
+                    statement.setObject(4, linkId)
                     statement.executeUpdate()
                 }
         }

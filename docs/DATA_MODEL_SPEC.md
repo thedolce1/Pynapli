@@ -151,9 +151,10 @@ Fields:
 
 Rules:
 
-- Account deletion soft-deletes `users` (`status='deleted'`, `deleted_at`).
+- Account deletion soft-deletes `users` (`status='deleted'`, `deleted_at`) and the row is retained for referential integrity of preserved safety/legal records.
 - Profile and discovery settings are removed from discovery surfaces.
-- Safety/legal retention data is preserved where required.
+- GDPR/CCPA erasure runs in the same transaction: identity hashes (`email_hash`/`phone_hash`/`firebase_uid`) are nulled, `auth_identities` credentials are cleared and `provider_subject` is tombstoned, profile PII (display name, bio, birthdate, gender, orientation) is anonymized, the exact `user_locations` row is hard-deleted, owned `media_assets` are soft-deleted, and `user_profile_links` + `linked_partner_benefits` are ended on both sides.
+- Safety/legal retention data (reports, the `account_deletion_events` audit) is preserved where required.
 
 ## Profile Tables
 
