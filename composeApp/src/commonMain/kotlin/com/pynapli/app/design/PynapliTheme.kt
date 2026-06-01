@@ -16,14 +16,14 @@ import androidx.compose.ui.unit.sp
 private val PynapliDarkColors: ColorScheme =
     darkColorScheme(
         primary = Color(0xFFFFC928),
-        onPrimary = Color(0xFF080808),
-        background = Color(0xFF050505),
-        onBackground = Color(0xFFF5F5F5),
-        surface = Color(0xFF101010),
-        onSurface = Color(0xFFF5F5F5),
-        surfaceVariant = Color(0xFF1A1A1A),
-        onSurfaceVariant = Color(0xFFB8B8B8),
-        outline = Color(0xFF2A2A2A),
+        onPrimary = Color(0xFF0A0A0C),
+        background = Color(0xFF0B0B0E),
+        onBackground = Color(0xFFF5F2EC),
+        surface = Color(0xFF121216),
+        onSurface = Color(0xFFF5F2EC),
+        surfaceVariant = Color(0xFF16161C),
+        onSurfaceVariant = Color(0xFFA8A29A),
+        outline = Color(0xFF23232C),
         error = Color(0xFFFF4D5E),
     )
 

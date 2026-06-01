@@ -32,28 +32,29 @@ Avoid:
 
 ## Color Tokens
 
-Initial dark palette:
+Dark palette (refined 2026-05-31 to match the design handoff `Pynapli-Handoff/components/primitives.jsx`: lifted, warmer-dark surfaces + warm off-white text; accent stays pineapple gold). This block is the source of truth and is mirrored in `composeApp/.../design/PynapliColors.kt`.
 
 ```kotlin
 object PynapliColors {
-    val Black = Color(0xFF050505)
-    val Surface = Color(0xFF101010)
-    val SurfaceRaised = Color(0xFF1A1A1A)
-    val SurfacePressed = Color(0xFF242424)
+    val Black = Color(0xFF0B0B0E)       // app background ("bg")
+    val Surface = Color(0xFF121216)
+    val SurfaceRaised = Color(0xFF16161C)
+    val SurfacePressed = Color(0xFF1E1E26)
 
-    val TextPrimary = Color(0xFFF5F5F5)
-    val TextSecondary = Color(0xFFB8B8B8)
-    val TextTertiary = Color(0xFF7A7A7A)
-    val TextInverse = Color(0xFF080808)
+    val TextPrimary = Color(0xFFF5F2EC) // warm off-white
+    val TextSecondary = Color(0xFFA8A29A)
+    val TextTertiary = Color(0xFF6B6660)
+    val TextInverse = Color(0xFF0A0A0C)
 
-    val Accent = Color(0xFFFFC928)      // restrained pineapple gold
+    val Accent = Color(0xFFFFC928)      // restrained pineapple gold (founder-locked)
     val AccentDark = Color(0xFFB88700)
     val Success = Color(0xFF18D77A)     // online dot
     val Danger = Color(0xFFFF4D5E)
     val Warning = Color(0xFFFFA23A)
     val Info = Color(0xFF4DA3FF)
 
-    val Border = Color(0xFF2A2A2A)
+    val Border = Color(0xFF23232C)
+    val BorderSoft = Color(0xFF1B1B22)  // hairline dividers / sticky-bar underlines
     val OverlayScrim = Color(0x99000000)
     val PhotoGradientBottom = Color(0xCC000000)
 }

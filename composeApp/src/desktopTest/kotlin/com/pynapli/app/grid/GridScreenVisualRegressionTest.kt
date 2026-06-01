@@ -109,7 +109,13 @@ private fun ImageBitmap.assertGridVisualSignature(label: String) {
     val signature = visualSignature()
 
     assertTrue(signature.darkRatio > 0.20f, "$label should keep a black-background base: $signature")
-    assertTrue(signature.darkRatio + signature.sheetSurfaceRatio > 0.55f, "$label should remain predominantly dark/subdued: $signature")
+    // Combined dark + subdued-surface coverage. Threshold recalibrated 2026-05-31 when the
+    // palette was refined to the design handoff (PynapliColors): the raised surface dropped from
+    // #1A1A1A (lum 0.10, which fell in BOTH the dark <0.13 and sheetSurface 0.09-0.22 bands and
+    // was double-counted) to #16161C (lum ~0.086, counted once as dark). The screen is just as
+    // subdued; the sum shrank only because the band overlap shrank. 0.52 still asserts a
+    // majority-dark premium surface.
+    assertTrue(signature.darkRatio + signature.sheetSurfaceRatio > 0.52f, "$label should remain predominantly dark/subdued: $signature")
     assertTrue(signature.midToneRatio > 0.25f, "$label should contain visible Grid card tone blocks: $signature")
     assertTrue(signature.brightRatio > 0.006f, "$label should contain legible light text/icons: $signature")
     assertTrue(signature.onlineGreenPixels > 8, "$label should render online indicators: $signature")
