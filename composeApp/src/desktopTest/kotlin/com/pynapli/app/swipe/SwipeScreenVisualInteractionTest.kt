@@ -170,7 +170,11 @@ private fun ImageBitmap.assertSwipeVisualSignature() {
     assertTrue(signature.darkRatio > 0.28f, "Swipe should keep a dark premium base: $signature")
     assertTrue(signature.darkRatio + signature.surfaceRatio > 0.42f, "Swipe should remain subdued, not bright/busy: $signature")
     assertTrue(signature.midToneRatio > 0.18f, "Swipe card should render a visible tonal card body: $signature")
-    assertTrue(signature.brightRatio > 0.006f, "Swipe should contain legible light text/icons: $signature")
+    // Bright-text threshold lowered 0.006 -> 0.003 on 2026-06-01 (slice 1.3): the Swipe filter
+    // row moved off solid-gold AssistChips (bright onSurface labels) onto restrained PynapliPills,
+    // whose inactive labels use TextSecondary (#A8A29A, lum ~0.64 — below the 0.74 "bright" cut)
+    // per the handoff pill language. The card name/age stay bright; only the filter chrome dimmed.
+    assertTrue(signature.brightRatio > 0.003f, "Swipe should contain legible light text/icons: $signature")
     assertTrue(signature.goldPixels > 8, "Swipe should retain the Pynapli gold accent: $signature")
     assertTrue(signature.greenPixels > 3, "Swipe should render the like action accent: $signature")
 }
