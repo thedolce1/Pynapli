@@ -8,16 +8,13 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliPill
 
 @Composable
 internal fun QuickFilterRow(
@@ -28,134 +25,76 @@ internal fun QuickFilterRow(
     LazyRow(
         modifier = Modifier.fillMaxWidth().testTag(GridFilterTags.QUICK_ROW),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         item(key = "filters-button") {
-            FiltersOpenChip(activeCount = filters.activeCount, onClick = onOpenSheet)
+            PynapliPill(
+                text = if (filters.activeCount == 0) "Filters" else "Filters · ${filters.activeCount}",
+                selected = filters.activeCount > 0,
+                onClick = onOpenSheet,
+                leading = {
+                    Icon(
+                        imageVector = Icons.Filled.FilterList,
+                        contentDescription = null,
+                        tint = PynapliColors.Accent,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+                modifier = Modifier.testTag(GridFilterTags.OPEN_SHEET),
+            )
         }
         item(key = QuickFilterId.Online.name) {
-            QuickToggleChip(
-                label = "Online",
-                active = filters.online,
+            PynapliPill(
+                text = "Online",
+                selected = filters.online,
                 onClick = { onToggled(QuickFilterId.Online) },
             )
         }
         item(key = "nearby-radius") {
-            NearbyRadiusChip(radiusMeters = filters.radiusMeters, onClick = onOpenSheet)
+            val km = (filters.radiusMeters + 500) / 1_000
+            PynapliPill(
+                text = "≤ $km km",
+                selected = false,
+                onClick = onOpenSheet,
+                leading = {
+                    Icon(
+                        imageVector = Icons.Filled.LocationOn,
+                        contentDescription = null,
+                        tint = PynapliColors.Accent,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+            )
         }
         item(key = QuickFilterId.Singles.name) {
-            QuickToggleChip(
-                label = "Singles",
-                active = filters.singles,
+            PynapliPill(
+                text = "Singles",
+                selected = filters.singles,
                 onClick = { onToggled(QuickFilterId.Singles) },
             )
         }
         item(key = QuickFilterId.Linked.name) {
-            QuickToggleChip(
-                label = "Linked",
-                active = filters.linked,
+            PynapliPill(
+                text = "Linked",
+                selected = filters.linked,
                 onClick = { onToggled(QuickFilterId.Linked) },
             )
         }
         item(key = QuickFilterId.Verified.name) {
-            QuickToggleChip(
-                label = "Verified",
-                active = filters.verified,
+            PynapliPill(
+                text = "Verified",
+                selected = filters.verified,
                 onClick = { onToggled(QuickFilterId.Verified) },
             )
         }
         item(key = QuickFilterId.Tonight.name) {
-            QuickToggleChip(
-                label = "Tonight",
-                active = filters.tonightAvailable,
+            PynapliPill(
+                text = "Tonight",
+                selected = filters.tonightAvailable,
                 onClick = { onToggled(QuickFilterId.Tonight) },
             )
         }
     }
-}
-
-@Composable
-private fun FiltersOpenChip(
-    activeCount: Int,
-    onClick: () -> Unit,
-) {
-    val label = if (activeCount == 0) "Filters" else "Filters · $activeCount"
-    AssistChip(
-        onClick = onClick,
-        label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Filled.FilterList,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-        },
-        colors =
-            AssistChipDefaults.assistChipColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                labelColor = MaterialTheme.colorScheme.onSurface,
-                leadingIconContentColor = MaterialTheme.colorScheme.primary,
-            ),
-        border =
-            AssistChipDefaults.assistChipBorder(
-                enabled = true,
-                borderColor = MaterialTheme.colorScheme.outline,
-            ),
-        modifier = Modifier.testTag(GridFilterTags.OPEN_SHEET),
-    )
-}
-
-@Composable
-private fun QuickToggleChip(
-    label: String,
-    active: Boolean,
-    onClick: () -> Unit,
-) {
-    AssistChip(
-        onClick = onClick,
-        label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        colors =
-            AssistChipDefaults.assistChipColors(
-                containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                labelColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-            ),
-        border =
-            AssistChipDefaults.assistChipBorder(
-                enabled = true,
-                borderColor = MaterialTheme.colorScheme.outline,
-            ),
-    )
-}
-
-@Composable
-private fun NearbyRadiusChip(
-    radiusMeters: Int,
-    onClick: () -> Unit,
-) {
-    val km = (radiusMeters + 500) / 1_000
-    val label = "≤ $km km"
-    AssistChip(
-        onClick = onClick,
-        label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Filled.LocationOn,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-        },
-        colors =
-            AssistChipDefaults.assistChipColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                labelColor = MaterialTheme.colorScheme.onSurface,
-                leadingIconContentColor = MaterialTheme.colorScheme.primary,
-            ),
-        border =
-            AssistChipDefaults.assistChipBorder(
-                enabled = true,
-                borderColor = MaterialTheme.colorScheme.outline,
-            ),
-    )
 }
 
 internal object GridFilterTags {

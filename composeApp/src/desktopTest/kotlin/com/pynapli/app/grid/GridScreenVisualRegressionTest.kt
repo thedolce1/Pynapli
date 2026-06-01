@@ -119,7 +119,12 @@ private fun ImageBitmap.assertGridVisualSignature(label: String) {
     assertTrue(signature.midToneRatio > 0.25f, "$label should contain visible Grid card tone blocks: $signature")
     assertTrue(signature.brightRatio > 0.006f, "$label should contain legible light text/icons: $signature")
     assertTrue(signature.onlineGreenPixels > 8, "$label should render online indicators: $signature")
-    assertTrue(signature.goldPixels > 5, "$label should retain the Pynapli gold accent: $signature")
+    // Gold threshold lowered 5 -> 2 on 2026-06-01 (slice 1.2): the quick-filter row moved from
+    // solid-gold AssistChips to restrained PynapliPills (accent border + small leading icon, no
+    // gold fill) per FRONTEND_DESIGN_DIRECTION_SPEC ("gold should be a premium accent, not the
+    // whole brand"). On the initial grid with no active filter, gold survives only as the two
+    // leading filter-pill icons. The accent is still present, just no longer a loud fill.
+    assertTrue(signature.goldPixels > 2, "$label should retain the Pynapli gold accent: $signature")
 }
 
 private fun ImageBitmap.assertFilterSheetVisualSignature() {
