@@ -17,8 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,6 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 
@@ -54,38 +54,22 @@ internal fun ProfileFacts(profileState: ProfileDetailUiState) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         chips.forEach { label ->
-            AssistChip(
-                onClick = {},
-                label = {
-                    Text(
-                        text = label,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                leadingIcon =
+            PynapliPill(
+                text = label,
+                selected = false,
+                leading =
                     if (label == "Linked") {
                         {
                             Icon(
                                 imageVector = Icons.Filled.Person,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp),
+                                tint = PynapliColors.Accent,
+                                modifier = Modifier.size(14.dp),
                             )
                         }
                     } else {
                         null
                     },
-                colors =
-                    AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        labelColor = MaterialTheme.colorScheme.onSurface,
-                        leadingIconContentColor = MaterialTheme.colorScheme.primary,
-                    ),
-                border =
-                    AssistChipDefaults.assistChipBorder(
-                        enabled = true,
-                        borderColor = MaterialTheme.colorScheme.outline,
-                    ),
             )
         }
     }

@@ -7,16 +7,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliPill
 
 @Composable
 internal fun SectionTitle(text: String) {
@@ -33,19 +31,10 @@ internal fun SheetToggleChip(
     active: Boolean,
     onClick: () -> Unit,
 ) {
-    AssistChip(
+    PynapliPill(
+        text = label,
+        selected = active,
         onClick = onClick,
-        label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        colors =
-            AssistChipDefaults.assistChipColors(
-                containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                labelColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-            ),
-        border =
-            AssistChipDefaults.assistChipBorder(
-                enabled = true,
-                borderColor = MaterialTheme.colorScheme.outline,
-            ),
     )
 }
 

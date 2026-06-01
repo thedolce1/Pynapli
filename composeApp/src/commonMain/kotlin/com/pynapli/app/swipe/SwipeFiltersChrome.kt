@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -24,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliPill
 
 @Composable
 internal fun SectionIntro(text: String) {
@@ -193,19 +192,10 @@ internal fun SwipeSheetChip(
     active: Boolean,
     onClick: () -> Unit,
 ) {
-    AssistChip(
+    PynapliPill(
+        text = label,
+        selected = active,
         onClick = onClick,
-        label = { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        colors =
-            AssistChipDefaults.assistChipColors(
-                containerColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                labelColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-            ),
-        border =
-            AssistChipDefaults.assistChipBorder(
-                enabled = true,
-                borderColor = MaterialTheme.colorScheme.outline,
-            ),
     )
 }
 
