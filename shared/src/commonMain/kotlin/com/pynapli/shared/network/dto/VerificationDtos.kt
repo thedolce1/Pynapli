@@ -32,6 +32,8 @@ data class AgeVerificationStatusDto(
     val verifiedAt: String? = null,
     val expiresAt: String? = null,
     val message: String,
+    val redirectUrl: String? = null,
+    val providerReference: String? = null,
 )
 
 @Serializable
