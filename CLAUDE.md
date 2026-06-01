@@ -106,3 +106,38 @@ Versioned under `/v1/`: `auth/email/{signup,login}`, `auth/{refresh,logout}`, `m
 - Production gates / load / security: `docs/PRODUCTION_READINESS_AND_QUALITY_SPEC.md`
 - Testing layers and release checklist: `docs/TESTING_STRATEGY_SPEC.md`
 - Per-feature: `docs/GRID_*`, `docs/SWIPE_*`, `docs/ACTIVITY_*`, `docs/MESSAGING_*`, `docs/MODERATION_*`, `docs/MONETIZATION_*`, `docs/PSYNC_*`, `docs/PLAYING_TONIGHT_*`, etc.
+
+## Production-readiness initiative (active)
+
+Pynapli is being driven from "mature MVP" to **enterprise-grade, production-ready** for three targets: Google Play, the Apple App Store, and `pynapli.com` (Compose-for-Web Wasm PWA). `docs/IMPLEMENTATION_AUDIT.md` is the authoritative gap analysis; the full phased plan is the working roadmap.
+
+Current sequencing (locked with the founder, 2026-05-31): **polish the core loop first** — finish and visually elevate the five core surfaces (Grid, Swipe, Activity, Messages, Store) and the backend behind them to production grade before standing up new surfaces (web/PWA, notifications) or the differentiators (Playing Tonight, Psync).
+
+### Design north-star (load-bearing)
+
+The visual target is the Claude design handoff at `C:\Users\Smaye\Downloads\Pynapli-Handoff` (JSX prototype + screenshots + the Messages/Tonight Map HTML specs). The founder confirmed the design docs are a guide, not the bible; the handoff refines the existing design language rather than replacing it. Handoff token values (`components/primitives.jsx`) to move toward:
+
+- Background `#0B0B0E`, surface `#121216`, surfaceRaised `#16161C`, surfacePressed `#1E1E26`, border `#23232C`, **new** borderSoft `#1B1B22`.
+- Text warm off-white `#F5F2EC` / secondary `#A8A29A` / tertiary `#6B6660` (slightly warmer than current `#F5F5F5/#B8B8B8/#7A7A7A`).
+- Semantics unchanged: online `#18D77A`, verified/info `#4DA3FF`, danger `#FF4D5E`, warning `#FFA23A`.
+- Radii in practice: grid tiles ~4, cards/banners 12, swipe card 16, sheets 16, pills 100.
+
+**Accent = pineapple-gold `#FFC928`** (founder-locked 2026-05-31; matches the handoff default and the Messages/Tonight Map specs). Keep accent routed through a single token (`PynapliColors.Accent`) so any future swap is one edit, and follow the spec's caution to use gold as a premium/highlight accent rather than flooding it across the UI.
+
+Everything else in `FRONTEND_DESIGN_DIRECTION_SPEC.md` / `DESIGN_AND_NAVIGATION_SPEC.md` still holds (dark-first, dense Grid, restrained, no decorative blobs). When restyling, move tokens toward the handoff and update visual-regression goldens deliberately.
+
+### Slice workflow (how this work ships)
+
+One feature branch + PR per slice, CI-gated. Each slice: implement (server stays the product authority) → targeted module tests → full `scripts/verify.ps1` → emulator QA for UI slices (`scripts/android-*-qa.ps1`) → push → CI → merge. Update `docs/IMPLEMENTATION_AUDIT.md` rows + relevant `*_SPEC.md` checklists per shipped slice. Pause for review only at **phase boundaries**. Never run `gradlew` (incl. `--stop`) while a `verify.ps1` gate is running — it disrupts the daemon.
+
+### Agent "engineering team" model
+
+Large slices may be delegated to specialized sub-agents (the founder asked for a full-team workflow), each given the relevant spec + handoff context. Sub-agents are reviewed by the orchestrator before anything merges; they never bypass the slice gates above:
+
+- **Architect/Plan** (`Plan`) — design a slice's implementation strategy and critical files before coding.
+- **Backend** — Ktor domain services, JDBC/PostGIS, Flyway migrations, perf; server-authoritative rules only.
+- **Frontend/Design** (`frontend-design` skill) — restyle Compose surfaces to the handoff language using token-only primitives.
+- **Explore** — fan-out codebase searches when locating call sites / conventions.
+- **Reviewer** (`/code-review`, `/security-review`) — correctness + security pass on each diff before merge.
+
+All security/privacy/billing/consent/moderation rules remain server-validated regardless of which agent wrote the code (`PRODUCTION_READINESS_AND_QUALITY_SPEC.md`).

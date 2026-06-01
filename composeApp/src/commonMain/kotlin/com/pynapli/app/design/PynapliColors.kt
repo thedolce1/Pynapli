@@ -3,32 +3,37 @@ package com.pynapli.app.design
 import androidx.compose.ui.graphics.Color
 
 /**
- * Canonical Pynapli brand color tokens, mirroring docs/DESIGN_TOKENS.md.
+ * Canonical Pynapli brand color tokens.
  *
- * Dark-first by design: these are the product's default surface/text/accent values. Feature
- * screens and design primitives should consume these (or [PynapliSemantic]) instead of hardcoding
- * hex literals. Theme-aware widgets may still read `MaterialTheme.colorScheme`; these tokens cover
- * the brand-fixed values the Material scheme does not express.
+ * Source of truth is the design handoff (`Pynapli-Handoff/components/primitives.jsx`), which
+ * refines the original docs/DESIGN_TOKENS.md neutrals toward slightly lifted, warmer-dark
+ * surfaces. Dark-first by design: these are the product's default surface/text/accent values.
+ * Feature screens and design primitives should consume these (or [PynapliSemantic]) instead of
+ * hardcoding hex literals. Theme-aware widgets may still read `MaterialTheme.colorScheme`; these
+ * tokens cover the brand-fixed values the Material scheme does not express.
  */
 object PynapliColors {
-    val Black = Color(0xFF050505)
-    val Surface = Color(0xFF101010)
-    val SurfaceRaised = Color(0xFF1A1A1A)
-    val SurfacePressed = Color(0xFF242424)
+    // Surfaces (handoff: bg #0B0B0E → pressed #1E1E26).
+    val Black = Color(0xFF0B0B0E) // app background ("bg")
+    val Surface = Color(0xFF121216)
+    val SurfaceRaised = Color(0xFF16161C)
+    val SurfacePressed = Color(0xFF1E1E26)
 
-    val TextPrimary = Color(0xFFF5F5F5)
-    val TextSecondary = Color(0xFFB8B8B8)
-    val TextTertiary = Color(0xFF7A7A7A)
-    val TextInverse = Color(0xFF080808)
+    // Text (handoff: warm off-white scale).
+    val TextPrimary = Color(0xFFF5F2EC)
+    val TextSecondary = Color(0xFFA8A29A)
+    val TextTertiary = Color(0xFF6B6660)
+    val TextInverse = Color(0xFF0A0A0C) // dark glyph on the gold accent
 
-    val Accent = Color(0xFFFFC928) // restrained pineapple gold
+    val Accent = Color(0xFFFFC928) // restrained pineapple gold (founder-locked)
     val AccentDark = Color(0xFFB88700)
     val Success = Color(0xFF18D77A) // online dot
     val Danger = Color(0xFFFF4D5E)
     val Warning = Color(0xFFFFA23A)
     val Info = Color(0xFF4DA3FF)
 
-    val Border = Color(0xFF2A2A2A)
+    val Border = Color(0xFF23232C)
+    val BorderSoft = Color(0xFF1B1B22) // hairline dividers / sticky-bar underlines
     val OverlayScrim = Color(0x99000000)
     val PhotoGradientBottom = Color(0xCC000000)
 }
