@@ -18,6 +18,11 @@ data class ServerConfig(
     val mediaUploadBaseUrl: String = "http://10.0.2.2:8080",
     val mediaLocalUploadDirectory: String = ".pynapli-local-media",
     val mediaDevAutoApproveUploads: Boolean = false,
+    // Automated moderation provider for upload-complete: "manual" (hold every upload for human
+    // review, the safe default) or "cloud_vision" (Google Cloud Vision SafeSearch, requires the GCS
+    // signing service account + the cloud-platform scope). Dev auto-approve still wins when set.
+    val mediaModerationProvider: String = "manual",
+    val mediaModerationVisionEndpoint: String = "https://vision.googleapis.com/v1/images:annotate",
     val mediaGcsSigningRegion: String = "auto",
     val mediaGcsSigningServiceAccountPath: String? = null,
     val mediaGcsSigningServiceAccountJson: String? = null,
@@ -111,6 +116,10 @@ data class ServerConfig(
                 mediaDevAutoApproveUploads =
                     System.getenv("PYNAPLI_MEDIA_DEV_AUTO_APPROVE_UPLOADS")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),
+                mediaModerationProvider = System.getenv("PYNAPLI_MEDIA_MODERATION_PROVIDER") ?: "manual",
+                mediaModerationVisionEndpoint =
+                    System.getenv("PYNAPLI_MEDIA_MODERATION_VISION_ENDPOINT")
+                        ?: "https://vision.googleapis.com/v1/images:annotate",
                 mediaGcsSigningRegion = System.getenv("PYNAPLI_MEDIA_GCS_SIGNING_REGION") ?: "auto",
                 mediaGcsSigningServiceAccountPath = System.getenv("PYNAPLI_MEDIA_GCS_SIGNING_SA_PATH"),
                 mediaGcsSigningServiceAccountJson = System.getenv("PYNAPLI_MEDIA_GCS_SIGNING_SA_JSON"),
