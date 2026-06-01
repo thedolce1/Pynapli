@@ -159,7 +159,10 @@ private fun ImageBitmap.visualSignature(sampleStep: Int = 4): VisualSignature {
             if (luminance > 0.74f) bright += 1
             if (green > 0.62f && red < 0.24f && blue in 0.22f..0.62f) onlineGreen += 1
             if (red > 0.82f && green > 0.62f && blue < 0.24f) gold += 1
-            if (luminance in 0.09f..0.22f && maxOf(red, green, blue) - minOf(red, green, blue) < 0.08f) {
+            // Subdued surface band floor lowered 0.09 -> 0.08 on 2026-05-31 with the handoff
+            // palette refine (raised surfaceVariant #1A1A1A ~0.102 -> #16161C ~0.088); see the
+            // matching note in ConversationScreenInteractionTest. Base bg/surface stay below 0.08.
+            if (luminance in 0.08f..0.22f && maxOf(red, green, blue) - minOf(red, green, blue) < 0.08f) {
                 sheetSurface += 1
             }
 

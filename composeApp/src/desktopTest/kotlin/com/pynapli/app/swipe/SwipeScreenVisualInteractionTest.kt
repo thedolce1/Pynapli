@@ -197,7 +197,10 @@ private fun ImageBitmap.visualSignature(sampleStep: Int = 4): SwipeVisualSignatu
 
             sampled += 1
             if (luminance < 0.13f) dark += 1
-            if (luminance in 0.09f..0.24f && colorSpread < 0.08f) surface += 1
+            // Subdued surface band floor lowered 0.09 -> 0.08 on 2026-05-31 with the handoff
+            // palette refine (raised surfaceVariant #1A1A1A ~0.102 -> #16161C ~0.088); see the
+            // matching note in ConversationScreenInteractionTest. Base bg/surface stay below 0.08.
+            if (luminance in 0.08f..0.24f && colorSpread < 0.08f) surface += 1
             if (luminance in 0.16f..0.60f && colorSpread > 0.07f) midTone += 1
             if (luminance > 0.74f) bright += 1
             if (red > 0.82f && color.green > 0.62f && blue < 0.24f) gold += 1

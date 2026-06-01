@@ -136,7 +136,12 @@ private fun ImageBitmap.conversationVisualSignature(sampleStep: Int = 4): Conver
 
             sampled += 1
             if (luminance < 0.13f) dark += 1
-            if (luminance in 0.09f..0.24f && color.channelSpread() < 0.10f) surface += 1
+            // Subdued raised surface band. Floor lowered 0.09 -> 0.08 on 2026-05-31 when the
+            // palette was refined to the design handoff: incoming bubbles use surfaceVariant,
+            // which moved from #1A1A1A (lum ~0.102) to #16161C (lum ~0.088) and dipped just under
+            // the old 0.09 floor. 0.08 keeps the new raised surfaces counted (base bg #0B0B0E
+            // ~0.044 and surface #121216 ~0.072 stay below it, so this still isolates raised fills).
+            if (luminance in 0.08f..0.24f && color.channelSpread() < 0.10f) surface += 1
             if (color.red > 0.82f && color.green > 0.62f && color.blue < 0.24f) gold += 1
             if (color.green > 0.62f && color.red < 0.24f && color.blue in 0.22f..0.62f) green += 1
             if (luminance > 0.74f) bright += 1
