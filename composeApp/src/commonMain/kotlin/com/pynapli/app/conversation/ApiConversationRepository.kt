@@ -34,7 +34,12 @@ class ApiConversationRepository(
     override suspend fun sendMessage(
         conversationId: String,
         body: String,
-    ): AppResult<MessageDto> = apiClient.sendMessage(conversationId, SendMessageRequestDto(body = body))
+        clientIdempotencyKey: String?,
+    ): AppResult<MessageDto> =
+        apiClient.sendMessage(
+            conversationId,
+            SendMessageRequestDto(body = body, clientIdempotencyKey = clientIdempotencyKey),
+        )
 
     override suspend fun sendTypingIndicator(
         conversationId: String,

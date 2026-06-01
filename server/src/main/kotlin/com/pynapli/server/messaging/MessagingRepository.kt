@@ -35,6 +35,7 @@ interface MessagingRepository {
         moderationStatus: String = "visible",
         bodyFingerprint: String? = null,
         safetyReason: String? = null,
+        clientIdempotencyKey: String? = null,
         messageIdFactory: () -> UUID = UUID::randomUUID,
     ): MessageRecord?
 

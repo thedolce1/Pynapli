@@ -17,6 +17,7 @@ internal fun Connection.insertMessage(
     moderationStatus: String,
     bodyFingerprint: String?,
     safetyReason: String?,
+    clientIdempotencyKey: String? = null,
 ): MessageRecord =
     prepareStatement(
         """
@@ -27,9 +28,10 @@ internal fun Connection.insertMessage(
             body,
             moderation_status,
             body_fingerprint,
-            safety_reason
+            safety_reason,
+            client_idempotency_key
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at
         """.trimIndent(),
     ).use { statement ->
@@ -40,6 +42,7 @@ internal fun Connection.insertMessage(
         statement.setString(5, moderationStatus)
         statement.setString(6, bodyFingerprint)
         statement.setString(7, safetyReason)
+        statement.setString(8, clientIdempotencyKey)
         statement.executeQuery().use { rs ->
             rs.next()
             rs.toMessageRecord(
@@ -50,6 +53,45 @@ internal fun Connection.insertMessage(
                         DELIVERY_SENT
                     },
             )
+        }
+    }
+
+/**
+ * Returns the existing message a sender already created in this conversation under
+ * [clientIdempotencyKey], if any — the idempotent-replay lookup. Delivery status mirrors the stored
+ * moderation status so a replay reflects whether the original was held for review.
+ */
+internal fun Connection.findMessageByIdempotencyKey(
+    userId: UUID,
+    conversationId: UUID,
+    clientIdempotencyKey: String,
+): MessageRecord? =
+    prepareStatement(
+        """
+        SELECT id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at
+        FROM messages
+        WHERE conversation_id = ?
+          AND sender_user_id = ?
+          AND client_idempotency_key = ?
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, conversationId)
+        statement.setObject(2, userId)
+        statement.setString(3, clientIdempotencyKey)
+        statement.executeQuery().use { rs ->
+            if (!rs.next()) {
+                null
+            } else {
+                val moderationStatus = rs.getString("moderation_status")
+                rs.toMessageRecord(
+                    deliveryStatus =
+                        when {
+                            rs.getTimestamp("deleted_at") != null -> DELIVERY_DELETED
+                            moderationStatus == MessageModerationStatus.HELD -> DELIVERY_HELD_FOR_REVIEW
+                            else -> DELIVERY_SENT
+                        },
+                )
+            }
         }
     }
 

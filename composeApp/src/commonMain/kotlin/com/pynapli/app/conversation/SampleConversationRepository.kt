@@ -96,6 +96,7 @@ class SampleConversationRepository : ConversationRepository {
     override suspend fun sendMessage(
         conversationId: String,
         body: String,
+        clientIdempotencyKey: String?,
     ): AppResult<MessageDto> =
         AppResult.Success(
             MessageDto(

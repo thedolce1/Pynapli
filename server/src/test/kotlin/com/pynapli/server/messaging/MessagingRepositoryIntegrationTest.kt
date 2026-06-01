@@ -16,6 +16,7 @@ import org.testcontainers.utility.DockerImageName
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -186,6 +187,83 @@ class MessagingRepositoryIntegrationTest {
             assertEquals(emptyList(), repository.listConversations(target, limit = 10))
             assertEquals(1, repository.getConversationDetail(viewer, conversation.conversationId, limit = 10)?.messages?.size)
             assertEquals(emptyList(), repository.getConversationDetail(target, conversation.conversationId, limit = 10)?.messages)
+        }
+
+    @Test
+    fun resendingWithSameIdempotencyKeyReturnsOriginalAndCreatesNoDuplicate() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000871")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000872")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "grid",
+                )!!
+
+            val first =
+                repository.sendMessage(
+                    userId = viewer,
+                    conversationId = conversation.conversationId,
+                    body = "Drinks this week?",
+                    clientIdempotencyKey = "retry-key-1",
+                )!!
+            // Simulated retry of a send whose response was lost: same key, same body.
+            val retry =
+                repository.sendMessage(
+                    userId = viewer,
+                    conversationId = conversation.conversationId,
+                    body = "Drinks this week?",
+                    clientIdempotencyKey = "retry-key-1",
+                )!!
+
+            assertEquals(first.messageId, retry.messageId, "Retry must return the original message")
+            assertEquals(
+                1,
+                dataSource.countMessagesInConversation(conversation.conversationId),
+                "Retry must not create a duplicate row",
+            )
+            assertEquals(
+                1,
+                repository.getConversationDetail(viewer, conversation.conversationId, limit = 10)?.messages?.size,
+            )
+        }
+
+    @Test
+    fun differentIdempotencyKeysCreateDistinctMessages() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000881")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000882")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "grid",
+                )!!
+
+            val first =
+                repository.sendMessage(
+                    userId = viewer,
+                    conversationId = conversation.conversationId,
+                    body = "Same text",
+                    clientIdempotencyKey = "key-a",
+                )!!
+            val second =
+                repository.sendMessage(
+                    userId = viewer,
+                    conversationId = conversation.conversationId,
+                    body = "Same text",
+                    clientIdempotencyKey = "key-b",
+                )!!
+
+            assertNotEquals(first.messageId, second.messageId)
+            assertEquals(2, dataSource.countMessagesInConversation(conversation.conversationId))
         }
 
     @Test
@@ -538,6 +616,24 @@ class MessagingRepositoryIntegrationTest {
                 }
         }
     }
+
+    private fun DataSource.countMessagesInConversation(conversationId: UUID): Int =
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT COUNT(*) AS row_count
+                    FROM messages
+                    WHERE conversation_id = ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, conversationId)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getInt("row_count")
+                    }
+                }
+        }
 
     private fun DataSource.countMessageReviewQueueRows(messageId: UUID): Int =
         connection.use { connection ->
