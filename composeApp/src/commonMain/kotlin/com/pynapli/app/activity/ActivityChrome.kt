@@ -18,8 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliPill
 
 @Composable
 internal fun ActivityGateRow(
@@ -128,39 +127,14 @@ internal fun ActivityTabRow(
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         ActivityTabUi.entries.forEach { tab ->
             item(key = tab.name) {
-                AssistChip(
+                PynapliPill(
+                    text = tab.label,
+                    selected = tab == selectedTab,
                     onClick = { onTabSelected(tab) },
-                    label = {
-                        Text(
-                            text = tab.label,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    colors =
-                        AssistChipDefaults.assistChipColors(
-                            containerColor =
-                                if (tab == selectedTab) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                },
-                            labelColor =
-                                if (tab == selectedTab) {
-                                    MaterialTheme.colorScheme.onPrimary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
-                        ),
-                    border =
-                        AssistChipDefaults.assistChipBorder(
-                            enabled = true,
-                            borderColor = MaterialTheme.colorScheme.outline,
-                        ),
                 )
             }
         }
