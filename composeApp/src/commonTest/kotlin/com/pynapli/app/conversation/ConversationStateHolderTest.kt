@@ -17,6 +17,32 @@ import kotlin.test.assertNull
 
 class ConversationStateHolderTest {
     @Test
+    fun failedSendRetryReusesIdempotencyKeyThenFreshKeyAfterSuccess() =
+        runBlocking {
+            val repository = FakeConversationRepository()
+            // First send fails, retry succeeds; a later fresh send succeeds too.
+            repository.sendResults.addLast(AppResult.Failure(AppError("RATE_LIMITED", "Slow down.")))
+            repository.sendResults.addLast(AppResult.Success(message(senderUserId = "viewer", messageId = "m-1")))
+            repository.sendResults.addLast(AppResult.Success(message(senderUserId = "viewer", messageId = "m-2")))
+
+            val keys = ArrayDeque(listOf("key-A", "key-B"))
+            val stateHolder =
+                ConversationStateHolder(
+                    repository,
+                    idempotencyKeyFactory = { keys.removeFirst() },
+                )
+            stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+            stateHolder.updateDraft("Drinks?")
+            stateHolder.sendDraft() // fails — key minted, draft preserved
+            stateHolder.sendDraft() // retry — must reuse the same key
+            stateHolder.updateDraft("A new message")
+            stateHolder.sendDraft() // fresh send — new key
+
+            assertEquals(listOf<String?>("key-A", "key-A", "key-B"), repository.sendIdempotencyKeys.toList())
+        }
+
+    @Test
     fun deleteOwnMessageReplacesBodyWithPlaceholderState() =
         runBlocking {
             val repository = FakeConversationRepository()
@@ -201,6 +227,11 @@ private class FakeConversationRepository(
     var acceptResult: AppResult<ConversationDetailDto> = AppResult.Failure(AppError("UNUSED", "Unused."))
     val typingCalls = mutableListOf<Pair<String, Boolean>>()
 
+    // Records the idempotency key passed to each sendMessage call (in order). When [sendResults] is
+    // non-empty, successive calls consume it; otherwise sendMessage returns the default failure.
+    val sendIdempotencyKeys = mutableListOf<String?>()
+    val sendResults = ArrayDeque<AppResult<MessageDto>>()
+
     override suspend fun createDirectConversation(
         targetUserId: String,
         origin: String,
@@ -222,7 +253,11 @@ private class FakeConversationRepository(
     override suspend fun sendMessage(
         conversationId: String,
         body: String,
-    ): AppResult<MessageDto> = AppResult.Failure(AppError("UNUSED", "Unused."))
+        clientIdempotencyKey: String?,
+    ): AppResult<MessageDto> {
+        sendIdempotencyKeys += clientIdempotencyKey
+        return if (sendResults.isNotEmpty()) sendResults.removeFirst() else AppResult.Failure(AppError("UNUSED", "Unused."))
+    }
 
     override suspend fun sendTypingIndicator(
         conversationId: String,
@@ -260,9 +295,10 @@ private class FakeConversationRepository(
 private fun message(
     senderUserId: String,
     body: String = "Original",
+    messageId: String = "message-1",
 ): MessageDto =
     MessageDto(
-        messageId = "message-1",
+        messageId = messageId,
         conversationId = "conversation-1",
         senderUserId = senderUserId,
         body = body,

@@ -4,6 +4,9 @@ import kotlinx.serialization.Serializable
 
 const val MESSAGE_BODY_MAX_LENGTH = 2_000
 
+/** Max length of a client-supplied message idempotency key (matches the DB CHECK constraint). */
+const val MESSAGE_IDEMPOTENCY_KEY_MAX_LENGTH = 128
+
 object ConversationParticipantStatus {
     const val ACTIVE = "active"
     const val INVITED = "invited"
@@ -91,6 +94,10 @@ data class PartnerChatInviteDto(
 @Serializable
 data class SendMessageRequestDto(
     val body: String,
+    // Optional client-generated idempotency key (<=128 chars). When set, a retried send with the
+    // same key in the same conversation returns the original message instead of creating a
+    // duplicate. Lets the client safely retry a send whose response was lost.
+    val clientIdempotencyKey: String? = null,
 )
 
 @Serializable

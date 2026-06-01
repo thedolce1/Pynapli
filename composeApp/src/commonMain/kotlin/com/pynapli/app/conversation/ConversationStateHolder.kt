@@ -13,12 +13,18 @@ import kotlinx.coroutines.flow.update
 
 class ConversationStateHolder(
     private val repository: ConversationRepository,
+    private val idempotencyKeyFactory: () -> String = ::newMessageIdempotencyKey,
 ) {
     private val _state = MutableStateFlow(ConversationUiState())
     val state: StateFlow<ConversationUiState> = _state.asStateFlow()
     private var lastTypingConversationId: String? = null
     private var lastTypingActive: Boolean = false
     private var lastTypingSentAtMillis: Long = 0L
+
+    // Idempotency key for the in-flight/failed send. Generated for a fresh draft and reused when the
+    // user re-taps Send after a failure (the draft is preserved on failure), so a retry of a send
+    // whose response was lost collapses to one server-side message. Cleared on success.
+    private var pendingSendKey: String? = null
 
     suspend fun openDirect(
         card: GridProfileCardUi,
@@ -531,9 +537,13 @@ class ConversationStateHolder(
             }
         }
 
+        // Reuse the key from a prior failed attempt of this draft; otherwise mint a fresh one.
+        val idempotencyKey = pendingSendKey ?: idempotencyKeyFactory().also { pendingSendKey = it }
+
         _state.update { it.copy(isSending = true, partnerInviteFeedback = null, errorMessage = null) }
-        when (val result = repository.sendMessage(conversationId, body)) {
+        when (val result = repository.sendMessage(conversationId, body, idempotencyKey)) {
             is AppResult.Success -> {
+                pendingSendKey = null
                 sendTypingStopped(conversationId)
                 _state.update { existing ->
                     val updatedDetail = existing.detail?.withAppendedMessage(result.value)
@@ -547,6 +557,7 @@ class ConversationStateHolder(
             }
 
             is AppResult.Failure -> {
+                // Keep pendingSendKey so a re-tap of the same draft retries idempotently.
                 _state.update { existing ->
                     existing.copy(
                         isSending = false,

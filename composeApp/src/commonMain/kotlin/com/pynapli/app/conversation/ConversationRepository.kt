@@ -22,6 +22,7 @@ interface ConversationRepository {
     suspend fun sendMessage(
         conversationId: String,
         body: String,
+        clientIdempotencyKey: String? = null,
     ): AppResult<MessageDto>
 
     suspend fun sendTypingIndicator(

@@ -2,6 +2,7 @@ package com.pynapli.server.messaging
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.sql.SQLException
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -95,6 +96,7 @@ class JdbcMessagingRepository(
         moderationStatus: String,
         bodyFingerprint: String?,
         safetyReason: String?,
+        clientIdempotencyKey: String?,
         messageIdFactory: () -> UUID,
     ): MessageRecord? =
         withContext(Dispatchers.IO) {
@@ -106,16 +108,41 @@ class JdbcMessagingRepository(
                         return@withContext null
                     }
 
+                    // Idempotent replay: if this sender already created a message in this
+                    // conversation under the same key, return it instead of inserting again.
+                    if (clientIdempotencyKey != null) {
+                        val existing =
+                            connection.findMessageByIdempotencyKey(userId, conversationId, clientIdempotencyKey)
+                        if (existing != null) {
+                            connection.rollback()
+                            return@withContext existing
+                        }
+                    }
+
                     val message =
-                        connection.insertMessage(
-                            messageId = messageIdFactory(),
-                            userId = userId,
-                            conversationId = conversationId,
-                            body = body,
-                            moderationStatus = moderationStatus,
-                            bodyFingerprint = bodyFingerprint,
-                            safetyReason = safetyReason,
-                        )
+                        try {
+                            connection.insertMessage(
+                                messageId = messageIdFactory(),
+                                userId = userId,
+                                conversationId = conversationId,
+                                body = body,
+                                moderationStatus = moderationStatus,
+                                bodyFingerprint = bodyFingerprint,
+                                safetyReason = safetyReason,
+                                clientIdempotencyKey = clientIdempotencyKey,
+                            )
+                        } catch (error: SQLException) {
+                            // Concurrent retry won the unique index race: roll back and return the
+                            // row the other request committed. A new connection is needed because
+                            // this one is in a failed transaction state.
+                            if (clientIdempotencyKey != null && error.sqlState == UNIQUE_VIOLATION_SQLSTATE) {
+                                connection.rollback()
+                                return@withContext dataSource.connection.use { lookup ->
+                                    lookup.findMessageByIdempotencyKey(userId, conversationId, clientIdempotencyKey)
+                                }
+                            }
+                            throw error
+                        }
 
                     if (moderationStatus == MessageModerationStatus.HELD && safetyReason != null) {
                         connection.insertMessageReviewQueue(
@@ -352,5 +379,6 @@ class JdbcMessagingRepository(
 
     companion object {
         private const val DEFAULT_MESSAGE_PAGE_LIMIT = 50
+        private const val UNIQUE_VIOLATION_SQLSTATE = "23505"
     }
 }

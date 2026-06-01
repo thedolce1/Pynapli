@@ -17,6 +17,7 @@ import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
+import com.pynapli.shared.network.dto.MESSAGE_IDEMPOTENCY_KEY_MAX_LENGTH
 import com.pynapli.shared.network.dto.MessageDeltaType
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
@@ -139,6 +140,10 @@ class MessagingService(
         val body = request.body.trim()
         if (body.isEmpty()) throw MessagingException("MESSAGE_BODY_EMPTY")
         if (body.length > MESSAGE_BODY_MAX_LENGTH) throw MessagingException("MESSAGE_BODY_TOO_LONG")
+        val clientIdempotencyKey = request.clientIdempotencyKey?.trim()?.takeIf { it.isNotEmpty() }
+        if (clientIdempotencyKey != null && clientIdempotencyKey.length > MESSAGE_IDEMPOTENCY_KEY_MAX_LENGTH) {
+            throw MessagingException("INVALID_IDEMPOTENCY_KEY")
+        }
         if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
             throw MessagingException("RISK_RESTRICTED")
         }
@@ -183,6 +188,7 @@ class MessagingService(
                 moderationStatus = safetyDecision.moderationStatus,
                 bodyFingerprint = safetyDecision.bodyFingerprint,
                 safetyReason = safetyDecision.safetyReason,
+                clientIdempotencyKey = clientIdempotencyKey,
             ) ?: throw MessagingException("CONVERSATION_NOT_FOUND")
         val conversation =
             repository

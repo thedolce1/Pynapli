@@ -873,6 +873,7 @@ private class InMemoryMessagingRepository(
     private val messagesByConversation = mutableMapOf<UUID, MutableList<MessageRecord>>()
     private val lastReadAtByParticipant = mutableMapOf<Pair<UUID, UUID>, Instant>()
     private val messageFingerprints = mutableMapOf<UUID, String?>()
+    private val idempotencyKeys = mutableMapOf<UUID, String>()
     private val partnerInvitesByConversation = mutableMapOf<UUID, PartnerChatInviteRecord>()
     private var nextConversationIndex = 1
     private var nextMessageIndex = 1
@@ -1153,6 +1154,7 @@ private class InMemoryMessagingRepository(
         moderationStatus: String,
         bodyFingerprint: String?,
         safetyReason: String?,
+        clientIdempotencyKey: String?,
         messageIdFactory: () -> UUID,
     ): MessageRecord? {
         val conversation =
@@ -1162,6 +1164,15 @@ private class InMemoryMessagingRepository(
                         participant.userId == userId && participant.status == ConversationParticipantStatus.ACTIVE
                     }
             } ?: return null
+
+        // Idempotent replay: same sender + conversation + key returns the original.
+        if (clientIdempotencyKey != null) {
+            val existing =
+                messagesByConversation[conversationId].orEmpty().firstOrNull {
+                    it.senderUserId == userId && idempotencyKeys[it.messageId] == clientIdempotencyKey
+                }
+            if (existing != null) return existing
+        }
 
         val messageIndex = nextMessageIndex++
         val message =
@@ -1181,6 +1192,7 @@ private class InMemoryMessagingRepository(
             )
         messagesByConversation.getOrPut(conversationId) { mutableListOf() }.add(message)
         messageFingerprints[message.messageId] = bodyFingerprint
+        if (clientIdempotencyKey != null) idempotencyKeys[message.messageId] = clientIdempotencyKey
         if (moderationStatus == MessageModerationStatus.HELD && safetyReason != null) {
             reviewQueue +=
                 ReviewQueueItem(

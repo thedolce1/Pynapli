@@ -143,6 +143,7 @@ internal fun messagingStatusFor(code: String): HttpStatusCode =
         "INVALID_MESSAGE_PAGE_LIMIT",
         "MESSAGE_BODY_EMPTY",
         "MESSAGE_BODY_TOO_LONG",
+        "INVALID_IDEMPOTENCY_KEY",
         -> HttpStatusCode.BadRequest
         else -> HttpStatusCode.BadRequest
     }
