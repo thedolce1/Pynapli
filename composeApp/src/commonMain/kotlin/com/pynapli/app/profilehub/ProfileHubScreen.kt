@@ -44,6 +44,7 @@ fun ProfileHubScreen(
     onClearProfileLinkMessages: () -> Unit,
     onClearMessagesError: () -> Unit,
     onLogout: () -> Unit,
+    onSetDiscreetIcon: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val state by stateHolder.state.collectAsState()
@@ -103,6 +104,10 @@ fun ProfileHubScreen(
             onBack = stateHolder::dismissAppSettings,
             onThemeModeChanged = appSettingsStateHolder::updateThemeMode,
             onDistanceUnitChanged = appSettingsStateHolder::updateDistanceUnit,
+            onDiscreetIconChanged = { enabled ->
+                appSettingsStateHolder.updateDiscreetIcon(enabled)
+                onSetDiscreetIcon(enabled)
+            },
             onNotificationDetailChanged = appSettingsStateHolder::updateNotificationDetail,
             onMessageNotificationsChanged = appSettingsStateHolder::updateMessageNotifications,
             onMatchNotificationsChanged = appSettingsStateHolder::updateMatchNotifications,

@@ -71,6 +71,7 @@ fun PynapliApp(
     deepLinkStateHolder: AppDeepLinkStateHolder? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
+    onSetDiscreetIcon: (Boolean) -> Unit = {},
     devLoginCredentials: DevLoginCredentials? = null,
 ) {
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -432,6 +433,7 @@ fun PynapliApp(
                             profileSurface = ProfileSurface.None
                             scope.launch { authStateHolder.logout() }
                         },
+                        onSetDiscreetIcon = onSetDiscreetIcon,
                         modifier = Modifier.weight(1f),
                     )
                 } else if (profileSurface == ProfileSurface.MediaAlbums) {

@@ -20,6 +20,7 @@ internal fun AppSettingsContent(
     onBack: () -> Unit,
     onThemeModeChanged: (String) -> Unit,
     onDistanceUnitChanged: (String) -> Unit,
+    onDiscreetIconChanged: (Boolean) -> Unit,
     onNotificationDetailChanged: (String) -> Unit,
     onMessageNotificationsChanged: (Boolean) -> Unit,
     onMatchNotificationsChanged: (Boolean) -> Unit,
@@ -87,6 +88,17 @@ internal fun AppSettingsContent(
                             onSelected = onDistanceUnitChanged,
                         )
                     }
+                }
+            }
+
+            item {
+                ProfileHubSection("App") {
+                    PrivacyToggleRow(
+                        label = "Discreet app icon",
+                        value = if (state.draft.discreetIconEnabled) "On" else "Off",
+                        checked = state.draft.discreetIconEnabled,
+                        onCheckedChange = onDiscreetIconChanged,
+                    )
                 }
             }
 

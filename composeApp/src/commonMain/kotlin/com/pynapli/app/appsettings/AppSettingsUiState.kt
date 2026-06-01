@@ -16,6 +16,7 @@ data class AppSettingsUiState(
 data class AppSettingsDraft(
     val themeMode: String = AppSettings.THEME_DARK,
     val distanceUnit: String = AppSettings.UNIT_METRIC,
+    val discreetIconEnabled: Boolean = false,
     val notificationDetail: String = AppSettings.NOTIFICATION_DISCREET,
     val messageNotifications: Boolean = true,
     val matchNotifications: Boolean = true,

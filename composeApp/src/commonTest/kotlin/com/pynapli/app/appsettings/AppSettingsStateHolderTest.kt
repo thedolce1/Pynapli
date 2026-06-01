@@ -39,6 +39,39 @@ class AppSettingsStateHolderTest {
         }
 
     @Test
+    fun updateDiscreetIconSetsDraftFlagAndRoundTripsThroughSettings() =
+        runBlocking {
+            val repository = InMemoryAppSettingsRepository()
+            val stateHolder = AppSettingsStateHolder(repository)
+
+            stateHolder.load()
+            assertEquals(false, stateHolder.state.value.draft.discreetIconEnabled)
+
+            stateHolder.updateDiscreetIcon(true)
+            assertEquals(true, stateHolder.state.value.draft.discreetIconEnabled)
+
+            // Round-trips through toSettings()/normalized() without losing the flag.
+            assertEquals(
+                true,
+                stateHolder.state.value.draft
+                    .toSettings()
+                    .discreetIconEnabled,
+            )
+            assertEquals(
+                true,
+                stateHolder.state.value.draft
+                    .toSettings()
+                    .normalized()
+                    .discreetIconEnabled,
+            )
+
+            val saved = stateHolder.saveDraft()
+            assertTrue(saved)
+            assertEquals(true, stateHolder.state.value.settings.discreetIconEnabled)
+            assertEquals(true, repository.settings.discreetIconEnabled)
+        }
+
+    @Test
     fun serverBackedRepositoryMergesNotificationPreferencesOnLoad() =
         runBlocking {
             val localRepository =

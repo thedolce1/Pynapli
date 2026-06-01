@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-API-26 launcher fallback (minSdk 23): adaptive icons are API 26+, so older launchers use
+     this composited layer-list (dark background + the Pynapli gold mark inset into the safe zone). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ic_launcher_background" />
+    <item
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:left="18dp"
+        android:top="18dp"
+        android:right="18dp"
+        android:bottom="18dp" />
+</layer-list>
