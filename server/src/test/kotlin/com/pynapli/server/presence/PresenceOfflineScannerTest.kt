@@ -1,10 +1,9 @@
 package com.pynapli.server.presence
 
 import com.pynapli.shared.network.dto.PresenceDeltaDto
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.runBlocking
@@ -46,10 +45,17 @@ class PresenceOfflineScannerTest {
                         .onEach { received += it }
                         .launchIn(this)
 
-                val scanJob = async(Dispatchers.Default) { scanner.scanOnce() }
-                scanJob.await()
+                // The broadcaster's SharedFlow has replay=0, so an emission before the collector is
+                // actually subscribed would be dropped. Wait for the subscription to register before
+                // running the scan, instead of racing it on another dispatcher (the CI-flake source).
+                withTimeoutOrNull(2_000) {
+                    broadcaster.subscriptionCount.first { it > 0 }
+                }
+
+                scanner.scanOnce()
+
                 // Allow the broadcaster's SharedFlow to deliver to the observer.
-                withTimeoutOrNull(500) {
+                withTimeoutOrNull(2_000) {
                     while (received.isEmpty()) delay(5)
                 }
                 observerJob.cancel()
@@ -89,6 +95,10 @@ class PresenceOfflineScannerTest {
                         .onEach { received += it }
                         .launchIn(this)
 
+                // Ensure the collector is subscribed first, so a spurious emission would be caught.
+                withTimeoutOrNull(2_000) {
+                    broadcaster.subscriptionCount.first { it > 0 }
+                }
                 scanner.scanOnce()
                 delay(100)
                 observerJob.cancel()

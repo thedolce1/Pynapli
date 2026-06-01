@@ -3,6 +3,7 @@ package com.pynapli.server.presence
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 class PresenceBroadcaster(
@@ -14,6 +15,9 @@ class PresenceBroadcaster(
             extraBufferCapacity = extraBufferCapacity,
         )
     val deltas: SharedFlow<PresenceDeltaDto> = _deltas.asSharedFlow()
+
+    /** Live count of active subscribers — useful for connection metrics and for tests to await readiness. */
+    val subscriptionCount: StateFlow<Int> = _deltas.subscriptionCount
 
     suspend fun emit(delta: PresenceDeltaDto) {
         _deltas.emit(delta)
