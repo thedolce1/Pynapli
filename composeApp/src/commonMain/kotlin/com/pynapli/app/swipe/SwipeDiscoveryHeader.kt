@@ -13,8 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Style
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,6 +25,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliPill
 
 @Composable
 internal fun SwipeHeader(
@@ -88,57 +88,27 @@ internal fun SwipeFilterRow(
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         filters.forEach { filter ->
             item(key = filter.type.name) {
-                AssistChip(
+                PynapliPill(
+                    text = filter.label,
+                    selected = filter.active,
                     onClick = { onFilterSelected(filter.type) },
-                    label = {
-                        Text(
-                            text = filter.label,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    leadingIcon =
+                    leading =
                         if (filter.locked) {
                             {
                                 Icon(
                                     imageVector = Icons.Filled.Lock,
                                     contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
+                                    tint = PynapliColors.Accent,
+                                    modifier = Modifier.size(13.dp),
                                 )
                             }
                         } else {
                             null
                         },
-                    colors =
-                        AssistChipDefaults.assistChipColors(
-                            containerColor =
-                                if (filter.active) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                },
-                            labelColor =
-                                when {
-                                    filter.active -> MaterialTheme.colorScheme.onPrimary
-                                    filter.locked -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    else -> MaterialTheme.colorScheme.onSurface
-                                },
-                            leadingIconContentColor =
-                                if (filter.active) {
-                                    MaterialTheme.colorScheme.onPrimary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                        ),
-                    border =
-                        AssistChipDefaults.assistChipBorder(
-                            enabled = true,
-                            borderColor = MaterialTheme.colorScheme.outline,
-                        ),
                 )
             }
         }
