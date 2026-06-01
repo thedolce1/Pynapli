@@ -1,5 +1,5 @@
 {
-  "description": "Connected Android Activity QA golden assertions. These are structural text and coarse screenshot checks because emulator density, clock, and seeded media can vary.",
+  "description": "Connected Android Activity QA golden assertions. These are structural text and coarse screenshot checks because emulator density, clock, and seeded media can vary. Per-tab minNonBlackRatio for the five content tabs was lowered 0.04 -> 0.025 on 2026-06-01 (slice 1.4): the tab row moved from a solid-gold selected AssistChip to a restrained PynapliPill (outline + faint fill), reducing non-black fill on these sparse tabs. Content rows are unchanged; the dense activityInitial floor (0.18) is unaffected.",
   "stages": {
     "activityInitial": {
       "requiredTexts": ["Activity", "All", "Views", "Flirts", "Likes", "Matches", "Albums", "New"],
@@ -18,7 +18,7 @@
       "image": {
         "minWidth": 320,
         "minHeight": 600,
-        "minNonBlackRatio": 0.04,
+        "minNonBlackRatio": 0.025,
         "maxBrightRatio": 0.32,
         "minColorBucketCount": 10
       }
@@ -29,7 +29,7 @@
       "image": {
         "minWidth": 320,
         "minHeight": 600,
-        "minNonBlackRatio": 0.04,
+        "minNonBlackRatio": 0.025,
         "maxBrightRatio": 0.32,
         "minColorBucketCount": 10
       }
@@ -40,7 +40,7 @@
       "image": {
         "minWidth": 320,
         "minHeight": 600,
-        "minNonBlackRatio": 0.04,
+        "minNonBlackRatio": 0.025,
         "maxBrightRatio": 0.32,
         "minColorBucketCount": 10
       }
@@ -51,7 +51,7 @@
       "image": {
         "minWidth": 320,
         "minHeight": 600,
-        "minNonBlackRatio": 0.04,
+        "minNonBlackRatio": 0.025,
         "maxBrightRatio": 0.32,
         "minColorBucketCount": 10
       }
@@ -62,7 +62,7 @@
       "image": {
         "minWidth": 320,
         "minHeight": 600,
-        "minNonBlackRatio": 0.04,
+        "minNonBlackRatio": 0.025,
         "maxBrightRatio": 0.32,
         "minColorBucketCount": 10
       }
