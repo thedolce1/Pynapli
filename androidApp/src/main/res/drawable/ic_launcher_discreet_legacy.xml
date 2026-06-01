@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-API-26 disguise launcher fallback (minSdk 23): muted background + neutral calculator mark. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ic_launcher_discreet_background" />
+    <item
+        android:drawable="@drawable/ic_launcher_discreet_foreground"
+        android:left="18dp"
+        android:top="18dp"
+        android:right="18dp"
+        android:bottom="18dp" />
+</layer-list>

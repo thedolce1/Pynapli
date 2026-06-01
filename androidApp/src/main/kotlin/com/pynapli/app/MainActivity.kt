@@ -2,6 +2,7 @@ package com.pynapli.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -13,6 +14,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
@@ -94,6 +96,7 @@ class MainActivity : ComponentActivity() {
                 deepLinkStateHolder = appGraph.deepLinkStateHolder,
                 onUseCurrentLocation = ::requestCurrentLocation,
                 onPickMediaForAlbum = ::pickMediaForAlbum,
+                onSetDiscreetIcon = ::applyLauncherIcon,
                 devLoginCredentials = appGraph.devLoginCredentials.takeIf { isDebuggable() },
             )
         }
@@ -226,6 +229,29 @@ class MainActivity : ComponentActivity() {
         mediaPickerLauncher.launch(
             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
         )
+    }
+
+    private fun applyLauncherIcon(discreet: Boolean) {
+        runCatching {
+            val defaultAlias = ComponentName(this, "$packageName.DefaultLauncherAlias")
+            val discreetAlias = ComponentName(this, "$packageName.DiscreetLauncherAlias")
+            // Enable the target alias FIRST, then disable the other, so exactly one
+            // launcher alias is enabled at all times and the icon never disappears.
+            val enabledAlias = if (discreet) discreetAlias else defaultAlias
+            val disabledAlias = if (discreet) defaultAlias else discreetAlias
+            packageManager.setComponentEnabledSetting(
+                enabledAlias,
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP,
+            )
+            packageManager.setComponentEnabledSetting(
+                disabledAlias,
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP,
+            )
+        }.onFailure { error ->
+            Log.w(TAG, "Failed to apply discreet launcher icon (discreet=$discreet)", error)
+        }
     }
 
     private fun handlePickedMedia(uri: Uri?) {
@@ -370,3 +396,4 @@ private fun AppSettings.pushNotificationsEnabled(): Boolean = messageNotificatio
 
 private const val NOTIFICATION_PERMISSION_PREFERENCES = "pynapli_notification_permission"
 private const val KEY_NOTIFICATION_PERMISSION_REQUESTED = "requested"
+private const val TAG = "MainActivity"

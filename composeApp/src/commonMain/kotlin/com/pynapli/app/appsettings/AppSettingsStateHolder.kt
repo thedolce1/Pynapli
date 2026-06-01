@@ -49,6 +49,8 @@ class AppSettingsStateHolder(
 
     fun updateDistanceUnit(value: String) = updateDraft { it.copy(distanceUnit = value.normalizedDistanceUnit()) }
 
+    fun updateDiscreetIcon(value: Boolean) = updateDraft { it.copy(discreetIconEnabled = value) }
+
     fun updateNotificationDetail(value: String) = updateDraft { it.copy(notificationDetail = value.normalizedNotificationDetail()) }
 
     fun updateMessageNotifications(value: Boolean) = updateDraft { it.copy(messageNotifications = value) }

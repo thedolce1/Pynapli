@@ -8,6 +8,7 @@ internal fun AppSettings.toDraft(): AppSettingsDraft =
     AppSettingsDraft(
         themeMode = themeMode.normalizedThemeMode(),
         distanceUnit = distanceUnit.normalizedDistanceUnit(),
+        discreetIconEnabled = discreetIconEnabled,
         notificationDetail = notificationDetail.normalizedNotificationDetail(),
         messageNotifications = messageNotifications,
         matchNotifications = matchNotifications,
@@ -26,6 +27,7 @@ internal fun AppSettingsDraft.toSettings(): AppSettings =
     AppSettings(
         themeMode = themeMode.normalizedThemeMode(),
         distanceUnit = distanceUnit.normalizedDistanceUnit(),
+        discreetIconEnabled = discreetIconEnabled,
         notificationDetail = notificationDetail.normalizedNotificationDetail(),
         messageNotifications = messageNotifications,
         matchNotifications = matchNotifications,
@@ -44,6 +46,7 @@ internal fun AppSettings.normalized(): AppSettings =
     AppSettings(
         themeMode = themeMode.normalizedThemeMode(),
         distanceUnit = distanceUnit.normalizedDistanceUnit(),
+        discreetIconEnabled = discreetIconEnabled,
         notificationDetail = notificationDetail.normalizedNotificationDetail(),
         messageNotifications = messageNotifications,
         matchNotifications = matchNotifications,

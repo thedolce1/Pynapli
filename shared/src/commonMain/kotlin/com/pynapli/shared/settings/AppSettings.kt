@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 data class AppSettings(
     val themeMode: String = THEME_DARK,
     val distanceUnit: String = UNIT_METRIC,
+    val discreetIconEnabled: Boolean = false,
     val notificationDetail: String = NOTIFICATION_DISCREET,
     val messageNotifications: Boolean = true,
     val matchNotifications: Boolean = true,
