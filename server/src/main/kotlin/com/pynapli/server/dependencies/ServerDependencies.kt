@@ -24,6 +24,7 @@ import com.pynapli.server.location.JdbcTravelLocationRepository
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationService
 import com.pynapli.server.media.AutoApproveMediaModerationScanner
+import com.pynapli.server.media.CloudVisionMediaModerationScanner
 import com.pynapli.server.media.GcsV4MediaAssetUrlResolver
 import com.pynapli.server.media.GcsV4MediaUploadSigner
 import com.pynapli.server.media.GcsV4SignedUrlFactory
@@ -36,6 +37,7 @@ import com.pynapli.server.media.ManualReviewMediaModerationScanner
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.media.MediaCleanupService
 import com.pynapli.server.media.MediaCleanupWorker
+import com.pynapli.server.media.MediaModerationScanner
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.media.StaticMediaUploadSigner
 import com.pynapli.server.messaging.JdbcMessagingRepository
@@ -200,11 +202,21 @@ class ServerDependencies(
                     repository = presenceRepository,
                     broadcaster = presenceBroadcaster,
                 )
+            // Media signing credentials, loaded once and shared by the GCS signer and the Cloud
+            // Vision moderation scanner (both ride the same service account).
+            val mediaSigningCredentials =
+                if (config.mediaStorageProvider.equals("gcs", ignoreCase = true) ||
+                    config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true)
+                ) {
+                    loadMediaSigningCredentials(config)
+                } else {
+                    null
+                }
             // One signing factory shared by the upload signer and the download resolver (gcs only).
             val gcsSignedUrlFactory =
                 if (config.mediaStorageProvider.equals("gcs", ignoreCase = true)) {
                     GcsV4SignedUrlFactory(
-                        credentials = loadMediaSigningCredentials(config),
+                        credentials = mediaSigningCredentials!!,
                         region = config.mediaGcsSigningRegion,
                     )
                 } else {
@@ -293,14 +305,7 @@ class ServerDependencies(
                     uploadSigner = uploadSigner,
                     blockRepository = blockRepository,
                     mediaAssetUrlResolver = mediaAssetUrlResolver,
-                    // Auto-approve in dev; hold for review otherwise. A real automated scanner can
-                    // replace ManualReview behind MediaModerationScanner without touching this wiring.
-                    moderationScanner =
-                        if (config.mediaDevAutoApproveUploads) {
-                            AutoApproveMediaModerationScanner()
-                        } else {
-                            ManualReviewMediaModerationScanner()
-                        },
+                    moderationScanner = createMediaModerationScanner(config, mediaSigningCredentials),
                 )
             val subscriptionService =
                 SubscriptionService(
@@ -537,6 +542,25 @@ class ServerDependencies(
                     "(or a Firebase service account) to sign upload URLs.",
             )
         }
+
+        // Upload-complete moderation: dev auto-approve wins first, then the configured provider.
+        // "cloud_vision" needs the media signing credentials; if they're absent we fall back to
+        // manual review rather than silently auto-approving (fail-safe).
+        private fun createMediaModerationScanner(
+            config: ServerConfig,
+            mediaSigningCredentials: ServiceAccountCredentials?,
+        ): MediaModerationScanner =
+            when {
+                config.mediaDevAutoApproveUploads -> AutoApproveMediaModerationScanner()
+                config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true) &&
+                    mediaSigningCredentials != null ->
+                    CloudVisionMediaModerationScanner(
+                        credentials = mediaSigningCredentials,
+                        endpoint = config.mediaModerationVisionEndpoint,
+                    )
+
+                else -> ManualReviewMediaModerationScanner()
+            }
 
         fun test(config: ServerConfig = ServerConfig.fromEnvironment()): ServerDependencies =
             ServerDependencies(
