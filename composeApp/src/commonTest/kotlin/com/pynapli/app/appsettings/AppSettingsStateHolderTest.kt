@@ -79,6 +79,35 @@ class AppSettingsStateHolderTest {
         }
 
     @Test
+    fun serverBackedRepositoryMapsEachNotificationCategoryIndependentlyOnLoad() =
+        runBlocking {
+            val localRepository = InMemoryAppSettingsRepository()
+            val gateway =
+                FakeNotificationPreferencesGateway(
+                    loadResult =
+                        AppResult.Success(
+                            notificationPreferences(
+                                activityEnabled = true,
+                                flirtsEnabled = false,
+                                albumRequestsEnabled = true,
+                                partnerInvitesEnabled = false,
+                                systemSafetyEnabled = false,
+                            ),
+                        ),
+                )
+            val repository = ServerBackedAppSettingsRepository(localRepository, gateway)
+
+            val settings = repository.load()
+
+            // flirtsEnabled=false while activityEnabled=true must not collapse together.
+            assertEquals(true, settings.activityNotifications)
+            assertEquals(false, settings.flirtNotifications)
+            assertEquals(true, settings.albumRequestNotifications)
+            assertEquals(false, settings.partnerInviteNotifications)
+            assertEquals(false, settings.systemSafetyNotifications)
+        }
+
+    @Test
     fun serverBackedRepositoryKeepsLocalSettingsWhenServerUnavailable() =
         runBlocking {
             val local = AppSettings(notificationDetail = AppSettings.NOTIFICATION_STANDARD)
@@ -114,7 +143,7 @@ class AppSettingsStateHolderTest {
         }
 
     @Test
-    fun serverBackedRepositoryPushesCollapsedNotificationTogglesOnSave() =
+    fun serverBackedRepositoryPushesIndependentNotificationTogglesOnSave() =
         runBlocking {
             val localRepository = InMemoryAppSettingsRepository()
             val gateway = FakeNotificationPreferencesGateway()
@@ -125,7 +154,11 @@ class AppSettingsStateHolderTest {
                     notificationDetail = AppSettings.NOTIFICATION_STANDARD,
                     messageNotifications = false,
                     matchNotifications = true,
-                    activityNotifications = false,
+                    activityNotifications = true,
+                    flirtNotifications = false,
+                    albumRequestNotifications = true,
+                    partnerInviteNotifications = false,
+                    systemSafetyNotifications = false,
                     quietHoursEnabled = true,
                     quietHoursStartMinute = 23 * 60,
                     quietHoursEndMinute = 7 * 60,
@@ -136,11 +169,13 @@ class AppSettingsStateHolderTest {
             assertEquals(AppSettings.NOTIFICATION_STANDARD, request.detailLevel)
             assertEquals(false, request.messagesEnabled)
             assertEquals(true, request.matchesEnabled)
-            assertEquals(false, request.activityEnabled)
+            assertEquals(true, request.activityEnabled)
+            // Each category is sent from its own client field, not reused from activity.
             assertEquals(false, request.flirtsEnabled)
-            assertEquals(false, request.albumRequestsEnabled)
+            assertEquals(true, request.albumRequestsEnabled)
             assertEquals(false, request.partnerInvitesEnabled)
-            assertEquals(true, request.systemSafetyEnabled)
+            // System/safety reflects the user setting, not a hardcoded true.
+            assertEquals(false, request.systemSafetyEnabled)
             assertEquals(true, request.quietHoursEnabled)
             assertEquals(23 * 60, request.quietHoursStartMinute)
             assertEquals(7 * 60, request.quietHoursEndMinute)
@@ -212,6 +247,10 @@ private fun notificationPreferences(
     messagesEnabled: Boolean = true,
     matchesEnabled: Boolean = true,
     activityEnabled: Boolean = true,
+    flirtsEnabled: Boolean = true,
+    albumRequestsEnabled: Boolean = true,
+    partnerInvitesEnabled: Boolean = true,
+    systemSafetyEnabled: Boolean = true,
     quietHoursEnabled: Boolean = false,
     quietHoursStartMinute: Int = AppSettings.DEFAULT_QUIET_HOURS_START_MINUTE,
     quietHoursEndMinute: Int = AppSettings.DEFAULT_QUIET_HOURS_END_MINUTE,
@@ -222,10 +261,10 @@ private fun notificationPreferences(
         messagesEnabled = messagesEnabled,
         matchesEnabled = matchesEnabled,
         activityEnabled = activityEnabled,
-        flirtsEnabled = activityEnabled,
-        albumRequestsEnabled = activityEnabled,
-        partnerInvitesEnabled = activityEnabled,
-        systemSafetyEnabled = true,
+        flirtsEnabled = flirtsEnabled,
+        albumRequestsEnabled = albumRequestsEnabled,
+        partnerInvitesEnabled = partnerInvitesEnabled,
+        systemSafetyEnabled = systemSafetyEnabled,
         quietHoursEnabled = quietHoursEnabled,
         quietHoursStartMinute = quietHoursStartMinute,
         quietHoursEndMinute = quietHoursEndMinute,

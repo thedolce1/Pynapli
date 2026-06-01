@@ -57,6 +57,14 @@ class AppSettingsStateHolder(
 
     fun updateActivityNotifications(value: Boolean) = updateDraft { it.copy(activityNotifications = value) }
 
+    fun updateFlirtNotifications(value: Boolean) = updateDraft { it.copy(flirtNotifications = value) }
+
+    fun updateAlbumRequestNotifications(value: Boolean) = updateDraft { it.copy(albumRequestNotifications = value) }
+
+    fun updatePartnerInviteNotifications(value: Boolean) = updateDraft { it.copy(partnerInviteNotifications = value) }
+
+    fun updateSystemSafetyNotifications(value: Boolean) = updateDraft { it.copy(systemSafetyNotifications = value) }
+
     fun updateQuietHoursEnabled(value: Boolean) = updateDraft { it.copy(quietHoursEnabled = value) }
 
     fun updateQuietHoursWindow(

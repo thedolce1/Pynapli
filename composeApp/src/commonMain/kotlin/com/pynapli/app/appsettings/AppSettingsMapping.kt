@@ -12,6 +12,10 @@ internal fun AppSettings.toDraft(): AppSettingsDraft =
         messageNotifications = messageNotifications,
         matchNotifications = matchNotifications,
         activityNotifications = activityNotifications,
+        flirtNotifications = flirtNotifications,
+        albumRequestNotifications = albumRequestNotifications,
+        partnerInviteNotifications = partnerInviteNotifications,
+        systemSafetyNotifications = systemSafetyNotifications,
         quietHoursEnabled = quietHoursEnabled,
         quietHoursStartMinute = quietHoursStartMinute.normalizedQuietHoursMinute(AppSettings.DEFAULT_QUIET_HOURS_START_MINUTE),
         quietHoursEndMinute = quietHoursEndMinute.normalizedQuietHoursMinute(AppSettings.DEFAULT_QUIET_HOURS_END_MINUTE),
@@ -26,6 +30,10 @@ internal fun AppSettingsDraft.toSettings(): AppSettings =
         messageNotifications = messageNotifications,
         matchNotifications = matchNotifications,
         activityNotifications = activityNotifications,
+        flirtNotifications = flirtNotifications,
+        albumRequestNotifications = albumRequestNotifications,
+        partnerInviteNotifications = partnerInviteNotifications,
+        systemSafetyNotifications = systemSafetyNotifications,
         quietHoursEnabled = quietHoursEnabled,
         quietHoursStartMinute = quietHoursStartMinute.normalizedQuietHoursMinute(AppSettings.DEFAULT_QUIET_HOURS_START_MINUTE),
         quietHoursEndMinute = quietHoursEndMinute.normalizedQuietHoursMinute(AppSettings.DEFAULT_QUIET_HOURS_END_MINUTE),
@@ -40,6 +48,10 @@ internal fun AppSettings.normalized(): AppSettings =
         messageNotifications = messageNotifications,
         matchNotifications = matchNotifications,
         activityNotifications = activityNotifications,
+        flirtNotifications = flirtNotifications,
+        albumRequestNotifications = albumRequestNotifications,
+        partnerInviteNotifications = partnerInviteNotifications,
+        systemSafetyNotifications = systemSafetyNotifications,
         quietHoursEnabled = quietHoursEnabled,
         quietHoursStartMinute = quietHoursStartMinute.normalizedQuietHoursMinute(AppSettings.DEFAULT_QUIET_HOURS_START_MINUTE),
         quietHoursEndMinute = quietHoursEndMinute.normalizedQuietHoursMinute(AppSettings.DEFAULT_QUIET_HOURS_END_MINUTE),
@@ -51,11 +63,11 @@ internal fun AppSettings.mergeNotificationPreferences(preferences: NotificationP
         notificationDetail = preferences.detailLevel.normalizedNotificationDetail(),
         messageNotifications = preferences.messagesEnabled,
         matchNotifications = preferences.matchesEnabled,
-        activityNotifications =
-            preferences.activityEnabled &&
-                preferences.flirtsEnabled &&
-                preferences.albumRequestsEnabled &&
-                preferences.partnerInvitesEnabled,
+        activityNotifications = preferences.activityEnabled,
+        flirtNotifications = preferences.flirtsEnabled,
+        albumRequestNotifications = preferences.albumRequestsEnabled,
+        partnerInviteNotifications = preferences.partnerInvitesEnabled,
+        systemSafetyNotifications = preferences.systemSafetyEnabled,
         quietHoursEnabled = preferences.quietHoursEnabled,
         quietHoursStartMinute =
             preferences.quietHoursStartMinute.normalizedQuietHoursMinute(
@@ -74,10 +86,10 @@ internal fun AppSettings.toNotificationPreferencesRequest(): UpdateNotificationP
         messagesEnabled = messageNotifications,
         matchesEnabled = matchNotifications,
         activityEnabled = activityNotifications,
-        flirtsEnabled = activityNotifications,
-        albumRequestsEnabled = activityNotifications,
-        partnerInvitesEnabled = activityNotifications,
-        systemSafetyEnabled = true,
+        flirtsEnabled = flirtNotifications,
+        albumRequestsEnabled = albumRequestNotifications,
+        partnerInvitesEnabled = partnerInviteNotifications,
+        systemSafetyEnabled = systemSafetyNotifications,
         quietHoursEnabled = quietHoursEnabled,
         quietHoursStartMinute =
             quietHoursStartMinute.normalizedQuietHoursMinute(
