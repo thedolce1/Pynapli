@@ -26,6 +26,13 @@ data class ServerConfig(
     val mediaGcsSigningRegion: String = "auto",
     val mediaGcsSigningServiceAccountPath: String? = null,
     val mediaGcsSigningServiceAccountJson: String? = null,
+    // Download delivery path for gcs storage: "signed_gcs" (default; direct GCS V4 signed GET) or
+    // "cdn" (Cloud CDN signed URL via a CDN-backed bucket — cheaper/faster at scale). "cdn" needs
+    // the CDN base URL + a signing key/key-name provisioned on the backend bucket (founder/GCP step).
+    val mediaDeliveryProvider: String = "signed_gcs",
+    val mediaCdnBaseUrl: String? = null,
+    val mediaCdnSigningKeyName: String? = null,
+    val mediaCdnSigningKeyBase64Url: String? = null,
     val notificationDispatchEnabled: Boolean = false,
     val notificationDispatchIntervalMillis: Long = 5_000L,
     val notificationDispatchBatchSize: Int = 50,
@@ -123,6 +130,10 @@ data class ServerConfig(
                 mediaGcsSigningRegion = System.getenv("PYNAPLI_MEDIA_GCS_SIGNING_REGION") ?: "auto",
                 mediaGcsSigningServiceAccountPath = System.getenv("PYNAPLI_MEDIA_GCS_SIGNING_SA_PATH"),
                 mediaGcsSigningServiceAccountJson = System.getenv("PYNAPLI_MEDIA_GCS_SIGNING_SA_JSON"),
+                mediaDeliveryProvider = System.getenv("PYNAPLI_MEDIA_DELIVERY_PROVIDER") ?: "signed_gcs",
+                mediaCdnBaseUrl = System.getenv("PYNAPLI_MEDIA_CDN_BASE_URL"),
+                mediaCdnSigningKeyName = System.getenv("PYNAPLI_MEDIA_CDN_SIGNING_KEY_NAME"),
+                mediaCdnSigningKeyBase64Url = System.getenv("PYNAPLI_MEDIA_CDN_SIGNING_KEY_BASE64URL"),
                 notificationDispatchEnabled =
                     System.getenv("PYNAPLI_NOTIFICATION_DISPATCH_ENABLED")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),
