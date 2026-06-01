@@ -13,8 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -31,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.location.TravelCityPreset
 import com.pynapli.app.location.TravelCityPresets
 import com.pynapli.app.location.TravelLocationUiState
@@ -98,30 +97,10 @@ internal fun TravelModeSheet(
                 ) {
                     TravelCityPresets.ALL.forEach { preset ->
                         val active = state.current?.city?.equals(preset.city, ignoreCase = true) == true
-                        AssistChip(
+                        PynapliPill(
+                            text = preset.displayName,
+                            selected = active,
                             onClick = { onPickCity(preset) },
-                            label = {
-                                Text(
-                                    text = preset.displayName,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            colors =
-                                AssistChipDefaults.assistChipColors(
-                                    containerColor =
-                                        if (active) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceVariant
-                                        },
-                                    labelColor =
-                                        if (active) {
-                                            MaterialTheme.colorScheme.onPrimary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface
-                                        },
-                                ),
                             modifier = Modifier.testTag(TravelModeTags.cityTag(preset.id)),
                         )
                     }
