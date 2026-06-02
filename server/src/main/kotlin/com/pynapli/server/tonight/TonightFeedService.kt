@@ -1,0 +1,130 @@
+package com.pynapli.server.tonight
+
+import com.pynapli.server.distance.toPublicDistanceLabel
+import com.pynapli.server.distance.toPublicDistanceMeters
+import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.presence.PresenceService
+import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.safety.HiddenProfileRepository
+import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
+import com.pynapli.shared.network.dto.TonightFeedItemDto
+import com.pynapli.shared.network.dto.TonightFeedPersonDto
+import com.pynapli.shared.network.dto.TonightFeedResponseDto
+import java.time.Clock
+import java.util.UUID
+
+/**
+ * Playing Tonight feed authority (PT-3, PLAYING_TONIGHT_SPEC). A near-viewer list of
+ * LIVE sessions, one row per session anchored on the owner with the linked partner as
+ * a mini (never a couple card). The repository runs the spatial discovery query; this
+ * service enforces every public-exposure rule the Grid enforces:
+ *  - drop a row whose OWNER is blocked or hidden by the viewer;
+ *  - keep a row but null the partner mini when the PARTNER is blocked or hidden;
+ *  - distance label/meters only when the owner opted into showing distance;
+ *  - zone-only location (coarse E3 bucket) — never precise coordinates;
+ *  - online resolved from presence; thumbnails resolved to signed/public URLs.
+ */
+class TonightFeedService(
+    private val repository: TonightFeedRepository,
+    private val presenceService: PresenceService? = null,
+    private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
+    private val blockRepository: BlockRepository? = null,
+    private val hiddenProfileRepository: HiddenProfileRepository? = null,
+    private val clock: Clock = Clock.systemUTC(),
+) {
+    suspend fun feed(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        intent: String?,
+        limit: Int,
+    ): TonightFeedResponseDto {
+        val normalizedIntent = intent?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        if (normalizedIntent != null && normalizedIntent !in VALID_INTENTS) {
+            throw TonightSessionException("INVALID_TONIGHT_INTENT")
+        }
+
+        val boundedRadius = radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
+        val boundedLimit = limit.coerceIn(MIN_LIMIT, MAX_LIMIT)
+
+        val rows =
+            repository.feedNear(
+                viewerUserId = viewerUserId,
+                radiusMeters = boundedRadius,
+                intent = normalizedIntent,
+                limit = boundedLimit,
+                now = clock.instant(),
+            )
+        if (rows.isEmpty()) return TonightFeedResponseDto(items = emptyList())
+
+        // Per-viewer identity exclusions, applied after the repository (same split as
+        // GridService): a blocked/hidden OWNER drops the row; a blocked/hidden PARTNER
+        // only suppresses the mini.
+        val excludedIds =
+            blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty() +
+                hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty()
+
+        val visibleRows = rows.filterNot { it.ownerUserId in excludedIds }
+        if (visibleRows.isEmpty()) return TonightFeedResponseDto(items = emptyList())
+
+        // Resolve online for every surfaced owner + (non-excluded) partner in one call.
+        val presenceIds =
+            buildSet {
+                visibleRows.forEach { row ->
+                    add(row.ownerUserId)
+                    row.partnerUserId?.takeIf { it !in excludedIds }?.let { add(it) }
+                }
+            }
+        val onlineIds = onlineUserIdsFor(presenceIds)
+
+        val items =
+            visibleRows.map { row ->
+                val partnerVisible = row.partnerUserId != null && row.partnerUserId !in excludedIds
+                TonightFeedItemDto(
+                    sessionId = row.sessionId.toString(),
+                    mode = row.mode,
+                    intent = row.intent,
+                    hostMode = row.hostMode,
+                    note = row.note,
+                    photoUrl = row.photoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                    person =
+                        TonightFeedPersonDto(
+                            userId = row.ownerUserId.toString(),
+                            displayName = row.ownerDisplayName,
+                            thumbnailUrl =
+                                row.ownerThumbnailMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                            online = row.ownerUserId in onlineIds,
+                            distanceLabel =
+                                if (row.ownerShowDistance) row.ownerDistanceMeters.toPublicDistanceLabel() else null,
+                            distanceMeters =
+                                if (row.ownerShowDistance) row.ownerDistanceMeters.toPublicDistanceMeters() else null,
+                            zoneKey = "${row.ownerLonE3}_${row.ownerLatE3}",
+                        ),
+                    linkedPartner =
+                        if (partnerVisible) {
+                            LinkedPartnerMiniDto(
+                                userId = row.partnerUserId.toString(),
+                                displayName = row.partnerDisplayName,
+                                thumbnailUrl =
+                                    row.partnerThumbnailMediaAssetId
+                                        ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                                online = row.partnerUserId in onlineIds,
+                            )
+                        } else {
+                            null
+                        },
+                )
+            }
+
+        return TonightFeedResponseDto(items = items)
+    }
+
+    private suspend fun onlineUserIdsFor(userIds: Set<UUID>): Set<UUID> = runCatching { presenceService?.onlineUserIds(userIds).orEmpty() }.getOrDefault(emptySet())
+
+    private companion object {
+        const val MIN_RADIUS_METERS = 1_000
+        const val MAX_RADIUS_METERS = 100_000
+        const val MIN_LIMIT = 1
+        const val MAX_LIMIT = 200
+        val VALID_INTENTS = setOf("solo", "together", "social", "event")
+    }
+}
