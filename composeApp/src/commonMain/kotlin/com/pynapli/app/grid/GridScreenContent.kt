@@ -34,6 +34,7 @@ internal fun GridScreenContent(
     onSetTonightAvailable: () -> Unit,
     onClearTonightAvailable: () -> Unit,
     onLoadMore: () -> Unit,
+    onRefresh: () -> Unit,
     onProfileSelected: (GridProfileCardUi) -> Unit,
     onUseCurrentLocation: () -> Unit,
     onProfileIconClick: () -> Unit,
@@ -67,16 +68,24 @@ internal fun GridScreenContent(
         if (state.adSupported) {
             GridAdSlot()
         }
-        GridBody(
-            state = state,
-            locationState = locationState,
-            distanceUnit = distanceUnit,
-            gridState = gridState,
-            onProfileSelected = onProfileSelected,
-            onLoadMore = onLoadMore,
-            onUseCurrentLocation = onUseCurrentLocation,
+        GridPullToRefresh(
+            // Show the indicator for an explicit refresh, but not for the very first cold load
+            // (which renders the body's own centered spinner) or background quiet refreshes.
+            refreshing = state.isRefreshing && state.cards.isNotEmpty(),
+            onRefresh = onRefresh,
             modifier = Modifier.weight(1f),
-        )
+        ) {
+            GridBody(
+                state = state,
+                locationState = locationState,
+                distanceUnit = distanceUnit,
+                gridState = gridState,
+                onProfileSelected = onProfileSelected,
+                onLoadMore = onLoadMore,
+                onUseCurrentLocation = onUseCurrentLocation,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 
     if (sheetVisible) {
