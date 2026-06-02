@@ -513,6 +513,99 @@ class GridStateHolderTest {
             assertEquals("cursor-2", state.nextCursor)
             assertEquals(listOf(null, "cursor-1"), repository.receivedCursors)
         }
+
+    @Test
+    fun primeFromCacheRendersCachedCardsImmediatelyThenSwapsInFreshFeed() =
+        runBlocking {
+            val cached =
+                GridProfileCardUi(
+                    id = "cached",
+                    displayName = "Cached",
+                    online = false,
+                    distanceLabel = "5 km",
+                    tone = GridCardTone.Slate,
+                )
+            val fresh =
+                GridProfileCardUi(
+                    id = "fresh",
+                    displayName = "Fresh",
+                    online = true,
+                    distanceLabel = "1 km",
+                    tone = GridCardTone.Warm,
+                )
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                GatedGridFeedRepository(
+                    feeds = listOf(GridFeedUi(cards = listOf(fresh))),
+                    gateBeforeIndex = 0,
+                    gate = gate,
+                )
+            val snapshotStore = FakeGridSnapshotStore(initial = listOf(cached))
+            val stateHolder = GridStateHolder(repository, snapshotStore)
+
+            val priming = async(Dispatchers.Default) { stateHolder.primeFromCacheThenLoad() }
+            // Before the network load completes, the cached cards are already visible (instant paint).
+            while (stateHolder.state.value.cards
+                    .isEmpty()
+            ) {
+                yield()
+            }
+            assertEquals(
+                listOf("cached"),
+                stateHolder.state.value.cards
+                    .map { it.id },
+            )
+
+            gate.complete(Unit)
+            priming.await()
+
+            // The fresh feed atomically replaces the cached cards, and is persisted for next launch.
+            assertEquals(
+                listOf("fresh"),
+                stateHolder.state.value.cards
+                    .map { it.id },
+            )
+            assertEquals(listOf("fresh"), snapshotStore.saved.last().map { it.id })
+            assertFalse(stateHolder.state.value.isRefreshing)
+        }
+
+    @Test
+    fun primeFromCacheFallsBackToNormalLoadWhenNoSnapshot() =
+        runBlocking {
+            val fresh =
+                GridProfileCardUi(
+                    id = "fresh",
+                    displayName = "Fresh",
+                    online = true,
+                    distanceLabel = "1 km",
+                    tone = GridCardTone.Warm,
+                )
+            val repository = FakeGridFeedRepository(GridFeedUi(cards = listOf(fresh)))
+            val snapshotStore = FakeGridSnapshotStore(initial = emptyList())
+            val stateHolder = GridStateHolder(repository, snapshotStore)
+
+            stateHolder.primeFromCacheThenLoad()
+
+            assertEquals(
+                listOf("fresh"),
+                stateHolder.state.value.cards
+                    .map { it.id },
+            )
+            assertEquals(1, repository.loadCount)
+            assertEquals(listOf("fresh"), snapshotStore.saved.last().map { it.id })
+        }
+}
+
+private class FakeGridSnapshotStore(
+    private val initial: List<GridProfileCardUi> = emptyList(),
+) : GridSnapshotStore {
+    val saved = mutableListOf<List<GridProfileCardUi>>()
+
+    override suspend fun load(): List<GridProfileCardUi> = initial
+
+    override suspend fun save(cards: List<GridProfileCardUi>) {
+        saved += cards
+    }
 }
 
 private class FakeGridFeedRepository(

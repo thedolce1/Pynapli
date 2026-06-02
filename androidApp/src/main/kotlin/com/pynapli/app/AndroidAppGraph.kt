@@ -24,6 +24,7 @@ import com.pynapli.app.grid.ApiTonightAvailabilityRepository
 import com.pynapli.app.grid.GridPresenceStreamCoordinator
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.SavedGridFilterStateHolder
+import com.pynapli.app.grid.SqlDelightGridSnapshotStore
 import com.pynapli.app.grid.TonightAvailabilityStateHolder
 import com.pynapli.app.location.ApiLocationUpdateRepository
 import com.pynapli.app.location.LocationStateHolder
@@ -139,6 +140,7 @@ class AndroidAppGraph(
     val gridStateHolder =
         GridStateHolder(
             repository = ApiGridFeedRepository(apiClient),
+            snapshotStore = SqlDelightGridSnapshotStore(database),
         )
 
     val savedGridFilterStateHolder =

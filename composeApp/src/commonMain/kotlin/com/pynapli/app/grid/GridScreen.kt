@@ -48,7 +48,7 @@ fun GridScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(stateHolder) {
-        stateHolder.load()
+        stateHolder.primeFromCacheThenLoad()
     }
 
     LaunchedEffect(savedGridFilterStateHolder) {

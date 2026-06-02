@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.pynapli.shared.network.dto.GridCardDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
+import kotlinx.serialization.Serializable
 
 @Immutable
 data class GridUiState(
@@ -221,6 +222,7 @@ enum class LogisticsTag(
 }
 
 @Immutable
+@Serializable
 data class GridProfileCardUi(
     val id: String,
     val displayName: String,
@@ -237,12 +239,14 @@ data class GridProfileCardUi(
 )
 
 @Immutable
+@Serializable
 data class GridLinkedPartnerUi(
     val userId: String,
     val displayName: String? = null,
     val thumbnailUrl: String? = null,
 )
 
+@Serializable
 enum class GridCardTone {
     Warm,
     Slate,
@@ -258,6 +262,7 @@ enum class GridCardTone {
     Midnight,
 }
 
+@Serializable
 enum class LinkedPartnerTone {
     Violet,
     Gold,
