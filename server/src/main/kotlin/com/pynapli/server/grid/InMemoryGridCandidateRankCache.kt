@@ -7,23 +7,26 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
 
 /**
- * In-memory ranked-candidate cache for the Grid discovery query. Direct copy of
- * the reviewed Swipe deck rank cache (`JdbcSwipeDeckRankCache`): a TTL-keyed
- * ConcurrentHashMap with single-flight via a CompletableFuture in-flight map and
- * size-bounded eviction. The cached value is an EXCLUSION-FREE ranked window
- * shared across viewers in the same coarse location + filter class; per-viewer
- * block / hide / self exclusion is applied AFTER the cache.
+ * In-memory (per-instance) ranked-candidate cache for the Grid discovery query.
+ * Direct copy of the reviewed Swipe deck rank cache (`JdbcSwipeDeckRankCache`): a
+ * TTL-keyed ConcurrentHashMap with single-flight via a CompletableFuture in-flight
+ * map and size-bounded eviction. The cached value is an EXCLUSION-FREE ranked
+ * window shared across viewers in the same coarse location + filter class;
+ * per-viewer block / hide / self exclusion is applied AFTER the cache.
+ *
+ * This is the default and the fallback when Redis is absent. For cross-instance
+ * sharing in production, [RedisGridCandidateRankCache] is wired in instead.
  */
-internal class JdbcGridCandidateRankCache(
+internal class InMemoryGridCandidateRankCache(
     private val ttl: Duration,
     private val maxEntries: Int,
-) {
+) : GridCandidateRankCache {
     private val rows = ConcurrentHashMap<GridRankCacheKey, CachedGridRankRows>()
     private val inFlight = ConcurrentHashMap<GridRankCacheKey, CompletableFuture<CachedGridRankRows>>()
 
-    fun isEnabled(): Boolean = !ttl.isZero && !ttl.isNegative && maxEntries > 0
+    override fun isEnabled(): Boolean = !ttl.isZero && !ttl.isNegative && maxEntries > 0
 
-    fun load(
+    override fun load(
         cacheKey: GridRankCacheKey,
         loader: () -> List<GridRankRow>,
     ): List<GridRankRow> {
