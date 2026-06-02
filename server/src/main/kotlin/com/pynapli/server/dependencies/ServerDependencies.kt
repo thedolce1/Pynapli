@@ -95,7 +95,9 @@ import com.pynapli.server.swipe.SavedSwipeFilterService
 import com.pynapli.server.swipe.SwipeDeckTokenCodec
 import com.pynapli.server.swipe.SwipeService
 import com.pynapli.server.swipe.TopPicksService
+import com.pynapli.server.tonight.JdbcTonightFeedRepository
 import com.pynapli.server.tonight.JdbcTonightSessionRepository
+import com.pynapli.server.tonight.TonightFeedService
 import com.pynapli.server.tonight.TonightSessionService
 import com.pynapli.server.verification.AgeVerificationService
 import com.pynapli.server.verification.JdbcAgeVerificationRepository
@@ -151,6 +153,7 @@ class ServerDependencies(
     val topPicksService: TopPicksService?,
     val tonightAvailabilityService: TonightAvailabilityService?,
     val tonightSessionService: TonightSessionService?,
+    val tonightFeedService: TonightFeedService?,
     val ageVerificationService: AgeVerificationService?,
     val accountLifecycleService: AccountLifecycleService?,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
@@ -461,6 +464,14 @@ class ServerDependencies(
                     repository = JdbcTonightSessionRepository(database.dataSource),
                     subscriptionService = subscriptionService,
                 )
+            val tonightFeedService =
+                TonightFeedService(
+                    repository = JdbcTonightFeedRepository(database.dataSource),
+                    presenceService = presenceService,
+                    mediaAssetUrlResolver = mediaAssetUrlResolver,
+                    blockRepository = blockRepository,
+                    hiddenProfileRepository = hiddenProfileRepository,
+                )
             // Provider-hosted age verification is opt-in: built only when both the provider name and
             // its redirect base URL are configured. Otherwise the service keeps manual-review-only
             // behavior.
@@ -569,6 +580,7 @@ class ServerDependencies(
                 topPicksService = topPicksService,
                 tonightAvailabilityService = tonightAvailabilityService,
                 tonightSessionService = tonightSessionService,
+                tonightFeedService = tonightFeedService,
                 ageVerificationService = ageVerificationService,
                 accountLifecycleService = accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,
@@ -664,6 +676,7 @@ class ServerDependencies(
                 topPicksService = null,
                 tonightAvailabilityService = null,
                 tonightSessionService = null,
+                tonightFeedService = null,
                 ageVerificationService = null,
                 accountLifecycleService = null,
                 requestProfilerFactory = RequestProfilerFactory.disabled(),

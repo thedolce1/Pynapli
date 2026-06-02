@@ -51,3 +51,37 @@ data class TonightSessionParticipantDto(
 data class CurrentTonightSessionDto(
     val session: TonightSessionDto? = null,
 )
+
+/**
+ * Public Playing Tonight feed: live sessions near the viewer that opted into
+ * discovery. One row per session, anchored on the session owner with the linked
+ * partner surfaced as a mini-avatar (PLAYING_TONIGHT_SPEC: "Session row must still
+ * make individual accounts clear"). Location is zone-only — never precise.
+ */
+@Serializable
+data class TonightFeedResponseDto(
+    val items: List<TonightFeedItemDto> = emptyList(),
+)
+
+@Serializable
+data class TonightFeedItemDto(
+    val sessionId: String,
+    val mode: String,
+    val intent: String,
+    val hostMode: String,
+    val note: String? = null,
+    val photoUrl: String? = null,
+    val person: TonightFeedPersonDto,
+    val linkedPartner: LinkedPartnerMiniDto? = null,
+)
+
+@Serializable
+data class TonightFeedPersonDto(
+    val userId: String,
+    val displayName: String,
+    val thumbnailUrl: String? = null,
+    val online: Boolean = false,
+    val distanceLabel: String? = null,
+    val distanceMeters: Int? = null,
+    val zoneKey: String? = null,
+)
