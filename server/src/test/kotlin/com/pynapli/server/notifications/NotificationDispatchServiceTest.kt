@@ -19,17 +19,25 @@ class NotificationDispatchServiceTest {
                     claimed = mutableListOf(notification),
                     targetsByUser = mapOf(recipient to listOf(target(recipient))),
                 )
+            val metrics = NotificationMetrics()
             val service =
                 NotificationDispatchService(
                     repository = repository,
                     sender = StaticPushSender(PushSendResult.accepted()),
                     clock = fixedClock,
+                    metrics = metrics,
                 )
 
             val summary = service.dispatchPending(limit = 10)
 
             assertEquals(NotificationDispatchSummary(claimed = 1, sent = 1, skipped = 0, retried = 0, failed = 0), summary)
             assertEquals(listOf(notification.notificationId), repository.sent)
+            // Privacy-safe metric recorded for the accepted send (outcome/kind/platform only).
+            assertEquals(1, metrics.totalFor(NotificationMetrics.Outcome.SENT))
+            assertEquals(
+                "android",
+                metrics.snapshot().single { it.outcome == NotificationMetrics.Outcome.SENT }.platform,
+            )
         }
 
     @Test

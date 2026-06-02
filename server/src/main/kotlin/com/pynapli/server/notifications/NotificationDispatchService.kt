@@ -20,8 +20,12 @@ class NotificationDispatchService(
     private val sender: PushNotificationSender,
     private val clock: Clock = Clock.systemUTC(),
     private val maxAttempts: Int = 5,
+    private val metrics: NotificationMetrics = NotificationMetrics(),
 ) {
     private val logger = LoggerFactory.getLogger(NotificationDispatchService::class.java)
+
+    /** Exposes the privacy-safe delivery metrics recorder for snapshotting/export. */
+    fun metrics(): NotificationMetrics = metrics
 
     suspend fun dispatchPending(limit: Int = DEFAULT_LIMIT): NotificationDispatchSummary {
         val normalizedLimit = limit.coerceIn(1, MAX_LIMIT)
@@ -66,12 +70,14 @@ class NotificationDispatchService(
                 retryAt = quietHoursRelease,
                 error = QUIET_HOURS_ACTIVE,
             )
+            metrics.record(NotificationMetrics.Outcome.RETRIED, notification.kind)
             return DispatchOutcome.Retried
         }
 
         val targets = repository.listActivePushTargets(notification.recipientUserId)
         if (targets.isEmpty()) {
             repository.markNotificationSkipped(notification.notificationId, NO_ACTIVE_DEVICES)
+            metrics.record(NotificationMetrics.Outcome.SKIPPED, notification.kind)
             return DispatchOutcome.Skipped
         }
 
@@ -94,10 +100,13 @@ class NotificationDispatchService(
                     .onFailure { error ->
                         logger.warn("Failed to deactivate dead push device {}", target.deviceId, error)
                     }
+                metrics.record(NotificationMetrics.Outcome.DEVICE_DEACTIVATED, notification.kind, target.platform)
             }
 
-        if (results.any { (_, result) -> result.accepted }) {
+        val acceptedTarget = results.firstOrNull { (_, result) -> result.accepted }
+        if (acceptedTarget != null) {
             repository.markNotificationSent(notification.notificationId)
+            metrics.record(NotificationMetrics.Outcome.SENT, notification.kind, acceptedTarget.first.platform)
             return DispatchOutcome.Sent
         }
 
@@ -105,6 +114,7 @@ class NotificationDispatchService(
         val shouldFail = notification.attemptCount >= maxAttempts || results.all { (_, result) -> result.terminalFailure }
         return if (shouldFail) {
             repository.markNotificationFailed(notification.notificationId, error)
+            metrics.record(NotificationMetrics.Outcome.FAILED, notification.kind)
             DispatchOutcome.Failed
         } else {
             repository.markNotificationRetry(
@@ -112,6 +122,7 @@ class NotificationDispatchService(
                 retryAt = clock.instant().plusSeconds(retryDelaySeconds(notification.attemptCount)),
                 error = error,
             )
+            metrics.record(NotificationMetrics.Outcome.RETRIED, notification.kind)
             DispatchOutcome.Retried
         }
     }
@@ -203,6 +214,14 @@ class NotificationDispatchWorker(
     }
 
     override fun close() {
+        // Emit a final privacy-safe delivery snapshot (counts only — no recipients/bodies/tokens).
+        val snapshot = service.metrics().snapshot()
+        if (snapshot.isNotEmpty()) {
+            logger.info(
+                "Notification delivery metrics snapshot: {}",
+                snapshot.joinToString(", ") { "${it.outcome}/${it.kind}/${it.platform}=${it.count}" },
+            )
+        }
         scope.cancel()
     }
 }
