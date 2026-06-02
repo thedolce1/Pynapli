@@ -85,6 +85,7 @@ internal class JdbcGridRepository(
                             linkedPartnerDisplayName = h?.linkedPartnerDisplayName,
                             linkedPartnerThumbnailMediaAssetId = h?.linkedPartnerThumbnailMediaAssetId,
                             visiting = row.visiting,
+                            tonightActive = h?.tonightActive ?: false,
                         )
                     }
 

@@ -40,6 +40,12 @@ data class GridCardRecord(
      * the person is browsing their area in passport mode, not local.
      */
     val visiting: Boolean = false,
+    /**
+     * Individual has a live Playing Tonight session (PLAYING_TONIGHT_SPEC). Drives a
+     * subtle per-tile indicator; hydrated per page (not part of the shared rank cache)
+     * so it stays fresh as sessions start/expire.
+     */
+    val tonightActive: Boolean = false,
 )
 
 data class GridCursorAnchor(

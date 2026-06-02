@@ -236,6 +236,8 @@ data class GridProfileCardUi(
     // SWIPE_IMPLEMENTATION_SPEC L348: target is virtually in the viewer's area
     // via passport/travel mode.
     val visiting: Boolean = false,
+    // PLAYING_TONIGHT_SPEC: this individual has a live Playing Tonight session.
+    val tonightActive: Boolean = false,
 )
 
 @Immutable
@@ -283,6 +285,7 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi =
         linkedPartnerTone = linkedPartner?.let { LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size] },
         distanceMeters = distanceMeters,
         visiting = visiting,
+        tonightActive = tonightActive,
     )
 
 internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi =

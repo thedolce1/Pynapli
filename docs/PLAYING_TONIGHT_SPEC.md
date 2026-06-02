@@ -140,7 +140,7 @@ Do not paywall:
 - [x] Solo and linked-together Tonight modes are distinct. (PT-1: `tonight_sessions.mode` solo|together; solo goes live immediately, together starts `proposed`.)
 - [x] Linked-together session requires both approvals. (PT-1: `tonight_session_participants` owner auto-approved + partner pending; session flips to `active` only when all approved. Either participant can end; decline sets `declined` with no public signal.)
 - [x] Session duration and expiry. (PT-1: default 2h window 1..24, `expires_at` reset from activation; `expireStale()` sweep + reads filter `expires_at > now`.)
-- [ ] Grid indicator on individual tiles. (PT-2)
+- [x] Grid indicator on individual tiles. (PT-2: `GridCardDto.tonightActive` hydrated per page from active sessions OR the legacy flag; subtle gold moon badge at the tile top-start — never a couple card. `tonightAvailableOnly` filter unified onto active sessions.)
 - [ ] Feed uses session context without creating couple accounts. (PT-3)
 - [ ] Zone map has no precise pins. (PT-4)
 - [ ] Session interactions respect individual vs together context. (PT-5)

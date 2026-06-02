@@ -1754,6 +1754,50 @@ class GridAndSwipeRepositoryIntegrationTest :
 
             assertEquals(rows, decoded, "Codec must round-trip the ranked window exactly (incl. unsigned-high-bit UUID and delimiter-laden names)")
         }
+
+        "grid card surfaces tonightActive when the candidate has a live Playing Tonight session" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-0000000040a1")
+                val playingTonight = UUID.fromString("00000000-0000-0000-0000-0000000040a2")
+                val notTonight = UUID.fromString("00000000-0000-0000-0000-0000000040a3")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(playingTonight, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(notTonight, "Alex", age = 36, longitude = -122.0838, latitude = 37.4228)
+                dataSource.insertActiveTonightSession(playingTonight)
+
+                val cards =
+                    JdbcGridRepository(dataSource, rankCacheTtl = Duration.ZERO)
+                        .queryNearby(viewer, radiusMeters = 100_000, limit = 10)
+                        .cards
+
+                val byId = cards.associateBy { it.userId }
+                assertEquals(true, byId[playingTonight]?.tonightActive, "Session owner must show tonightActive")
+                assertEquals(false, byId[notTonight]?.tonightActive, "Non-session candidate must not show tonightActive")
+            }
+        }
+
+        "grid tonightAvailableOnly filter returns only individuals with a live session" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-0000000040b1")
+                val playingTonight = UUID.fromString("00000000-0000-0000-0000-0000000040b2")
+                val notTonight = UUID.fromString("00000000-0000-0000-0000-0000000040b3")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(playingTonight, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(notTonight, "Alex", age = 36, longitude = -122.0838, latitude = 37.4228)
+                dataSource.insertActiveTonightSession(playingTonight)
+
+                val cards =
+                    JdbcGridRepository(dataSource, rankCacheTtl = Duration.ZERO)
+                        .queryNearby(
+                            viewer,
+                            radiusMeters = 100_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(tonightAvailableOnly = true),
+                        ).cards
+
+                assertEquals(listOf(playingTonight), cards.map { it.userId })
+            }
+        }
     })
 
 private class RankCountingDataSource(
@@ -2045,6 +2089,39 @@ private fun DataSource.insertBoostActivation(userId: UUID) {
                 """.trimIndent(),
             ).use { statement ->
                 statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+    }
+}
+
+/** Seeds a live solo Playing Tonight session (active, owner-approved) for the user. */
+private fun DataSource.insertActiveTonightSession(userId: UUID) {
+    val sessionId = UUID.randomUUID()
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO tonight_sessions (
+                    id, created_by_user_id, mode, intent, host_mode, map_visible,
+                    status, created_at, started_at, expires_at
+                )
+                VALUES (?, ?, 'solo', 'solo', 'public_meet_first', true,
+                        'active', now() - interval '1 minute', now() - interval '1 minute', now() + interval '2 hours')
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, sessionId)
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO tonight_session_participants (session_id, user_id, role, approval_status, approved_at)
+                VALUES (?, ?, 'owner', 'approved', now() - interval '1 minute')
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, sessionId)
                 statement.setObject(2, userId)
                 statement.executeUpdate()
             }

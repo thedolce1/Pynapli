@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -78,6 +79,18 @@ internal fun GridProfileTile(
             )
         }
 
+        if (card.tonightActive) {
+            // PLAYING_TONIGHT_SPEC: a subtle per-tile indicator that this individual
+            // has a live Playing Tonight session. Gold accent, never a couple card.
+            TonightIndicator(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(7.dp)
+                        .testTag(GridCardTags.tonightTag(card.id)),
+            )
+        }
+
         Row(
             modifier =
                 Modifier
@@ -134,6 +147,28 @@ internal fun GridProfileTile(
 
 internal object GridCardTags {
     fun visitingTag(cardId: String): String = "grid-card-visiting-$cardId"
+
+    fun tonightTag(cardId: String): String = "grid-card-tonight-$cardId"
+}
+
+@Composable
+private fun TonightIndicator(modifier: Modifier = Modifier) {
+    Box(
+        modifier =
+            modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(Color(0xCC0B0B0E))
+                .border(1.dp, PynapliColors.Accent, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.DarkMode,
+            contentDescription = "Playing tonight",
+            tint = PynapliColors.Accent,
+            modifier = Modifier.size(10.dp),
+        )
+    }
 }
 
 @Composable
