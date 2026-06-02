@@ -209,6 +209,57 @@ class NotificationDispatchServiceTest {
             assertEquals(listOf(notification.notificationId), repository.failed.map { it.first })
             assertEquals("still down", repository.failed.single().second)
         }
+
+    @Test
+    fun dispatchPendingDeactivatesDeviceOnTerminalDeliveryFailure() =
+        runBlocking {
+            val recipient = uuid(7)
+            val deadDevice = target(recipient)
+            val notification = notification(recipientUserId = recipient, attemptCount = 1)
+            val repository =
+                DispatchRepository(
+                    claimed = mutableListOf(notification),
+                    targetsByUser = mapOf(recipient to listOf(deadDevice)),
+                )
+            val service =
+                NotificationDispatchService(
+                    repository = repository,
+                    sender = StaticPushSender(PushSendResult.terminalFailure("UNREGISTERED: token dead")),
+                    clock = fixedClock,
+                    maxAttempts = 5,
+                )
+
+            val summary = service.dispatchPending(limit = 10)
+
+            // The token's device is deactivated so it is never retried, and the notification fails
+            // terminally (its only target was permanently invalid).
+            assertEquals(listOf(deadDevice.deviceId), repository.deactivatedDevices)
+            assertEquals(1, summary.failed)
+        }
+
+    @Test
+    fun dispatchPendingDoesNotDeactivateDeviceOnRetryableFailure() =
+        runBlocking {
+            val recipient = uuid(8)
+            val notification = notification(recipientUserId = recipient, attemptCount = 1)
+            val repository =
+                DispatchRepository(
+                    claimed = mutableListOf(notification),
+                    targetsByUser = mapOf(recipient to listOf(target(recipient))),
+                )
+            val service =
+                NotificationDispatchService(
+                    repository = repository,
+                    sender = StaticPushSender(PushSendResult.retryableFailure("temporary outage")),
+                    clock = fixedClock,
+                    maxAttempts = 5,
+                )
+
+            service.dispatchPending(limit = 10)
+
+            // A transient failure must NOT deactivate the device — only permanent token failures do.
+            assertEquals(emptyList(), repository.deactivatedDevices)
+        }
 }
 
 private class DispatchRepository(
@@ -222,6 +273,7 @@ private class DispatchRepository(
     val retried = mutableListOf<RetryRecord>()
     val failed = mutableListOf<Pair<UUID, String>>()
     val staleRecoveryChecks = mutableListOf<StaleRecoveryCheck>()
+    val deactivatedDevices = mutableListOf<UUID>()
 
     override suspend fun claimPendingNotifications(limit: Int): List<NotificationDeliveryRecord> {
         val rows = claimed.take(limit)
@@ -289,6 +341,11 @@ private class DispatchRepository(
         platform: String,
         deviceToken: String,
     ): Boolean = false
+
+    override suspend fun deactivatePushDevice(deviceId: UUID): Boolean {
+        deactivatedDevices += deviceId
+        return true
+    }
 
     override suspend fun insertOutboxNotification(
         notification: NotificationOutboxInsert,

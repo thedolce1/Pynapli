@@ -450,6 +450,8 @@ private class InMemoryNotificationRepository(
         deviceToken: String,
     ): Boolean = true
 
+    override suspend fun deactivatePushDevice(deviceId: UUID): Boolean = true
+
     override suspend fun insertOutboxNotification(
         notification: NotificationOutboxInsert,
         notificationIdFactory: () -> UUID,

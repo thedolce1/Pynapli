@@ -212,6 +212,26 @@ class JdbcNotificationRepository(
             }
         }
 
+    override suspend fun deactivatePushDevice(deviceId: UUID): Boolean =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE push_devices
+                        SET disabled_at = now(),
+                            notifications_enabled = false,
+                            updated_at = now()
+                        WHERE id = ?
+                          AND disabled_at IS NULL
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, deviceId)
+                        statement.executeUpdate() > 0
+                    }
+            }
+        }
+
     override suspend fun insertOutboxNotification(
         notification: NotificationOutboxInsert,
         notificationIdFactory: () -> UUID,
