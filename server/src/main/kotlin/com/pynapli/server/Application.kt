@@ -35,6 +35,7 @@ import com.pynapli.server.subscriptions.configureSubscriptionRoutes
 import com.pynapli.server.swipe.configureSavedSwipeFilterRoutes
 import com.pynapli.server.swipe.configureSwipeRoutes
 import com.pynapli.server.swipe.configureTopPicksRoutes
+import com.pynapli.server.tonight.configureTonightSessionRoutes
 import com.pynapli.server.verification.configureAgeVerificationAdminRoutes
 import com.pynapli.server.verification.configureAgeVerificationRoutes
 import io.ktor.server.application.Application
@@ -88,6 +89,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureGridRoutes(dependencies.authService, dependencies.gridService, dependencies.requestProfilerFactory)
     configureSavedGridFilterRoutes(dependencies.authService, dependencies.savedGridFilterService)
     configureTonightAvailabilityRoutes(dependencies.authService, dependencies.tonightAvailabilityService)
+    configureTonightSessionRoutes(dependencies.authService, dependencies.tonightSessionService)
     configureActivityRoutes(dependencies.authService, dependencies.activityService)
     configureActivityStreamRoutes(dependencies.authService, dependencies.activityBroadcaster)
     configureNotificationRoutes(dependencies.authService, dependencies.notificationService)
