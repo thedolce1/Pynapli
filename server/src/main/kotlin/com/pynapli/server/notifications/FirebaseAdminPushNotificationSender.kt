@@ -3,6 +3,9 @@ package com.pynapli.server.notifications
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
+import com.google.firebase.messaging.AndroidConfig
+import com.google.firebase.messaging.ApnsConfig
+import com.google.firebase.messaging.Aps
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingException
 import com.google.firebase.messaging.Message
@@ -36,6 +39,8 @@ class FirebaseAdminPushNotificationSender private constructor(
                             .setBody(notification.body)
                             .build(),
                     ).putAllData(notification.toDataPayload(target))
+                    .setAndroidConfig(androidConfigFor(notification.kind))
+                    .setApnsConfig(apnsConfigFor(notification.kind))
                     .build()
 
             runCatching {
@@ -117,4 +122,70 @@ class FirebaseAdminPushNotificationSender private constructor(
             return FirebaseAdminPushNotificationSender(app)
         }
     }
+}
+
+/**
+ * Platform-agnostic push-delivery decisions for a notification kind, resolved by [forKind] so the
+ * rules are unit-testable without constructing Firebase objects (whose builders are write-only). The
+ * Firebase APNs/Android configs are a thin translation of these values.
+ *
+ *  - [highUrgency]: high-urgency kinds get immediate/heads-up delivery; others are power-considerate.
+ *  - [apnsPriority]: APNs `apns-priority` header (10 immediate, 5 throttled).
+ *  - [collapseKey]: per-kind id so a burst of the same kind coalesces (APNs caps it at 64 bytes).
+ */
+internal data class PushDeliveryConfig(
+    val highUrgency: Boolean,
+    val collapseKey: String,
+) {
+    val apnsPriority: String get() = if (highUrgency) "10" else "5"
+
+    companion object {
+        private val highUrgencyKinds =
+            setOf(
+                NotificationKind.SYSTEM_SAFETY,
+                NotificationKind.MESSAGE,
+                NotificationKind.MATCH,
+                NotificationKind.PARTNER_CHAT_INVITE,
+            )
+
+        fun forKind(kind: String): PushDeliveryConfig =
+            PushDeliveryConfig(
+                highUrgency = kind in highUrgencyKinds,
+                collapseKey = kind.ifBlank { "notification" }.take(64),
+            )
+    }
+}
+
+/**
+ * APNs delivery config for an FCM message. FCM is the APNs transport, so iOS rendering (sound, badge,
+ * lock-screen behaviour, notification-service-extension support) is controlled here rather than in
+ * Swift. `mutable-content=1` lets a future iOS notification-service extension localise/redact the
+ * payload; the data payload travels in the FCM message alongside `aps`.
+ */
+internal fun apnsConfigFor(kind: String): ApnsConfig {
+    val delivery = PushDeliveryConfig.forKind(kind)
+    val aps =
+        Aps
+            .builder()
+            .setSound("default")
+            .setMutableContent(true)
+            .setCategory(kind)
+            .build()
+    return ApnsConfig
+        .builder()
+        .setAps(aps)
+        .putHeader("apns-priority", delivery.apnsPriority)
+        .putHeader("apns-push-type", "alert")
+        .putHeader("apns-collapse-id", delivery.collapseKey)
+        .build()
+}
+
+/** Android delivery config: HIGH priority for high-urgency kinds (heads-up), NORMAL otherwise. */
+internal fun androidConfigFor(kind: String): AndroidConfig {
+    val delivery = PushDeliveryConfig.forKind(kind)
+    return AndroidConfig
+        .builder()
+        .setPriority(if (delivery.highUrgency) AndroidConfig.Priority.HIGH else AndroidConfig.Priority.NORMAL)
+        .setCollapseKey(delivery.collapseKey)
+        .build()
 }
