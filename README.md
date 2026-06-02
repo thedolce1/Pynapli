@@ -128,6 +128,11 @@ POST http://localhost:8080/v1/messages/threads/{threadId}/read
 POST http://localhost:8080/v1/messages/threads/{threadId}/messages
 POST http://localhost:8080/v1/media/uploads
 POST http://localhost:8080/v1/media/uploads/{assetId}/complete
+POST   http://localhost:8080/v1/tonight/sessions
+GET    http://localhost:8080/v1/me/tonight/session
+POST   http://localhost:8080/v1/tonight/sessions/{id}/approve
+POST   http://localhost:8080/v1/tonight/sessions/{id}/decline
+DELETE http://localhost:8080/v1/tonight/sessions/{id}
 ```
 
 Auth currently uses server-owned opaque access/refresh tokens, PBKDF2 password hashing, and hashed email/token storage in Postgres.

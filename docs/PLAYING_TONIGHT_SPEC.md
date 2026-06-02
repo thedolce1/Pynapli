@@ -137,14 +137,24 @@ Do not paywall:
 
 ## Implementation Checklist
 
-- [ ] Solo and linked-together Tonight modes are distinct.
-- [ ] Linked-together session requires both approvals.
-- [ ] Session duration and expiry.
-- [ ] Grid indicator on individual tiles.
-- [ ] Feed uses session context without creating couple accounts.
-- [ ] Zone map has no precise pins.
-- [ ] Session interactions respect individual vs together context.
-- [ ] Activity labels "via Playing Tonight" where appropriate.
+- [x] Solo and linked-together Tonight modes are distinct. (PT-1: `tonight_sessions.mode` solo|together; solo goes live immediately, together starts `proposed`.)
+- [x] Linked-together session requires both approvals. (PT-1: `tonight_session_participants` owner auto-approved + partner pending; session flips to `active` only when all approved. Either participant can end; decline sets `declined` with no public signal.)
+- [x] Session duration and expiry. (PT-1: default 2h window 1..24, `expires_at` reset from activation; `expireStale()` sweep + reads filter `expires_at > now`.)
+- [ ] Grid indicator on individual tiles. (PT-2)
+- [ ] Feed uses session context without creating couple accounts. (PT-3)
+- [ ] Zone map has no precise pins. (PT-4)
+- [ ] Session interactions respect individual vs together context. (PT-5)
+- [ ] Activity labels "via Playing Tonight" where appropriate. (PT-5/PT-6)
+
+### PT-1 — session backend (shipped 2026-06-02)
+
+`V60__create_tonight_sessions.sql` + `com.pynapli.server.tonight` (`TonightSessionService`/
+`JdbcTonightSessionRepository`/routes). Endpoints (bearer-authed): `POST /v1/tonight/sessions`
+(propose), `GET /v1/me/tonight/session` (current), `POST /v1/tonight/sessions/{id}/approve`,
+`POST /v1/tonight/sessions/{id}/decline`, `DELETE /v1/tonight/sessions/{id}` (end). Free tier
+capped at 3 sessions / rolling 7 days (ending/declining never gated); approve/decline/end are
+transactional with a `FOR UPDATE` session lock; location is never stored on the session (feed/
+map derive zone live in later slices). Covered by `TonightSessionServiceIntegrationTest`.
 
 ## Do Not Implement
 

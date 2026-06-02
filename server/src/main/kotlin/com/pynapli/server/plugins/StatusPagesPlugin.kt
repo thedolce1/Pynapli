@@ -20,6 +20,7 @@ import com.pynapli.server.subscriptions.SubscriptionException
 import com.pynapli.server.swipe.SavedSwipeFilterException
 import com.pynapli.server.swipe.SwipeException
 import com.pynapli.server.swipe.TopPicksException
+import com.pynapli.server.tonight.TonightSessionException
 import com.pynapli.server.verification.VerificationException
 import com.pynapli.shared.network.dto.ApiErrorDto
 import io.ktor.http.HttpStatusCode
@@ -159,6 +160,18 @@ fun Application.configureStatusPages() {
         exception<TonightAvailabilityException> { call, cause ->
             call.respond(
                 status = tonightAvailabilityStatusFor(cause.code),
+                message =
+                    ApiErrorDto(
+                        code = cause.code,
+                        message = userSafeMessage(cause.code),
+                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                    ),
+            )
+        }
+
+        exception<TonightSessionException> { call, cause ->
+            call.respond(
+                status = tonightSessionStatusFor(cause.code),
                 message =
                     ApiErrorDto(
                         code = cause.code,

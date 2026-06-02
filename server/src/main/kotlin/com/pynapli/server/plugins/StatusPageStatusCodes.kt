@@ -106,6 +106,26 @@ internal fun tonightAvailabilityStatusFor(code: String): HttpStatusCode =
         else -> HttpStatusCode.BadRequest
     }
 
+internal fun tonightSessionStatusFor(code: String): HttpStatusCode =
+    when (code) {
+        "INVALID_TONIGHT_MODE",
+        "INVALID_TONIGHT_INTENT",
+        "INVALID_TONIGHT_HOST_MODE",
+        "INVALID_TONIGHT_DURATION",
+        "TONIGHT_NOTE_TOO_LONG",
+        "TONIGHT_INVALID_PHOTO",
+        "TONIGHT_NO_LINKED_PARTNER",
+        -> HttpStatusCode.BadRequest
+        "TONIGHT_ALREADY_ACTIVE",
+        "TONIGHT_NOT_PENDING",
+        -> HttpStatusCode.Conflict
+        "TONIGHT_WEEKLY_LIMIT_REACHED",
+        "TONIGHT_NOT_PARTICIPANT",
+        -> HttpStatusCode.Forbidden
+        "TONIGHT_SESSION_NOT_FOUND" -> HttpStatusCode.NotFound
+        else -> HttpStatusCode.BadRequest
+    }
+
 internal fun activityStatusFor(code: String): HttpStatusCode =
     when (code) {
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
