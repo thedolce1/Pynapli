@@ -21,6 +21,8 @@ class NotificationDispatchService(
     private val clock: Clock = Clock.systemUTC(),
     private val maxAttempts: Int = 5,
 ) {
+    private val logger = LoggerFactory.getLogger(NotificationDispatchService::class.java)
+
     suspend fun dispatchPending(limit: Int = DEFAULT_LIMIT): NotificationDispatchSummary {
         val normalizedLimit = limit.coerceIn(1, MAX_LIMIT)
         val recovered =
@@ -75,18 +77,32 @@ class NotificationDispatchService(
 
         val results =
             targets.map { target ->
-                runCatching { sender.send(target, notification) }.getOrElse { error ->
-                    PushSendResult.retryableFailure(error.message ?: error::class.simpleName.orEmpty())
-                }
+                target to
+                    runCatching { sender.send(target, notification) }.getOrElse { error ->
+                        PushSendResult.retryableFailure(error.message ?: error::class.simpleName.orEmpty())
+                    }
             }
 
-        if (results.any { it.accepted }) {
+        // Device-token lifecycle: a terminal failure means the provider considers this token
+        // permanently invalid (e.g. FCM UNREGISTERED). Deactivate that device so its dead token is
+        // never retried on future notifications. This is independent of the notification's own
+        // retry/fail outcome below (a sibling device may still have accepted it).
+        results
+            .filter { (_, result) -> !result.accepted && result.terminalFailure }
+            .forEach { (target, _) ->
+                runCatching { repository.deactivatePushDevice(target.deviceId) }
+                    .onFailure { error ->
+                        logger.warn("Failed to deactivate dead push device {}", target.deviceId, error)
+                    }
+            }
+
+        if (results.any { (_, result) -> result.accepted }) {
             repository.markNotificationSent(notification.notificationId)
             return DispatchOutcome.Sent
         }
 
-        val error = results.mapNotNull { it.errorMessage }.joinToString("; ").ifBlank { "Push delivery failed." }
-        val shouldFail = notification.attemptCount >= maxAttempts || results.all { it.terminalFailure }
+        val error = results.mapNotNull { (_, result) -> result.errorMessage }.joinToString("; ").ifBlank { "Push delivery failed." }
+        val shouldFail = notification.attemptCount >= maxAttempts || results.all { (_, result) -> result.terminalFailure }
         return if (shouldFail) {
             repository.markNotificationFailed(notification.notificationId, error)
             DispatchOutcome.Failed

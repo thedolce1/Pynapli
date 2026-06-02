@@ -25,6 +25,13 @@ interface NotificationRepository {
         deviceToken: String,
     ): Boolean
 
+    /**
+     * Deactivates a single push device by id (sets `disabled_at` + `notifications_enabled = false`).
+     * Called when a push provider reports the device's token is permanently invalid (e.g. FCM
+     * UNREGISTERED / INVALID_ARGUMENT) so the dead token is never retried on future notifications.
+     */
+    suspend fun deactivatePushDevice(deviceId: UUID): Boolean
+
     suspend fun insertOutboxNotification(
         notification: NotificationOutboxInsert,
         notificationIdFactory: () -> UUID,
