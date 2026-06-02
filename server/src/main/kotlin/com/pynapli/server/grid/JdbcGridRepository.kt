@@ -9,18 +9,21 @@ import java.time.Duration
 import java.util.UUID
 import javax.sql.DataSource
 
-class JdbcGridRepository(
+internal class JdbcGridRepository(
     private val dataSource: DataSource,
     rankCacheTtl: Duration = Duration.ofSeconds(5),
     rankCacheMaxEntries: Int = 128,
     private val rankCacheWindow: Int = 128,
-) : GridRepository {
-    private val candidateRankCache =
-        JdbcGridCandidateRankCache(
+    // Defaults to a per-instance in-memory cache (tests, single-instance). Production
+    // injects RedisGridCandidateRankCache via ServerDependencies for cross-instance
+    // sharing. The cached window is exclusion-free either way, so swapping the impl
+    // never changes correctness — only how widely the window is shared.
+    private val candidateRankCache: GridCandidateRankCache =
+        InMemoryGridCandidateRankCache(
             ttl = rankCacheTtl,
             maxEntries = rankCacheMaxEntries,
-        )
-
+        ),
+) : GridRepository {
     override suspend fun queryNearby(
         viewerUserId: UUID,
         radiusMeters: Int,

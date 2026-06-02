@@ -18,6 +18,7 @@ import com.pynapli.server.grid.GridService
 import com.pynapli.server.grid.JdbcGridRepository
 import com.pynapli.server.grid.JdbcGridViewerTrustRepository
 import com.pynapli.server.grid.JdbcSavedGridFilterRepository
+import com.pynapli.server.grid.RedisGridCandidateRankCache
 import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.location.JdbcLocationRepository
 import com.pynapli.server.location.JdbcTravelLocationRepository
@@ -420,7 +421,16 @@ class ServerDependencies(
                 )
             val gridService =
                 GridService(
-                    repository = JdbcGridRepository(database.dataSource),
+                    repository =
+                        JdbcGridRepository(
+                            dataSource = database.dataSource,
+                            // Share the ranked candidate window across instances via Redis
+                            // (GRID_IMPLEMENTATION_SPEC candidate cache). The cached window is
+                            // exclusion-free, so per-viewer safety is unchanged; the cache fails
+                            // open to direct queries if Redis is unavailable. Single-instance /
+                            // tests use the in-memory default baked into JdbcGridRepository.
+                            candidateRankCache = RedisGridCandidateRankCache(redisCache, Duration.ofSeconds(5)),
+                        ),
                     cursorCodec = DiscoveryCursorCodec(config.discoveryCursorSecret),
                     presenceService = presenceService,
                     mediaAssetUrlResolver = mediaAssetUrlResolver,

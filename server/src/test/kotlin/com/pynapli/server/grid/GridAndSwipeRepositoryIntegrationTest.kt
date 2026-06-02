@@ -1,5 +1,6 @@
 package com.pynapli.server.grid
 
+import com.pynapli.server.dependencies.RedisCache
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.safety.JdbcBlockRepository
 import com.pynapli.server.safety.JdbcHiddenProfileRepository
@@ -20,6 +21,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import org.flywaydb.core.Flyway
+import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
 import java.time.Clock
@@ -45,14 +47,21 @@ class GridAndSwipeRepositoryIntegrationTest :
                 withUsername("pynapli")
                 withPassword("pynapli_test_password")
             }
+        val redis =
+            GenericContainer<Nothing>(DockerImageName.parse("redis:7-alpine"))
+                .apply { withExposedPorts(6379) }
         lateinit var dataSource: HikariDataSource
+
+        fun redisCache(): RedisCache = RedisCache("redis://${redis.host}:${redis.getMappedPort(6379)}")
 
         beforeSpec {
             postgres.start()
+            redis.start()
         }
 
         afterSpec {
             postgres.stop()
+            redis.stop()
         }
 
         beforeTest {
@@ -1663,6 +1672,87 @@ class GridAndSwipeRepositoryIntegrationTest :
                 assertEquals(uncached.cards, cached.cards, "Cached cards must be byte-identical to the uncached query")
                 assertEquals(uncached.nextCursorAnchor, cached.nextCursorAnchor)
             }
+        }
+
+        "grid redis candidate cache shares the ranked window across separate repository instances" {
+            // Headline of the Redis upgrade: two server instances (here, two repos
+            // with independent in-process state and their own DB connections) share
+            // ONE ranked window via Redis, so the expensive rank SQL runs once
+            // fleet-wide for the same coarse bucket + filter — what an in-memory
+            // per-instance cache cannot do.
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000003071")
+                val target = UUID.fromString("00000000-0000-0000-0000-000000003072")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+
+                val cache = redisCache()
+                try {
+                    val countingA = RankCountingDataSource(dataSource)
+                    val countingB = RankCountingDataSource(dataSource)
+                    val instanceA = JdbcGridRepository(countingA, candidateRankCache = RedisGridCandidateRankCache(cache, Duration.ofSeconds(30)))
+                    val instanceB = JdbcGridRepository(countingB, candidateRankCache = RedisGridCandidateRankCache(cache, Duration.ofSeconds(30)))
+
+                    val a = instanceA.queryNearby(viewer, radiusMeters = 100_000, limit = 10)
+                    val b = instanceB.queryNearby(viewer, radiusMeters = 100_000, limit = 10)
+
+                    assertEquals(listOf(target), a.cards.map { it.userId })
+                    assertEquals(listOf(target), b.cards.map { it.userId })
+                    assertEquals(1, countingA.rankRunCount(), "Instance A must populate the shared Redis window once")
+                    assertEquals(
+                        0,
+                        countingB.rankRunCount(),
+                        "Instance B must serve from the Redis window A populated, without re-running the rank SQL",
+                    )
+                } finally {
+                    cache.close()
+                }
+            }
+        }
+
+        "grid redis candidate cache fails open to direct queries when redis is unavailable" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000003081")
+                val target = UUID.fromString("00000000-0000-0000-0000-000000003082")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
+
+                val cache = redisCache()
+                cache.close() // simulate a Redis outage: every command now throws.
+                val repository = JdbcGridRepository(dataSource, candidateRankCache = RedisGridCandidateRankCache(cache, Duration.ofSeconds(30)))
+
+                val result = repository.queryNearby(viewer, radiusMeters = 100_000, limit = 10)
+
+                assertEquals(listOf(target), result.cards.map { it.userId }, "A Redis outage must degrade to direct queries, not break the Grid")
+            }
+        }
+
+        "grid redis window codec round-trips ranked rows" {
+            val rows =
+                listOf(
+                    GridRankRow(
+                        userId = UUID.fromString("00000000-0000-0000-0000-0000000030a1"),
+                        displayName = "Maya | with: delimiters \"and\" quotes",
+                        showDistance = true,
+                        boostBucket = 0,
+                        distanceBucketMeters = 1234,
+                        distanceMeters = 1234.56,
+                        visiting = false,
+                    ),
+                    GridRankRow(
+                        userId = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+                        displayName = "Pynapli User",
+                        showDistance = false,
+                        boostBucket = 1,
+                        distanceBucketMeters = 0,
+                        distanceMeters = 0.0,
+                        visiting = true,
+                    ),
+                )
+
+            val decoded = GridRankWindowCodec.decode(GridRankWindowCodec.encode(rows))
+
+            assertEquals(rows, decoded, "Codec must round-trip the ranked window exactly (incl. unsigned-high-bit UUID and delimiter-laden names)")
         }
     })
 
