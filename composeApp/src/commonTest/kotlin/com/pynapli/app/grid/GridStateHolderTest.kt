@@ -211,6 +211,44 @@ class GridStateHolderTest {
         }
 
     @Test
+    fun refreshReFetchesCurrentFiltersAndPreservesThem() =
+        runBlocking {
+            val card =
+                GridProfileCardUi(
+                    id = "u1",
+                    displayName = "One",
+                    online = true,
+                    distanceLabel = "1 km",
+                    tone = GridCardTone.Warm,
+                )
+            val repository =
+                FakeGridFeedRepository(
+                    feeds =
+                        listOf(
+                            GridFeedUi(cards = listOf(card)),
+                            GridFeedUi(cards = listOf(card)),
+                            GridFeedUi(cards = listOf(card)),
+                        ),
+                )
+            val stateHolder = GridStateHolder(repository)
+
+            stateHolder.load()
+            stateHolder.applyFilters(
+                stateHolder.state.value.filters
+                    .copy(online = true),
+            )
+            val callsBeforeRefresh = repository.loadCount
+            val filtersBeforeRefresh = stateHolder.state.value.filters
+
+            stateHolder.refresh()
+
+            assertEquals(callsBeforeRefresh + 1, repository.loadCount, "refresh must re-fetch")
+            assertEquals(filtersBeforeRefresh, stateHolder.state.value.filters, "refresh must preserve filters")
+            assertEquals(true, repository.lastFilters?.online, "refresh must use the current filters")
+            assertFalse(stateHolder.state.value.isRefreshing, "refresh settles isRefreshing")
+        }
+
+    @Test
     fun quietLoadKeepsCardsVisibleAndNeverFlipsRefreshing() =
         runBlocking {
             val firstCard =

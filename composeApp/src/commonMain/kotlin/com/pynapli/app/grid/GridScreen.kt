@@ -87,6 +87,7 @@ fun GridScreen(
             tonightAvailabilityStateHolder?.let { holder -> scope.launch { holder.clear() } }
         },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
+        onRefresh = { scope.launch { stateHolder.refresh() } },
         onProfileSelected = { card ->
             scope.launch { profileDetailStateHolder.open(card) }
         },
