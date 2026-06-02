@@ -12,9 +12,29 @@ import kotlinx.coroutines.flow.update
 
 class GridStateHolder(
     private val repository: GridFeedRepository,
+    private val snapshotStore: GridSnapshotStore = NoOpGridSnapshotStore,
 ) {
     private val _state = MutableStateFlow(GridUiState(isRefreshing = true))
     val state: StateFlow<GridUiState> = _state.asStateFlow()
+
+    /**
+     * Instant first paint: render the last persisted Grid cards immediately (if any) so the screen
+     * isn't blank while the network refresh runs, then load fresh. Only primes when no cards are
+     * present yet, so it never clobbers a live grid. Call once on first composition instead of [load].
+     */
+    suspend fun primeFromCacheThenLoad() {
+        if (_state.value.cards.isEmpty()) {
+            val cached = runCatching { snapshotStore.load() }.getOrElse { emptyList() }
+            if (cached.isNotEmpty() && _state.value.cards.isEmpty()) {
+                // Show cached cards instantly; a quiet refresh swaps in the live feed atomically
+                // (no blank, no scroll reset) per the spec's instant-render rule.
+                _state.update { current -> current.copy(cards = cached, isRefreshing = true) }
+                load(quiet = true)
+                return
+            }
+        }
+        load()
+    }
 
     suspend fun load(quiet: Boolean = false) {
         val before = _state.value
@@ -40,6 +60,8 @@ class GridStateHolder(
                         errorMessage = null,
                     )
                 }
+                // Persist the fresh cards for an instant first paint on next open (best-effort).
+                runCatching { snapshotStore.save(feed.cards) }
             }.onFailure { error ->
                 _state.update { current ->
                     val code = (error as? GridFeedException)?.code
