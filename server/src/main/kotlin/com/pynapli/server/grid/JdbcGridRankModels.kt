@@ -29,6 +29,7 @@ internal data class GridHydration(
     val linkedPartnerUserId: UUID?,
     val linkedPartnerDisplayName: String?,
     val linkedPartnerThumbnailMediaAssetId: UUID?,
+    val tonightActive: Boolean = false,
 )
 
 /** Coarse location bucket (lat/lng rounded to E3 ~= 111m) — copy of Swipe's `DeckLocationCacheKey`. */

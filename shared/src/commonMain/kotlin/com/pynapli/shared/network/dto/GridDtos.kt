@@ -45,6 +45,9 @@ data class GridCardDto(
     // SWIPE_IMPLEMENTATION_SPEC L348: target has an active travel mode row, so
     // they're virtually in the viewer's area rather than physically there.
     val visiting: Boolean = false,
+    // PLAYING_TONIGHT_SPEC: this individual has a live Playing Tonight session.
+    // A subtle per-tile indicator only — never a couple card.
+    val tonightActive: Boolean = false,
 )
 
 @Serializable

@@ -122,7 +122,21 @@ internal fun Connection.queryGridRank(
               AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
               AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
               AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
-              AND (?::boolean = false OR (p.tonight_available_until IS NOT NULL AND p.tonight_available_until > now()))
+              AND (
+                  -- PLAYING_TONIGHT_SPEC: "playing tonight" means a live session OR the
+                  -- legacy availability flag (transitional). Only evaluated when the
+                  -- filter is on; the leading boolean short-circuits the default path.
+                  ?::boolean = false
+                  OR EXISTS (
+                      SELECT 1
+                      FROM tonight_session_participants tsp
+                      JOIN tonight_sessions ts ON ts.id = tsp.session_id
+                      WHERE tsp.user_id = u.id
+                        AND ts.status = 'active'
+                        AND ts.expires_at > now()
+                  )
+                  OR (p.tonight_available_until IS NOT NULL AND p.tonight_available_until > now())
+              )
               AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
               -- Per-viewer self/block exclusion ONLY when userSpecificViewerId is
               -- set (uncached path). On the cached path these are applied in Kotlin

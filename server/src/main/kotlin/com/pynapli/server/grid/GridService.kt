@@ -218,6 +218,7 @@ class GridService(
                 },
             rankToken = "grid:v1:$userId",
             visiting = visiting,
+            tonightActive = tonightActive,
         )
 
     companion object {
