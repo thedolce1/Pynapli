@@ -155,12 +155,17 @@ by an `expireStale` integration test. The client surfaces the free-tier weekly c
 (`TONIGHT_WEEKLY_LIMIT_REACHED` → friendly "Upgrade for unlimited sessions" banner;
 ending/declining stay ungated). Server tier caps were already enforced in PT-1.
 
-**Tracked follow-ups (each its own slice — not yet shipped):** proposal + 15-minute-before-expiry
-**push notifications** (needs a new `NotificationKind` + a reminder scanner); **partner-offline
-pause/end** for linked-together sessions (presence-driven); optional **moderated session photo**
-upload (depends on the media upload pipeline); and **"via Playing Tonight" activity labels**
-(activity-feed integration). The core create→approve→browse→expire loop is functional end-to-end
-without these.
+**Notifications shipped (2026-06-03):** `NotificationKind.TONIGHT_INVITE` (high-urgency, gated by
+`partnerInvitesEnabled`) is emitted to the partner when a linked-together session is **proposed**;
+`NotificationKind.TONIGHT_REMINDER` (gated by `activityEnabled`) is sent to every participant ~15
+minutes before expiry. The reminder uses a `tonight_sessions.reminder_sent_at` latch claimed
+atomically (`FOR UPDATE SKIP LOCKED`) so it fires at most once per session across worker ticks/
+instances; the existing `TonightSessionExpiryWorker` runs the scan each tick. (V61 migration.)
+
+**Tracked follow-ups (each its own slice — not yet shipped):** **partner-offline pause/end** for
+linked-together sessions (presence-driven); optional **moderated session photo** upload (depends on
+the media upload pipeline); and **"via Playing Tonight" activity labels** (activity-feed
+integration). The core create→approve→browse→expire loop is functional end-to-end without these.
 
 ### PT-1 — session backend (shipped 2026-06-02)
 

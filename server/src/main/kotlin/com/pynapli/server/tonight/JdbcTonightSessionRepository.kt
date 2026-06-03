@@ -311,6 +311,80 @@ class JdbcTonightSessionRepository(
             }
         }
 
+    override suspend fun claimSessionsDueForReminder(
+        now: Instant,
+        leadWindow: java.time.Duration,
+    ): List<TonightSessionRepository.TonightReminderTarget> =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.inTransaction {
+                    // Lock the due-but-unreminded rows; SKIP LOCKED lets concurrent ticks/instances
+                    // each take a disjoint set instead of blocking on one another.
+                    val dueSessionIds =
+                        connection
+                            .prepareStatement(
+                                """
+                                SELECT id
+                                FROM tonight_sessions
+                                WHERE status = 'active'
+                                  AND reminder_sent_at IS NULL
+                                  AND expires_at > ?
+                                  AND expires_at <= ?
+                                FOR UPDATE SKIP LOCKED
+                                """.trimIndent(),
+                            ).use { statement ->
+                                statement.setTimestamp(1, Timestamp.from(now))
+                                statement.setTimestamp(2, Timestamp.from(now.plus(leadWindow)))
+                                statement.executeQuery().use { rs ->
+                                    buildList { while (rs.next()) add(rs.getObject("id", UUID::class.java)) }
+                                }
+                            }
+
+                    if (dueSessionIds.isEmpty()) {
+                        return@inTransaction emptyList()
+                    }
+
+                    // Stamp the latch so these sessions are never claimed/reminded again.
+                    connection
+                        .prepareStatement(
+                            "UPDATE tonight_sessions SET reminder_sent_at = ? WHERE id = ANY (?)",
+                        ).use { statement ->
+                            statement.setTimestamp(1, Timestamp.from(now))
+                            statement.setArray(2, connection.createArrayOf("uuid", dueSessionIds.toTypedArray()))
+                            statement.executeUpdate()
+                        }
+
+                    val participantsBySession =
+                        connection
+                            .prepareStatement(
+                                """
+                                SELECT session_id, user_id
+                                FROM tonight_session_participants
+                                WHERE session_id = ANY (?)
+                                """.trimIndent(),
+                            ).use { statement ->
+                                statement.setArray(1, connection.createArrayOf("uuid", dueSessionIds.toTypedArray()))
+                                statement.executeQuery().use { rs ->
+                                    buildMap<UUID, MutableList<UUID>> {
+                                        while (rs.next()) {
+                                            val sessionId = rs.getObject("session_id", UUID::class.java)
+                                            val userId = rs.getObject("user_id", UUID::class.java)
+                                            getOrPut(sessionId) { mutableListOf() }.add(userId)
+                                        }
+                                    }
+                                }
+                            }
+
+                    dueSessionIds.map { sessionId ->
+                        TonightSessionRepository.TonightReminderTarget(
+                            sessionId = sessionId,
+                            participantUserIds = participantsBySession[sessionId].orEmpty(),
+                        )
+                    }
+                }
+            }
+        }
+
     // ---- transactional helpers -------------------------------------------------------
 
     private inline fun <T> Connection.inTransaction(block: () -> T): T {
