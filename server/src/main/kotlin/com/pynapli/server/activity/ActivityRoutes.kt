@@ -64,7 +64,7 @@ fun Application.configureActivityRoutes(
             val targetUserId =
                 request.targetUserId.toUuidOrNull()
                     ?: throw ActivityException("INVALID_FLIRT_TARGET")
-            call.respond(activityService.sendFlirt(user.id, targetUserId))
+            call.respond(activityService.sendFlirt(user.id, targetUserId, request.source))
         }
 
         post("/v1/activity/album-requests") {

@@ -37,6 +37,7 @@ data class MarkActivitySeenResponseDto(
 @Serializable
 data class SendFlirtRequestDto(
     val targetUserId: String,
+    val source: String? = null,
 )
 
 @Serializable
@@ -94,4 +95,5 @@ data class ActivityEventDto(
     val albumRequestStatus: String? = null,
     val matchId: String? = null,
     val conversationId: String? = null,
+    val source: String? = null,
 )

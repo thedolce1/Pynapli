@@ -12,6 +12,7 @@ interface ActivityRepository {
     suspend fun recordFlirt(
         senderUserId: UUID,
         targetUserId: UUID,
+        source: String? = null,
     ): Boolean
 
     suspend fun recordAlbumRequest(
@@ -84,6 +85,7 @@ data class ActivityEventRecord(
     val albumRequestStatus: String?,
     val matchId: String?,
     val conversationId: String?,
+    val source: String? = null,
 )
 
 fun ActivityEventRecord.toCursorAnchor(seenCount: Int): ActivityCursorAnchor =

@@ -120,6 +120,34 @@ class ActivityServiceTest {
         }
 
     @Test
+    fun sendFlirtPersistsPlayingTonightSource() =
+        runBlocking {
+            val senderUserId = UUID.randomUUID()
+            val targetUserId = UUID.randomUUID()
+            val repository = InMemoryActivityRepository()
+            val service = ActivityService(repository)
+
+            service.sendFlirt(senderUserId, targetUserId, "playing_tonight")
+
+            assertEquals(listOf<String?>("playing_tonight"), repository.flirtSources)
+        }
+
+    @Test
+    fun sendFlirtNormalizesNullAndUnknownSourcesToNull() =
+        runBlocking {
+            val senderUserId = UUID.randomUUID()
+            val targetUserId = UUID.randomUUID()
+            val repository = InMemoryActivityRepository()
+            val service = ActivityService(repository)
+
+            service.sendFlirt(senderUserId, targetUserId, null)
+            service.sendFlirt(senderUserId, targetUserId, "grid")
+            service.sendFlirt(senderUserId, targetUserId, "PLAYING_TONIGHT")
+
+            assertEquals(listOf<String?>(null, null, null), repository.flirtSources)
+        }
+
+    @Test
     fun sendFlirtPublishesRealtimeDeltaWhenRecorded() =
         runBlocking {
             val senderUserId = UUID.randomUUID()
@@ -835,6 +863,7 @@ private class InMemoryActivityRepository(
 ) : ActivityRepository {
     val profileViews = mutableListOf<Pair<UUID, UUID>>()
     val flirts = mutableListOf<Pair<UUID, UUID>>()
+    val flirtSources = mutableListOf<String?>()
     val albumRequests = mutableListOf<Pair<UUID, UUID>>()
     val swipeInterests = mutableListOf<Triple<UUID, UUID, String>>()
     val matches = mutableListOf<Triple<UUID, UUID, UUID>>()
@@ -853,9 +882,11 @@ private class InMemoryActivityRepository(
     override suspend fun recordFlirt(
         senderUserId: UUID,
         targetUserId: UUID,
+        source: String?,
     ): Boolean {
         if (!allowFlirts) return false
         flirts += senderUserId to targetUserId
+        flirtSources += source
         return true
     }
 

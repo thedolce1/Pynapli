@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -191,6 +193,41 @@ class ActivityScreenInteractionTest {
 
             assertEquals(true, openedStore)
         }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun activityRowShowsViaPlayingTonightChipOnlyForTaggedFlirts() =
+        runComposeUiTest {
+            val repository =
+                StaticActivityScreenRepository(
+                    responses =
+                        mutableMapOf(
+                            ActivityRequest(ActivityTabUi.All, null) to
+                                ActivityFeedUi(
+                                    items =
+                                        listOf(
+                                            activityEvent("flirt-tonight", "flirt", "Alex", source = "playing_tonight"),
+                                            activityEvent("flirt-plain", "flirt", "Sam"),
+                                        ),
+                                ),
+                        ),
+                )
+            val stateHolder = ActivityStateHolder(repository)
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        ActivityScreen(stateHolder = stateHolder)
+                    }
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.All, null)) }
+            onNodeWithText("Alex").assertExists()
+            onNodeWithText("Sam").assertExists()
+            onAllNodesWithTag(VIA_PLAYING_TONIGHT_TEST_TAG).assertCountEquals(1)
+            onNodeWithText("via Playing Tonight").assertExists()
+        }
 }
 
 private class StaticActivityScreenRepository(
@@ -246,6 +283,7 @@ private fun activityEvent(
     matchId: String? = null,
     conversationId: String? = null,
     seen: Boolean = false,
+    source: String? = null,
 ): ActivityEventDto =
     ActivityEventDto(
         eventId = eventId,
@@ -257,4 +295,5 @@ private fun activityEvent(
         albumRequestStatus = albumRequestStatus,
         matchId = matchId,
         conversationId = conversationId,
+        source = source,
     )

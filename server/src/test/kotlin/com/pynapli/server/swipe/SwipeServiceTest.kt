@@ -2065,6 +2065,7 @@ private class RecordingActivityRepository : ActivityRepository {
     override suspend fun recordFlirt(
         senderUserId: UUID,
         targetUserId: UUID,
+        source: String?,
     ): Boolean = true
 
     override suspend fun recordAlbumRequest(

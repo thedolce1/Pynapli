@@ -34,7 +34,10 @@ class SamplePublicProfileRepository : PublicProfileRepository {
             ),
         )
 
-    override suspend fun sendFlirt(userId: String): AppResult<SendFlirtResponseDto> = AppResult.Success(SendFlirtResponseDto(sent = true))
+    override suspend fun sendFlirt(
+        userId: String,
+        source: String?,
+    ): AppResult<SendFlirtResponseDto> = AppResult.Success(SendFlirtResponseDto(sent = true))
 
     override suspend fun requestAlbumAccess(userId: String): AppResult<RequestAlbumAccessResponseDto> = AppResult.Success(RequestAlbumAccessResponseDto(requested = true))
 

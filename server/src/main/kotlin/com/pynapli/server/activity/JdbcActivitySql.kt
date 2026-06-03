@@ -99,9 +99,10 @@ internal object JdbcActivitySql {
             first_occurred_at,
             last_counted_at,
             occurred_at,
-            updated_at
+            updated_at,
+            metadata
         )
-        VALUES (?, ?, ?, 'flirt', ?, 1, now(), now(), now(), now())
+        VALUES (?, ?, ?, 'flirt', ?, 1, now(), now(), now(), now(), COALESCE(?::jsonb, '{}'::jsonb))
         ON CONFLICT (recipient_user_id, actor_user_id, event_type, target_user_id)
         WHERE event_type = 'flirt' AND deleted_at IS NULL
         DO UPDATE SET
@@ -117,6 +118,7 @@ internal object JdbcActivitySql {
             END,
             occurred_at = now(),
             updated_at = now(),
+            metadata = activity_events.metadata || COALESCE(?::jsonb, '{}'::jsonb),
             seen_at = CASE
                 WHEN activity_events.last_counted_at <= now() - (?::interval)
                 THEN NULL
@@ -316,6 +318,7 @@ internal object JdbcActivitySql {
                (ae.seen_at IS NOT NULL) AS seen,
                ae.metadata->>'matchId' AS match_id,
                ae.metadata->>'conversationId' AS conversation_id,
+               ae.metadata->>'source' AS source,
                album_request.status AS album_request_status,
                actor_settings.show_distance AS actor_show_distance,
                CASE
