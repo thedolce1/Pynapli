@@ -403,6 +403,32 @@ class ActivityRepositoryIntegrationTest {
         }
 
     @Test
+    fun recordFlirtRoundTripsPlayingTonightSourceIntoFeed() =
+        runBlocking {
+            val taggedSender = UUID.fromString("00000000-0000-0000-0000-000000002101")
+            val untaggedSender = UUID.fromString("00000000-0000-0000-0000-000000002102")
+            val unknownSourceSender = UUID.fromString("00000000-0000-0000-0000-000000002103")
+            val recipient = UUID.fromString("00000000-0000-0000-0000-000000002104")
+            listOf(taggedSender, untaggedSender, unknownSourceSender, recipient)
+                .forEach { userId -> dataSource.insertUserWithDiscovery(userId) }
+            val repository = JdbcActivityRepository(dataSource)
+
+            // The service normalizes the source before reaching the repository, so the repository
+            // only ever sees "playing_tonight" or null. Passing a stray value here proves the
+            // metadata->>'source' read simply surfaces whatever was persisted (null when absent).
+            assertTrue(repository.recordFlirt(taggedSender, recipient, "playing_tonight"))
+            assertTrue(repository.recordFlirt(untaggedSender, recipient, null))
+            assertTrue(repository.recordFlirt(unknownSourceSender, recipient, null))
+
+            val feed = repository.listActivity(ActivityFeedQuery(recipient, setOf("flirt"), 10, null))
+            val bySender = feed.associateBy { it.actorUserId }
+
+            assertEquals("playing_tonight", bySender.getValue(taggedSender).source)
+            assertEquals(null, bySender.getValue(untaggedSender).source)
+            assertEquals(null, bySender.getValue(unknownSourceSender).source)
+        }
+
+    @Test
     fun retentionHidesExpiredProductVisibleActivityButKeepsMatches() =
         runBlocking {
             val recipient = UUID.fromString("00000000-0000-0000-0000-000000001901")

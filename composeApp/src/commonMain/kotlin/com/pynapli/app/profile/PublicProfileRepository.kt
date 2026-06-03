@@ -12,7 +12,10 @@ import com.pynapli.shared.network.dto.SendFlirtResponseDto
 interface PublicProfileRepository {
     suspend fun loadProfile(userId: String): AppResult<PublicProfileDto>
 
-    suspend fun sendFlirt(userId: String): AppResult<SendFlirtResponseDto>
+    suspend fun sendFlirt(
+        userId: String,
+        source: String? = null,
+    ): AppResult<SendFlirtResponseDto>
 
     suspend fun requestAlbumAccess(userId: String): AppResult<RequestAlbumAccessResponseDto>
 

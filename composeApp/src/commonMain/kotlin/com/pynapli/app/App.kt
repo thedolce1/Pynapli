@@ -608,19 +608,13 @@ fun PynapliApp(
                 onOpenProfile = { userId ->
                     tonightVisible = false
                     scope.launch {
-                        profileDetailStateHolder.openLinkedPartner(
-                            com.pynapli.app.grid
-                                .GridLinkedPartnerUi(userId = userId),
-                        )
+                        profileDetailStateHolder.openFromTonight(userId)
                     }
                 },
                 onMessage = { userId ->
                     tonightVisible = false
                     scope.launch {
-                        profileDetailStateHolder.openLinkedPartner(
-                            com.pynapli.app.grid
-                                .GridLinkedPartnerUi(userId = userId),
-                        )
+                        profileDetailStateHolder.openFromTonight(userId)
                     }
                 },
                 modifier = Modifier.fillMaxSize(),

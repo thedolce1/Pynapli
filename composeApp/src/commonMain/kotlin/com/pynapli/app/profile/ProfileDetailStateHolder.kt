@@ -16,11 +16,15 @@ class ProfileDetailStateHolder(
     private val _state = MutableStateFlow(ProfileDetailUiState())
     val state: StateFlow<ProfileDetailUiState> = _state.asStateFlow()
 
-    suspend fun open(card: GridProfileCardUi) {
+    suspend fun open(
+        card: GridProfileCardUi,
+        flirtSource: String? = null,
+    ) {
         _state.update {
             ProfileDetailUiState(
                 selectedCard = card,
                 isLoading = true,
+                flirtSource = flirtSource,
             )
         }
 
@@ -46,7 +50,10 @@ class ProfileDetailStateHolder(
         }
     }
 
-    suspend fun openLinkedPartner(partner: GridLinkedPartnerUi) {
+    suspend fun openLinkedPartner(
+        partner: GridLinkedPartnerUi,
+        flirtSource: String? = null,
+    ) {
         open(
             GridProfileCardUi(
                 id = partner.userId,
@@ -56,6 +63,19 @@ class ProfileDetailStateHolder(
                 distanceLabel = null,
                 tone = GridCardTone.entries[partner.userId.stableIndex(GridCardTone.entries.size)],
             ),
+            flirtSource = flirtSource,
+        )
+    }
+
+    /**
+     * Opens a profile from the Playing Tonight surface so a subsequent flirt is tagged
+     * [PLAYING_TONIGHT_SOURCE]. Normal grid/swipe opens leave [ProfileDetailUiState.flirtSource]
+     * null, so a later flirt is never mislabeled.
+     */
+    suspend fun openFromTonight(userId: String) {
+        openLinkedPartner(
+            GridLinkedPartnerUi(userId = userId),
+            flirtSource = PLAYING_TONIGHT_SOURCE,
         )
     }
 
@@ -70,7 +90,7 @@ class ProfileDetailStateHolder(
             )
         }
 
-        when (val result = repository.sendFlirt(targetUserId)) {
+        when (val result = repository.sendFlirt(targetUserId, _state.value.flirtSource)) {
             is AppResult.Success -> {
                 _state.update { current ->
                     current.copy(
@@ -279,5 +299,9 @@ class ProfileDetailStateHolder(
 
     fun dismiss() {
         _state.value = ProfileDetailUiState()
+    }
+
+    companion object {
+        const val PLAYING_TONIGHT_SOURCE = "playing_tonight"
     }
 }

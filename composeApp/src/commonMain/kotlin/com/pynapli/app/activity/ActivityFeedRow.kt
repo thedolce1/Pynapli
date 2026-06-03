@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,11 +21,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.network.dto.ActivityEventDto
+
+internal const val PLAYING_TONIGHT_SOURCE = "playing_tonight"
+internal const val VIA_PLAYING_TONIGHT_TEST_TAG = "activity-via-playing-tonight"
 
 @Composable
 internal fun ActivityRow(
@@ -112,6 +118,9 @@ internal fun ActivityRow(
                     )
                 }
             }
+            if (item.source == PLAYING_TONIGHT_SOURCE) {
+                ViaPlayingTonightChip()
+            }
             AlbumRequestActions(
                 item = item,
                 pendingAction = pendingAction,
@@ -149,4 +158,26 @@ internal fun ActivityRow(
             }
         }
     }
+}
+
+/**
+ * Small accent caption surfaced when a flirt originated from the Playing Tonight surface
+ * (PLAYING_TONIGHT_SPEC: "Activity labels 'via Playing Tonight' where appropriate").
+ */
+@Composable
+private fun ViaPlayingTonightChip() {
+    Text(
+        text = "via Playing Tonight",
+        color = PynapliColors.Accent,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        modifier =
+            Modifier
+                .padding(top = 4.dp)
+                .clip(RoundedCornerShape(100.dp))
+                .background(PynapliColors.Accent.copy(alpha = 0.12f))
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .testTag(VIA_PLAYING_TONIGHT_TEST_TAG),
+    )
 }

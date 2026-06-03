@@ -23,6 +23,9 @@ data class ProfileDetailUiState(
     val blockedTargetUserId: String? = null,
     val hiddenTargetUserId: String? = null,
     val errorMessage: String? = null,
+    // Origin of the surface that opened this profile, carried onto a subsequent flirt so the
+    // recipient's Activity feed can show a "via Playing Tonight" label. Null for normal opens.
+    val flirtSource: String? = null,
 ) {
     val visible: Boolean
         get() = selectedCard != null

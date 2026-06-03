@@ -65,6 +65,7 @@ class ActivityService(
     suspend fun sendFlirt(
         senderUserId: UUID,
         targetUserId: UUID,
+        source: String? = null,
     ): SendFlirtResponseDto {
         if (senderUserId == targetUserId) throw ActivityException("INVALID_FLIRT_TARGET")
         if (riskPolicyService?.isSocialActionRestricted(senderUserId) == true) {
@@ -76,7 +77,10 @@ class ActivityService(
         if (rateLimitService?.check(senderUserId, RateLimitedAction.FLIRT)?.allowed == false) {
             throw ActivityException("RATE_LIMITED")
         }
-        if (!repository.recordFlirt(senderUserId, targetUserId)) {
+        // Only the deliberate Playing Tonight origin is recognised; anything else is dropped to
+        // null so an arbitrary client-supplied label can never leak into the recipient's feed.
+        val normalizedSource = source?.takeIf { it == ACTIVITY_SOURCE_PLAYING_TONIGHT }
+        if (!repository.recordFlirt(senderUserId, targetUserId, normalizedSource)) {
             throw ActivityException("FLIRT_NOT_ALLOWED")
         }
         publishActivityDelta(targetUserId, "flirt")
@@ -357,6 +361,7 @@ class ActivityService(
             albumRequestStatus = albumRequestStatus,
             matchId = matchId,
             conversationId = conversationId,
+            source = source,
         )
 
     private suspend fun publishActivityDelta(
@@ -383,6 +388,7 @@ class ActivityService(
             )
 
     companion object {
+        const val ACTIVITY_SOURCE_PLAYING_TONIGHT = "playing_tonight"
         private const val DEFAULT_LIMIT = 50
         private const val MAX_LIMIT = 100
         private const val MAX_MARK_SEEN_IDS = 100

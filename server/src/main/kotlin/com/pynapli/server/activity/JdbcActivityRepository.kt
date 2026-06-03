@@ -39,6 +39,7 @@ class JdbcActivityRepository(
     override suspend fun recordFlirt(
         senderUserId: UUID,
         targetUserId: UUID,
+        source: String?,
     ): Boolean =
         withContext(Dispatchers.IO) {
             if (senderUserId == targetUserId) return@withContext false
@@ -55,14 +56,17 @@ class JdbcActivityRepository(
                     }
                 if (!eligible) return@withContext false
 
+                val metadataJson = source?.let { """{"source":"$it"}""" }
                 connection.prepareStatement(JdbcActivitySql.UPSERT_FLIRT_QUERY).use { statement ->
                     statement.setObject(1, UUID.randomUUID())
                     statement.setObject(2, targetUserId)
                     statement.setObject(3, senderUserId)
                     statement.setObject(4, targetUserId)
-                    statement.setString(5, "${flirtCooldown.toMinutes()} minutes")
+                    statement.setString(5, metadataJson)
                     statement.setString(6, "${flirtCooldown.toMinutes()} minutes")
                     statement.setString(7, "${flirtCooldown.toMinutes()} minutes")
+                    statement.setString(8, metadataJson)
+                    statement.setString(9, "${flirtCooldown.toMinutes()} minutes")
                     statement.executeUpdate() > 0
                 }
             }

@@ -21,7 +21,10 @@ class ApiPublicProfileRepository(
 ) : PublicProfileRepository {
     override suspend fun loadProfile(userId: String): AppResult<PublicProfileDto> = apiClient.getPublicProfile(userId)
 
-    override suspend fun sendFlirt(userId: String): AppResult<SendFlirtResponseDto> = apiClient.sendFlirt(SendFlirtRequestDto(targetUserId = userId))
+    override suspend fun sendFlirt(
+        userId: String,
+        source: String?,
+    ): AppResult<SendFlirtResponseDto> = apiClient.sendFlirt(SendFlirtRequestDto(targetUserId = userId, source = source))
 
     override suspend fun requestAlbumAccess(userId: String): AppResult<RequestAlbumAccessResponseDto> = apiClient.requestAlbumAccess(RequestAlbumAccessRequestDto(targetUserId = userId))
 

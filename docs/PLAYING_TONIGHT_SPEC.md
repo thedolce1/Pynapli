@@ -144,7 +144,7 @@ Do not paywall:
 - [x] Feed uses session context without creating couple accounts. (PT-3 backend: `GET /v1/tonight/feed` — one row per live session anchored on the owner with the linked partner as a mini-avatar, never a couple card. Grid-style PostGIS discovery with the same owner eligibility gates + block/hidden split; map-only opt-out via `map_visible`; zone-only location. Client list UI lands in PT-4.)
 - [x] Zone map has no precise pins. (PT-4: Compose `PlayingTonightScreen` — abstract Canvas zone map with halos sized by session count and dots jittered within their coarse `zoneKey` bucket (never precise/street-level), a draggable bottom sheet with intent pills + session rows, and a live-session floater. Opened from a Grid-header moon button as a full-screen overlay; row/message taps open the individual's profile.)
 - [~] Session interactions respect individual vs together context. (PT-5 shipped the client **start-session + linked-approval flow**: `StartTonightSheet` builds a solo/together proposal — solo goes live immediately, together starts `proposed`; the map floater shows the right state per viewer — owner "waiting", pending partner "Approve/Decline", or live "End". Row/message taps open the individual's profile. Remaining for PT-6: routing a "message session" thread to both partners only in the together/session context + not auto-sharing every interaction.)
-- [ ] Activity labels "via Playing Tonight" where appropriate. (PT-5/PT-6)
+- [x] Activity labels "via Playing Tonight" where appropriate. (PT-5/PT-6 — flirts sent from the Playing Tonight surface carry `metadata.source = "playing_tonight"` on the `activity_events` row (server-normalized: only `playing_tonight` is honored, anything else → null); the recipient's Activity feed renders a "via Playing Tonight" accent chip. Client threads the source via `ProfileDetailStateHolder.openFromTonight(...)`; normal grid/swipe opens stay null.)
 
 ### PT-6 — expiry sweep + monetization surfacing (shipped 2026-06-02)
 
@@ -179,10 +179,12 @@ session's `photo_media_asset_id` when its media asset is `moderation_status='app
 pending/held/rejected/deleted photo is never shown and the session "continues without photo" (Edge
 Cases).
 
-**Tracked follow-ups (each its own slice — not yet shipped):** session-photo **attach UI** (client
-media upload, depends on the album upload pipeline) + row/map display; and **"via Playing Tonight"
-activity labels** (activity-feed integration). The core create→approve→browse→expire loop is
-functional end-to-end without these.
+**Tracked follow-ups (each its own slice):** session-photo **attach UI** (client
+media upload, depends on the album upload pipeline) + row/map display (not yet shipped). **"via
+Playing Tonight" activity labels** shipped 2026-06-03 — flirts from the Playing Tonight surface tag
+the `activity_events` row with `metadata.source = "playing_tonight"` and the recipient's Activity
+feed shows a "via Playing Tonight" chip. The core create→approve→browse→expire loop is functional
+end-to-end without the attach UI.
 
 ### PT-1 — session backend (shipped 2026-06-02)
 

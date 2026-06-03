@@ -20,6 +20,7 @@ internal object JdbcActivityRowMappers {
             albumRequestStatus = rs.getString("album_request_status"),
             matchId = rs.getString("match_id"),
             conversationId = rs.getString("conversation_id"),
+            source = rs.getString("source"),
         )
     }
 
