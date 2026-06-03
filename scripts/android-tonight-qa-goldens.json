@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "description": "Connected Android Playing Tonight QA golden assertions. Structural signatures (text + loose luminance/colour ratios) rather than exact pixel images, since emulator time, density, and platform chrome vary. Assumes seed-dev-data.ps1 created live solo sessions (Maya social/hosting, Kai social, Theo event, Nico solo).",
+  "stages": {
+    "tonightMap": {
+      "requiredTexts": [
+        "Playing Tonight",
+        "All",
+        "Solo",
+        "Together",
+        "Social",
+        "Events",
+        "Start a session",
+        "Hosting"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed",
+        "Nobody here yet"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.45,
+        "maxBrightRatio": 0.14,
+        "minNonBlackRatio": 0.20,
+        "minAccentYellowRatio": 0.0003,
+        "minColorBucketCount": 5
+      }
+    },
+    "tonightSocialFilter": {
+      "requiredTexts": [
+        "Playing Tonight",
+        "Social",
+        "Hosting"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed",
+        "Nobody here yet"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.45,
+        "maxBrightRatio": 0.14,
+        "minNonBlackRatio": 0.20,
+        "minAccentYellowRatio": 0.0003,
+        "minColorBucketCount": 5
+      }
+    }
+  }
+}

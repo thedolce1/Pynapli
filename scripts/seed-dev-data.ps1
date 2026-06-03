@@ -548,6 +548,56 @@ SET user_id = EXCLUDED.user_id,
     Write-Host "  [ok] Dev subscriptions: Seb Dev Select, Maya Social, Alex linked benefit via Maya"
 }
 
+function Set-DevTonightSessions {
+    param(
+        [hashtable]$SessionsByEmail
+    )
+
+    # Seed a few live Playing Tonight sessions so the viewer's feed + zone map show
+    # populated rows/dots. SOLO sessions go active immediately; a "together" session
+    # would stay 'proposed' until the partner approves (so it would be invisible),
+    # which is why these are all solo. Re-runs are idempotent: an existing live session
+    # returns TONIGHT_ALREADY_ACTIVE (409), which we treat as a skip.
+    $tonight = @(
+        @{ email = "maya@pynapli.local"; intent = "social"; hostMode = "hosting";           note = "At the lounge — say hi" },
+        @{ email = "kai@pynapli.local";  intent = "social"; hostMode = "public_meet_first"; note = "Up for a drink first" },
+        @{ email = "theo@pynapli.local"; intent = "event";  hostMode = "traveling";         note = "Heading to the night market" },
+        @{ email = "nico@pynapli.local"; intent = "solo";   hostMode = "public_meet_first"; note = $null }
+    )
+
+    foreach ($entry in $tonight) {
+        $session = $SessionsByEmail[$entry.email]
+        if ($null -eq $session) {
+            continue
+        }
+
+        $body = @{
+            mode = "solo"
+            intent = $entry.intent
+            hostMode = $entry.hostMode
+            durationHours = 4
+            mapVisible = $true
+        }
+        if ($null -ne $entry.note) {
+            $body.note = $entry.note
+        }
+
+        $response = Invoke-PynapliJson `
+            -Method POST `
+            -Path "/v1/tonight/sessions" `
+            -AccessToken $session.accessToken `
+            -Body $body
+
+        if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
+            Write-Host "  [ok] Playing Tonight session for $($entry.email) ($($entry.intent))"
+        } elseif ($response.StatusCode -eq 409) {
+            Write-Host "  [skip] Playing Tonight session for $($entry.email): already live"
+        } else {
+            Write-Host "  [skip] Playing Tonight session for $($entry.email): HTTP $($response.StatusCode)"
+        }
+    }
+}
+
 $accounts = @(
     @{
         email = $viewerEmail
@@ -696,6 +746,7 @@ for ($index = 0; $index -lt $accounts.Count; $index++) {
 
 Set-LinkedDevAccounts -SessionsByEmail $sessionsByEmail
 Set-DevMonetization -SessionsByEmail $sessionsByEmail
+Set-DevTonightSessions -SessionsByEmail $sessionsByEmail
 
 $grid = Invoke-PynapliJson `
     -Method POST `
