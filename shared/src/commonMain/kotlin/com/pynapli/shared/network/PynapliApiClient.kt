@@ -26,6 +26,7 @@ import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
 import com.pynapli.shared.network.dto.CreateSavedSwipeFilterRequestDto
 import com.pynapli.shared.network.dto.CurrentLocationDto
+import com.pynapli.shared.network.dto.CurrentTonightSessionDto
 import com.pynapli.shared.network.dto.DeleteAccountRequestDto
 import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
@@ -83,6 +84,8 @@ import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckResponseDto
 import com.pynapli.shared.network.dto.SwipeRewindResponseDto
 import com.pynapli.shared.network.dto.TonightAvailabilityDto
+import com.pynapli.shared.network.dto.TonightFeedResponseDto
+import com.pynapli.shared.network.dto.TonightSessionDto
 import com.pynapli.shared.network.dto.TopPicksResponseDto
 import com.pynapli.shared.network.dto.TravelLocationDto
 import com.pynapli.shared.network.dto.UnregisterPushDeviceRequestDto
@@ -152,6 +155,15 @@ interface PynapliApiClient {
     suspend fun setTonightAvailability(request: SetTonightAvailableRequestDto = SetTonightAvailableRequestDto()): AppResult<TonightAvailabilityDto>
 
     suspend fun clearTonightAvailability(): AppResult<TonightAvailabilityDto>
+
+    suspend fun getTonightFeed(
+        radiusMeters: Int = 50_000,
+        intent: String? = null,
+    ): AppResult<TonightFeedResponseDto>
+
+    suspend fun getCurrentTonightSession(): AppResult<CurrentTonightSessionDto>
+
+    suspend fun endTonightSession(sessionId: String): AppResult<TonightSessionDto>
 
     suspend fun getMe(): AppResult<MeDto>
 
@@ -510,6 +522,35 @@ class KtorPynapliApiClient(
         authenticatedPost { token ->
             httpClient
                 .delete(config.endpoint("/v1/me/availability/tonight")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun getTonightFeed(
+        radiusMeters: Int,
+        intent: String?,
+    ): AppResult<TonightFeedResponseDto> =
+        authenticatedPost { token ->
+            httpClient
+                .get(config.endpoint("/v1/tonight/feed")) {
+                    bearerAuth(token)
+                    parameter("radiusMeters", radiusMeters)
+                    intent?.let { parameter("intent", it) }
+                }.toAppResult(json)
+        }
+
+    override suspend fun getCurrentTonightSession(): AppResult<CurrentTonightSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .get(config.endpoint("/v1/me/tonight/session")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun endTonightSession(sessionId: String): AppResult<TonightSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .delete(config.endpoint("/v1/tonight/sessions/$sessionId")) {
                     bearerAuth(token)
                 }.toAppResult(json)
         }

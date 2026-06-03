@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
@@ -29,17 +30,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.GridTileTokens
 import com.pynapli.app.design.OnlineDot
+import com.pynapli.app.design.PynapliColors
 
 @Composable
 internal fun GridHeader(
     locationLabel: String,
     profileImageUrl: String?,
     onProfileIconClick: () -> Unit,
+    onOpenTonight: () -> Unit = {},
 ) {
     Row(
         modifier =
@@ -107,6 +111,22 @@ internal fun GridHeader(
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        IconButton(
+            onClick = onOpenTonight,
+            modifier =
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .testTag("grid-open-tonight"),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.DarkMode,
+                contentDescription = "Playing Tonight",
+                tint = PynapliColors.Accent,
             )
         }
 

@@ -280,6 +280,23 @@ private class FakeApiClient(
 
     override suspend fun clearTonightAvailability(): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun getTonightFeed(
+        radiusMeters: Int,
+        intent: String?,
+    ): AppResult<com.pynapli.shared.network.dto.TonightFeedResponseDto> =
+        AppResult.Success(
+            com.pynapli.shared.network.dto
+                .TonightFeedResponseDto(),
+        )
+
+    override suspend fun getCurrentTonightSession(): AppResult<com.pynapli.shared.network.dto.CurrentTonightSessionDto> =
+        AppResult.Success(
+            com.pynapli.shared.network.dto
+                .CurrentTonightSessionDto(),
+        )
+
+    override suspend fun endTonightSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.TonightSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun getMe(): AppResult<MeDto> = meResult
 
     override suspend fun getAgeVerificationRequirements(): AppResult<AgeVerificationRequirementsDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
