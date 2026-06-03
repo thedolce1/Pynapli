@@ -24,6 +24,10 @@ private class FakeTonightRepository(
 
     override suspend fun loadCurrentSession(): AppResult<TonightSessionUi?> = AppResult.Success(current)
 
+    var photoOptions: List<TonightPhotoOptionUi> = emptyList()
+
+    override suspend fun loadProfilePhotos(): AppResult<List<TonightPhotoOptionUi>> = AppResult.Success(photoOptions)
+
     var proposed: com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto? = null
     var approvedId: String? = null
     var declinedId: String? = null
@@ -193,6 +197,26 @@ class PlayingTonightStateHolderTest {
 
             assertEquals("p1", repo.declinedId)
             assertNull(holder.state.value.currentSession)
+        }
+
+    @Test
+    fun loadPopulatesProfilePhotoOptions() =
+        runBlocking {
+            val repo = FakeTonightRepository(feed = emptyList(), current = null)
+            repo.photoOptions =
+                listOf(
+                    TonightPhotoOptionUi(assetId = "a1", thumbnailUrl = "https://media.example/a1"),
+                    TonightPhotoOptionUi(assetId = "a2", thumbnailUrl = "https://media.example/a2"),
+                )
+            val holder = PlayingTonightStateHolder(repo)
+
+            holder.load()
+
+            assertEquals(
+                listOf("a1", "a2"),
+                holder.state.value.photoOptions
+                    .map { it.assetId },
+            )
         }
 
     @Test

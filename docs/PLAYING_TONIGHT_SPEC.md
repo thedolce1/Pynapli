@@ -179,12 +179,22 @@ session's `photo_media_asset_id` when its media asset is `moderation_status='app
 pending/held/rejected/deleted photo is never shown and the session "continues without photo" (Edge
 Cases).
 
-**Tracked follow-ups (each its own slice):** session-photo **attach UI** (client
-media upload, depends on the album upload pipeline) + row/map display (not yet shipped). **"via
-Playing Tonight" activity labels** shipped 2026-06-03 — flirts from the Playing Tonight surface tag
-the `activity_events` row with `metadata.source = "playing_tonight"` and the recipient's Activity
-feed shows a "via Playing Tonight" chip. The core create→approve→browse→expire loop is functional
-end-to-end without the attach UI.
+**"via Playing Tonight" activity labels** shipped 2026-06-03 — flirts from the Playing Tonight
+surface tag the `activity_events` row with `metadata.source = "playing_tonight"` and the recipient's
+Activity feed shows a "via Playing Tonight" chip.
+
+**Session-photo attach shipped (2026-06-03):** `StartTonightSheet` offers an optional "Session photo"
+picker sourced from the viewer's **already-approved profile photos** (`PlayingTonightStateHolder`
+loads them via `listMediaAlbum("profile")`, filtered to ready+approved). The chosen
+`photoMediaAssetId` flows into `propose`; the feed surfaces it (the moderation gate is satisfied
+since profile photos are approved) and the feed row prefers the session photo when present. Picking
+an approved photo — vs a fresh upload that manual moderation would hold past the short session
+window — makes it visible immediately; a fresh-upload variant is possible future work once
+auto-moderation is enabled.
+
+Playing Tonight is now feature-complete end-to-end: session model, grid indicator, feed, zone map,
+start/approval UX, expiry, monetization surfacing, notifications (invite + reminder), partner-offline
+pause/end, moderated-photo gate + attach, and "via Playing Tonight" activity labels.
 
 ### PT-1 — session backend (shipped 2026-06-02)
 

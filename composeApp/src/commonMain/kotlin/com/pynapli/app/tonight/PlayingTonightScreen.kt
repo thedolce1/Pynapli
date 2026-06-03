@@ -135,6 +135,7 @@ fun PlayingTonightScreen(
     if (showStartSheet) {
         StartTonightSheet(
             isSubmitting = state.isMutating,
+            photoOptions = state.photoOptions,
             onDismiss = { showStartSheet = false },
             onSubmit = { request ->
                 scope.launch {
@@ -563,7 +564,8 @@ private fun TonightSessionRow(
                         .clip(RoundedCornerShape(10.dp))
                         .background(PynapliColors.SurfaceRaised),
             ) {
-                item.thumbnailUrl?.let {
+                // Prefer the (approved) session photo when attached; fall back to the profile thumbnail.
+                (item.photoUrl ?: item.thumbnailUrl)?.let {
                     AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
             }

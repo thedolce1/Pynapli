@@ -19,6 +19,8 @@ private class StaticTonightRepository(
 
     override suspend fun loadCurrentSession(): AppResult<TonightSessionUi?> = AppResult.Success(current)
 
+    override suspend fun loadProfilePhotos(): AppResult<List<TonightPhotoOptionUi>> = AppResult.Success(emptyList())
+
     override suspend fun propose(
         request: com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto,
     ): AppResult<TonightSessionUi> = AppResult.Success(current!!)
