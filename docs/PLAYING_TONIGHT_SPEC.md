@@ -173,10 +173,16 @@ subqueries). `TonightSessionService.reconcilePresence()` resolves the online set
 grace → end (`status='ended'`). Solo sessions are never touched; a null `presenceService` is a
 no-op. Covered by reconcile + feed-hiding integration tests.
 
-**Tracked follow-ups (each its own slice — not yet shipped):** optional **moderated session
-photo** upload (depends on the media upload pipeline); and **"via Playing Tonight" activity
-labels** (activity-feed integration). The core create→approve→browse→expire loop is functional
-end-to-end without these.
+**Moderated session photo — server gate shipped (2026-06-03):** the feed only surfaces a
+session's `photo_media_asset_id` when its media asset is `moderation_status='approved'` AND
+`processing_status='ready'` AND not deleted (a subquery in the feed SQL nulls it otherwise), so a
+pending/held/rejected/deleted photo is never shown and the session "continues without photo" (Edge
+Cases).
+
+**Tracked follow-ups (each its own slice — not yet shipped):** session-photo **attach UI** (client
+media upload, depends on the album upload pipeline) + row/map display; and **"via Playing Tonight"
+activity labels** (activity-feed integration). The core create→approve→browse→expire loop is
+functional end-to-end without these.
 
 ### PT-1 — session backend (shipped 2026-06-02)
 

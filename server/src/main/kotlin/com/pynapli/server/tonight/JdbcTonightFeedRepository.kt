@@ -114,7 +114,18 @@ class JdbcTonightFeedRepository(
                    ts.intent,
                    ts.host_mode,
                    ts.note,
-                   ts.photo_media_asset_id,
+                   -- PLAYING_TONIGHT_SPEC: surface the optional session photo ONLY once it is
+                   -- moderation-approved + processed. A pending/held/rejected/deleted photo is
+                   -- nulled so the session "continues without photo" (Edge Cases) and no
+                   -- unreviewed image is ever shown publicly.
+                   (
+                       SELECT m.id
+                       FROM media_assets m
+                       WHERE m.id = ts.photo_media_asset_id
+                         AND m.deleted_at IS NULL
+                         AND m.processing_status = 'ready'
+                         AND m.moderation_status = 'approved'
+                   ) AS photo_media_asset_id,
                    owner_user.id AS owner_user_id,
                    COALESCE(NULLIF(owner_profile.display_name, ''), 'Pynapli User') AS owner_display_name,
                    owner_ds.show_distance AS owner_show_distance,
