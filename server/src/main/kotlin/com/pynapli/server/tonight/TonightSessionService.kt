@@ -3,6 +3,7 @@ package com.pynapli.server.tonight
 import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationPublisher
+import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.CurrentTonightSessionDto
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
@@ -23,6 +24,7 @@ class TonightSessionService(
     private val repository: TonightSessionRepository,
     private val subscriptionService: SubscriptionService?,
     private val notificationPublisher: NotificationPublisher? = null,
+    private val presenceService: PresenceService? = null,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     suspend fun propose(
@@ -240,6 +242,55 @@ class TonightSessionService(
         return targets.size
     }
 
+    /**
+     * Presence-driven pause/end for linked-together sessions (PLAYING_TONIGHT_SPEC Edge Cases:
+     * "Partner goes offline: pause linked-together session briefly, then end if not restored").
+     *
+     * Applies ONLY to mode='together', status='active', not-yet-expired sessions. Solo sessions are
+     * never paused/ended by presence. Per session, comparing its participants to the live online set:
+     *  - all online + currently paused  → RESUME (clear paused_at).
+     *  - any offline + not paused        → PAUSE (set paused_at = now), hiding it from discovery.
+     *  - any offline + paused for ≥ [PAUSE_GRACE] → END (status='ended', ended_at=now).
+     *  - otherwise no change.
+     *
+     * No-op (zero summary) when [presenceService] is not wired. Discovery (feed/grid) hides paused
+     * sessions; current() still returns a paused session to its own participants.
+     */
+    suspend fun reconcilePresence(): TonightReconcileSummary {
+        val presence = presenceService ?: return TonightReconcileSummary()
+        val now = clock.instant()
+        val sessions = repository.listActivePresenceSessions(now)
+        if (sessions.isEmpty()) return TonightReconcileSummary()
+
+        val allParticipantIds = sessions.flatMap { it.participantUserIds }.toSet()
+        val online = presence.onlineUserIds(allParticipantIds)
+
+        var paused = 0
+        var resumed = 0
+        var ended = 0
+        for (session in sessions) {
+            val anyOffline = session.participantUserIds.any { it !in online }
+            when {
+                !anyOffline && session.pausedAt != null -> {
+                    repository.resumeSession(session.sessionId)
+                    resumed++
+                }
+                anyOffline && session.pausedAt == null -> {
+                    repository.pauseSession(session.sessionId, now)
+                    paused++
+                }
+                anyOffline &&
+                    session.pausedAt != null &&
+                    !now.isBefore(session.pausedAt.plus(PAUSE_GRACE)) -> {
+                    repository.systemEndSession(session.sessionId, now)
+                    ended++
+                }
+                // else: still online & running, or paused but within grace → no change.
+            }
+        }
+        return TonightReconcileSummary(paused = paused, resumed = resumed, ended = ended)
+    }
+
     private suspend fun enforceWeeklyCap(
         userId: UUID,
         now: java.time.Instant,
@@ -290,6 +341,9 @@ class TonightSessionService(
 
         // PLAYING_TONIGHT_SPEC: "Recommended reminder: 15 minutes before expiration."
         val REMINDER_LEAD_WINDOW: Duration = Duration.ofMinutes(15)
+
+        // PLAYING_TONIGHT_SPEC: "pause linked-together session briefly, then end if not restored."
+        val PAUSE_GRACE: Duration = Duration.ofMinutes(5)
         val VALID_MODES = setOf(MODE_SOLO, MODE_TOGETHER)
         val VALID_HOST_MODES = setOf("hosting", "traveling", "public_meet_first")
         val VALID_INTENTS = setOf("solo", "together", "social", "event")
@@ -301,3 +355,12 @@ class TonightSessionService(
 class TonightSessionException(
     val code: String,
 ) : RuntimeException(code)
+
+/** Counts from one [TonightSessionService.reconcilePresence] pass. */
+data class TonightReconcileSummary(
+    val paused: Int = 0,
+    val resumed: Int = 0,
+    val ended: Int = 0,
+) {
+    val changed: Boolean get() = paused > 0 || resumed > 0 || ended > 0
+}

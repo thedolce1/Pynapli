@@ -114,6 +114,40 @@ interface TonightSessionRepository {
         val participantUserIds: List<UUID>,
     )
 
+    /**
+     * Together-only, currently-live (status='active' AND expires_at > [now]) sessions with their
+     * participant user ids and current [pausedAt]. Used by the presence reconciler to decide
+     * pause/resume/end. Solo sessions are intentionally excluded — presence pause/end applies only
+     * to linked-together sessions (PLAYING_TONIGHT_SPEC Edge Cases).
+     */
+    suspend fun listActivePresenceSessions(now: Instant): List<TonightPresenceSession>
+
+    /** Set paused_at = [now] on a session (begin a presence pause). */
+    suspend fun pauseSession(
+        sessionId: UUID,
+        now: Instant,
+    )
+
+    /** Clear paused_at on a session (resume after the participant returned). */
+    suspend fun resumeSession(sessionId: UUID)
+
+    /**
+     * End a session as the SYSTEM (participant-agnostic): status='ended', ended_at=[now]. Unlike
+     * [endSession] this performs no participant/status gating — the reconciler already selected an
+     * eligible session — so it must NOT be used for user-initiated ends.
+     */
+    suspend fun systemEndSession(
+        sessionId: UUID,
+        now: Instant,
+    )
+
+    /** A live together session the presence reconciler may pause/resume/end. */
+    data class TonightPresenceSession(
+        val sessionId: UUID,
+        val pausedAt: Instant?,
+        val participantUserIds: List<UUID>,
+    )
+
     /** Outcome of approve/decline/end participant mutations. */
     sealed interface MutateOutcome {
         data class Updated(

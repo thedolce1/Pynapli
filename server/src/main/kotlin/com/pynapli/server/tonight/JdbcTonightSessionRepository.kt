@@ -385,6 +385,113 @@ class JdbcTonightSessionRepository(
             }
         }
 
+    override suspend fun listActivePresenceSessions(now: Instant): List<TonightSessionRepository.TonightPresenceSession> =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val sessions =
+                    connection
+                        .prepareStatement(
+                            """
+                            SELECT id, paused_at
+                            FROM tonight_sessions
+                            WHERE status = 'active'
+                              AND mode = 'together'
+                              AND expires_at > ?
+                            """.trimIndent(),
+                        ).use { statement ->
+                            statement.setTimestamp(1, Timestamp.from(now))
+                            statement.executeQuery().use { rs ->
+                                buildList {
+                                    while (rs.next()) {
+                                        add(
+                                            rs.getObject("id", UUID::class.java) to
+                                                rs.getTimestamp("paused_at")?.toInstant(),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                if (sessions.isEmpty()) {
+                    return@withContext emptyList()
+                }
+
+                val sessionIds = sessions.map { it.first }
+                val participantsBySession =
+                    connection
+                        .prepareStatement(
+                            """
+                            SELECT session_id, user_id
+                            FROM tonight_session_participants
+                            WHERE session_id = ANY (?)
+                            """.trimIndent(),
+                        ).use { statement ->
+                            statement.setArray(1, connection.createArrayOf("uuid", sessionIds.toTypedArray()))
+                            statement.executeQuery().use { rs ->
+                                buildMap<UUID, MutableList<UUID>> {
+                                    while (rs.next()) {
+                                        val sessionId = rs.getObject("session_id", UUID::class.java)
+                                        val userId = rs.getObject("user_id", UUID::class.java)
+                                        getOrPut(sessionId) { mutableListOf() }.add(userId)
+                                    }
+                                }
+                            }
+                        }
+
+                sessions.map { (sessionId, pausedAt) ->
+                    TonightSessionRepository.TonightPresenceSession(
+                        sessionId = sessionId,
+                        pausedAt = pausedAt,
+                        participantUserIds = participantsBySession[sessionId].orEmpty(),
+                    )
+                }
+            }
+        }
+
+    override suspend fun pauseSession(
+        sessionId: UUID,
+        now: Instant,
+    ): Unit =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement("UPDATE tonight_sessions SET paused_at = ? WHERE id = ?")
+                    .use { statement ->
+                        statement.setTimestamp(1, Timestamp.from(now))
+                        statement.setObject(2, sessionId)
+                        statement.executeUpdate()
+                    }
+            }
+        }
+
+    override suspend fun resumeSession(sessionId: UUID): Unit =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement("UPDATE tonight_sessions SET paused_at = NULL WHERE id = ?")
+                    .use { statement ->
+                        statement.setObject(1, sessionId)
+                        statement.executeUpdate()
+                    }
+            }
+        }
+
+    override suspend fun systemEndSession(
+        sessionId: UUID,
+        now: Instant,
+    ): Unit =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement("UPDATE tonight_sessions SET status = 'ended', ended_at = ? WHERE id = ?")
+                    .use { statement ->
+                        statement.setTimestamp(1, Timestamp.from(now))
+                        statement.setObject(2, sessionId)
+                        statement.executeUpdate()
+                    }
+            }
+        }
+
     // ---- transactional helpers -------------------------------------------------------
 
     private inline fun <T> Connection.inTransaction(block: () -> T): T {

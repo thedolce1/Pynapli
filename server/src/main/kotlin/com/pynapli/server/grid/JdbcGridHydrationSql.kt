@@ -32,6 +32,7 @@ internal fun Connection.hydrateGridCards(
                        JOIN tonight_sessions ts ON ts.id = tsp.session_id
                        WHERE tsp.user_id = pc.user_id
                          AND ts.status = 'active'
+                         AND ts.paused_at IS NULL
                          AND ts.expires_at > now()
                    )
                    OR EXISTS (

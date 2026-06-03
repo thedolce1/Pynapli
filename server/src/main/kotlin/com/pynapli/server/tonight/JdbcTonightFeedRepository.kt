@@ -158,6 +158,7 @@ class JdbcTonightFeedRepository(
                 LIMIT 1
             ) partner ON ts.mode = 'together'
             WHERE ts.status = 'active'
+              AND ts.paused_at IS NULL
               AND ts.expires_at > ?
               AND ts.map_visible = true
               AND owner_user.id <> ?

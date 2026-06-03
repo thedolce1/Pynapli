@@ -228,6 +228,29 @@ class TonightFeedServiceIntegrationTest :
             }
         }
 
+        "excludes a paused together session, and it returns once resumed" {
+            runBlocking {
+                val viewer = UUID.randomUUID()
+                val owner = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                dataSource.seedDiscoverableUser(viewer, "Viewer", viewerLon, viewerLat)
+                dataSource.seedDiscoverableUser(owner, "Paused Pam", viewerLon + 0.001, viewerLat)
+                dataSource.seedDiscoverableUser(partner, "Partner Pat", viewerLon + 0.001, viewerLat)
+                dataSource.insertActiveTogetherSession(owner, partner, intent = "together")
+
+                // Visible while running.
+                assertEquals(1, service().feed(viewer, radiusMeters = 50_000, intent = null, limit = 100).items.size)
+
+                // Pause it -> hidden from the feed even though status stays 'active'.
+                dataSource.setPausedAt(owner, Instant.now())
+                assertTrue(service().feed(viewer, radiusMeters = 50_000, intent = null, limit = 100).items.isEmpty())
+
+                // Resume it -> reappears.
+                dataSource.setPausedAt(owner, null)
+                assertEquals(1, service().feed(viewer, radiusMeters = 50_000, intent = null, limit = 100).items.size)
+            }
+        }
+
         "intent filter narrows results" {
             runBlocking {
                 val viewer = UUID.randomUUID()
@@ -479,6 +502,26 @@ private fun java.sql.Connection.insertParticipant(
         statement.setString(3, role)
         statement.setString(4, approval)
         statement.executeUpdate()
+    }
+}
+
+private fun DataSource.setPausedAt(
+    ownerUserId: UUID,
+    pausedAt: Instant?,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                UPDATE tonight_sessions
+                SET paused_at = ?
+                WHERE created_by_user_id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setTimestamp(1, pausedAt?.let(Timestamp::from))
+                statement.setObject(2, ownerUserId)
+                statement.executeUpdate()
+            }
     }
 }
 
