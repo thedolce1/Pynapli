@@ -92,8 +92,17 @@ class PlayingTonightStateHolder(
             is AppResult.Success ->
                 _state.update { it.copy(isMutating = false, currentSession = result.value) }
 
-            is AppResult.Failure ->
-                _state.update { it.copy(isMutating = false, errorMessage = result.error.message) }
+            is AppResult.Failure -> {
+                // Surface the free-tier weekly cap as a clear upgrade prompt (server is the
+                // entitlement authority; ending/declining are never gated — PLAYING_TONIGHT_SPEC).
+                val message =
+                    if (result.error.code == "TONIGHT_WEEKLY_LIMIT_REACHED") {
+                        "You've used your free Playing Tonight sessions this week. Upgrade for unlimited sessions."
+                    } else {
+                        result.error.message
+                    }
+                _state.update { it.copy(isMutating = false, errorMessage = message) }
+            }
         }
     }
 

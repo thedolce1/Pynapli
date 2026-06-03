@@ -28,11 +28,13 @@ private class FakeTonightRepository(
     var approvedId: String? = null
     var declinedId: String? = null
     var proposeResult: TonightSessionUi? = null
+    var proposeError: com.pynapli.shared.core.result.AppError? = null
 
     override suspend fun propose(
         request: com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto,
     ): AppResult<TonightSessionUi> {
         proposed = request
+        proposeError?.let { return AppResult.Failure(it) }
         return AppResult.Success(proposeResult ?: current!!)
     }
 
@@ -190,6 +192,27 @@ class PlayingTonightStateHolderTest {
             holder.declineSession()
 
             assertEquals("p1", repo.declinedId)
+            assertNull(holder.state.value.currentSession)
+        }
+
+    @Test
+    fun weeklyLimitSurfacesAnUpgradeMessage() =
+        runBlocking {
+            val repo = FakeTonightRepository(feed = emptyList(), current = null)
+            repo.proposeError =
+                com.pynapli.shared.core.result
+                    .AppError("TONIGHT_WEEKLY_LIMIT_REACHED", "limit")
+            val holder = PlayingTonightStateHolder(repo)
+
+            holder.propose(
+                com.pynapli.shared.network.dto
+                    .ProposeTonightSessionRequestDto(mode = "solo", intent = "solo", hostMode = "hosting"),
+            )
+
+            assertTrue(
+                holder.state.value.errorMessage
+                    ?.contains("Upgrade", ignoreCase = true) == true,
+            )
             assertNull(holder.state.value.currentSession)
         }
 }

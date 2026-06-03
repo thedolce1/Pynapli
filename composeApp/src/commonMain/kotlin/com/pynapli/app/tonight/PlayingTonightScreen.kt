@@ -112,6 +112,24 @@ fun PlayingTonightScreen(
             onMessage = onMessage,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+
+        state.errorMessage?.let { message ->
+            Text(
+                text = message,
+                color = PynapliColors.TextPrimary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 72.dp, start = 12.dp, end = 12.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xF2201216))
+                        .border(1.dp, PynapliColors.Warning.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .clickable { stateHolder.clearError() }
+                        .testTag(PlayingTonightTags.ERROR)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
     }
 
     if (showStartSheet) {
@@ -676,6 +694,7 @@ internal object PlayingTonightTags {
     const val APPROVE = "tonight-approve"
     const val DECLINE = "tonight-decline"
     const val WAITING = "tonight-waiting"
+    const val ERROR = "tonight-error"
 
     fun row(sessionId: String): String = "tonight-row-$sessionId"
 

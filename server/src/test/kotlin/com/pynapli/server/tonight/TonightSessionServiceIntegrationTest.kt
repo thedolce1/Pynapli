@@ -315,6 +315,26 @@ class TonightSessionServiceIntegrationTest :
                 assertNull(current.session)
             }
         }
+
+        "expireStale sweeps elapsed sessions to expired" {
+            runBlocking {
+                val now = Instant.parse("2026-06-01T20:00:00Z")
+                val user = UUID.randomUUID()
+                dataSource.insertUserWithProfile(user, "Sweepy Sue")
+                paidService(Clock.fixed(now, ZoneOffset.UTC))
+                    .propose(user, ProposeTonightSessionRequestDto(mode = "solo", intent = "solo", durationHours = 1))
+
+                // Sweep 2 hours later: the elapsed session is moved to 'expired', and a fresh
+                // propose is allowed (the active-session guard no longer blocks it).
+                val swept = paidService(Clock.fixed(now.plus(Duration.ofHours(2)), ZoneOffset.UTC)).expireStale()
+                assertEquals(1, swept)
+
+                val reproposed =
+                    paidService(Clock.fixed(now.plus(Duration.ofHours(2)), ZoneOffset.UTC))
+                        .propose(user, ProposeTonightSessionRequestDto(mode = "solo", intent = "solo"))
+                assertEquals("active", reproposed.status)
+            }
+        }
     })
 
 private fun policy(tier: String): EntitlementPolicy =
