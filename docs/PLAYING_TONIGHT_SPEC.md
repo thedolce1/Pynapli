@@ -146,6 +146,22 @@ Do not paywall:
 - [~] Session interactions respect individual vs together context. (PT-5 shipped the client **start-session + linked-approval flow**: `StartTonightSheet` builds a solo/together proposal — solo goes live immediately, together starts `proposed`; the map floater shows the right state per viewer — owner "waiting", pending partner "Approve/Decline", or live "End". Row/message taps open the individual's profile. Remaining for PT-6: routing a "message session" thread to both partners only in the together/session context + not auto-sharing every interaction.)
 - [ ] Activity labels "via Playing Tonight" where appropriate. (PT-5/PT-6)
 
+### PT-6 — expiry sweep + monetization surfacing (shipped 2026-06-02)
+
+`TonightSessionExpiryWorker` (mirrors `MediaCleanupWorker`) sweeps elapsed `proposed`/`active`
+sessions to `expired` every 5 minutes (reads already filter `expires_at > now`, so this is
+hygiene, not correctness); wired + started/closed in `ServerDependencies`/`Application`, covered
+by an `expireStale` integration test. The client surfaces the free-tier weekly cap
+(`TONIGHT_WEEKLY_LIMIT_REACHED` → friendly "Upgrade for unlimited sessions" banner;
+ending/declining stay ungated). Server tier caps were already enforced in PT-1.
+
+**Tracked follow-ups (each its own slice — not yet shipped):** proposal + 15-minute-before-expiry
+**push notifications** (needs a new `NotificationKind` + a reminder scanner); **partner-offline
+pause/end** for linked-together sessions (presence-driven); optional **moderated session photo**
+upload (depends on the media upload pipeline); and **"via Playing Tonight" activity labels**
+(activity-feed integration). The core create→approve→browse→expire loop is functional end-to-end
+without these.
+
 ### PT-1 — session backend (shipped 2026-06-02)
 
 `V60__create_tonight_sessions.sql` + `com.pynapli.server.tonight` (`TonightSessionService`/

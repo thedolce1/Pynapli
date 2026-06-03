@@ -98,6 +98,7 @@ import com.pynapli.server.swipe.TopPicksService
 import com.pynapli.server.tonight.JdbcTonightFeedRepository
 import com.pynapli.server.tonight.JdbcTonightSessionRepository
 import com.pynapli.server.tonight.TonightFeedService
+import com.pynapli.server.tonight.TonightSessionExpiryWorker
 import com.pynapli.server.tonight.TonightSessionService
 import com.pynapli.server.verification.AgeVerificationService
 import com.pynapli.server.verification.JdbcAgeVerificationRepository
@@ -154,6 +155,7 @@ class ServerDependencies(
     val tonightAvailabilityService: TonightAvailabilityService?,
     val tonightSessionService: TonightSessionService?,
     val tonightFeedService: TonightFeedService?,
+    val tonightSessionExpiryWorker: TonightSessionExpiryWorker?,
     val ageVerificationService: AgeVerificationService?,
     val accountLifecycleService: AccountLifecycleService?,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
@@ -167,6 +169,7 @@ class ServerDependencies(
         runCatching { playStoreSubscriptionSyncWorker?.close() }
         runCatching { activityRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
+        runCatching { tonightSessionExpiryWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
         runCatching { profileActivityScope?.cancel() }
         probes.asReversed().forEach { probe ->
@@ -472,6 +475,9 @@ class ServerDependencies(
                     blockRepository = blockRepository,
                     hiddenProfileRepository = hiddenProfileRepository,
                 )
+            // Hygiene sweep so elapsed sessions move to 'expired' (reads already filter on
+            // expires_at, so this is not load-bearing for correctness). Default every 5 minutes.
+            val tonightSessionExpiryWorker = TonightSessionExpiryWorker(tonightSessionService, intervalMillis = 5 * 60 * 1000L)
             // Provider-hosted age verification is opt-in: built only when both the provider name and
             // its redirect base URL are configured. Otherwise the service keeps manual-review-only
             // behavior.
@@ -581,6 +587,7 @@ class ServerDependencies(
                 tonightAvailabilityService = tonightAvailabilityService,
                 tonightSessionService = tonightSessionService,
                 tonightFeedService = tonightFeedService,
+                tonightSessionExpiryWorker = tonightSessionExpiryWorker,
                 ageVerificationService = ageVerificationService,
                 accountLifecycleService = accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,
@@ -677,6 +684,7 @@ class ServerDependencies(
                 tonightAvailabilityService = null,
                 tonightSessionService = null,
                 tonightFeedService = null,
+                tonightSessionExpiryWorker = null,
                 ageVerificationService = null,
                 accountLifecycleService = null,
                 requestProfilerFactory = RequestProfilerFactory.disabled(),
