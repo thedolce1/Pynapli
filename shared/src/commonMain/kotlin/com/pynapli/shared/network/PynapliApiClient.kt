@@ -50,6 +50,7 @@ import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.NotificationPreferencesDto
 import com.pynapli.shared.network.dto.PresenceHeartbeatResponseDto
 import com.pynapli.shared.network.dto.ProfileLinksSummaryDto
+import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.PushDeviceRegistrationResponseDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
@@ -162,6 +163,12 @@ interface PynapliApiClient {
     ): AppResult<TonightFeedResponseDto>
 
     suspend fun getCurrentTonightSession(): AppResult<CurrentTonightSessionDto>
+
+    suspend fun proposeTonightSession(request: ProposeTonightSessionRequestDto): AppResult<TonightSessionDto>
+
+    suspend fun approveTonightSession(sessionId: String): AppResult<TonightSessionDto>
+
+    suspend fun declineTonightSession(sessionId: String): AppResult<TonightSessionDto>
 
     suspend fun endTonightSession(sessionId: String): AppResult<TonightSessionDto>
 
@@ -543,6 +550,32 @@ class KtorPynapliApiClient(
         authenticatedPost { token ->
             httpClient
                 .get(config.endpoint("/v1/me/tonight/session")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun proposeTonightSession(request: ProposeTonightSessionRequestDto): AppResult<TonightSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/tonight/sessions")) {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }.toAppResult(json)
+        }
+
+    override suspend fun approveTonightSession(sessionId: String): AppResult<TonightSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/tonight/sessions/$sessionId/approve")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun declineTonightSession(sessionId: String): AppResult<TonightSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/tonight/sessions/$sessionId/decline")) {
                     bearerAuth(token)
                 }.toAppResult(json)
         }

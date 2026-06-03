@@ -2,6 +2,7 @@ package com.pynapli.app.tonight
 
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
 import com.pynapli.shared.network.dto.TonightFeedItemDto
 import com.pynapli.shared.network.dto.TonightSessionDto
 import kotlinx.coroutines.async
@@ -81,6 +82,47 @@ class PlayingTonightStateHolder(
         }
     }
 
+    /**
+     * Propose a session. Solo goes live immediately; linked-together starts `proposed` and waits
+     * for the partner. Either way the result becomes the viewer's current session (drives the floater).
+     */
+    suspend fun propose(request: ProposeTonightSessionRequestDto) {
+        _state.update { it.copy(isMutating = true, errorMessage = null) }
+        when (val result = repository.propose(request)) {
+            is AppResult.Success ->
+                _state.update { it.copy(isMutating = false, currentSession = result.value) }
+
+            is AppResult.Failure ->
+                _state.update { it.copy(isMutating = false, errorMessage = result.error.message) }
+        }
+    }
+
+    /** The pending partner approves the proposed session; on success it becomes the live session. */
+    suspend fun approveSession() {
+        val sessionId = _state.value.currentSession?.id ?: return
+        _state.update { it.copy(isMutating = true, errorMessage = null) }
+        when (val result = repository.approve(sessionId)) {
+            is AppResult.Success ->
+                _state.update { it.copy(isMutating = false, currentSession = result.value) }
+
+            is AppResult.Failure ->
+                _state.update { it.copy(isMutating = false, errorMessage = result.error.message) }
+        }
+    }
+
+    /** The pending partner declines; no public signal. Clears the floater. */
+    suspend fun declineSession() {
+        val sessionId = _state.value.currentSession?.id ?: return
+        _state.update { it.copy(isMutating = true, errorMessage = null) }
+        when (val result = repository.decline(sessionId)) {
+            is AppResult.Success ->
+                _state.update { it.copy(isMutating = false, currentSession = null) }
+
+            is AppResult.Failure ->
+                _state.update { it.copy(isMutating = false, errorMessage = result.error.message) }
+        }
+    }
+
     fun clearError() {
         _state.update { it.copy(errorMessage = null) }
     }
@@ -98,6 +140,12 @@ interface TonightRepository {
     ): AppResult<List<TonightFeedItemUi>>
 
     suspend fun loadCurrentSession(): AppResult<TonightSessionUi?>
+
+    suspend fun propose(request: ProposeTonightSessionRequestDto): AppResult<TonightSessionUi>
+
+    suspend fun approve(sessionId: String): AppResult<TonightSessionUi>
+
+    suspend fun decline(sessionId: String): AppResult<TonightSessionUi>
 
     suspend fun endSession(sessionId: String): AppResult<TonightSessionUi>
 }
@@ -117,6 +165,24 @@ class ApiTonightRepository(
     override suspend fun loadCurrentSession(): AppResult<TonightSessionUi?> =
         when (val result = apiClient.getCurrentTonightSession()) {
             is AppResult.Success -> AppResult.Success(result.value.session?.toUi())
+            is AppResult.Failure -> AppResult.Failure(result.error)
+        }
+
+    override suspend fun propose(request: ProposeTonightSessionRequestDto): AppResult<TonightSessionUi> =
+        when (val result = apiClient.proposeTonightSession(request)) {
+            is AppResult.Success -> AppResult.Success(result.value.toUi())
+            is AppResult.Failure -> AppResult.Failure(result.error)
+        }
+
+    override suspend fun approve(sessionId: String): AppResult<TonightSessionUi> =
+        when (val result = apiClient.approveTonightSession(sessionId)) {
+            is AppResult.Success -> AppResult.Success(result.value.toUi())
+            is AppResult.Failure -> AppResult.Failure(result.error)
+        }
+
+    override suspend fun decline(sessionId: String): AppResult<TonightSessionUi> =
+        when (val result = apiClient.declineTonightSession(sessionId)) {
+            is AppResult.Success -> AppResult.Success(result.value.toUi())
             is AppResult.Failure -> AppResult.Failure(result.error)
         }
 
@@ -156,9 +222,19 @@ internal fun TonightFeedItemDto.toUi(): TonightFeedItemUi =
 internal fun TonightSessionDto.toUi(): TonightSessionUi =
     TonightSessionUi(
         id = id,
+        mode = mode,
         intent = TonightIntent.fromServer(intent),
         intentRaw = intent,
         hostMode = hostMode,
         status = status,
         expiresAt = expiresAt,
+        participants =
+            participants.map {
+                TonightParticipantUi(
+                    userId = it.userId,
+                    displayName = it.displayName,
+                    role = it.role,
+                    approvalStatus = it.approvalStatus,
+                )
+            },
     )

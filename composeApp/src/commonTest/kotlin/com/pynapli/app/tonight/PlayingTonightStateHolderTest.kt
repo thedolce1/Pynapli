@@ -24,6 +24,28 @@ private class FakeTonightRepository(
 
     override suspend fun loadCurrentSession(): AppResult<TonightSessionUi?> = AppResult.Success(current)
 
+    var proposed: com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto? = null
+    var approvedId: String? = null
+    var declinedId: String? = null
+    var proposeResult: TonightSessionUi? = null
+
+    override suspend fun propose(
+        request: com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto,
+    ): AppResult<TonightSessionUi> {
+        proposed = request
+        return AppResult.Success(proposeResult ?: current!!)
+    }
+
+    override suspend fun approve(sessionId: String): AppResult<TonightSessionUi> {
+        approvedId = sessionId
+        return AppResult.Success(current!!.copy(status = "active"))
+    }
+
+    override suspend fun decline(sessionId: String): AppResult<TonightSessionUi> {
+        declinedId = sessionId
+        return AppResult.Success(current!!.copy(status = "declined"))
+    }
+
     override suspend fun endSession(sessionId: String): AppResult<TonightSessionUi> {
         endedSessionId = sessionId
         return AppResult.Success(current!!)
@@ -58,6 +80,7 @@ class PlayingTonightStateHolderTest {
             val session =
                 TonightSessionUi(
                     id = "s1",
+                    mode = "solo",
                     intent = TonightIntent.Solo,
                     intentRaw = "solo",
                     hostMode = "hosting",
@@ -101,6 +124,7 @@ class PlayingTonightStateHolderTest {
             val session =
                 TonightSessionUi(
                     id = "s9",
+                    mode = "together",
                     intent = TonightIntent.Together,
                     intentRaw = "together",
                     hostMode = "traveling",
@@ -114,6 +138,58 @@ class PlayingTonightStateHolderTest {
             holder.endCurrentSession()
 
             assertEquals("s9", repo.endedSessionId)
+            assertNull(holder.state.value.currentSession)
+        }
+
+    @Test
+    fun proposeSetsCurrentSession() =
+        runBlocking {
+            val repo = FakeTonightRepository(feed = emptyList(), current = null)
+            repo.proposeResult =
+                TonightSessionUi(
+                    id = "new",
+                    mode = "solo",
+                    intent = TonightIntent.Solo,
+                    intentRaw = "solo",
+                    hostMode = "hosting",
+                    status = "active",
+                    expiresAt = "2026-06-03T00:00:00Z",
+                )
+            val holder = PlayingTonightStateHolder(repo)
+
+            holder.propose(
+                com.pynapli.shared.network.dto
+                    .ProposeTonightSessionRequestDto(mode = "solo", intent = "solo", hostMode = "hosting"),
+            )
+
+            assertEquals("solo", repo.proposed?.mode)
+            assertEquals(
+                "new",
+                holder.state.value.currentSession
+                    ?.id,
+            )
+        }
+
+    @Test
+    fun declineClearsTheProposedSession() =
+        runBlocking {
+            val proposed =
+                TonightSessionUi(
+                    id = "p1",
+                    mode = "together",
+                    intent = TonightIntent.Together,
+                    intentRaw = "together",
+                    hostMode = "hosting",
+                    status = "proposed",
+                    expiresAt = "2026-06-03T00:00:00Z",
+                )
+            val repo = FakeTonightRepository(feed = emptyList(), current = proposed)
+            val holder = PlayingTonightStateHolder(repo)
+            holder.load()
+
+            holder.declineSession()
+
+            assertEquals("p1", repo.declinedId)
             assertNull(holder.state.value.currentSession)
         }
 }

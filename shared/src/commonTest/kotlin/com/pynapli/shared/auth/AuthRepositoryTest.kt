@@ -295,6 +295,14 @@ private class FakeApiClient(
                 .CurrentTonightSessionDto(),
         )
 
+    override suspend fun proposeTonightSession(
+        request: com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto,
+    ): AppResult<com.pynapli.shared.network.dto.TonightSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun approveTonightSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.TonightSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun declineTonightSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.TonightSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun endTonightSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.TonightSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun getMe(): AppResult<MeDto> = meResult
