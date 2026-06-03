@@ -133,6 +133,7 @@ internal fun Connection.queryGridRank(
                       JOIN tonight_sessions ts ON ts.id = tsp.session_id
                       WHERE tsp.user_id = u.id
                         AND ts.status = 'active'
+                        AND ts.paused_at IS NULL
                         AND ts.expires_at > now()
                   )
                   OR (p.tonight_available_until IS NOT NULL AND p.tonight_available_until > now())

@@ -4,6 +4,7 @@ import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationOutboxRecord
 import com.pynapli.server.notifications.NotificationPublisher
+import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
@@ -75,6 +76,7 @@ class TonightSessionServiceIntegrationTest :
         fun paidService(
             clock: Clock = Clock.systemUTC(),
             notificationPublisher: NotificationPublisher? = null,
+            presenceService: PresenceService? = null,
         ): TonightSessionService {
             val subscriptions = mockk<SubscriptionService>()
             coEvery { subscriptions.getPolicy(any()) } returns policy(SubscriptionTier.SELECT)
@@ -82,8 +84,37 @@ class TonightSessionServiceIntegrationTest :
                 repository = JdbcTonightSessionRepository(dataSource),
                 subscriptionService = subscriptions,
                 notificationPublisher = notificationPublisher,
+                presenceService = presenceService,
                 clock = clock,
             )
+        }
+
+        // Presence mock that reports exactly [online] as the live subset of whatever is queried.
+        fun presence(online: Set<UUID>): PresenceService {
+            val mock = mockk<PresenceService>()
+            coEvery { mock.onlineUserIds(any()) } answers {
+                firstArg<Collection<UUID>>().filterTo(mutableSetOf()) { it in online }
+            }
+            return mock
+        }
+
+        // Creates an active together session (propose by owner + partner approves) at [clock].
+        fun activeTogether(
+            owner: UUID,
+            partner: UUID,
+            clock: Clock,
+        ): UUID {
+            dataSource.insertUserWithProfile(owner, "Owner ${owner.toString().take(4)}")
+            dataSource.insertUserWithProfile(partner, "Partner ${partner.toString().take(4)}")
+            dataSource.insertActiveLink(owner, partner)
+            val service = paidService(clock = clock)
+            val proposed =
+                runBlocking {
+                    val p = service.propose(owner, ProposeTonightSessionRequestDto(mode = "together", intent = "together"))
+                    service.approve(UUID.fromString(p.id), partner)
+                    p
+                }
+            return UUID.fromString(proposed.id)
         }
 
         "solo propose goes active immediately with an approved owner" {
@@ -461,6 +492,145 @@ class TonightSessionServiceIntegrationTest :
                 assertNull(dataSource.reminderSentAt(sessionId))
             }
         }
+
+        "reconcile pauses a together session when one participant is offline" {
+            runBlocking {
+                val now = Instant.parse("2026-06-01T20:00:00Z")
+                val clock = Clock.fixed(now, ZoneOffset.UTC)
+                val owner = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                val sessionId = activeTogether(owner, partner, clock)
+                assertNull(dataSource.pausedAt(sessionId))
+
+                // Owner online, partner offline.
+                val service = paidService(clock = clock, presenceService = presence(online = setOf(owner)))
+                val summary = service.reconcilePresence()
+
+                assertEquals(1, summary.paused)
+                assertEquals(0, summary.resumed)
+                assertEquals(0, summary.ended)
+                assertNotNull(dataSource.pausedAt(sessionId))
+                // Still 'active' (paused is a timestamp, not a status) and current() still returns it.
+                assertEquals("active", dataSource.statusOf(sessionId))
+                assertNotNull(service.current(owner).session)
+            }
+        }
+
+        "reconcile resumes a paused session when both participants are back online" {
+            runBlocking {
+                val now = Instant.parse("2026-06-01T20:00:00Z")
+                val clock = Clock.fixed(now, ZoneOffset.UTC)
+                val owner = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                val sessionId = activeTogether(owner, partner, clock)
+
+                // First pass pauses (partner offline)...
+                paidService(clock = clock, presenceService = presence(online = setOf(owner))).reconcilePresence()
+                assertNotNull(dataSource.pausedAt(sessionId))
+
+                // ...both back online -> resume.
+                val summary =
+                    paidService(clock = clock, presenceService = presence(online = setOf(owner, partner)))
+                        .reconcilePresence()
+
+                assertEquals(0, summary.paused)
+                assertEquals(1, summary.resumed)
+                assertEquals(0, summary.ended)
+                assertNull(dataSource.pausedAt(sessionId))
+                assertEquals("active", dataSource.statusOf(sessionId))
+            }
+        }
+
+        "reconcile ends a session still offline past the grace window" {
+            runBlocking {
+                val start = Instant.parse("2026-06-01T20:00:00Z")
+                val owner = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                val sessionId = activeTogether(owner, partner, Clock.fixed(start, ZoneOffset.UTC))
+
+                // Pause at start (partner offline).
+                paidService(clock = Clock.fixed(start, ZoneOffset.UTC), presenceService = presence(online = setOf(owner)))
+                    .reconcilePresence()
+                assertNotNull(dataSource.pausedAt(sessionId))
+
+                // 6 minutes later, still offline -> past the 5-minute grace -> end.
+                val later = Clock.fixed(start.plus(Duration.ofMinutes(6)), ZoneOffset.UTC)
+                val summary =
+                    paidService(clock = later, presenceService = presence(online = setOf(owner))).reconcilePresence()
+
+                assertEquals(0, summary.paused)
+                assertEquals(0, summary.resumed)
+                assertEquals(1, summary.ended)
+                assertEquals("ended", dataSource.statusOf(sessionId))
+            }
+        }
+
+        "reconcile does not pause a paused session within the grace window" {
+            runBlocking {
+                val start = Instant.parse("2026-06-01T20:00:00Z")
+                val owner = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                val sessionId = activeTogether(owner, partner, Clock.fixed(start, ZoneOffset.UTC))
+
+                paidService(clock = Clock.fixed(start, ZoneOffset.UTC), presenceService = presence(online = setOf(owner)))
+                    .reconcilePresence()
+                val firstPausedAt = dataSource.pausedAt(sessionId)
+                assertNotNull(firstPausedAt)
+
+                // 2 minutes later, still offline but inside grace -> no change.
+                val later = Clock.fixed(start.plus(Duration.ofMinutes(2)), ZoneOffset.UTC)
+                val summary =
+                    paidService(clock = later, presenceService = presence(online = setOf(owner))).reconcilePresence()
+
+                assertEquals(0, summary.paused)
+                assertEquals(0, summary.resumed)
+                assertEquals(0, summary.ended)
+                assertEquals("active", dataSource.statusOf(sessionId))
+                // paused_at is unchanged (grace measured from the original pause).
+                assertEquals(firstPausedAt, dataSource.pausedAt(sessionId))
+            }
+        }
+
+        "reconcile leaves a solo session untouched even when the owner is offline" {
+            runBlocking {
+                val now = Instant.parse("2026-06-01T20:00:00Z")
+                val clock = Clock.fixed(now, ZoneOffset.UTC)
+                val owner = UUID.randomUUID()
+                dataSource.insertUserWithProfile(owner, "Solo Sol")
+                val proposeService = paidService(clock = clock)
+                val solo =
+                    proposeService.propose(owner, ProposeTonightSessionRequestDto(mode = "solo", intent = "solo"))
+                val sessionId = UUID.fromString(solo.id)
+
+                // Owner offline; solo sessions are out of scope for presence pause/end.
+                val summary =
+                    paidService(clock = clock, presenceService = presence(online = emptySet())).reconcilePresence()
+
+                assertEquals(0, summary.paused)
+                assertEquals(0, summary.resumed)
+                assertEquals(0, summary.ended)
+                assertNull(dataSource.pausedAt(sessionId))
+                assertEquals("active", dataSource.statusOf(sessionId))
+            }
+        }
+
+        "reconcile with no presence service is a no-op" {
+            runBlocking {
+                val now = Instant.parse("2026-06-01T20:00:00Z")
+                val clock = Clock.fixed(now, ZoneOffset.UTC)
+                val owner = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                val sessionId = activeTogether(owner, partner, clock)
+
+                val summary = paidService(clock = clock, presenceService = null).reconcilePresence()
+
+                assertEquals(0, summary.paused)
+                assertEquals(0, summary.resumed)
+                assertEquals(0, summary.ended)
+                assertNull(dataSource.pausedAt(sessionId))
+                assertEquals("active", dataSource.statusOf(sessionId))
+            }
+        }
     })
 
 private class RecordingPublisher : NotificationPublisher {
@@ -480,6 +650,30 @@ private fun DataSource.reminderSentAt(sessionId: UUID): Instant? =
                 statement.setObject(1, sessionId)
                 statement.executeQuery().use { rs ->
                     if (!rs.next()) null else rs.getTimestamp("reminder_sent_at")?.toInstant()
+                }
+            }
+    }
+
+private fun DataSource.pausedAt(sessionId: UUID): Instant? =
+    connection.use { connection ->
+        connection
+            .prepareStatement("SELECT paused_at FROM tonight_sessions WHERE id = ?")
+            .use { statement ->
+                statement.setObject(1, sessionId)
+                statement.executeQuery().use { rs ->
+                    if (!rs.next()) null else rs.getTimestamp("paused_at")?.toInstant()
+                }
+            }
+    }
+
+private fun DataSource.statusOf(sessionId: UUID): String? =
+    connection.use { connection ->
+        connection
+            .prepareStatement("SELECT status FROM tonight_sessions WHERE id = ?")
+            .use { statement ->
+                statement.setObject(1, sessionId)
+                statement.executeQuery().use { rs ->
+                    if (!rs.next()) null else rs.getString("status")
                 }
             }
     }

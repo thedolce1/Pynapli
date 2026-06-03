@@ -162,10 +162,21 @@ minutes before expiry. The reminder uses a `tonight_sessions.reminder_sent_at` l
 atomically (`FOR UPDATE SKIP LOCKED`) so it fires at most once per session across worker ticks/
 instances; the existing `TonightSessionExpiryWorker` runs the scan each tick. (V61 migration.)
 
-**Tracked follow-ups (each its own slice — not yet shipped):** **partner-offline pause/end** for
-linked-together sessions (presence-driven); optional **moderated session photo** upload (depends on
-the media upload pipeline); and **"via Playing Tonight" activity labels** (activity-feed
-integration). The core create→approve→browse→expire loop is functional end-to-end without these.
+**Partner-offline pause/end shipped (2026-06-03):** linked-together (`mode='together'`,
+`status='active'`) sessions are presence-reconciled each `TonightSessionExpiryWorker` tick.
+Pause is modeled as a `tonight_sessions.paused_at` timestamp (V62) — NOT a new status — so
+`current()`/`end` semantics are unchanged and only DISCOVERY hides paused sessions
+(`AND ts.paused_at IS NULL` added to the feed WHERE + the grid hydration/rank `tonight` EXISTS
+subqueries). `TonightSessionService.reconcilePresence()` resolves the online set once via
+`PresenceService.onlineUserIds(...)` and per session: all-online + paused → resume (clear
+`paused_at`); any-offline + running → pause (`paused_at=now`); any-offline + paused ≥ 5-minute
+grace → end (`status='ended'`). Solo sessions are never touched; a null `presenceService` is a
+no-op. Covered by reconcile + feed-hiding integration tests.
+
+**Tracked follow-ups (each its own slice — not yet shipped):** optional **moderated session
+photo** upload (depends on the media upload pipeline); and **"via Playing Tonight" activity
+labels** (activity-feed integration). The core create→approve→browse→expire loop is functional
+end-to-end without these.
 
 ### PT-1 — session backend (shipped 2026-06-02)
 
