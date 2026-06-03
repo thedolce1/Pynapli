@@ -36,6 +36,7 @@ fun GridScreen(
     onUseCurrentLocation: () -> Unit = {},
     onProfileIconClick: () -> Unit = {},
     onOpenStore: () -> Unit = {},
+    onOpenTonight: () -> Unit = {},
 ) {
     val state by stateHolder.state.collectAsState()
     val profileState by profileDetailStateHolder.state.collectAsState()
@@ -94,6 +95,7 @@ fun GridScreen(
         onUseCurrentLocation = onUseCurrentLocation,
         onProfileIconClick = onProfileIconClick,
         onOpenStore = onOpenStore,
+        onOpenTonight = onOpenTonight,
         modifier = modifier,
     )
 

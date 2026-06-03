@@ -1,0 +1,164 @@
+package com.pynapli.app.tonight
+
+import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.TonightFeedItemDto
+import com.pynapli.shared.network.dto.TonightSessionDto
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+
+/**
+ * State holder for the Playing Tonight map surface (PT-4). Reads the public feed + the viewer's
+ * current session through [TonightRepository] and exposes immutable [PlayingTonightUiState];
+ * DTOs never leak into the screen. Server stays the product authority — this only renders what
+ * the feed allows (zone-only location, individual rows). Proposing/approving sessions is a later
+ * slice and is not wired here.
+ */
+class PlayingTonightStateHolder(
+    private val repository: TonightRepository,
+    private val radiusMeters: Int = DEFAULT_RADIUS_METERS,
+) {
+    private val _state = MutableStateFlow(PlayingTonightUiState())
+    val state: StateFlow<PlayingTonightUiState> = _state.asStateFlow()
+
+    /** Parallel first load: the public feed and the viewer's own session at once. */
+    suspend fun load() {
+        _state.update { it.copy(isLoading = true, errorMessage = null) }
+        val intent = _state.value.intentFilter
+        coroutineScope {
+            val feedDeferred = async { repository.loadFeed(radiusMeters, intent?.serverValue) }
+            val sessionDeferred = async { repository.loadCurrentSession() }
+            val feedResult = feedDeferred.await()
+            val sessionResult = sessionDeferred.await()
+
+            _state.update { current ->
+                current.copy(
+                    isLoading = false,
+                    feedItems =
+                        when (feedResult) {
+                            is AppResult.Success -> feedResult.value
+                            is AppResult.Failure -> current.feedItems
+                        },
+                    currentSession =
+                        when (sessionResult) {
+                            is AppResult.Success -> sessionResult.value
+                            is AppResult.Failure -> current.currentSession
+                        },
+                    errorMessage = (feedResult as? AppResult.Failure)?.error?.message,
+                )
+            }
+        }
+    }
+
+    /** Re-query the feed for the chosen intent (null = All). Leaves the current session untouched. */
+    suspend fun setIntentFilter(intent: TonightIntent?) {
+        if (_state.value.intentFilter == intent) return
+        _state.update { it.copy(intentFilter = intent, isLoading = true, errorMessage = null) }
+        when (val result = repository.loadFeed(radiusMeters, intent?.serverValue)) {
+            is AppResult.Success ->
+                _state.update { it.copy(isLoading = false, feedItems = result.value, errorMessage = null) }
+
+            is AppResult.Failure ->
+                _state.update { it.copy(isLoading = false, errorMessage = result.error.message) }
+        }
+    }
+
+    suspend fun refresh() = load()
+
+    /** End the viewer's live session; clears the floater on success. Never gated (spec). */
+    suspend fun endCurrentSession() {
+        val sessionId = _state.value.currentSession?.id ?: return
+        when (val result = repository.endSession(sessionId)) {
+            is AppResult.Success ->
+                _state.update { it.copy(currentSession = null) }
+
+            is AppResult.Failure ->
+                _state.update { it.copy(errorMessage = result.error.message) }
+        }
+    }
+
+    fun clearError() {
+        _state.update { it.copy(errorMessage = null) }
+    }
+
+    companion object {
+        const val DEFAULT_RADIUS_METERS = 50_000
+    }
+}
+
+/** Repository seam so tests can use a fake without the Ktor client. */
+interface TonightRepository {
+    suspend fun loadFeed(
+        radiusMeters: Int,
+        intent: String?,
+    ): AppResult<List<TonightFeedItemUi>>
+
+    suspend fun loadCurrentSession(): AppResult<TonightSessionUi?>
+
+    suspend fun endSession(sessionId: String): AppResult<TonightSessionUi>
+}
+
+class ApiTonightRepository(
+    private val apiClient: PynapliApiClient,
+) : TonightRepository {
+    override suspend fun loadFeed(
+        radiusMeters: Int,
+        intent: String?,
+    ): AppResult<List<TonightFeedItemUi>> =
+        when (val result = apiClient.getTonightFeed(radiusMeters = radiusMeters, intent = intent)) {
+            is AppResult.Success -> AppResult.Success(result.value.items.map { it.toUi() })
+            is AppResult.Failure -> AppResult.Failure(result.error)
+        }
+
+    override suspend fun loadCurrentSession(): AppResult<TonightSessionUi?> =
+        when (val result = apiClient.getCurrentTonightSession()) {
+            is AppResult.Success -> AppResult.Success(result.value.session?.toUi())
+            is AppResult.Failure -> AppResult.Failure(result.error)
+        }
+
+    override suspend fun endSession(sessionId: String): AppResult<TonightSessionUi> =
+        when (val result = apiClient.endTonightSession(sessionId)) {
+            is AppResult.Success -> AppResult.Success(result.value.toUi())
+            is AppResult.Failure -> AppResult.Failure(result.error)
+        }
+}
+
+internal fun TonightFeedItemDto.toUi(): TonightFeedItemUi =
+    TonightFeedItemUi(
+        sessionId = sessionId,
+        userId = person.userId,
+        displayName = person.displayName,
+        thumbnailUrl = person.thumbnailUrl,
+        online = person.online,
+        intent = TonightIntent.fromServer(intent),
+        intentRaw = intent,
+        hostMode = hostMode,
+        note = note,
+        photoUrl = photoUrl,
+        distanceLabel = person.distanceLabel,
+        distanceMeters = person.distanceMeters,
+        zoneKey = person.zoneKey,
+        linkedPartner =
+            linkedPartner?.let {
+                TonightLinkedPartnerUi(
+                    userId = it.userId,
+                    displayName = it.displayName,
+                    thumbnailUrl = it.thumbnailUrl,
+                    online = it.online,
+                )
+            },
+    )
+
+internal fun TonightSessionDto.toUi(): TonightSessionUi =
+    TonightSessionUi(
+        id = id,
+        intent = TonightIntent.fromServer(intent),
+        intentRaw = intent,
+        hostMode = hostMode,
+        status = status,
+        expiresAt = expiresAt,
+    )

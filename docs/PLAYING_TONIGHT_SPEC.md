@@ -142,7 +142,7 @@ Do not paywall:
 - [x] Session duration and expiry. (PT-1: default 2h window 1..24, `expires_at` reset from activation; `expireStale()` sweep + reads filter `expires_at > now`.)
 - [x] Grid indicator on individual tiles. (PT-2: `GridCardDto.tonightActive` hydrated per page from active sessions OR the legacy flag; subtle gold moon badge at the tile top-start — never a couple card. `tonightAvailableOnly` filter unified onto active sessions.)
 - [x] Feed uses session context without creating couple accounts. (PT-3 backend: `GET /v1/tonight/feed` — one row per live session anchored on the owner with the linked partner as a mini-avatar, never a couple card. Grid-style PostGIS discovery with the same owner eligibility gates + block/hidden split; map-only opt-out via `map_visible`; zone-only location. Client list UI lands in PT-4.)
-- [ ] Zone map has no precise pins. (PT-4)
+- [x] Zone map has no precise pins. (PT-4: Compose `PlayingTonightScreen` — abstract Canvas zone map with halos sized by session count and dots jittered within their coarse `zoneKey` bucket (never precise/street-level), a draggable bottom sheet with intent pills + session rows, and a live-session floater. Opened from a Grid-header moon button as a full-screen overlay; row/message taps open the individual's profile.)
 - [ ] Session interactions respect individual vs together context. (PT-5)
 - [ ] Activity labels "via Playing Tonight" where appropriate. (PT-5/PT-6)
 

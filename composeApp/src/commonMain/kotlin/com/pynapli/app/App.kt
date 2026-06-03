@@ -68,6 +68,7 @@ fun PynapliApp(
     topPicksStateHolder: com.pynapli.app.swipe.TopPicksStateHolder? = null,
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
     tonightAvailabilityStateHolder: com.pynapli.app.grid.TonightAvailabilityStateHolder? = null,
+    playingTonightStateHolder: com.pynapli.app.tonight.PlayingTonightStateHolder? = null,
     deepLinkStateHolder: AppDeepLinkStateHolder? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
@@ -93,6 +94,7 @@ fun PynapliApp(
         val scope = rememberCoroutineScope()
         var selectedTab by remember { mutableStateOf(PynapliTab.Grid) }
         var profileSurface by remember { mutableStateOf(ProfileSurface.None) }
+        var tonightVisible by remember { mutableStateOf(false) }
         var activeNotification by remember { mutableStateOf<InAppNotificationUi?>(null) }
         var messageUnreadSnapshot by remember { mutableStateOf<Map<String, Int>?>(null) }
         var activityEventSnapshot by remember { mutableStateOf<Set<String>?>(null) }
@@ -463,6 +465,7 @@ fun PynapliApp(
                                 onUseCurrentLocation = onUseCurrentLocation,
                                 onProfileIconClick = { profileSurface = ProfileSurface.Hub },
                                 onOpenStore = { selectedTab = PynapliTab.Store },
+                                onOpenTonight = { tonightVisible = true },
                             )
 
                         PynapliTab.Messages -> {
@@ -592,6 +595,35 @@ fun PynapliApp(
                     modifier = Modifier.align(Alignment.TopCenter),
                 )
             }
+        }
+
+        if (tonightVisible && playingTonightStateHolder != null) {
+            // Playing Tonight map surface, opened from the Grid header moon button. Profile/
+            // message taps close the overlay and reuse the existing profile-detail path
+            // (PLAYING_TONIGHT_SPEC: "tapping opens the relevant individual profile/session").
+            com.pynapli.app.tonight.PlayingTonightScreen(
+                stateHolder = playingTonightStateHolder,
+                onBack = { tonightVisible = false },
+                onOpenProfile = { userId ->
+                    tonightVisible = false
+                    scope.launch {
+                        profileDetailStateHolder.openLinkedPartner(
+                            com.pynapli.app.grid
+                                .GridLinkedPartnerUi(userId = userId),
+                        )
+                    }
+                },
+                onMessage = { userId ->
+                    tonightVisible = false
+                    scope.launch {
+                        profileDetailStateHolder.openLinkedPartner(
+                            com.pynapli.app.grid
+                                .GridLinkedPartnerUi(userId = userId),
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
 
         if (selectedTab == PynapliTab.Messages && profileDetailState.visible) {

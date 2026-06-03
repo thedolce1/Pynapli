@@ -93,6 +93,7 @@ class MainActivity : ComponentActivity() {
                 topPicksStateHolder = appGraph.topPicksStateHolder,
                 travelLocationStateHolder = appGraph.travelLocationStateHolder,
                 tonightAvailabilityStateHolder = appGraph.tonightAvailabilityStateHolder,
+                playingTonightStateHolder = appGraph.playingTonightStateHolder,
                 deepLinkStateHolder = appGraph.deepLinkStateHolder,
                 onUseCurrentLocation = ::requestCurrentLocation,
                 onPickMediaForAlbum = ::pickMediaForAlbum,

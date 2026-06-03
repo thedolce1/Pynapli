@@ -39,6 +39,7 @@ internal fun GridScreenContent(
     onUseCurrentLocation: () -> Unit,
     onProfileIconClick: () -> Unit,
     onOpenStore: () -> Unit,
+    onOpenTonight: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var sheetVisible by remember { mutableStateOf(false) }
@@ -53,6 +54,7 @@ internal fun GridScreenContent(
             locationLabel = state.locationLabel,
             profileImageUrl = profileImageUrl,
             onProfileIconClick = onProfileIconClick,
+            onOpenTonight = onOpenTonight,
         )
         QuickFilterRow(
             filters = state.filters,

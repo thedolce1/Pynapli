@@ -170,6 +170,13 @@ class AndroidAppGraph(
             repository = ApiTonightAvailabilityRepository(apiClient),
         )
 
+    val playingTonightStateHolder =
+        com.pynapli.app.tonight.PlayingTonightStateHolder(
+            repository =
+                com.pynapli.app.tonight
+                    .ApiTonightRepository(apiClient),
+        )
+
     val gridPresenceStreamCoordinator =
         GridPresenceStreamCoordinator(
             client =
