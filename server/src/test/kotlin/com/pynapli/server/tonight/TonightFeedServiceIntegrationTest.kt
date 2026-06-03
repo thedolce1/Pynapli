@@ -357,7 +357,89 @@ class TonightFeedServiceIntegrationTest :
                 assertNotNull(parts[1].toIntOrNull())
             }
         }
+
+        "surfaces a session photo only once it is moderation-approved" {
+            runBlocking {
+                val viewer = UUID.randomUUID()
+                val approvedOwner = UUID.randomUUID()
+                val pendingOwner = UUID.randomUUID()
+                dataSource.seedDiscoverableUser(viewer, "Viewer", viewerLon, viewerLat)
+                dataSource.seedDiscoverableUser(approvedOwner, "Approved Amy", viewerLon + 0.001, viewerLat)
+                dataSource.seedDiscoverableUser(pendingOwner, "Pending Pat", viewerLon + 0.001, viewerLat)
+
+                val approvedPhoto = UUID.randomUUID()
+                val pendingPhoto = UUID.randomUUID()
+                dataSource.insertMediaAsset(approvedOwner, approvedPhoto, processing = "ready", moderation = "approved")
+                dataSource.insertMediaAsset(pendingOwner, pendingPhoto, processing = "ready", moderation = "held")
+                dataSource.insertActiveSoloSessionWithPhoto(approvedOwner, approvedPhoto)
+                dataSource.insertActiveSoloSessionWithPhoto(pendingOwner, pendingPhoto)
+
+                val items = service().feed(viewer, radiusMeters = 50_000, intent = null, limit = 100).items
+                val byOwner = items.associateBy { it.person.userId }
+
+                // Approved photo is surfaced; the unreviewed one is nulled but the session still shows.
+                assertNotNull(byOwner[approvedOwner.toString()]?.photoUrl)
+                assertNotNull(byOwner[pendingOwner.toString()])
+                assertNull(byOwner[pendingOwner.toString()]?.photoUrl)
+            }
+        }
     })
+
+private fun DataSource.insertMediaAsset(
+    ownerUserId: UUID,
+    assetId: UUID,
+    processing: String,
+    moderation: String,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO media_assets (
+                    id, owner_user_id, media_type, storage_provider, storage_bucket,
+                    storage_object_key, content_type, byte_size, processing_status, moderation_status
+                )
+                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, ?, ?)
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, assetId)
+                statement.setObject(2, ownerUserId)
+                statement.setString(3, "media/$assetId")
+                statement.setString(4, processing)
+                statement.setString(5, moderation)
+                statement.executeUpdate()
+            }
+    }
+}
+
+private fun DataSource.insertActiveSoloSessionWithPhoto(
+    ownerUserId: UUID,
+    photoAssetId: UUID,
+) {
+    val sessionId = UUID.randomUUID()
+    val now = Instant.now()
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO tonight_sessions (
+                    id, created_by_user_id, mode, intent, host_mode, photo_media_asset_id,
+                    map_visible, status, created_at, started_at, expires_at
+                )
+                VALUES (?, ?, 'solo', 'solo', 'public_meet_first', ?, true, 'active', ?, ?, ?)
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, sessionId)
+                statement.setObject(2, ownerUserId)
+                statement.setObject(3, photoAssetId)
+                statement.setTimestamp(4, Timestamp.from(now))
+                statement.setTimestamp(5, Timestamp.from(now))
+                statement.setTimestamp(6, Timestamp.from(now.plus(Duration.ofHours(2))))
+                statement.executeUpdate()
+            }
+        connection.insertParticipant(sessionId, ownerUserId, role = "owner", approval = "approved")
+    }
+}
 
 private object FakeMediaResolver : MediaAssetUrlResolver {
     override fun publicContentUrl(mediaAssetId: UUID): String = "https://media.example/$mediaAssetId"
