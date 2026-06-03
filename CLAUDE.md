@@ -128,7 +128,7 @@ Everything else in `FRONTEND_DESIGN_DIRECTION_SPEC.md` / `DESIGN_AND_NAVIGATION_
 
 ### Slice workflow (how this work ships)
 
-One feature branch + PR per slice, CI-gated. Each slice: implement (server stays the product authority) → targeted module tests → full `scripts/verify.ps1` → emulator QA for UI slices (`scripts/android-*-qa.ps1`) → push → CI → merge. Update `docs/IMPLEMENTATION_AUDIT.md` rows + relevant `*_SPEC.md` checklists per shipped slice. Pause for review only at **phase boundaries**. Never run `gradlew` (incl. `--stop`) while a `verify.ps1` gate is running — it disrupts the daemon.
+One feature branch + PR per slice, CI-gated. Each slice: implement (server stays the product authority) → targeted module tests → full `scripts/verify.ps1` → emulator QA for UI slices (`scripts/android-*-qa.ps1` — match the surface, e.g. `android-grid-qa.ps1`, `android-swipe-qa.ps1`, `android-tonight-qa.ps1` for Playing Tonight) → push → CI → merge. Update `docs/IMPLEMENTATION_AUDIT.md` rows + relevant `*_SPEC.md` checklists per shipped slice. Pause for review only at **phase boundaries**. Never run `gradlew` (incl. `--stop`) while a `verify.ps1` gate is running — it disrupts the daemon.
 
 ### Agent "engineering team" model
 
