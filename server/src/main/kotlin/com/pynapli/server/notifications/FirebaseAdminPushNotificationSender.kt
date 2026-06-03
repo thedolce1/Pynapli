@@ -146,6 +146,7 @@ internal data class PushDeliveryConfig(
                 NotificationKind.MESSAGE,
                 NotificationKind.MATCH,
                 NotificationKind.PARTNER_CHAT_INVITE,
+                NotificationKind.TONIGHT_INVITE,
             )
 
         fun forKind(kind: String): PushDeliveryConfig =

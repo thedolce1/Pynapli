@@ -466,6 +466,7 @@ class ServerDependencies(
                 TonightSessionService(
                     repository = JdbcTonightSessionRepository(database.dataSource),
                     subscriptionService = subscriptionService,
+                    notificationPublisher = notificationService,
                 )
             val tonightFeedService =
                 TonightFeedService(

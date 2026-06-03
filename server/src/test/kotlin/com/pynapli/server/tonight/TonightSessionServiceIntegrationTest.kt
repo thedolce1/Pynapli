@@ -1,5 +1,9 @@
 package com.pynapli.server.tonight
 
+import com.pynapli.server.notifications.NotificationEventDraft
+import com.pynapli.server.notifications.NotificationKind
+import com.pynapli.server.notifications.NotificationOutboxRecord
+import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
@@ -68,12 +72,16 @@ class TonightSessionServiceIntegrationTest :
 
         afterTest { dataSource.close() }
 
-        fun paidService(clock: Clock = Clock.systemUTC()): TonightSessionService {
+        fun paidService(
+            clock: Clock = Clock.systemUTC(),
+            notificationPublisher: NotificationPublisher? = null,
+        ): TonightSessionService {
             val subscriptions = mockk<SubscriptionService>()
             coEvery { subscriptions.getPolicy(any()) } returns policy(SubscriptionTier.SELECT)
             return TonightSessionService(
                 repository = JdbcTonightSessionRepository(dataSource),
                 subscriptionService = subscriptions,
+                notificationPublisher = notificationPublisher,
                 clock = clock,
             )
         }
@@ -335,7 +343,146 @@ class TonightSessionServiceIntegrationTest :
                 assertEquals("active", reproposed.status)
             }
         }
+
+        "together propose enqueues exactly one TONIGHT_INVITE to the partner" {
+            runBlocking {
+                val user = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                dataSource.insertUserWithProfile(user, "Inviting Ivy")
+                dataSource.insertUserWithProfile(partner, "Pending Pete")
+                dataSource.insertActiveLink(user, partner)
+                val publisher = RecordingPublisher()
+                val service = paidService(notificationPublisher = publisher)
+
+                val proposed =
+                    service.propose(user, ProposeTonightSessionRequestDto(mode = "together", intent = "together"))
+
+                assertEquals(1, publisher.drafts.size)
+                val draft = publisher.drafts.single()
+                assertEquals(NotificationKind.TONIGHT_INVITE, draft.kind)
+                assertEquals(partner, draft.recipientUserId)
+                assertEquals(user, draft.actorUserId)
+                assertEquals(UUID.fromString(proposed.id), draft.subjectId)
+                assertEquals("tonight_invite:${proposed.id}:$partner", draft.idempotencyKey)
+                assertEquals(proposed.id, draft.payload["sessionId"])
+            }
+        }
+
+        "solo propose enqueues no notification" {
+            runBlocking {
+                val user = UUID.randomUUID()
+                dataSource.insertUserWithProfile(user, "Quiet Quinn")
+                val publisher = RecordingPublisher()
+                val service = paidService(notificationPublisher = publisher)
+
+                service.propose(user, ProposeTonightSessionRequestDto(mode = "solo", intent = "solo"))
+
+                assertTrue(publisher.drafts.isEmpty())
+            }
+        }
+
+        "sendExpiryReminders reminds both participants once when inside the lead window" {
+            runBlocking {
+                // Propose+activate a 2h together session at `start`; it expires at start+2h.
+                val start = Instant.parse("2026-06-01T20:00:00Z")
+                val user = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                dataSource.insertUserWithProfile(user, "Owner Otto")
+                dataSource.insertUserWithProfile(partner, "Partner Peg")
+                dataSource.insertActiveLink(user, partner)
+
+                val proposePublisher = RecordingPublisher()
+                val proposeService =
+                    paidService(
+                        clock = Clock.fixed(start, ZoneOffset.UTC),
+                        notificationPublisher = proposePublisher,
+                    )
+                val proposed =
+                    proposeService.propose(user, ProposeTonightSessionRequestDto(mode = "together", intent = "together"))
+                proposeService.approve(UUID.fromString(proposed.id), partner)
+                val sessionId = UUID.fromString(proposed.id)
+
+                // 10 minutes before expiry (start + 1h50m) -> inside the 15-minute lead window.
+                val reminderClock = Clock.fixed(start.plus(Duration.ofMinutes(110)), ZoneOffset.UTC)
+                val reminderPublisher = RecordingPublisher()
+                val reminderService =
+                    paidService(clock = reminderClock, notificationPublisher = reminderPublisher)
+
+                val reminded = reminderService.sendExpiryReminders()
+                assertEquals(1, reminded)
+
+                val reminderDrafts = reminderPublisher.drafts.filter { it.kind == NotificationKind.TONIGHT_REMINDER }
+                assertEquals(2, reminderDrafts.size)
+                assertEquals(setOf(user, partner), reminderDrafts.map { it.recipientUserId }.toSet())
+                reminderDrafts.forEach { draft ->
+                    assertNull(draft.actorUserId)
+                    assertEquals(sessionId, draft.subjectId)
+                    assertEquals(
+                        "tonight_reminder:$sessionId:${draft.recipientUserId}",
+                        draft.idempotencyKey,
+                    )
+                }
+                // reminder_sent_at is now stamped.
+                assertNotNull(dataSource.reminderSentAt(sessionId))
+
+                // A second call is idempotent: the latch suppresses any further reminder.
+                val secondPublisher = RecordingPublisher()
+                val secondReminded =
+                    paidService(clock = reminderClock, notificationPublisher = secondPublisher)
+                        .sendExpiryReminders()
+                assertEquals(0, secondReminded)
+                assertTrue(secondPublisher.drafts.isEmpty())
+            }
+        }
+
+        "sendExpiryReminders does not remind a session expiring beyond the lead window" {
+            runBlocking {
+                val start = Instant.parse("2026-06-01T20:00:00Z")
+                val user = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                dataSource.insertUserWithProfile(user, "Owner Ola")
+                dataSource.insertUserWithProfile(partner, "Partner Per")
+                dataSource.insertActiveLink(user, partner)
+
+                val proposeService = paidService(clock = Clock.fixed(start, ZoneOffset.UTC))
+                val proposed =
+                    proposeService.propose(user, ProposeTonightSessionRequestDto(mode = "together", intent = "together"))
+                proposeService.approve(UUID.fromString(proposed.id), partner)
+                val sessionId = UUID.fromString(proposed.id)
+
+                // 1 hour before expiry (start + 1h) -> outside the 15-minute lead window.
+                val earlyClock = Clock.fixed(start.plus(Duration.ofHours(1)), ZoneOffset.UTC)
+                val publisher = RecordingPublisher()
+                val reminded =
+                    paidService(clock = earlyClock, notificationPublisher = publisher).sendExpiryReminders()
+
+                assertEquals(0, reminded)
+                assertTrue(publisher.drafts.isEmpty())
+                assertNull(dataSource.reminderSentAt(sessionId))
+            }
+        }
     })
+
+private class RecordingPublisher : NotificationPublisher {
+    val drafts = mutableListOf<NotificationEventDraft>()
+
+    override suspend fun enqueue(notification: NotificationEventDraft): NotificationOutboxRecord? {
+        drafts.add(notification)
+        return null
+    }
+}
+
+private fun DataSource.reminderSentAt(sessionId: UUID): Instant? =
+    connection.use { connection ->
+        connection
+            .prepareStatement("SELECT reminder_sent_at FROM tonight_sessions WHERE id = ?")
+            .use { statement ->
+                statement.setObject(1, sessionId)
+                statement.executeQuery().use { rs ->
+                    if (!rs.next()) null else rs.getTimestamp("reminder_sent_at")?.toInstant()
+                }
+            }
+    }
 
 private fun policy(tier: String): EntitlementPolicy =
     EntitlementPolicy(

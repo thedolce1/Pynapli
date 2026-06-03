@@ -214,7 +214,9 @@ class NotificationService(
             NotificationKind.PROFILE_LINK_INVITE,
             NotificationKind.PROFILE_LINK_ACCEPTED,
             NotificationKind.PARTNER_CHAT_INVITE,
+            NotificationKind.TONIGHT_INVITE,
             -> partnerInvitesEnabled
+            NotificationKind.TONIGHT_REMINDER -> activityEnabled
             NotificationKind.SYSTEM_SAFETY -> systemSafetyEnabled
             else -> false
         }
@@ -254,6 +256,16 @@ class NotificationService(
                 NotificationCopy(
                     "Chat invite",
                     "Your linked partner invited you to a chat.",
+                )
+            NotificationKind.TONIGHT_INVITE ->
+                NotificationCopy(
+                    "Playing Tonight invite",
+                    "Your linked partner wants to go live tonight.",
+                )
+            NotificationKind.TONIGHT_REMINDER ->
+                NotificationCopy(
+                    "Playing Tonight ending soon",
+                    "Your session ends in about 15 minutes.",
                 )
             NotificationKind.SYSTEM_SAFETY -> NotificationCopy("Pynapli safety", "You have a safety update.")
             else -> NotificationCopy("Pynapli", "You have a new update.")
@@ -334,6 +346,8 @@ class NotificationService(
                 NotificationKind.PROFILE_LINK_INVITE,
                 NotificationKind.PROFILE_LINK_ACCEPTED,
                 NotificationKind.PARTNER_CHAT_INVITE,
+                NotificationKind.TONIGHT_INVITE,
+                NotificationKind.TONIGHT_REMINDER,
                 NotificationKind.SYSTEM_SAFETY,
             )
     }
@@ -357,6 +371,8 @@ object NotificationKind {
     const val PROFILE_LINK_INVITE = "profile_link_invite"
     const val PROFILE_LINK_ACCEPTED = "profile_link_accepted"
     const val PARTNER_CHAT_INVITE = "partner_chat_invite"
+    const val TONIGHT_INVITE = "tonight_invite"
+    const val TONIGHT_REMINDER = "tonight_reminder"
     const val SYSTEM_SAFETY = "system_safety"
 }
 

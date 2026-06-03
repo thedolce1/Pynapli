@@ -1,5 +1,6 @@
 package com.pynapli.server.tonight
 
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
@@ -93,6 +94,25 @@ interface TonightSessionRepository {
 
     /** Sweep stale sessions to 'expired'. Returns rows updated. */
     suspend fun expireStale(now: Instant): Int
+
+    /**
+     * Atomically claim active sessions whose expiry falls within [leadWindow] of [now] and that
+     * have not yet been reminded (status='active' AND reminder_sent_at IS NULL AND
+     * expires_at > [now] AND expires_at <= [now] + [leadWindow]). In ONE transaction this
+     * selects the due rows FOR UPDATE SKIP LOCKED, stamps reminder_sent_at = [now], and returns
+     * each claimed session with its participant user ids. The stamp is the idempotency latch:
+     * a session is claimed (and therefore reminded) at most once across ticks/instances.
+     */
+    suspend fun claimSessionsDueForReminder(
+        now: Instant,
+        leadWindow: Duration,
+    ): List<TonightReminderTarget>
+
+    /** A session claimed for a 15-minute-before-expiry reminder, with its participants. */
+    data class TonightReminderTarget(
+        val sessionId: UUID,
+        val participantUserIds: List<UUID>,
+    )
 
     /** Outcome of approve/decline/end participant mutations. */
     sealed interface MutateOutcome {

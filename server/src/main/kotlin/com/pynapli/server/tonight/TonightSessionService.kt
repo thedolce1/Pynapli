@@ -1,5 +1,8 @@
 package com.pynapli.server.tonight
 
+import com.pynapli.server.notifications.NotificationEventDraft
+import com.pynapli.server.notifications.NotificationKind
+import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.CurrentTonightSessionDto
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
@@ -19,6 +22,7 @@ import java.util.UUID
 class TonightSessionService(
     private val repository: TonightSessionRepository,
     private val subscriptionService: SubscriptionService?,
+    private val notificationPublisher: NotificationPublisher? = null,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     suspend fun propose(
@@ -65,6 +69,9 @@ class TonightSessionService(
         val sessionId = UUID.randomUUID()
         val expiresAt = now.plus(Duration.ofHours(durationHours.toLong()))
 
+        // Captured for the together path so we can notify the partner after persistence.
+        var togetherPartnerId: UUID? = null
+
         val session =
             when (mode) {
                 MODE_SOLO -> {
@@ -98,6 +105,7 @@ class TonightSessionService(
                     val partnerId =
                         repository.findActiveLinkedPartner(userId)
                             ?: throw TonightSessionException("TONIGHT_NO_LINKED_PARTNER")
+                    togetherPartnerId = partnerId
                     TonightSession(
                         id = sessionId,
                         createdByUserId = userId,
@@ -131,7 +139,24 @@ class TonightSessionService(
                 }
             }
 
-        return repository.insertSession(session).toDto()
+        val persisted = repository.insertSession(session)
+
+        // Best-effort: a notification failure must never break propose. Solo sessions notify
+        // nobody (no partner to invite).
+        togetherPartnerId?.let { partnerId ->
+            notificationPublisher?.enqueue(
+                NotificationEventDraft(
+                    recipientUserId = partnerId,
+                    actorUserId = userId,
+                    kind = NotificationKind.TONIGHT_INVITE,
+                    subjectId = sessionId,
+                    idempotencyKey = "tonight_invite:$sessionId:$partnerId",
+                    payload = mapOf("sessionId" to sessionId.toString()),
+                ),
+            )
+        }
+
+        return persisted.toDto()
     }
 
     suspend fun approve(
@@ -191,6 +216,30 @@ class TonightSessionService(
     /** For a future expiry-sweep worker. Returns rows swept to 'expired'. */
     suspend fun expireStale(): Int = repository.expireStale(clock.instant())
 
+    /**
+     * Atomically claim active sessions expiring within the 15-minute lead window (each at most
+     * once — the repository stamps reminder_sent_at) and enqueue a TONIGHT_REMINDER to every
+     * participant. Notifications are best-effort. Returns the number of sessions reminded.
+     */
+    suspend fun sendExpiryReminders(): Int {
+        val targets = repository.claimSessionsDueForReminder(clock.instant(), REMINDER_LEAD_WINDOW)
+        targets.forEach { target ->
+            target.participantUserIds.forEach { participant ->
+                notificationPublisher?.enqueue(
+                    NotificationEventDraft(
+                        recipientUserId = participant,
+                        actorUserId = null,
+                        kind = NotificationKind.TONIGHT_REMINDER,
+                        subjectId = target.sessionId,
+                        idempotencyKey = "tonight_reminder:${target.sessionId}:$participant",
+                        payload = mapOf("sessionId" to target.sessionId.toString()),
+                    ),
+                )
+            }
+        }
+        return targets.size
+    }
+
     private suspend fun enforceWeeklyCap(
         userId: UUID,
         now: java.time.Instant,
@@ -238,6 +287,9 @@ class TonightSessionService(
         const val MAX_DURATION_HOURS = 24
         const val FREE_WEEKLY_LIMIT = 3
         val WEEKLY_WINDOW: Duration = Duration.ofDays(7)
+
+        // PLAYING_TONIGHT_SPEC: "Recommended reminder: 15 minutes before expiration."
+        val REMINDER_LEAD_WINDOW: Duration = Duration.ofMinutes(15)
         val VALID_MODES = setOf(MODE_SOLO, MODE_TOGETHER)
         val VALID_HOST_MODES = setOf("hosting", "traveling", "public_meet_first")
         val VALID_INTENTS = setOf("solo", "together", "social", "event")
