@@ -97,6 +97,7 @@ Current Store coverage:
 - `StoreScreenInteractionTest` renders the real Compose Store screen and verifies plan/product rendering plus inventory refresh after a product purchase.
 - `scripts/android-store-qa.ps1` runs the installed Android app against local Ktor, logs in through the real app path, opens Store from the bottom nav, captures Store plan/product screenshots and XML, checks structural golden assertions, exercises Restore, performs an environment-gated dev Boost purchase, and verifies the server-backed balance refreshes from 0 to 1.
 - Latest emulator proof: `artifacts/android-store-qa/20260521-163009`.
+- `scripts/android-tonight-qa.ps1` + `scripts/android-tonight-qa-goldens.json` run the installed Android app against local Ktor, log in through the real app path, open Playing Tonight from the Grid header moon button, and assert the populated zone map + bottom sheet (intent pills, host-mode pills, notes) plus a Social intent filter. `seed-dev-data.ps1` seeds the live solo sessions that populate the feed/map. **Run this for any UI slice touching Playing Tonight (Grid indicator, feed, zone map, start/approval flow).** Latest emulator proof: `artifacts/android-tonight-qa/20260603-174249`.
 
 Still open before beta:
 
@@ -258,6 +259,29 @@ Requirements:
 
 The script writes PNG screenshots, UI hierarchy XML, screenshot signatures, and `qa-summary.json` under `artifacts/android-store-qa/<timestamp>`. A passing run proves the installed app can complete login -> Grid -> Store, render Free/Social/Select plus accelerator products, avoid app error text, exercise Restore, perform the local/dev Boost purchase, and refresh the Store inventory balance through Ktor.
 
+## Connected Android Playing Tonight QA
+
+Run this before and after meaningful Playing Tonight changes (session model, feed, zone map, grid indicator):
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\android-tonight-qa.ps1
+```
+
+Useful faster rerun after the APK is already built:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\android-tonight-qa.ps1 -SkipBuild
+```
+
+Requirements:
+
+- Local Ktor must be healthy at `http://127.0.0.1:8080/health/deep`.
+- Docker Postgres/Redis must be running for the local server and the dev seed.
+- One Android emulator/device must be connected through `adb`, or pass `-DeviceId`.
+- Debug builds must expose the `Dev login` button.
+
+`seed-dev-data.ps1` seeds a few live solo Playing Tonight sessions (Maya social/hosting, Kai social, Theo event, Nico solo) so the feed and zone map render populated rows/dots. The script logs in through the real app path, opens Playing Tonight from the Grid header **moon button**, asserts the populated map + bottom sheet (intent pills, host-mode pills, notes) via `scripts/android-tonight-qa-goldens.json` (`tonightMap` stage), filters the sheet to Social (`tonightSocialFilter` stage), and returns to the Grid. It writes PNG screenshots, UI hierarchy XML, screenshot signatures, and `qa-summary.json` under `artifacts/android-tonight-qa/<timestamp>`. Latest emulator proof: `artifacts/android-tonight-qa/20260603-174249`.
+
 ## Activity API Load QA
 
 Run this after backend Activity feed, summary, tab, retention, or producer-query changes:
@@ -338,6 +362,7 @@ Current local proof:
 - [ ] Partial: Grid shared-UI visual-signature regression, connected Android Grid structural golden QA, denied-location QA, battery-profile harness, and Android location policy checks exist and run locally; real-device screenshot and battery coverage is still open.
 - [ ] Partial: connected Android Activity structural golden QA, OS notification deep-link plumbing, Activity realtime stream tests, and Activity API load harness exist; real-device Activity notification and battery passes remain open.
 - [ ] Partial: connected Android Store structural golden QA exists and covers Restore plus local/dev purchase; production Play Billing sandbox validation and real-device Store passes remain open.
+- [ ] Partial: connected Android Playing Tonight structural golden QA (`scripts/android-tonight-qa.ps1`) exists and passes on emulator with seeded live sessions (populated zone map + feed + Social filter); real-device passes and a together/approval-flow variant remain open.
 - [ ] Partial: core abuse/risk tests exist and pass; release-grade abuse suite is not complete.
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [x] Location denied path tested on connected Android emulator/device through `scripts/android-grid-denied-location-qa.ps1`.
