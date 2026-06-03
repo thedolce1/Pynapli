@@ -33,8 +33,10 @@ class PlayingTonightStateHolder(
         coroutineScope {
             val feedDeferred = async { repository.loadFeed(radiusMeters, intent?.serverValue) }
             val sessionDeferred = async { repository.loadCurrentSession() }
+            val photosDeferred = async { repository.loadProfilePhotos() }
             val feedResult = feedDeferred.await()
             val sessionResult = sessionDeferred.await()
+            val photosResult = photosDeferred.await()
 
             _state.update { current ->
                 current.copy(
@@ -48,6 +50,12 @@ class PlayingTonightStateHolder(
                         when (sessionResult) {
                             is AppResult.Success -> sessionResult.value
                             is AppResult.Failure -> current.currentSession
+                        },
+                    // Best-effort: a photo-list failure shouldn't surface an error or block the surface.
+                    photoOptions =
+                        when (photosResult) {
+                            is AppResult.Success -> photosResult.value
+                            is AppResult.Failure -> current.photoOptions
                         },
                     errorMessage = (feedResult as? AppResult.Failure)?.error?.message,
                 )
@@ -150,6 +158,9 @@ interface TonightRepository {
 
     suspend fun loadCurrentSession(): AppResult<TonightSessionUi?>
 
+    /** The viewer's approved profile photos, offered as optional session photos. */
+    suspend fun loadProfilePhotos(): AppResult<List<TonightPhotoOptionUi>>
+
     suspend fun propose(request: ProposeTonightSessionRequestDto): AppResult<TonightSessionUi>
 
     suspend fun approve(sessionId: String): AppResult<TonightSessionUi>
@@ -174,6 +185,23 @@ class ApiTonightRepository(
     override suspend fun loadCurrentSession(): AppResult<TonightSessionUi?> =
         when (val result = apiClient.getCurrentTonightSession()) {
             is AppResult.Success -> AppResult.Success(result.value.session?.toUi())
+            is AppResult.Failure -> AppResult.Failure(result.error)
+        }
+
+    override suspend fun loadProfilePhotos(): AppResult<List<TonightPhotoOptionUi>> =
+        when (val result = apiClient.listMediaAlbum("profile")) {
+            is AppResult.Success ->
+                AppResult.Success(
+                    result.value.items
+                        .map { it.mediaAsset }
+                        .filter { it.processingStatus == "ready" && it.moderationStatus == "approved" }
+                        .map { asset ->
+                            TonightPhotoOptionUi(
+                                assetId = asset.mediaAssetId,
+                                thumbnailUrl = asset.contentUrl ?: apiClient.mediaAssetContentUrl(asset.mediaAssetId),
+                            )
+                        },
+                )
             is AppResult.Failure -> AppResult.Failure(result.error)
         }
 

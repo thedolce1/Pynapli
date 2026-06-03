@@ -1,14 +1,22 @@
 package com.pynapli.app.tonight
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -27,9 +35,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
 
@@ -54,13 +65,16 @@ private enum class TonightHostMode(
 
 /**
  * Start-session sheet (PT-5). Builds a [ProposeTonightSessionRequestDto] for solo (live
- * immediately) or together (proposed → partner approves). Photo attachment + moderation is a
- * later slice. Intent options follow the mode: solo can't pick "together" and vice-versa.
+ * immediately) or together (proposed → partner approves). Intent options follow the mode: solo
+ * can't pick "together" and vice-versa. An optional session photo can be picked from the viewer's
+ * already-approved profile photos (so it shows immediately; the server feed gate still requires
+ * approval, which profile photos already have).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StartTonightSheet(
     isSubmitting: Boolean,
+    photoOptions: List<TonightPhotoOptionUi>,
     onDismiss: () -> Unit,
     onSubmit: (ProposeTonightSessionRequestDto) -> Unit,
 ) {
@@ -70,7 +84,7 @@ fun StartTonightSheet(
         sheetState = sheetState,
         modifier = Modifier.testTag(StartTonightTags.SHEET),
     ) {
-        StartTonightSheetBody(isSubmitting = isSubmitting, onSubmit = onSubmit)
+        StartTonightSheetBody(isSubmitting = isSubmitting, photoOptions = photoOptions, onSubmit = onSubmit)
     }
 }
 
@@ -78,6 +92,7 @@ fun StartTonightSheet(
 @Composable
 internal fun StartTonightSheetBody(
     isSubmitting: Boolean,
+    photoOptions: List<TonightPhotoOptionUi>,
     onSubmit: (ProposeTonightSessionRequestDto) -> Unit,
 ) {
     var mode by remember { mutableStateOf(TonightMode.Solo) }
@@ -86,6 +101,7 @@ internal fun StartTonightSheetBody(
     var durationHours by remember { mutableStateOf(2) }
     var note by remember { mutableStateOf("") }
     var mapVisible by remember { mutableStateOf(true) }
+    var selectedPhotoId by remember { mutableStateOf<String?>(null) }
 
     // Intent options depend on the structural mode (server rejects mismatches).
     val intentOptions =
@@ -145,6 +161,44 @@ internal fun StartTonightSheetBody(
             modifier = Modifier.fillMaxWidth().testTag(StartTonightTags.NOTE),
         )
 
+        if (photoOptions.isNotEmpty()) {
+            SectionLabel("Session photo (optional)")
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .testTag(StartTonightTags.PHOTO_ROW),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                photoOptions.forEach { option ->
+                    val selected = option.assetId == selectedPhotoId
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(64.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(PynapliColors.SurfaceRaised)
+                                .border(
+                                    width = if (selected) 2.dp else 1.dp,
+                                    color = if (selected) PynapliColors.Accent else PynapliColors.Border,
+                                    shape = RoundedCornerShape(10.dp),
+                                ).clickable { selectedPhotoId = if (selected) null else option.assetId }
+                                .testTag(StartTonightTags.photo(option.assetId)),
+                    ) {
+                        option.thumbnailUrl?.let { url ->
+                            AsyncImage(
+                                model = url,
+                                contentDescription = "Session photo option",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("Show on the zone map", color = PynapliColors.TextPrimary, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
@@ -163,6 +217,7 @@ internal fun StartTonightSheetBody(
                         note = note.trim().ifEmpty { null },
                         durationHours = durationHours,
                         mapVisible = mapVisible,
+                        photoMediaAssetId = selectedPhotoId,
                     ),
                 )
             },
@@ -215,6 +270,9 @@ internal object StartTonightTags {
     const val NOTE = "tonight-start-note"
     const val MAP_VISIBLE = "tonight-start-map-visible"
     const val SUBMIT = "tonight-start-submit"
+    const val PHOTO_ROW = "tonight-start-photo-row"
+
+    fun photo(assetId: String): String = "tonight-start-photo-$assetId"
 
     fun mode(value: String): String = "tonight-start-mode-$value"
 

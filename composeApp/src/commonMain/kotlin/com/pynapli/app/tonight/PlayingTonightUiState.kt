@@ -88,6 +88,18 @@ data class TonightParticipantUi(
     val approvalStatus: String,
 )
 
+/**
+ * A photo the viewer can attach to a new session. Sourced from the viewer's already-approved
+ * profile album (PLAYING_TONIGHT_SPEC "optional moderated session photo"): reusing approved photos
+ * means the session photo is visible immediately, vs a fresh upload that moderation would hold past
+ * the short session window.
+ */
+@Immutable
+data class TonightPhotoOptionUi(
+    val assetId: String,
+    val thumbnailUrl: String?,
+)
+
 @Immutable
 data class PlayingTonightUiState(
     val isLoading: Boolean = false,
@@ -95,5 +107,6 @@ data class PlayingTonightUiState(
     val feedItems: List<TonightFeedItemUi> = emptyList(),
     val currentSession: TonightSessionUi? = null,
     val intentFilter: TonightIntent? = null,
+    val photoOptions: List<TonightPhotoOptionUi> = emptyList(),
     val errorMessage: String? = null,
 )
