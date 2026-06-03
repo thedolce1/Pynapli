@@ -69,11 +69,12 @@ fun PlayingTonightScreen(
     onBack: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onMessage: (String) -> Unit,
-    onStartSession: () -> Unit = {},
+    viewerUserId: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
+    var showStartSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { stateHolder.load() }
 
@@ -91,8 +92,11 @@ fun PlayingTonightScreen(
 
         TonightTopFloater(
             session = state.currentSession,
+            viewerUserId = viewerUserId,
             onBack = onBack,
-            onStartSession = onStartSession,
+            onStartSession = { showStartSheet = true },
+            onApprove = { scope.launch { stateHolder.approveSession() } },
+            onDecline = { scope.launch { stateHolder.declineSession() } },
             onEnd = { scope.launch { stateHolder.endCurrentSession() } },
             modifier =
                 Modifier
@@ -107,6 +111,19 @@ fun PlayingTonightScreen(
             onOpenProfile = onOpenProfile,
             onMessage = onMessage,
             modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+
+    if (showStartSheet) {
+        StartTonightSheet(
+            isSubmitting = state.isMutating,
+            onDismiss = { showStartSheet = false },
+            onSubmit = { request ->
+                scope.launch {
+                    stateHolder.propose(request)
+                    showStartSheet = false
+                }
+            },
         )
     }
 }
@@ -244,17 +261,22 @@ private fun hash(seed: Int): Int {
 }
 
 // ── Top floater ─────────────────────────────────────────────────────────────
+// Four states: no session (Start CTA), live (End), proposed + viewer is the pending
+// partner (Approve/Decline), proposed + viewer is the owner (waiting + Cancel).
 @Composable
 private fun TonightTopFloater(
     session: TonightSessionUi?,
+    viewerUserId: String?,
     onBack: () -> Unit,
     onStartSession: () -> Unit,
+    onApprove: () -> Unit,
+    onDecline: () -> Unit,
     onEnd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(
@@ -271,70 +293,100 @@ private fun TonightTopFloater(
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PynapliColors.TextPrimary, modifier = Modifier.size(20.dp))
         }
 
-        if (session != null) {
-            Row(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xEB15151B))
-                        .border(1.dp, PynapliColors.Accent.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                        .testTag(PlayingTonightTags.LIVE_FLOATER),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Icon(Icons.Filled.DarkMode, contentDescription = null, tint = PynapliColors.Accent, modifier = Modifier.size(18.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "You're live · ${intentLabel(session.intent, session.intentRaw)}",
-                        color = PynapliColors.TextPrimary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = humanizeHostMode(session.hostMode),
-                        color = PynapliColors.TextTertiary,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
+        when {
+            session == null ->
+                FloaterCard(
+                    modifier = Modifier.weight(1f).clickable(onClick = onStartSession).testTag(PlayingTonightTags.START),
+                    leadingDashed = true,
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, tint = PynapliColors.Accent, modifier = Modifier.size(18.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Start a session", color = PynapliColors.TextPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Solo or propose together · 2-hour window", color = PynapliColors.TextTertiary, style = MaterialTheme.typography.labelSmall)
+                    }
                 }
-                Text(
-                    text = "End",
-                    color = PynapliColors.TextSecondary,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(100))
-                            .background(PynapliColors.Surface)
-                            .border(1.dp, PynapliColors.Border, RoundedCornerShape(100))
-                            .clickable(onClick = onEnd)
-                            .testTag(PlayingTonightTags.END)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                )
-            }
-        } else {
-            Row(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xEB15151B))
-                        .border(1.dp, PynapliColors.Border, RoundedCornerShape(12.dp))
-                        .clickable(onClick = onStartSession)
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                        .testTag(PlayingTonightTags.START),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, tint = PynapliColors.Accent, modifier = Modifier.size(18.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Start a session", color = PynapliColors.TextPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Solo or propose together · 2-hour window", color = PynapliColors.TextTertiary, style = MaterialTheme.typography.labelSmall)
+
+            session.pendingApprovalFor(viewerUserId) ->
+                FloaterCard(modifier = Modifier.weight(1f).testTag(PlayingTonightTags.APPROVAL)) {
+                    Icon(Icons.Filled.DarkMode, contentDescription = null, tint = PynapliColors.Accent, modifier = Modifier.size(18.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${session.ownerDisplayName() ?: "Your partner"} invited you",
+                            color = PynapliColors.TextPrimary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text("Together · ${humanizeHostMode(session.hostMode)}", color = PynapliColors.TextTertiary, style = MaterialTheme.typography.labelSmall)
+                    }
+                    PillButton("Decline", onDecline, filled = false, modifier = Modifier.testTag(PlayingTonightTags.DECLINE))
+                    PillButton("Approve", onApprove, filled = true, modifier = Modifier.testTag(PlayingTonightTags.APPROVE))
                 }
-            }
+
+            session.isProposed ->
+                FloaterCard(modifier = Modifier.weight(1f).testTag(PlayingTonightTags.WAITING)) {
+                    Icon(Icons.Filled.DarkMode, contentDescription = null, tint = PynapliColors.Accent, modifier = Modifier.size(18.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Waiting for your partner", color = PynapliColors.TextPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("They need to approve before you go live", color = PynapliColors.TextTertiary, style = MaterialTheme.typography.labelSmall)
+                    }
+                    PillButton("Cancel", onEnd, filled = false, modifier = Modifier.testTag(PlayingTonightTags.END))
+                }
+
+            else ->
+                FloaterCard(modifier = Modifier.weight(1f).testTag(PlayingTonightTags.LIVE_FLOATER)) {
+                    Icon(Icons.Filled.DarkMode, contentDescription = null, tint = PynapliColors.Accent, modifier = Modifier.size(18.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("You're live · ${intentLabel(session.intent, session.intentRaw)}", color = PynapliColors.TextPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(humanizeHostMode(session.hostMode), color = PynapliColors.TextTertiary, style = MaterialTheme.typography.labelSmall)
+                    }
+                    PillButton("End", onEnd, filled = false, modifier = Modifier.testTag(PlayingTonightTags.END))
+                }
         }
     }
+}
+
+@Composable
+private fun FloaterCard(
+    modifier: Modifier = Modifier,
+    leadingDashed: Boolean = false,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
+) {
+    Row(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xEB15151B))
+                .border(
+                    1.dp,
+                    if (leadingDashed) PynapliColors.Border else PynapliColors.Accent.copy(alpha = 0.35f),
+                    RoundedCornerShape(12.dp),
+                ).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        content = content,
+    )
+}
+
+@Composable
+private fun PillButton(
+    label: String,
+    onClick: () -> Unit,
+    filled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = label,
+        color = if (filled) PynapliColors.TextInverse else PynapliColors.TextSecondary,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(100))
+                .background(if (filled) PynapliColors.Accent else PynapliColors.Surface)
+                .border(1.dp, if (filled) PynapliColors.Accent else PynapliColors.Border, RoundedCornerShape(100))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
 }
 
 // ── Draggable sheet ─────────────────────────────────────────────────────────
@@ -620,6 +672,10 @@ internal object PlayingTonightTags {
     const val LIVE_FLOATER = "tonight-live-floater"
     const val START = "tonight-start"
     const val END = "tonight-end"
+    const val APPROVAL = "tonight-approval"
+    const val APPROVE = "tonight-approve"
+    const val DECLINE = "tonight-decline"
+    const val WAITING = "tonight-waiting"
 
     fun row(sessionId: String): String = "tonight-row-$sessionId"
 

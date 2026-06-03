@@ -603,6 +603,7 @@ fun PynapliApp(
             // (PLAYING_TONIGHT_SPEC: "tapping opens the relevant individual profile/session").
             com.pynapli.app.tonight.PlayingTonightScreen(
                 stateHolder = playingTonightStateHolder,
+                viewerUserId = authState.session?.userId,
                 onBack = { tonightVisible = false },
                 onOpenProfile = { userId ->
                     tonightVisible = false

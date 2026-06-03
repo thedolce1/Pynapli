@@ -19,6 +19,14 @@ private class StaticTonightRepository(
 
     override suspend fun loadCurrentSession(): AppResult<TonightSessionUi?> = AppResult.Success(current)
 
+    override suspend fun propose(
+        request: com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto,
+    ): AppResult<TonightSessionUi> = AppResult.Success(current!!)
+
+    override suspend fun approve(sessionId: String): AppResult<TonightSessionUi> = AppResult.Success(current!!)
+
+    override suspend fun decline(sessionId: String): AppResult<TonightSessionUi> = AppResult.Success(current!!)
+
     override suspend fun endSession(sessionId: String): AppResult<TonightSessionUi> = AppResult.Success(current!!)
 }
 
@@ -74,6 +82,7 @@ class PlayingTonightScreenTest {
             val session =
                 TonightSessionUi(
                     id = "s1",
+                    mode = "solo",
                     intent = TonightIntent.Solo,
                     intentRaw = "solo",
                     hostMode = "public_meet_first",

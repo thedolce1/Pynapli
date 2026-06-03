@@ -60,16 +60,38 @@ data class TonightLinkedPartnerUi(
 @Immutable
 data class TonightSessionUi(
     val id: String,
+    val mode: String,
     val intent: TonightIntent?,
     val intentRaw: String,
     val hostMode: String,
     val status: String,
     val expiresAt: String,
+    val participants: List<TonightParticipantUi> = emptyList(),
+) {
+    /** True while a linked-together session is waiting for the other partner to approve. */
+    val isProposed: Boolean get() = status == "proposed"
+
+    /** True when [viewerUserId] is the pending partner who must approve/decline this session. */
+    fun pendingApprovalFor(viewerUserId: String?): Boolean =
+        viewerUserId != null &&
+            isProposed &&
+            participants.any { it.userId == viewerUserId && it.approvalStatus == "pending" }
+
+    fun ownerDisplayName(): String? = participants.firstOrNull { it.role == "owner" }?.displayName
+}
+
+@Immutable
+data class TonightParticipantUi(
+    val userId: String,
+    val displayName: String?,
+    val role: String,
+    val approvalStatus: String,
 )
 
 @Immutable
 data class PlayingTonightUiState(
     val isLoading: Boolean = false,
+    val isMutating: Boolean = false,
     val feedItems: List<TonightFeedItemUi> = emptyList(),
     val currentSession: TonightSessionUi? = null,
     val intentFilter: TonightIntent? = null,
