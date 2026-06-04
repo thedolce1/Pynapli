@@ -72,6 +72,7 @@ import com.pynapli.server.profilelink.ProfileLinkService
 import com.pynapli.server.profiling.RequestProfilerFactory
 import com.pynapli.server.psync.JdbcPsyncSessionRepository
 import com.pynapli.server.psync.PsyncSessionService
+import com.pynapli.server.psync.SwipeServicePsyncDeckGenerator
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockService
 import com.pynapli.server.safety.HiddenProfileRepository
@@ -483,10 +484,6 @@ class ServerDependencies(
             // Hygiene sweep so elapsed sessions move to 'expired' (reads already filter on
             // expires_at, so this is not load-bearing for correctness). Default every 5 minutes.
             val tonightSessionExpiryWorker = TonightSessionExpiryWorker(tonightSessionService, intervalMillis = 5 * 60 * 1000L)
-            val psyncSessionService =
-                PsyncSessionService(
-                    repository = JdbcPsyncSessionRepository(database.dataSource),
-                )
             // Provider-hosted age verification is opt-in: built only when both the provider name and
             // its redirect base URL are configured. Otherwise the service keeps manual-review-only
             // behavior.
@@ -546,6 +543,14 @@ class ServerDependencies(
                     travelLocationRepository = travelLocationRepository,
                     deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret),
                     activityService = activityService,
+                )
+            val psyncSessionService =
+                PsyncSessionService(
+                    repository = JdbcPsyncSessionRepository(database.dataSource),
+                    deckGenerator = SwipeServicePsyncDeckGenerator(swipeService),
+                    blockRepository = blockRepository,
+                    hiddenProfileRepository = hiddenProfileRepository,
+                    presenceService = presenceService,
                 )
             val topPicksService =
                 TopPicksService(

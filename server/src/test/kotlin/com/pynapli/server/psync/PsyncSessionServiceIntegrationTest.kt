@@ -1,6 +1,7 @@
 package com.pynapli.server.psync
 
 import com.pynapli.shared.network.dto.CreatePsyncSessionRequestDto
+import com.pynapli.shared.network.dto.SubmitPsyncActionRequestDto
 import com.pynapli.shared.network.dto.SuggestPsyncFiltersRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.zaxxer.hikari.HikariConfig
@@ -71,6 +72,48 @@ class PsyncSessionServiceIntegrationTest :
                 repository = JdbcPsyncSessionRepository(dataSource),
                 clock = clock,
             )
+
+        // PS-2 service with a fake deck ranker (returns the given candidates in order) + real
+        // block/hidden repos so cross-partner exclusion is exercised against the DB.
+        fun deckService(
+            candidates: List<UUID>,
+            clock: Clock = Clock.systemUTC(),
+        ): PsyncSessionService =
+            PsyncSessionService(
+                repository = JdbcPsyncSessionRepository(dataSource),
+                deckGenerator =
+                    object : com.pynapli.server.psync.PsyncDeckGenerator {
+                        override suspend fun rankCandidates(
+                            viewerUserId: UUID,
+                            filters: com.pynapli.shared.network.dto.SwipeDeckRequestDto,
+                            limit: Int,
+                        ): List<com.pynapli.shared.network.dto.SwipeCardDto> =
+                            candidates.take(limit).map { id ->
+                                com.pynapli.shared.network.dto.SwipeCardDto(
+                                    userId = id.toString(),
+                                    displayName = "Candidate ${id.toString().take(4)}",
+                                    rankToken = "rank:$id",
+                                )
+                            }
+                    },
+                blockRepository =
+                    com.pynapli.server.safety
+                        .JdbcBlockRepository(dataSource),
+                hiddenProfileRepository =
+                    com.pynapli.server.safety
+                        .JdbcHiddenProfileRepository(dataSource),
+                clock = clock,
+            )
+
+        suspend fun PsyncSessionService.readyFor(
+            initiator: UUID,
+            partner: UUID,
+            deckSize: Int = 25,
+        ): UUID {
+            val created = create(initiator, CreatePsyncSessionRequestDto(deckSize = deckSize))
+            accept(UUID.fromString(created.id), partner)
+            return UUID.fromString(created.id)
+        }
 
         // Seeds two profiled users + an active link between them. Returns (initiator, partner).
         fun seedLinkedPair(): Pair<UUID, UUID> {
@@ -295,6 +338,132 @@ class PsyncSessionServiceIntegrationTest :
                 assertEquals("expired", dataSource.statusOf(sessionId))
             }
         }
+
+        // ---- PS-2: shared deck + private swipes ----------------------------------------
+
+        "both partners must start before the shared deck is generated" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val candidates = List(3) { UUID.randomUUID() }
+                candidates.forEachIndexed { i, c -> dataSource.insertUserWithProfile(c, "Cand $i") }
+                val svc = deckService(candidates)
+                val sessionId = svc.readyFor(initiator, partner)
+
+                assertEquals("ready", svc.start(sessionId, initiator).status)
+                assertEquals("ready", dataSource.statusOf(sessionId))
+
+                val active = svc.start(sessionId, partner)
+                assertEquals("active", active.status)
+                assertEquals(3, svc.getDeck(sessionId, initiator).cards.size)
+            }
+        }
+
+        "the shared deck excludes the partner and anyone blocked by either partner" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val blockedByPartner = UUID.randomUUID()
+                val clean = UUID.randomUUID()
+                dataSource.insertUserWithProfile(blockedByPartner, "Blocked")
+                dataSource.insertUserWithProfile(clean, "Clean")
+                dataSource.insertBlock(partner, blockedByPartner)
+
+                // The ranker offers the partner + a partner-blocked user + a clean user.
+                val svc = deckService(listOf(partner, blockedByPartner, clean))
+                val sessionId = svc.readyFor(initiator, partner)
+                svc.start(sessionId, initiator)
+                svc.start(sessionId, partner)
+
+                val deck = svc.getDeck(sessionId, initiator)
+                assertEquals(listOf(clean.toString()), deck.cards.map { it.card.userId })
+            }
+        }
+
+        "submitAction records a private decision idempotently and never exposes the partner" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val candidate = UUID.randomUUID()
+                dataSource.insertUserWithProfile(candidate, "Cand")
+                val svc = deckService(listOf(candidate))
+                val sessionId = svc.readyFor(initiator, partner)
+                svc.start(sessionId, initiator)
+                svc.start(sessionId, partner)
+
+                val token =
+                    svc
+                        .getDeck(sessionId, initiator)
+                        .cards
+                        .single()
+                        .cardToken
+                val first = svc.submitAction(sessionId, initiator, SubmitPsyncActionRequestDto(token, "like"))
+                assertTrue(first.recorded)
+                assertEquals(1, first.actedCount)
+
+                val again = svc.submitAction(sessionId, initiator, SubmitPsyncActionRequestDto(token, "pass"))
+                assertFalse(again.recorded) // first decision wins
+                assertEquals(1, again.actedCount)
+
+                // The initiator sees their own action; the partner never sees it.
+                assertEquals(
+                    "like",
+                    svc
+                        .getDeck(sessionId, initiator)
+                        .cards
+                        .single()
+                        .viewerAction,
+                )
+                assertNull(
+                    svc
+                        .getDeck(sessionId, partner)
+                        .cards
+                        .single()
+                        .viewerAction,
+                )
+            }
+        }
+
+        "submitAction rejects an unknown card token" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val candidate = UUID.randomUUID()
+                dataSource.insertUserWithProfile(candidate, "Cand")
+                val svc = deckService(listOf(candidate))
+                val sessionId = svc.readyFor(initiator, partner)
+                svc.start(sessionId, initiator)
+                svc.start(sessionId, partner)
+
+                val error =
+                    assertFailsWith<PsyncException> {
+                        svc.submitAction(sessionId, initiator, SubmitPsyncActionRequestDto("not-a-real-token", "like"))
+                    }
+                assertEquals("PSYNC_INVALID_CARD", error.code)
+            }
+        }
+
+        "pause then resume round-trips and actions are refused while paused" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val candidate = UUID.randomUUID()
+                dataSource.insertUserWithProfile(candidate, "Cand")
+                val svc = deckService(listOf(candidate))
+                val sessionId = svc.readyFor(initiator, partner)
+                svc.start(sessionId, initiator)
+                svc.start(sessionId, partner)
+                val token =
+                    svc
+                        .getDeck(sessionId, initiator)
+                        .cards
+                        .single()
+                        .cardToken
+
+                assertEquals("paused", svc.pause(sessionId, initiator).status)
+                val paused =
+                    assertFailsWith<PsyncException> {
+                        svc.submitAction(sessionId, partner, SubmitPsyncActionRequestDto(token, "like"))
+                    }
+                assertEquals("PSYNC_INVALID_STATE", paused.code)
+                assertEquals("active", svc.resume(sessionId, partner).status)
+            }
+        }
     })
 
 private fun DataSource.insertUserWithProfile(
@@ -337,6 +506,23 @@ private fun DataSource.insertActiveLink(
                 statement.setObject(1, UUID.randomUUID())
                 statement.setObject(2, userId)
                 statement.setObject(3, linkedUserId)
+                statement.executeUpdate()
+            }
+    }
+}
+
+private fun DataSource.insertBlock(
+    blockerUserId: UUID,
+    blockedUserId: UUID,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                "INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id) VALUES (?, ?, ?)",
+            ).use { statement ->
+                statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, blockerUserId)
+                statement.setObject(3, blockedUserId)
                 statement.executeUpdate()
             }
     }
