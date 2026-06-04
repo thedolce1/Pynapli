@@ -79,3 +79,16 @@ data class PsyncSessionMatch(
     val ownerUserId: UUID?,
     val displayName: String? = null,
 )
+
+/**
+ * PS-4: one canonical match created/kept by session resolution, paired with the partner it
+ * belongs to. A together match yields two of these (one per partner ↔ target); a solo
+ * passthrough yields one. The service replays these post-commit into the Activity +
+ * notification + realtime match pipeline. Never carries swipe-by-swipe detail.
+ */
+data class PsyncResolvedMatch(
+    val partnerUserId: UUID,
+    val targetUserId: UUID,
+    val matchId: UUID,
+    val kind: String,
+)

@@ -1,6 +1,7 @@
 package com.pynapli.server.psync
 
 import com.pynapli.server.psync.PsyncSessionRepository.ActiveLink
+import com.pynapli.server.psync.PsyncSessionRepository.CompleteOutcome
 import com.pynapli.server.psync.PsyncSessionRepository.MutateOutcome
 import com.pynapli.server.psync.PsyncSessionRepository.RecordActionOutcome
 import com.pynapli.server.psync.PsyncSessionRepository.StartOutcome
@@ -521,31 +522,32 @@ class JdbcPsyncSessionRepository(
         userId: UUID,
         now: Instant,
         matchIdFactory: () -> UUID,
-    ): MutateOutcome =
+    ): CompleteOutcome =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
                 connection.inTransaction {
                     val session =
                         connection.lockSession(sessionId)
-                            ?: return@inTransaction MutateOutcome.SessionNotFound
+                            ?: return@inTransaction CompleteOutcome.SessionNotFound
                     if (session.participants.none { it.userId == userId }) {
-                        return@inTransaction MutateOutcome.NotParticipant
+                        return@inTransaction CompleteOutcome.NotParticipant
                     }
-                    // Idempotent: matches were already resolved on a prior completion.
+                    // Idempotent: matches were already resolved on a prior completion. Return no
+                    // resolved matches so the service does not re-emit Activity/notifications.
                     if (session.status == STATUS_COMPLETED) {
-                        return@inTransaction MutateOutcome.Updated(session)
+                        return@inTransaction CompleteOutcome.Completed(session, emptyList())
                     }
                     if (session.status != STATUS_ACTIVE && session.status != STATUS_PAUSED) {
-                        return@inTransaction MutateOutcome.InvalidState
+                        return@inTransaction CompleteOutcome.InvalidState
                     }
 
-                    connection.resolveMatches(session, matchIdFactory)
+                    val resolved = connection.resolveMatches(session, matchIdFactory)
                     connection.setSessionStatus(sessionId, STATUS_COMPLETED, endedAt = now)
 
                     val updated =
                         connection.loadSession(sessionId)
-                            ?: return@inTransaction MutateOutcome.SessionNotFound
-                    MutateOutcome.Updated(updated)
+                            ?: return@inTransaction CompleteOutcome.SessionNotFound
+                    CompleteOutcome.Completed(updated, resolved)
                 }
             }
         }
@@ -877,39 +879,45 @@ class JdbcPsyncSessionRepository(
     private fun Connection.resolveMatches(
         session: PsyncSession,
         matchIdFactory: () -> UUID,
-    ) {
+    ): List<PsyncResolvedMatch> {
         val initiator = session.initiatorUserId
         val partner =
             session.participants.firstOrNull { it.userId != initiator }?.userId
-                ?: return // a session always has two participants; nothing to resolve otherwise
+                ?: return emptyList() // a session always has two participants; nothing to resolve otherwise
         val targets = deckTargetIds(session.id)
         val likedByInitiator = likedTargetsByActor(session.id, initiator)
         val likedByPartner = likedTargetsByActor(session.id, partner)
 
-        for (target in targets) {
-            val aLiked = target in likedByInitiator
-            val bLiked = target in likedByPartner
-            if (!aLiked && !bLiked) continue
-            // Blocks override all match state.
-            if (blockedBetween(target, initiator) || blockedBetween(target, partner)) continue
+        return buildList {
+            for (target in targets) {
+                val aLiked = target in likedByInitiator
+                val bLiked = target in likedByPartner
+                if (!aLiked && !bLiked) continue
+                // Blocks override all match state.
+                if (blockedBetween(target, initiator) || blockedBetween(target, partner)) continue
 
-            val tLikesA = targetLikesPartner(target, initiator)
-            val tLikesB = targetLikesPartner(target, partner)
+                val tLikesA = targetLikesPartner(target, initiator)
+                val tLikesB = targetLikesPartner(target, partner)
 
-            if (aLiked && bLiked && togetherEnabled(target) && (tLikesA || tLikesB)) {
-                upsertMatch(initiator, target, matchIdFactory)
-                val matchId = upsertMatch(partner, target, matchIdFactory)
-                insertSessionMatch(session.id, target, kind = "together", ownerUserId = null, matchId = matchId)
-                continue
-            }
-            // Solo passthrough(s): each liking partner the target liked back.
-            if (aLiked && tLikesA) {
-                val matchId = upsertMatch(initiator, target, matchIdFactory)
-                insertSessionMatch(session.id, target, kind = "solo", ownerUserId = initiator, matchId = matchId)
-            }
-            if (bLiked && tLikesB) {
-                val matchId = upsertMatch(partner, target, matchIdFactory)
-                insertSessionMatch(session.id, target, kind = "solo", ownerUserId = partner, matchId = matchId)
+                if (aLiked && bLiked && togetherEnabled(target) && (tLikesA || tLikesB)) {
+                    val matchA = upsertMatch(initiator, target, matchIdFactory)
+                    val matchB = upsertMatch(partner, target, matchIdFactory)
+                    insertSessionMatch(session.id, target, kind = "together", ownerUserId = null, matchId = matchB)
+                    add(PsyncResolvedMatch(initiator, target, matchA, "together"))
+                    add(PsyncResolvedMatch(partner, target, matchB, "together"))
+                    continue
+                }
+                // Solo passthrough(s): each liking partner the target liked back.
+                if (aLiked && tLikesA) {
+                    val matchId = upsertMatch(initiator, target, matchIdFactory)
+                    insertSessionMatch(session.id, target, kind = "solo", ownerUserId = initiator, matchId = matchId)
+                    add(PsyncResolvedMatch(initiator, target, matchId, "solo"))
+                }
+                if (bLiked && tLikesB) {
+                    val matchId = upsertMatch(partner, target, matchIdFactory)
+                    insertSessionMatch(session.id, target, kind = "solo", ownerUserId = partner, matchId = matchId)
+                    add(PsyncResolvedMatch(partner, target, matchId, "solo"))
+                }
             }
         }
     }

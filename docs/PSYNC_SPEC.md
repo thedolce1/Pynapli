@@ -565,7 +565,7 @@ Avoid:
 - [x] Either partner can pause/leave. (PS-1: `leave` → `cancelled`. PS-2: `pause`/`resume` round-trip `active↔paused`; actions are refused while paused.)
 - [ ] Partner link ending cancels active session.
 - [~] Blocks/reports invalidate targets. (PS-2: deck generation drops anyone blocked/hidden by either partner. PS-3: match resolution skips any target blocked by/Blocking either partner, even mid-session. Report-driven invalidation TBD.)
-- [ ] Activity integration exists. (PS-4: together match + recap + session events surface in Activity.)
+- [~] Activity integration exists. (PS-4a: resolved together + solo matches replay into the existing match→Activity feed + realtime delta + MATCH push for both parties — a partner's private solo match never surfaces to the other. PS-4b: dedicated psync invite/started/recap/expired feed cards + the realtime session channel + nudge.)
 - [x] Ktor owns session and match state. (Server-authoritative throughout: status machine, deck generation, private actions, and PS-3 match resolution all run server-side under `FOR UPDATE`.)
 - [ ] WebSocket events do not reveal private swipes.
 

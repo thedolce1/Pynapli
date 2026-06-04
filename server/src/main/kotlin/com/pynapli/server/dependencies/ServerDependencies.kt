@@ -551,6 +551,8 @@ class ServerDependencies(
                     blockRepository = blockRepository,
                     hiddenProfileRepository = hiddenProfileRepository,
                     presenceService = presenceService,
+                    activityService = activityService,
+                    notificationPublisher = notificationService,
                 )
             val topPicksService =
                 TopPicksService(

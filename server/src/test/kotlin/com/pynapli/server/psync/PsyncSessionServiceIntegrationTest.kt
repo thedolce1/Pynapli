@@ -105,6 +105,44 @@ class PsyncSessionServiceIntegrationTest :
                 clock = clock,
             )
 
+        // PS-4: deck service wired to a REAL ActivityService so match resolution surfaces in the
+        // Activity feed (other ActivityService deps are null — recordMatch only needs the repo).
+        fun deckServiceWithActivity(
+            candidates: List<UUID>,
+            clock: Clock = Clock.systemUTC(),
+        ): PsyncSessionService =
+            PsyncSessionService(
+                repository = JdbcPsyncSessionRepository(dataSource),
+                deckGenerator =
+                    object : com.pynapli.server.psync.PsyncDeckGenerator {
+                        override suspend fun rankCandidates(
+                            viewerUserId: UUID,
+                            filters: com.pynapli.shared.network.dto.SwipeDeckRequestDto,
+                            limit: Int,
+                        ): List<com.pynapli.shared.network.dto.SwipeCardDto> =
+                            candidates.take(limit).map { id ->
+                                com.pynapli.shared.network.dto.SwipeCardDto(
+                                    userId = id.toString(),
+                                    displayName = "Candidate ${id.toString().take(4)}",
+                                    rankToken = "rank:$id",
+                                )
+                            }
+                    },
+                blockRepository =
+                    com.pynapli.server.safety
+                        .JdbcBlockRepository(dataSource),
+                hiddenProfileRepository =
+                    com.pynapli.server.safety
+                        .JdbcHiddenProfileRepository(dataSource),
+                activityService =
+                    com.pynapli.server.activity.ActivityService(
+                        repository =
+                            com.pynapli.server.activity
+                                .JdbcActivityRepository(dataSource),
+                    ),
+                clock = clock,
+            )
+
         suspend fun PsyncSessionService.readyFor(
             initiator: UUID,
             partner: UUID,
@@ -632,6 +670,54 @@ class PsyncSessionServiceIntegrationTest :
                 assertEquals(1, dataSource.countMatchesFor(initiator)) // not double-inserted
             }
         }
+
+        // ---- PS-4: matches surface in Activity -----------------------------------------
+
+        "a together match surfaces in both partners' Activity feed and is not double-emitted" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.setTogetherEnabled(target)
+                dataSource.insertSwipeLike(target, initiator)
+
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                // The partner's like exhausts the deck -> auto-complete resolves + emits.
+                val finished = svc.actOnSingle(sessionId, partner, "like")
+                assertTrue(finished.sessionCompleted)
+
+                // Both partners get one match activity row; the target gets one per partner.
+                assertEquals(1, dataSource.countActivityEvents(initiator, "match"))
+                assertEquals(1, dataSource.countActivityEvents(partner, "match"))
+                assertEquals(2, dataSource.countActivityEvents(target, "match"))
+
+                // Re-completing must not duplicate the activity rows.
+                svc.complete(sessionId, initiator)
+                assertEquals(1, dataSource.countActivityEvents(initiator, "match"))
+                assertEquals(2, dataSource.countActivityEvents(target, "match"))
+            }
+        }
+
+        "a private solo match surfaces only for the matched partner, not the other" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.insertSwipeLike(target, initiator) // target liked only the initiator
+
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "pass")
+                svc.complete(sessionId, initiator)
+
+                assertEquals(1, dataSource.countActivityEvents(initiator, "match"))
+                assertEquals(0, dataSource.countActivityEvents(partner, "match"))
+                assertEquals(1, dataSource.countActivityEvents(target, "match"))
+            }
+        }
     })
 
 private fun DataSource.insertUserWithProfile(
@@ -735,6 +821,24 @@ private fun DataSource.countMatchesFor(userId: UUID): Int =
             .use { statement ->
                 statement.setObject(1, userId)
                 statement.setObject(2, userId)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt(1)
+                }
+            }
+    }
+
+private fun DataSource.countActivityEvents(
+    recipientUserId: UUID,
+    eventType: String,
+): Int =
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                "SELECT COUNT(*) FROM activity_events WHERE recipient_user_id = ? AND event_type = ? AND deleted_at IS NULL",
+            ).use { statement ->
+                statement.setObject(1, recipientUserId)
+                statement.setString(2, eventType)
                 statement.executeQuery().use { rs ->
                     rs.next()
                     rs.getInt(1)
