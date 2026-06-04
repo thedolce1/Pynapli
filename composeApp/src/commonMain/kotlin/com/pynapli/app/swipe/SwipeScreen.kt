@@ -29,6 +29,7 @@ fun SwipeScreen(
     matchNotificationsEnabled: Boolean = true,
     notificationDetail: String = AppSettings.NOTIFICATION_DISCREET,
     onOpenStore: () -> Unit = {},
+    onOpenPsync: (() -> Unit)? = null,
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
     topPicksStateHolder: TopPicksStateHolder? = null,
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
@@ -106,6 +107,7 @@ fun SwipeScreen(
         onOpenFilters = { filtersSheetVisible = true },
         onOpenTravel = { travelSheetVisible = true },
         onOpenStore = onOpenStore,
+        onOpenPsync = onOpenPsync,
         onFilterSelected = { filter -> scope.launch { stateHolder.selectFilter(filter) } },
         onTopPickSelected = { pickCard ->
             scope.launch { profileDetailStateHolder.open(pickCard.toProfileCardUi()) }

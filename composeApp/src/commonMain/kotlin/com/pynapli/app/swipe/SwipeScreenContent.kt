@@ -30,6 +30,7 @@ internal fun SwipeScreenContent(
     onOpenFilters: () -> Unit,
     onOpenTravel: () -> Unit,
     onOpenStore: () -> Unit,
+    onOpenPsync: (() -> Unit)? = null,
     onFilterSelected: (SwipeFilterType) -> Unit,
     onTopPickSelected: (SwipeCardDto) -> Unit,
     onRetryDeck: () -> Unit,
@@ -59,6 +60,7 @@ internal fun SwipeScreenContent(
             travelCityName = travelCityName,
             onOpenFilters = onOpenFilters,
             onOpenTravel = onOpenTravel,
+            onOpenPsync = onOpenPsync,
         )
         Spacer(Modifier.height(10.dp))
         SwipeFilterRow(
