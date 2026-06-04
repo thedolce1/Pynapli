@@ -552,10 +552,10 @@ Avoid:
 
 ## Implementation Checklist
 
-- [ ] Psync session model exists.
-- [ ] Both partners must consent before start.
-- [ ] Filters can be suggested before start.
-- [ ] Deck is bounded.
+- [x] Psync session model exists. (PS-1: `V63` `psync_sessions` + `psync_session_participants`; `com.pynapli.server.psync`.)
+- [x] Both partners must consent before start. (PS-1: invite → accept; both `approved` required to reach `ready`; deny/leave → `cancelled`. Ktor-owned status machine.)
+- [x] Filters can be suggested before start. (PS-1: `suggest-filters` replaces the agreed filters, resets both approvals except the suggester, status → `configuring`; both must re-approve to return to `ready`.)
+- [ ] Deck is bounded. (deck_size 1..50 captured at PS-1; deck generation is PS-2.)
 - [ ] Same ordered deck is served to both partners.
 - [ ] Swipes are private during session.
 - [ ] Together match requires target consent.

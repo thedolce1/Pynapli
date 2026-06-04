@@ -126,6 +126,19 @@ internal fun tonightSessionStatusFor(code: String): HttpStatusCode =
         else -> HttpStatusCode.BadRequest
     }
 
+internal fun psyncStatusFor(code: String): HttpStatusCode =
+    when (code) {
+        "PSYNC_NO_LINKED_PARTNER",
+        "INVALID_PSYNC_DECK_SIZE",
+        -> HttpStatusCode.BadRequest
+        "PSYNC_SESSION_ALREADY_ACTIVE",
+        "PSYNC_INVALID_STATE",
+        -> HttpStatusCode.Conflict
+        "PSYNC_NOT_PARTICIPANT" -> HttpStatusCode.Forbidden
+        "PSYNC_SESSION_NOT_FOUND" -> HttpStatusCode.NotFound
+        else -> HttpStatusCode.BadRequest
+    }
+
 internal fun activityStatusFor(code: String): HttpStatusCode =
     when (code) {
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
