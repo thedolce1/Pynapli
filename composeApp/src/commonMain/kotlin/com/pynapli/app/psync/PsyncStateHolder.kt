@@ -112,7 +112,11 @@ class PsyncStateHolder(
             is AppResult.Success -> {
                 applySession(result.value.session)
                 _state.update { it.copy(isLoading = false) }
-                refreshDeckIfActive()
+                when (_state.value.session?.status) {
+                    "active", "paused" -> loadDeck()
+                    "completed" -> loadRecap()
+                    else -> Unit
+                }
             }
             is AppResult.Failure ->
                 _state.update { it.copy(isLoading = false, errorMessage = result.error.message) }
