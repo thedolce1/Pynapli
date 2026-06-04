@@ -565,9 +565,9 @@ Avoid:
 - [x] Either partner can pause/leave. (PS-1: `leave` → `cancelled`. PS-2: `pause`/`resume` round-trip `active↔paused`; actions are refused while paused.)
 - [ ] Partner link ending cancels active session.
 - [~] Blocks/reports invalidate targets. (PS-2: deck generation drops anyone blocked/hidden by either partner. PS-3: match resolution skips any target blocked by/Blocking either partner, even mid-session. Report-driven invalidation TBD.)
-- [~] Activity integration exists. (PS-4a: resolved together + solo matches replay into the existing match→Activity feed + realtime delta + MATCH push for both parties — a partner's private solo match never surfaces to the other. PS-4b: dedicated psync invite/started/recap/expired feed cards + the realtime session channel + nudge.)
+- [~] Activity integration exists. (PS-4a: resolved together + solo matches replay into the existing match→Activity feed + realtime delta + MATCH push for both parties — a partner's private solo match never surfaces to the other. PS-4b: realtime session channel (`/v1/psync/stream`) + nudge (60s cooldown). PS-4c remaining: dedicated psync invite/started/recap/expired Activity feed cards.)
 - [x] Ktor owns session and match state. (Server-authoritative throughout: status machine, deck generation, private actions, and PS-3 match resolution all run server-side under `FOR UPDATE`.)
-- [ ] WebSocket events do not reveal private swipes.
+- [x] WebSocket events do not reveal private swipes. (PS-4b: `/v1/psync/stream` emits session-level convenience deltas only — partner_started/session_active/partner_finished/session_completed/session_paused/session_resumed/nudge — keyed to the recipient; never swipe-by-swipe detail. HTTP fetch stays canonical.)
 
 ## Do Not Implement
 

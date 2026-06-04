@@ -147,6 +147,7 @@ class ServerDependencies(
     val playStoreSubscriptionSyncWorker: PlayStoreSubscriptionSyncWorker?,
     val localMediaUploadStorage: LocalMediaUploadStorage?,
     val activityBroadcaster: ActivityBroadcaster?,
+    val psyncBroadcaster: com.pynapli.server.psync.PsyncBroadcaster?,
     val messageBroadcaster: MessageBroadcaster?,
     val presenceBroadcaster: PresenceBroadcaster?,
     val presenceOfflineScanner: PresenceOfflineScanner?,
@@ -322,6 +323,9 @@ class ServerDependencies(
             val notificationRepository = JdbcNotificationRepository(database.dataSource)
             val notificationService = NotificationService(notificationRepository)
             val activityBroadcaster = ActivityBroadcaster()
+            val psyncBroadcaster =
+                com.pynapli.server.psync
+                    .PsyncBroadcaster()
             val messageBroadcaster = MessageBroadcaster()
             val notificationDispatchWorker =
                 if (config.notificationDispatchEnabled) {
@@ -553,6 +557,8 @@ class ServerDependencies(
                     presenceService = presenceService,
                     activityService = activityService,
                     notificationPublisher = notificationService,
+                    broadcaster = psyncBroadcaster,
+                    rateLimitService = rateLimitService,
                 )
             val topPicksService =
                 TopPicksService(
@@ -592,6 +598,7 @@ class ServerDependencies(
                 playStoreSubscriptionSyncWorker = playStoreSubscriptionSyncWorker,
                 localMediaUploadStorage = localMediaUploadStorage,
                 activityBroadcaster = activityBroadcaster,
+                psyncBroadcaster = psyncBroadcaster,
                 messageBroadcaster = messageBroadcaster,
                 presenceBroadcaster = presenceBroadcaster,
                 presenceOfflineScanner = presenceOfflineScanner,
@@ -690,6 +697,7 @@ class ServerDependencies(
                 playStoreSubscriptionSyncWorker = null,
                 localMediaUploadStorage = null,
                 activityBroadcaster = null,
+                psyncBroadcaster = null,
                 messageBroadcaster = null,
                 presenceBroadcaster = null,
                 presenceOfflineScanner = null,

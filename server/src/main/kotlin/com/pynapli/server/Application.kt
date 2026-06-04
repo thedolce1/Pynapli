@@ -28,6 +28,7 @@ import com.pynapli.server.profile.configureProfileRoutes
 import com.pynapli.server.profile.configureTonightAvailabilityRoutes
 import com.pynapli.server.profilelink.configureProfileLinkRoutes
 import com.pynapli.server.psync.configurePsyncRoutes
+import com.pynapli.server.psync.configurePsyncStreamRoutes
 import com.pynapli.server.routing.configureHealthRoutes
 import com.pynapli.server.safety.configureSafetyRoutes
 import com.pynapli.server.subscriptions.configurePlayStoreRtdnRoutes
@@ -95,6 +96,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureTonightSessionRoutes(dependencies.authService, dependencies.tonightSessionService)
     configureTonightFeedRoutes(dependencies.authService, dependencies.tonightFeedService)
     configurePsyncRoutes(dependencies.authService, dependencies.psyncSessionService)
+    configurePsyncStreamRoutes(dependencies.authService, dependencies.psyncBroadcaster)
     configureActivityRoutes(dependencies.authService, dependencies.activityService)
     configureActivityStreamRoutes(dependencies.authService, dependencies.activityBroadcaster)
     configureNotificationRoutes(dependencies.authService, dependencies.notificationService)

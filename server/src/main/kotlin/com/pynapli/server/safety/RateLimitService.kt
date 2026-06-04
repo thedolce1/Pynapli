@@ -58,9 +58,12 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.SWIPE_ACTION, limit = 500, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.FIRST_MESSAGE, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.GRID_QUERY, limit = 720, windowSeconds = ONE_HOUR_SECONDS),
+                // PSYNC_SPEC PS-4: nudge cooldown — one nudge per minute per user (≈one live session).
+                RateLimitPolicy(action = RateLimitedAction.PSYNC_NUDGE, limit = 1, windowSeconds = NUDGE_COOLDOWN_SECONDS),
             ).associateBy { it.action }
 
         private const val ONE_HOUR_SECONDS = 3_600L
+        private const val NUDGE_COOLDOWN_SECONDS = 60L
     }
 }
 
@@ -72,6 +75,7 @@ object RateLimitedAction {
     const val SWIPE_ACTION = "swipe_action"
     const val FIRST_MESSAGE = "first_message"
     const val GRID_QUERY = "grid_query"
+    const val PSYNC_NUDGE = "psync_nudge"
 }
 
 data class RateLimitDecision(

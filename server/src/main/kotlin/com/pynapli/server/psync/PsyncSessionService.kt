@@ -42,6 +42,8 @@ class PsyncSessionService(
     private val presenceService: com.pynapli.server.presence.PresenceService? = null,
     private val activityService: com.pynapli.server.activity.ActivityService? = null,
     private val notificationPublisher: com.pynapli.server.notifications.NotificationPublisher? = null,
+    private val broadcaster: PsyncBroadcaster? = null,
+    private val rateLimitService: com.pynapli.server.safety.RateLimitService? = null,
     private val deckTokenCodec: com.pynapli.server.swipe.SwipeDeckTokenCodec =
         com.pynapli.server.swipe
             .SwipeDeckTokenCodec(),
@@ -151,7 +153,12 @@ class PsyncSessionService(
                 PsyncSessionRepository.StartOutcome.NotParticipant -> throw PsyncException("PSYNC_NOT_PARTICIPANT")
                 PsyncSessionRepository.StartOutcome.InvalidState -> throw PsyncException("PSYNC_INVALID_STATE")
             }
-        if (started.alreadyActive || !started.allStarted) {
+        if (started.alreadyActive) {
+            return started.session.toDto()
+        }
+        if (!started.allStarted) {
+            // Single tap: let the other partner know the caller is in.
+            emitDelta(sessionId, PsyncBroadcaster.PARTNER_STARTED, otherParticipantIds(started.session, userId))
             return started.session.toDto()
         }
 
@@ -205,7 +212,11 @@ class PsyncSessionService(
             }
 
         return when (val activated = repository.activateWithDeck(sessionId, deckSessionId, cards, now)) {
-            is PsyncSessionRepository.MutateOutcome.Updated -> activated.session.toDto()
+            is PsyncSessionRepository.MutateOutcome.Updated -> {
+                // Both partners are in and the deck is live — tell both to load it.
+                emitDelta(sessionId, PsyncBroadcaster.SESSION_ACTIVE, allParticipantIds(activated.session))
+                activated.session.toDto()
+            }
             else -> throw PsyncException("PSYNC_INVALID_STATE")
         }
     }
@@ -253,6 +264,7 @@ class PsyncSessionService(
                     finish.session.status == STATUS_COMPLETED
                 ) {
                     emitMatchActivity(finish.resolvedMatches)
+                    emitDelta(sessionId, PsyncBroadcaster.SESSION_COMPLETED, allParticipantIds(session))
                     true
                 } else {
                     false
@@ -261,6 +273,11 @@ class PsyncSessionService(
                 false
             }
 
+        // The caller just exhausted their own deck (but the partner has not) — nudge the UI.
+        if (!completed && outcome.newlyRecorded && deckCount > 0 && outcome.actedCount >= deckCount) {
+            emitDelta(sessionId, PsyncBroadcaster.PARTNER_FINISHED, otherParticipantIds(session, userId))
+        }
+
         return PsyncActionResponseDto(
             recorded = outcome.newlyRecorded,
             actedCount = outcome.actedCount,
@@ -268,6 +285,28 @@ class PsyncSessionService(
             sessionCompleted = completed,
         )
     }
+
+    /** Fan out a convenience realtime delta to [recipients] (no-op without a broadcaster). */
+    private suspend fun emitDelta(
+        sessionId: UUID,
+        type: String,
+        recipients: List<UUID>,
+    ) {
+        val b = broadcaster ?: return
+        val now = clock.instant()
+        recipients.forEach { recipient ->
+            b.emit(PsyncRealtimeDelta(recipientUserId = recipient, sessionId = sessionId, type = type, occurredAt = now))
+        }
+    }
+
+    private fun allParticipantIds(session: PsyncSession): List<UUID> = session.participants.map { it.userId }
+
+    private fun otherParticipantIds(
+        session: PsyncSession,
+        userId: UUID,
+    ): List<UUID> = session.participants.map { it.userId }.filter { it != userId }
+
+    private fun PsyncSessionDto.participantIds(): List<UUID> = participants.map { UUID.fromString(it.userId) }
 
     /** True once both participants have acted on every deck card (the auto-complete gate). */
     private suspend fun bothPartnersFinished(
@@ -398,12 +437,40 @@ class PsyncSessionService(
     suspend fun pause(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = repository.transitionStatus(sessionId, userId, fromStatus = "active", toStatus = "paused").orThrow()
+    ): PsyncSessionDto {
+        val dto = repository.transitionStatus(sessionId, userId, fromStatus = "active", toStatus = "paused").orThrow()
+        emitDelta(sessionId, PsyncBroadcaster.SESSION_PAUSED, dto.participantIds())
+        return dto
+    }
 
     suspend fun resume(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = repository.transitionStatus(sessionId, userId, fromStatus = "paused", toStatus = "active").orThrow()
+    ): PsyncSessionDto {
+        val dto = repository.transitionStatus(sessionId, userId, fromStatus = "paused", toStatus = "active").orThrow()
+        emitDelta(sessionId, PsyncBroadcaster.SESSION_RESUMED, dto.participantIds())
+        return dto
+    }
+
+    /**
+     * PS-4b: nudge the other partner to keep swiping. Convenience-only realtime ping, rate
+     * limited to a short cooldown (see [RateLimitedAction.PSYNC_NUDGE]); never reveals swipes.
+     */
+    suspend fun nudge(
+        sessionId: UUID,
+        userId: UUID,
+    ): com.pynapli.shared.network.dto.PsyncNudgeResponseDto {
+        val session = requireActiveParticipant(sessionId, userId, allowPaused = true)
+        if (rateLimitService
+                ?.check(userId, com.pynapli.server.safety.RateLimitedAction.PSYNC_NUDGE)
+                ?.allowed == false
+        ) {
+            throw PsyncException("PSYNC_NUDGE_COOLDOWN")
+        }
+        emitDelta(sessionId, PsyncBroadcaster.NUDGE, otherParticipantIds(session, userId))
+        return com.pynapli.shared.network.dto
+            .PsyncNudgeResponseDto(sent = true)
+    }
 
     private suspend fun requireActiveParticipant(
         sessionId: UUID,

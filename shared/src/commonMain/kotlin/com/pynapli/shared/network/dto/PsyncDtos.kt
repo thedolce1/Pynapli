@@ -92,6 +92,22 @@ data class PsyncMatchDto(
     val kind: String, // 'together' | 'solo'
 )
 
+// PS-4b: realtime session channel + nudge. Convenience deltas only — they tell a partner
+// that session state changed (partner started/finished, session activated/completed/paused/
+// resumed, or a nudge). They NEVER carry swipe-by-swipe detail. HTTP fetch stays canonical.
+
+@Serializable
+data class PsyncRealtimeDeltaDto(
+    val sessionId: String,
+    val type: String, // partner_started | session_active | partner_finished | session_completed | session_paused | session_resumed | nudge
+    val occurredAt: String,
+)
+
+@Serializable
+data class PsyncNudgeResponseDto(
+    val sent: Boolean,
+)
+
 @Serializable
 data class PsyncRecapDto(
     val sessionId: String,
