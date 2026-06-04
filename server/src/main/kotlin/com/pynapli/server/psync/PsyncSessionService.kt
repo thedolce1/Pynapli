@@ -44,6 +44,7 @@ class PsyncSessionService(
     private val notificationPublisher: com.pynapli.server.notifications.NotificationPublisher? = null,
     private val broadcaster: PsyncBroadcaster? = null,
     private val rateLimitService: com.pynapli.server.safety.RateLimitService? = null,
+    private val subscriptionService: com.pynapli.server.subscriptions.SubscriptionService? = null,
     private val deckTokenCodec: com.pynapli.server.swipe.SwipeDeckTokenCodec =
         com.pynapli.server.swipe
             .SwipeDeckTokenCodec(),
@@ -56,6 +57,14 @@ class PsyncSessionService(
     ): PsyncSessionDto {
         if (request.deckSize !in MIN_DECK_SIZE..MAX_DECK_SIZE) {
             throw PsyncException("INVALID_PSYNC_DECK_SIZE")
+        }
+
+        // PSYNC_SPEC Monetization: the deck size is capped by the initiator's tier (Free is small).
+        subscriptionService?.let { subscriptions ->
+            val policy = subscriptions.getPolicy(userId)
+            if (request.deckSize > policy.psyncMaxDeckSize) {
+                throw PsyncException("PSYNC_DECK_SIZE_NOT_ALLOWED")
+            }
         }
 
         val link =

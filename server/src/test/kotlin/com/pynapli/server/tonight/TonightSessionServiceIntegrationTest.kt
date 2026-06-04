@@ -687,6 +687,7 @@ private fun policy(tier: String): EntitlementPolicy =
         introNoteInventoryRequired = true,
         gridPageLimit = 60,
         gridResultDepthLimit = 60,
+        psyncMaxDeckSize = if (tier == SubscriptionTier.FREE) 10 else 50,
     )
 
 private fun DataSource.insertUserWithProfile(

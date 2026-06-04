@@ -559,6 +559,7 @@ class ServerDependencies(
                     notificationPublisher = notificationService,
                     broadcaster = psyncBroadcaster,
                     rateLimitService = rateLimitService,
+                    subscriptionService = subscriptionService,
                 )
             val topPicksService =
                 TopPicksService(

@@ -11,6 +11,8 @@ data class EntitlementPolicy(
     val introNoteInventoryRequired: Boolean,
     val gridPageLimit: Int,
     val gridResultDepthLimit: Int,
+    // PSYNC_SPEC Monetization: Free has a limited deck size; Social/Select get larger decks.
+    val psyncMaxDeckSize: Int,
 ) {
     val fullActivityReveal: Boolean
         get() = activityRevealLimit == Int.MAX_VALUE
@@ -25,7 +27,13 @@ data class EntitlementPolicy(
                 introNoteInventoryRequired = true,
                 gridPageLimit = 120,
                 gridResultDepthLimit = Int.MAX_VALUE,
+                psyncMaxDeckSize = PSYNC_MAX_DECK_SIZE,
             )
+
+        // PSYNC_SPEC deck-size caps per tier (overall hard cap is 50; see psync_sessions CHECK).
+        const val PSYNC_MAX_DECK_SIZE = 50
+        const val PSYNC_SOCIAL_DECK_SIZE = 25
+        const val PSYNC_FREE_DECK_SIZE = 10
     }
 }
 
@@ -40,6 +48,7 @@ fun SubscriptionEntitlementDto.toPolicy(): EntitlementPolicy =
                 introNoteInventoryRequired = true,
                 gridPageLimit = 120,
                 gridResultDepthLimit = Int.MAX_VALUE,
+                psyncMaxDeckSize = EntitlementPolicy.PSYNC_MAX_DECK_SIZE,
             )
         SubscriptionTier.SOCIAL ->
             EntitlementPolicy(
@@ -50,6 +59,7 @@ fun SubscriptionEntitlementDto.toPolicy(): EntitlementPolicy =
                 introNoteInventoryRequired = true,
                 gridPageLimit = 90,
                 gridResultDepthLimit = 600,
+                psyncMaxDeckSize = EntitlementPolicy.PSYNC_SOCIAL_DECK_SIZE,
             )
         else ->
             EntitlementPolicy(
@@ -60,5 +70,6 @@ fun SubscriptionEntitlementDto.toPolicy(): EntitlementPolicy =
                 introNoteInventoryRequired = true,
                 gridPageLimit = 60,
                 gridResultDepthLimit = 60,
+                psyncMaxDeckSize = EntitlementPolicy.PSYNC_FREE_DECK_SIZE,
             )
     }
