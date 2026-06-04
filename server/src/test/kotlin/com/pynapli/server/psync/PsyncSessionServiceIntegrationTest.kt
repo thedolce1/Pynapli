@@ -808,6 +808,64 @@ class PsyncSessionServiceIntegrationTest :
                 assertEquals("PSYNC_SESSION_NOT_FOUND", error.code)
             }
         }
+
+        // ---- PS-4c: dedicated Psync Activity feed cards --------------------------------
+
+        "creating an invite records a psync_invite card for the invitee only" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                deckServiceWithActivity(emptyList()).create(initiator, CreatePsyncSessionRequestDto())
+
+                assertEquals(1, dataSource.countActivityEvents(partner, "psync_invite"))
+                assertEquals(0, dataSource.countActivityEvents(initiator, "psync_invite"))
+            }
+        }
+
+        "starting records a psync_started card for both partners" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val svc = deckServiceWithActivity(listOf(target))
+                svc.activeSessionOver(initiator, partner, target)
+
+                assertEquals(1, dataSource.countActivityEvents(initiator, "psync_started"))
+                assertEquals(1, dataSource.countActivityEvents(partner, "psync_started"))
+            }
+        }
+
+        "completing records a psync_recap card for both partners (once)" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "like") // auto-completes
+                svc.complete(sessionId, initiator) // idempotent re-complete
+
+                assertEquals(1, dataSource.countActivityEvents(initiator, "psync_recap"))
+                assertEquals(1, dataSource.countActivityEvents(partner, "psync_recap"))
+            }
+        }
+
+        "expiry records a psync_expired card for both partners" {
+            runBlocking {
+                val now = Instant.parse("2026-06-01T20:00:00Z")
+                val (initiator, partner) = seedLinkedPair()
+                deckServiceWithActivity(emptyList(), Clock.fixed(now, ZoneOffset.UTC))
+                    .create(initiator, CreatePsyncSessionRequestDto())
+
+                val swept =
+                    deckServiceWithActivity(emptyList(), Clock.fixed(now.plus(Duration.ofHours(25)), ZoneOffset.UTC))
+                        .expireStale()
+
+                assertEquals(1, swept)
+                assertEquals(1, dataSource.countActivityEvents(initiator, "psync_expired"))
+                assertEquals(1, dataSource.countActivityEvents(partner, "psync_expired"))
+            }
+        }
     })
 
 // PS-4b: in-memory rate limiter — psync_nudge policy is limit 1 / 60s, so the first nudge for a

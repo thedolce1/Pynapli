@@ -78,8 +78,8 @@ interface PsyncSessionRepository {
         now: Instant,
     ): PsyncSession?
 
-    /** Sweep stale non-terminal sessions to 'expired'. Returns rows updated. */
-    suspend fun expireStale(now: Instant): Int
+    /** Sweep stale non-terminal sessions to 'expired'. Returns the swept sessions + participants. */
+    suspend fun expireStale(now: Instant): List<PsyncExpiredSession>
 
     // ---- PS-2: shared deck + private swipes --------------------------------------------
 

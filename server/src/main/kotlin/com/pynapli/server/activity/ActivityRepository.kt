@@ -38,6 +38,17 @@ interface ActivityRepository {
         conversationId: UUID,
     ): Boolean
 
+    /**
+     * Record a Psync session-lifecycle card (psync_invite/started/recap/expired) for [recipientUserId].
+     * Idempotent per (recipient, eventType, sessionId). Returns true if a new row was inserted.
+     */
+    suspend fun recordPsyncSessionEvent(
+        recipientUserId: UUID,
+        actorUserId: UUID,
+        eventType: String,
+        sessionId: UUID,
+    ): Boolean = false
+
     suspend fun getAlbumRequestEvent(
         recipientUserId: UUID,
         eventId: UUID,
