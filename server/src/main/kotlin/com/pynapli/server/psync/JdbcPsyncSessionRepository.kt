@@ -514,6 +514,114 @@ class JdbcPsyncSessionRepository(
             }
         }
 
+    // ---- PS-3: match resolution + recap ------------------------------------------------
+
+    override suspend fun complete(
+        sessionId: UUID,
+        userId: UUID,
+        now: Instant,
+        matchIdFactory: () -> UUID,
+    ): MutateOutcome =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.inTransaction {
+                    val session =
+                        connection.lockSession(sessionId)
+                            ?: return@inTransaction MutateOutcome.SessionNotFound
+                    if (session.participants.none { it.userId == userId }) {
+                        return@inTransaction MutateOutcome.NotParticipant
+                    }
+                    // Idempotent: matches were already resolved on a prior completion.
+                    if (session.status == STATUS_COMPLETED) {
+                        return@inTransaction MutateOutcome.Updated(session)
+                    }
+                    if (session.status != STATUS_ACTIVE && session.status != STATUS_PAUSED) {
+                        return@inTransaction MutateOutcome.InvalidState
+                    }
+
+                    connection.resolveMatches(session, matchIdFactory)
+                    connection.setSessionStatus(sessionId, STATUS_COMPLETED, endedAt = now)
+
+                    val updated =
+                        connection.loadSession(sessionId)
+                            ?: return@inTransaction MutateOutcome.SessionNotFound
+                    MutateOutcome.Updated(updated)
+                }
+            }
+        }
+
+    override suspend fun listSessionMatches(sessionId: UUID): List<PsyncSessionMatch> =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT m.target_user_id, m.kind, m.owner_user_id,
+                               COALESCE(NULLIF(TRIM(pr.display_name), ''), 'Pynapli User') AS display_name
+                        FROM psync_session_matches m
+                        LEFT JOIN profiles pr ON pr.user_id = m.target_user_id
+                        WHERE m.session_id = ?
+                        ORDER BY m.kind ASC, m.created_at ASC
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, sessionId)
+                        statement.executeQuery().use { rs ->
+                            buildList {
+                                while (rs.next()) {
+                                    add(
+                                        PsyncSessionMatch(
+                                            targetUserId = rs.getObject("target_user_id", UUID::class.java),
+                                            kind = rs.getString("kind"),
+                                            ownerUserId = rs.getObject("owner_user_id", UUID::class.java),
+                                            displayName = rs.getString("display_name"),
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    }
+            }
+        }
+
+    override suspend fun countDeckCards(sessionId: UUID): Int =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement("SELECT COUNT(*) FROM psync_session_cards WHERE session_id = ?")
+                    .use { statement ->
+                        statement.setObject(1, sessionId)
+                        statement.executeQuery().use { rs ->
+                            rs.next()
+                            rs.getInt(1)
+                        }
+                    }
+            }
+        }
+
+    override suspend fun countBothLiked(sessionId: UUID): Int =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT COUNT(*) FROM (
+                            SELECT target_user_id
+                            FROM psync_session_actions
+                            WHERE session_id = ? AND action IN ('like', 'pineapple_like')
+                            GROUP BY target_user_id
+                            HAVING COUNT(DISTINCT actor_user_id) = 2
+                        ) both_liked
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, sessionId)
+                        statement.executeQuery().use { rs ->
+                            rs.next()
+                            rs.getInt(1)
+                        }
+                    }
+            }
+        }
+
     // ---- transactional helpers -------------------------------------------------------
 
     private inline fun <T> Connection.inTransaction(block: () -> T): T {
@@ -760,6 +868,184 @@ class JdbcPsyncSessionRepository(
             }
         }
 
+    /**
+     * Resolve every deck target into a together / solo / no-match outcome and persist it.
+     * Together: both partners liked + target is together-open + target reciprocated (liked >=1
+     * partner). Otherwise each partner who liked a target that liked them back gets a solo
+     * passthrough match. Blocks (either direction, either partner) skip the target entirely.
+     */
+    private fun Connection.resolveMatches(
+        session: PsyncSession,
+        matchIdFactory: () -> UUID,
+    ) {
+        val initiator = session.initiatorUserId
+        val partner =
+            session.participants.firstOrNull { it.userId != initiator }?.userId
+                ?: return // a session always has two participants; nothing to resolve otherwise
+        val targets = deckTargetIds(session.id)
+        val likedByInitiator = likedTargetsByActor(session.id, initiator)
+        val likedByPartner = likedTargetsByActor(session.id, partner)
+
+        for (target in targets) {
+            val aLiked = target in likedByInitiator
+            val bLiked = target in likedByPartner
+            if (!aLiked && !bLiked) continue
+            // Blocks override all match state.
+            if (blockedBetween(target, initiator) || blockedBetween(target, partner)) continue
+
+            val tLikesA = targetLikesPartner(target, initiator)
+            val tLikesB = targetLikesPartner(target, partner)
+
+            if (aLiked && bLiked && togetherEnabled(target) && (tLikesA || tLikesB)) {
+                upsertMatch(initiator, target, matchIdFactory)
+                val matchId = upsertMatch(partner, target, matchIdFactory)
+                insertSessionMatch(session.id, target, kind = "together", ownerUserId = null, matchId = matchId)
+                continue
+            }
+            // Solo passthrough(s): each liking partner the target liked back.
+            if (aLiked && tLikesA) {
+                val matchId = upsertMatch(initiator, target, matchIdFactory)
+                insertSessionMatch(session.id, target, kind = "solo", ownerUserId = initiator, matchId = matchId)
+            }
+            if (bLiked && tLikesB) {
+                val matchId = upsertMatch(partner, target, matchIdFactory)
+                insertSessionMatch(session.id, target, kind = "solo", ownerUserId = partner, matchId = matchId)
+            }
+        }
+    }
+
+    private fun Connection.deckTargetIds(sessionId: UUID): List<UUID> =
+        prepareStatement(
+            "SELECT target_user_id FROM psync_session_cards WHERE session_id = ? ORDER BY position ASC",
+        ).use { statement ->
+            statement.setObject(1, sessionId)
+            statement.executeQuery().use { rs ->
+                buildList { while (rs.next()) add(rs.getObject("target_user_id", UUID::class.java)) }
+            }
+        }
+
+    private fun Connection.likedTargetsByActor(
+        sessionId: UUID,
+        actorUserId: UUID,
+    ): Set<UUID> =
+        prepareStatement(
+            """
+            SELECT target_user_id
+            FROM psync_session_actions
+            WHERE session_id = ? AND actor_user_id = ? AND action IN ('like', 'pineapple_like')
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, sessionId)
+            statement.setObject(2, actorUserId)
+            statement.executeQuery().use { rs ->
+                buildSet { while (rs.next()) add(rs.getObject("target_user_id", UUID::class.java)) }
+            }
+        }
+
+    private fun Connection.togetherEnabled(userId: UUID): Boolean =
+        prepareStatement(
+            "SELECT COALESCE(together_enabled, false) FROM discovery_settings WHERE user_id = ?",
+        ).use { statement ->
+            statement.setObject(1, userId)
+            statement.executeQuery().use { rs -> if (!rs.next()) false else rs.getBoolean(1) }
+        }
+
+    private fun Connection.targetLikesPartner(
+        targetUserId: UUID,
+        partnerUserId: UUID,
+    ): Boolean =
+        prepareStatement(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM swipe_actions
+                WHERE actor_user_id = ? AND target_user_id = ? AND action = 'like'
+            )
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, targetUserId)
+            statement.setObject(2, partnerUserId)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getBoolean(1)
+            }
+        }
+
+    private fun Connection.blockedBetween(
+        userA: UUID,
+        userB: UUID,
+    ): Boolean =
+        prepareStatement(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM user_blocks
+                WHERE (blocker_user_id = ? AND blocked_user_id = ?)
+                   OR (blocker_user_id = ? AND blocked_user_id = ?)
+            )
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, userA)
+            statement.setObject(2, userB)
+            statement.setObject(3, userB)
+            statement.setObject(4, userA)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getBoolean(1)
+            }
+        }
+
+    private fun Connection.upsertMatch(
+        actorUserId: UUID,
+        targetUserId: UUID,
+        matchIdFactory: () -> UUID,
+    ): UUID {
+        val (userA, userB) =
+            if (actorUserId.toString() < targetUserId.toString()) {
+                actorUserId to targetUserId
+            } else {
+                targetUserId to actorUserId
+            }
+        return prepareStatement(
+            """
+            INSERT INTO matches (id, user_a, user_b)
+            VALUES (?, ?, ?)
+            ON CONFLICT (user_a, user_b) DO UPDATE SET user_a = EXCLUDED.user_a
+            RETURNING id
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, matchIdFactory())
+            statement.setObject(2, userA)
+            statement.setObject(3, userB)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getObject("id", UUID::class.java)
+            }
+        }
+    }
+
+    private fun Connection.insertSessionMatch(
+        sessionId: UUID,
+        targetUserId: UUID,
+        kind: String,
+        ownerUserId: UUID?,
+        matchId: UUID,
+    ) {
+        prepareStatement(
+            """
+            INSERT INTO psync_session_matches (id, session_id, target_user_id, kind, owner_user_id, match_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT DO NOTHING
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, sessionId)
+            statement.setObject(3, targetUserId)
+            statement.setString(4, kind)
+            statement.setObject(5, ownerUserId)
+            statement.setObject(6, matchId)
+            statement.executeUpdate()
+        }
+    }
+
     private fun ResultSet.toDeckCard(): PsyncSessionCard =
         PsyncSessionCard(
             id = getObject("id", UUID::class.java),
@@ -794,6 +1080,8 @@ class JdbcPsyncSessionRepository(
         const val STATUS_CONFIGURING = "configuring"
         const val STATUS_READY = "ready"
         const val STATUS_ACTIVE = "active"
+        const val STATUS_PAUSED = "paused"
+        const val STATUS_COMPLETED = "completed"
         const val STATUS_CANCELLED = "cancelled"
         const val CONSENT_ACCEPTED = "accepted"
         const val CONSENT_DENIED = "denied"

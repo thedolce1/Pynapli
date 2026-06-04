@@ -152,6 +152,31 @@ interface PsyncSessionRepository {
         toStatus: String,
     ): MutateOutcome
 
+    // ---- PS-3: match resolution + recap -------------------------------------------------
+
+    /**
+     * Finish a session [userId] participates in: resolve every deck target into a together /
+     * solo / no-match outcome, persist the canonical `matches` rows + `psync_session_matches`
+     * provenance, set status='completed' and ended_at, all under a `FOR UPDATE` lock. Requires
+     * the session to be `active` or `paused`; if it is already `completed` this is an idempotent
+     * no-op (no re-resolution) that returns the current session.
+     */
+    suspend fun complete(
+        sessionId: UUID,
+        userId: UUID,
+        now: Instant,
+        matchIdFactory: () -> UUID = UUID::randomUUID,
+    ): MutateOutcome
+
+    /** Resolved match outcomes for a session (display names joined). */
+    suspend fun listSessionMatches(sessionId: UUID): List<PsyncSessionMatch>
+
+    /** Number of cards in the shared deck (profiles reviewed). */
+    suspend fun countDeckCards(sessionId: UUID): Int
+
+    /** Number of deck targets liked (like/pineapple_like) by BOTH partners. */
+    suspend fun countBothLiked(sessionId: UUID): Int
+
     /** The active linked partner of a user, with the link row id. */
     data class ActiveLink(
         val linkId: UUID,

@@ -66,3 +66,16 @@ data class PsyncSessionAction(
     val action: String,
     val createdAt: Instant,
 )
+
+/**
+ * PS-3 resolved match outcome (mirrors `psync_session_matches`). [kind] is 'together'
+ * (both partners + target together-mode consent; [ownerUserId] null, belongs to both) or
+ * 'solo' (one partner's solo passthrough; [ownerUserId] is that partner). [displayName] is
+ * joined for the recap/Activity card.
+ */
+data class PsyncSessionMatch(
+    val targetUserId: UUID,
+    val kind: String,
+    val ownerUserId: UUID?,
+    val displayName: String? = null,
+)
