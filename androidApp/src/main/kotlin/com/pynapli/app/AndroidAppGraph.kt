@@ -177,6 +177,11 @@ class AndroidAppGraph(
                     .ApiTonightRepository(apiClient),
         )
 
+    // Psync repository; the per-viewer PsyncStateHolder is built in PynapliApp from this.
+    val psyncRepository =
+        com.pynapli.app.psync
+            .ApiPsyncRepository(apiClient)
+
     val gridPresenceStreamCoordinator =
         GridPresenceStreamCoordinator(
             client =

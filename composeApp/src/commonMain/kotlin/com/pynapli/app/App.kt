@@ -69,6 +69,7 @@ fun PynapliApp(
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
     tonightAvailabilityStateHolder: com.pynapli.app.grid.TonightAvailabilityStateHolder? = null,
     playingTonightStateHolder: com.pynapli.app.tonight.PlayingTonightStateHolder? = null,
+    psyncRepository: com.pynapli.app.psync.PsyncRepository? = null,
     deepLinkStateHolder: AppDeepLinkStateHolder? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
@@ -95,6 +96,15 @@ fun PynapliApp(
         var selectedTab by remember { mutableStateOf(PynapliTab.Grid) }
         var profileSurface by remember { mutableStateOf(ProfileSurface.None) }
         var tonightVisible by remember { mutableStateOf(false) }
+        var psyncVisible by remember { mutableStateOf(false) }
+        // Built per signed-in viewer so session mapping (isInitiator/partner) is correct.
+        val psyncStateHolder =
+            remember(authState.session?.userId, psyncRepository) {
+                psyncRepository?.let { repo ->
+                    com.pynapli.app.psync
+                        .PsyncStateHolder(repo, authState.session?.userId)
+                }
+            }
         var activeNotification by remember { mutableStateOf<InAppNotificationUi?>(null) }
         var messageUnreadSnapshot by remember { mutableStateOf<Map<String, Int>?>(null) }
         var activityEventSnapshot by remember { mutableStateOf<Set<String>?>(null) }
@@ -554,6 +564,7 @@ fun PynapliApp(
                                 matchNotificationsEnabled = appSettingsState.settings.matchNotifications,
                                 notificationDetail = appSettingsState.settings.notificationDetail,
                                 onOpenStore = { selectedTab = PynapliTab.Store },
+                                onOpenPsync = psyncStateHolder?.let { { psyncVisible = true } },
                                 savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
                                 topPicksStateHolder = topPicksStateHolder,
                                 travelLocationStateHolder = travelLocationStateHolder,
@@ -617,6 +628,16 @@ fun PynapliApp(
                         profileDetailStateHolder.openFromTonight(userId)
                     }
                 },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        if (psyncVisible && psyncStateHolder != null) {
+            // Psync synchronized-swipe surface, opened from the Swipe header (PSYNC_SPEC: Psync
+            // lives in the Swipe/partner flow, not its own tab).
+            com.pynapli.app.psync.PsyncSessionScreen(
+                stateHolder = psyncStateHolder,
+                onBack = { psyncVisible = false },
                 modifier = Modifier.fillMaxSize(),
             )
         }

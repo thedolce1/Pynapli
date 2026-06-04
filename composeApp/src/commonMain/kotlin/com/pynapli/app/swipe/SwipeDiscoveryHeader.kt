@@ -28,12 +28,17 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
 
+internal object SwipeHeaderTags {
+    const val OPEN_PSYNC = "swipe_open_psync"
+}
+
 @Composable
 internal fun SwipeHeader(
     activeFilterCount: Int,
     travelCityName: String?,
     onOpenFilters: () -> Unit,
     onOpenTravel: () -> Unit,
+    onOpenPsync: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -58,6 +63,14 @@ internal fun SwipeHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+        onOpenPsync?.let { openPsync ->
+            TextButton(
+                onClick = openPsync,
+                modifier = Modifier.testTag(SwipeHeaderTags.OPEN_PSYNC),
+            ) {
+                Text(text = "Psync", maxLines = 1)
+            }
         }
         TextButton(
             onClick = onOpenTravel,
