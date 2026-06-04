@@ -73,6 +73,19 @@ class PsyncSessionServiceIntegrationTest :
                 clock = clock,
             )
 
+        // PS-6a: service whose deck size is gated by the initiator's tier. With no subscription
+        // rows the initiator is Free (psyncMaxDeckSize = 10).
+        fun freeTierService(clock: Clock = Clock.systemUTC()): PsyncSessionService =
+            PsyncSessionService(
+                repository = JdbcPsyncSessionRepository(dataSource),
+                subscriptionService =
+                    com.pynapli.server.subscriptions.SubscriptionService(
+                        com.pynapli.server.subscriptions
+                            .JdbcSubscriptionRepository(dataSource),
+                    ),
+                clock = clock,
+            )
+
         // PS-2 service with a fake deck ranker (returns the given candidates in order) + real
         // block/hidden repos so cross-partner exclusion is exercised against the DB.
         fun deckService(
@@ -806,6 +819,32 @@ class PsyncSessionServiceIntegrationTest :
 
                 val error = assertFailsWith<PsyncException> { svc.nudge(sessionId, outsider) }
                 assertEquals("PSYNC_SESSION_NOT_FOUND", error.code)
+            }
+        }
+
+        // ---- PS-6a: deck-size entitlement gating ---------------------------------------
+
+        "create rejects a deck larger than the initiator's tier allows (Free caps at 10)" {
+            runBlocking {
+                val (initiator, _) = seedLinkedPair()
+                val svc = freeTierService()
+
+                val error =
+                    assertFailsWith<PsyncException> {
+                        svc.create(initiator, CreatePsyncSessionRequestDto(deckSize = 25))
+                    }
+                assertEquals("PSYNC_DECK_SIZE_NOT_ALLOWED", error.code)
+            }
+        }
+
+        "create allows a deck within the initiator's tier (Free up to 10)" {
+            runBlocking {
+                val (initiator, _) = seedLinkedPair()
+                val svc = freeTierService()
+
+                val session = svc.create(initiator, CreatePsyncSessionRequestDto(deckSize = 10))
+                assertEquals("invited", session.status)
+                assertEquals(10, session.deckSize)
             }
         }
 
