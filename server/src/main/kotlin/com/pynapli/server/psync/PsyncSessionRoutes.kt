@@ -17,8 +17,8 @@ import io.ktor.server.routing.routing
 import java.util.UUID
 
 /**
- * Psync session endpoints (PS-1 negotiation + PS-2 shared deck/swipes). All bearer-authed.
- * Match resolution + recap remain later phases.
+ * Psync session endpoints (PS-1 negotiation + PS-2 shared deck/swipes + PS-3 match
+ * resolution/recap). All bearer-authed. Realtime + Activity remain later phases.
  */
 fun Application.configurePsyncRoutes(
     authService: AuthService?,
@@ -82,6 +82,16 @@ fun Application.configurePsyncRoutes(
         post("/v1/psync/sessions/{id}/resume") {
             val user = authService.authenticate(call.requiredBearerToken())
             call.respond(service.resume(call.requiredSessionId(), user.id))
+        }
+
+        post("/v1/psync/sessions/{id}/complete") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(service.complete(call.requiredSessionId(), user.id))
+        }
+
+        get("/v1/psync/sessions/{id}/recap") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(service.getRecap(call.requiredSessionId(), user.id))
         }
 
         get("/v1/psync/sessions/{id}") {

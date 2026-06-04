@@ -5,7 +5,9 @@ import com.pynapli.shared.network.dto.CurrentPsyncSessionDto
 import com.pynapli.shared.network.dto.PsyncActionResponseDto
 import com.pynapli.shared.network.dto.PsyncDeckCardDto
 import com.pynapli.shared.network.dto.PsyncDeckResponseDto
+import com.pynapli.shared.network.dto.PsyncMatchDto
 import com.pynapli.shared.network.dto.PsyncParticipantDto
+import com.pynapli.shared.network.dto.PsyncRecapDto
 import com.pynapli.shared.network.dto.PsyncSessionDto
 import com.pynapli.shared.network.dto.SubmitPsyncActionRequestDto
 import com.pynapli.shared.network.dto.SuggestPsyncFiltersRequestDto
@@ -239,11 +241,119 @@ class PsyncSessionService(
             repository.findCardByTokenHash(sessionId, deckTokenCodec.tokenHash(request.cardToken))
                 ?: throw PsyncException("PSYNC_INVALID_CARD")
         val outcome = repository.recordAction(sessionId, userId, card.targetUserId, request.action, clock.instant())
+
+        // Auto-complete when this action exhausts the deck for BOTH partners.
+        val deckCount = repository.countDeckCards(sessionId)
+        val completed =
+            if (outcome.actedCount >= deckCount && bothPartnersFinished(session, userId, deckCount)) {
+                val finish = repository.complete(sessionId, userId, clock.instant())
+                finish is PsyncSessionRepository.MutateOutcome.Updated &&
+                    finish.session.status == STATUS_COMPLETED
+            } else {
+                false
+            }
+
         return PsyncActionResponseDto(
             recorded = outcome.newlyRecorded,
             actedCount = outcome.actedCount,
             deckSize = session.deckSize,
+            sessionCompleted = completed,
         )
+    }
+
+    /** True once both participants have acted on every deck card (the auto-complete gate). */
+    private suspend fun bothPartnersFinished(
+        session: PsyncSession,
+        actorUserId: UUID,
+        deckCount: Int,
+    ): Boolean {
+        if (deckCount == 0) return false
+        val partnerId = session.participants.firstOrNull { it.userId != actorUserId }?.userId ?: return false
+        return repository.countActionsForActor(session.id, partnerId) >= deckCount
+    }
+
+    /**
+     * Finish the session [userId] participates in: resolve matches, complete, and return the
+     * recap. Either partner can finish early; auto-complete also routes through the repository
+     * resolution. Idempotent — completing an already-completed session just returns its recap.
+     */
+    suspend fun complete(
+        sessionId: UUID,
+        userId: UUID,
+    ): PsyncRecapDto {
+        val outcome = repository.complete(sessionId, userId, clock.instant())
+        val session =
+            when (outcome) {
+                is PsyncSessionRepository.MutateOutcome.Updated -> outcome.session
+                PsyncSessionRepository.MutateOutcome.SessionNotFound -> throw PsyncException("PSYNC_SESSION_NOT_FOUND")
+                PsyncSessionRepository.MutateOutcome.NotParticipant -> throw PsyncException("PSYNC_NOT_PARTICIPANT")
+                PsyncSessionRepository.MutateOutcome.InvalidState -> throw PsyncException("PSYNC_INVALID_STATE")
+            }
+        return buildRecap(session, userId)
+    }
+
+    /** The recap for a completed session the caller participated in (participant-scoped). */
+    suspend fun getRecap(
+        sessionId: UUID,
+        userId: UUID,
+    ): PsyncRecapDto {
+        val session = repository.findById(sessionId) ?: throw PsyncException("PSYNC_SESSION_NOT_FOUND")
+        if (session.participants.none { it.userId == userId }) throw PsyncException("PSYNC_SESSION_NOT_FOUND")
+        if (session.status != STATUS_COMPLETED) throw PsyncException("PSYNC_INVALID_STATE")
+        return buildRecap(session, userId)
+    }
+
+    /**
+     * Recap is recap, NOT a score (PSYNC_SPEC): aggregate counts only. soloMatchCount is always
+     * the VIEWER's OWN solo passthrough matches — a partner's solo matches stay private.
+     */
+    private suspend fun buildRecap(
+        session: PsyncSession,
+        viewerUserId: UUID,
+    ): PsyncRecapDto {
+        val matches = repository.listSessionMatches(session.id)
+        val together = matches.filter { it.kind == "together" }
+        val mySolo = matches.count { it.kind == "solo" && it.ownerUserId == viewerUserId }
+        return PsyncRecapDto(
+            sessionId = session.id.toString(),
+            status = session.status,
+            profilesReviewed = repository.countDeckCards(session.id),
+            bothLikedCount = repository.countBothLiked(session.id),
+            togetherMatchCount = together.size,
+            soloMatchCount = mySolo,
+            startedAt = session.startedAt?.toString(),
+            endedAt = session.endedAt?.toString(),
+            filtersSummary = filtersSummary(session.filters),
+            togetherMatches =
+                together.map {
+                    PsyncMatchDto(
+                        targetUserId = it.targetUserId.toString(),
+                        displayName = it.displayName,
+                        kind = it.kind,
+                    )
+                },
+        )
+    }
+
+    /** A compact, human-readable one-line summary of the deck filters for the recap card. */
+    private fun filtersSummary(filters: SwipeDeckRequestDto): String {
+        val parts =
+            buildList {
+                add("${filters.radiusMeters / 1000}km")
+                val lo = filters.minimumAge
+                val hi = filters.maximumAge
+                when {
+                    lo != null && hi != null -> add("ages $lo-$hi")
+                    lo != null -> add("ages $lo+")
+                    hi != null -> add("ages up to $hi")
+                }
+                if (filters.verifiedOnly) add("verified only")
+                if (filters.discoveryStyles.isNotEmpty()) add(filters.discoveryStyles.joinToString("/"))
+                if (filters.intents.isNotEmpty()) add(filters.intents.joinToString("/"))
+                val tagCount = filters.lifestyleTags.size + filters.logisticsTags.size
+                if (tagCount > 0) add("$tagCount tags")
+            }
+        return parts.joinToString(" · ")
     }
 
     suspend fun pause(
@@ -350,6 +460,7 @@ class PsyncSessionService(
 
     private companion object {
         const val STATUS_INVITED = "invited"
+        const val STATUS_COMPLETED = "completed"
         const val ROLE_INITIATOR = "initiator"
         const val ROLE_PARTNER = "partner"
         const val CONSENT_PENDING = "pending"

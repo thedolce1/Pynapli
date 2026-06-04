@@ -115,6 +115,32 @@ class PsyncSessionServiceIntegrationTest :
             return UUID.fromString(created.id)
         }
 
+        // Drives a started (active) session to both partners acting on a single-card deck.
+        suspend fun PsyncSessionService.actOnSingle(
+            sessionId: UUID,
+            user: UUID,
+            action: String,
+        ): com.pynapli.shared.network.dto.PsyncActionResponseDto {
+            val token =
+                getDeck(sessionId, user)
+                    .cards
+                    .single()
+                    .cardToken
+            return submitAction(sessionId, user, SubmitPsyncActionRequestDto(token, action))
+        }
+
+        // Seeds an active single-card session over [target], returns its id.
+        suspend fun PsyncSessionService.activeSessionOver(
+            initiator: UUID,
+            partner: UUID,
+            target: UUID,
+        ): UUID {
+            val sessionId = readyFor(initiator, partner)
+            start(sessionId, initiator)
+            start(sessionId, partner)
+            return sessionId
+        }
+
         // Seeds two profiled users + an active link between them. Returns (initiator, partner).
         fun seedLinkedPair(): Pair<UUID, UUID> {
             val initiator = UUID.randomUUID()
@@ -464,6 +490,148 @@ class PsyncSessionServiceIntegrationTest :
                 assertEquals("active", svc.resume(sessionId, partner).status)
             }
         }
+
+        // ---- PS-3: match resolution + recap --------------------------------------------
+
+        "complete resolves a together match when both like a together-open target who liked back" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.setTogetherEnabled(target)
+                dataSource.insertSwipeLike(target, initiator) // target reciprocated
+
+                val svc = deckService(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "like")
+
+                val recap = svc.complete(sessionId, initiator)
+                assertEquals("completed", recap.status)
+                assertEquals(1, recap.profilesReviewed)
+                assertEquals(1, recap.bothLikedCount)
+                assertEquals(1, recap.togetherMatchCount)
+                assertEquals(0, recap.soloMatchCount)
+                assertEquals(listOf(target.toString()), recap.togetherMatches.map { it.targetUserId })
+                // The canonical match exists for BOTH partners.
+                assertEquals(1, dataSource.countMatchesFor(initiator))
+                assertEquals(1, dataSource.countMatchesFor(partner))
+            }
+        }
+
+        "a one-sided like with reciprocation yields a private solo passthrough match" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.insertSwipeLike(target, initiator) // target liked the initiator only
+
+                val svc = deckService(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "pass")
+
+                val recap = svc.complete(sessionId, initiator)
+                assertEquals(0, recap.togetherMatchCount)
+                assertEquals(1, recap.soloMatchCount) // the initiator's own solo match
+                assertEquals(0, recap.bothLikedCount)
+                // The partner's recap never shows the initiator's private solo match.
+                val partnerRecap = svc.getRecap(sessionId, partner)
+                assertEquals(0, partnerRecap.soloMatchCount)
+                assertEquals(1, dataSource.countMatchesFor(initiator))
+                assertEquals(0, dataSource.countMatchesFor(partner))
+            }
+        }
+
+        "both like but the target is not together-open -> a solo match per reciprocated partner" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.insertSwipeLike(target, initiator)
+                dataSource.insertSwipeLike(target, partner) // liked both, but not together-open
+
+                val svc = deckService(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "like")
+
+                val recap = svc.complete(sessionId, initiator)
+                assertEquals(0, recap.togetherMatchCount)
+                assertEquals(1, recap.bothLikedCount)
+                assertEquals(1, recap.soloMatchCount)
+                assertEquals(1, svc.getRecap(sessionId, partner).soloMatchCount)
+            }
+        }
+
+        "a block applied mid-session overrides match resolution" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.setTogetherEnabled(target)
+                dataSource.insertSwipeLike(target, initiator)
+
+                // Deck is generated clean; the initiator likes the target...
+                val svc = deckService(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                // ...a block lands, then the partner's like exhausts + auto-completes the deck.
+                dataSource.insertBlock(initiator, target)
+                val finished = svc.actOnSingle(sessionId, partner, "like")
+                assertTrue(finished.sessionCompleted)
+
+                val recap = svc.getRecap(sessionId, initiator)
+                assertEquals(0, recap.togetherMatchCount)
+                assertEquals(0, recap.soloMatchCount)
+                assertEquals(0, dataSource.countMatchesFor(initiator))
+            }
+        }
+
+        "the deck auto-completes once both partners act on every card" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.setTogetherEnabled(target)
+                dataSource.insertSwipeLike(target, initiator)
+
+                val svc = deckService(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+
+                val first = svc.actOnSingle(sessionId, initiator, "like")
+                assertFalse(first.sessionCompleted) // partner hasn't finished yet
+                val second = svc.actOnSingle(sessionId, partner, "like")
+                assertTrue(second.sessionCompleted)
+
+                assertEquals("completed", dataSource.statusOf(sessionId))
+                assertEquals(1, svc.getRecap(sessionId, initiator).togetherMatchCount)
+            }
+        }
+
+        "getRecap rejects a session that is not completed, and complete is idempotent" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.setTogetherEnabled(target)
+                dataSource.insertSwipeLike(target, initiator)
+
+                val svc = deckService(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+
+                val notDone =
+                    assertFailsWith<PsyncException> { svc.getRecap(sessionId, initiator) }
+                assertEquals("PSYNC_INVALID_STATE", notDone.code)
+
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "like")
+                val first = svc.complete(sessionId, initiator)
+                val second = svc.complete(sessionId, partner) // idempotent re-complete
+                assertEquals(first.togetherMatchCount, second.togetherMatchCount)
+                assertEquals(1, dataSource.countMatchesFor(initiator)) // not double-inserted
+            }
+        }
     })
 
 private fun DataSource.insertUserWithProfile(
@@ -527,6 +695,52 @@ private fun DataSource.insertBlock(
             }
     }
 }
+
+private fun DataSource.setTogetherEnabled(userId: UUID) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO discovery_settings (user_id, together_enabled) VALUES (?, true)
+                ON CONFLICT (user_id) DO UPDATE SET together_enabled = true
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeUpdate()
+            }
+    }
+}
+
+private fun DataSource.insertSwipeLike(
+    actorUserId: UUID,
+    targetUserId: UUID,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                "INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action) VALUES (?, ?, ?, 'like')",
+            ).use { statement ->
+                statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, actorUserId)
+                statement.setObject(3, targetUserId)
+                statement.executeUpdate()
+            }
+    }
+}
+
+private fun DataSource.countMatchesFor(userId: UUID): Int =
+    connection.use { connection ->
+        connection
+            .prepareStatement("SELECT COUNT(*) FROM matches WHERE user_a = ? OR user_b = ?")
+            .use { statement ->
+                statement.setObject(1, userId)
+                statement.setObject(2, userId)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt(1)
+                }
+            }
+    }
 
 private fun DataSource.statusOf(sessionId: UUID): String? =
     connection.use { connection ->

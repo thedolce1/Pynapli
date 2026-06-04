@@ -76,4 +76,33 @@ data class PsyncActionResponseDto(
     val recorded: Boolean,
     val actedCount: Int,
     val deckSize: Int,
+    // True when this action exhausted the deck for BOTH partners and the session was
+    // auto-completed (matches resolved). The client should fetch the recap.
+    val sessionCompleted: Boolean = false,
+)
+
+// PS-3: match resolution + recap (PSYNC_SPEC "Match Outcomes" / "Session Recap").
+// Recap is recap, NOT a score: aggregate counts only. soloMatchCount is always the
+// VIEWER's own solo passthrough matches (a partner's solo matches stay private).
+
+@Serializable
+data class PsyncMatchDto(
+    val targetUserId: String,
+    val displayName: String? = null,
+    val kind: String, // 'together' | 'solo'
+)
+
+@Serializable
+data class PsyncRecapDto(
+    val sessionId: String,
+    val status: String,
+    val profilesReviewed: Int,
+    val bothLikedCount: Int,
+    val togetherMatchCount: Int,
+    val soloMatchCount: Int, // the viewer's own solo passthrough matches
+    val startedAt: String? = null,
+    val endedAt: String? = null,
+    val filtersSummary: String,
+    // Together matches are visible to both partners; listed for the recap/Activity card.
+    val togetherMatches: List<PsyncMatchDto> = emptyList(),
 )
