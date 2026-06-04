@@ -305,6 +305,44 @@ private class FakeApiClient(
 
     override suspend fun endTonightSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.TonightSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun createPsyncSession(
+        request: com.pynapli.shared.network.dto.CreatePsyncSessionRequestDto,
+    ): AppResult<com.pynapli.shared.network.dto.PsyncSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun getCurrentPsyncSession(): AppResult<com.pynapli.shared.network.dto.CurrentPsyncSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun getPsyncSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun acceptPsyncSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun denyPsyncSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun suggestPsyncFilters(
+        sessionId: String,
+        request: com.pynapli.shared.network.dto.SuggestPsyncFiltersRequestDto,
+    ): AppResult<com.pynapli.shared.network.dto.PsyncSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun leavePsyncSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun startPsyncSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun getPsyncDeck(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncDeckResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun submitPsyncAction(
+        sessionId: String,
+        request: com.pynapli.shared.network.dto.SubmitPsyncActionRequestDto,
+    ): AppResult<com.pynapli.shared.network.dto.PsyncActionResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun pausePsyncSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun resumePsyncSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun completePsyncSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncRecapDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun getPsyncRecap(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncRecapDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun nudgePsyncSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncNudgeResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun getMe(): AppResult<MeDto> = meResult
 
     override suspend fun getAgeVerificationRequirements(): AppResult<AgeVerificationRequirementsDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))

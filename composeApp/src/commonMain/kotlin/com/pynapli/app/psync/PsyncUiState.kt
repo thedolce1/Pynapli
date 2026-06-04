@@ -1,0 +1,113 @@
+package com.pynapli.app.psync
+
+import com.pynapli.shared.network.dto.PsyncDeckCardDto
+import com.pynapli.shared.network.dto.PsyncRecapDto
+import com.pynapli.shared.network.dto.PsyncSessionDto
+
+/**
+ * Where the viewer sits in the Psync flow, derived from the server-owned session status.
+ * The server is the authority; this is a client convenience for routing the UI.
+ */
+enum class PsyncPhase {
+    IDLE, // no current session
+    INVITED, // an invite exists, awaiting approvals
+    CONFIGURING, // filters were re-suggested, re-approval needed
+    READY, // both approved, awaiting both to tap Start
+    ACTIVE, // shared deck live
+    PAUSED, // a partner paused
+    COMPLETED, // resolved, recap available
+    ENDED, // expired or cancelled
+}
+
+/** Immutable UI state for the Psync surfaces. DTOs never leak past this layer. */
+data class PsyncUiState(
+    val isLoading: Boolean = false,
+    val isMutating: Boolean = false,
+    val errorMessage: String? = null,
+    val session: PsyncSessionUi? = null,
+    val deck: List<PsyncDeckCardUi> = emptyList(),
+    val recap: PsyncRecapUi? = null,
+) {
+    val phase: PsyncPhase get() = session?.phase ?: PsyncPhase.IDLE
+}
+
+data class PsyncSessionUi(
+    val id: String,
+    val status: String,
+    val deckSize: Int,
+    val isInitiator: Boolean,
+    val partnerDisplayName: String?,
+    val viewerApproved: Boolean,
+    val partnerApproved: Boolean,
+) {
+    val phase: PsyncPhase
+        get() =
+            when (status) {
+                "invited" -> PsyncPhase.INVITED
+                "configuring" -> PsyncPhase.CONFIGURING
+                "ready" -> PsyncPhase.READY
+                "active" -> PsyncPhase.ACTIVE
+                "paused" -> PsyncPhase.PAUSED
+                "completed" -> PsyncPhase.COMPLETED
+                else -> PsyncPhase.ENDED // expired | cancelled
+            }
+
+    /** The viewer is the invitee and still needs to approve the (current) setup. */
+    val awaitingViewerApproval: Boolean
+        get() = !isInitiator && !viewerApproved && (status == "invited" || status == "configuring")
+}
+
+data class PsyncDeckCardUi(
+    val cardToken: String,
+    val userId: String,
+    val displayName: String,
+    val online: Boolean,
+    val viewerAction: String?,
+)
+
+data class PsyncRecapUi(
+    val profilesReviewed: Int,
+    val bothLikedCount: Int,
+    val togetherMatchCount: Int,
+    val soloMatchCount: Int,
+    val filtersSummary: String,
+    val togetherMatches: List<PsyncMatchUi>,
+)
+
+data class PsyncMatchUi(
+    val userId: String,
+    val displayName: String?,
+)
+
+fun PsyncSessionDto.toUi(viewerUserId: String?): PsyncSessionUi {
+    val viewer = participants.firstOrNull { it.userId == viewerUserId }
+    val partner = participants.firstOrNull { it.userId != viewerUserId }
+    return PsyncSessionUi(
+        id = id,
+        status = status,
+        deckSize = deckSize,
+        isInitiator = initiatorUserId == viewerUserId,
+        partnerDisplayName = partner?.displayName,
+        viewerApproved = viewer?.approved ?: false,
+        partnerApproved = partner?.approved ?: false,
+    )
+}
+
+fun PsyncDeckCardDto.toUi(): PsyncDeckCardUi =
+    PsyncDeckCardUi(
+        cardToken = cardToken,
+        userId = card.userId,
+        displayName = card.displayName,
+        online = card.online,
+        viewerAction = viewerAction,
+    )
+
+fun PsyncRecapDto.toUi(): PsyncRecapUi =
+    PsyncRecapUi(
+        profilesReviewed = profilesReviewed,
+        bothLikedCount = bothLikedCount,
+        togetherMatchCount = togetherMatchCount,
+        soloMatchCount = soloMatchCount,
+        filtersSummary = filtersSummary,
+        togetherMatches = togetherMatches.map { PsyncMatchUi(it.targetUserId, it.displayName) },
+    )

@@ -22,10 +22,12 @@ import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateProfileLinkInvitationRequestDto
+import com.pynapli.shared.network.dto.CreatePsyncSessionRequestDto
 import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
 import com.pynapli.shared.network.dto.CreateSavedSwipeFilterRequestDto
 import com.pynapli.shared.network.dto.CurrentLocationDto
+import com.pynapli.shared.network.dto.CurrentPsyncSessionDto
 import com.pynapli.shared.network.dto.CurrentTonightSessionDto
 import com.pynapli.shared.network.dto.DeleteAccountRequestDto
 import com.pynapli.shared.network.dto.DeleteAccountResponseDto
@@ -51,6 +53,11 @@ import com.pynapli.shared.network.dto.NotificationPreferencesDto
 import com.pynapli.shared.network.dto.PresenceHeartbeatResponseDto
 import com.pynapli.shared.network.dto.ProfileLinksSummaryDto
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
+import com.pynapli.shared.network.dto.PsyncActionResponseDto
+import com.pynapli.shared.network.dto.PsyncDeckResponseDto
+import com.pynapli.shared.network.dto.PsyncNudgeResponseDto
+import com.pynapli.shared.network.dto.PsyncRecapDto
+import com.pynapli.shared.network.dto.PsyncSessionDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.PushDeviceRegistrationResponseDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
@@ -75,9 +82,11 @@ import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.StorePurchaseResponseDto
 import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
+import com.pynapli.shared.network.dto.SubmitPsyncActionRequestDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
 import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncResponseDto
+import com.pynapli.shared.network.dto.SuggestPsyncFiltersRequestDto
 import com.pynapli.shared.network.dto.SupportContactDto
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
@@ -171,6 +180,46 @@ interface PynapliApiClient {
     suspend fun declineTonightSession(sessionId: String): AppResult<TonightSessionDto>
 
     suspend fun endTonightSession(sessionId: String): AppResult<TonightSessionDto>
+
+    // Psync (synchronized partner swipe). Server is the product authority; the client just
+    // negotiates, swipes the shared deck privately, and reads the recap.
+    suspend fun createPsyncSession(
+        request: CreatePsyncSessionRequestDto = CreatePsyncSessionRequestDto(),
+    ): AppResult<PsyncSessionDto>
+
+    suspend fun getCurrentPsyncSession(): AppResult<CurrentPsyncSessionDto>
+
+    suspend fun getPsyncSession(sessionId: String): AppResult<PsyncSessionDto>
+
+    suspend fun acceptPsyncSession(sessionId: String): AppResult<PsyncSessionDto>
+
+    suspend fun denyPsyncSession(sessionId: String): AppResult<PsyncSessionDto>
+
+    suspend fun suggestPsyncFilters(
+        sessionId: String,
+        request: SuggestPsyncFiltersRequestDto,
+    ): AppResult<PsyncSessionDto>
+
+    suspend fun leavePsyncSession(sessionId: String): AppResult<PsyncSessionDto>
+
+    suspend fun startPsyncSession(sessionId: String): AppResult<PsyncSessionDto>
+
+    suspend fun getPsyncDeck(sessionId: String): AppResult<PsyncDeckResponseDto>
+
+    suspend fun submitPsyncAction(
+        sessionId: String,
+        request: SubmitPsyncActionRequestDto,
+    ): AppResult<PsyncActionResponseDto>
+
+    suspend fun pausePsyncSession(sessionId: String): AppResult<PsyncSessionDto>
+
+    suspend fun resumePsyncSession(sessionId: String): AppResult<PsyncSessionDto>
+
+    suspend fun completePsyncSession(sessionId: String): AppResult<PsyncRecapDto>
+
+    suspend fun getPsyncRecap(sessionId: String): AppResult<PsyncRecapDto>
+
+    suspend fun nudgePsyncSession(sessionId: String): AppResult<PsyncNudgeResponseDto>
 
     suspend fun getMe(): AppResult<MeDto>
 
@@ -584,6 +633,138 @@ class KtorPynapliApiClient(
         authenticatedPost { token ->
             httpClient
                 .delete(config.endpoint("/v1/tonight/sessions/$sessionId")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun createPsyncSession(request: CreatePsyncSessionRequestDto): AppResult<PsyncSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions")) {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }.toAppResult(json)
+        }
+
+    override suspend fun getCurrentPsyncSession(): AppResult<CurrentPsyncSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .get(config.endpoint("/v1/me/psync/session")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun getPsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .get(config.endpoint("/v1/psync/sessions/$sessionId")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun acceptPsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions/$sessionId/accept")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun denyPsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions/$sessionId/deny")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun suggestPsyncFilters(
+        sessionId: String,
+        request: SuggestPsyncFiltersRequestDto,
+    ): AppResult<PsyncSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions/$sessionId/suggest-filters")) {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }.toAppResult(json)
+        }
+
+    override suspend fun leavePsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions/$sessionId/leave")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun startPsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions/$sessionId/start")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun getPsyncDeck(sessionId: String): AppResult<PsyncDeckResponseDto> =
+        authenticatedPost { token ->
+            httpClient
+                .get(config.endpoint("/v1/psync/sessions/$sessionId/deck")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun submitPsyncAction(
+        sessionId: String,
+        request: SubmitPsyncActionRequestDto,
+    ): AppResult<PsyncActionResponseDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions/$sessionId/actions")) {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }.toAppResult(json)
+        }
+
+    override suspend fun pausePsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions/$sessionId/pause")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun resumePsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions/$sessionId/resume")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun completePsyncSession(sessionId: String): AppResult<PsyncRecapDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions/$sessionId/complete")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun getPsyncRecap(sessionId: String): AppResult<PsyncRecapDto> =
+        authenticatedPost { token ->
+            httpClient
+                .get(config.endpoint("/v1/psync/sessions/$sessionId/recap")) {
+                    bearerAuth(token)
+                }.toAppResult(json)
+        }
+
+    override suspend fun nudgePsyncSession(sessionId: String): AppResult<PsyncNudgeResponseDto> =
+        authenticatedPost { token ->
+            httpClient
+                .post(config.endpoint("/v1/psync/sessions/$sessionId/nudge")) {
                     bearerAuth(token)
                 }.toAppResult(json)
         }
