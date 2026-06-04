@@ -143,3 +143,19 @@ private class ChannelPsyncStreamSession(
         job.cancel()
     }
 }
+
+fun buildPsyncStreamClient(
+    websocketHttpClient: HttpClient,
+    websocketBaseUrl: String,
+    tokenProvider: AccessTokenProvider,
+    backoff: PsyncStreamBackoff = PsyncStreamBackoff(),
+): PsyncStreamClient =
+    PsyncStreamClient(
+        sessionFactory =
+            KtorPsyncStreamSessionFactory(
+                httpClient = websocketHttpClient,
+                streamUrl = websocketBaseUrl.trimEnd('/') + "/v1/psync/stream",
+            ),
+        tokenProvider = tokenProvider,
+        backoff = backoff,
+    )

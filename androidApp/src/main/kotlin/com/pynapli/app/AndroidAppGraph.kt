@@ -63,6 +63,7 @@ import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.buildAndroidActivityStreamClient
 import com.pynapli.shared.network.buildAndroidMessageStreamClient
 import com.pynapli.shared.network.buildAndroidPresenceStreamClient
+import com.pynapli.shared.network.buildAndroidPsyncStreamClient
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
 import java.util.Locale
@@ -181,6 +182,13 @@ class AndroidAppGraph(
     val psyncRepository =
         com.pynapli.app.psync
             .ApiPsyncRepository(apiClient)
+
+    // Realtime convenience channel for an open Psync session (refetch on partner-side changes).
+    val psyncStreamClient =
+        buildAndroidPsyncStreamClient(
+            websocketBaseUrl = PynapliConfigs.LocalAndroidEmulator.websocketBaseUrl,
+            tokenProvider = sessionStore,
+        )
 
     val gridPresenceStreamCoordinator =
         GridPresenceStreamCoordinator(

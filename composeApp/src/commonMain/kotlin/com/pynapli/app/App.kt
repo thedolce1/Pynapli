@@ -70,6 +70,7 @@ fun PynapliApp(
     tonightAvailabilityStateHolder: com.pynapli.app.grid.TonightAvailabilityStateHolder? = null,
     playingTonightStateHolder: com.pynapli.app.tonight.PlayingTonightStateHolder? = null,
     psyncRepository: com.pynapli.app.psync.PsyncRepository? = null,
+    psyncStreamClient: com.pynapli.shared.network.PsyncStreamClient? = null,
     deepLinkStateHolder: AppDeepLinkStateHolder? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
@@ -635,6 +636,13 @@ fun PynapliApp(
         if (psyncVisible && psyncStateHolder != null) {
             // Psync synchronized-swipe surface, opened from the Swipe header (PSYNC_SPEC: Psync
             // lives in the Swipe/partner flow, not its own tab).
+            psyncStreamClient?.let { client ->
+                // Convenience realtime: refetch canonical state when the partner's side changes.
+                // Scoped to the open overlay — leaving composition cancels the socket.
+                LaunchedEffect(psyncStateHolder, client) {
+                    client.connect().collect { psyncStateHolder.refresh() }
+                }
+            }
             com.pynapli.app.psync.PsyncSessionScreen(
                 stateHolder = psyncStateHolder,
                 onBack = { psyncVisible = false },
