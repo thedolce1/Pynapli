@@ -301,6 +301,46 @@ internal object JdbcActivitySql {
         RETURNING id
         """.trimIndent()
 
+    // PS-4c: one Psync session-lifecycle card per recipient per session per type. The actor is
+    // the OTHER partner (or the initiator for an invite); metadata.sessionId links to the session.
+    val UPSERT_PSYNC_SESSION_EVENT_QUERY =
+        """
+        INSERT INTO activity_events (
+            id,
+            recipient_user_id,
+            actor_user_id,
+            event_type,
+            target_user_id,
+            aggregate_count,
+            first_occurred_at,
+            last_counted_at,
+            occurred_at,
+            updated_at,
+            metadata
+        )
+        SELECT ?, ?, ?, ?, ?, 1, now(), now(), now(), now(), ?::jsonb
+        WHERE EXISTS (
+            SELECT 1
+            FROM users actor
+            WHERE actor.id = ?
+              AND actor.status = 'active'
+              AND actor.deleted_at IS NULL
+        )
+        AND EXISTS (
+            SELECT 1
+            FROM users recipient
+            WHERE recipient.id = ?
+              AND recipient.status = 'active'
+              AND recipient.deleted_at IS NULL
+        )
+        ON CONFLICT (recipient_user_id, event_type, ((metadata->>'sessionId')))
+        WHERE event_type IN ('psync_invite', 'psync_started', 'psync_recap', 'psync_expired') AND deleted_at IS NULL
+        DO NOTHING
+        RETURNING id
+        """.trimIndent()
+
+    val PSYNC_SESSION_EVENT_TYPES = setOf("psync_invite", "psync_started", "psync_recap", "psync_expired")
+
     val ACTIVITY_FEED_QUERY =
         """
         WITH recipient_location AS (

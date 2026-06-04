@@ -170,6 +170,32 @@ class JdbcActivityRepository(
             }
         }
 
+    override suspend fun recordPsyncSessionEvent(
+        recipientUserId: UUID,
+        actorUserId: UUID,
+        eventType: String,
+        sessionId: UUID,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            if (recipientUserId == actorUserId || eventType !in JdbcActivitySql.PSYNC_SESSION_EVENT_TYPES) {
+                return@withContext false
+            }
+
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(JdbcActivitySql.UPSERT_PSYNC_SESSION_EVENT_QUERY).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, recipientUserId)
+                    statement.setObject(3, actorUserId)
+                    statement.setString(4, eventType)
+                    statement.setObject(5, actorUserId)
+                    statement.setString(6, """{"sessionId":"$sessionId"}""")
+                    statement.setObject(7, actorUserId)
+                    statement.setObject(8, recipientUserId)
+                    statement.executeQuery().use { rs -> rs.next() }
+                }
+            }
+        }
+
     override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->

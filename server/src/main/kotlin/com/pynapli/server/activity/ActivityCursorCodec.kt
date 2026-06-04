@@ -124,7 +124,17 @@ enum class ActivityFeedTab(
     LIKES("likes", setOf("swipe_like", "pineapple_like", "intro_note")),
     MATCHES("matches", setOf("match")),
     ALBUMS("albums", setOf("album_request")),
-    INVITES("invites", setOf("partner_chat_invite", "psync_invite", "playing_tonight")),
+    INVITES(
+        "invites",
+        setOf(
+            "partner_chat_invite",
+            "psync_invite",
+            "psync_started",
+            "psync_recap",
+            "psync_expired",
+            "playing_tonight",
+        ),
+    ),
     ;
 
     companion object {

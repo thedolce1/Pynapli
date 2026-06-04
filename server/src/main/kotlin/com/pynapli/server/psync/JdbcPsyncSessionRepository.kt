@@ -283,22 +283,42 @@ class JdbcPsyncSessionRepository(
             }
         }
 
-    override suspend fun expireStale(now: Instant): Int =
+    override suspend fun expireStale(now: Instant): List<PsyncExpiredSession> =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        UPDATE psync_sessions
-                        SET status = 'expired', ended_at = ?
-                        WHERE status IN ($EXPIRABLE_STATUS_LIST)
-                          AND expires_at <= ?
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setTimestamp(1, Timestamp.from(now))
-                        statement.setTimestamp(2, Timestamp.from(now))
-                        statement.executeUpdate()
+                connection.inTransaction {
+                    // Lock the rows we're about to expire so participants line up with the flip.
+                    val expiredIds =
+                        connection
+                            .prepareStatement(
+                                """
+                                SELECT id FROM psync_sessions
+                                WHERE status IN ($EXPIRABLE_STATUS_LIST)
+                                  AND expires_at <= ?
+                                FOR UPDATE
+                                """.trimIndent(),
+                            ).use { statement ->
+                                statement.setTimestamp(1, Timestamp.from(now))
+                                statement.executeQuery().use { rs ->
+                                    buildList { while (rs.next()) add(rs.getObject("id", UUID::class.java)) }
+                                }
+                            }
+                    if (expiredIds.isEmpty()) return@inTransaction emptyList()
+
+                    val participantsBySession = connection.participantIdsForSessions(expiredIds)
+                    connection
+                        .prepareStatement(
+                            "UPDATE psync_sessions SET status = 'expired', ended_at = ? WHERE id = ANY(?)",
+                        ).use { statement ->
+                            statement.setTimestamp(1, Timestamp.from(now))
+                            statement.setArray(2, connection.createArrayOf("uuid", expiredIds.toTypedArray()))
+                            statement.executeUpdate()
+                        }
+
+                    expiredIds.map { sessionId ->
+                        PsyncExpiredSession(sessionId, participantsBySession[sessionId].orEmpty())
                     }
+                }
             }
         }
 
@@ -921,6 +941,22 @@ class JdbcPsyncSessionRepository(
             }
         }
     }
+
+    private fun Connection.participantIdsForSessions(sessionIds: List<UUID>): Map<UUID, List<UUID>> =
+        prepareStatement(
+            "SELECT session_id, user_id FROM psync_session_participants WHERE session_id = ANY(?)",
+        ).use { statement ->
+            statement.setArray(1, createArrayOf("uuid", sessionIds.toTypedArray()))
+            statement.executeQuery().use { rs ->
+                buildMap<UUID, MutableList<UUID>> {
+                    while (rs.next()) {
+                        val sessionId = rs.getObject("session_id", UUID::class.java)
+                        val userId = rs.getObject("user_id", UUID::class.java)
+                        getOrPut(sessionId) { mutableListOf() }.add(userId)
+                    }
+                }
+            }
+        }
 
     private fun Connection.deckTargetIds(sessionId: UUID): List<UUID> =
         prepareStatement(

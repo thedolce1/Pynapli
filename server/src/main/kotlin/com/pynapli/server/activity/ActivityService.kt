@@ -189,6 +189,24 @@ class ActivityService(
         }
     }
 
+    /**
+     * Record a Psync session-lifecycle card (psync_invite/started/recap/expired) for [recipientUserId],
+     * with [actorUserId] (the other partner, or the initiator for an invite) as the card actor.
+     * Idempotent per session+type; blocks suppress the card. Emits a convenience Activity delta.
+     */
+    suspend fun recordPsyncSessionEvent(
+        recipientUserId: UUID,
+        actorUserId: UUID,
+        eventType: String,
+        sessionId: UUID,
+    ) {
+        if (recipientUserId == actorUserId) return
+        if (blockRepository?.isBlockedEitherWay(recipientUserId, actorUserId) == true) return
+        if (repository.recordPsyncSessionEvent(recipientUserId, actorUserId, eventType, sessionId)) {
+            publishActivityDelta(recipientUserId, eventType)
+        }
+    }
+
     suspend fun respondToAlbumAccessRequest(
         ownerUserId: UUID,
         eventId: UUID,

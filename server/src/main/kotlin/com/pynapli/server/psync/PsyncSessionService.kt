@@ -103,7 +103,15 @@ class PsyncSessionService(
                 ),
             )
 
-        return repository.insertSession(session, participants).toDto()
+        val created = repository.insertSession(session, participants)
+        // PS-4c: the invitee sees a Psync invite card in Activity.
+        activityService?.recordPsyncSessionEvent(
+            recipientUserId = link.partnerUserId,
+            actorUserId = userId,
+            eventType = "psync_invite",
+            sessionId = created.id,
+        )
+        return created.toDto()
     }
 
     suspend fun accept(
@@ -215,6 +223,7 @@ class PsyncSessionService(
             is PsyncSessionRepository.MutateOutcome.Updated -> {
                 // Both partners are in and the deck is live — tell both to load it.
                 emitDelta(sessionId, PsyncBroadcaster.SESSION_ACTIVE, allParticipantIds(activated.session))
+                recordPsyncActivityForBoth(activated.session, "psync_started")
                 activated.session.toDto()
             }
             else -> throw PsyncException("PSYNC_INVALID_STATE")
@@ -265,6 +274,7 @@ class PsyncSessionService(
                 ) {
                     emitMatchActivity(finish.resolvedMatches)
                     emitDelta(sessionId, PsyncBroadcaster.SESSION_COMPLETED, allParticipantIds(session))
+                    recordPsyncActivityForBoth(finish.session, "psync_recap")
                     true
                 } else {
                     false
@@ -337,7 +347,22 @@ class PsyncSessionService(
                 PsyncSessionRepository.CompleteOutcome.InvalidState -> throw PsyncException("PSYNC_INVALID_STATE")
             }
         emitMatchActivity(completed.resolvedMatches)
+        // Idempotent per (recipient, type, session) — safe on an idempotent re-complete.
+        recordPsyncActivityForBoth(completed.session, "psync_recap")
         return buildRecap(completed.session, userId)
+    }
+
+    /** Record a Psync session card (started/recap/expired) for both partners, actor = the other. */
+    private suspend fun recordPsyncActivityForBoth(
+        session: PsyncSession,
+        eventType: String,
+    ) {
+        val activity = activityService ?: return
+        val ids = session.participants.map { it.userId }
+        for (recipient in ids) {
+            val other = ids.firstOrNull { it != recipient } ?: continue
+            activity.recordPsyncSessionEvent(recipient, other, eventType, session.id)
+        }
     }
 
     /**
@@ -528,7 +553,19 @@ class PsyncSessionService(
     }
 
     /** Sweep non-terminal sessions past their expiry to 'expired'. Returns rows swept. */
-    suspend fun expireStale(): Int = repository.expireStale(clock.instant())
+    suspend fun expireStale(): Int {
+        val expired = repository.expireStale(clock.instant())
+        val activity = activityService
+        if (activity != null) {
+            for (session in expired) {
+                for (recipient in session.participantUserIds) {
+                    val other = session.participantUserIds.firstOrNull { it != recipient } ?: continue
+                    activity.recordPsyncSessionEvent(recipient, other, "psync_expired", session.sessionId)
+                }
+            }
+        }
+        return expired.size
+    }
 
     private fun PsyncSessionRepository.MutateOutcome.orThrow(): PsyncSessionDto =
         when (this) {

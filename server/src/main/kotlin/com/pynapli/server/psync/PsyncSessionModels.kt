@@ -81,6 +81,15 @@ data class PsyncSessionMatch(
 )
 
 /**
+ * PS-4c: a session the expiry sweep just flipped to 'expired', with its participants, so the
+ * service can surface a "Psync session expired" Activity card to each partner.
+ */
+data class PsyncExpiredSession(
+    val sessionId: UUID,
+    val participantUserIds: List<UUID>,
+)
+
+/**
  * PS-4: one canonical match created/kept by session resolution, paired with the partner it
  * belongs to. A together match yields two of these (one per partner ↔ target); a solo
  * passthrough yields one. The service replays these post-commit into the Activity +
