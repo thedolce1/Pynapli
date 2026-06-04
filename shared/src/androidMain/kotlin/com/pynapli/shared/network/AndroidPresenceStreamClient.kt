@@ -44,3 +44,15 @@ fun buildAndroidMessageStreamClient(
         tokenProvider = tokenProvider,
         backoff = backoff,
     )
+
+fun buildAndroidPsyncStreamClient(
+    websocketBaseUrl: String,
+    tokenProvider: AccessTokenProvider,
+    backoff: PsyncStreamBackoff = PsyncStreamBackoff(),
+): PsyncStreamClient =
+    buildPsyncStreamClient(
+        websocketHttpClient = HttpClient(OkHttp) { install(WebSockets) },
+        websocketBaseUrl = websocketBaseUrl,
+        tokenProvider = tokenProvider,
+        backoff = backoff,
+    )
