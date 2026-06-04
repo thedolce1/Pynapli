@@ -194,14 +194,7 @@ class PsyncSessionService(
             buildSet {
                 add(session.initiatorUserId)
                 add(partnerId)
-                blockRepository?.let {
-                    addAll(it.listBlockedRelatedUserIds(session.initiatorUserId))
-                    addAll(it.listBlockedRelatedUserIds(partnerId))
-                }
-                hiddenProfileRepository?.let {
-                    addAll(it.listHiddenProfileIds(session.initiatorUserId))
-                    addAll(it.listHiddenProfileIds(partnerId))
-                }
+                addAll(blockedOrHiddenTargets(session.initiatorUserId, partnerId))
             }
         val deckCards =
             ranked
@@ -245,7 +238,12 @@ class PsyncSessionService(
         userId: UUID,
     ): PsyncDeckResponseDto {
         val session = requireActiveParticipant(sessionId, userId, allowPaused = true)
-        val cards = repository.listDeckCards(sessionId)
+        // PSYNC_SPEC edge case: a block/report mid-session invalidates the target. Drop anyone
+        // blocked/hidden by EITHER partner from the live deck (not only at resolution).
+        val partnerId = session.participants.firstOrNull { it.userId != session.initiatorUserId }?.userId
+        val invalidated =
+            if (partnerId == null) emptySet() else blockedOrHiddenTargets(session.initiatorUserId, partnerId)
+        val cards = repository.listDeckCards(sessionId).filterNot { it.targetUserId in invalidated }
         val myActions = repository.listActionsForActor(sessionId, userId).associate { it.targetUserId to it.action }
         val online = onlineFor(cards.map { it.targetUserId })
         val items =
@@ -534,6 +532,22 @@ class PsyncSessionService(
             expiresAt = session.expiresAt,
             position = position,
         )
+
+    /** Targets blocked (either direction) or hidden by EITHER partner — invalid for the deck. */
+    private suspend fun blockedOrHiddenTargets(
+        partnerA: UUID,
+        partnerB: UUID,
+    ): Set<UUID> =
+        buildSet {
+            blockRepository?.let {
+                addAll(it.listBlockedRelatedUserIds(partnerA))
+                addAll(it.listBlockedRelatedUserIds(partnerB))
+            }
+            hiddenProfileRepository?.let {
+                addAll(it.listHiddenProfileIds(partnerA))
+                addAll(it.listHiddenProfileIds(partnerB))
+            }
+        }
 
     private suspend fun onlineFor(userIds: List<UUID>): Set<UUID> = runCatching { presenceService?.onlineUserIds(userIds).orEmpty() }.getOrDefault(emptySet())
 

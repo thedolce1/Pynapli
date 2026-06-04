@@ -184,6 +184,21 @@ class PsyncSessionServiceIntegrationTest :
             return submitAction(sessionId, user, SubmitPsyncActionRequestDto(token, action))
         }
 
+        // Acts on a specific target's card (deck may have multiple cards).
+        suspend fun PsyncSessionService.actOn(
+            sessionId: UUID,
+            user: UUID,
+            target: UUID,
+            action: String,
+        ): com.pynapli.shared.network.dto.PsyncActionResponseDto {
+            val token =
+                getDeck(sessionId, user)
+                    .cards
+                    .first { it.card.userId == target.toString() }
+                    .cardToken
+            return submitAction(sessionId, user, SubmitPsyncActionRequestDto(token, action))
+        }
+
         // Seeds an active single-card session over [target], returns its id.
         suspend fun PsyncSessionService.activeSessionOver(
             initiator: UUID,
@@ -627,14 +642,17 @@ class PsyncSessionServiceIntegrationTest :
                 dataSource.setTogetherEnabled(target)
                 dataSource.insertSwipeLike(target, initiator)
 
-                // Deck is generated clean; the initiator likes the target...
-                val svc = deckService(listOf(target))
+                // Two-card deck so acting on the target alone does NOT auto-complete the session.
+                val filler = UUID.randomUUID()
+                dataSource.insertUserWithProfile(filler, "Filler")
+                val svc = deckService(listOf(target, filler))
                 val sessionId = svc.activeSessionOver(initiator, partner, target)
-                svc.actOnSingle(sessionId, initiator, "like")
-                // ...a block lands, then the partner's like exhausts + auto-completes the deck.
+                // Both like the target while it's still valid...
+                svc.actOn(sessionId, initiator, target, "like")
+                svc.actOn(sessionId, partner, target, "like")
+                // ...then a block lands and the session is completed explicitly.
                 dataSource.insertBlock(initiator, target)
-                val finished = svc.actOnSingle(sessionId, partner, "like")
-                assertTrue(finished.sessionCompleted)
+                svc.complete(sessionId, initiator)
 
                 val recap = svc.getRecap(sessionId, initiator)
                 assertEquals(0, recap.togetherMatchCount)
@@ -845,6 +863,39 @@ class PsyncSessionServiceIntegrationTest :
                 val session = svc.create(initiator, CreatePsyncSessionRequestDto(deckSize = 10))
                 assertEquals("invited", session.status)
                 assertEquals(10, session.deckSize)
+            }
+        }
+
+        // ---- PS-6b: mid-session block invalidates the target in the live deck ----------
+
+        "a block applied mid-session removes the target from the live deck" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val keep = UUID.randomUUID()
+                val dropped = UUID.randomUUID()
+                dataSource.insertUserWithProfile(keep, "Keep")
+                dataSource.insertUserWithProfile(dropped, "Dropped")
+
+                val svc = deckService(listOf(keep, dropped))
+                val sessionId = svc.activeSessionOver(initiator, partner, keep)
+                // Deck starts with both cards.
+                assertEquals(
+                    listOf(keep.toString(), dropped.toString()),
+                    svc.getDeck(sessionId, initiator).cards.map { it.card.userId },
+                )
+
+                // The partner blocks one target mid-session.
+                dataSource.insertBlock(partner, dropped)
+
+                assertEquals(
+                    listOf(keep.toString()),
+                    svc.getDeck(sessionId, initiator).cards.map { it.card.userId },
+                )
+                // The other partner's live deck drops it too.
+                assertEquals(
+                    listOf(keep.toString()),
+                    svc.getDeck(sessionId, partner).cards.map { it.card.userId },
+                )
             }
         }
 
