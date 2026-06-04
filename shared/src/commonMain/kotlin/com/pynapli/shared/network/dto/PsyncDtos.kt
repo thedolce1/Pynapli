@@ -44,3 +44,36 @@ data class PsyncSessionDto(
 data class CurrentPsyncSessionDto(
     val session: PsyncSessionDto? = null,
 )
+
+// PS-2: shared bounded deck + private per-partner swipes.
+// The deck is shared (same cards/order for both partners); viewerAction reflects ONLY
+// the calling partner's own recorded action — a partner's swipes are never exposed.
+
+@Serializable
+data class PsyncDeckResponseDto(
+    val sessionId: String,
+    val deckSize: Int,
+    val cards: List<PsyncDeckCardDto>,
+)
+
+@Serializable
+data class PsyncDeckCardDto(
+    val card: SwipeCardDto,
+    val cardToken: String,
+    // The CALLING viewer's own recorded action for this card, or null if not yet acted.
+    // Never the partner's action.
+    val viewerAction: String? = null,
+)
+
+@Serializable
+data class SubmitPsyncActionRequestDto(
+    val cardToken: String,
+    val action: String, // 'like' | 'pass' | 'pineapple_like'
+)
+
+@Serializable
+data class PsyncActionResponseDto(
+    val recorded: Boolean,
+    val actedCount: Int,
+    val deckSize: Int,
+)

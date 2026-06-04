@@ -555,14 +555,14 @@ Avoid:
 - [x] Psync session model exists. (PS-1: `V63` `psync_sessions` + `psync_session_participants`; `com.pynapli.server.psync`.)
 - [x] Both partners must consent before start. (PS-1: invite → accept; both `approved` required to reach `ready`; deny/leave → `cancelled`. Ktor-owned status machine.)
 - [x] Filters can be suggested before start. (PS-1: `suggest-filters` replaces the agreed filters, resets both approvals except the suggester, status → `configuring`; both must re-approve to return to `ready`.)
-- [ ] Deck is bounded. (deck_size 1..50 captured at PS-1; deck generation is PS-2.)
-- [ ] Same ordered deck is served to both partners.
-- [ ] Swipes are private during session.
+- [x] Deck is bounded. (PS-2: `V64` `psync_session_cards`; deck generated once when both partners `start`, oversampled ≤60 then bounded to `deck_size`.)
+- [x] Same ordered deck is served to both partners. (PS-2: deck snapshot persisted as JSONB; `getDeck` serves the same ordered cards to both, reissuing deterministic HMAC card tokens.)
+- [x] Swipes are private during session. (PS-2: `psync_session_actions`, one decision per actor+target; `getDeck` carries the caller's OWN action only — a partner's choices are never exposed.)
 - [ ] Together match requires target consent.
 - [ ] Solo passthrough is private by default.
 - [ ] Session recap exists.
 - [x] Psync Score does not exist.
-- [ ] Either partner can pause/leave.
+- [x] Either partner can pause/leave. (PS-1: `leave` → `cancelled`. PS-2: `pause`/`resume` round-trip `active↔paused`; actions are refused while paused.)
 - [ ] Partner link ending cancels active session.
 - [ ] Blocks/reports invalidate targets.
 - [ ] Activity integration exists.

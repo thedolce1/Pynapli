@@ -2,8 +2,12 @@ package com.pynapli.server.psync
 
 import com.pynapli.shared.network.dto.CreatePsyncSessionRequestDto
 import com.pynapli.shared.network.dto.CurrentPsyncSessionDto
+import com.pynapli.shared.network.dto.PsyncActionResponseDto
+import com.pynapli.shared.network.dto.PsyncDeckCardDto
+import com.pynapli.shared.network.dto.PsyncDeckResponseDto
 import com.pynapli.shared.network.dto.PsyncParticipantDto
 import com.pynapli.shared.network.dto.PsyncSessionDto
+import com.pynapli.shared.network.dto.SubmitPsyncActionRequestDto
 import com.pynapli.shared.network.dto.SuggestPsyncFiltersRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlinx.serialization.json.Json
@@ -30,6 +34,13 @@ import java.util.UUID
  */
 class PsyncSessionService(
     private val repository: PsyncSessionRepository,
+    private val deckGenerator: PsyncDeckGenerator? = null,
+    private val blockRepository: com.pynapli.server.safety.BlockRepository? = null,
+    private val hiddenProfileRepository: com.pynapli.server.safety.HiddenProfileRepository? = null,
+    private val presenceService: com.pynapli.server.presence.PresenceService? = null,
+    private val deckTokenCodec: com.pynapli.server.swipe.SwipeDeckTokenCodec =
+        com.pynapli.server.swipe
+            .SwipeDeckTokenCodec(),
     private val clock: Clock = Clock.systemUTC(),
     private val json: Json = Json,
 ) {
@@ -118,6 +129,165 @@ class PsyncSessionService(
     ): PsyncSessionDto = repository.leave(sessionId, userId, clock.instant()).orThrow()
 
     /**
+     * PS-2: both-tap-Start gate. Marks the caller started; once EVERY participant has
+     * started, generates the shared bounded deck (ranked from the initiator with the agreed
+     * filters, minus anyone blocked/hidden by EITHER partner + both partners themselves) and
+     * flips the session to `active`. A single start leaves the session `ready`. Idempotent.
+     */
+    suspend fun start(
+        sessionId: UUID,
+        userId: UUID,
+    ): PsyncSessionDto {
+        val now = clock.instant()
+        val outcome = repository.start(sessionId, userId, now)
+        val started =
+            when (outcome) {
+                is PsyncSessionRepository.StartOutcome.Updated -> outcome
+                PsyncSessionRepository.StartOutcome.SessionNotFound -> throw PsyncException("PSYNC_SESSION_NOT_FOUND")
+                PsyncSessionRepository.StartOutcome.NotParticipant -> throw PsyncException("PSYNC_NOT_PARTICIPANT")
+                PsyncSessionRepository.StartOutcome.InvalidState -> throw PsyncException("PSYNC_INVALID_STATE")
+            }
+        if (started.alreadyActive || !started.allStarted) {
+            return started.session.toDto()
+        }
+
+        // All partners tapped Start -> generate the shared deck once and activate.
+        val session = started.session
+        val partnerId =
+            session.participants.firstOrNull { it.userId != session.initiatorUserId }?.userId
+                ?: throw PsyncException("PSYNC_INVALID_STATE")
+        val generator = deckGenerator ?: throw PsyncException("PSYNC_DECK_EMPTY")
+
+        val oversample = (session.deckSize * 2).coerceAtMost(MAX_RANK_LIMIT)
+        val ranked = generator.rankCandidates(session.initiatorUserId, session.filters, oversample)
+
+        // Cross-partner safety: drop anyone blocked/hidden by EITHER partner, plus both partners.
+        val excluded =
+            buildSet {
+                add(session.initiatorUserId)
+                add(partnerId)
+                blockRepository?.let {
+                    addAll(it.listBlockedRelatedUserIds(session.initiatorUserId))
+                    addAll(it.listBlockedRelatedUserIds(partnerId))
+                }
+                hiddenProfileRepository?.let {
+                    addAll(it.listHiddenProfileIds(session.initiatorUserId))
+                    addAll(it.listHiddenProfileIds(partnerId))
+                }
+            }
+        val deckCards =
+            ranked
+                .asSequence()
+                .filter { runCatching { UUID.fromString(it.userId) }.getOrNull()?.let { id -> id !in excluded } ?: false }
+                .distinctBy { it.userId }
+                .take(session.deckSize)
+                .toList()
+        if (deckCards.isEmpty()) throw PsyncException("PSYNC_DECK_EMPTY")
+
+        val deckSessionId = UUID.randomUUID()
+        val cards =
+            deckCards.mapIndexed { position, card ->
+                val targetId = UUID.fromString(card.userId)
+                val rawToken = issueCardToken(session, deckSessionId, targetId, position, now)
+                PsyncSessionCard(
+                    id = UUID.randomUUID(),
+                    sessionId = sessionId,
+                    position = position,
+                    targetUserId = targetId,
+                    cardTokenHash = deckTokenCodec.tokenHash(rawToken),
+                    snapshot = card,
+                    dealtAt = now,
+                )
+            }
+
+        return when (val activated = repository.activateWithDeck(sessionId, deckSessionId, cards, now)) {
+            is PsyncSessionRepository.MutateOutcome.Updated -> activated.session.toDto()
+            else -> throw PsyncException("PSYNC_INVALID_STATE")
+        }
+    }
+
+    /** The shared ordered deck for a participant; each card carries the viewer's OWN action only. */
+    suspend fun getDeck(
+        sessionId: UUID,
+        userId: UUID,
+    ): PsyncDeckResponseDto {
+        val session = requireActiveParticipant(sessionId, userId, allowPaused = true)
+        val cards = repository.listDeckCards(sessionId)
+        val myActions = repository.listActionsForActor(sessionId, userId).associate { it.targetUserId to it.action }
+        val online = onlineFor(cards.map { it.targetUserId })
+        val items =
+            cards.map { card ->
+                val rawToken = issueCardToken(session, session.deckSessionId!!, card.targetUserId, card.position, session.startedAt!!)
+                PsyncDeckCardDto(
+                    card = card.snapshot.copy(online = card.targetUserId in online),
+                    cardToken = rawToken,
+                    viewerAction = myActions[card.targetUserId],
+                )
+            }
+        return PsyncDeckResponseDto(sessionId = sessionId.toString(), deckSize = session.deckSize, cards = items)
+    }
+
+    /** Record the caller's PRIVATE decision on a deck card. Idempotent; never reveals the partner. */
+    suspend fun submitAction(
+        sessionId: UUID,
+        userId: UUID,
+        request: SubmitPsyncActionRequestDto,
+    ): PsyncActionResponseDto {
+        if (request.action !in VALID_ACTIONS) throw PsyncException("PSYNC_INVALID_ACTION")
+        val session = requireActiveParticipant(sessionId, userId, allowPaused = false)
+        val card =
+            repository.findCardByTokenHash(sessionId, deckTokenCodec.tokenHash(request.cardToken))
+                ?: throw PsyncException("PSYNC_INVALID_CARD")
+        val outcome = repository.recordAction(sessionId, userId, card.targetUserId, request.action, clock.instant())
+        return PsyncActionResponseDto(
+            recorded = outcome.newlyRecorded,
+            actedCount = outcome.actedCount,
+            deckSize = session.deckSize,
+        )
+    }
+
+    suspend fun pause(
+        sessionId: UUID,
+        userId: UUID,
+    ): PsyncSessionDto = repository.transitionStatus(sessionId, userId, fromStatus = "active", toStatus = "paused").orThrow()
+
+    suspend fun resume(
+        sessionId: UUID,
+        userId: UUID,
+    ): PsyncSessionDto = repository.transitionStatus(sessionId, userId, fromStatus = "paused", toStatus = "active").orThrow()
+
+    private suspend fun requireActiveParticipant(
+        sessionId: UUID,
+        userId: UUID,
+        allowPaused: Boolean,
+    ): PsyncSession {
+        val session = repository.findById(sessionId, withDisplayNames = false) ?: throw PsyncException("PSYNC_SESSION_NOT_FOUND")
+        if (session.participants.none { it.userId == userId }) throw PsyncException("PSYNC_SESSION_NOT_FOUND")
+        val live = session.status == "active" || (allowPaused && session.status == "paused")
+        if (!live) throw PsyncException("PSYNC_INVALID_STATE")
+        return session
+    }
+
+    private fun issueCardToken(
+        session: PsyncSession,
+        deckSessionId: UUID,
+        targetUserId: UUID,
+        position: Int,
+        generatedAt: java.time.Instant,
+    ): String =
+        deckTokenCodec.issueCardToken(
+            deckSessionId = deckSessionId.toString(),
+            viewerUserId = session.initiatorUserId,
+            targetUserId = targetUserId,
+            scopeHash = "psync:${session.id}",
+            generatedAt = generatedAt,
+            expiresAt = session.expiresAt,
+            position = position,
+        )
+
+    private suspend fun onlineFor(userIds: List<UUID>): Set<UUID> = runCatching { presenceService?.onlineUserIds(userIds).orEmpty() }.getOrDefault(emptySet())
+
+    /**
      * Fetch a session by id, scoped to its participants. A non-participant (or a missing
      * session) gets PSYNC_SESSION_NOT_FOUND so existence never leaks.
      */
@@ -186,6 +356,10 @@ class PsyncSessionService(
         const val CONSENT_ACCEPTED = "accepted"
         const val MIN_DECK_SIZE = 1
         const val MAX_DECK_SIZE = 50
+
+        // Oversample ceiling for the ranker so cross-partner filtering still yields deckSize.
+        const val MAX_RANK_LIMIT = 60
+        val VALID_ACTIONS = setOf("like", "pass", "pineapple_like")
 
         // PSYNC_SPEC Edge Cases: "Partner ignores invite -> Invite expires." 24h window.
         val INVITE_TTL: Duration = Duration.ofHours(24)

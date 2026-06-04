@@ -1,5 +1,6 @@
 package com.pynapli.server.psync
 
+import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import java.time.Instant
 import java.util.UUID
@@ -34,4 +35,34 @@ data class PsyncSessionParticipant(
     val consentStatus: String,
     val approved: Boolean,
     val displayName: String? = null,
+    // PS-2: the both-tap-Start gate. The deck is generated + the session flips to
+    // 'active' only when every participant has started.
+    val started: Boolean = false,
+)
+
+/**
+ * PS-2 shared deck card (mirrors `psync_session_cards`). One row per card; both partners
+ * act on the same ordered list. The [snapshot] is the SwipeCardDto captured at generation
+ * time (bounded, short-lived deck — staleness is acceptable). The [cardTokenHash] is the
+ * hash of the HMAC card token used to validate submitted actions against this deck.
+ */
+data class PsyncSessionCard(
+    val id: UUID,
+    val sessionId: UUID,
+    val position: Int,
+    val targetUserId: UUID,
+    val cardTokenHash: String,
+    val snapshot: SwipeCardDto,
+    val dealtAt: Instant,
+)
+
+/**
+ * PS-2 private per-partner swipe (mirrors `psync_session_actions`). One decision per card
+ * per partner; the actor's own decisions are never exposed to the other partner.
+ */
+data class PsyncSessionAction(
+    val actorUserId: UUID,
+    val targetUserId: UUID,
+    val action: String,
+    val createdAt: Instant,
 )

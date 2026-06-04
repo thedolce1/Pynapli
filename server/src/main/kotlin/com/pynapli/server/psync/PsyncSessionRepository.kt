@@ -81,6 +81,77 @@ interface PsyncSessionRepository {
     /** Sweep stale non-terminal sessions to 'expired'. Returns rows updated. */
     suspend fun expireStale(now: Instant): Int
 
+    // ---- PS-2: shared deck + private swipes --------------------------------------------
+
+    /**
+     * Mark [userId]'s participant row `started=true` on a `ready` session (locks the row).
+     * Reports back whether ALL participants are now started (the both-tap gate) and the
+     * reloaded session. Does NOT generate the deck or flip status — the service computes
+     * the deck (calling the swipe ranker + safety repos) then calls [activateWithDeck].
+     * If the session is already `active`, returns it untouched with allStarted=true.
+     */
+    suspend fun start(
+        sessionId: UUID,
+        userId: UUID,
+        now: Instant,
+    ): StartOutcome
+
+    /**
+     * Atomically flip a `ready` session to `active`, set started_at/deck_session_id, and
+     * persist the shared ordered [cards] (locks the row). Idempotent against races: if the
+     * session is already `active` (deck already persisted) this is a no-op that returns the
+     * current session. Used by the service after it has generated the deck.
+     */
+    suspend fun activateWithDeck(
+        sessionId: UUID,
+        deckSessionId: UUID,
+        cards: List<PsyncSessionCard>,
+        now: Instant,
+    ): MutateOutcome
+
+    /** The shared ordered deck cards for a session (position ascending). */
+    suspend fun listDeckCards(sessionId: UUID): List<PsyncSessionCard>
+
+    /** Only [actorUserId]'s own recorded actions for [sessionId], keyed by target user id. */
+    suspend fun listActionsForActor(
+        sessionId: UUID,
+        actorUserId: UUID,
+    ): List<PsyncSessionAction>
+
+    /** A single deck card matched by its token hash within [sessionId], or null. */
+    suspend fun findCardByTokenHash(
+        sessionId: UUID,
+        cardTokenHash: String,
+    ): PsyncSessionCard?
+
+    /**
+     * Insert [actorUserId]'s private decision on [targetUserId] in [sessionId] idempotently
+     * (ON CONFLICT DO NOTHING — first decision wins). Returns [newlyRecorded]=false if a
+     * decision already existed, plus the actor's current acted count.
+     */
+    suspend fun recordAction(
+        sessionId: UUID,
+        actorUserId: UUID,
+        targetUserId: UUID,
+        action: String,
+        now: Instant,
+        actionIdFactory: () -> UUID = UUID::randomUUID,
+    ): RecordActionOutcome
+
+    /** Count of [actorUserId]'s own recorded decisions in [sessionId]. */
+    suspend fun countActionsForActor(
+        sessionId: UUID,
+        actorUserId: UUID,
+    ): Int
+
+    /** Transition a session [userId] participates in between statuses (locks the row). */
+    suspend fun transitionStatus(
+        sessionId: UUID,
+        userId: UUID,
+        fromStatus: String,
+        toStatus: String,
+    ): MutateOutcome
+
     /** The active linked partner of a user, with the link row id. */
     data class ActiveLink(
         val linkId: UUID,
@@ -99,4 +170,30 @@ interface PsyncSessionRepository {
 
         object InvalidState : MutateOutcome
     }
+
+    /** Outcome of [start]: the reloaded session + whether the deck should now be generated. */
+    sealed interface StartOutcome {
+        /**
+         * The both-tap gate state after marking the caller started. [allStarted] true means
+         * every participant has started and the service should generate + persist the deck.
+         * [alreadyActive] true means the session was already `active` (idempotent start).
+         */
+        data class Updated(
+            val session: PsyncSession,
+            val allStarted: Boolean,
+            val alreadyActive: Boolean,
+        ) : StartOutcome
+
+        object SessionNotFound : StartOutcome
+
+        object NotParticipant : StartOutcome
+
+        object InvalidState : StartOutcome
+    }
+
+    /** Outcome of [recordAction]: idempotent insert result + the actor's acted count. */
+    data class RecordActionOutcome(
+        val newlyRecorded: Boolean,
+        val actedCount: Int,
+    )
 }

@@ -130,12 +130,16 @@ internal fun psyncStatusFor(code: String): HttpStatusCode =
     when (code) {
         "PSYNC_NO_LINKED_PARTNER",
         "INVALID_PSYNC_DECK_SIZE",
+        "PSYNC_INVALID_ACTION",
         -> HttpStatusCode.BadRequest
         "PSYNC_SESSION_ALREADY_ACTIVE",
         "PSYNC_INVALID_STATE",
+        "PSYNC_DECK_EMPTY",
         -> HttpStatusCode.Conflict
         "PSYNC_NOT_PARTICIPANT" -> HttpStatusCode.Forbidden
-        "PSYNC_SESSION_NOT_FOUND" -> HttpStatusCode.NotFound
+        "PSYNC_SESSION_NOT_FOUND",
+        "PSYNC_INVALID_CARD",
+        -> HttpStatusCode.NotFound
         else -> HttpStatusCode.BadRequest
     }
 

@@ -141,6 +141,11 @@ POST   http://localhost:8080/v1/psync/sessions/{id}/accept
 POST   http://localhost:8080/v1/psync/sessions/{id}/deny
 POST   http://localhost:8080/v1/psync/sessions/{id}/suggest-filters
 POST   http://localhost:8080/v1/psync/sessions/{id}/leave
+POST   http://localhost:8080/v1/psync/sessions/{id}/start
+GET    http://localhost:8080/v1/psync/sessions/{id}/deck
+POST   http://localhost:8080/v1/psync/sessions/{id}/actions
+POST   http://localhost:8080/v1/psync/sessions/{id}/pause
+POST   http://localhost:8080/v1/psync/sessions/{id}/resume
 ```
 
 Auth currently uses server-owned opaque access/refresh tokens, PBKDF2 password hashing, and hashed email/token storage in Postgres.

@@ -2,6 +2,9 @@ package com.pynapli.server.psync
 
 import com.pynapli.server.psync.PsyncSessionRepository.ActiveLink
 import com.pynapli.server.psync.PsyncSessionRepository.MutateOutcome
+import com.pynapli.server.psync.PsyncSessionRepository.RecordActionOutcome
+import com.pynapli.server.psync.PsyncSessionRepository.StartOutcome
+import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -298,6 +301,219 @@ class JdbcPsyncSessionRepository(
             }
         }
 
+    // ---- PS-2: shared deck + private swipes --------------------------------------------
+
+    override suspend fun start(
+        sessionId: UUID,
+        userId: UUID,
+        now: Instant,
+    ): StartOutcome =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.inTransaction {
+                    val session =
+                        connection.lockSession(sessionId)
+                            ?: return@inTransaction StartOutcome.SessionNotFound
+                    if (session.participants.none { it.userId == userId }) {
+                        return@inTransaction StartOutcome.NotParticipant
+                    }
+                    // Idempotent: the deck is already generated and the session is live.
+                    if (session.status == STATUS_ACTIVE) {
+                        return@inTransaction StartOutcome.Updated(session, allStarted = true, alreadyActive = true)
+                    }
+                    if (session.status != STATUS_READY) {
+                        return@inTransaction StartOutcome.InvalidState
+                    }
+
+                    connection.setParticipantStarted(sessionId, userId, now)
+
+                    val allStarted =
+                        session.participants.all { existing ->
+                            existing.userId == userId || existing.started
+                        }
+                    val updated =
+                        connection.loadSession(sessionId)
+                            ?: return@inTransaction StartOutcome.SessionNotFound
+                    StartOutcome.Updated(updated, allStarted = allStarted, alreadyActive = false)
+                }
+            }
+        }
+
+    override suspend fun activateWithDeck(
+        sessionId: UUID,
+        deckSessionId: UUID,
+        cards: List<PsyncSessionCard>,
+        now: Instant,
+    ): MutateOutcome =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.inTransaction {
+                    val session =
+                        connection.lockSession(sessionId)
+                            ?: return@inTransaction MutateOutcome.SessionNotFound
+                    // Race guard: another start already activated + persisted the deck.
+                    if (session.status == STATUS_ACTIVE) {
+                        return@inTransaction MutateOutcome.Updated(session)
+                    }
+                    if (session.status != STATUS_READY) {
+                        return@inTransaction MutateOutcome.InvalidState
+                    }
+
+                    connection
+                        .prepareStatement(
+                            "UPDATE psync_sessions SET status = ?, started_at = ?, deck_session_id = ? WHERE id = ?",
+                        ).use { statement ->
+                            statement.setString(1, STATUS_ACTIVE)
+                            statement.setTimestamp(2, Timestamp.from(now))
+                            statement.setObject(3, deckSessionId)
+                            statement.setObject(4, sessionId)
+                            statement.executeUpdate()
+                        }
+                    cards.forEach { connection.insertDeckCard(it) }
+
+                    val updated =
+                        connection.loadSession(sessionId)
+                            ?: return@inTransaction MutateOutcome.SessionNotFound
+                    MutateOutcome.Updated(updated)
+                }
+            }
+        }
+
+    override suspend fun listDeckCards(sessionId: UUID): List<PsyncSessionCard> =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT id, session_id, position, target_user_id, card_token_hash,
+                               card_snapshot::text AS card_snapshot, dealt_at
+                        FROM psync_session_cards
+                        WHERE session_id = ?
+                        ORDER BY position ASC
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, sessionId)
+                        statement.executeQuery().use { rs ->
+                            buildList { while (rs.next()) add(rs.toDeckCard()) }
+                        }
+                    }
+            }
+        }
+
+    override suspend fun listActionsForActor(
+        sessionId: UUID,
+        actorUserId: UUID,
+    ): List<PsyncSessionAction> =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT actor_user_id, target_user_id, action, created_at
+                        FROM psync_session_actions
+                        WHERE session_id = ? AND actor_user_id = ?
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, sessionId)
+                        statement.setObject(2, actorUserId)
+                        statement.executeQuery().use { rs ->
+                            buildList { while (rs.next()) add(rs.toAction()) }
+                        }
+                    }
+            }
+        }
+
+    override suspend fun findCardByTokenHash(
+        sessionId: UUID,
+        cardTokenHash: String,
+    ): PsyncSessionCard? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT id, session_id, position, target_user_id, card_token_hash,
+                               card_snapshot::text AS card_snapshot, dealt_at
+                        FROM psync_session_cards
+                        WHERE session_id = ? AND card_token_hash = ?
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, sessionId)
+                        statement.setString(2, cardTokenHash)
+                        statement.executeQuery().use { rs -> if (!rs.next()) null else rs.toDeckCard() }
+                    }
+            }
+        }
+
+    override suspend fun recordAction(
+        sessionId: UUID,
+        actorUserId: UUID,
+        targetUserId: UUID,
+        action: String,
+        now: Instant,
+        actionIdFactory: () -> UUID,
+    ): RecordActionOutcome =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.inTransaction {
+                    val inserted =
+                        connection
+                            .prepareStatement(
+                                """
+                                INSERT INTO psync_session_actions (id, session_id, actor_user_id, target_user_id, action, created_at)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                                ON CONFLICT (session_id, actor_user_id, target_user_id) DO NOTHING
+                                """.trimIndent(),
+                            ).use { statement ->
+                                statement.setObject(1, actionIdFactory())
+                                statement.setObject(2, sessionId)
+                                statement.setObject(3, actorUserId)
+                                statement.setObject(4, targetUserId)
+                                statement.setString(5, action)
+                                statement.setTimestamp(6, Timestamp.from(now))
+                                statement.executeUpdate()
+                            }
+                    val actedCount = connection.countActions(sessionId, actorUserId)
+                    RecordActionOutcome(newlyRecorded = inserted > 0, actedCount = actedCount)
+                }
+            }
+        }
+
+    override suspend fun countActionsForActor(
+        sessionId: UUID,
+        actorUserId: UUID,
+    ): Int =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection -> connection.countActions(sessionId, actorUserId) }
+        }
+
+    override suspend fun transitionStatus(
+        sessionId: UUID,
+        userId: UUID,
+        fromStatus: String,
+        toStatus: String,
+    ): MutateOutcome =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.inTransaction {
+                    val session =
+                        connection.lockSession(sessionId)
+                            ?: return@inTransaction MutateOutcome.SessionNotFound
+                    if (session.participants.none { it.userId == userId }) {
+                        return@inTransaction MutateOutcome.NotParticipant
+                    }
+                    if (session.status != fromStatus) {
+                        return@inTransaction MutateOutcome.InvalidState
+                    }
+                    connection.setSessionStatus(sessionId, toStatus)
+                    val updated =
+                        connection.loadSession(sessionId)
+                            ?: return@inTransaction MutateOutcome.SessionNotFound
+                    MutateOutcome.Updated(updated)
+                }
+            }
+        }
+
     // ---- transactional helpers -------------------------------------------------------
 
     private inline fun <T> Connection.inTransaction(block: () -> T): T {
@@ -447,7 +663,7 @@ class JdbcPsyncSessionRepository(
         val sql =
             if (withDisplayNames) {
                 """
-                SELECT p.user_id, p.role, p.consent_status, p.approved,
+                SELECT p.user_id, p.role, p.consent_status, p.approved, p.started,
                        COALESCE(NULLIF(TRIM(pr.display_name), ''), 'Pynapli User') AS display_name
                 FROM psync_session_participants p
                 LEFT JOIN profiles pr ON pr.user_id = p.user_id
@@ -456,7 +672,7 @@ class JdbcPsyncSessionRepository(
                 """.trimIndent()
             } else {
                 """
-                SELECT user_id, role, consent_status, approved, NULL AS display_name
+                SELECT user_id, role, consent_status, approved, started, NULL AS display_name
                 FROM psync_session_participants
                 WHERE session_id = ?
                 ORDER BY role ASC, user_id ASC
@@ -490,12 +706,86 @@ class JdbcPsyncSessionRepository(
             participants = emptyList(),
         )
 
+    private fun Connection.setParticipantStarted(
+        sessionId: UUID,
+        userId: UUID,
+        now: Instant,
+    ) {
+        prepareStatement(
+            "UPDATE psync_session_participants SET started = true, updated_at = ? WHERE session_id = ? AND user_id = ?",
+        ).use { statement ->
+            statement.setTimestamp(1, Timestamp.from(now))
+            statement.setObject(2, sessionId)
+            statement.setObject(3, userId)
+            statement.executeUpdate()
+        }
+    }
+
+    private fun Connection.insertDeckCard(card: PsyncSessionCard) {
+        prepareStatement(
+            """
+            INSERT INTO psync_session_cards (id, session_id, position, target_user_id, card_token_hash, card_snapshot, dealt_at)
+            VALUES (?, ?, ?, ?, ?, ?::jsonb, ?)
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, card.id)
+            statement.setObject(2, card.sessionId)
+            statement.setInt(3, card.position)
+            statement.setObject(4, card.targetUserId)
+            statement.setString(5, card.cardTokenHash)
+            statement.setObject(
+                6,
+                PGobject().apply {
+                    type = "jsonb"
+                    value = json.encodeToString(SwipeCardDto.serializer(), card.snapshot)
+                },
+            )
+            statement.setTimestamp(7, Timestamp.from(card.dealtAt))
+            statement.executeUpdate()
+        }
+    }
+
+    private fun Connection.countActions(
+        sessionId: UUID,
+        actorUserId: UUID,
+    ): Int =
+        prepareStatement(
+            "SELECT COUNT(*) FROM psync_session_actions WHERE session_id = ? AND actor_user_id = ?",
+        ).use { statement ->
+            statement.setObject(1, sessionId)
+            statement.setObject(2, actorUserId)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getInt(1)
+            }
+        }
+
+    private fun ResultSet.toDeckCard(): PsyncSessionCard =
+        PsyncSessionCard(
+            id = getObject("id", UUID::class.java),
+            sessionId = getObject("session_id", UUID::class.java),
+            position = getInt("position"),
+            targetUserId = getObject("target_user_id", UUID::class.java),
+            cardTokenHash = getString("card_token_hash"),
+            snapshot = json.decodeFromString(SwipeCardDto.serializer(), getString("card_snapshot")),
+            dealtAt = getTimestamp("dealt_at").toInstant(),
+        )
+
+    private fun ResultSet.toAction(): PsyncSessionAction =
+        PsyncSessionAction(
+            actorUserId = getObject("actor_user_id", UUID::class.java),
+            targetUserId = getObject("target_user_id", UUID::class.java),
+            action = getString("action"),
+            createdAt = getTimestamp("created_at").toInstant(),
+        )
+
     private fun ResultSet.toParticipant(): PsyncSessionParticipant =
         PsyncSessionParticipant(
             userId = getObject("user_id", UUID::class.java),
             role = getString("role"),
             consentStatus = getString("consent_status"),
             approved = getBoolean("approved"),
+            started = getBoolean("started"),
             displayName = getString("display_name"),
         )
 
@@ -503,6 +793,7 @@ class JdbcPsyncSessionRepository(
         const val STATUS_INVITED = "invited"
         const val STATUS_CONFIGURING = "configuring"
         const val STATUS_READY = "ready"
+        const val STATUS_ACTIVE = "active"
         const val STATUS_CANCELLED = "cancelled"
         const val CONSENT_ACCEPTED = "accepted"
         const val CONSENT_DENIED = "denied"

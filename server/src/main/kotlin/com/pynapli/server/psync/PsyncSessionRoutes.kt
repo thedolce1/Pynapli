@@ -3,6 +3,7 @@ package com.pynapli.server.psync
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
 import com.pynapli.shared.network.dto.CreatePsyncSessionRequestDto
+import com.pynapli.shared.network.dto.SubmitPsyncActionRequestDto
 import com.pynapli.shared.network.dto.SuggestPsyncFiltersRequestDto
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
@@ -16,8 +17,8 @@ import io.ktor.server.routing.routing
 import java.util.UUID
 
 /**
- * Psync session negotiation endpoints (PS-1). All bearer-authed. start/actions/recap are
- * later phases and are intentionally absent.
+ * Psync session endpoints (PS-1 negotiation + PS-2 shared deck/swipes). All bearer-authed.
+ * Match resolution + recap remain later phases.
  */
 fun Application.configurePsyncRoutes(
     authService: AuthService?,
@@ -53,6 +54,34 @@ fun Application.configurePsyncRoutes(
         post("/v1/psync/sessions/{id}/leave") {
             val user = authService.authenticate(call.requiredBearerToken())
             call.respond(service.leave(call.requiredSessionId(), user.id))
+        }
+
+        post("/v1/psync/sessions/{id}/start") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(service.start(call.requiredSessionId(), user.id))
+        }
+
+        get("/v1/psync/sessions/{id}/deck") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(service.getDeck(call.requiredSessionId(), user.id))
+        }
+
+        post("/v1/psync/sessions/{id}/actions") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val body =
+                call.receiveNullable<SubmitPsyncActionRequestDto>()
+                    ?: throw PsyncException("PSYNC_INVALID_CARD")
+            call.respond(service.submitAction(call.requiredSessionId(), user.id, body))
+        }
+
+        post("/v1/psync/sessions/{id}/pause") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(service.pause(call.requiredSessionId(), user.id))
+        }
+
+        post("/v1/psync/sessions/{id}/resume") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(service.resume(call.requiredSessionId(), user.id))
         }
 
         get("/v1/psync/sessions/{id}") {
