@@ -48,6 +48,7 @@ Current Grid coverage:
 - `scripts/android-grid-denied-location-qa.ps1` runs the installed Android app with the dev viewer's server-side location removed, exercises the Android location permission denial prompt, verifies the no-location and denied-permission UI states, confirms no Grid cards leak into the denied state, captures screenshots/XML, and restores the dev location afterward.
 - `scripts/android-location-policy-check.ps1` verifies the Android Grid location path stays while-in-use only: no background location permission, no foreground location service, no continuous `requestLocationUpdates`, one-shot `getCurrentLocation`, and cancellation on `MainActivity.onStop`.
 - `scripts/android-grid-battery-profile.ps1` captures a repeatable foreground/background Grid battery-location profile bundle through `adb`. It refuses emulator evidence unless `-AllowEmulator` is passed, so real-device evidence stays distinct from harness smoke testing.
+- `scripts/android-tonight-battery-profile.ps1` is the Playing Tonight counterpart: it opens the Playing Tonight surface (Grid header moon button) and profiles foreground/background battery + location there (the map-first surface is the new battery-relevant screen). Same emulator-refusal guard as the Grid profiler.
 
 Current Swipe coverage:
 
@@ -334,10 +335,19 @@ Run this on a physical Android device before beta:
 
 Use `-DeviceId` when more than one Android device is attached. The script intentionally rejects emulators unless `-AllowEmulator` is provided, because emulator results are only harness smoke evidence. It captures battery dumps, batterystats, location dumps, activity service state, Grid screenshots, foreground observation, background observation, and a `battery-profile-summary.json` under `artifacts/android-grid-battery-profile/<timestamp>`.
 
+The **Playing Tonight** counterpart profiles the map-first surface:
+
+```powershell
+.\scripts\android-tonight-battery-profile.ps1 -ForegroundMinutes 30 -BackgroundSeconds 7200
+```
+
+It seeds live sessions, dev-logs in, opens Playing Tonight from the Grid header moon button, and runs the same foreground/background battery+location capture (asserting no background location is granted), writing `battery-profile-summary.json` under `artifacts/android-tonight-battery-profile/<timestamp>`. Same `-AllowEmulator` smoke-only guard.
+
 Current local proof:
 
 - `scripts/android-grid-denied-location-qa.ps1 -SkipBuild` passed on emulator on 2026-05-14 with artifacts under `artifacts/android-grid-denied-location-qa/20260514-091231`.
 - `scripts/android-grid-battery-profile.ps1 -AllowEmulator -SkipBuild -ForegroundMinutes 0 -BackgroundSeconds 5` completed on 2026-05-14 with artifacts under `artifacts/android-grid-battery-profile/20260514-091341`. This proves the harness, not real battery behavior.
+- `scripts/android-tonight-battery-profile.ps1 -AllowEmulator -SkipBuild -ForegroundMinutes 0 -BackgroundSeconds 5` completed on 2026-06-03 with artifacts under `artifacts/android-tonight-battery-profile/20260603-200302` (no background location granted). Harness smoke only — a **physical-device** Playing Tonight battery/notification pass is still required before beta.
 
 ## Security/Abuse Tests
 
@@ -367,6 +377,7 @@ Current local proof:
 - [ ] Manual QA on mid-range Android and older supported iPhone.
 - [x] Location denied path tested on connected Android emulator/device through `scripts/android-grid-denied-location-qa.ps1`.
 - [ ] Real-device Grid battery/location profile completed and reviewed.
+- [ ] Real-device Playing Tonight battery/location + notification-delivery pass completed and reviewed. (`scripts/android-tonight-battery-profile.ps1` is harness-ready and emulator-smoke-passed; needs a physical device, and push delivery needs FCM/`google-services.json`.)
 - [ ] Partial: notification denied logic has unit coverage; manual device QA is not complete.
 - [ ] Low-network path tested.
 
