@@ -15,6 +15,7 @@ import com.pynapli.server.notifications.NotificationException
 import com.pynapli.server.profile.ProfileException
 import com.pynapli.server.profile.TonightAvailabilityException
 import com.pynapli.server.profilelink.ProfileLinkException
+import com.pynapli.server.psync.PsyncException
 import com.pynapli.server.safety.SafetyException
 import com.pynapli.server.subscriptions.SubscriptionException
 import com.pynapli.server.swipe.SavedSwipeFilterException
@@ -172,6 +173,18 @@ fun Application.configureStatusPages() {
         exception<TonightSessionException> { call, cause ->
             call.respond(
                 status = tonightSessionStatusFor(cause.code),
+                message =
+                    ApiErrorDto(
+                        code = cause.code,
+                        message = userSafeMessage(cause.code),
+                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                    ),
+            )
+        }
+
+        exception<PsyncException> { call, cause ->
+            call.respond(
+                status = psyncStatusFor(cause.code),
                 message =
                     ApiErrorDto(
                         code = cause.code,

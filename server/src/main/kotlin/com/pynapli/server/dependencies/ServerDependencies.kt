@@ -70,6 +70,8 @@ import com.pynapli.server.profile.TonightAvailabilityService
 import com.pynapli.server.profilelink.JdbcProfileLinkRepository
 import com.pynapli.server.profilelink.ProfileLinkService
 import com.pynapli.server.profiling.RequestProfilerFactory
+import com.pynapli.server.psync.JdbcPsyncSessionRepository
+import com.pynapli.server.psync.PsyncSessionService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockService
 import com.pynapli.server.safety.HiddenProfileRepository
@@ -156,6 +158,7 @@ class ServerDependencies(
     val tonightSessionService: TonightSessionService?,
     val tonightFeedService: TonightFeedService?,
     val tonightSessionExpiryWorker: TonightSessionExpiryWorker?,
+    val psyncSessionService: PsyncSessionService?,
     val ageVerificationService: AgeVerificationService?,
     val accountLifecycleService: AccountLifecycleService?,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
@@ -480,6 +483,10 @@ class ServerDependencies(
             // Hygiene sweep so elapsed sessions move to 'expired' (reads already filter on
             // expires_at, so this is not load-bearing for correctness). Default every 5 minutes.
             val tonightSessionExpiryWorker = TonightSessionExpiryWorker(tonightSessionService, intervalMillis = 5 * 60 * 1000L)
+            val psyncSessionService =
+                PsyncSessionService(
+                    repository = JdbcPsyncSessionRepository(database.dataSource),
+                )
             // Provider-hosted age verification is opt-in: built only when both the provider name and
             // its redirect base URL are configured. Otherwise the service keeps manual-review-only
             // behavior.
@@ -590,6 +597,7 @@ class ServerDependencies(
                 tonightSessionService = tonightSessionService,
                 tonightFeedService = tonightFeedService,
                 tonightSessionExpiryWorker = tonightSessionExpiryWorker,
+                psyncSessionService = psyncSessionService,
                 ageVerificationService = ageVerificationService,
                 accountLifecycleService = accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,
@@ -687,6 +695,7 @@ class ServerDependencies(
                 tonightSessionService = null,
                 tonightFeedService = null,
                 tonightSessionExpiryWorker = null,
+                psyncSessionService = null,
                 ageVerificationService = null,
                 accountLifecycleService = null,
                 requestProfilerFactory = RequestProfilerFactory.disabled(),
