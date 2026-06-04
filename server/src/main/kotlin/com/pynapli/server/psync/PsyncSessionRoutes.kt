@@ -94,6 +94,11 @@ fun Application.configurePsyncRoutes(
             call.respond(service.getRecap(call.requiredSessionId(), user.id))
         }
 
+        post("/v1/psync/sessions/{id}/nudge") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            call.respond(service.nudge(call.requiredSessionId(), user.id))
+        }
+
         get("/v1/psync/sessions/{id}") {
             val user = authService.authenticate(call.requiredBearerToken())
             call.respond(service.get(call.requiredSessionId(), user.id))

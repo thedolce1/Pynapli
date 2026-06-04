@@ -71,6 +71,7 @@ internal fun userSafeMessage(code: String): String =
         "PSYNC_DECK_EMPTY" -> "No profiles match the agreed Psync filters right now. Try widening them."
         "PSYNC_INVALID_CARD" -> "That Psync card is no longer valid."
         "PSYNC_INVALID_ACTION" -> "That Psync swipe action isn't allowed."
+        "PSYNC_NUDGE_COOLDOWN" -> "Give your partner a moment — you can nudge again shortly."
         "INVALID_FLIRT_TARGET" -> "Spark could not be sent."
         "FLIRT_NOT_ALLOWED" -> "This profile is not accepting Sparks."
         "INVALID_ALBUM_REQUEST_TARGET" -> "Album request could not be sent."

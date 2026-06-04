@@ -78,6 +78,8 @@ class PsyncSessionServiceIntegrationTest :
         fun deckService(
             candidates: List<UUID>,
             clock: Clock = Clock.systemUTC(),
+            broadcaster: PsyncBroadcaster? = null,
+            rateLimitService: com.pynapli.server.safety.RateLimitService? = null,
         ): PsyncSessionService =
             PsyncSessionService(
                 repository = JdbcPsyncSessionRepository(dataSource),
@@ -102,6 +104,8 @@ class PsyncSessionServiceIntegrationTest :
                 hiddenProfileRepository =
                     com.pynapli.server.safety
                         .JdbcHiddenProfileRepository(dataSource),
+                broadcaster = broadcaster,
+                rateLimitService = rateLimitService,
                 clock = clock,
             )
 
@@ -718,7 +722,112 @@ class PsyncSessionServiceIntegrationTest :
                 assertEquals(1, dataSource.countActivityEvents(target, "match"))
             }
         }
+
+        // ---- PS-4b: realtime session channel + nudge -----------------------------------
+
+        "session transitions broadcast convenience deltas to the right partners" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val broadcaster = PsyncBroadcaster(replay = 64)
+                val svc = deckService(listOf(target), broadcaster = broadcaster)
+
+                val sessionId = svc.readyFor(initiator, partner)
+                svc.start(sessionId, initiator) // single tap -> partner_started to the partner
+                svc.start(sessionId, partner) // both in -> session_active to both
+                svc.actOnSingle(sessionId, initiator, "like") // initiator finishes -> partner_finished to partner
+                svc.actOnSingle(sessionId, partner, "like") // both done -> session_completed to both
+
+                val deltas = broadcaster.deltas.replayCache
+                // partner_started went only to the partner (the one who hadn't tapped yet).
+                assertEquals(
+                    listOf(partner),
+                    deltas.filter { it.type == PsyncBroadcaster.PARTNER_STARTED }.map { it.recipientUserId },
+                )
+                // session_active + session_completed each fan out to BOTH participants.
+                assertEquals(2, deltas.count { it.type == PsyncBroadcaster.SESSION_ACTIVE })
+                assertEquals(2, deltas.count { it.type == PsyncBroadcaster.SESSION_COMPLETED })
+                // partner_finished went only to the partner (initiator finished first).
+                assertEquals(
+                    listOf(partner),
+                    deltas.filter { it.type == PsyncBroadcaster.PARTNER_FINISHED }.map { it.recipientUserId },
+                )
+                // No delta ever names a swiped target.
+                assertTrue(deltas.all { it.sessionId == sessionId })
+            }
+        }
+
+        "pause and resume broadcast to both partners" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val broadcaster = PsyncBroadcaster(replay = 64)
+                val svc = deckService(listOf(target), broadcaster = broadcaster)
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+
+                svc.pause(sessionId, initiator)
+                svc.resume(sessionId, partner)
+
+                val deltas = broadcaster.deltas.replayCache
+                assertEquals(2, deltas.count { it.type == PsyncBroadcaster.SESSION_PAUSED })
+                assertEquals(2, deltas.count { it.type == PsyncBroadcaster.SESSION_RESUMED })
+            }
+        }
+
+        "nudge pings only the other partner and is refused on cooldown" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val broadcaster = PsyncBroadcaster(replay = 64)
+                val svc = deckService(listOf(target), broadcaster = broadcaster, rateLimitService = countingRateLimiter())
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+
+                assertTrue(svc.nudge(sessionId, initiator).sent)
+                val cooled = assertFailsWith<PsyncException> { svc.nudge(sessionId, initiator) }
+                assertEquals("PSYNC_NUDGE_COOLDOWN", cooled.code)
+
+                val nudges = broadcaster.deltas.replayCache.filter { it.type == PsyncBroadcaster.NUDGE }
+                assertEquals(listOf(partner), nudges.map { it.recipientUserId })
+            }
+        }
+
+        "nudge rejects a non-participant" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val outsider = UUID.randomUUID()
+                dataSource.insertUserWithProfile(outsider, "Outsider")
+                val svc = deckService(listOf(target), broadcaster = PsyncBroadcaster(replay = 8))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+
+                val error = assertFailsWith<PsyncException> { svc.nudge(sessionId, outsider) }
+                assertEquals("PSYNC_SESSION_NOT_FOUND", error.code)
+            }
+        }
     })
+
+// PS-4b: in-memory rate limiter — psync_nudge policy is limit 1 / 60s, so the first nudge for a
+// key is allowed and the second is denied.
+private fun countingRateLimiter(): com.pynapli.server.safety.RateLimitService =
+    com.pynapli.server.safety.RateLimitService(
+        object : com.pynapli.server.safety.RateLimitRepository {
+            private val counts = mutableMapOf<String, Long>()
+
+            override suspend fun increment(
+                key: String,
+                windowSeconds: Long,
+            ): com.pynapli.server.safety.RateLimitCounter {
+                val next = (counts[key] ?: 0L) + 1L
+                counts[key] = next
+                return com.pynapli.server.safety
+                    .RateLimitCounter(count = next, ttlSeconds = windowSeconds)
+            }
+        },
+    )
 
 private fun DataSource.insertUserWithProfile(
     userId: UUID,

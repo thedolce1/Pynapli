@@ -136,6 +136,7 @@ internal fun psyncStatusFor(code: String): HttpStatusCode =
         "PSYNC_INVALID_STATE",
         "PSYNC_DECK_EMPTY",
         -> HttpStatusCode.Conflict
+        "PSYNC_NUDGE_COOLDOWN" -> HttpStatusCode.TooManyRequests
         "PSYNC_NOT_PARTICIPANT" -> HttpStatusCode.Forbidden
         "PSYNC_SESSION_NOT_FOUND",
         "PSYNC_INVALID_CARD",
