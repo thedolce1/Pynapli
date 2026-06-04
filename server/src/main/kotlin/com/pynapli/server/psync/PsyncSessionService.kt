@@ -40,6 +40,8 @@ class PsyncSessionService(
     private val blockRepository: com.pynapli.server.safety.BlockRepository? = null,
     private val hiddenProfileRepository: com.pynapli.server.safety.HiddenProfileRepository? = null,
     private val presenceService: com.pynapli.server.presence.PresenceService? = null,
+    private val activityService: com.pynapli.server.activity.ActivityService? = null,
+    private val notificationPublisher: com.pynapli.server.notifications.NotificationPublisher? = null,
     private val deckTokenCodec: com.pynapli.server.swipe.SwipeDeckTokenCodec =
         com.pynapli.server.swipe
             .SwipeDeckTokenCodec(),
@@ -247,8 +249,14 @@ class PsyncSessionService(
         val completed =
             if (outcome.actedCount >= deckCount && bothPartnersFinished(session, userId, deckCount)) {
                 val finish = repository.complete(sessionId, userId, clock.instant())
-                finish is PsyncSessionRepository.MutateOutcome.Updated &&
+                if (finish is PsyncSessionRepository.CompleteOutcome.Completed &&
                     finish.session.status == STATUS_COMPLETED
+                ) {
+                    emitMatchActivity(finish.resolvedMatches)
+                    true
+                } else {
+                    false
+                }
             } else {
                 false
             }
@@ -282,14 +290,45 @@ class PsyncSessionService(
         userId: UUID,
     ): PsyncRecapDto {
         val outcome = repository.complete(sessionId, userId, clock.instant())
-        val session =
+        val completed =
             when (outcome) {
-                is PsyncSessionRepository.MutateOutcome.Updated -> outcome.session
-                PsyncSessionRepository.MutateOutcome.SessionNotFound -> throw PsyncException("PSYNC_SESSION_NOT_FOUND")
-                PsyncSessionRepository.MutateOutcome.NotParticipant -> throw PsyncException("PSYNC_NOT_PARTICIPANT")
-                PsyncSessionRepository.MutateOutcome.InvalidState -> throw PsyncException("PSYNC_INVALID_STATE")
+                is PsyncSessionRepository.CompleteOutcome.Completed -> outcome
+                PsyncSessionRepository.CompleteOutcome.SessionNotFound -> throw PsyncException("PSYNC_SESSION_NOT_FOUND")
+                PsyncSessionRepository.CompleteOutcome.NotParticipant -> throw PsyncException("PSYNC_NOT_PARTICIPANT")
+                PsyncSessionRepository.CompleteOutcome.InvalidState -> throw PsyncException("PSYNC_INVALID_STATE")
             }
-        return buildRecap(session, userId)
+        emitMatchActivity(completed.resolvedMatches)
+        return buildRecap(completed.session, userId)
+    }
+
+    /**
+     * Replay resolved matches into the existing match pipeline post-commit: each canonical match
+     * lands in BOTH parties' Activity feed + realtime delta (via [ActivityService.recordMatch])
+     * and enqueues a MATCH push to the target. PSYNC_SPEC: never streams individual swipes — only
+     * the resolved match outcome surfaces. Empty on an idempotent re-complete (no double-emit).
+     */
+    private suspend fun emitMatchActivity(matches: List<PsyncResolvedMatch>) {
+        val activity = activityService ?: return
+        for (match in matches) {
+            activity.recordMatch(match.partnerUserId, match.targetUserId, match.matchId)
+            notificationPublisher?.enqueue(
+                com.pynapli.server.notifications.NotificationEventDraft(
+                    recipientUserId = match.targetUserId,
+                    actorUserId = match.partnerUserId,
+                    kind = com.pynapli.server.notifications.NotificationKind.MATCH,
+                    subjectId = match.matchId,
+                    idempotencyKey = "match:${match.matchId}:${match.targetUserId}",
+                    payload =
+                        mapOf(
+                            "target" to "activity",
+                            "activityTab" to "matches",
+                            "activityEventType" to "match",
+                            "matchId" to match.matchId.toString(),
+                            "matchedUserId" to match.partnerUserId.toString(),
+                        ),
+                ),
+            )
+        }
     }
 
     /** The recap for a completed session the caller participated in (participant-scoped). */

@@ -166,7 +166,7 @@ interface PsyncSessionRepository {
         userId: UUID,
         now: Instant,
         matchIdFactory: () -> UUID = UUID::randomUUID,
-    ): MutateOutcome
+    ): CompleteOutcome
 
     /** Resolved match outcomes for a session (display names joined). */
     suspend fun listSessionMatches(sessionId: UUID): List<PsyncSessionMatch>
@@ -221,4 +221,22 @@ interface PsyncSessionRepository {
         val newlyRecorded: Boolean,
         val actedCount: Int,
     )
+
+    /**
+     * Outcome of [complete]. [Completed.resolvedMatches] is the set of canonical matches created
+     * by THIS completion (empty on an idempotent re-complete), which the service replays into the
+     * Activity/notification/realtime pipeline post-commit.
+     */
+    sealed interface CompleteOutcome {
+        data class Completed(
+            val session: PsyncSession,
+            val resolvedMatches: List<PsyncResolvedMatch>,
+        ) : CompleteOutcome
+
+        object SessionNotFound : CompleteOutcome
+
+        object NotParticipant : CompleteOutcome
+
+        object InvalidState : CompleteOutcome
+    }
 }
