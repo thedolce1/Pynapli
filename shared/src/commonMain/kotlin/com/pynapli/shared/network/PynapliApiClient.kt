@@ -121,15 +121,7 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
-interface PynapliApiClient {
-    suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto>
-
-    suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto>
-
-    suspend fun refreshSession(request: RefreshSessionRequestDto): AppResult<AuthSessionDto>
-
-    suspend fun logout(): AppResult<LogoutResponseDto>
-
+interface PynapliApiClient : AuthApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -380,21 +372,8 @@ class KtorPynapliApiClient(
     private val accessTokenProvider: AccessTokenProvider,
     private val httpClient: HttpClient = createPynapliHttpClient(),
     private val json: Json = PynapliJson,
-) : PynapliApiClient {
-    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> = postJson("/v1/auth/email/signup", request)
-
-    override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> = postJson("/v1/auth/email/login", request)
-
-    override suspend fun refreshSession(request: RefreshSessionRequestDto): AppResult<AuthSessionDto> = postJson("/v1/auth/refresh", request)
-
-    override suspend fun logout(): AppResult<LogoutResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/auth/logout")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
+) : PynapliApiClient,
+    AuthApi by KtorAuthApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -1407,7 +1386,7 @@ fun createPynapliHttpClient(json: Json = PynapliJson): HttpClient =
         }
     }
 
-private suspend inline fun <reified T> HttpResponse.toAppResult(json: Json): AppResult<T> {
+internal suspend inline fun <reified T> HttpResponse.toAppResult(json: Json): AppResult<T> {
     if (status.value in 200..299) {
         return AppResult.Success(body())
     }
