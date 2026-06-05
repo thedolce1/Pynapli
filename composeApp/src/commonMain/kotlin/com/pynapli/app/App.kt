@@ -156,51 +156,12 @@ fun PynapliApp(
             return@PynapliTheme
         }
 
-        val dismissConversation: () -> Unit = {
-            val conversationId = conversationState.detail?.conversation?.conversationId
-            scope.launch { conversationStateHolder.sendTypingStopped(conversationId) }
-            conversationStateHolder.dismiss()
-        }
-        val onConversationDraftChanged: (String) -> Unit = { value ->
-            conversationStateHolder.updateDraft(value)
-            scope.launch { conversationStateHolder.sendTypingSignal(value.isNotBlank()) }
-        }
-        val onConversationSend: () -> Unit = {
-            scope.launch { conversationStateHolder.sendDraft() }
-        }
-        val onConversationLoadOlder: () -> Unit = {
-            scope.launch { conversationStateHolder.loadOlderMessages() }
-        }
-        val onConversationInvitePartner: () -> Unit = {
-            scope.launch {
-                conversationStateHolder.inviteLinkedPartner()
-                messagesStateHolder.refreshSilently()
-            }
-        }
-        val onConversationAcceptInvite: () -> Unit = {
-            scope.launch {
-                conversationStateHolder.acceptPartnerInvite()
-                messagesStateHolder.refreshSilently()
-            }
-        }
-        val onConversationDeclineInvite: () -> Unit = {
-            scope.launch {
-                conversationStateHolder.declinePartnerInvite()
-                messagesStateHolder.refreshSilently()
-            }
-        }
-        val onConversationLeave: () -> Unit = {
-            scope.launch {
-                conversationStateHolder.leaveConversation()
-                messagesStateHolder.refreshSilently()
-            }
-        }
-        val onConversationDeleteMessage: (String) -> Unit = { messageId ->
-            scope.launch {
-                conversationStateHolder.deleteMessage(messageId)
-                messagesStateHolder.refreshSilently()
-            }
-        }
+        val conversationActions =
+            rememberConversationActions(
+                scope = scope,
+                conversationStateHolder = conversationStateHolder,
+                messagesStateHolder = messagesStateHolder,
+            )
         val conversationShownInline = selectedTab == PynapliTab.Messages && conversationState.visible
 
         LaunchedEffect(selectedTab, profileDetailState.blockedTargetUserId) {
@@ -212,7 +173,7 @@ fun PynapliApp(
                     ?.participants
                     ?.any { participant -> participant.userId == blockedId } == true
             ) {
-                dismissConversation()
+                conversationActions.dismiss()
             }
             messagesStateHolder.refreshSilently()
         }
@@ -303,22 +264,22 @@ fun PynapliApp(
                                 ConversationScreen(
                                     modifier = Modifier.weight(1f),
                                     state = conversationState,
-                                    onBack = dismissConversation,
+                                    onBack = conversationActions.dismiss,
                                     onProfileIconClick = { profileSurface = ProfileSurface.Hub },
                                     onOpenParticipantProfile = { participant ->
                                         scope.launch {
                                             profileDetailStateHolder.open(participant.toConversationProfileCardUi())
                                         }
                                     },
-                                    onDraftChanged = onConversationDraftChanged,
-                                    onSend = onConversationSend,
-                                    onLoadOlder = onConversationLoadOlder,
+                                    onDraftChanged = conversationActions.onDraftChanged,
+                                    onSend = conversationActions.onSend,
+                                    onLoadOlder = conversationActions.onLoadOlder,
                                     linkedPartnerUserId = profileLinksState.current?.otherUserId,
-                                    onInvitePartner = onConversationInvitePartner,
-                                    onAcceptInvite = onConversationAcceptInvite,
-                                    onDeclineInvite = onConversationDeclineInvite,
-                                    onLeaveConversation = onConversationLeave,
-                                    onDeleteMessage = onConversationDeleteMessage,
+                                    onInvitePartner = conversationActions.onInvitePartner,
+                                    onAcceptInvite = conversationActions.onAcceptInvite,
+                                    onDeclineInvite = conversationActions.onDeclineInvite,
+                                    onLeaveConversation = conversationActions.onLeave,
+                                    onDeleteMessage = conversationActions.onDeleteMessage,
                                 )
                             } else {
                                 MessagesScreen(
@@ -404,7 +365,7 @@ fun PynapliApp(
                     activityBadgeCount = activityState.activityBadgeCount,
                     onTabSelected = {
                         if (selectedTab == PynapliTab.Messages && it != PynapliTab.Messages && conversationState.visible) {
-                            dismissConversation()
+                            conversationActions.dismiss()
                         }
                         profileSurface = ProfileSurface.None
                         selectedTab = it
@@ -487,16 +448,16 @@ fun PynapliApp(
         if (conversationState.visible && !conversationShownInline) {
             ConversationSheet(
                 state = conversationState,
-                onDismiss = dismissConversation,
-                onDraftChanged = onConversationDraftChanged,
-                onSend = onConversationSend,
-                onLoadOlder = onConversationLoadOlder,
+                onDismiss = conversationActions.dismiss,
+                onDraftChanged = conversationActions.onDraftChanged,
+                onSend = conversationActions.onSend,
+                onLoadOlder = conversationActions.onLoadOlder,
                 linkedPartnerUserId = profileLinksState.current?.otherUserId,
-                onInvitePartner = onConversationInvitePartner,
-                onAcceptInvite = onConversationAcceptInvite,
-                onDeclineInvite = onConversationDeclineInvite,
-                onLeaveConversation = onConversationLeave,
-                onDeleteMessage = onConversationDeleteMessage,
+                onInvitePartner = conversationActions.onInvitePartner,
+                onAcceptInvite = conversationActions.onAcceptInvite,
+                onDeclineInvite = conversationActions.onDeclineInvite,
+                onLeaveConversation = conversationActions.onLeave,
+                onDeleteMessage = conversationActions.onDeleteMessage,
             )
         }
     }
