@@ -365,6 +365,7 @@ private class InMemoryProfileRepository(
                     togetherEnabled = false,
                     socialEnabled = true,
                     visibleWhileTraveling = true,
+                    sharePsyncSoloMatches = false,
                 ),
         )
 

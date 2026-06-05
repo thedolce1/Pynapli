@@ -71,6 +71,7 @@ class ProfileRepositoryIntegrationTest {
                             allowIntroNotes = false,
                             allowAlbumRequests = false,
                             visibleWhileTraveling = null,
+                            sharePsyncSoloMatches = null,
                         ),
                 )
 

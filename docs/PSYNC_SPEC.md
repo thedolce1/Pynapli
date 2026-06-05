@@ -559,7 +559,7 @@ Avoid:
 - [x] Same ordered deck is served to both partners. (PS-2: deck snapshot persisted as JSONB; `getDeck` serves the same ordered cards to both, reissuing deterministic HMAC card tokens.)
 - [x] Swipes are private during session. (PS-2: `psync_session_actions`, one decision per actor+target; `getDeck` carries the caller's OWN action only — a partner's choices are never exposed.)
 - [x] Together match requires target consent. (PS-3: together match needs both partners' likes + target `discovery_settings.together_enabled` + target reciprocation (liked ≥1 partner); otherwise falls through to per-partner solo eligibility.)
-- [x] Solo passthrough is private by default. (PS-3: solo match is the liking partner's standard match; the recap's `soloMatchCount` is always the VIEWER's own — a partner's solo matches are never surfaced.)
+- [x] Solo passthrough is private by default. (PS-3: solo match is the liking partner's standard match; the recap's `soloMatchCount` is always the VIEWER's own. PS-6d: opt-in `discovery_settings.share_psync_solo_matches` lets a partner surface their solo count to the other via `partnerSoloMatchCount` — null unless they opted in.)
 - [x] Session recap exists. (PS-3: `GET .../recap` + `POST .../complete` return aggregate counts — profiles reviewed, both-liked, together matches, viewer's solo matches, dates, filters summary — recap not score.)
 - [x] Psync Score does not exist.
 - [x] Either partner can pause/leave. (PS-1: `leave` → `cancelled`. PS-2: `pause`/`resume` round-trip `active↔paused`; actions are refused while paused.)

@@ -138,6 +138,7 @@ class ProfileService(
             allowIntroNotes = allowIntroNotes,
             allowAlbumRequests = allowAlbumRequests,
             visibleWhileTraveling = visibleWhileTraveling,
+            sharePsyncSoloMatches = sharePsyncSoloMatches,
         )
     }
 
@@ -252,6 +253,7 @@ class ProfileService(
             togetherEnabled = togetherEnabled,
             socialEnabled = socialEnabled,
             visibleWhileTraveling = visibleWhileTraveling,
+            sharePsyncSoloMatches = sharePsyncSoloMatches,
         )
 
     private fun String?.cleanOptional(maxLength: Int): String? {

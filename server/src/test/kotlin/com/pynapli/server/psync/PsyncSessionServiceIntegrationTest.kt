@@ -918,6 +918,30 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        // ---- PS-6d: opt-in solo-share in the recap -------------------------------------
+
+        "the partner's solo count appears in the recap only when the partner opted to share" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.insertSwipeLike(target, partner) // target liked the PARTNER only
+
+                val svc = deckService(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "pass")
+                svc.actOnSingle(sessionId, partner, "like") // partner gets a solo passthrough; auto-completes
+
+                // Private by default — the initiator's recap hides the partner's solo count.
+                assertNull(svc.getRecap(sessionId, initiator).partnerSoloMatchCount)
+                assertEquals(0, svc.getRecap(sessionId, initiator).soloMatchCount)
+
+                // After the partner opts in, the initiator's recap surfaces the shared count.
+                dataSource.setSharePsyncSolo(partner)
+                assertEquals(1, svc.getRecap(sessionId, initiator).partnerSoloMatchCount)
+            }
+        }
+
         // ---- PS-4c: dedicated Psync Activity feed cards --------------------------------
 
         "creating an invite records a psync_invite card for the invitee only" {
@@ -1065,6 +1089,21 @@ private fun DataSource.setTogetherEnabled(userId: UUID) {
                 """
                 INSERT INTO discovery_settings (user_id, together_enabled) VALUES (?, true)
                 ON CONFLICT (user_id) DO UPDATE SET together_enabled = true
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeUpdate()
+            }
+    }
+}
+
+private fun DataSource.setSharePsyncSolo(userId: UUID) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO discovery_settings (user_id, share_psync_solo_matches) VALUES (?, true)
+                ON CONFLICT (user_id) DO UPDATE SET share_psync_solo_matches = true
                 """.trimIndent(),
             ).use { statement ->
                 statement.setObject(1, userId)

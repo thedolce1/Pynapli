@@ -644,6 +644,19 @@ class JdbcPsyncSessionRepository(
             }
         }
 
+    override suspend fun isSoloShareEnabled(userId: UUID): Boolean =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        "SELECT COALESCE(share_psync_solo_matches, false) FROM discovery_settings WHERE user_id = ?",
+                    ).use { statement ->
+                        statement.setObject(1, userId)
+                        statement.executeQuery().use { rs -> if (!rs.next()) false else rs.getBoolean(1) }
+                    }
+            }
+        }
+
     // ---- transactional helpers -------------------------------------------------------
 
     private inline fun <T> Connection.inTransaction(block: () -> T): T {

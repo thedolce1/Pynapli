@@ -60,6 +60,7 @@ data class DiscoverySettingsRecord(
     val togetherEnabled: Boolean,
     val socialEnabled: Boolean,
     val visibleWhileTraveling: Boolean,
+    val sharePsyncSoloMatches: Boolean,
 )
 
 data class PublicProfileRecord(
@@ -103,4 +104,5 @@ data class DiscoverySettingsUpdate(
     val allowIntroNotes: Boolean?,
     val allowAlbumRequests: Boolean?,
     val visibleWhileTraveling: Boolean?,
+    val sharePsyncSoloMatches: Boolean?,
 )

@@ -64,6 +64,9 @@ data class DiscoverySettingsDto(
     // every discovery surface while they have an active travel_locations row.
     // Defaults true so existing clients see the documented passport behavior.
     val visibleWhileTraveling: Boolean = true,
+    // PSYNC_SPEC: solo passthrough matches are private by default; opt in to let a
+    // linked partner see them in the shared Psync recap. Defaults false (private).
+    val sharePsyncSoloMatches: Boolean = false,
 )
 
 @Serializable
@@ -88,4 +91,5 @@ data class UpdateDiscoverySettingsRequestDto(
     val allowIntroNotes: Boolean? = null,
     val allowAlbumRequests: Boolean? = null,
     val visibleWhileTraveling: Boolean? = null,
+    val sharePsyncSoloMatches: Boolean? = null,
 )

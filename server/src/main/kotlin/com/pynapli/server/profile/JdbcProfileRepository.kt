@@ -108,6 +108,7 @@ class JdbcProfileRepository(
                             allow_intro_notes = COALESCE(?::boolean, allow_intro_notes),
                             allow_album_requests = COALESCE(?::boolean, allow_album_requests),
                             visible_while_traveling = COALESCE(?::boolean, visible_while_traveling),
+                            share_psync_solo_matches = COALESCE(?::boolean, share_psync_solo_matches),
                             updated_at = now()
                         WHERE user_id = ?
                         """.trimIndent(),
@@ -122,7 +123,8 @@ class JdbcProfileRepository(
                         statement.setObject(8, update.allowIntroNotes)
                         statement.setObject(9, update.allowAlbumRequests)
                         statement.setObject(10, update.visibleWhileTraveling)
-                        statement.setObject(11, userId)
+                        statement.setObject(11, update.sharePsyncSoloMatches)
+                        statement.setObject(12, userId)
                         if (statement.executeUpdate() == 0) return@withContext null
                     }
             }
@@ -189,6 +191,7 @@ class JdbcProfileRepository(
                     togetherEnabled = getBoolean("together_enabled"),
                     socialEnabled = getBoolean("social_enabled"),
                     visibleWhileTraveling = getBoolean("visible_while_traveling"),
+                    sharePsyncSoloMatches = getBoolean("share_psync_solo_matches"),
                 ),
         )
     }
@@ -223,7 +226,8 @@ class JdbcProfileRepository(
                    ds.solo_enabled,
                    ds.together_enabled,
                    ds.social_enabled,
-                   ds.visible_while_traveling
+                   ds.visible_while_traveling,
+                   ds.share_psync_solo_matches
             FROM users u
             JOIN profiles p ON p.user_id = u.id
             JOIN discovery_settings ds ON ds.user_id = u.id
