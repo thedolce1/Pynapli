@@ -942,6 +942,44 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        // ---- PS-6e: advanced-filter gating ---------------------------------------------
+
+        "create rejects advanced Psync filters on the Free tier" {
+            runBlocking {
+                val (initiator, _) = seedLinkedPair()
+                val svc = freeTierService()
+
+                val error =
+                    assertFailsWith<PsyncException> {
+                        svc.create(
+                            initiator,
+                            CreatePsyncSessionRequestDto(
+                                deckSize = 5,
+                                filters = SwipeDeckRequestDto(lifestyleTags = listOf("soft_swap")),
+                            ),
+                        )
+                    }
+                assertEquals("PSYNC_ADVANCED_FILTERS_NOT_ALLOWED", error.code)
+            }
+        }
+
+        "create allows basic Psync filters on the Free tier" {
+            runBlocking {
+                val (initiator, _) = seedLinkedPair()
+                val svc = freeTierService()
+
+                val session =
+                    svc.create(
+                        initiator,
+                        CreatePsyncSessionRequestDto(
+                            deckSize = 5,
+                            filters = SwipeDeckRequestDto(minimumAge = 25, maximumAge = 40, verifiedOnly = true),
+                        ),
+                    )
+                assertEquals("invited", session.status)
+            }
+        }
+
         // ---- PS-4c: dedicated Psync Activity feed cards --------------------------------
 
         "creating an invite records a psync_invite card for the invitee only" {
