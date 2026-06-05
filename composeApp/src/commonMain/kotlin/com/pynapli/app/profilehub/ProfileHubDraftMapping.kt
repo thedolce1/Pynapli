@@ -31,6 +31,7 @@ internal fun DiscoverySettingsDto.toPrivacyDraft(): PrivacySettingsDraft =
         swipeVisible = swipeVisible,
         showDistance = showDistance,
         visibleWhileTraveling = visibleWhileTraveling,
+        sharePsyncSoloMatches = sharePsyncSoloMatches,
     )
 
 internal fun DiscoverySettingsDto.toActivityDraft(): ActivitySettingsDraft =
@@ -49,6 +50,7 @@ internal fun PrivacySettingsDraft.toRequest(): UpdateDiscoverySettingsRequestDto
         swipeVisible = swipeVisible,
         showDistance = showDistance,
         visibleWhileTraveling = visibleWhileTraveling,
+        sharePsyncSoloMatches = sharePsyncSoloMatches,
     )
 
 internal fun ActivitySettingsDraft.toRequest(): UpdateDiscoverySettingsRequestDto =

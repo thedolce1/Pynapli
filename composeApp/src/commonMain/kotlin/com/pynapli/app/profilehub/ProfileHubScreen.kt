@@ -82,6 +82,7 @@ fun ProfileHubScreen(
             onSwipeVisibleChanged = stateHolder::updateSwipeVisible,
             onShowDistanceChanged = stateHolder::updateShowDistance,
             onVisibleWhileTravelingChanged = stateHolder::updateVisibleWhileTraveling,
+            onSharePsyncSoloMatchesChanged = stateHolder::updateSharePsyncSoloMatches,
             onSave = { scope.launch { stateHolder.savePrivacySettings() } },
             modifier = modifier,
         )
