@@ -127,7 +127,8 @@ interface PynapliApiClient :
     GridApi,
     SwipeApi,
     ProfileApi,
-    ActivityApi {
+    ActivityApi,
+    SafetyApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -256,27 +257,6 @@ interface PynapliApiClient :
 
     suspend fun revokePrivateAlbumAccess(granteeUserId: String): AppResult<MediaAlbumGrantDto>
 
-    suspend fun blockUser(
-        targetUserId: String,
-        request: BlockUserRequestDto = BlockUserRequestDto(),
-    ): AppResult<BlockSummaryDto>
-
-    suspend fun unblockUser(targetUserId: String): AppResult<Unit>
-
-    suspend fun listBlocks(): AppResult<BlocksListDto>
-
-    suspend fun hideProfile(targetUserId: String): AppResult<HiddenProfileSummaryDto>
-
-    suspend fun unhideProfile(targetUserId: String): AppResult<Unit>
-
-    suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto>
-
-    suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto>
-
-    suspend fun listReports(limit: Int? = null): AppResult<ReportHistoryListDto>
-
-    suspend fun getSupportContact(): AppResult<SupportContactDto>
-
     fun mediaAssetContentUrl(mediaAssetId: String): String
 
     suspend fun heartbeatPresence(): AppResult<PresenceHeartbeatResponseDto>
@@ -293,7 +273,8 @@ class KtorPynapliApiClient(
     GridApi by KtorGridApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     SwipeApi by KtorSwipeApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     ProfileApi by KtorProfileApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    ActivityApi by KtorActivityApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    ActivityApi by KtorActivityApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    SafetyApi by KtorSafetyApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -765,96 +746,6 @@ class KtorPynapliApiClient(
         authenticatedPost { token ->
             httpClient
                 .post(config.endpoint("/v1/media/albums/private/grants/$granteeUserId/revoke")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun blockUser(
-        targetUserId: String,
-        request: BlockUserRequestDto,
-    ): AppResult<BlockSummaryDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/blocks/$targetUserId")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun unblockUser(targetUserId: String): AppResult<Unit> =
-        authenticatedPost { token ->
-            val response =
-                httpClient.delete(config.endpoint("/v1/blocks/$targetUserId")) {
-                    bearerAuth(token)
-                }
-            if (response.status.value in 200..299) {
-                AppResult.Success(Unit)
-            } else {
-                response.toAppResult<Unit>(json)
-            }
-        }
-
-    override suspend fun listBlocks(): AppResult<BlocksListDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/blocks")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun hideProfile(targetUserId: String): AppResult<HiddenProfileSummaryDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/hidden-profiles/$targetUserId")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun unhideProfile(targetUserId: String): AppResult<Unit> =
-        authenticatedPost { token ->
-            val response =
-                httpClient.delete(config.endpoint("/v1/hidden-profiles/$targetUserId")) {
-                    bearerAuth(token)
-                }
-            if (response.status.value in 200..299) {
-                AppResult.Success(Unit)
-            } else {
-                response.toAppResult<Unit>(json)
-            }
-        }
-
-    override suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/hidden-profiles")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/reports")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun listReports(limit: Int?): AppResult<ReportHistoryListDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/reports")) {
-                    bearerAuth(token)
-                    if (limit != null) parameter("limit", limit)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getSupportContact(): AppResult<SupportContactDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/support/contact")) {
                     bearerAuth(token)
                 }.toAppResult(json)
         }
