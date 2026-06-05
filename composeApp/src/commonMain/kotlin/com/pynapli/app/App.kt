@@ -84,13 +84,9 @@ fun PynapliApp(
 
     PynapliTheme(themeMode = appSettingsState.settings.themeMode) {
         val authState by authStateHolder.state.collectAsState()
-        val locationState by locationStateHolder.state.collectAsState()
         val conversationState by conversationStateHolder.state.collectAsState()
         val messagesState by messagesStateHolder.state.collectAsState()
         val activityState by activityStateHolder.state.collectAsState()
-        val mediaAlbumsState by mediaAlbumsStateHolder.state.collectAsState()
-        val profileLinksState by profileLinksStateHolder.state.collectAsState()
-        val profileHubState by profileHubStateHolder.state.collectAsState()
         val profileDetailState by profileDetailStateHolder.state.collectAsState()
         val scope = rememberCoroutineScope()
         var selectedTab by remember { mutableStateOf(PynapliTab.Grid) }
@@ -162,7 +158,6 @@ fun PynapliApp(
                 conversationStateHolder = conversationStateHolder,
                 messagesStateHolder = messagesStateHolder,
             )
-        val conversationShownInline = selectedTab == PynapliTab.Messages && conversationState.visible
 
         LaunchedEffect(selectedTab, profileDetailState.blockedTargetUserId) {
             if (selectedTab != PynapliTab.Messages) return@LaunchedEffect
@@ -247,77 +242,23 @@ fun PynapliApp(
             }
         }
 
-        if (tonightVisible && playingTonightStateHolder != null) {
-            // Playing Tonight map surface, opened from the Grid header moon button. Profile/
-            // message taps close the overlay and reuse the existing profile-detail path
-            // (PLAYING_TONIGHT_SPEC: "tapping opens the relevant individual profile/session").
-            com.pynapli.app.tonight.PlayingTonightScreen(
-                stateHolder = playingTonightStateHolder,
-                viewerUserId = authState.session?.userId,
-                onBack = { tonightVisible = false },
-                onOpenProfile = { userId ->
-                    tonightVisible = false
-                    scope.launch {
-                        profileDetailStateHolder.openFromTonight(userId)
-                    }
-                },
-                onMessage = { userId ->
-                    tonightVisible = false
-                    scope.launch {
-                        profileDetailStateHolder.openFromTonight(userId)
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        if (psyncVisible && psyncStateHolder != null) {
-            // Psync synchronized-swipe surface, opened from the Swipe header (PSYNC_SPEC: Psync
-            // lives in the Swipe/partner flow, not its own tab).
-            psyncStreamClient?.let { client ->
-                // Convenience realtime: refetch canonical state when the partner's side changes.
-                // Scoped to the open overlay — leaving composition cancels the socket.
-                LaunchedEffect(psyncStateHolder, client) {
-                    client.connect().collect { psyncStateHolder.refresh() }
-                }
-            }
-            com.pynapli.app.psync.PsyncSessionScreen(
-                stateHolder = psyncStateHolder,
-                onBack = { psyncVisible = false },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        if (selectedTab == PynapliTab.Messages && profileDetailState.visible) {
-            MessageProfilePeekSheet(
-                state = profileDetailState,
-                onDismiss = profileDetailStateHolder::dismiss,
-                onMessage = profileDetailStateHolder::dismiss,
-                onSpark = {
-                    scope.launch { profileDetailStateHolder.sendSpark() }
-                },
-                onRequestAlbum = {
-                    scope.launch { profileDetailStateHolder.requestAlbumAccess() }
-                },
-                distanceUnit = appSettingsState.settings.distanceUnit,
-            )
-        }
-
-        if (conversationState.visible && !conversationShownInline) {
-            ConversationSheet(
-                state = conversationState,
-                onDismiss = conversationActions.dismiss,
-                onDraftChanged = conversationActions.onDraftChanged,
-                onSend = conversationActions.onSend,
-                onLoadOlder = conversationActions.onLoadOlder,
-                linkedPartnerUserId = profileLinksState.current?.otherUserId,
-                onInvitePartner = conversationActions.onInvitePartner,
-                onAcceptInvite = conversationActions.onAcceptInvite,
-                onDeclineInvite = conversationActions.onDeclineInvite,
-                onLeaveConversation = conversationActions.onLeave,
-                onDeleteMessage = conversationActions.onDeleteMessage,
-            )
-        }
+        PynapliOverlays(
+            tonightVisible = tonightVisible,
+            onTonightDismiss = { tonightVisible = false },
+            psyncVisible = psyncVisible,
+            onPsyncDismiss = { psyncVisible = false },
+            selectedTab = selectedTab,
+            playingTonightStateHolder = playingTonightStateHolder,
+            psyncStateHolder = psyncStateHolder,
+            psyncStreamClient = psyncStreamClient,
+            profileDetailStateHolder = profileDetailStateHolder,
+            conversationStateHolder = conversationStateHolder,
+            profileLinksStateHolder = profileLinksStateHolder,
+            authStateHolder = authStateHolder,
+            appSettingsStateHolder = appSettingsStateHolder,
+            conversationActions = conversationActions,
+            scope = scope,
+        )
     }
 }
 
