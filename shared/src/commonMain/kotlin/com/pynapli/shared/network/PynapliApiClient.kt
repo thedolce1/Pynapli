@@ -128,7 +128,8 @@ interface PynapliApiClient :
     SwipeApi,
     ProfileApi,
     ActivityApi,
-    SafetyApi {
+    SafetyApi,
+    MediaApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -242,23 +243,6 @@ interface PynapliApiClient :
 
     suspend fun activateBoost(): AppResult<BoostActivationDto>
 
-    suspend fun createMediaUpload(request: CreateMediaUploadRequestDto): AppResult<MediaUploadSlotDto>
-
-    suspend fun completeMediaUpload(
-        mediaAssetId: String,
-        request: CompleteMediaUploadRequestDto,
-    ): AppResult<MediaAlbumItemDto>
-
-    suspend fun listMediaAlbum(albumKind: String): AppResult<MediaAlbumItemsResponseDto>
-
-    suspend fun listUserPrivateAlbum(ownerUserId: String): AppResult<MediaAlbumItemsResponseDto>
-
-    suspend fun listOwnPrivateAlbumGrants(): AppResult<MediaAlbumGrantsResponseDto>
-
-    suspend fun revokePrivateAlbumAccess(granteeUserId: String): AppResult<MediaAlbumGrantDto>
-
-    fun mediaAssetContentUrl(mediaAssetId: String): String
-
     suspend fun heartbeatPresence(): AppResult<PresenceHeartbeatResponseDto>
 }
 
@@ -274,7 +258,8 @@ class KtorPynapliApiClient(
     SwipeApi by KtorSwipeApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     ProfileApi by KtorProfileApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     ActivityApi by KtorActivityApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    SafetyApi by KtorSafetyApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    SafetyApi by KtorSafetyApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    MediaApi by KtorMediaApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -694,63 +679,6 @@ class KtorPynapliApiClient(
                     bearerAuth(token)
                 }.toAppResult(json)
         }
-
-    override suspend fun createMediaUpload(request: CreateMediaUploadRequestDto): AppResult<MediaUploadSlotDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/media/uploads")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun completeMediaUpload(
-        mediaAssetId: String,
-        request: CompleteMediaUploadRequestDto,
-    ): AppResult<MediaAlbumItemDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/media/uploads/$mediaAssetId/complete")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun listMediaAlbum(albumKind: String): AppResult<MediaAlbumItemsResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/media/albums/$albumKind")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun listUserPrivateAlbum(ownerUserId: String): AppResult<MediaAlbumItemsResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/media/users/$ownerUserId/albums/private")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun listOwnPrivateAlbumGrants(): AppResult<MediaAlbumGrantsResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/media/albums/private/grants")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun revokePrivateAlbumAccess(granteeUserId: String): AppResult<MediaAlbumGrantDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/media/albums/private/grants/$granteeUserId/revoke")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override fun mediaAssetContentUrl(mediaAssetId: String): String = config.endpoint("/v1/media/uploads/local/$mediaAssetId")
 
     override suspend fun heartbeatPresence(): AppResult<PresenceHeartbeatResponseDto> =
         authenticatedPost { token ->
