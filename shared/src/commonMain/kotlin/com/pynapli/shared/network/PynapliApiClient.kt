@@ -123,7 +123,8 @@ import kotlinx.serialization.json.Json
 
 interface PynapliApiClient :
     AuthApi,
-    ConversationApi {
+    ConversationApi,
+    GridApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -131,28 +132,6 @@ interface PynapliApiClient :
     suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto>
 
     suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto>
-
-    suspend fun queryGrid(request: GridQueryRequestDto = GridQueryRequestDto()): AppResult<GridQueryResponseDto>
-
-    suspend fun listSavedGridFilters(): AppResult<SavedGridFiltersListDto>
-
-    suspend fun createSavedGridFilter(request: CreateSavedGridFilterRequestDto): AppResult<SavedGridFilterDto>
-
-    suspend fun deleteSavedGridFilter(id: String): AppResult<Unit>
-
-    suspend fun listSavedSwipeFilters(): AppResult<SavedSwipeFiltersListDto>
-
-    suspend fun createSavedSwipeFilter(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto>
-
-    suspend fun deleteSavedSwipeFilter(id: String): AppResult<Unit>
-
-    suspend fun getTopPicks(): AppResult<TopPicksResponseDto>
-
-    suspend fun getTravelLocation(): AppResult<TravelLocationDto?>
-
-    suspend fun setTravelLocation(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto>
-
-    suspend fun clearTravelLocation(): AppResult<Unit>
 
     suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto>
 
@@ -344,7 +323,8 @@ class KtorPynapliApiClient(
     private val json: Json = PynapliJson,
 ) : PynapliApiClient,
     AuthApi by KtorAuthApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    ConversationApi by KtorConversationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    ConversationApi by KtorConversationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    GridApi by KtorGridApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -385,125 +365,6 @@ class KtorPynapliApiClient(
                     contentType(ContentType.Application.Json)
                     setBody(request)
                 }.toAppResult(json)
-        }
-
-    override suspend fun queryGrid(request: GridQueryRequestDto): AppResult<GridQueryResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/grid/query")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun listSavedGridFilters(): AppResult<SavedGridFiltersListDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/me/grid-filters")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun createSavedGridFilter(request: CreateSavedGridFilterRequestDto): AppResult<SavedGridFilterDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/me/grid-filters")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun deleteSavedGridFilter(id: String): AppResult<Unit> =
-        authenticatedPost { token ->
-            val response =
-                httpClient.delete(config.endpoint("/v1/me/grid-filters/$id")) {
-                    bearerAuth(token)
-                }
-            if (response.status.value in 200..299) {
-                AppResult.Success(Unit)
-            } else {
-                response.toAppResult<Unit>(json)
-            }
-        }
-
-    override suspend fun listSavedSwipeFilters(): AppResult<SavedSwipeFiltersListDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/me/swipe-filters")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun createSavedSwipeFilter(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/me/swipe-filters")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun deleteSavedSwipeFilter(id: String): AppResult<Unit> =
-        authenticatedPost { token ->
-            val response =
-                httpClient.delete(config.endpoint("/v1/me/swipe-filters/$id")) {
-                    bearerAuth(token)
-                }
-            if (response.status.value in 200..299) {
-                AppResult.Success(Unit)
-            } else {
-                response.toAppResult<Unit>(json)
-            }
-        }
-
-    override suspend fun getTopPicks(): AppResult<TopPicksResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/swipe/picks")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getTravelLocation(): AppResult<TravelLocationDto?> =
-        authenticatedPost { token ->
-            val response =
-                httpClient.get(config.endpoint("/v1/location/travel")) {
-                    bearerAuth(token)
-                }
-            // 204 No Content means no active travel row — fold to Success(null)
-            // so callers don't have to special-case the empty state.
-            if (response.status.value == 204) {
-                AppResult.Success(null)
-            } else {
-                @Suppress("UNCHECKED_CAST")
-                response.toAppResult<TravelLocationDto>(json) as AppResult<TravelLocationDto?>
-            }
-        }
-
-    override suspend fun setTravelLocation(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/location/travel")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun clearTravelLocation(): AppResult<Unit> =
-        authenticatedPost { token ->
-            val response =
-                httpClient.delete(config.endpoint("/v1/location/travel")) {
-                    bearerAuth(token)
-                }
-            if (response.status.value in 200..299) {
-                AppResult.Success(Unit)
-            } else {
-                response.toAppResult<Unit>(json)
-            }
         }
 
     override suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto> =
