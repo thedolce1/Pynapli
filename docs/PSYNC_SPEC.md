@@ -563,7 +563,7 @@ Avoid:
 - [x] Session recap exists. (PS-3: `GET .../recap` + `POST .../complete` return aggregate counts — profiles reviewed, both-liked, together matches, viewer's solo matches, dates, filters summary — recap not score.)
 - [x] Psync Score does not exist.
 - [x] Either partner can pause/leave. (PS-1: `leave` → `cancelled`. PS-2: `pause`/`resume` round-trip `active↔paused`; actions are refused while paused.)
-- [ ] Partner link ending cancels active session.
+- [x] Partner link ending cancels active session. (PS-6c: `JdbcProfileLinkRepository.unlinkCurrent` atomically cancels any non-terminal `psync_sessions` for the unlinked `partner_link_id` via a data-modifying CTE.)
 - [x] Blocks/reports invalidate targets. (PS-2: deck generation drops anyone blocked/hidden by either partner. PS-3: match resolution skips a blocked target. PS-6b: a block applied MID-SESSION removes the target from the live deck for both partners — `getDeck` filters anyone blocked/hidden by either partner — so it can no longer be acted on.)
 - [x] Activity integration exists. (PS-4a: resolved together + solo matches replay into the existing match→Activity feed + realtime delta + MATCH push for both parties — a partner's private solo match never surfaces to the other. PS-4b: realtime session channel (`/v1/psync/stream`) + nudge (60s cooldown). PS-4c: dedicated `psync_invite`/`psync_started`/`psync_recap`/`psync_expired` Activity feed cards (idempotent per recipient+session+type, under the Invites tab), wired to create/activate/complete/expiry.)
 - [x] Ktor owns session and match state. (Server-authoritative throughout: status machine, deck generation, private actions, and PS-3 match resolution all run server-side under `FOR UPDATE`.)

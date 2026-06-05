@@ -312,23 +312,38 @@ class JdbcProfileLinkRepository(
                               AND status = 'active'
                               AND unlinked_at IS NULL
                             LIMIT 1
+                        ),
+                        unlinked AS (
+                            UPDATE user_profile_links
+                            SET status = 'unlinked',
+                                unlinked_at = now(),
+                                updated_at = now()
+                            WHERE status = 'active'
+                              AND unlinked_at IS NULL
+                              AND (
+                                  (user_id = ? AND linked_user_id = (SELECT partner_user_id FROM current_link))
+                                  OR (user_id = (SELECT partner_user_id FROM current_link) AND linked_user_id = ?)
+                              )
+                            RETURNING id
+                        ),
+                        -- PSYNC_SPEC edge case: ending the partner link cancels any live Psync session.
+                        cancelled_psync AS (
+                            UPDATE psync_sessions
+                            SET status = 'cancelled', ended_at = now()
+                            WHERE partner_link_id IN (SELECT id FROM unlinked)
+                              AND status IN ('invited', 'configuring', 'ready', 'active', 'paused')
+                            RETURNING id
                         )
-                        UPDATE user_profile_links
-                        SET status = 'unlinked',
-                            unlinked_at = now(),
-                            updated_at = now()
-                        WHERE status = 'active'
-                          AND unlinked_at IS NULL
-                          AND (
-                              (user_id = ? AND linked_user_id = (SELECT partner_user_id FROM current_link))
-                              OR (user_id = (SELECT partner_user_id FROM current_link) AND linked_user_id = ?)
-                          )
+                        SELECT count(*) AS unlinked_count FROM unlinked
                         """.trimIndent(),
                     ).use { statement ->
                         statement.setObject(1, userId)
                         statement.setObject(2, userId)
                         statement.setObject(3, userId)
-                        statement.executeUpdate() > 0
+                        statement.executeQuery().use { rs ->
+                            rs.next()
+                            rs.getInt("unlinked_count") > 0
+                        }
                     }
             }
         }

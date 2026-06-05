@@ -899,6 +899,25 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        // ---- PS-6c: ending the partner link cancels a live Psync session ---------------
+
+        "unlinking the partner cancels the active Psync session" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val created = service().create(initiator, CreatePsyncSessionRequestDto())
+                val sessionId = UUID.fromString(created.id)
+                assertEquals("invited", dataSource.statusOf(sessionId))
+
+                val unlinked =
+                    com.pynapli.server.profilelink
+                        .JdbcProfileLinkRepository(dataSource)
+                        .unlinkCurrent(initiator)
+
+                assertTrue(unlinked)
+                assertEquals("cancelled", dataSource.statusOf(sessionId))
+            }
+        }
+
         // ---- PS-4c: dedicated Psync Activity feed cards --------------------------------
 
         "creating an invite records a psync_invite card for the invitee only" {
