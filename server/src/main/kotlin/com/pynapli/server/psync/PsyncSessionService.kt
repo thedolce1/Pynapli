@@ -65,6 +65,7 @@ class PsyncSessionService(
             if (request.deckSize > policy.psyncMaxDeckSize) {
                 throw PsyncException("PSYNC_DECK_SIZE_NOT_ALLOWED")
             }
+            requireFiltersAllowed(request.filters, policy)
         }
 
         val link =
@@ -138,12 +139,39 @@ class PsyncSessionService(
         userId: UUID,
         request: SuggestPsyncFiltersRequestDto,
     ): PsyncSessionDto {
+        // The re-suggested filters are gated by the suggester's tier too (Free = basic filters).
+        subscriptionService?.let { requireFiltersAllowed(request.filters, it.getPolicy(userId)) }
         val filtersJson =
             json.encodeToString(
                 SwipeDeckRequestDto.serializer(),
                 request.filters.copy(cursor = null),
             )
         return repository.suggestFilters(sessionId, userId, filtersJson, clock.instant()).orThrow()
+    }
+
+    /** PSYNC_SPEC Monetization: advanced (lifestyle/logistics) filters need Social/Select. */
+    private fun requireFiltersAllowed(
+        filters: SwipeDeckRequestDto,
+        policy: com.pynapli.server.subscriptions.EntitlementPolicy,
+    ) {
+        val discovery =
+            com.pynapli.server.discovery.discoveryFiltersFrom(
+                minimumAge = filters.minimumAge,
+                maximumAge = filters.maximumAge,
+                relationshipContexts = filters.relationshipContexts,
+                linkedOnly = filters.linkedOnly,
+                verifiedOnly = filters.verifiedOnly,
+                facePhotoVerifiedOnly = filters.facePhotoVerifiedOnly,
+                ageVerifiedOnly = filters.ageVerifiedOnly,
+                discoveryStyles = filters.discoveryStyles,
+                lifestyleTags = filters.lifestyleTags,
+                logisticsTags = filters.logisticsTags,
+                intents = filters.intents,
+                verifiedPreferred = filters.verifiedPreferred,
+            ) { PsyncException("INVALID_PSYNC_FILTER") }
+        if (discovery.requiresAdvancedEntitlement && !policy.advancedFiltersAllowed) {
+            throw PsyncException("PSYNC_ADVANCED_FILTERS_NOT_ALLOWED")
+        }
     }
 
     suspend fun leave(

@@ -131,6 +131,7 @@ internal fun psyncStatusFor(code: String): HttpStatusCode =
         "PSYNC_NO_LINKED_PARTNER",
         "INVALID_PSYNC_DECK_SIZE",
         "PSYNC_INVALID_ACTION",
+        "INVALID_PSYNC_FILTER",
         -> HttpStatusCode.BadRequest
         "PSYNC_SESSION_ALREADY_ACTIVE",
         "PSYNC_INVALID_STATE",
@@ -139,6 +140,7 @@ internal fun psyncStatusFor(code: String): HttpStatusCode =
         "PSYNC_NUDGE_COOLDOWN" -> HttpStatusCode.TooManyRequests
         "PSYNC_NOT_PARTICIPANT",
         "PSYNC_DECK_SIZE_NOT_ALLOWED",
+        "PSYNC_ADVANCED_FILTERS_NOT_ALLOWED",
         -> HttpStatusCode.Forbidden
         "PSYNC_SESSION_NOT_FOUND",
         "PSYNC_INVALID_CARD",
