@@ -126,7 +126,8 @@ interface PynapliApiClient :
     ConversationApi,
     GridApi,
     SwipeApi,
-    ProfileApi {
+    ProfileApi,
+    ActivityApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -240,27 +241,6 @@ interface PynapliApiClient :
 
     suspend fun activateBoost(): AppResult<BoostActivationDto>
 
-    suspend fun listActivity(
-        limit: Int? = null,
-        tab: String? = null,
-        cursor: String? = null,
-    ): AppResult<ActivityFeedResponseDto>
-
-    suspend fun getActivitySummary(): AppResult<ActivitySummaryDto>
-
-    suspend fun markActivitySeen(request: MarkActivitySeenRequestDto): AppResult<MarkActivitySeenResponseDto>
-
-    suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto>
-
-    suspend fun sendFlirt(request: SendFlirtRequestDto): AppResult<SendFlirtResponseDto>
-
-    suspend fun requestAlbumAccess(request: RequestAlbumAccessRequestDto): AppResult<RequestAlbumAccessResponseDto>
-
-    suspend fun respondToAlbumAccessRequest(
-        eventId: String,
-        request: RespondAlbumAccessRequestDto,
-    ): AppResult<RespondAlbumAccessResponseDto>
-
     suspend fun createMediaUpload(request: CreateMediaUploadRequestDto): AppResult<MediaUploadSlotDto>
 
     suspend fun completeMediaUpload(
@@ -312,7 +292,8 @@ class KtorPynapliApiClient(
     ConversationApi by KtorConversationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     GridApi by KtorGridApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     SwipeApi by KtorSwipeApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    ProfileApi by KtorProfileApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    ProfileApi by KtorProfileApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    ActivityApi by KtorActivityApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -730,84 +711,6 @@ class KtorPynapliApiClient(
             httpClient
                 .post(config.endpoint("/v1/boosts")) {
                     bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun listActivity(
-        limit: Int?,
-        tab: String?,
-        cursor: String?,
-    ): AppResult<ActivityFeedResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/activity")) {
-                    bearerAuth(token)
-                    limit?.let { parameter("limit", it) }
-                    tab?.let { parameter("tab", it) }
-                    cursor?.let { parameter("cursor", it) }
-                }.toAppResult(json)
-        }
-
-    override suspend fun getActivitySummary(): AppResult<ActivitySummaryDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/activity/summary")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun markActivitySeen(
-        request: MarkActivitySeenRequestDto,
-    ): AppResult<MarkActivitySeenResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/activity/seen")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/activity/$eventId/dismiss")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun sendFlirt(request: SendFlirtRequestDto): AppResult<SendFlirtResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/activity/flirts")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun requestAlbumAccess(
-        request: RequestAlbumAccessRequestDto,
-    ): AppResult<RequestAlbumAccessResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/activity/album-requests")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun respondToAlbumAccessRequest(
-        eventId: String,
-        request: RespondAlbumAccessRequestDto,
-    ): AppResult<RespondAlbumAccessResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/activity/album-requests/$eventId/respond")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
                 }.toAppResult(json)
         }
 
