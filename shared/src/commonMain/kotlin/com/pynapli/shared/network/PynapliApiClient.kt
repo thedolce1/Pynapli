@@ -129,7 +129,8 @@ interface PynapliApiClient :
     ProfileApi,
     ActivityApi,
     SafetyApi,
-    MediaApi {
+    MediaApi,
+    SubscriptionApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -231,18 +232,6 @@ interface PynapliApiClient :
 
     suspend fun unlinkCurrentProfileLink(): AppResult<ProfileLinksSummaryDto>
 
-    suspend fun getSubscriptionEntitlement(): AppResult<SubscriptionEntitlementDto>
-
-    suspend fun getSubscriptionInventory(): AppResult<SubscriptionInventoryResponseDto>
-
-    suspend fun submitPlayStoreSubscriptionPurchase(
-        request: SubmitPlayStoreSubscriptionPurchaseRequestDto,
-    ): AppResult<SubscriptionPurchaseSyncResponseDto>
-
-    suspend fun submitDevStorePurchase(request: SubmitDevStorePurchaseRequestDto): AppResult<StorePurchaseResponseDto>
-
-    suspend fun activateBoost(): AppResult<BoostActivationDto>
-
     suspend fun heartbeatPresence(): AppResult<PresenceHeartbeatResponseDto>
 }
 
@@ -259,7 +248,8 @@ class KtorPynapliApiClient(
     ProfileApi by KtorProfileApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     ActivityApi by KtorActivityApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     SafetyApi by KtorSafetyApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    MediaApi by KtorMediaApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    MediaApi by KtorMediaApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    SubscriptionApi by KtorSubscriptionApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -630,52 +620,6 @@ class KtorPynapliApiClient(
         authenticatedPost { token ->
             httpClient
                 .delete(config.endpoint("/v1/profile-links/current")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getSubscriptionEntitlement(): AppResult<SubscriptionEntitlementDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/subscriptions/entitlement")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getSubscriptionInventory(): AppResult<SubscriptionInventoryResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/subscriptions/inventory")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun submitPlayStoreSubscriptionPurchase(
-        request: SubmitPlayStoreSubscriptionPurchaseRequestDto,
-    ): AppResult<SubscriptionPurchaseSyncResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/subscriptions/play-store/purchases")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun submitDevStorePurchase(request: SubmitDevStorePurchaseRequestDto): AppResult<StorePurchaseResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/subscriptions/dev/purchases")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun activateBoost(): AppResult<BoostActivationDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/boosts")) {
                     bearerAuth(token)
                 }.toAppResult(json)
         }
