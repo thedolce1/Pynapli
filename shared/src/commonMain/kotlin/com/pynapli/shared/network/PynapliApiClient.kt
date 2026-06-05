@@ -132,7 +132,8 @@ interface PynapliApiClient :
     MediaApi,
     SubscriptionApi,
     VerificationApi,
-    NotificationApi {
+    NotificationApi,
+    ProfileLinkApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -202,18 +203,6 @@ interface PynapliApiClient :
 
     suspend fun nudgePsyncSession(sessionId: String): AppResult<PsyncNudgeResponseDto>
 
-    suspend fun listProfileLinks(): AppResult<ProfileLinksSummaryDto>
-
-    suspend fun createProfileLinkInvitation(
-        request: CreateProfileLinkInvitationRequestDto,
-    ): AppResult<ProfileLinksSummaryDto>
-
-    suspend fun acceptProfileLinkInvitation(linkId: String): AppResult<ProfileLinksSummaryDto>
-
-    suspend fun declineProfileLinkInvitation(linkId: String): AppResult<ProfileLinksSummaryDto>
-
-    suspend fun unlinkCurrentProfileLink(): AppResult<ProfileLinksSummaryDto>
-
     suspend fun heartbeatPresence(): AppResult<PresenceHeartbeatResponseDto>
 }
 
@@ -233,7 +222,8 @@ class KtorPynapliApiClient(
     MediaApi by KtorMediaApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     SubscriptionApi by KtorSubscriptionApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     VerificationApi by KtorVerificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    NotificationApi by KtorNotificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    NotificationApi by KtorNotificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    ProfileLinkApi by KtorProfileLinkApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -485,50 +475,6 @@ class KtorPynapliApiClient(
         authenticatedPost { token ->
             httpClient
                 .post(config.endpoint("/v1/psync/sessions/$sessionId/nudge")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun listProfileLinks(): AppResult<ProfileLinksSummaryDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/profile-links")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun createProfileLinkInvitation(
-        request: CreateProfileLinkInvitationRequestDto,
-    ): AppResult<ProfileLinksSummaryDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/profile-links/invitations")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun acceptProfileLinkInvitation(linkId: String): AppResult<ProfileLinksSummaryDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/profile-links/invitations/$linkId/accept")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun declineProfileLinkInvitation(linkId: String): AppResult<ProfileLinksSummaryDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/profile-links/invitations/$linkId/decline")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun unlinkCurrentProfileLink(): AppResult<ProfileLinksSummaryDto> =
-        authenticatedPost { token ->
-            httpClient
-                .delete(config.endpoint("/v1/profile-links/current")) {
                     bearerAuth(token)
                 }.toAppResult(json)
         }
