@@ -121,7 +121,9 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
-interface PynapliApiClient : AuthApi {
+interface PynapliApiClient :
+    AuthApi,
+    ConversationApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -286,38 +288,6 @@ interface PynapliApiClient : AuthApi {
         request: RespondAlbumAccessRequestDto,
     ): AppResult<RespondAlbumAccessResponseDto>
 
-    suspend fun createDirectConversation(request: CreateDirectConversationRequestDto): AppResult<ConversationDetailDto>
-
-    suspend fun listConversations(): AppResult<ConversationListResponseDto>
-
-    suspend fun getConversationDetail(
-        conversationId: String,
-        before: String? = null,
-        limit: Int? = null,
-    ): AppResult<ConversationDetailDto>
-
-    suspend fun markConversationRead(conversationId: String): AppResult<ConversationDto>
-
-    suspend fun sendMessage(
-        conversationId: String,
-        request: SendMessageRequestDto,
-    ): AppResult<MessageDto>
-
-    suspend fun sendTypingIndicator(
-        conversationId: String,
-        request: SendTypingIndicatorRequestDto,
-    ): AppResult<Unit>
-
-    suspend fun deleteMessage(messageId: String): AppResult<MessageDto>
-
-    suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto>
-
-    suspend fun acceptConversationPartnerInvite(conversationId: String): AppResult<ConversationDetailDto>
-
-    suspend fun declineConversationPartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
-
-    suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
-
     suspend fun createMediaUpload(request: CreateMediaUploadRequestDto): AppResult<MediaUploadSlotDto>
 
     suspend fun completeMediaUpload(
@@ -373,7 +343,8 @@ class KtorPynapliApiClient(
     private val httpClient: HttpClient = createPynapliHttpClient(),
     private val json: Json = PynapliJson,
 ) : PynapliApiClient,
-    AuthApi by KtorAuthApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    AuthApi by KtorAuthApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    ConversationApi by KtorConversationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -1024,121 +995,6 @@ class KtorPynapliApiClient(
                     bearerAuth(token)
                     contentType(ContentType.Application.Json)
                     setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun createDirectConversation(
-        request: CreateDirectConversationRequestDto,
-    ): AppResult<ConversationDetailDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/messages/threads")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun listConversations(): AppResult<ConversationListResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/messages/threads")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getConversationDetail(
-        conversationId: String,
-        before: String?,
-        limit: Int?,
-    ): AppResult<ConversationDetailDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/messages/threads/$conversationId")) {
-                    bearerAuth(token)
-                    before?.let { parameter("before", it) }
-                    limit?.let { parameter("limit", it) }
-                }.toAppResult(json)
-        }
-
-    override suspend fun markConversationRead(conversationId: String): AppResult<ConversationDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/messages/threads/$conversationId/read")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun sendMessage(
-        conversationId: String,
-        request: SendMessageRequestDto,
-    ): AppResult<MessageDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/messages/threads/$conversationId/messages")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun sendTypingIndicator(
-        conversationId: String,
-        request: SendTypingIndicatorRequestDto,
-    ): AppResult<Unit> =
-        authenticatedPost { token ->
-            val response =
-                httpClient.post(config.endpoint("/v1/messages/threads/$conversationId/typing")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }
-            if (response.status.value in 200..299) {
-                AppResult.Success(Unit)
-            } else {
-                response.toAppResult<Unit>(json)
-            }
-        }
-
-    override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/messages/$messageId/delete")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/messages/threads/$conversationId/partner-invite")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun acceptConversationPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/messages/threads/$conversationId/partner-invite/accept")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun declineConversationPartnerInvite(
-        conversationId: String,
-    ): AppResult<ConversationPartnerInviteResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/messages/threads/$conversationId/partner-invite/decline")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/messages/threads/$conversationId/leave")) {
-                    bearerAuth(token)
                 }.toAppResult(json)
         }
 
