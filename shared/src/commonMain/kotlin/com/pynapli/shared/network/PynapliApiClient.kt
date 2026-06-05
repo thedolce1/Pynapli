@@ -131,7 +131,8 @@ interface PynapliApiClient :
     SafetyApi,
     MediaApi,
     SubscriptionApi,
-    VerificationApi {
+    VerificationApi,
+    NotificationApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -201,18 +202,6 @@ interface PynapliApiClient :
 
     suspend fun nudgePsyncSession(sessionId: String): AppResult<PsyncNudgeResponseDto>
 
-    suspend fun getNotificationPreferences(): AppResult<NotificationPreferencesDto>
-
-    suspend fun updateNotificationPreferences(
-        request: UpdateNotificationPreferencesRequestDto,
-    ): AppResult<NotificationPreferencesDto>
-
-    suspend fun registerPushDevice(
-        request: RegisterPushDeviceRequestDto,
-    ): AppResult<PushDeviceRegistrationResponseDto>
-
-    suspend fun unregisterPushDevice(request: UnregisterPushDeviceRequestDto): AppResult<Unit>
-
     suspend fun listProfileLinks(): AppResult<ProfileLinksSummaryDto>
 
     suspend fun createProfileLinkInvitation(
@@ -243,7 +232,8 @@ class KtorPynapliApiClient(
     SafetyApi by KtorSafetyApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     MediaApi by KtorMediaApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     SubscriptionApi by KtorSubscriptionApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    VerificationApi by KtorVerificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    VerificationApi by KtorVerificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    NotificationApi by KtorNotificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -497,53 +487,6 @@ class KtorPynapliApiClient(
                 .post(config.endpoint("/v1/psync/sessions/$sessionId/nudge")) {
                     bearerAuth(token)
                 }.toAppResult(json)
-        }
-
-    override suspend fun getNotificationPreferences(): AppResult<NotificationPreferencesDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/notifications/preferences")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun updateNotificationPreferences(
-        request: UpdateNotificationPreferencesRequestDto,
-    ): AppResult<NotificationPreferencesDto> =
-        authenticatedPost { token ->
-            httpClient
-                .patch(config.endpoint("/v1/notifications/preferences")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun registerPushDevice(
-        request: RegisterPushDeviceRequestDto,
-    ): AppResult<PushDeviceRegistrationResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/notifications/devices")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun unregisterPushDevice(request: UnregisterPushDeviceRequestDto): AppResult<Unit> =
-        authenticatedPost { token ->
-            val response =
-                httpClient.post(config.endpoint("/v1/notifications/devices/unregister")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }
-            if (response.status.value in 200..299) {
-                AppResult.Success(Unit)
-            } else {
-                response.toAppResult<Unit>(json)
-            }
         }
 
     override suspend fun listProfileLinks(): AppResult<ProfileLinksSummaryDto> =
