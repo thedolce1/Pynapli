@@ -130,7 +130,8 @@ interface PynapliApiClient :
     ActivityApi,
     SafetyApi,
     MediaApi,
-    SubscriptionApi {
+    SubscriptionApi,
+    VerificationApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -200,14 +201,6 @@ interface PynapliApiClient :
 
     suspend fun nudgePsyncSession(sessionId: String): AppResult<PsyncNudgeResponseDto>
 
-    suspend fun getAgeVerificationRequirements(): AppResult<AgeVerificationRequirementsDto>
-
-    suspend fun getAgeVerificationStatus(): AppResult<AgeVerificationStatusDto>
-
-    suspend fun startAgeVerification(
-        request: StartAgeVerificationRequestDto,
-    ): AppResult<AgeVerificationStatusDto>
-
     suspend fun getNotificationPreferences(): AppResult<NotificationPreferencesDto>
 
     suspend fun updateNotificationPreferences(
@@ -249,7 +242,8 @@ class KtorPynapliApiClient(
     ActivityApi by KtorActivityApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     SafetyApi by KtorSafetyApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     MediaApi by KtorMediaApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    SubscriptionApi by KtorSubscriptionApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    SubscriptionApi by KtorSubscriptionApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    VerificationApi by KtorVerificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -502,34 +496,6 @@ class KtorPynapliApiClient(
             httpClient
                 .post(config.endpoint("/v1/psync/sessions/$sessionId/nudge")) {
                     bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getAgeVerificationRequirements(): AppResult<AgeVerificationRequirementsDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/verification/requirements")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getAgeVerificationStatus(): AppResult<AgeVerificationStatusDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/verification/status")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun startAgeVerification(
-        request: StartAgeVerificationRequestDto,
-    ): AppResult<AgeVerificationStatusDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/verification/start")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
                 }.toAppResult(json)
         }
 
