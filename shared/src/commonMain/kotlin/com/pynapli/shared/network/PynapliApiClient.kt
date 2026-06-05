@@ -125,7 +125,8 @@ interface PynapliApiClient :
     AuthApi,
     ConversationApi,
     GridApi,
-    SwipeApi {
+    SwipeApi,
+    ProfileApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -195,12 +196,6 @@ interface PynapliApiClient :
 
     suspend fun nudgePsyncSession(sessionId: String): AppResult<PsyncNudgeResponseDto>
 
-    suspend fun getMe(): AppResult<MeDto>
-
-    suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto>
-
-    suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto>
-
     suspend fun getAgeVerificationRequirements(): AppResult<AgeVerificationRequirementsDto>
 
     suspend fun getAgeVerificationStatus(): AppResult<AgeVerificationStatusDto>
@@ -220,8 +215,6 @@ interface PynapliApiClient :
     ): AppResult<PushDeviceRegistrationResponseDto>
 
     suspend fun unregisterPushDevice(request: UnregisterPushDeviceRequestDto): AppResult<Unit>
-
-    suspend fun getPublicProfile(userId: String): AppResult<PublicProfileDto>
 
     suspend fun listProfileLinks(): AppResult<ProfileLinksSummaryDto>
 
@@ -318,7 +311,8 @@ class KtorPynapliApiClient(
     AuthApi by KtorAuthApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     ConversationApi by KtorConversationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     GridApi by KtorGridApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    SwipeApi by KtorSwipeApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    SwipeApi by KtorSwipeApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    ProfileApi by KtorProfileApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -574,34 +568,6 @@ class KtorPynapliApiClient(
                 }.toAppResult(json)
         }
 
-    override suspend fun getMe(): AppResult<MeDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/me")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> =
-        authenticatedPost { token ->
-            httpClient
-                .patch(config.endpoint("/v1/me/profile")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto> =
-        authenticatedPost { token ->
-            httpClient
-                .patch(config.endpoint("/v1/me/discovery-settings")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
     override suspend fun getAgeVerificationRequirements(): AppResult<AgeVerificationRequirementsDto> =
         authenticatedPost { token ->
             httpClient
@@ -675,14 +641,6 @@ class KtorPynapliApiClient(
             } else {
                 response.toAppResult<Unit>(json)
             }
-        }
-
-    override suspend fun getPublicProfile(userId: String): AppResult<PublicProfileDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/profiles/$userId")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
         }
 
     override suspend fun listProfileLinks(): AppResult<ProfileLinksSummaryDto> =
