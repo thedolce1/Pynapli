@@ -116,6 +116,9 @@ data class PsyncRecapDto(
     val bothLikedCount: Int,
     val togetherMatchCount: Int,
     val soloMatchCount: Int, // the viewer's own solo passthrough matches
+    // The partner's solo passthrough count — present ONLY if the partner opted to share
+    // (discovery_settings.share_psync_solo_matches); null means private/not shared.
+    val partnerSoloMatchCount: Int? = null,
     val startedAt: String? = null,
     val endedAt: String? = null,
     val filtersSummary: String,

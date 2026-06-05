@@ -177,6 +177,9 @@ interface PsyncSessionRepository {
     /** Number of deck targets liked (like/pineapple_like) by BOTH partners. */
     suspend fun countBothLiked(sessionId: UUID): Int
 
+    /** Whether [userId] opted to share their Psync solo matches with their linked partner. */
+    suspend fun isSoloShareEnabled(userId: UUID): Boolean
+
     /** The active linked partner of a user, with the link row id. */
     data class ActiveLink(
         val linkId: UUID,
