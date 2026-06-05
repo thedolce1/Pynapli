@@ -61,6 +61,9 @@ data class PrivacySettingsDraft(
     // PROFILE_SETTINGS_SPEC L221-245: when false, the viewer is hidden from
     // every discovery surface while they have an active travel_locations row.
     val visibleWhileTraveling: Boolean = true,
+    // PSYNC_SPEC: opt in to let a linked partner see your Psync solo matches in
+    // the shared recap. Private (false) by default.
+    val sharePsyncSoloMatches: Boolean = false,
 )
 
 @Immutable

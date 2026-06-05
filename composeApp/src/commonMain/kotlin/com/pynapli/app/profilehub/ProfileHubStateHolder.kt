@@ -267,6 +267,8 @@ class ProfileHubStateHolder(
 
     fun updateVisibleWhileTraveling(value: Boolean) = updatePrivacyDraft { it.copy(visibleWhileTraveling = value) }
 
+    fun updateSharePsyncSoloMatches(value: Boolean) = updatePrivacyDraft { it.copy(sharePsyncSoloMatches = value) }
+
     fun updateShowInViewedLists(value: Boolean) = updateActivityDraft { it.copy(showInViewedLists = value) }
 
     fun updateAllowGridMessages(value: Boolean) =

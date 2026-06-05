@@ -131,6 +131,7 @@ internal fun PrivacyDiscoveryContent(
     onSwipeVisibleChanged: (Boolean) -> Unit,
     onShowDistanceChanged: (Boolean) -> Unit,
     onVisibleWhileTravelingChanged: (Boolean) -> Unit,
+    onSharePsyncSoloMatchesChanged: (Boolean) -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -186,6 +187,14 @@ internal fun PrivacyDiscoveryContent(
                         value = if (state.privacyDraft.visibleWhileTraveling) "On" else "Off",
                         checked = state.privacyDraft.visibleWhileTraveling,
                         onCheckedChange = onVisibleWhileTravelingChanged,
+                    )
+                    // PSYNC_SPEC: solo passthrough matches are private by default; opt in to
+                    // share their count with your linked partner in the Psync recap.
+                    PrivacyToggleRow(
+                        label = "Share Psync solo matches",
+                        value = if (state.privacyDraft.sharePsyncSoloMatches) "On" else "Off",
+                        checked = state.privacyDraft.sharePsyncSoloMatches,
+                        onCheckedChange = onSharePsyncSoloMatchesChanged,
                     )
                 }
             }
