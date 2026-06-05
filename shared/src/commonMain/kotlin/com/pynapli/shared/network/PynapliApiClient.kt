@@ -124,7 +124,8 @@ import kotlinx.serialization.json.Json
 interface PynapliApiClient :
     AuthApi,
     ConversationApi,
-    GridApi {
+    GridApi,
+    SwipeApi {
     suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
 
     suspend fun requestDataExport(): AppResult<AccountDataExportDto>
@@ -303,14 +304,6 @@ interface PynapliApiClient :
 
     suspend fun getSupportContact(): AppResult<SupportContactDto>
 
-    suspend fun querySwipeDeck(request: SwipeDeckRequestDto = SwipeDeckRequestDto()): AppResult<SwipeDeckResponseDto>
-
-    suspend fun submitSwipeAction(request: SwipeActionRequestDto): AppResult<SwipeActionResponseDto>
-
-    suspend fun rewindSwipeAction(): AppResult<SwipeRewindResponseDto>
-
-    suspend fun listMatches(): AppResult<MatchesListResponseDto>
-
     fun mediaAssetContentUrl(mediaAssetId: String): String
 
     suspend fun heartbeatPresence(): AppResult<PresenceHeartbeatResponseDto>
@@ -324,7 +317,8 @@ class KtorPynapliApiClient(
 ) : PynapliApiClient,
     AuthApi by KtorAuthApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     ConversationApi by KtorConversationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    GridApi by KtorGridApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    GridApi by KtorGridApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    SwipeApi by KtorSwipeApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
         authenticatedPost { token ->
             val response =
@@ -1000,42 +994,6 @@ class KtorPynapliApiClient(
         authenticatedPost { token ->
             httpClient
                 .get(config.endpoint("/v1/support/contact")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun querySwipeDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/swipe/deck/query")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun submitSwipeAction(request: SwipeActionRequestDto): AppResult<SwipeActionResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/swipe/actions")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun rewindSwipeAction(): AppResult<SwipeRewindResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/swipe/rewind")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun listMatches(): AppResult<MatchesListResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/matches")) {
                     bearerAuth(token)
                 }.toAppResult(json)
         }
