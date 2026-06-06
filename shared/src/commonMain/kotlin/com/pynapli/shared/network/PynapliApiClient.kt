@@ -133,13 +133,8 @@ interface PynapliApiClient :
     SubscriptionApi,
     VerificationApi,
     NotificationApi,
-    ProfileLinkApi {
-    suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?>
-
-    suspend fun requestDataExport(): AppResult<AccountDataExportDto>
-
-    suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto>
-
+    ProfileLinkApi,
+    AccountApi {
     suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto>
 
     suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto>
@@ -223,39 +218,8 @@ class KtorPynapliApiClient(
     SubscriptionApi by KtorSubscriptionApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     VerificationApi by KtorVerificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     NotificationApi by KtorNotificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    ProfileLinkApi by KtorProfileLinkApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
-    override suspend fun getLatestDataExportRequest(): AppResult<AccountDataExportDto?> =
-        authenticatedPost { token ->
-            val response =
-                httpClient.get(config.endpoint("/v1/account/data-export")) {
-                    bearerAuth(token)
-                }
-            if (response.status.value == 204) {
-                AppResult.Success(null)
-            } else {
-                @Suppress("UNCHECKED_CAST")
-                response.toAppResult<AccountDataExportDto>(json) as AppResult<AccountDataExportDto?>
-            }
-        }
-
-    override suspend fun requestDataExport(): AppResult<AccountDataExportDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/account/data-export")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/account/delete")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
+    ProfileLinkApi by KtorProfileLinkApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    AccountApi by KtorAccountApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto> =
         authenticatedPost { token ->
             httpClient
