@@ -135,28 +135,8 @@ interface PynapliApiClient :
     NotificationApi,
     ProfileLinkApi,
     AccountApi,
-    LocationApi {
-    suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto>
-
-    suspend fun setTonightAvailability(request: SetTonightAvailableRequestDto = SetTonightAvailableRequestDto()): AppResult<TonightAvailabilityDto>
-
-    suspend fun clearTonightAvailability(): AppResult<TonightAvailabilityDto>
-
-    suspend fun getTonightFeed(
-        radiusMeters: Int = 50_000,
-        intent: String? = null,
-    ): AppResult<TonightFeedResponseDto>
-
-    suspend fun getCurrentTonightSession(): AppResult<CurrentTonightSessionDto>
-
-    suspend fun proposeTonightSession(request: ProposeTonightSessionRequestDto): AppResult<TonightSessionDto>
-
-    suspend fun approveTonightSession(sessionId: String): AppResult<TonightSessionDto>
-
-    suspend fun declineTonightSession(sessionId: String): AppResult<TonightSessionDto>
-
-    suspend fun endTonightSession(sessionId: String): AppResult<TonightSessionDto>
-
+    LocationApi,
+    TonightApi {
     // Psync (synchronized partner swipe). Server is the product authority; the client just
     // negotiates, swipes the shared deck privately, and reads the recap.
     suspend fun createPsyncSession(
@@ -219,88 +199,8 @@ class KtorPynapliApiClient(
     NotificationApi by KtorNotificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     ProfileLinkApi by KtorProfileLinkApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     AccountApi by KtorAccountApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    LocationApi by KtorLocationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
-    override suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/me/availability/tonight")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun setTonightAvailability(request: SetTonightAvailableRequestDto): AppResult<TonightAvailabilityDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/me/availability/tonight")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun clearTonightAvailability(): AppResult<TonightAvailabilityDto> =
-        authenticatedPost { token ->
-            httpClient
-                .delete(config.endpoint("/v1/me/availability/tonight")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getTonightFeed(
-        radiusMeters: Int,
-        intent: String?,
-    ): AppResult<TonightFeedResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/tonight/feed")) {
-                    bearerAuth(token)
-                    parameter("radiusMeters", radiusMeters)
-                    intent?.let { parameter("intent", it) }
-                }.toAppResult(json)
-        }
-
-    override suspend fun getCurrentTonightSession(): AppResult<CurrentTonightSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/me/tonight/session")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun proposeTonightSession(request: ProposeTonightSessionRequestDto): AppResult<TonightSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/tonight/sessions")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun approveTonightSession(sessionId: String): AppResult<TonightSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/tonight/sessions/$sessionId/approve")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun declineTonightSession(sessionId: String): AppResult<TonightSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/tonight/sessions/$sessionId/decline")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun endTonightSession(sessionId: String): AppResult<TonightSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .delete(config.endpoint("/v1/tonight/sessions/$sessionId")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
+    LocationApi by KtorLocationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    TonightApi by KtorTonightApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun createPsyncSession(request: CreatePsyncSessionRequestDto): AppResult<PsyncSessionDto> =
         authenticatedPost { token ->
             httpClient
