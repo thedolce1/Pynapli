@@ -136,47 +136,10 @@ interface PynapliApiClient :
     ProfileLinkApi,
     AccountApi,
     LocationApi,
-    TonightApi {
+    TonightApi,
     // Psync (synchronized partner swipe). Server is the product authority; the client just
     // negotiates, swipes the shared deck privately, and reads the recap.
-    suspend fun createPsyncSession(
-        request: CreatePsyncSessionRequestDto = CreatePsyncSessionRequestDto(),
-    ): AppResult<PsyncSessionDto>
-
-    suspend fun getCurrentPsyncSession(): AppResult<CurrentPsyncSessionDto>
-
-    suspend fun getPsyncSession(sessionId: String): AppResult<PsyncSessionDto>
-
-    suspend fun acceptPsyncSession(sessionId: String): AppResult<PsyncSessionDto>
-
-    suspend fun denyPsyncSession(sessionId: String): AppResult<PsyncSessionDto>
-
-    suspend fun suggestPsyncFilters(
-        sessionId: String,
-        request: SuggestPsyncFiltersRequestDto,
-    ): AppResult<PsyncSessionDto>
-
-    suspend fun leavePsyncSession(sessionId: String): AppResult<PsyncSessionDto>
-
-    suspend fun startPsyncSession(sessionId: String): AppResult<PsyncSessionDto>
-
-    suspend fun getPsyncDeck(sessionId: String): AppResult<PsyncDeckResponseDto>
-
-    suspend fun submitPsyncAction(
-        sessionId: String,
-        request: SubmitPsyncActionRequestDto,
-    ): AppResult<PsyncActionResponseDto>
-
-    suspend fun pausePsyncSession(sessionId: String): AppResult<PsyncSessionDto>
-
-    suspend fun resumePsyncSession(sessionId: String): AppResult<PsyncSessionDto>
-
-    suspend fun completePsyncSession(sessionId: String): AppResult<PsyncRecapDto>
-
-    suspend fun getPsyncRecap(sessionId: String): AppResult<PsyncRecapDto>
-
-    suspend fun nudgePsyncSession(sessionId: String): AppResult<PsyncNudgeResponseDto>
-
+    PsyncApi {
     suspend fun heartbeatPresence(): AppResult<PresenceHeartbeatResponseDto>
 }
 
@@ -200,139 +163,8 @@ class KtorPynapliApiClient(
     ProfileLinkApi by KtorProfileLinkApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     AccountApi by KtorAccountApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     LocationApi by KtorLocationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    TonightApi by KtorTonightApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
-    override suspend fun createPsyncSession(request: CreatePsyncSessionRequestDto): AppResult<PsyncSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getCurrentPsyncSession(): AppResult<CurrentPsyncSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/me/psync/session")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getPsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/psync/sessions/$sessionId")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun acceptPsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions/$sessionId/accept")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun denyPsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions/$sessionId/deny")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun suggestPsyncFilters(
-        sessionId: String,
-        request: SuggestPsyncFiltersRequestDto,
-    ): AppResult<PsyncSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions/$sessionId/suggest-filters")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun leavePsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions/$sessionId/leave")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun startPsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions/$sessionId/start")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getPsyncDeck(sessionId: String): AppResult<PsyncDeckResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/psync/sessions/$sessionId/deck")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun submitPsyncAction(
-        sessionId: String,
-        request: SubmitPsyncActionRequestDto,
-    ): AppResult<PsyncActionResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions/$sessionId/actions")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
-    override suspend fun pausePsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions/$sessionId/pause")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun resumePsyncSession(sessionId: String): AppResult<PsyncSessionDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions/$sessionId/resume")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun completePsyncSession(sessionId: String): AppResult<PsyncRecapDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions/$sessionId/complete")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun getPsyncRecap(sessionId: String): AppResult<PsyncRecapDto> =
-        authenticatedPost { token ->
-            httpClient
-                .get(config.endpoint("/v1/psync/sessions/$sessionId/recap")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
-    override suspend fun nudgePsyncSession(sessionId: String): AppResult<PsyncNudgeResponseDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/psync/sessions/$sessionId/nudge")) {
-                    bearerAuth(token)
-                }.toAppResult(json)
-        }
-
+    TonightApi by KtorTonightApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    PsyncApi by KtorPsyncApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun heartbeatPresence(): AppResult<PresenceHeartbeatResponseDto> =
         authenticatedPost { token ->
             httpClient
