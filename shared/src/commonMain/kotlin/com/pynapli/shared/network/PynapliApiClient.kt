@@ -134,9 +134,8 @@ interface PynapliApiClient :
     VerificationApi,
     NotificationApi,
     ProfileLinkApi,
-    AccountApi {
-    suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto>
-
+    AccountApi,
+    LocationApi {
     suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto>
 
     suspend fun setTonightAvailability(request: SetTonightAvailableRequestDto = SetTonightAvailableRequestDto()): AppResult<TonightAvailabilityDto>
@@ -219,17 +218,8 @@ class KtorPynapliApiClient(
     VerificationApi by KtorVerificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     NotificationApi by KtorNotificationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     ProfileLinkApi by KtorProfileLinkApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    AccountApi by KtorAccountApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
-    override suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto> =
-        authenticatedPost { token ->
-            httpClient
-                .post(config.endpoint("/v1/location/current")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(json)
-        }
-
+    AccountApi by KtorAccountApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
+    LocationApi by KtorLocationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     override suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto> =
         authenticatedPost { token ->
             httpClient
