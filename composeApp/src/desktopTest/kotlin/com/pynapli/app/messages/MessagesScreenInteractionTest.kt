@@ -117,6 +117,44 @@ class MessagesScreenInteractionTest {
             onNodeWithTag(NewMatchesRailTags.avatar("match-conv")).performClick()
             waitUntil(timeoutMillis = 5_000) { opened == listOf("match-conv") }
         }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun railOnlyInboxShowsSayHiHint() =
+        runComposeUiTest {
+            val matchConversation =
+                ConversationDto(
+                    conversationId = "match-conv",
+                    kind = "direct",
+                    origin = "swipe",
+                    participants =
+                        listOf(
+                            ConversationParticipantDto("viewer", "You", status = ConversationParticipantStatus.ACTIVE),
+                            ConversationParticipantDto("nico", "Nico", status = ConversationParticipantStatus.ACTIVE),
+                        ),
+                    lastMessage = null,
+                    unreadCount = 0,
+                    updatedAt = "2026-05-22T14:00:00Z",
+                )
+            val repository = StaticMessagesRepository(listOf(matchConversation))
+            val stateHolder = MessagesStateHolder(repository)
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        MessagesScreen(
+                            viewerUserId = "viewer",
+                            onThreadSelected = {},
+                            stateHolder = stateHolder,
+                        )
+                    }
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000) { repository.listCount == 1 }
+            onNodeWithTag(NewMatchesRailTags.RAIL).assertExists()
+            onNodeWithText("Say hi to your new matches to start a conversation.").assertExists()
+        }
 }
 
 private class StaticMessagesRepository(

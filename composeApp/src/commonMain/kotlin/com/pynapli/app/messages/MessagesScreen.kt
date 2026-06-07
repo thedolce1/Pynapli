@@ -158,6 +158,19 @@ private fun MessagesScreenContent(
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                     }
+                    if (listConversations.isEmpty() && newMatches.isNotEmpty()) {
+                        item(key = "new-matches-only-hint") {
+                            Text(
+                                text = "Say hi to your new matches to start a conversation.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 28.dp, vertical = 24.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
