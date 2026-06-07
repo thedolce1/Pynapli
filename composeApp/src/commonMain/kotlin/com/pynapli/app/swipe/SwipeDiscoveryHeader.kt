@@ -40,54 +40,52 @@ internal fun SwipeHeader(
     onOpenTravel: () -> Unit,
     onOpenPsync: (() -> Unit)? = null,
 ) {
+    // Slim single-row header: the bottom nav already labels this tab "Swipe", so the tall
+    // title/subtitle/icon block is dropped to give the card deck the maximum vertical space.
+    // Psync / Travel / Filters stay as compact text actions; Travel surfaces the active city.
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
             imageVector = Icons.Filled.Style,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(20.dp),
         )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Swipe",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = if (travelCityName != null) "Travel: $travelCityName" else "Pass or like nearby profiles",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
+        Text(
+            text = "Swipe",
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
         onOpenPsync?.let { openPsync ->
             TextButton(
                 onClick = openPsync,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                 modifier = Modifier.testTag(SwipeHeaderTags.OPEN_PSYNC),
             ) {
-                Text(text = "Psync", maxLines = 1)
+                Text(text = "Psync", maxLines = 1, style = MaterialTheme.typography.labelLarge)
             }
         }
         TextButton(
             onClick = onOpenTravel,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
             modifier = Modifier.testTag(TravelModeTags.OPEN_SHEET),
         ) {
-            Text(
-                text = travelCityName ?: "Travel",
-                maxLines = 1,
-            )
+            Text(text = travelCityName ?: "Travel", maxLines = 1, style = MaterialTheme.typography.labelLarge)
         }
         TextButton(
             onClick = onOpenFilters,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
             modifier = Modifier.testTag(SwipeFilterTags.OPEN_SHEET),
         ) {
             Text(
                 text = if (activeFilterCount > 0) "Filters ($activeFilterCount)" else "Filters",
                 maxLines = 1,
+                style = MaterialTheme.typography.labelLarge,
             )
         }
     }
