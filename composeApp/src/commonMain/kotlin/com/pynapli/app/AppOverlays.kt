@@ -5,7 +5,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.conversation.ConversationSheet
@@ -28,6 +30,7 @@ import kotlinx.coroutines.launch
  * `psyncVisible` writes replaced by dismiss callbacks. Per-surface UI state is collected from the
  * passed holders, so the shell no longer threads those values.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun PynapliOverlays(
     tonightVisible: Boolean,
@@ -54,6 +57,9 @@ internal fun PynapliOverlays(
     val conversationShownInline = selectedTab == PynapliTab.Messages && conversationState.visible
 
     if (tonightVisible && playingTonightStateHolder != null) {
+        // System back (gesture/hardware) closes the full-screen overlay instead of falling
+        // through to the Activity — otherwise the only exit is the small top-left back button.
+        BackHandler(onBack = onTonightDismiss)
         // Playing Tonight map surface, opened from the Grid header moon button. Profile/
         // message taps close the overlay and reuse the existing profile-detail path
         // (PLAYING_TONIGHT_SPEC: "tapping opens the relevant individual profile/session").
@@ -78,6 +84,7 @@ internal fun PynapliOverlays(
     }
 
     if (psyncVisible && psyncStateHolder != null) {
+        BackHandler(onBack = onPsyncDismiss)
         // Psync synchronized-swipe surface, opened from the Swipe header (PSYNC_SPEC: Psync
         // lives in the Swipe/partner flow, not its own tab).
         psyncStreamClient?.let { client ->
