@@ -235,6 +235,46 @@ class SwipeStateHolderTest {
         }
 
     @Test
+    fun selectingTopPicksLoadsPicksDeckAndForYouReturnsToNormalDeck() =
+        runBlocking {
+            val normalCard = swipeCard(userId = "normal-1")
+            val pickCard = swipeCard(userId = "pick-1")
+            val repository =
+                FakeSwipeRepository(
+                    deck = SwipeDeckUi(cards = listOf(normalCard), deckSessionId = "deck-1"),
+                    topPicksDeck = SwipeDeckUi(cards = listOf(pickCard), deckSessionId = "picks-1"),
+                )
+            val stateHolder = SwipeStateHolder(repository)
+
+            stateHolder.load()
+            assertEquals(
+                listOf("normal-1"),
+                stateHolder.state.value.cards
+                    .map { it.userId },
+            )
+            assertEquals(false, stateHolder.state.value.topPicksMode)
+
+            stateHolder.selectFilter(SwipeFilterType.TopPicks)
+            assertEquals(true, stateHolder.state.value.topPicksMode)
+            assertEquals(1, repository.topPicksLoadCount)
+            assertEquals(
+                listOf("pick-1"),
+                stateHolder.state.value.cards
+                    .map { it.userId },
+            )
+            assertEquals("picks-1", stateHolder.state.value.deckSessionId)
+            assertEquals(null, stateHolder.state.value.nextCursor)
+
+            stateHolder.selectFilter(SwipeFilterType.ForYou)
+            assertEquals(false, stateHolder.state.value.topPicksMode)
+            assertEquals(
+                listOf("normal-1"),
+                stateHolder.state.value.cards
+                    .map { it.userId },
+            )
+        }
+
+    @Test
     fun anonymousPendingQueueMigratesWhenViewerIdBecomesAvailable() =
         runBlocking {
             val card = swipeCard(userId = "target-1")
@@ -514,12 +554,15 @@ private class FakeSwipeRepository(
     var actionResult: AppResult<MatchDto?> = AppResult.Success(null),
     var rewindResult: AppResult<SwipeRewindUi?> = AppResult.Success(null),
     private val pagesByCursor: Map<String, SwipeDeckUi> = emptyMap(),
+    private val topPicksDeck: SwipeDeckUi = SwipeDeckUi(deckSessionId = "fake-picks", cards = emptyList()),
 ) : SwipeRepository {
     var submitCount = 0
         private set
     var rewindCount = 0
         private set
     var deckLoadCount = 0
+        private set
+    var topPicksLoadCount = 0
         private set
     val deckCursors = mutableListOf<String?>()
     val deckRequests = mutableListOf<SwipeDeckRequestDto>()
@@ -537,6 +580,11 @@ private class FakeSwipeRepository(
                     ?: return AppResult.Failure(AppError("UNKNOWN_CURSOR", "no fake page for ${request.cursor}", recoverable = false))
             }
         return AppResult.Success(payload)
+    }
+
+    override suspend fun loadTopPicks(): AppResult<SwipeDeckUi> {
+        topPicksLoadCount += 1
+        return AppResult.Success(topPicksDeck)
     }
 
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {

@@ -24,6 +24,21 @@ class ApiSwipeRepository(
             is AppResult.Failure -> result
         }
 
+    override suspend fun loadTopPicks(): AppResult<SwipeDeckUi> =
+        when (val result = apiClient.getTopPicks()) {
+            is AppResult.Success ->
+                AppResult.Success(
+                    SwipeDeckUi(
+                        deckSessionId = result.value.deckSessionId.takeIf { it.isNotBlank() },
+                        cards = result.value.picks.map { it.card },
+                        nextCursor = null,
+                        adSupported = false,
+                        advancedFiltersApplied = false,
+                    ),
+                )
+            is AppResult.Failure -> result
+        }
+
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> =
         when (
             val result =

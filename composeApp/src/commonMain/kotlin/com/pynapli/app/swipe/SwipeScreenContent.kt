@@ -23,7 +23,6 @@ import com.pynapli.shared.network.dto.SwipeCardDto
 @Composable
 internal fun SwipeScreenContent(
     state: SwipeUiState,
-    topPicksState: TopPicksUiState,
     travelCityName: String?,
     requestedAction: String?,
     distanceUnit: String,
@@ -32,7 +31,6 @@ internal fun SwipeScreenContent(
     onOpenStore: () -> Unit,
     onOpenPsync: (() -> Unit)? = null,
     onFilterSelected: (SwipeFilterType) -> Unit,
-    onTopPickSelected: (SwipeCardDto) -> Unit,
     onRetryDeck: () -> Unit,
     onActionConsumed: () -> Unit,
     onOpenProfile: (SwipeCardDto) -> Unit,
@@ -75,12 +73,6 @@ internal fun SwipeScreenContent(
         }
         if (AdPlacementPolicy.canShowAds(state.adSupported, AdPlacement.SwipeBetweenBatches)) {
             SwipeAdSlot()
-        }
-        if (topPicksState.items.isNotEmpty()) {
-            TopPicksRow(
-                state = topPicksState,
-                onPickSelected = onTopPickSelected,
-            )
         }
         Spacer(Modifier.height(10.dp))
 
