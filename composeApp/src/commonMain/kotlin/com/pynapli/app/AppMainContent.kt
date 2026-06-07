@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.pynapli.app.activity.ActivityScreen
 import com.pynapli.app.activity.ActivityStateHolder
+import com.pynapli.app.activity.toActivityProfileCardUi
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.conversation.ConversationScreen
@@ -229,6 +230,9 @@ internal fun ColumnScope.PynapliMainContent(
                             )
                             messagesStateHolder.refreshSilently()
                         }
+                    },
+                    onOpenProfile = { event ->
+                        scope.launch { profileDetailStateHolder.open(event.toActivityProfileCardUi()) }
                     },
                 )
 

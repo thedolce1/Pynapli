@@ -7,6 +7,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -227,6 +228,49 @@ class ActivityScreenInteractionTest {
             onNodeWithText("Sam").assertExists()
             onAllNodesWithTag(VIA_PLAYING_TONIGHT_TEST_TAG).assertCountEquals(1)
             onNodeWithText("via Playing Tonight").assertExists()
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun viewsTabRendersFomoGridWithLockedTilesAndTapOpensProfile() =
+        runComposeUiTest {
+            val repository =
+                StaticActivityScreenRepository(
+                    responses =
+                        mutableMapOf(
+                            ActivityRequest(ActivityTabUi.Likes, null) to ActivityFeedUi(items = emptyList()),
+                            ActivityRequest(ActivityTabUi.Views, null) to
+                                ActivityFeedUi(
+                                    items = listOf(activityEvent("view-1", "profile_view", "Maya")),
+                                    gatedCount = 4,
+                                ),
+                        ),
+                )
+            val stateHolder = ActivityStateHolder(repository)
+            val openedProfiles = mutableListOf<String>()
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        ActivityScreen(
+                            stateHolder = stateHolder,
+                            onOpenProfile = { event -> openedProfiles += event.actorUserId },
+                        )
+                    }
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Likes, null)) }
+            onNodeWithText("Views").performClick()
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Views, null)) }
+
+            onNodeWithTag(ActivityFomoTags.GRID).assertExists()
+            onNodeWithText("Maya").assertExists()
+            // gatedCount = 4 frosted teaser tiles
+            onAllNodesWithTag(ActivityFomoTags.LOCKED_TILE).assertCountEquals(4)
+
+            onNodeWithTag(ActivityFomoTags.tile("view-1")).performClick()
+            waitUntil(timeoutMillis = 5_000) { openedProfiles == listOf("view-1-actor") }
         }
 }
 
