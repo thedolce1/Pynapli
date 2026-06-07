@@ -123,14 +123,29 @@ private fun MessagesScreenContent(
             }
 
             else -> {
+                // New matches (swipe conversations with no messages yet) ride a Tinder-style rail
+                // at the top; they are kept out of the conversation list until someone says hi.
+                val newMatches = state.conversations.filter { it.isNewMatch() }
+                val listConversations = state.conversations.filterNot { it.isNewMatch() }
                 LazyColumn(
                     modifier =
                         Modifier
                             .fillMaxSize()
                             .testTag(MessagesTestTags.LIST),
                 ) {
+                    if (newMatches.isNotEmpty()) {
+                        item(key = "new-matches-rail") {
+                            MessagesNewMatchesRail(
+                                matches = newMatches,
+                                viewerUserId = viewerUserId,
+                                onMatchSelected = onThreadSelected,
+                                modifier = Modifier.padding(bottom = 6.dp),
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                        }
+                    }
                     items(
-                        items = state.conversations,
+                        items = listConversations,
                         key = { conversation -> conversation.conversationId },
                     ) { conversation ->
                         ConversationRow(
