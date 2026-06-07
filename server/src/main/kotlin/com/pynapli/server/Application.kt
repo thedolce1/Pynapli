@@ -17,6 +17,7 @@ import com.pynapli.server.messaging.configureMessagingRoutes
 import com.pynapli.server.moderation.configureAdminModerationRoutes
 import com.pynapli.server.moderation.configureAdminReportRoutes
 import com.pynapli.server.moderation.configureAdminRiskRoutes
+import com.pynapli.server.notifications.configureAdminMetricsRoutes
 import com.pynapli.server.notifications.configureNotificationRoutes
 import com.pynapli.server.plugins.configureHTTP
 import com.pynapli.server.plugins.configureMonitoring
@@ -74,6 +75,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAdminModerationRoutes(dependencies.config, dependencies.messageModerationService)
     configureAdminReportRoutes(dependencies.config, dependencies.adminReportService)
     configureAdminRiskRoutes(dependencies.config, dependencies.adminRiskService)
+    configureAdminMetricsRoutes(dependencies.config, dependencies.notificationDispatchWorker)
     configureAgeVerificationAdminRoutes(dependencies.config, dependencies.ageVerificationService)
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)

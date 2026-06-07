@@ -187,6 +187,9 @@ class NotificationDispatchWorker(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
 
+    /** Exposes the privacy-safe delivery metrics recorder for the admin metrics scrape endpoint. */
+    fun metrics(): NotificationMetrics = service.metrics()
+
     fun start() {
         if (job != null) return
         job =
