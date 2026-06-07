@@ -58,6 +58,84 @@ class MessagesScreenInteractionTest {
             )
             onNodeWithText("No messages yet").assertExists()
         }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun newSwipeMatchesShowInRailAndOpenOnTap() =
+        runComposeUiTest {
+            val matchConversation =
+                ConversationDto(
+                    conversationId = "match-conv",
+                    kind = "direct",
+                    origin = "swipe",
+                    participants =
+                        listOf(
+                            ConversationParticipantDto("viewer", "You", status = ConversationParticipantStatus.ACTIVE),
+                            ConversationParticipantDto("nico", "Nico", status = ConversationParticipantStatus.ACTIVE),
+                        ),
+                    lastMessage = null,
+                    unreadCount = 0,
+                    updatedAt = "2026-05-22T14:00:00Z",
+                )
+            val gridConversation =
+                ConversationDto(
+                    conversationId = "grid-conv",
+                    kind = "direct",
+                    origin = "grid",
+                    participants =
+                        listOf(
+                            ConversationParticipantDto("viewer", "You", status = ConversationParticipantStatus.ACTIVE),
+                            ConversationParticipantDto("maya", "Maya", status = ConversationParticipantStatus.ACTIVE),
+                        ),
+                    lastMessage = null,
+                    unreadCount = 0,
+                    updatedAt = "2026-05-22T13:00:00Z",
+                )
+            val repository = StaticMessagesRepository(listOf(matchConversation, gridConversation))
+            val stateHolder = MessagesStateHolder(repository)
+            val opened = mutableListOf<String>()
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        MessagesScreen(
+                            viewerUserId = "viewer",
+                            onThreadSelected = { opened += it.conversationId },
+                            stateHolder = stateHolder,
+                        )
+                    }
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000) { repository.listCount == 1 }
+            onNodeWithTag(NewMatchesRailTags.RAIL).assertExists()
+            // The new match rides the rail and is kept out of the conversation list.
+            onNodeWithTag(NewMatchesRailTags.avatar("match-conv")).assertExists()
+            onNodeWithTag(MessagesTestTags.row("match-conv")).assertDoesNotExist()
+            onNodeWithTag(MessagesTestTags.row("grid-conv")).assertExists()
+
+            onNodeWithTag(NewMatchesRailTags.avatar("match-conv")).performClick()
+            waitUntil(timeoutMillis = 5_000) { opened == listOf("match-conv") }
+        }
+}
+
+private class StaticMessagesRepository(
+    private val conversations: List<ConversationDto>,
+) : MessagesRepository {
+    var listCount = 0
+        private set
+
+    override suspend fun listConversations(): AppResult<ConversationListResponseDto> {
+        listCount += 1
+        return AppResult.Success(ConversationListResponseDto(items = conversations))
+    }
+
+    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> =
+        AppResult.Success(
+            ConversationDetailDto(conversation = conversations.first { it.conversationId == conversationId }, messages = emptyList()),
+        )
+
+    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
 }
 
 private class ThirdPartyInviteMessagesRepository : MessagesRepository {
