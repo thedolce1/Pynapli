@@ -247,7 +247,6 @@ internal fun ColumnScope.PynapliMainContent(
                     onOpenStore = onOpenStore,
                     onOpenPsync = onOpenPsync,
                     savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
-                    topPicksStateHolder = topPicksStateHolder,
                     travelLocationStateHolder = travelLocationStateHolder,
                 )
 

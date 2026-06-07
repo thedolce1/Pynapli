@@ -47,6 +47,16 @@ class SampleSwipeRepository : SwipeRepository {
             ),
         )
 
+    override suspend fun loadTopPicks(): AppResult<SwipeDeckUi> =
+        AppResult.Success(
+            SwipeDeckUi(
+                deckSessionId = "sample-top-picks",
+                cards = cards.toList().take(3),
+                nextCursor = null,
+                adSupported = false,
+            ),
+        )
+
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
         cards.removeAll { it.userId == action.card.userId }
         return AppResult.Success(null)

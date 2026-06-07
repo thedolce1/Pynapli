@@ -22,7 +22,9 @@ class SwipeStateHolder(
     suspend fun load(ownerUserId: String? = restoredQueueOwnerUserId) {
         val effectiveOwnerUserId = ownerUserId.normalizedOwnerUserId() ?: restoredQueueOwnerUserId
         restorePendingActions(effectiveOwnerUserId)
-        val swipeFilters = _state.value.swipeFilters
+        val current = _state.value
+        val topPicksMode = current.topPicksMode
+        val swipeFilters = current.swipeFilters
         _state.update {
             it.copy(
                 isLoading = true,
@@ -32,7 +34,13 @@ class SwipeStateHolder(
                 errorMessage = null,
             )
         }
-        when (val result = repository.loadDeck(swipeFilters.toSwipeDeckRequest())) {
+        val deckResult =
+            if (topPicksMode) {
+                repository.loadTopPicks()
+            } else {
+                repository.loadDeck(swipeFilters.toSwipeDeckRequest())
+            }
+        when (val result = deckResult) {
             is AppResult.Success ->
                 _state.update {
                     it.copy(
@@ -51,6 +59,7 @@ class SwipeStateHolder(
                     it.copy(
                         isLoading = false,
                         nextCursor = null,
+                        topPicksMode = if (entitlementRequired) false else it.topPicksMode,
                         filters =
                             if (entitlementRequired) {
                                 it.filters.withPaidLocks(adSupported = true).withActiveFilter(SwipeFilterType.ForYou)
@@ -131,6 +140,7 @@ class SwipeStateHolder(
             it.copy(
                 filters = it.filters.withActiveFilter(type),
                 swipeFilters = type.toPresetFilters(),
+                topPicksMode = type == SwipeFilterType.TopPicks,
                 paywallMessage = null,
                 errorCode = null,
                 errorMessage = null,
@@ -149,6 +159,8 @@ class SwipeStateHolder(
         _state.update {
             it.copy(
                 swipeFilters = filters,
+                topPicksMode = false,
+                filters = it.filters.withActiveFilter(SwipeFilterType.ForYou),
                 paywallMessage = null,
                 errorCode = null,
                 errorMessage = null,

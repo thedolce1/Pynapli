@@ -31,7 +31,6 @@ fun SwipeScreen(
     onOpenStore: () -> Unit = {},
     onOpenPsync: (() -> Unit)? = null,
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
-    topPicksStateHolder: TopPicksStateHolder? = null,
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -39,8 +38,6 @@ fun SwipeScreen(
     val profileState by profileDetailStateHolder.state.collectAsState()
     val savedSwipeFiltersState by savedSwipeFilterStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf(SavedSwipeFiltersUiState()) }
-    val topPicksState by topPicksStateHolder?.state?.collectAsState()
-        ?: remember { mutableStateOf(TopPicksUiState()) }
     val travelLocationState by travelLocationStateHolder?.state?.collectAsState()
         ?: remember {
             mutableStateOf(
@@ -64,10 +61,6 @@ fun SwipeScreen(
 
     LaunchedEffect(stateHolder, state.cards.size, state.nextCursor) {
         stateHolder.loadMoreIfNeeded()
-    }
-
-    LaunchedEffect(topPicksStateHolder, viewerUserId) {
-        topPicksStateHolder?.load()
     }
 
     LaunchedEffect(travelLocationStateHolder, viewerUserId) {
@@ -100,7 +93,6 @@ fun SwipeScreen(
 
     SwipeScreenContent(
         state = state,
-        topPicksState = topPicksState,
         travelCityName = travelLocationState.current?.city,
         requestedAction = requestedAction,
         distanceUnit = distanceUnit,
@@ -109,9 +101,6 @@ fun SwipeScreen(
         onOpenStore = onOpenStore,
         onOpenPsync = onOpenPsync,
         onFilterSelected = { filter -> scope.launch { stateHolder.selectFilter(filter) } },
-        onTopPickSelected = { pickCard ->
-            scope.launch { profileDetailStateHolder.open(pickCard.toProfileCardUi()) }
-        },
         onRetryDeck = { scope.launch { stateHolder.load() } },
         onActionConsumed = { requestedAction = null },
         onOpenProfile = { card ->
@@ -283,7 +272,6 @@ fun SwipeScreen(
                     // Refresh the deck so the new travel location takes effect
                     // immediately rather than waiting for the next manual reload.
                     stateHolder.load(ownerUserId = viewerUserId)
-                    topPicksStateHolder?.load()
                 }
                 travelSheetVisible = false
             },
@@ -291,7 +279,6 @@ fun SwipeScreen(
                 scope.launch {
                     travelLocationStateHolder?.clear()
                     stateHolder.load(ownerUserId = viewerUserId)
-                    topPicksStateHolder?.load()
                 }
                 travelSheetVisible = false
             },

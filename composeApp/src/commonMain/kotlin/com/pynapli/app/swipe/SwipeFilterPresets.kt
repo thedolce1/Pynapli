@@ -12,6 +12,7 @@ data class SwipeFilterUi(
 
 enum class SwipeFilterType {
     ForYou,
+    TopPicks,
     Linked,
     Age,
 }
@@ -19,6 +20,7 @@ enum class SwipeFilterType {
 internal val defaultSwipeFilters =
     listOf(
         SwipeFilterUi(SwipeFilterType.ForYou, "For You", active = true),
+        SwipeFilterUi(SwipeFilterType.TopPicks, "Top Picks", active = false),
         SwipeFilterUi(SwipeFilterType.Linked, "Linked", active = false),
         SwipeFilterUi(SwipeFilterType.Age, "Age", active = false),
     )
@@ -30,7 +32,11 @@ internal fun List<SwipeFilterUi>.withPaidLocks(adSupported: Boolean): List<Swipe
         filter.copy(
             locked =
                 when (filter.type) {
-                    SwipeFilterType.ForYou -> false
+                    // Top Picks is free (all tiers get at least one daily pick); the
+                    // server enforces the per-tier pick count, not the chip.
+                    SwipeFilterType.ForYou,
+                    SwipeFilterType.TopPicks,
+                    -> false
                     SwipeFilterType.Linked,
                     SwipeFilterType.Age,
                     -> adSupported
@@ -40,7 +46,11 @@ internal fun List<SwipeFilterUi>.withPaidLocks(adSupported: Boolean): List<Swipe
 
 internal fun SwipeFilterType.toPresetFilters(): SwipeFilters =
     when (this) {
-        SwipeFilterType.ForYou -> SwipeFilters.forYou
+        // Top Picks is a deck SOURCE switch, not a filter set; the server curates the
+        // picks, so the request filters are reset to defaults (unused in picks mode).
+        SwipeFilterType.ForYou,
+        SwipeFilterType.TopPicks,
+        -> SwipeFilters.forYou
         SwipeFilterType.Linked -> SwipeFilters.linkedOnly
         SwipeFilterType.Age -> SwipeFilters.ageRange
     }
