@@ -203,6 +203,12 @@ fun PynapliApp(
                     scope = scope,
                     onProfileSurface = { profileSurface = it },
                     onOpenStore = { selectedTab = PynapliTab.Store },
+                    onOpenAgeVerification = {
+                        // Route a gated AGE_VERIFICATION_REQUIRED prompt into the existing
+                        // Profile-Hub age-verification flow: show the Hub surface and open its dialog.
+                        profileSurface = ProfileSurface.Hub
+                        profileHubStateHolder.openAgeVerification()
+                    },
                     onOpenTonight = { tonightVisible = true },
                     onOpenPsync = psyncStateHolder?.let { { psyncVisible = true } },
                     onUseCurrentLocation = onUseCurrentLocation,

@@ -33,11 +33,12 @@ class SavedSwipeFilterStateHolder(
             is AppResult.Failure ->
                 _state.update {
                     val entitlement = result.error.code == "ENTITLEMENT_REQUIRED"
+                    val verification = result.error.code == "AGE_VERIFICATION_REQUIRED"
                     it.copy(
                         isLoading = false,
-                        items = if (entitlement) emptyList() else it.items,
+                        items = if (entitlement || verification) emptyList() else it.items,
                         errorCode = result.error.code,
-                        errorMessage = if (entitlement) null else result.error.message,
+                        errorMessage = if (entitlement || verification) null else result.error.message,
                     )
                 }
         }
@@ -74,10 +75,12 @@ class SavedSwipeFilterStateHolder(
                 }
             is AppResult.Failure ->
                 _state.update {
+                    val verification = result.error.code == "AGE_VERIFICATION_REQUIRED"
                     it.copy(
                         isSaving = false,
                         errorCode = result.error.code,
-                        errorMessage = result.error.message,
+                        // Age-verification is surfaced via the prompt row, not a raw error toast.
+                        errorMessage = if (verification) null else result.error.message,
                     )
                 }
         }
@@ -119,6 +122,7 @@ data class SavedSwipeFiltersUiState(
     val errorMessage: String? = null,
 ) {
     val entitlementRequired: Boolean get() = errorCode == "ENTITLEMENT_REQUIRED"
+    val ageVerificationRequired: Boolean get() = errorCode == "AGE_VERIFICATION_REQUIRED"
 }
 
 interface SavedSwipeFilterRepository {

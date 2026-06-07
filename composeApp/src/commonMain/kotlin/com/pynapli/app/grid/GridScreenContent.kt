@@ -39,6 +39,7 @@ internal fun GridScreenContent(
     onUseCurrentLocation: () -> Unit,
     onProfileIconClick: () -> Unit,
     onOpenStore: () -> Unit,
+    onOpenAgeVerification: () -> Unit = {},
     onOpenTonight: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -65,6 +66,12 @@ internal fun GridScreenContent(
             GridPaywallRow(
                 message = message,
                 onOpenStore = onOpenStore,
+            )
+        }
+        state.verificationMessage?.let { message ->
+            GridVerificationRow(
+                message = message,
+                onOpenAgeVerification = onOpenAgeVerification,
             )
         }
         if (state.adSupported) {

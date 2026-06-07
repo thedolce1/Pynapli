@@ -55,6 +55,7 @@ class GridStateHolder(
                         nextCursor = feed.nextCursor,
                         adSupported = feed.adSupported,
                         paywallMessage = feed.resultLimitPaywallMessage,
+                        verificationMessage = null,
                         isRefreshing = false,
                         errorCode = null,
                         errorMessage = null,
@@ -66,21 +67,31 @@ class GridStateHolder(
                 _state.update { current ->
                     val code = (error as? GridFeedException)?.code
                     val entitlementRequired = code == "ENTITLEMENT_REQUIRED"
-                    if (keepCardsVisible && !entitlementRequired) {
+                    val verificationRequired = code == "AGE_VERIFICATION_REQUIRED"
+                    // Both gates revert the just-applied (gated) filters and surface a prompt
+                    // instead of a raw error, keeping any visible cards on screen.
+                    val gated = entitlementRequired || verificationRequired
+                    if (keepCardsVisible && !gated) {
                         current.copy(isRefreshing = false)
                     } else {
                         current.copy(
                             isRefreshing = false,
-                            filters = if (entitlementRequired) GridFilters.defaults else current.filters,
+                            filters = if (gated) GridFilters.defaults else current.filters,
                             paywallMessage =
                                 if (entitlementRequired) {
                                     "Social or Select unlocks this filter."
                                 } else {
                                     current.paywallMessage
                                 },
+                            verificationMessage =
+                                if (verificationRequired) {
+                                    "Verify your age to use lifestyle filters."
+                                } else {
+                                    current.verificationMessage
+                                },
                             errorCode = code,
                             errorMessage =
-                                if (entitlementRequired && current.cards.isNotEmpty()) {
+                                if (gated && current.cards.isNotEmpty()) {
                                     null
                                 } else {
                                     error.message ?: "Grid could not be loaded."
@@ -106,6 +117,7 @@ class GridStateHolder(
             current.copy(
                 filters = current.filters.toggle(id),
                 paywallMessage = null,
+                verificationMessage = null,
                 errorCode = null,
                 errorMessage = null,
             )
@@ -119,6 +131,7 @@ class GridStateHolder(
             current.copy(
                 filters = filters,
                 paywallMessage = null,
+                verificationMessage = null,
                 errorCode = null,
                 errorMessage = null,
             )
@@ -289,7 +302,7 @@ data class GridFeedUi(
             }
 }
 
-private class GridFeedException(
+internal class GridFeedException(
     val code: String,
     override val message: String,
 ) : RuntimeException(message)

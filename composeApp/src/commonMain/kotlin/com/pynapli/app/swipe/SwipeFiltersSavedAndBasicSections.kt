@@ -9,13 +9,18 @@ internal fun SwipeSavedFiltersControls(
     savedState: SavedSwipeFiltersUiState,
     onApplySavedPreset: (SavedSwipeFilterDto) -> Unit,
     onDeleteSavedPreset: (String) -> Unit,
+    onOpenAgeVerification: () -> Unit = {},
 ) {
-    if (savedState.items.isNotEmpty() || savedState.entitlementRequired) {
+    if (savedState.items.isNotEmpty() ||
+        savedState.entitlementRequired ||
+        savedState.ageVerificationRequired
+    ) {
         SectionTitle("Saved filters")
         SavedSwipePresetsSection(
             state = savedState,
             onApply = { dto -> onApplySavedPreset(dto) },
             onDelete = onDeleteSavedPreset,
+            onOpenAgeVerification = onOpenAgeVerification,
         )
     }
 }

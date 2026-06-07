@@ -184,6 +184,7 @@ Avoid:
 
 - [x] 18+ DOB and confirmation exist for email signup and profile-hub verification start.
 - [x] Terms/privacy acceptance exists for email signup.
+- [x] Client detects `AGE_VERIFICATION_REQUIRED` on gated surfaces (Grid lifestyle filters, saved grid/swipe filter presets, travel mode), reverts the blocked change, shows a "Verify your age" prompt, and routes into the Profile-Hub age-verification flow (A1).
 - [ ] Market-driven enhanced verification flags.
 - [x] Verification data minimization.
 - [ ] Public content moderation before visibility.

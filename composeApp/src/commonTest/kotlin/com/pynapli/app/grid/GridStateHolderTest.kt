@@ -347,6 +347,80 @@ class GridStateHolderTest {
         }
 
     @Test
+    fun ageVerificationRequiredRevertsFiltersAndSurfacesVerificationPrompt() =
+        runBlocking {
+            // GridService throws AGE_VERIFICATION_REQUIRED when an unverified viewer applies a
+            // lifestyle filter. The client must revert to defaults (drop the gated filter), surface
+            // the verification prompt instead of a raw error, and not show a paywall.
+            val repository =
+                ScriptedGridFeedRepository(
+                    outcomes =
+                        listOf(
+                            GridFeedOutcome.Success(GridFeedUi(cards = emptyList())),
+                            GridFeedOutcome.Failure(
+                                GridFeedException(
+                                    code = "AGE_VERIFICATION_REQUIRED",
+                                    message = "Age verification is required for this feature.",
+                                ),
+                            ),
+                        ),
+                )
+            val stateHolder = GridStateHolder(repository)
+
+            stateHolder.load()
+            stateHolder.applyFilters(
+                stateHolder.state.value.filters
+                    .copy(lifestyleTags = setOf(LifestyleTag.SoftSwap)),
+            )
+
+            val state = stateHolder.state.value
+            assertTrue(state.verificationRequired, "verificationRequired must be set")
+            assertEquals("Verify your age to use lifestyle filters.", state.verificationMessage)
+            assertEquals(GridFilters.defaults, state.filters, "gated filter change must be reverted")
+            assertTrue(state.filters.lifestyleTags.isEmpty(), "lifestyle tag must be dropped")
+            assertNull(state.paywallMessage, "age-verification must not surface a paywall")
+            assertEquals("AGE_VERIFICATION_REQUIRED", state.errorCode)
+            assertFalse(state.isRefreshing)
+        }
+
+    @Test
+    fun successfulLoadClearsAnyPriorVerificationPrompt() =
+        runBlocking {
+            val card =
+                GridProfileCardUi(
+                    id = "u1",
+                    displayName = "One",
+                    online = true,
+                    distanceLabel = "1 km",
+                    tone = GridCardTone.Warm,
+                )
+            val repository =
+                ScriptedGridFeedRepository(
+                    outcomes =
+                        listOf(
+                            GridFeedOutcome.Failure(
+                                GridFeedException(
+                                    code = "AGE_VERIFICATION_REQUIRED",
+                                    message = "Age verification is required for this feature.",
+                                ),
+                            ),
+                            GridFeedOutcome.Success(GridFeedUi(cards = listOf(card))),
+                        ),
+                )
+            val stateHolder = GridStateHolder(repository)
+
+            stateHolder.load()
+            assertTrue(stateHolder.state.value.verificationRequired)
+
+            stateHolder.refresh()
+
+            val state = stateHolder.state.value
+            assertFalse(state.verificationRequired, "a successful load clears the verification prompt")
+            assertNull(state.verificationMessage)
+            assertEquals(listOf("u1"), state.cards.map { it.id })
+        }
+
+    @Test
     fun nonQuietLoadFailurePreservesErrorSemantics() =
         runBlocking {
             val repository =

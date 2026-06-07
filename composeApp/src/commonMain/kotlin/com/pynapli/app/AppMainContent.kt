@@ -69,6 +69,7 @@ internal fun ColumnScope.PynapliMainContent(
     scope: CoroutineScope,
     onProfileSurface: (ProfileSurface) -> Unit,
     onOpenStore: () -> Unit,
+    onOpenAgeVerification: () -> Unit,
     onOpenTonight: () -> Unit,
     onOpenPsync: (() -> Unit)?,
     onUseCurrentLocation: () -> Unit,
@@ -155,6 +156,7 @@ internal fun ColumnScope.PynapliMainContent(
                     onUseCurrentLocation = onUseCurrentLocation,
                     onProfileIconClick = { onProfileSurface(ProfileSurface.Hub) },
                     onOpenStore = onOpenStore,
+                    onOpenAgeVerification = onOpenAgeVerification,
                     onOpenTonight = onOpenTonight,
                 )
 
@@ -247,6 +249,7 @@ internal fun ColumnScope.PynapliMainContent(
                     matchNotificationsEnabled = appSettingsState.settings.matchNotifications,
                     notificationDetail = appSettingsState.settings.notificationDetail,
                     onOpenStore = onOpenStore,
+                    onOpenAgeVerification = onOpenAgeVerification,
                     onOpenPsync = onOpenPsync,
                     savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
                     travelLocationStateHolder = travelLocationStateHolder,
