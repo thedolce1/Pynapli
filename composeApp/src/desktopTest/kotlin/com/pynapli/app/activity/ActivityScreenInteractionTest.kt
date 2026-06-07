@@ -29,7 +29,7 @@ class ActivityScreenInteractionTest {
                 StaticActivityScreenRepository(
                     responses =
                         mutableMapOf(
-                            ActivityRequest(ActivityTabUi.All, null) to
+                            ActivityRequest(ActivityTabUi.Likes, null) to
                                 ActivityFeedUi(
                                     items = listOf(activityEvent("view-1", "profile_view", "Maya")),
                                 ),
@@ -54,7 +54,7 @@ class ActivityScreenInteractionTest {
                 }
             }
 
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.All, null)) }
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Likes, null)) }
             onNodeWithText("Maya").assertExists()
 
             onNodeWithText("Flirts").performClick()
@@ -80,7 +80,7 @@ class ActivityScreenInteractionTest {
 
             assertEquals(
                 listOf(
-                    ActivityRequest(ActivityTabUi.All, null),
+                    ActivityRequest(ActivityTabUi.Likes, null),
                     ActivityRequest(ActivityTabUi.Flirts, null),
                     ActivityRequest(ActivityTabUi.Flirts, "flirts-page-2"),
                 ),
@@ -96,7 +96,7 @@ class ActivityScreenInteractionTest {
                 StaticActivityScreenRepository(
                     responses =
                         mutableMapOf(
-                            ActivityRequest(ActivityTabUi.All, null) to
+                            ActivityRequest(ActivityTabUi.Likes, null) to
                                 ActivityFeedUi(
                                     items =
                                         listOf(
@@ -138,7 +138,7 @@ class ActivityScreenInteractionTest {
                 }
             }
 
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.All, null)) }
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Likes, null)) }
             onNodeWithText("Message").performClick()
             onNodeWithText("Open invite").performClick()
             onNodeWithText("Review").performClick()
@@ -158,7 +158,7 @@ class ActivityScreenInteractionTest {
                 StaticActivityScreenRepository(
                     responses =
                         mutableMapOf(
-                            ActivityRequest(ActivityTabUi.All, null) to
+                            ActivityRequest(ActivityTabUi.Likes, null) to
                                 ActivityFeedUi(
                                     items =
                                         listOf(
@@ -184,7 +184,7 @@ class ActivityScreenInteractionTest {
                 }
             }
 
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.All, null)) }
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Likes, null)) }
             onNodeWithText("4 more waiting").assertExists()
             onNodeWithText("Select unlocks the full Activity feed.").assertExists()
             onNodeWithText("New").assertExists()
@@ -202,7 +202,7 @@ class ActivityScreenInteractionTest {
                 StaticActivityScreenRepository(
                     responses =
                         mutableMapOf(
-                            ActivityRequest(ActivityTabUi.All, null) to
+                            ActivityRequest(ActivityTabUi.Likes, null) to
                                 ActivityFeedUi(
                                     items =
                                         listOf(
@@ -222,7 +222,7 @@ class ActivityScreenInteractionTest {
                 }
             }
 
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.All, null)) }
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Likes, null)) }
             onNodeWithText("Alex").assertExists()
             onNodeWithText("Sam").assertExists()
             onAllNodesWithTag(VIA_PLAYING_TONIGHT_TEST_TAG).assertCountEquals(1)

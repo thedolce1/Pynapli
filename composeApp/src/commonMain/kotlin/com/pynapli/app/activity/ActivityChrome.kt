@@ -230,11 +230,8 @@ internal fun EmptyActivityState(
 
 internal fun ActivityTabUi.emptyLabel(): String =
     when (this) {
-        ActivityTabUi.All -> "No activity yet."
+        ActivityTabUi.Likes -> "No likes yet."
         ActivityTabUi.Views -> "No views yet."
         ActivityTabUi.Flirts -> "No flirts yet."
-        ActivityTabUi.Likes -> "No likes yet."
-        ActivityTabUi.Matches -> "No matches yet."
-        ActivityTabUi.Albums -> "No album requests yet."
-        ActivityTabUi.Invites -> "No invites yet."
+        ActivityTabUi.Requests -> "No requests yet."
     }

@@ -6,7 +6,7 @@ import com.pynapli.shared.network.dto.ActivityEventDto
 @Immutable
 data class ActivityUiState(
     val items: List<ActivityEventDto> = emptyList(),
-    val selectedTab: ActivityTabUi = ActivityTabUi.All,
+    val selectedTab: ActivityTabUi = ActivityTabUi.Likes,
     val summary: ActivitySummaryUi = ActivitySummaryUi.Empty,
     val nextCursor: String? = null,
     val isLoading: Boolean = false,
@@ -58,13 +58,12 @@ enum class ActivityTabUi(
     val label: String,
     val apiValue: String,
 ) {
-    All("All", "all"),
+    // Mobile Activity surface: Likes (premium reveal), Views, Flirts, and Requests
+    // (album-access + partner/psync/tonight invites). New matches live in Messages.
+    Likes("Likes", "likes"),
     Views("Views", "views"),
     Flirts("Flirts", "flirts"),
-    Likes("Likes", "likes"),
-    Matches("Matches", "matches"),
-    Albums("Albums", "albums"),
-    Invites("Invites", "invites"),
+    Requests("Requests", "requests"),
 }
 
 @Immutable

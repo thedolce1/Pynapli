@@ -112,13 +112,15 @@ internal fun ConversationDto.toMessageNotification(
 
 internal fun ActivityEventDto.toActivityNotification(settings: AppSettings): InAppNotificationUi {
     val standardDetail = settings.notificationDetail == AppSettings.NOTIFICATION_STANDARD
+    // Matches now live in Messages (the new-matches rail), so route them there.
+    val matchNotification = type == "match"
     return InAppNotificationUi(
         id = "activity:$eventId",
         kind = InAppNotificationKind.Activity,
         title = if (standardDetail) actorDisplayName else "New activity",
         body = if (standardDetail) activityNotificationBody() else "Open Activity",
-        targetTab = PynapliTab.Activity,
-        activityTab = activityTab(),
+        targetTab = if (matchNotification) PynapliTab.Messages else PynapliTab.Activity,
+        activityTab = if (matchNotification) null else activityTab(),
     )
 }
 
@@ -140,10 +142,15 @@ private fun ActivityEventDto.activityTab(): ActivityTabUi =
         "profile_view", "viewed_profile" -> ActivityTabUi.Views
         "flirt" -> ActivityTabUi.Flirts
         "swipe_like", "pineapple_like", "intro_note" -> ActivityTabUi.Likes
-        "match" -> ActivityTabUi.Matches
-        "album_request" -> ActivityTabUi.Albums
-        "partner_chat_invite", "psync_invite", "playing_tonight" -> ActivityTabUi.Invites
-        else -> ActivityTabUi.All
+        "album_request",
+        "partner_chat_invite",
+        "psync_invite",
+        "psync_started",
+        "psync_recap",
+        "psync_expired",
+        "playing_tonight",
+        -> ActivityTabUi.Requests
+        else -> ActivityTabUi.Likes
     }
 
 private fun String.cleanNotificationText(): String {

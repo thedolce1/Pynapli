@@ -123,10 +123,13 @@ enum class ActivityFeedTab(
     FLIRTS("flirts", setOf("flirt")),
     LIKES("likes", setOf("swipe_like", "pineapple_like", "intro_note")),
     MATCHES("matches", setOf("match")),
-    ALBUMS("albums", setOf("album_request")),
-    INVITES(
-        "invites",
+
+    // "Requests" folds album-access requests and partner/psync/tonight invites into one
+    // action-oriented tab (mobile Activity surface shows Likes/Views/Flirts/Requests).
+    REQUESTS(
+        "requests",
         setOf(
+            "album_request",
             "partner_chat_invite",
             "psync_invite",
             "psync_started",

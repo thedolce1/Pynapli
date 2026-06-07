@@ -216,7 +216,7 @@ class ActivityStateHolderTest {
             repository.result = AppResult.Success(ActivityFeedUi(items = listOf(flirtEvent)))
             stateHolder.selectTab(ActivityTabUi.Flirts)
 
-            assertEquals(listOf(ActivityTabUi.All, ActivityTabUi.Flirts), repository.loadCalls.map { it.tab })
+            assertEquals(listOf(ActivityTabUi.Likes, ActivityTabUi.Flirts), repository.loadCalls.map { it.tab })
             assertEquals(null, repository.loadCalls.last().cursor)
             assertEquals(ActivityTabUi.Flirts, stateHolder.state.value.selectedTab)
             assertEquals(listOf(flirtEvent), stateHolder.state.value.items)
