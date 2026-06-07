@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Style
@@ -14,7 +15,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,16 +101,35 @@ internal fun SwipeError(
     message: String,
     onRetry: () -> Unit,
 ) {
+    // Friendlier full-deck failure state: a clear icon + reassuring title and a prominent
+    // Retry, rather than a bare red server string. The underlying message is kept as the
+    // secondary line for context.
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        Icon(
+            imageVector = Icons.Filled.CloudOff,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+            modifier = Modifier.size(56.dp),
+        )
         Text(
-            text = message,
-            color = MaterialTheme.colorScheme.error,
+            text = "Couldn't load your deck",
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = message.ifBlank { "Check your connection and try again." },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )
-        TextButton(onClick = onRetry) { Text("Retry") }
+        Button(onClick = onRetry) {
+            Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
+            Spacer(Modifier.size(6.dp))
+            Text("Retry")
+        }
     }
 }
