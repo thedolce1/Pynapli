@@ -36,6 +36,7 @@ fun ActivityScreen(
     onOpenStore: () -> Unit = {},
     onOpenMatch: (ActivityEventDto) -> Unit = {},
     onOpenPartnerChatInvite: (String) -> Unit = {},
+    onOpenProfile: (ActivityEventDto) -> Unit = {},
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -48,6 +49,7 @@ fun ActivityScreen(
     ActivityScreenContent(
         state = state,
         onTabSelected = { tab -> scope.launch { stateHolder.selectTab(tab) } },
+        onOpenProfile = onOpenProfile,
         onAlbumRequestDecision = { eventId, approve ->
             expandedAlbumReviewEventId = null
             scope.launch { stateHolder.respondToAlbumRequest(eventId, approve) }
@@ -77,6 +79,7 @@ private fun rememberActivityStateHolder(): ActivityStateHolder =
 private fun ActivityScreenContent(
     state: ActivityUiState,
     onTabSelected: (ActivityTabUi) -> Unit,
+    onOpenProfile: (ActivityEventDto) -> Unit,
     onAlbumRequestDecision: (String, Boolean) -> Unit,
     expandedAlbumReviewEventId: String?,
     onReviewAlbumRequest: (String) -> Unit,
@@ -156,6 +159,24 @@ private fun ActivityScreenContent(
                     label = state.selectedTab.emptyLabel(),
                     modifier = Modifier.fillMaxSize(),
                 )
+
+            state.selectedTab.isFomoGridTab() -> {
+                ActivityFomoGrid(
+                    items = state.visibleItems,
+                    gatedCount = state.gatedCount,
+                    adSupported = state.adSupported,
+                    nextCursor = state.nextCursor,
+                    isLoadingMore = state.isLoadingMore,
+                    focusedEventId = state.focusedEventId,
+                    pendingDismissEventId = state.pendingDismissEventId,
+                    distanceUnit = distanceUnit,
+                    onOpenProfile = onOpenProfile,
+                    onDismissEvent = onDismissEvent,
+                    onOpenStore = onOpenStore,
+                    onLoadMore = onLoadMore,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
 
             else -> {
                 LazyColumn(

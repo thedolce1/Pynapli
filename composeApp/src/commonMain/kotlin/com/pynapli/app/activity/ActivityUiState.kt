@@ -66,6 +66,12 @@ enum class ActivityTabUi(
     Requests("Requests", "requests"),
 }
 
+/**
+ * Views and Flirts render as a 2-up profile grid (FOMO teaser). Likes keeps its premium-reveal
+ * list and Requests keeps action rows, so both stay as the list layout.
+ */
+internal fun ActivityTabUi.isFomoGridTab(): Boolean = this == ActivityTabUi.Views || this == ActivityTabUi.Flirts
+
 @Immutable
 data class ActivityFeedUi(
     val items: List<ActivityEventDto>,
