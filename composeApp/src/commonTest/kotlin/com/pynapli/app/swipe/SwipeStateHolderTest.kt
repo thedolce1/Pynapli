@@ -405,7 +405,8 @@ class SwipeStateHolderTest {
     @Test
     fun loadMoreSkipsWhenAboveThresholdOrNoCursor() =
         runBlocking {
-            val cards = (1..5).map { swipeCard(userId = "card-$it") }
+            // More than LOAD_MORE_THRESHOLD cards remain, so no prefetch should fire yet.
+            val cards = (1..LOAD_MORE_THRESHOLD + 2).map { swipeCard(userId = "card-$it") }
             val repository =
                 FakeSwipeRepository(
                     deck = SwipeDeckUi(cards = cards, deckSessionId = "deck-1", nextCursor = "cursor-1"),

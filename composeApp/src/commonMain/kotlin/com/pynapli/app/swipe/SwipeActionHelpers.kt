@@ -7,7 +7,11 @@ import kotlin.random.Random
 
 internal const val INTRO_NOTE_MAX_LENGTH = 140
 internal const val MAX_PENDING_ACTIONS = 10
-internal const val LOAD_MORE_THRESHOLD = 3
+
+// Prefetch the next 30-card page once this many cards remain. Tuned for "never wait for a card"
+// (SWIPE_IMPLEMENTATION_SPEC perf goal): a 10-card runway is several seconds even for very fast
+// swipers, so the next page lands well before the deck empties on normal networks.
+internal const val LOAD_MORE_THRESHOLD = 10
 
 internal fun QueuedSwipeAction.paywallMessageFor(errorCode: String): String? =
     when (errorCode) {

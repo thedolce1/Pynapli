@@ -2,7 +2,7 @@ package com.pynapli.app.swipe
 
 import com.pynapli.shared.network.dto.SwipeCardDto
 
-internal const val SWIPE_IMAGE_PREFETCH_WINDOW = 4
+internal const val SWIPE_IMAGE_PREFETCH_WINDOW = 6
 internal const val SWIPE_TOP_CARD_PHOTO_PREFETCH = 5
 
 internal fun planSwipeImagePrefetch(
