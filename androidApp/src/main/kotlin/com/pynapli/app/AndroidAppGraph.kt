@@ -49,12 +49,10 @@ import com.pynapli.app.store.StorePurchaseGateway
 import com.pynapli.app.store.StoreStateHolder
 import com.pynapli.app.swipe.ApiSavedSwipeFilterRepository
 import com.pynapli.app.swipe.ApiSwipeRepository
-import com.pynapli.app.swipe.ApiTopPicksRepository
 import com.pynapli.app.swipe.DebugFaultInjectingSwipeRepository
 import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.app.swipe.SwipeStateHolder
-import com.pynapli.app.swipe.TopPicksStateHolder
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.core.config.PynapliConfigs
@@ -152,11 +150,6 @@ class AndroidAppGraph(
     val savedSwipeFilterStateHolder =
         SavedSwipeFilterStateHolder(
             repository = ApiSavedSwipeFilterRepository(apiClient),
-        )
-
-    val topPicksStateHolder =
-        TopPicksStateHolder(
-            repository = ApiTopPicksRepository(apiClient),
         )
 
     val travelLocationStateHolder =
