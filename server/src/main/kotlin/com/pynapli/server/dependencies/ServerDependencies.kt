@@ -47,9 +47,7 @@ import com.pynapli.server.profile.TonightAvailabilityService
 import com.pynapli.server.profilelink.JdbcProfileLinkRepository
 import com.pynapli.server.profilelink.ProfileLinkService
 import com.pynapli.server.profiling.RequestProfilerFactory
-import com.pynapli.server.psync.JdbcPsyncSessionRepository
 import com.pynapli.server.psync.PsyncSessionService
-import com.pynapli.server.psync.SwipeServicePsyncDeckGenerator
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockService
 import com.pynapli.server.safety.HiddenProfileRepository
@@ -68,10 +66,7 @@ import com.pynapli.server.subscriptions.GooglePlayStorePurchaseVerifier
 import com.pynapli.server.subscriptions.JdbcSubscriptionRepository
 import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
-import com.pynapli.server.swipe.JdbcSwipeRepository
-import com.pynapli.server.swipe.JdbcTopPicksRepository
 import com.pynapli.server.swipe.SavedSwipeFilterService
-import com.pynapli.server.swipe.SwipeDeckTokenCodec
 import com.pynapli.server.swipe.SwipeService
 import com.pynapli.server.swipe.TopPicksService
 import com.pynapli.server.tonight.TonightFeedService
@@ -370,42 +365,21 @@ class ServerDependencies(
                     subscriptionService = subscriptionService,
                     activityService = activityService,
                 )
-            val swipeRepository = JdbcSwipeRepository(database.dataSource)
-            val swipeService =
-                SwipeService(
-                    repository = swipeRepository,
+            val swipe =
+                buildSwipeDependencies(
+                    config = config,
+                    dataSource = database.dataSource,
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     blockRepository = blockRepository,
-                    notificationPublisher = notificationService,
+                    hiddenProfileRepository = hiddenProfileRepository,
+                    notificationService = notificationService,
                     rateLimitService = rateLimitService,
                     riskPolicyService = riskPolicyService,
                     subscriptionService = subscriptionService,
                     presenceService = presenceService,
                     travelLocationRepository = travelLocationRepository,
-                    deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret),
                     activityService = activityService,
-                )
-            val psyncSessionService =
-                PsyncSessionService(
-                    repository = JdbcPsyncSessionRepository(database.dataSource),
-                    deckGenerator = SwipeServicePsyncDeckGenerator(swipeService),
-                    blockRepository = blockRepository,
-                    hiddenProfileRepository = hiddenProfileRepository,
-                    presenceService = presenceService,
-                    activityService = activityService,
-                    notificationPublisher = notificationService,
-                    broadcaster = psyncBroadcaster,
-                    rateLimitService = rateLimitService,
-                    subscriptionService = subscriptionService,
-                )
-            val topPicksService =
-                TopPicksService(
-                    topPicksRepository = JdbcTopPicksRepository(database.dataSource),
-                    swipeRepository = swipeRepository,
-                    subscriptionService = subscriptionService,
-                    presenceService = presenceService,
-                    mediaAssetUrlResolver = media.mediaAssetUrlResolver,
-                    deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret),
+                    psyncBroadcaster = psyncBroadcaster,
                 )
             return ServerDependencies(
                 config = config,
@@ -431,7 +405,7 @@ class ServerDependencies(
                 blockService = blockService,
                 hiddenProfileService = hiddenProfileService,
                 reportService = reportService,
-                swipeService = swipeService,
+                swipeService = swipe.swipeService,
                 subscriptionService = subscriptionService,
                 playStoreSubscriptionSyncWorker = playStoreSubscriptionSyncWorker,
                 localMediaUploadStorage = media.localMediaUploadStorage,
@@ -444,12 +418,12 @@ class ServerDependencies(
                 hiddenProfileRepository = hiddenProfileRepository,
                 savedGridFilterService = grid.savedGridFilterService,
                 savedSwipeFilterService = grid.savedSwipeFilterService,
-                topPicksService = topPicksService,
+                topPicksService = swipe.topPicksService,
                 tonightAvailabilityService = tonight.tonightAvailabilityService,
                 tonightSessionService = tonight.tonightSessionService,
                 tonightFeedService = tonight.tonightFeedService,
                 tonightSessionExpiryWorker = tonight.tonightSessionExpiryWorker,
-                psyncSessionService = psyncSessionService,
+                psyncSessionService = swipe.psyncSessionService,
                 ageVerificationService = ageVerificationService,
                 accountLifecycleService = accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,
