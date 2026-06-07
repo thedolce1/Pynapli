@@ -32,7 +32,6 @@ import com.pynapli.app.store.StoreStateHolder
 import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SwipeScreen
 import com.pynapli.app.swipe.SwipeStateHolder
-import com.pynapli.app.swipe.TopPicksStateHolder
 import com.pynapli.shared.network.dto.MatchDto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -63,7 +62,6 @@ internal fun ColumnScope.PynapliMainContent(
     authStateHolder: AuthStateHolder,
     savedGridFilterStateHolder: SavedGridFilterStateHolder?,
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder?,
-    topPicksStateHolder: TopPicksStateHolder?,
     travelLocationStateHolder: TravelLocationStateHolder?,
     tonightAvailabilityStateHolder: TonightAvailabilityStateHolder?,
     conversationActions: ConversationActions,

@@ -90,7 +90,6 @@ class MainActivity : ComponentActivity() {
                 storeStateHolder = appGraph.storeStateHolder,
                 savedGridFilterStateHolder = appGraph.savedGridFilterStateHolder,
                 savedSwipeFilterStateHolder = appGraph.savedSwipeFilterStateHolder,
-                topPicksStateHolder = appGraph.topPicksStateHolder,
                 travelLocationStateHolder = appGraph.travelLocationStateHolder,
                 tonightAvailabilityStateHolder = appGraph.tonightAvailabilityStateHolder,
                 playingTonightStateHolder = appGraph.playingTonightStateHolder,
