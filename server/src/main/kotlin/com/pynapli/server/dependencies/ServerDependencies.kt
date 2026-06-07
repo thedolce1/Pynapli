@@ -24,14 +24,10 @@ import com.pynapli.server.media.LocalMediaUploadStorage
 import com.pynapli.server.media.MediaCleanupService
 import com.pynapli.server.media.MediaCleanupWorker
 import com.pynapli.server.media.MediaService
-import com.pynapli.server.messaging.JdbcMessagingRepository
 import com.pynapli.server.messaging.MessageBroadcaster
 import com.pynapli.server.messaging.MessagingService
 import com.pynapli.server.moderation.AdminReportService
 import com.pynapli.server.moderation.AdminRiskService
-import com.pynapli.server.moderation.JdbcAdminReportRepository
-import com.pynapli.server.moderation.JdbcAdminRiskRepository
-import com.pynapli.server.moderation.JdbcMessageModerationRepository
 import com.pynapli.server.moderation.MessageModerationService
 import com.pynapli.server.notifications.FirebaseAdminPushNotificationSender
 import com.pynapli.server.notifications.JdbcNotificationRepository
@@ -362,30 +358,17 @@ class ServerDependencies(
                     repository = JdbcAgeVerificationRepository(database.dataSource),
                     provider = ageVerificationProvider,
                 )
-            val messagingRepository = JdbcMessagingRepository(database.dataSource)
-            val messagingService =
-                MessagingService(
-                    repository = messagingRepository,
+            val messaging =
+                buildMessagingDependencies(
+                    dataSource = database.dataSource,
                     blockRepository = blockRepository,
-                    notificationPublisher = notificationService,
+                    notificationService = notificationService,
                     messageBroadcaster = messageBroadcaster,
                     rateLimitService = rateLimitService,
-                    messageReviewRiskSignalPublisher = riskService,
+                    riskService = riskService,
                     riskPolicyService = riskPolicyService,
                     subscriptionService = subscriptionService,
                     activityService = activityService,
-                )
-            val messageModerationService =
-                MessageModerationService(
-                    JdbcMessageModerationRepository(database.dataSource),
-                )
-            val adminReportService =
-                AdminReportService(
-                    JdbcAdminReportRepository(database.dataSource),
-                )
-            val adminRiskService =
-                AdminRiskService(
-                    JdbcAdminRiskRepository(database.dataSource),
                 )
             val swipeRepository = JdbcSwipeRepository(database.dataSource)
             val swipeService =
@@ -435,11 +418,11 @@ class ServerDependencies(
                 travelLocationService = travelLocationService,
                 presenceService = presenceService,
                 gridService = grid.gridService,
-                messagingService = messagingService,
+                messagingService = messaging.messagingService,
                 mediaService = media.mediaService,
-                messageModerationService = messageModerationService,
-                adminReportService = adminReportService,
-                adminRiskService = adminRiskService,
+                messageModerationService = messaging.messageModerationService,
+                adminReportService = messaging.adminReportService,
+                adminRiskService = messaging.adminRiskService,
                 activityService = activityService,
                 activityRetentionWorker = activityRetentionWorker,
                 mediaCleanupWorker = mediaCleanupWorker,
