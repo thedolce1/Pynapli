@@ -20,8 +20,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
 
 @Composable
@@ -117,18 +119,36 @@ private fun DealbreakerLockChip(
         selected = locked,
         onClick = onClick,
         enabled = eligible,
+        leadingIcon =
+            if (locked) {
+                {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = PynapliColors.Accent,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            } else {
+                null
+            },
         label = {
             Text(
                 text = if (locked) "Locked" else "Lock",
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (locked) FontWeight.SemiBold else FontWeight.Normal,
             )
         },
         colors =
             FilterChipDefaults.filterChipColors(
-                selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                // Locked = a hard dealbreaker gate; surface it with the premium gold accent
+                // (a tinted fill + gold label/icon) so it's unmistakable at a glance vs the
+                // plain outlined "Lock" affordance. Design north-star: gold = highlight accent.
+                selectedContainerColor = PynapliColors.Accent.copy(alpha = 0.20f),
+                selectedLabelColor = PynapliColors.Accent,
+                selectedLeadingIconColor = PynapliColors.Accent,
             ),
         modifier = Modifier.testTag(SwipeFilterTags.dealbreakerTag(dealbreakerKey)),
     )
