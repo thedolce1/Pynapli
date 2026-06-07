@@ -12,6 +12,7 @@ out/
 # Claude Code (local per-machine overrides only)
 .claude/settings.local.json
 .claude/worktrees/
+.claude/*.lock
 
 # Generated local QA artifacts
 artifacts/
