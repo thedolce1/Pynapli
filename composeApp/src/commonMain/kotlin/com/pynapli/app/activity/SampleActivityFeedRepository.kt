@@ -103,11 +103,18 @@ class SampleActivityFeedRepository : ActivityFeedRepository {
 
 private fun ActivityTabUi.matches(type: String): Boolean =
     when (this) {
-        ActivityTabUi.All -> true
+        ActivityTabUi.Likes -> type in setOf("swipe_like", "pineapple_like", "intro_note")
         ActivityTabUi.Views -> type == "profile_view"
         ActivityTabUi.Flirts -> type == "flirt"
-        ActivityTabUi.Likes -> type in setOf("swipe_like", "pineapple_like", "intro_note")
-        ActivityTabUi.Matches -> type == "match"
-        ActivityTabUi.Albums -> type == "album_request"
-        ActivityTabUi.Invites -> type in setOf("partner_chat_invite", "psync_invite", "playing_tonight")
+        ActivityTabUi.Requests ->
+            type in
+                setOf(
+                    "album_request",
+                    "partner_chat_invite",
+                    "psync_invite",
+                    "psync_started",
+                    "psync_recap",
+                    "psync_expired",
+                    "playing_tonight",
+                )
     }

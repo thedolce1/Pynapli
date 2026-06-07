@@ -43,10 +43,7 @@ object PynapliNotificationDeepLinks {
             ActivityTabUi.Views.apiValue -> ActivityTabUi.Views
             ActivityTabUi.Flirts.apiValue -> ActivityTabUi.Flirts
             ActivityTabUi.Likes.apiValue -> ActivityTabUi.Likes
-            ActivityTabUi.Matches.apiValue -> ActivityTabUi.Matches
-            ActivityTabUi.Albums.apiValue -> ActivityTabUi.Albums
-            ActivityTabUi.Invites.apiValue -> ActivityTabUi.Invites
-            ActivityTabUi.All.apiValue -> ActivityTabUi.All
+            ActivityTabUi.Requests.apiValue -> ActivityTabUi.Requests
             else -> null
         }
 
@@ -56,8 +53,10 @@ object PynapliNotificationDeepLinks {
 
     fun targetForKind(kind: String?): String =
         when (kind) {
-            "message" -> AppDeepLinkStateHolder.TARGET_MESSAGES
+            // Matches now open in Messages (new-matches rail), not Activity.
+            "message",
             "match",
+            -> AppDeepLinkStateHolder.TARGET_MESSAGES
             "flirt",
             "profile_view",
             "album_request",
@@ -70,9 +69,9 @@ object PynapliNotificationDeepLinks {
         when (kind) {
             "profile_view" -> ActivityTabUi.Views.apiValue
             "flirt" -> ActivityTabUi.Flirts.apiValue
-            "match" -> ActivityTabUi.Matches.apiValue
-            "album_request" -> ActivityTabUi.Albums.apiValue
-            "partner_chat_invite" -> ActivityTabUi.Invites.apiValue
+            "album_request",
+            "partner_chat_invite",
+            -> ActivityTabUi.Requests.apiValue
             else -> null
         }
 

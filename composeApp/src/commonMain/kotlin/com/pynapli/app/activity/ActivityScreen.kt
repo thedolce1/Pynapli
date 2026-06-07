@@ -147,7 +147,7 @@ private fun ActivityScreenContent(
 
             state.items.isEmpty() ->
                 EmptyActivityState(
-                    label = "No activity yet.",
+                    label = state.selectedTab.emptyLabel(),
                     modifier = Modifier.fillMaxSize(),
                 )
 
