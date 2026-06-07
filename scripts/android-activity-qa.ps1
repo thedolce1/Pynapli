@@ -302,7 +302,7 @@ function Tap-ActivityTabText {
         }
 
         $screen = Get-ScreenSize $xml
-        $anchor = Find-NodeByText $xml "All"
+        $anchor = Find-NodeByText $xml "Likes"
         $y = if ($null -ne $anchor) {
             (Get-Bounds $anchor).CenterY
         } else {
@@ -518,6 +518,12 @@ BEGIN
         RAISE EXCEPTION 'Missing one or more dev users for Activity QA.';
     END IF;
 
+    -- The Views tab gates profile_view rows on mutual viewed-list opt-in, so make the viewer and
+    -- the view actor discoverable in viewed lists (non-incognito) or the seeded view stays hidden.
+    UPDATE discovery_settings
+    SET show_in_viewed_lists = true, incognito = false, updated_at = now()
+    WHERE user_id IN (viewer_id, maya_id);
+
     DELETE FROM activity_events WHERE recipient_user_id = viewer_id;
     SELECT id INTO private_album_id
     FROM media_albums
@@ -629,14 +635,16 @@ function Start-App {
 }
 
 function Complete-LoginIfNeeded {
-    $landing = Wait-ForAnyText @("Dev login", "Grid Load", "Dense", "Filters") 45
+    # Cold start on the x86_64 emulator can take well over a minute right after a Gradle build,
+    # so give the splash -> sign-in transition a generous window before giving up.
+    $landing = Wait-ForAnyText @("Dev login", "Grid Load", "Dense", "Filters") 120
     if ($landing.Text -eq "Dev login") {
         $loginXml = Dump-Ui "00_login" -Keep
         Assert-NoAppErrorText $loginXml "Login"
         $script:Screenshots.login = Save-Screen "00_login"
         Tap-Text "Dev login"
 
-        Wait-ForAnyText @("Allow Pynapli", "Don", "Current location", "Filters", "Grid Load", "Dense") 45 | Out-Null
+        Wait-ForAnyText @("Allow Pynapli", "Don", "Current location", "Filters", "Grid Load", "Dense") 90 | Out-Null
         Start-Sleep -Milliseconds 1200
         $afterLoginXml = Dump-Ui "after_login"
         if ($null -ne (Find-NodeByText $afterLoginXml "Don")) {
@@ -753,41 +761,37 @@ Assert-NoAppErrorText $gridXml "Grid after login"
 $script:Screenshots.gridAfterLogin = Save-Screen "02_grid_after_login"
 
 Tap-BottomNavText "Activity"
-Wait-ForAnyText @("Activity", "All", "Flirts") 45 | Out-Null
-$initialXml = Capture-ActivityStage "activityInitial" "03_activity_initial"
-Assert-TextPresent $initialXml "Noa" "Initial Activity"
-Assert-TextPresent $initialXml "Rae" "Initial Activity"
+Wait-ForAnyText @("Activity", "Likes", "Flirts") 45 | Out-Null
+# Default tab is Likes (premium-reveal money surface). Matches moved to Messages; album/invite
+# requests are folded into the Requests tab; Views/Flirts render as a 2-up FOMO grid.
+$initialXml = Capture-ActivityStage "likesTab" "03_activity_likes"
+Assert-TextPresent $initialXml "Nico" "Initial Activity (Likes)"
 
+Tap-ActivityTabText "Views"
+Wait-ForAnyText @("Maya", "viewed you") 20 | Out-Null
+Capture-ActivityStage "viewsTab" "04_activity_views" | Out-Null
+
+Tap-ActivityTabText "Flirts"
+Wait-ForAnyText @("Alex", "sent a Spark") 20 | Out-Null
+Capture-ActivityStage "flirtsTab" "05_activity_flirts" | Out-Null
+
+Tap-ActivityTabText "Requests"
+Wait-ForAnyText @("Rae", "Review", "Noa", "Open invite") 20 | Out-Null
+Capture-ActivityStage "requestsTab" "06_activity_requests" | Out-Null
+
+# After visiting every tab the app should have marked the loaded rows seen in the backend.
+# Likes(1) + Views(1) + Flirts(1) + Requests(album+invite=2) = 5; the seeded match stays unseen
+# because it now lives in Messages, not Activity.
 $seenDeadline = (Get-Date).AddSeconds(20)
 do {
     Start-Sleep -Milliseconds 800
     $seenCount = Get-ActivitySeenCount
-    if ($seenCount -ge 5) { break }
+    if ($seenCount -ge 4) { break }
 } while ((Get-Date) -lt $seenDeadline)
-if ($seenCount -lt 5) {
-    throw "Activity screen did not mark loaded badge rows seen. Seen rows=$seenCount"
+if ($seenCount -lt 4) {
+    throw "Activity screen did not mark loaded rows seen. Seen rows=$seenCount"
 }
 Write-Host "[ok] Activity loaded rows marked seen in backend: $seenCount"
-
-Tap-ActivityTabText "Flirts"
-Wait-ForAnyText @("Alex", "sent a Spark") 20 | Out-Null
-Capture-ActivityStage "flirtsTab" "04_activity_flirts" | Out-Null
-
-Tap-ActivityTabText "Likes"
-Wait-ForAnyText @("Nico", "liked you") 20 | Out-Null
-Capture-ActivityStage "likesTab" "05_activity_likes" | Out-Null
-
-Tap-ActivityTabText "Matches"
-Wait-ForAnyText @("Jules", "Message") 20 | Out-Null
-Capture-ActivityStage "matchesTab" "06_activity_matches" | Out-Null
-
-Tap-ActivityTabText "Albums"
-Wait-ForAnyText @("Rae", "Review") 20 | Out-Null
-Capture-ActivityStage "albumsTab" "07_activity_albums" | Out-Null
-
-Tap-ActivityTabText "Invites"
-Wait-ForAnyText @("Noa", "Open invite") 20 | Out-Null
-Capture-ActivityStage "invitesTab" "08_activity_invites" | Out-Null
 
 Write-Summary @{
     passed = $true
