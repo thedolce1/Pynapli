@@ -83,8 +83,6 @@ import com.pynapli.server.swipe.SavedSwipeFilterService
 import com.pynapli.server.swipe.SwipeDeckTokenCodec
 import com.pynapli.server.swipe.SwipeService
 import com.pynapli.server.swipe.TopPicksService
-import com.pynapli.server.tonight.JdbcTonightFeedRepository
-import com.pynapli.server.tonight.JdbcTonightSessionRepository
 import com.pynapli.server.tonight.TonightFeedService
 import com.pynapli.server.tonight.TonightSessionExpiryWorker
 import com.pynapli.server.tonight.TonightSessionService
@@ -360,25 +358,16 @@ class ServerDependencies(
                     subscriptionService = subscriptionService,
                     viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
                 )
-            val tonightAvailabilityService = TonightAvailabilityService(database.dataSource)
-            val tonightSessionService =
-                TonightSessionService(
-                    repository = JdbcTonightSessionRepository(database.dataSource),
+            val tonight =
+                buildTonightDependencies(
+                    dataSource = database.dataSource,
                     subscriptionService = subscriptionService,
-                    notificationPublisher = notificationService,
-                    presenceService = presenceService,
-                )
-            val tonightFeedService =
-                TonightFeedService(
-                    repository = JdbcTonightFeedRepository(database.dataSource),
+                    notificationService = notificationService,
                     presenceService = presenceService,
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     blockRepository = blockRepository,
                     hiddenProfileRepository = hiddenProfileRepository,
                 )
-            // Hygiene sweep so elapsed sessions move to 'expired' (reads already filter on
-            // expires_at, so this is not load-bearing for correctness). Default every 5 minutes.
-            val tonightSessionExpiryWorker = TonightSessionExpiryWorker(tonightSessionService, intervalMillis = 5 * 60 * 1000L)
             // Provider-hosted age verification is opt-in: built only when both the provider name and
             // its redirect base URL are configured. Otherwise the service keeps manual-review-only
             // behavior.
@@ -499,10 +488,10 @@ class ServerDependencies(
                 savedGridFilterService = savedGridFilterService,
                 savedSwipeFilterService = savedSwipeFilterService,
                 topPicksService = topPicksService,
-                tonightAvailabilityService = tonightAvailabilityService,
-                tonightSessionService = tonightSessionService,
-                tonightFeedService = tonightFeedService,
-                tonightSessionExpiryWorker = tonightSessionExpiryWorker,
+                tonightAvailabilityService = tonight.tonightAvailabilityService,
+                tonightSessionService = tonight.tonightSessionService,
+                tonightFeedService = tonight.tonightFeedService,
+                tonightSessionExpiryWorker = tonight.tonightSessionExpiryWorker,
                 psyncSessionService = psyncSessionService,
                 ageVerificationService = ageVerificationService,
                 accountLifecycleService = accountLifecycleService,
