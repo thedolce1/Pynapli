@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +75,16 @@ internal fun SwipeScreenContent(
         if (AdPlacementPolicy.canShowAds(state.adSupported, AdPlacement.SwipeBetweenBatches)) {
             SwipeAdSlot()
         }
+        if (state.topPicksMode) {
+            // Make the curated mode legible on the deck itself (the chip alone is easy to miss)
+            // and set the expectation that the set is finite + refreshes daily.
+            Text(
+                text = "Today's Top Picks · refreshes daily",
+                color = com.pynapli.app.design.PynapliColors.Accent,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+            )
+        }
         Spacer(Modifier.height(10.dp))
 
         SwipeDeckArea(
@@ -82,6 +93,7 @@ internal fun SwipeScreenContent(
             distanceUnit = distanceUnit,
             onRetryDeck = onRetryDeck,
             onOpenFilters = onOpenFilters,
+            onBackToForYou = { onFilterSelected(SwipeFilterType.ForYou) },
             onActionConsumed = onActionConsumed,
             onOpenProfile = onOpenProfile,
             onLinkedPartnerTap = onLinkedPartnerTap,
@@ -125,6 +137,7 @@ private fun SwipeDeckArea(
     distanceUnit: String,
     onRetryDeck: () -> Unit,
     onOpenFilters: () -> Unit,
+    onBackToForYou: () -> Unit,
     onActionConsumed: () -> Unit,
     onOpenProfile: (SwipeCardDto) -> Unit,
     onLinkedPartnerTap: (SwipeCardDto) -> Unit,
@@ -153,6 +166,8 @@ private fun SwipeDeckArea(
                     filtersActive = state.swipeFilters.isAnyActive,
                     onRefresh = onRetryDeck,
                     onOpenFilters = onOpenFilters,
+                    topPicksMode = state.topPicksMode,
+                    onBackToForYou = onBackToForYou,
                 )
             }
             else -> {
