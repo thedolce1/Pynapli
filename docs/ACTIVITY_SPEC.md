@@ -641,7 +641,7 @@ Implemented and verified as of 2026-05-20:
 - `/v1/activity/stream` emits authenticated Activity deltas for the connected recipient. The Android client consumes those deltas through a resilient WebSocket client and refreshes Activity summary/feed state without marking background-refreshed rows as seen.
 - `GET /v1/activity/summary` returns meaningful badge counts, separate profile-view counts, per-category counts, and the latest badge-worthy timestamp.
 - `POST /v1/activity/seen` marks only the authenticated user's requested Activity event IDs as seen.
-- Feed tabs are server-authoritative: `all`, `views`, `flirts`, `likes`, `matches`, and `requests` (album-access + partner/psync/tonight invites). The mobile Activity surface exposes `likes`, `views`, `flirts`, `requests`; new matches surface in Messages (new-matches rail), not an Activity tab.
+- Feed tabs are server-authoritative: `all`, `views`, `flirts` (unified inbound interest — Grindr taps + swipe-likes + Pineapple likes + Intro Notes; carries the premium reveal/"who's into you" gating), `matches`, and `requests` (album-access + partner/psync/tonight invites). The mobile Activity surface exposes `flirts`, `views`, `matches`, `requests` (Flirts is the default/money surface). Matches also surface in Messages via the new-matches rail. (`likes` was folded into `flirts`.)
 - Cursor tokens are HMAC-signed and scoped to the authenticated viewer plus selected tab, so a cursor from one tab cannot page another tab.
 - Free/Social/Select reveal depth is enforced across pages by the cursor's seen-count state.
 - `POST /v1/activity/{eventId}/dismiss` soft-deletes the recipient's own Activity item without allowing cross-user dismissal.

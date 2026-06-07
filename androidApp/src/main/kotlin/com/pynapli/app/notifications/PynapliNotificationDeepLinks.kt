@@ -42,7 +42,7 @@ object PynapliNotificationDeepLinks {
         when (intent.getStringExtra(EXTRA_ACTIVITY_TAB)) {
             ActivityTabUi.Views.apiValue -> ActivityTabUi.Views
             ActivityTabUi.Flirts.apiValue -> ActivityTabUi.Flirts
-            ActivityTabUi.Likes.apiValue -> ActivityTabUi.Likes
+            ActivityTabUi.Matches.apiValue -> ActivityTabUi.Matches
             ActivityTabUi.Requests.apiValue -> ActivityTabUi.Requests
             else -> null
         }

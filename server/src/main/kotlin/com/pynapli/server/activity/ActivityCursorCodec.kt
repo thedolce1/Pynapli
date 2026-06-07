@@ -120,12 +120,14 @@ enum class ActivityFeedTab(
 ) {
     ALL("all", emptySet()),
     VIEWS("views", setOf("profile_view")),
-    FLIRTS("flirts", setOf("flirt")),
-    LIKES("likes", setOf("swipe_like", "pineapple_like", "intro_note")),
+
+    // Flirts is the unified inbound-interest surface (Grindr taps + swipe-likes + Pineapple likes +
+    // Intro Notes) and carries the premium reveal gating — "Likes" folded into it.
+    FLIRTS("flirts", setOf("flirt", "swipe_like", "pineapple_like", "intro_note")),
     MATCHES("matches", setOf("match")),
 
     // "Requests" folds album-access requests and partner/psync/tonight invites into one
-    // action-oriented tab (mobile Activity surface shows Likes/Views/Flirts/Requests).
+    // action-oriented tab (mobile Activity surface shows Flirts/Views/Matches/Requests).
     REQUESTS(
         "requests",
         setOf(

@@ -355,7 +355,7 @@ POST /v1/activity/{eventId}/dismiss
 Query params:
 
 - `limit`
-- `tab`: `all`, `views`, `flirts`, `likes`, `matches`, or `requests` (album-access + partner/psync/tonight invites)
+- `tab`: `all`, `views`, `flirts` (inbound interest: taps + swipe-likes + pineapple likes + intro notes), `matches`, or `requests` (album-access + partner/psync/tonight invites)
 - `cursor`: signed, viewer/tab-scoped cursor token
 
 Realtime:

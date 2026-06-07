@@ -74,7 +74,7 @@ internal fun ActivityFomoGrid(
     focusedEventId: String?,
     pendingDismissEventId: String?,
     distanceUnit: String,
-    onOpenProfile: (ActivityEventDto) -> Unit,
+    onTileClick: (ActivityEventDto) -> Unit,
     onDismissEvent: (String) -> Unit,
     onOpenStore: () -> Unit,
     onLoadMore: () -> Unit,
@@ -107,7 +107,7 @@ internal fun ActivityFomoGrid(
                 focused = focusedEventId == item.eventId,
                 pendingDismiss = pendingDismissEventId == item.eventId,
                 distanceUnit = distanceUnit,
-                onOpenProfile = { onOpenProfile(item) },
+                onTileClick = { onTileClick(item) },
                 onDismiss = { onDismissEvent(item.eventId) },
             )
         }
@@ -143,7 +143,7 @@ private fun ActivityFomoTile(
     focused: Boolean,
     pendingDismiss: Boolean,
     distanceUnit: String,
-    onOpenProfile: () -> Unit,
+    onTileClick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val distanceLabel =
@@ -162,7 +162,7 @@ private fun ActivityFomoTile(
                 .clip(RoundedCornerShape(12.dp))
                 .background(tileBackgroundBrush(item.actorUserId))
                 .border(if (focused) 2.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
-                .clickable(onClick = onOpenProfile)
+                .clickable(onClick = onTileClick)
                 .testTag(ActivityFomoTags.tile(item.eventId)),
     ) {
         item.actorPhotoUrl?.let { url ->
