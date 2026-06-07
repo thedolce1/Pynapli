@@ -2,6 +2,7 @@ package com.pynapli.app.swipe
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +31,7 @@ internal fun BoxScope.SwipeCardPhotos(
     isTop: Boolean,
     resolvedPhotos: List<String>,
     pagerState: PagerState,
+    displayName: String,
 ) {
     if (isTop && resolvedPhotos.size > 1) {
         HorizontalPager(
@@ -48,13 +50,18 @@ internal fun BoxScope.SwipeCardPhotos(
             )
         }
     } else {
-        resolvedPhotos.firstOrNull()?.let { url ->
+        val url = resolvedPhotos.firstOrNull()
+        if (url != null) {
             AsyncImage(
                 model = url,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+        } else {
+            // Photo-less profile: a centered initial over the card gradient reads as an
+            // intentional avatar rather than a blank wash.
+            SwipeCardPhotoFallback(displayName)
         }
     }
     if (isTop && resolvedPhotos.size > 1) {
@@ -65,6 +72,29 @@ internal fun BoxScope.SwipeCardPhotos(
                 Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 12.dp, start = 18.dp, end = 18.dp),
+        )
+    }
+}
+
+@Composable
+private fun SwipeCardPhotoFallback(displayName: String) {
+    val initials =
+        displayName
+            .trim()
+            .split(Regex("\\s+"))
+            .filter { it.isNotEmpty() }
+            .take(2)
+            .joinToString("") { it.first().uppercase() }
+            .ifBlank { "?" }
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = initials,
+            color = Color.White.copy(alpha = 0.55f),
+            style = MaterialTheme.typography.displayLarge,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }

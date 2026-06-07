@@ -202,6 +202,7 @@ internal fun SwipeCard(
             isTop = isTop,
             resolvedPhotos = resolvedPhotos,
             pagerState = pagerState,
+            displayName = card.displayName,
         )
         val linkedPartner = card.linkedPartner
         if (linkedPartner != null && decisionAlpha < 0.12f) {
