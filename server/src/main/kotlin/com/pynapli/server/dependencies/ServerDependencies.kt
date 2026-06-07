@@ -12,12 +12,8 @@ import com.pynapli.server.activity.JdbcActivityRetentionRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.config.ServerConfig
-import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.grid.GridService
-import com.pynapli.server.grid.JdbcGridRepository
 import com.pynapli.server.grid.JdbcGridViewerTrustRepository
-import com.pynapli.server.grid.JdbcSavedGridFilterRepository
-import com.pynapli.server.grid.RedisGridCandidateRankCache
 import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.location.JdbcLocationRepository
 import com.pynapli.server.location.JdbcTravelLocationRepository
@@ -76,7 +72,6 @@ import com.pynapli.server.subscriptions.GooglePlayStorePurchaseVerifier
 import com.pynapli.server.subscriptions.JdbcSubscriptionRepository
 import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
-import com.pynapli.server.swipe.JdbcSavedSwipeFilterRepository
 import com.pynapli.server.swipe.JdbcSwipeRepository
 import com.pynapli.server.swipe.JdbcTopPicksRepository
 import com.pynapli.server.swipe.SavedSwipeFilterService
@@ -325,38 +320,17 @@ class ServerDependencies(
                     blockRepository = blockRepository,
                     notificationPublisher = notificationService,
                 )
-            val gridService =
-                GridService(
-                    repository =
-                        JdbcGridRepository(
-                            dataSource = database.dataSource,
-                            // Share the ranked candidate window across instances via Redis
-                            // (GRID_IMPLEMENTATION_SPEC candidate cache). The cached window is
-                            // exclusion-free, so per-viewer safety is unchanged; the cache fails
-                            // open to direct queries if Redis is unavailable. Single-instance /
-                            // tests use the in-memory default baked into JdbcGridRepository.
-                            candidateRankCache = RedisGridCandidateRankCache(redisCache, Duration.ofSeconds(5)),
-                        ),
-                    cursorCodec = DiscoveryCursorCodec(config.discoveryCursorSecret),
+            val grid =
+                buildGridDependencies(
+                    config = config,
+                    dataSource = database.dataSource,
+                    redisCache = redisCache,
                     presenceService = presenceService,
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     blockRepository = blockRepository,
                     hiddenProfileRepository = hiddenProfileRepository,
                     subscriptionService = subscriptionService,
-                    viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
                     rateLimitService = rateLimitService,
-                )
-            val savedGridFilterService =
-                SavedGridFilterService(
-                    repository = JdbcSavedGridFilterRepository(database.dataSource),
-                    subscriptionService = subscriptionService,
-                    viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
-                )
-            val savedSwipeFilterService =
-                SavedSwipeFilterService(
-                    repository = JdbcSavedSwipeFilterRepository(database.dataSource),
-                    subscriptionService = subscriptionService,
-                    viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
                 )
             val tonight =
                 buildTonightDependencies(
@@ -460,7 +434,7 @@ class ServerDependencies(
                 locationService = locationService,
                 travelLocationService = travelLocationService,
                 presenceService = presenceService,
-                gridService = gridService,
+                gridService = grid.gridService,
                 messagingService = messagingService,
                 mediaService = media.mediaService,
                 messageModerationService = messageModerationService,
@@ -485,8 +459,8 @@ class ServerDependencies(
                 presenceOfflineScanner = presenceOfflineScanner,
                 blockRepository = blockRepository,
                 hiddenProfileRepository = hiddenProfileRepository,
-                savedGridFilterService = savedGridFilterService,
-                savedSwipeFilterService = savedSwipeFilterService,
+                savedGridFilterService = grid.savedGridFilterService,
+                savedSwipeFilterService = grid.savedSwipeFilterService,
                 topPicksService = topPicksService,
                 tonightAvailabilityService = tonight.tonightAvailabilityService,
                 tonightSessionService = tonight.tonightSessionService,
