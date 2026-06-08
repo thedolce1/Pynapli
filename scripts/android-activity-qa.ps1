@@ -302,7 +302,7 @@ function Tap-ActivityTabText {
         }
 
         $screen = Get-ScreenSize $xml
-        $anchor = Find-NodeByText $xml "Likes"
+        $anchor = Find-NodeByText $xml "Flirts"
         $y = if ($null -ne $anchor) {
             (Get-Bounds $anchor).CenterY
         } else {
@@ -761,27 +761,27 @@ Assert-NoAppErrorText $gridXml "Grid after login"
 $script:Screenshots.gridAfterLogin = Save-Screen "02_grid_after_login"
 
 Tap-BottomNavText "Activity"
-Wait-ForAnyText @("Activity", "Likes", "Flirts") 45 | Out-Null
-# Default tab is Likes (premium-reveal money surface). Matches moved to Messages; album/invite
-# requests are folded into the Requests tab; Views/Flirts render as a 2-up FOMO grid.
-$initialXml = Capture-ActivityStage "likesTab" "03_activity_likes"
-Assert-TextPresent $initialXml "Nico" "Initial Activity (Likes)"
+Wait-ForAnyText @("Activity", "Flirts", "Views") 45 | Out-Null
+# Default tab is Flirts (unified inbound interest: taps + swipe-likes + pineapples + intro notes —
+# the premium reveal money surface). Matches has its own tab (all swipe matches); album/invite
+# requests are folded into Requests. Flirts/Views/Matches render as a 2-up FOMO grid.
+$initialXml = Capture-ActivityStage "flirtsTab" "03_activity_flirts"
+Assert-TextPresent $initialXml "Alex" "Initial Activity (Flirts)"
 
 Tap-ActivityTabText "Views"
 Wait-ForAnyText @("Maya", "viewed you") 20 | Out-Null
 Capture-ActivityStage "viewsTab" "04_activity_views" | Out-Null
 
-Tap-ActivityTabText "Flirts"
-Wait-ForAnyText @("Alex", "sent a Spark") 20 | Out-Null
-Capture-ActivityStage "flirtsTab" "05_activity_flirts" | Out-Null
+Tap-ActivityTabText "Matches"
+Wait-ForAnyText @("Jules") 20 | Out-Null
+Capture-ActivityStage "matchesTab" "05_activity_matches" | Out-Null
 
 Tap-ActivityTabText "Requests"
 Wait-ForAnyText @("Rae", "Review", "Noa", "Open invite") 20 | Out-Null
 Capture-ActivityStage "requestsTab" "06_activity_requests" | Out-Null
 
 # After visiting every tab the app should have marked the loaded rows seen in the backend.
-# Likes(1) + Views(1) + Flirts(1) + Requests(album+invite=2) = 5; the seeded match stays unseen
-# because it now lives in Messages, not Activity.
+# Flirts(flirt+swipe_like=2) + Views(1) + Matches(1) + Requests(album+invite=2) = 6.
 $seenDeadline = (Get-Date).AddSeconds(20)
 do {
     Start-Sleep -Milliseconds 800
