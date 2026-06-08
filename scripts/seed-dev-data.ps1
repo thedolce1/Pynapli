@@ -598,6 +598,84 @@ function Set-DevTonightSessions {
     }
 }
 
+function Set-DevActivityFeed {
+    param(
+        [hashtable]$SessionsByEmail
+    )
+
+    # Populate the viewer's Activity feed + a no-message swipe match so the restructured Activity
+    # surface is demoable on first login: Views/Flirts render as 2-up FOMO tiles, Likes shows a
+    # like, and Messages shows the Tinder-style New Matches rail (a swipe conversation with no
+    # messages yet). Re-runs are idempotent and reset seen state so the "New" pills reappear.
+    $docker = Get-Command docker -ErrorAction SilentlyContinue
+    if ($null -eq $docker) {
+        Write-Host "  [skip] Docker not found; dev Activity feed was not seeded."
+        return
+    }
+
+    $viewerId = $SessionsByEmail[$viewerEmail].user.userId
+    $mayaId = $SessionsByEmail["maya@pynapli.local"].user.userId
+    $kaiId = $SessionsByEmail["kai@pynapli.local"].user.userId
+    $theoId = $SessionsByEmail["theo@pynapli.local"].user.userId
+    $nicoId = $SessionsByEmail["nico@pynapli.local"].user.userId
+    $julesId = $SessionsByEmail["jules@pynapli.local"].user.userId
+    $noaId = $SessionsByEmail["noa@pynapli.local"].user.userId
+
+    $sql = @"
+-- The Views tab gates profile_view rows on mutual viewed-list opt-in, so make the viewer and the
+-- view actors discoverable in viewed lists (non-incognito) — otherwise the seeded views are hidden.
+UPDATE discovery_settings
+SET show_in_viewed_lists = true, incognito = false, updated_at = now()
+WHERE user_id IN ('$viewerId'::uuid, '$mayaId'::uuid, '$kaiId'::uuid);
+
+-- Clear any prior dev/QA-seeded Activity for the viewer so the aggregate unique indexes
+-- (one profile_view/flirt row per actor) don't collide on re-run.
+DELETE FROM activity_events WHERE recipient_user_id = '$viewerId'::uuid;
+
+INSERT INTO activity_events (
+    id, recipient_user_id, actor_user_id, event_type, target_user_id, aggregate_count,
+    first_occurred_at, last_counted_at, occurred_at, updated_at, seen_at, metadata
+)
+VALUES
+    ('00000000-0000-0000-0000-000000009541'::uuid, '$viewerId'::uuid, '$mayaId'::uuid, 'profile_view', '$viewerId'::uuid, 3, now() - interval '42 minutes', now() - interval '12 minutes', now() - interval '12 minutes', now(), NULL, '{}'::jsonb),
+    ('00000000-0000-0000-0000-000000009542'::uuid, '$viewerId'::uuid, '$kaiId'::uuid, 'profile_view', '$viewerId'::uuid, 1, now() - interval '35 minutes', now() - interval '35 minutes', now() - interval '35 minutes', now(), NULL, '{}'::jsonb),
+    ('00000000-0000-0000-0000-000000009543'::uuid, '$viewerId'::uuid, '$theoId'::uuid, 'flirt', '$viewerId'::uuid, 1, now() - interval '28 minutes', now() - interval '28 minutes', now() - interval '28 minutes', now(), NULL, '{}'::jsonb),
+    ('00000000-0000-0000-0000-000000009544'::uuid, '$viewerId'::uuid, '$nicoId'::uuid, 'flirt', '$viewerId'::uuid, 1, now() - interval '22 minutes', now() - interval '22 minutes', now() - interval '22 minutes', now(), NULL, '{}'::jsonb),
+    ('00000000-0000-0000-0000-000000009545'::uuid, '$viewerId'::uuid, '$julesId'::uuid, 'swipe_like', '$viewerId'::uuid, 1, now() - interval '16 minutes', now() - interval '16 minutes', now() - interval '16 minutes', now(), NULL, '{}'::jsonb)
+ON CONFLICT (id) DO UPDATE
+SET occurred_at = EXCLUDED.occurred_at,
+    last_counted_at = EXCLUDED.last_counted_at,
+    aggregate_count = EXCLUDED.aggregate_count,
+    seen_at = NULL,
+    deleted_at = NULL,
+    updated_at = now();
+
+INSERT INTO conversations (id, kind, origin, created_by_user_id, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000095a1'::uuid, 'direct', 'swipe', '$viewerId'::uuid, now() - interval '9 minutes', now() - interval '9 minutes')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO direct_conversations (conversation_id, user_a_id, user_b_id, created_at)
+VALUES ('00000000-0000-0000-0000-0000000095a1'::uuid, LEAST('$viewerId'::uuid, '$noaId'::uuid), GREATEST('$viewerId'::uuid, '$noaId'::uuid), now() - interval '9 minutes')
+ON CONFLICT (conversation_id) DO NOTHING;
+
+INSERT INTO conversation_participants (
+    conversation_id, user_id, role, joined_at, left_at, last_read_at,
+    invitation_status, invited_by_user_id, invited_at, invitation_responded_at
+)
+VALUES
+    ('00000000-0000-0000-0000-0000000095a1'::uuid, '$viewerId'::uuid, 'member', now() - interval '9 minutes', NULL, now() - interval '9 minutes', 'active', NULL, NULL, NULL),
+    ('00000000-0000-0000-0000-0000000095a1'::uuid, '$noaId'::uuid, 'member', now() - interval '9 minutes', NULL, now() - interval '9 minutes', 'active', NULL, NULL, NULL)
+ON CONFLICT (conversation_id, user_id) DO NOTHING;
+"@
+
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 -c $sql 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dev Activity feed seed failed: $output"
+    }
+
+    Write-Host "  [ok] Dev Activity feed: 2 views, 2 flirts, 1 like, + a no-message swipe match (Noa) for the Messages rail"
+}
+
 $accounts = @(
     @{
         email = $viewerEmail
@@ -747,6 +825,7 @@ for ($index = 0; $index -lt $accounts.Count; $index++) {
 Set-LinkedDevAccounts -SessionsByEmail $sessionsByEmail
 Set-DevMonetization -SessionsByEmail $sessionsByEmail
 Set-DevTonightSessions -SessionsByEmail $sessionsByEmail
+Set-DevActivityFeed -SessionsByEmail $sessionsByEmail
 
 $grid = Invoke-PynapliJson `
     -Method POST `
