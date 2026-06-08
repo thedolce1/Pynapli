@@ -32,6 +32,11 @@ interface MediaRepository {
         mediaAssetId: UUID,
     ): MediaAssetRecord?
 
+    suspend fun findAlbum(
+        ownerUserId: UUID,
+        albumId: UUID,
+    ): MediaAlbumRecord?
+
     suspend fun addAssetToAlbum(
         ownerUserId: UUID,
         albumId: UUID,

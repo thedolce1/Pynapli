@@ -39,6 +39,17 @@ class AdminReportService(
         reason: String?,
     ): AdminReportActionRecord = updateReportStatus(reportIdText, "resolved", actorId, reason)
 
+    suspend fun resolveReportAndRemoveMedia(
+        reportIdText: String,
+        actorId: String,
+        reason: String?,
+    ): AdminReportActionRecord =
+        repository.resolveReportAndRemoveMedia(
+            reportId = reportIdText.toUuidOrThrow(),
+            actorId = actorId.normalizedActorIdOrThrow(),
+            reason = reason.normalizedReasonOrThrow(),
+        ) ?: throw ModerationException("REPORT_REVIEW_NOT_FOUND")
+
     suspend fun dismissReport(
         reportIdText: String,
         actorId: String,

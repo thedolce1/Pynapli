@@ -65,6 +65,22 @@ fun Application.configureAdminReportRoutes(
                 )
             }
 
+            post("/{reportId}/resolve-remove-media") {
+                val actor = call.requireAdminActor(adminApiToken)
+                val reportId = call.parameters["reportId"] ?: throw ModerationException("INVALID_ID")
+                val request =
+                    call.receiveNullable<AdminReportActionRequestDto>()
+                        ?: throw ModerationException("MODERATION_REASON_REQUIRED")
+                call.respond(
+                    adminReportService
+                        .resolveReportAndRemoveMedia(
+                            reportIdText = reportId,
+                            actorId = actor.actorId,
+                            reason = request.reason,
+                        ).toDto(),
+                )
+            }
+
             post("/{reportId}/dismiss") {
                 val actor = call.requireAdminActor(adminApiToken)
                 val reportId = call.parameters["reportId"] ?: throw ModerationException("INVALID_ID")
@@ -98,6 +114,7 @@ data class AdminReportItemDto(
     val targetId: String? = null,
     val category: String,
     val note: String? = null,
+    val source: String,
     val status: String,
     val createdAt: String,
     val updatedAt: String,
@@ -125,6 +142,7 @@ private fun AdminReportRecord.toDto(): AdminReportItemDto =
         targetId = targetId,
         category = category,
         note = note,
+        source = source,
         status = status,
         createdAt = createdAt.toString(),
         updatedAt = updatedAt.toString(),

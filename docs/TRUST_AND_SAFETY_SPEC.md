@@ -664,6 +664,8 @@ Reject:
 - [x] Message review queue exists.
 - [x] Held first-message review supports audited release/remove actions.
 - [x] Reports queue supports audited triage actions.
+- [x] Severe media scanner decisions create system safety reports and media-moderation risk events.
+- [x] Media reports support audited target-media removal.
 - [x] Risk review queue supports audited clear/set-tier/review actions.
 - [x] Album request throttles exist.
 - [x] Swipe velocity detection exists.

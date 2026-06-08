@@ -43,6 +43,8 @@ class CloudVisionMediaModerationScannerTest {
     fun rejectsAtVeryLikely() {
         val decision = SafeSearchPolicy().decide(annotation(violence = "VERY_LIKELY"))
         assertTrue(decision is MediaModerationDecision.Rejected, "expected Rejected, got $decision")
+        assertEquals(MediaModerationSeverity.SEVERE, decision.severity)
+        assertEquals("harassment_or_threats", decision.reportCategory)
     }
 
     @Test

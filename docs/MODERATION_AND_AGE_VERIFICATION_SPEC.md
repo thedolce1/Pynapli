@@ -187,11 +187,11 @@ Avoid:
 - [x] Client detects `AGE_VERIFICATION_REQUIRED` on gated surfaces (Grid lifestyle filters, saved grid/swipe filter presets, travel mode), reverts the blocked change, shows a "Verify your age" prompt, and routes into the Profile-Hub age-verification flow (A1).
 - [ ] Market-driven enhanced verification flags.
 - [x] Verification data minimization.
-- [ ] Public content moderation before visibility.
-- [ ] Partial: private album grants and report flow exist; media moderation/scanning policy is not complete.
+- [x] Public/profile media moderation is enforced before discovery visibility.
+- [x] Private album grants and report flow exist; consent-gated private media stays hidden from non-grantees, removed media is filtered, and severe scanner decisions remove the asset before escalating.
 - [x] Report categories implemented.
-- [ ] Partial: reports/risk/message review queues and actions exist; full moderator console is not complete.
-- [ ] CSAM/severe escalation policy.
+- [ ] Partial: reports/risk/message review queues and actions exist; full moderator console, roles, MFA, appeals, and production admin separation are not complete.
+- [ ] Partial: severe scanner decisions create system reports and risk events; CSAM/hash-matching provider integration, legal retention policy, and live provider tuning remain.
 - [ ] Appeals flow.
 - [ ] Public community guidelines URL.
 - [ ] App-store-safe screenshots and copy.

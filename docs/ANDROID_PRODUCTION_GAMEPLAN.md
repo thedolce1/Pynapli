@@ -1,6 +1,6 @@
 # Android Production Gameplan
 
-Last updated: 2026-06-07
+Last updated: 2026-06-08
 
 ## Purpose
 
@@ -52,7 +52,7 @@ reporting. This phase is the hard gate to submission and is mostly codeable.
 | Slice | Track | What | Spec |
 |------|-------|------|------|
 | A1 | 🟢 | **Age-verification enforcement end-to-end** — gate discovery/posting/age-restricted features until verified; wire the existing `AGE_VERIFICATION_REQUIRED` path everywhere it's required; verification UI completeness. | MODERATION_AND_AGE_VERIFICATION |
-| A2 | 🟢 | **Media moderation pipeline** — scanning/queue policy for public + private-album media before visibility; **CSAM/severe-content escalation** path; finish report → moderator-action loop. | MODERATION, TRUST_AND_SAFETY |
+| A2 | 🟢🔵 | **Media moderation pipeline** — public/profile media stays hidden until approved; private-album media is consent-gated with severe scanner removal/escalation; system reports + risk events + reported-media admin removal are now code-complete locally. Live Vision tuning, CSAM/hash matching, legal retention, and production admin operations remain founder/legal/provider work. | MODERATION, TRUST_AND_SAFETY |
 | A3 | 🟢 | **Appeals flow** — user-facing appeal submission + status; server states. | MODERATION, ADMIN_CONSOLE |
 | A4 | 🟢 | **Risk middleware completeness** — Ktor risk middleware coverage, device/account-farm hash signals, location-spoofing signals, "verification lowers risk", false-positive metrics. | TRUST_AND_SAFETY |
 | A5 | 🟢🔵 | **Legal surfaces in-app** — Privacy Policy + Terms + Community Guidelines public URLs wired into onboarding/settings; finalize the drafts (🔵 legal review). | PRIVACY_POLICY_DRAFT, TERMS_DRAFT, COMMUNITY_GUIDELINES |

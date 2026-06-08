@@ -226,7 +226,7 @@ class ServerDependencies(
                 } else {
                     null
                 }
-            val media = buildMediaDependencies(config, blockRepository, database.dataSource)
+            val media = buildMediaDependencies(config, blockRepository, riskService, database.dataSource)
             val subscriptionService =
                 SubscriptionService(
                     repository = JdbcSubscriptionRepository(database.dataSource),

@@ -270,6 +270,31 @@ private class InMemoryReportRepository : ReportRepository {
         return record
     }
 
+    override suspend fun createSystemReport(
+        reportedUserId: UUID,
+        targetType: String,
+        targetId: String?,
+        category: String,
+        note: String?,
+        reportIdFactory: () -> UUID,
+    ): ReportRecord {
+        val record =
+            ReportRecord(
+                id = reportIdFactory(),
+                reporterUserId = reportedUserId,
+                reportedUserId = reportedUserId,
+                targetType = targetType,
+                targetId = targetId,
+                category = category,
+                note = note,
+                status = "open",
+                createdAt = now,
+                source = "system",
+            )
+        captured.add(record)
+        return record
+    }
+
     override suspend fun listReportsByReporter(
         reporterUserId: UUID,
         limit: Int,

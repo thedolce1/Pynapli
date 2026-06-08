@@ -793,12 +793,12 @@ Keep sensitive payloads out of logs.
 - [ ] Partial: Firebase role is limited to FCM in the current code path, but production App Check/Analytics/Crashlytics boundaries are not complete.
 - [x] PostgreSQL/PostGIS selected for location.
 - [x] Redis selected for presence/cache/rate limits.
-- [ ] Partial: object-storage-style upload contracts exist, but production signed storage is not complete.
+- [ ] Partial: object-storage-style upload contracts, GCS V4 signed upload/download URLs, and CDN signed delivery exist; production bucket/CDN provisioning validation remains.
 - [x] FCM notification pipeline goes through Ktor.
 - [ ] Analytics avoids sensitive lifestyle payloads.
 - [ ] Partial: Google Play subscription validation is server-side; StoreKit and real production credential validation remain.
 - [x] Linked partner entitlement is server-side.
-- [ ] Partial: private album upload destinations are signed/contracted for local-dev; production signed upload/download URLs remain.
+- [ ] Partial: private album upload/download access is signed and server-gated; live GCS/CDN validation, bucket lifecycle/IAM, and production credentials remain.
 - [ ] Partial: Grid presence, Activity, and Messages have reconnecting WebSocket clients that keep HTTP state authoritative; remaining realtime surfaces still need implementation.
 - [x] Rate limits exist for messaging/flirts/album requests.
 - [x] Blocks are enforced across grid/swipe/activity/messages.

@@ -86,6 +86,34 @@ class AdminReportServiceTest {
             assertEquals("moderator-1", repository.lastActorId)
             assertEquals("queue triage", repository.lastReason)
         }
+
+    @Test
+    fun resolveRemoveMediaPassesNormalizedInputs() =
+        runBlocking {
+            val reportId = UUID.randomUUID()
+            val repository =
+                RecordingAdminReportRepository(
+                    action =
+                        AdminReportActionRecord(
+                            reportId = reportId,
+                            status = "resolved",
+                            actedAt = Instant.parse("2026-04-24T18:00:00Z"),
+                        ),
+                )
+            val service = AdminReportService(repository)
+
+            val action =
+                service.resolveReportAndRemoveMedia(
+                    reportIdText = reportId.toString(),
+                    actorId = " moderator-2 ",
+                    reason = " remove reported media ",
+                )
+
+            assertEquals("resolved", action.status)
+            assertEquals("moderator-2", repository.lastActorId)
+            assertEquals("remove reported media", repository.lastReason)
+            assertEquals(true, repository.resolveRemoveMediaCalled)
+        }
 }
 
 private class RecordingAdminReportRepository(
@@ -93,6 +121,7 @@ private class RecordingAdminReportRepository(
 ) : AdminReportRepository {
     var lastActorId: String? = null
     var lastReason: String? = null
+    var resolveRemoveMediaCalled: Boolean = false
 
     override suspend fun listReports(
         status: String,
@@ -111,6 +140,17 @@ private class RecordingAdminReportRepository(
         actorId: String,
         reason: String,
     ): AdminReportActionRecord? {
+        lastActorId = actorId
+        lastReason = reason
+        return action
+    }
+
+    override suspend fun resolveReportAndRemoveMedia(
+        reportId: UUID,
+        actorId: String,
+        reason: String,
+    ): AdminReportActionRecord? {
+        resolveRemoveMediaCalled = true
         lastActorId = actorId
         lastReason = reason
         return action

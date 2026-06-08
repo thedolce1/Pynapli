@@ -85,20 +85,33 @@ class MediaServiceTest {
         }
 
     @Test
-    fun manualReviewScannerHoldsUploadPending() =
+    fun manualReviewScannerHoldsProfileUploadPending() =
         runBlocking {
             val ownerId = UUID.randomUUID()
             val service =
                 MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = ManualReviewMediaModerationScanner())
 
-            val item = service.uploadAndComplete(ownerId)
+            val item = service.uploadAndComplete(ownerId, albumKind = "profile")
 
             assertEquals("uploaded", item.mediaAsset.processingStatus)
             assertEquals("pending", item.mediaAsset.moderationStatus)
         }
 
     @Test
-    fun rejectingScannerMarksUploadRejected() =
+    fun manualReviewScannerAllowsPrivateUploadBecausePrivateAlbumsAreConsentGated() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = ManualReviewMediaModerationScanner())
+
+            val item = service.uploadAndComplete(ownerId, albumKind = "private")
+
+            assertEquals("ready", item.mediaAsset.processingStatus)
+            assertEquals("approved", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun rejectingScannerRemovesProfileUpload() =
         runBlocking {
             val ownerId = UUID.randomUUID()
             val scanner =
@@ -107,18 +120,67 @@ class MediaServiceTest {
                 }
             val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = scanner)
 
-            val item = service.uploadAndComplete(ownerId)
+            val item = service.uploadAndComplete(ownerId, albumKind = "profile")
 
             assertEquals("removed", item.mediaAsset.moderationStatus)
         }
 
-    private suspend fun MediaService.uploadAndComplete(ownerId: UUID) =
-        createUploadSlot(
-            ownerId,
-            CreateMediaUploadRequestDto(albumKind = "private", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
-        ).let { slot ->
-            completeUpload(ownerId, slot.mediaAsset.mediaAssetId, CompleteMediaUploadRequestDto(albumId = slot.album.albumId))
+    @Test
+    fun nonSeverePrivateRejectionDoesNotRemoveConsentGatedMedia() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val scanner =
+                object : MediaModerationScanner {
+                    override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision = MediaModerationDecision.Rejected("policy")
+                }
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = scanner)
+
+            val item = service.uploadAndComplete(ownerId, albumKind = "private")
+
+            assertEquals("ready", item.mediaAsset.processingStatus)
+            assertEquals("approved", item.mediaAsset.moderationStatus)
         }
+
+    @Test
+    fun severePrivateRejectionRemovesAndEscalates() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val scanner =
+                object : MediaModerationScanner {
+                    override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision =
+                        MediaModerationDecision.Rejected(
+                            reason = "safe_search_violence_very_likely",
+                            severity = MediaModerationSeverity.SEVERE,
+                            reportCategory = "harassment_or_threats",
+                        )
+                }
+            val escalationPublisher = RecordingMediaModerationEscalationPublisher()
+            val service =
+                MediaService(
+                    repository = InMemoryMediaRepository(),
+                    uploadSigner = FixedMediaUploadSigner(),
+                    moderationScanner = scanner,
+                    moderationEscalationPublisher = escalationPublisher,
+                )
+
+            val item = service.uploadAndComplete(ownerId, albumKind = "private")
+
+            assertEquals("removed", item.mediaAsset.moderationStatus)
+            assertEquals(ownerId, escalationPublisher.ownerUserId)
+            assertEquals(item.mediaAsset.mediaAssetId, escalationPublisher.mediaAssetId.toString())
+            assertEquals("private", escalationPublisher.albumKind)
+            assertEquals("safe_search_violence_very_likely", escalationPublisher.reason)
+        }
+
+    private suspend fun MediaService.uploadAndComplete(
+        ownerId: UUID,
+        albumKind: String = "private",
+    ) = createUploadSlot(
+        ownerId,
+        CreateMediaUploadRequestDto(albumKind = albumKind, mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+    ).let { slot ->
+        completeUpload(ownerId, slot.mediaAsset.mediaAssetId, CompleteMediaUploadRequestDto(albumId = slot.album.albumId))
+    }
 
     @Test
     fun createUploadSlotRejectsOversizedImages() =
@@ -407,6 +469,28 @@ private class FixedMediaUploadSigner : MediaUploadSigner {
     }
 }
 
+private class RecordingMediaModerationEscalationPublisher : MediaModerationEscalationPublisher {
+    var ownerUserId: UUID? = null
+    var mediaAssetId: UUID? = null
+    var albumKind: String? = null
+    var reason: String? = null
+    var reportCategory: String? = null
+
+    override suspend fun recordSevereMediaDecision(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+        albumKind: String,
+        reason: String,
+        reportCategory: String,
+    ) {
+        this.ownerUserId = ownerUserId
+        this.mediaAssetId = mediaAssetId
+        this.albumKind = albumKind
+        this.reason = reason
+        this.reportCategory = reportCategory
+    }
+}
+
 private class InMemoryMediaRepository : MediaRepository {
     private val albums = mutableMapOf<UUID, MediaAlbumRecord>()
     private val assets = mutableMapOf<UUID, MediaAssetRecord>()
@@ -497,6 +581,11 @@ private class InMemoryMediaRepository : MediaRepository {
         updateAlbumItems(rejected)
         return rejected
     }
+
+    override suspend fun findAlbum(
+        ownerUserId: UUID,
+        albumId: UUID,
+    ): MediaAlbumRecord? = albums[albumId]?.takeIf { album -> album.ownerUserId == ownerUserId && album.deletedAt == null }
 
     override suspend fun addAssetToAlbum(
         ownerUserId: UUID,

@@ -228,6 +228,16 @@ class JdbcMediaRepository(
             }
         }
 
+    override suspend fun findAlbum(
+        ownerUserId: UUID,
+        albumId: UUID,
+    ): MediaAlbumRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection.findActiveAlbum(ownerUserId, albumId)
+            }
+        }
+
     override suspend fun addAssetToAlbum(
         ownerUserId: UUID,
         albumId: UUID,
@@ -442,14 +452,41 @@ class JdbcMediaRepository(
                 connection
                     .prepareStatement(
                         """
-                        SELECT album_id, media_asset_id, owner_user_id, sort_order, added_at, removed_at
-                        FROM media_album_items
-                        WHERE album_id = ?
-                          AND removed_at IS NULL
+                        SELECT i.album_id,
+                               i.media_asset_id,
+                               i.owner_user_id,
+                               i.sort_order,
+                               i.added_at,
+                               i.removed_at
+                        FROM media_album_items i
+                        JOIN media_assets m
+                          ON m.id = i.media_asset_id
+                         AND m.owner_user_id = i.owner_user_id
+                         AND m.deleted_at IS NULL
+                        JOIN media_albums a
+                          ON a.id = i.album_id
+                         AND a.owner_user_id = i.owner_user_id
+                         AND a.deleted_at IS NULL
+                        WHERE i.album_id = ?
+                          AND i.removed_at IS NULL
+                          AND (
+                              (
+                                  a.owner_user_id = ?
+                                  AND m.processing_status IN ('uploaded', 'processing', 'ready')
+                                  AND m.moderation_status IN ('pending', 'approved')
+                              )
+                              OR (
+                                  a.owner_user_id <> ?
+                                  AND m.processing_status = 'ready'
+                                  AND m.moderation_status = 'approved'
+                              )
+                          )
                         ORDER BY sort_order ASC, added_at ASC, media_asset_id ASC
                         """.trimIndent(),
                     ).use { statement ->
                         statement.setObject(1, albumId)
+                        statement.setObject(2, viewerUserId)
+                        statement.setObject(3, viewerUserId)
                         statement.executeQuery().use { rs ->
                             buildList {
                                 while (rs.next()) add(rs.toMediaAlbumItemRecord(connection))
@@ -621,6 +658,27 @@ class JdbcMediaRepository(
         ).use { statement ->
             statement.setObject(1, ownerUserId)
             statement.setString(2, kind)
+            statement.executeQuery().use { rs ->
+                if (rs.next()) rs.toMediaAlbumRecord() else null
+            }
+        }
+
+    private fun Connection.findActiveAlbum(
+        ownerUserId: UUID,
+        albumId: UUID,
+    ): MediaAlbumRecord? =
+        prepareStatement(
+            """
+            SELECT id, owner_user_id, kind, title, visibility_status, created_at, updated_at, deleted_at
+            FROM media_albums
+            WHERE id = ?
+              AND owner_user_id = ?
+              AND deleted_at IS NULL
+            LIMIT 1
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, albumId)
+            statement.setObject(2, ownerUserId)
             statement.executeQuery().use { rs ->
                 if (rs.next()) rs.toMediaAlbumRecord() else null
             }

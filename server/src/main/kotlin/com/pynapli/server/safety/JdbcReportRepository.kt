@@ -30,9 +30,10 @@ class JdbcReportRepository(
                             target_type,
                             target_id,
                             category,
-                            note
+                            note,
+                            source
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'user')
                         RETURNING id,
                                   reporter_user_id,
                                   reported_user_id,
@@ -41,7 +42,8 @@ class JdbcReportRepository(
                                   category,
                                   note,
                                   status,
-                                  created_at
+                                  created_at,
+                                  source
                         """.trimIndent(),
                     ).use { statement ->
                         statement.setObject(1, reportIdFactory())
@@ -53,17 +55,58 @@ class JdbcReportRepository(
                         statement.setString(7, note)
                         statement.executeQuery().use { rs ->
                             rs.next()
-                            ReportRecord(
-                                id = rs.getObject("id", UUID::class.java),
-                                reporterUserId = rs.getObject("reporter_user_id", UUID::class.java),
-                                reportedUserId = rs.getObject("reported_user_id", UUID::class.java),
-                                targetType = rs.getString("target_type"),
-                                targetId = rs.getString("target_id"),
-                                category = rs.getString("category"),
-                                note = rs.getString("note"),
-                                status = rs.getString("status"),
-                                createdAt = rs.getTimestamp("created_at").toInstant(),
-                            )
+                            rs.toReportRecord()
+                        }
+                    }
+            }
+        }
+
+    override suspend fun createSystemReport(
+        reportedUserId: UUID,
+        targetType: String,
+        targetId: String?,
+        category: String,
+        note: String?,
+        reportIdFactory: () -> UUID,
+    ): ReportRecord =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        INSERT INTO safety_reports (
+                            id,
+                            reporter_user_id,
+                            reported_user_id,
+                            target_type,
+                            target_id,
+                            category,
+                            note,
+                            source
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'system')
+                        RETURNING id,
+                                  reporter_user_id,
+                                  reported_user_id,
+                                  target_type,
+                                  target_id,
+                                  category,
+                                  note,
+                                  status,
+                                  created_at,
+                                  source
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, reportIdFactory())
+                        statement.setObject(2, reportedUserId)
+                        statement.setObject(3, reportedUserId)
+                        statement.setString(4, targetType)
+                        statement.setString(5, targetId)
+                        statement.setString(6, category)
+                        statement.setString(7, note)
+                        statement.executeQuery().use { rs ->
+                            rs.next()
+                            rs.toReportRecord()
                         }
                     }
             }
@@ -87,6 +130,7 @@ class JdbcReportRepository(
                         FROM safety_reports sr
                         LEFT JOIN profiles p ON p.user_id = sr.reported_user_id
                         WHERE sr.reporter_user_id = ?
+                          AND sr.source = 'user'
                         ORDER BY sr.created_at DESC, sr.id DESC
                         LIMIT ?
                         """.trimIndent(),
@@ -110,6 +154,20 @@ class JdbcReportRepository(
             category = getString("category"),
             status = getString("status"),
             createdAt = getTimestamp("created_at").toInstant(),
+        )
+
+    private fun ResultSet.toReportRecord(): ReportRecord =
+        ReportRecord(
+            id = getObject("id", UUID::class.java),
+            reporterUserId = getObject("reporter_user_id", UUID::class.java),
+            reportedUserId = getObject("reported_user_id", UUID::class.java),
+            targetType = getString("target_type"),
+            targetId = getString("target_id"),
+            category = getString("category"),
+            note = getString("note"),
+            status = getString("status"),
+            createdAt = getTimestamp("created_at").toInstant(),
+            source = getString("source"),
         )
 
     private companion object {

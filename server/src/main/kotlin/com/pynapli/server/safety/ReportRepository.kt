@@ -14,6 +14,15 @@ interface ReportRepository {
         reportIdFactory: () -> UUID = UUID::randomUUID,
     ): ReportRecord
 
+    suspend fun createSystemReport(
+        reportedUserId: UUID,
+        targetType: String,
+        targetId: String?,
+        category: String,
+        note: String?,
+        reportIdFactory: () -> UUID = UUID::randomUUID,
+    ): ReportRecord
+
     suspend fun listReportsByReporter(
         reporterUserId: UUID,
         limit: Int,
@@ -30,6 +39,7 @@ data class ReportRecord(
     val note: String?,
     val status: String,
     val createdAt: Instant,
+    val source: String = "user",
 )
 
 data class ReportHistoryRecord(

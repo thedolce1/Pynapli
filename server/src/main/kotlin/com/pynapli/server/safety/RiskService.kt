@@ -30,11 +30,23 @@ interface MessageReviewRiskSignalPublisher {
     )
 }
 
+interface MediaModerationRiskSignalPublisher {
+    suspend fun recordSevereMediaModerationFlag(
+        reportId: UUID,
+        userId: UUID,
+        mediaAssetId: UUID,
+        albumKind: String,
+        reason: String,
+        category: String,
+    )
+}
+
 class RiskService(
     private val repository: RiskRepository,
 ) : ReportRiskSignalPublisher,
     RateLimitRiskSignalPublisher,
-    MessageReviewRiskSignalPublisher {
+    MessageReviewRiskSignalPublisher,
+    MediaModerationRiskSignalPublisher {
     override suspend fun recordReportCreated(
         reportId: UUID,
         reporterUserId: UUID,
@@ -101,10 +113,35 @@ class RiskService(
         )
     }
 
+    override suspend fun recordSevereMediaModerationFlag(
+        reportId: UUID,
+        userId: UUID,
+        mediaAssetId: UUID,
+        albumKind: String,
+        reason: String,
+        category: String,
+    ) {
+        repository.recordEvent(
+            userId = userId,
+            actorUserId = null,
+            source = SOURCE_MEDIA_MODERATION,
+            reason = "media_moderation.$reason",
+            delta = 70,
+            metadataJson =
+                mapOf(
+                    "reportId" to reportId.toString(),
+                    "mediaAssetId" to mediaAssetId.toString(),
+                    "albumKind" to albumKind,
+                    "category" to category,
+                ).toJsonObjectString(),
+        )
+    }
+
     companion object {
         const val SOURCE_REPORT = "report"
         const val SOURCE_RATE_LIMIT = "rate_limit"
         const val SOURCE_MESSAGE_REVIEW = "message_review"
+        const val SOURCE_MEDIA_MODERATION = "media_moderation"
 
         fun reportDelta(category: String): Int =
             when (category) {

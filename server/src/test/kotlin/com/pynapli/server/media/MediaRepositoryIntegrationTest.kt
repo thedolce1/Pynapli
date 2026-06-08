@@ -150,6 +150,8 @@ class MediaRepositoryIntegrationTest {
                         ),
                     assetIdFactory = { UUID.fromString("20000000-0000-0000-0000-000000000001") },
                 )
+            repository.markAssetUploaded(ownerId, asset.mediaAssetId)
+            repository.markAssetReadyApproved(ownerId, asset.mediaAssetId)
             assertNotNull(
                 repository.addAssetToAlbum(
                     ownerUserId = ownerId,
@@ -182,6 +184,50 @@ class MediaRepositoryIntegrationTest {
             assertNotNull(revokedGrant?.revokedAt)
             assertFalse(repository.hasAlbumAccess(granteeId, album.albumId))
             assertNull(repository.listAlbumItemsForViewer(granteeId, album.albumId))
+        }
+
+    @Test
+    fun albumItemsFilterModerationStateByViewerRole() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000501")
+            val granteeId = UUID.fromString("00000000-0000-0000-0000-000000000502")
+            val repository = JdbcMediaRepository(dataSource)
+            dataSource.insertUser(ownerId)
+            dataSource.insertUser(granteeId)
+            val album =
+                repository.ensureAlbum(
+                    ownerUserId = ownerId,
+                    kind = "private",
+                    title = "Private album",
+                    albumIdFactory = { UUID.fromString("10000000-0000-0000-0000-000000000501") },
+                )
+            val pending =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "pending-visible-owner"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000501")
+                })
+            repository.markAssetUploaded(ownerId, pending.mediaAssetId)
+            repository.addAssetToAlbum(ownerId, album.albumId, pending.mediaAssetId, sortOrder = 0)
+            val approved =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "approved-visible-grantee"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000502")
+                })
+            repository.markAssetUploaded(ownerId, approved.mediaAssetId)
+            repository.markAssetReadyApproved(ownerId, approved.mediaAssetId)
+            repository.addAssetToAlbum(ownerId, album.albumId, approved.mediaAssetId, sortOrder = 1)
+            val removed =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "removed-hidden"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000503")
+                })
+            repository.markAssetUploaded(ownerId, removed.mediaAssetId)
+            repository.markAssetModerationRejected(ownerId, removed.mediaAssetId)
+            repository.addAssetToAlbum(ownerId, album.albumId, removed.mediaAssetId, sortOrder = 2)
+            repository.grantAlbumAccess(ownerId, album.albumId, granteeId)
+
+            val ownerItems = repository.listAlbumItemsForViewer(ownerId, album.albumId).orEmpty()
+            val granteeItems = repository.listAlbumItemsForViewer(granteeId, album.albumId).orEmpty()
+
+            assertEquals(setOf(pending.mediaAssetId, approved.mediaAssetId), ownerItems.map { it.mediaAsset.mediaAssetId }.toSet())
+            assertEquals(listOf(approved.mediaAssetId), granteeItems.map { it.mediaAsset.mediaAssetId })
         }
 
     @Test

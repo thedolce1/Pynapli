@@ -1,5 +1,8 @@
 package com.pynapli.server.media
 
+import com.pynapli.shared.network.dto.ReportCategory
+import java.util.UUID
+
 /** Decision a [MediaModerationScanner] returns for a freshly-uploaded asset. */
 sealed interface MediaModerationDecision {
     /** Asset is safe to surface immediately. */
@@ -11,7 +14,14 @@ sealed interface MediaModerationDecision {
     /** Asset violates policy and must stay hidden. */
     data class Rejected(
         val reason: String,
+        val severity: MediaModerationSeverity = MediaModerationSeverity.POLICY,
+        val reportCategory: String = ReportCategory.EXPLICIT_PUBLIC_CONTENT,
     ) : MediaModerationDecision
+}
+
+enum class MediaModerationSeverity {
+    POLICY,
+    SEVERE,
 }
 
 /**
@@ -21,6 +31,26 @@ sealed interface MediaModerationDecision {
  */
 interface MediaModerationScanner {
     suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision
+}
+
+interface MediaModerationEscalationPublisher {
+    suspend fun recordSevereMediaDecision(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+        albumKind: String,
+        reason: String,
+        reportCategory: String,
+    )
+}
+
+object NoOpMediaModerationEscalationPublisher : MediaModerationEscalationPublisher {
+    override suspend fun recordSevereMediaDecision(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+        albumKind: String,
+        reason: String,
+        reportCategory: String,
+    ) = Unit
 }
 
 /** Dev/local: approves every upload immediately. */

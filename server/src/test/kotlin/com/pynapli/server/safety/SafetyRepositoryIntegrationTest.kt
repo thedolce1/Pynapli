@@ -292,6 +292,71 @@ class SafetyRepositoryIntegrationTest {
         }
 
     @Test
+    fun systemReportsAreVisibleToAdminQueueButHiddenFromUserReportHistory() =
+        runBlocking {
+            val reported = UUID.fromString("00000000-0000-0000-0000-000000000471")
+            val mediaAssetId = UUID.fromString("20000000-0000-0000-0000-000000000471")
+            val reportRepository = JdbcReportRepository(dataSource)
+            val adminRepository = JdbcAdminReportRepository(dataSource)
+            dataSource.insertUser(reported)
+
+            val report =
+                reportRepository.createSystemReport(
+                    reportedUserId = reported,
+                    targetType = ReportTargetType.MEDIA,
+                    targetId = mediaAssetId.toString(),
+                    category = ReportCategory.HARASSMENT_OR_THREATS,
+                    note = "Automated media moderation flagged severe content.",
+                )
+
+            assertEquals("system", report.source)
+            assertEquals(emptyList(), reportRepository.listReportsByReporter(reported, limit = 10).map { it.id })
+            val queue =
+                adminRepository.listReports(
+                    status = "open",
+                    limit = 10,
+                    actorId = "moderator-1",
+                    reason = "daily report queue",
+                )
+            assertEquals(listOf(report.id), queue.map { it.reportId })
+            assertEquals("system", queue.single().source)
+        }
+
+    @Test
+    fun adminResolveRemoveMediaRemovesTargetMediaAndResolvesReport() =
+        runBlocking {
+            val reporter = UUID.fromString("00000000-0000-0000-0000-000000000481")
+            val reported = UUID.fromString("00000000-0000-0000-0000-000000000482")
+            val mediaAssetId = UUID.fromString("20000000-0000-0000-0000-000000000482")
+            val reportRepository = JdbcReportRepository(dataSource)
+            val adminRepository = JdbcAdminReportRepository(dataSource)
+            dataSource.insertUser(reporter)
+            dataSource.insertUser(reported)
+            dataSource.insertReadyApprovedMediaAsset(reported, mediaAssetId)
+            val report =
+                reportRepository.createReport(
+                    reporterUserId = reporter,
+                    reportedUserId = reported,
+                    targetType = ReportTargetType.MEDIA,
+                    targetId = mediaAssetId.toString(),
+                    category = ReportCategory.NON_CONSENSUAL_CONTENT,
+                    note = "This should not stay visible.",
+                )
+
+            val action =
+                adminRepository.resolveReportAndRemoveMedia(
+                    reportId = report.id,
+                    actorId = "moderator-1",
+                    reason = "reported media violates policy",
+                )
+
+            assertEquals("resolved", action?.status)
+            assertEquals("resolved", dataSource.reportStatus(report.id))
+            assertEquals("removed", dataSource.mediaModerationStatus(mediaAssetId))
+            assertEquals(1, dataSource.countAdminAuditRows("report.resolve_remove_media"))
+        }
+
+    @Test
     fun riskRepositoryRecordsEventAndUpdatesState() =
         runBlocking {
             val actor = UUID.fromString("00000000-0000-0000-0000-000000000431")
@@ -509,6 +574,54 @@ class SafetyRepositoryIntegrationTest {
                 }
         }
     }
+
+    private fun DataSource.insertReadyApprovedMediaAsset(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO media_assets (
+                        id,
+                        owner_user_id,
+                        media_type,
+                        storage_provider,
+                        storage_bucket,
+                        storage_object_key,
+                        content_type,
+                        byte_size,
+                        moderation_status,
+                        processing_status
+                    )
+                    VALUES (?, ?, 'image', 'gcs', 'pynapli-test-media', ?, 'image/jpeg', 1024, 'approved', 'ready')
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, mediaAssetId)
+                    statement.setObject(2, ownerUserId)
+                    statement.setString(3, "media/$mediaAssetId.jpg")
+                    statement.executeUpdate()
+                }
+        }
+    }
+
+    private fun DataSource.mediaModerationStatus(mediaAssetId: UUID): String? =
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT moderation_status
+                    FROM media_assets
+                    WHERE id = ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, mediaAssetId)
+                    statement.executeQuery().use { rs ->
+                        if (rs.next()) rs.getString("moderation_status") else null
+                    }
+                }
+        }
 
     private fun DataSource.reportStatus(reportId: UUID): String? =
         connection.use { connection ->

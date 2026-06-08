@@ -12,6 +12,7 @@ import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAssetDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
+import org.slf4j.LoggerFactory
 import java.util.UUID
 
 class MediaService(
@@ -20,6 +21,7 @@ class MediaService(
     private val blockRepository: BlockRepository? = null,
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val moderationScanner: MediaModerationScanner = ManualReviewMediaModerationScanner(),
+    private val moderationEscalationPublisher: MediaModerationEscalationPublisher = NoOpMediaModerationEscalationPublisher,
 ) {
     suspend fun createUploadSlot(
         ownerUserId: UUID,
@@ -92,6 +94,9 @@ class MediaService(
         val albumId = request.albumId.toUuidOrThrow()
         if (request.sortOrder < 0) throw MediaException("INVALID_MEDIA_SORT_ORDER")
 
+        val album =
+            repository.findAlbum(ownerUserId, albumId)
+                ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
         val item =
             repository.addAssetToAlbum(
                 ownerUserId = ownerUserId,
@@ -103,18 +108,9 @@ class MediaService(
         val uploadedAsset =
             repository.markAssetUploaded(ownerUserId, mediaAssetId)
                 ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
-        // Moderation hook: decide visibility on upload-complete. Public discovery only surfaces
-        // ready+approved assets, so PendingReview/Rejected stay hidden until a moderator acts.
-        val visibleAsset =
-            when (moderationScanner.scan(uploadedAsset)) {
-                MediaModerationDecision.Approved ->
-                    repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
-
-                is MediaModerationDecision.Rejected ->
-                    repository.markAssetModerationRejected(ownerUserId, mediaAssetId) ?: uploadedAsset
-
-                MediaModerationDecision.PendingReview -> uploadedAsset
-            }
+        // Moderation hook: public photos are held/removed before discovery; private albums remain
+        // consent-gated unless a scanner returns a severe safety/legal rejection.
+        val visibleAsset = applyModerationDecision(ownerUserId, mediaAssetId, album.kind, uploadedAsset)
 
         return item.copy(mediaAsset = visibleAsset).toDto()
     }
@@ -280,6 +276,47 @@ class MediaService(
             contentUrl = mediaAssetUrlResolver?.publicContentUrl(mediaAssetId),
         )
 
+    private suspend fun applyModerationDecision(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+        albumKind: String,
+        uploadedAsset: MediaAssetRecord,
+    ): MediaAssetRecord {
+        val decision = moderationScanner.scan(uploadedAsset)
+        return when (decision) {
+            MediaModerationDecision.Approved ->
+                repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
+
+            MediaModerationDecision.PendingReview ->
+                if (albumKind == "profile") {
+                    uploadedAsset
+                } else {
+                    repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
+                }
+
+            is MediaModerationDecision.Rejected ->
+                if (albumKind == "private" && decision.severity != MediaModerationSeverity.SEVERE) {
+                    repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
+                } else {
+                    val removed = repository.markAssetModerationRejected(ownerUserId, mediaAssetId) ?: uploadedAsset
+                    if (decision.severity == MediaModerationSeverity.SEVERE) {
+                        runCatching {
+                            moderationEscalationPublisher.recordSevereMediaDecision(
+                                ownerUserId = ownerUserId,
+                                mediaAssetId = mediaAssetId,
+                                albumKind = albumKind,
+                                reason = decision.reason,
+                                reportCategory = decision.reportCategory,
+                            )
+                        }.onFailure { error ->
+                            logger.warn("Failed to create severe media moderation escalation for asset {}", mediaAssetId, error)
+                        }
+                    }
+                    removed
+                }
+        }
+    }
+
     private fun String.toUuidOrThrow(): UUID = runCatching { UUID.fromString(this) }.getOrElse { throw MediaException("INVALID_ID") }
 
     private fun String.maxBytes(): Long =
@@ -297,6 +334,7 @@ class MediaService(
         }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(MediaService::class.java)
         private val ALBUM_KINDS = setOf("profile", "private")
         private val MEDIA_TYPES = setOf("image", "video")
         private val CONTENT_TYPES =

@@ -1,6 +1,7 @@
 package com.pynapli.server.media
 
 import com.google.auth.oauth2.GoogleCredentials
+import com.pynapli.shared.network.dto.ReportCategory
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -133,12 +134,28 @@ data class SafeSearchPolicy(
         return when {
             worst == null -> MediaModerationDecision.PendingReview
             worst.second.ordinal >= rejectAtOrAbove.ordinal ->
-                MediaModerationDecision.Rejected("safe_search_${worst.first.name.lowercase()}_${worst.second.name.lowercase()}")
+                MediaModerationDecision.Rejected(
+                    reason = "safe_search_${worst.first.name.lowercase()}_${worst.second.name.lowercase()}",
+                    severity = worst.first.toModerationSeverity(),
+                    reportCategory = worst.first.toReportCategory(),
+                )
             worst.second.ordinal >= reviewAtOrAbove.ordinal -> MediaModerationDecision.PendingReview
             else -> MediaModerationDecision.Approved
         }
     }
 }
+
+private fun SafeSearchCategory.toModerationSeverity(): MediaModerationSeverity =
+    when (this) {
+        SafeSearchCategory.VIOLENCE -> MediaModerationSeverity.SEVERE
+        else -> MediaModerationSeverity.POLICY
+    }
+
+private fun SafeSearchCategory.toReportCategory(): String =
+    when (this) {
+        SafeSearchCategory.VIOLENCE -> ReportCategory.HARASSMENT_OR_THREATS
+        else -> ReportCategory.EXPLICIT_PUBLIC_CONTENT
+    }
 
 enum class SafeSearchCategory { ADULT, RACY, VIOLENCE, MEDICAL, SPOOF }
 

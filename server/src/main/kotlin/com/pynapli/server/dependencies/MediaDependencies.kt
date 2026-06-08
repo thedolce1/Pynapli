@@ -19,6 +19,9 @@ import com.pynapli.server.media.MediaModerationScanner
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.media.StaticMediaUploadSigner
 import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.safety.JdbcReportRepository
+import com.pynapli.server.safety.MediaModerationEscalationService
+import com.pynapli.server.safety.RiskService
 import java.io.ByteArrayInputStream
 import java.io.FileInputStream
 import java.nio.charset.StandardCharsets
@@ -42,6 +45,7 @@ internal class MediaDependencies(
 internal fun buildMediaDependencies(
     config: ServerConfig,
     blockRepository: BlockRepository,
+    riskService: RiskService,
     dataSource: DataSource,
 ): MediaDependencies {
     // Media signing credentials, loaded once and shared by the GCS signer and the Cloud
@@ -133,6 +137,11 @@ internal fun buildMediaDependencies(
             blockRepository = blockRepository,
             mediaAssetUrlResolver = mediaAssetUrlResolver,
             moderationScanner = createMediaModerationScanner(config, mediaSigningCredentials),
+            moderationEscalationPublisher =
+                MediaModerationEscalationService(
+                    reportRepository = JdbcReportRepository(dataSource),
+                    riskSignalPublisher = riskService,
+                ),
         )
     return MediaDependencies(
         mediaAssetUrlResolver = mediaAssetUrlResolver,

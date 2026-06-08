@@ -17,6 +17,12 @@ interface AdminReportRepository {
         actorId: String,
         reason: String,
     ): AdminReportActionRecord?
+
+    suspend fun resolveReportAndRemoveMedia(
+        reportId: UUID,
+        actorId: String,
+        reason: String,
+    ): AdminReportActionRecord?
 }
 
 data class AdminReportRecord(
@@ -27,6 +33,7 @@ data class AdminReportRecord(
     val targetId: String?,
     val category: String,
     val note: String?,
+    val source: String,
     val status: String,
     val createdAt: Instant,
     val updatedAt: Instant,

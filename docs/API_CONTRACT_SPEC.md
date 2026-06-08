@@ -589,6 +589,10 @@ Groups:
 ```http
 /v1/admin/users
 /v1/admin/reports
+/v1/admin/reports/{reportId}/mark-under-review
+/v1/admin/reports/{reportId}/resolve
+/v1/admin/reports/{reportId}/resolve-remove-media
+/v1/admin/reports/{reportId}/dismiss
 /v1/admin/moderation-cases
 /v1/admin/risk
 /v1/admin/appeals

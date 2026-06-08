@@ -85,6 +85,39 @@ class AdminReportRoutesTest {
             assertEquals("action taken", repository.lastReason)
         }
 
+    @Test
+    fun resolveRemoveMediaUsesProtectedAdminRoute() =
+        testApplication {
+            val reportId = UUID.fromString("00000000-0000-0000-0000-000000000912")
+            val repository =
+                RouteAdminReportRepository(
+                    action =
+                        AdminReportActionRecord(
+                            reportId = reportId,
+                            status = "resolved",
+                            actedAt = Instant.parse("2026-04-24T18:00:00Z"),
+                        ),
+                )
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureAdminReportRoutes(testConfig(), AdminReportService(repository))
+            }
+
+            val response =
+                client.post("/v1/admin/reports/$reportId/resolve-remove-media") {
+                    header("X-Admin-Token", "test-admin-token")
+                    header("X-Admin-Id", "moderator-1")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"reason":"remove reported media"}""")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals("moderator-1", repository.lastActorId)
+            assertEquals("remove reported media", repository.lastReason)
+            assertEquals(true, repository.resolveRemoveMediaCalled)
+        }
+
     private fun testConfig(): ServerConfig =
         ServerConfig(
             environment = "test",
@@ -102,6 +135,7 @@ private class RouteAdminReportRepository(
 ) : AdminReportRepository {
     var lastActorId: String? = null
     var lastReason: String? = null
+    var resolveRemoveMediaCalled: Boolean = false
 
     override suspend fun listReports(
         status: String,
@@ -120,6 +154,17 @@ private class RouteAdminReportRepository(
         actorId: String,
         reason: String,
     ): AdminReportActionRecord? {
+        lastActorId = actorId
+        lastReason = reason
+        return action
+    }
+
+    override suspend fun resolveReportAndRemoveMedia(
+        reportId: UUID,
+        actorId: String,
+        reason: String,
+    ): AdminReportActionRecord? {
+        resolveRemoveMediaCalled = true
         lastActorId = actorId
         lastReason = reason
         return action

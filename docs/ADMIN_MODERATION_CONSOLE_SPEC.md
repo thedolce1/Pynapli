@@ -515,7 +515,7 @@ Current bootstrap implementation:
 - Admin calls require `X-Admin-Token`, `X-Admin-Id`, and a reason header/body depending on the action.
 - Listing held messages writes an `admin_audit_log` row because message body review is sensitive.
 - Held message actions support release and remove, and both write audit rows.
-- Report actions support mark under review, resolve, and dismiss, and all write audit rows.
+- Report actions support mark under review, resolve, dismiss, and reported-media removal, and all write audit rows.
 - Risk actions support list states, list events, clear, set tier, and mark reviewed, and all write audit rows.
 - This bootstrap route is not a replacement for full admin accounts, MFA, role checks, and step-up auth.
 
@@ -544,6 +544,7 @@ Track:
 - [x] Reports queue exists.
 - [x] Reports triage actions exist.
 - [x] Reports triage actions are audit logged.
+- [x] Reported-media remove action exists for media reports and writes an audit row.
 - [x] Risk review exists.
 - [x] Risk review actions are audit logged.
 - [x] Message review queue exists.
