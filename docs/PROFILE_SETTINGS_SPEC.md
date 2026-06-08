@@ -660,7 +660,7 @@ Client-local:
 - [x] Report history and support contact exist in Safety Center.
 - [ ] Discreet app icon exists or is planned.
 - [x] Logout exists.
-- [ ] Partial: data export request and account deletion exist; production export archive generation is not implemented.
+- [x] Data export request + async archive generation (`AccountDataExportWorker`: claim → build JSON archive of the user's own data → store → mark ready/expiry, or failed) and account deletion exist. Storage is pluggable (`AccountExportStorage`); local-dev writes + serves via an owner-only download route. Only the production GCS storage swap remains (tracked under the GCS/signed-storage slice D1).
 - [x] Server-authoritative settings are not only local.
 
 ## Do Not Implement

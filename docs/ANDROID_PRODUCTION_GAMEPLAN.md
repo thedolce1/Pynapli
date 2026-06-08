@@ -56,7 +56,7 @@ reporting. This phase is the hard gate to submission and is mostly codeable.
 | A3 | 🟢 | **Appeals flow** — user-facing appeal submission + status; server states. | MODERATION, ADMIN_CONSOLE |
 | A4 | 🟢 | **Risk middleware completeness** — Ktor risk middleware coverage, device/account-farm hash signals, location-spoofing signals, "verification lowers risk", false-positive metrics. | TRUST_AND_SAFETY |
 | A5 | 🟢🔵 | **Legal surfaces in-app** — Privacy Policy + Terms + Community Guidelines public URLs wired into onboarding/settings; finalize the drafts (🔵 legal review). | PRIVACY_POLICY_DRAFT, TERMS_DRAFT, COMMUNITY_GUIDELINES |
-| A6 | 🟢 | **Account lifecycle** — finish **data-export archive generation + signed delivery** (request path exists); confirm deletion server-authoritative completeness. | PROFILE_SETTINGS, API_CONTRACT |
+| A6 | ✅ (local) | **Account lifecycle** — data-export **archive generation** + async worker + owner-only local-dev delivery + account deletion already shipped (`AccountDataExportWorker`, pluggable `AccountExportStorage`). Only the production **GCS signed delivery** swap remains → folded into **D1**. | PROFILE_SETTINGS, API_CONTRACT |
 | A7 | 🟢 | **Analytics sensitivity guarantees** — event registry; never send exact location / message text / lifestyle payloads; crash-log redaction; experiment flags can't bypass server limits. | ANALYTICS_AND_METRICS |
 
 ---
