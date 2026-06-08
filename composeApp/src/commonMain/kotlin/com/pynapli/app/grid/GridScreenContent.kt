@@ -92,6 +92,8 @@ internal fun GridScreenContent(
                 onProfileSelected = onProfileSelected,
                 onLoadMore = onLoadMore,
                 onUseCurrentLocation = onUseCurrentLocation,
+                onRetry = onRefresh,
+                onClearFilters = onClearAllFilters,
                 modifier = Modifier.fillMaxSize(),
             )
         }
