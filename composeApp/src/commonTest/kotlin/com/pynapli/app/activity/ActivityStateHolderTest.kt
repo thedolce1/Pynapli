@@ -205,7 +205,7 @@ class ActivityStateHolderTest {
     @Test
     fun selectingTabQueriesBackendTabAndReplacesFeed() =
         runBlocking {
-            val flirtEvent = activityEvent(eventId = "flirt-1", type = "flirt")
+            val viewEvent = activityEvent(eventId = "view-1", type = "profile_view")
             val repository =
                 FakeActivityFeedRepository(
                     result = AppResult.Success(ActivityFeedUi(items = listOf(activityEvent(eventId = "event-1")))),
@@ -213,13 +213,13 @@ class ActivityStateHolderTest {
             val stateHolder = ActivityStateHolder(repository)
 
             stateHolder.load()
-            repository.result = AppResult.Success(ActivityFeedUi(items = listOf(flirtEvent)))
-            stateHolder.selectTab(ActivityTabUi.Flirts)
+            repository.result = AppResult.Success(ActivityFeedUi(items = listOf(viewEvent)))
+            stateHolder.selectTab(ActivityTabUi.Views)
 
-            assertEquals(listOf(ActivityTabUi.Likes, ActivityTabUi.Flirts), repository.loadCalls.map { it.tab })
+            assertEquals(listOf(ActivityTabUi.Flirts, ActivityTabUi.Views), repository.loadCalls.map { it.tab })
             assertEquals(null, repository.loadCalls.last().cursor)
-            assertEquals(ActivityTabUi.Flirts, stateHolder.state.value.selectedTab)
-            assertEquals(listOf(flirtEvent), stateHolder.state.value.items)
+            assertEquals(ActivityTabUi.Views, stateHolder.state.value.selectedTab)
+            assertEquals(listOf(viewEvent), stateHolder.state.value.items)
         }
 
     @Test

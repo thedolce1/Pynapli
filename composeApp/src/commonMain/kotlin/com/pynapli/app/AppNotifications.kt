@@ -140,8 +140,7 @@ private fun ActivityEventDto.activityNotificationBody(): String =
 private fun ActivityEventDto.activityTab(): ActivityTabUi =
     when (type) {
         "profile_view", "viewed_profile" -> ActivityTabUi.Views
-        "flirt" -> ActivityTabUi.Flirts
-        "swipe_like", "pineapple_like", "intro_note" -> ActivityTabUi.Likes
+        "flirt", "swipe_like", "pineapple_like", "intro_note" -> ActivityTabUi.Flirts
         "album_request",
         "partner_chat_invite",
         "psync_invite",
@@ -150,7 +149,7 @@ private fun ActivityEventDto.activityTab(): ActivityTabUi =
         "psync_expired",
         "playing_tonight",
         -> ActivityTabUi.Requests
-        else -> ActivityTabUi.Likes
+        else -> ActivityTabUi.Flirts
     }
 
 private fun String.cleanNotificationText(): String {

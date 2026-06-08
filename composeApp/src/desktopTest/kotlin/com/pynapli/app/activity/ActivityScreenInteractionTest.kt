@@ -24,25 +24,21 @@ import kotlin.test.assertEquals
 class ActivityScreenInteractionTest {
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun activityTabsLoadMoreAndDismissUseServerBackedState() =
+    fun flirtsGridLoadMoreDismissAndTabSwitch() =
         runComposeUiTest {
             val repository =
                 StaticActivityScreenRepository(
                     responses =
                         mutableMapOf(
-                            ActivityRequest(ActivityTabUi.Likes, null) to
-                                ActivityFeedUi(
-                                    items = listOf(activityEvent("view-1", "profile_view", "Maya")),
-                                ),
                             ActivityRequest(ActivityTabUi.Flirts, null) to
                                 ActivityFeedUi(
                                     items = listOf(activityEvent("flirt-1", "flirt", "Alex")),
                                     nextCursor = "flirts-page-2",
                                 ),
                             ActivityRequest(ActivityTabUi.Flirts, "flirts-page-2") to
-                                ActivityFeedUi(
-                                    items = listOf(activityEvent("flirt-2", "flirt", "Sam")),
-                                ),
+                                ActivityFeedUi(items = listOf(activityEvent("flirt-2", "flirt", "Sam"))),
+                            ActivityRequest(ActivityTabUi.Views, null) to
+                                ActivityFeedUi(items = listOf(activityEvent("view-1", "profile_view", "Maya"))),
                         ),
                 )
             val stateHolder = ActivityStateHolder(repository)
@@ -55,13 +51,9 @@ class ActivityScreenInteractionTest {
                 }
             }
 
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Likes, null)) }
-            onNodeWithText("Maya").assertExists()
-
-            onNodeWithText("Flirts").performClick()
+            // Flirts is the default tab (and a FOMO grid).
             waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Flirts, null)) }
             onNodeWithText("Alex").assertExists()
-            onNodeWithText("Maya").assertDoesNotExist()
 
             onNodeWithText("Load more").performClick()
             waitUntil(timeoutMillis = 5_000) {
@@ -79,11 +71,15 @@ class ActivityScreenInteractionTest {
             }
             onNodeWithText("Alex").assertDoesNotExist()
 
+            onNodeWithText("Views").performClick()
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Views, null)) }
+            onNodeWithText("Maya").assertExists()
+
             assertEquals(
                 listOf(
-                    ActivityRequest(ActivityTabUi.Likes, null),
                     ActivityRequest(ActivityTabUi.Flirts, null),
                     ActivityRequest(ActivityTabUi.Flirts, "flirts-page-2"),
+                    ActivityRequest(ActivityTabUi.Views, null),
                 ),
                 repository.loadCalls,
             )
@@ -91,21 +87,22 @@ class ActivityScreenInteractionTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun activityRowCtasOpenExpectedActions() =
+    fun requestsTabCtasOpenInviteAndAlbumActions() =
         runComposeUiTest {
             val repository =
                 StaticActivityScreenRepository(
                     responses =
                         mutableMapOf(
-                            ActivityRequest(ActivityTabUi.Likes, null) to
+                            ActivityRequest(ActivityTabUi.Flirts, null) to ActivityFeedUi(items = emptyList()),
+                            ActivityRequest(ActivityTabUi.Requests, null) to
                                 ActivityFeedUi(
                                     items =
                                         listOf(
                                             activityEvent(
-                                                eventId = "match-1",
-                                                type = "match",
-                                                displayName = "Taylor",
-                                                matchId = "match-id-1",
+                                                eventId = "invite-1",
+                                                type = "partner_chat_invite",
+                                                displayName = "Noa",
+                                                conversationId = "conversation-1",
                                             ),
                                             activityEvent(
                                                 eventId = "album-1",
@@ -113,18 +110,11 @@ class ActivityScreenInteractionTest {
                                                 displayName = "Sam",
                                                 albumRequestStatus = "pending",
                                             ),
-                                            activityEvent(
-                                                eventId = "invite-1",
-                                                type = "partner_chat_invite",
-                                                displayName = "Noa",
-                                                conversationId = "conversation-1",
-                                            ),
                                         ),
                                 ),
                         ),
                 )
             val stateHolder = ActivityStateHolder(repository)
-            val openedMatches = mutableListOf<ActivityEventDto>()
             val openedInvites = mutableListOf<String>()
 
             setContent {
@@ -132,40 +122,36 @@ class ActivityScreenInteractionTest {
                     Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
                         ActivityScreen(
                             stateHolder = stateHolder,
-                            onOpenMatch = { openedMatches += it },
                             onOpenPartnerChatInvite = { openedInvites += it },
                         )
                     }
                 }
             }
 
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Likes, null)) }
-            onNodeWithText("Message").performClick()
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Flirts, null)) }
+            onNodeWithText("Requests").performClick()
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Requests, null)) }
+
             onNodeWithText("Open invite").performClick()
             onNodeWithText("Review").performClick()
             onNodeWithText("Grant").performClick()
 
             waitUntil(timeoutMillis = 5_000) { repository.respondCalls == listOf("album-1" to true) }
-            assertEquals(listOf("match-1"), openedMatches.map { it.eventId })
             assertEquals(listOf("conversation-1"), openedInvites)
         }
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun activityRowsShowUnreadStateAndPremiumGate() =
+    fun flirtsGridShowsLockedTilesAndUnlockBanner() =
         runComposeUiTest {
             var openedStore = false
             val repository =
                 StaticActivityScreenRepository(
                     responses =
                         mutableMapOf(
-                            ActivityRequest(ActivityTabUi.Likes, null) to
+                            ActivityRequest(ActivityTabUi.Flirts, null) to
                                 ActivityFeedUi(
-                                    items =
-                                        listOf(
-                                            activityEvent("flirt-new", "flirt", "Alex", seen = false),
-                                            activityEvent("match-seen", "match", "Taylor", seen = true),
-                                        ),
+                                    items = listOf(activityEvent("flirt-new", "flirt", "Alex", seen = false)),
                                     entitlementTier = "free",
                                     revealLimit = 1,
                                     gatedCount = 4,
@@ -185,25 +171,25 @@ class ActivityScreenInteractionTest {
                 }
             }
 
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Likes, null)) }
-            onNodeWithText("4 more waiting").assertExists()
-            onNodeWithText("Select unlocks the full Activity feed.").assertExists()
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Flirts, null)) }
+            // Unseen real tile shows a New pill; gatedCount = 4 frosted locked tiles drive FOMO.
             onNodeWithText("New").assertExists()
+            onAllNodesWithTag(ActivityFomoTags.LOCKED_TILE).assertCountEquals(4)
 
-            onNodeWithText("Select").performClick()
-
+            // Tapping a locked teaser tile routes to the Store (the upgrade path).
+            onAllNodesWithTag(ActivityFomoTags.LOCKED_TILE)[0].performClick()
             assertEquals(true, openedStore)
         }
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun activityRowShowsViaPlayingTonightChipOnlyForTaggedFlirts() =
+    fun viaPlayingTonightChipOnlyForTaggedFlirts() =
         runComposeUiTest {
             val repository =
                 StaticActivityScreenRepository(
                     responses =
                         mutableMapOf(
-                            ActivityRequest(ActivityTabUi.Likes, null) to
+                            ActivityRequest(ActivityTabUi.Flirts, null) to
                                 ActivityFeedUi(
                                     items =
                                         listOf(
@@ -223,10 +209,11 @@ class ActivityScreenInteractionTest {
                 }
             }
 
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Likes, null)) }
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Flirts, null)) }
             onNodeWithText("Alex").assertExists()
             onNodeWithText("Sam").assertExists()
-            onAllNodesWithTag(VIA_PLAYING_TONIGHT_TEST_TAG).assertCountEquals(1)
+            // The caption tag lives on a child of the clickable tile, so look in the unmerged tree.
+            onAllNodesWithTag(VIA_PLAYING_TONIGHT_TEST_TAG, useUnmergedTree = true).assertCountEquals(1)
             onNodeWithText("via Playing Tonight").assertExists()
         }
 
@@ -238,7 +225,7 @@ class ActivityScreenInteractionTest {
                 StaticActivityScreenRepository(
                     responses =
                         mutableMapOf(
-                            ActivityRequest(ActivityTabUi.Likes, null) to ActivityFeedUi(items = emptyList()),
+                            ActivityRequest(ActivityTabUi.Flirts, null) to ActivityFeedUi(items = emptyList()),
                             ActivityRequest(ActivityTabUi.Views, null) to
                                 ActivityFeedUi(
                                     items = listOf(activityEvent("view-1", "profile_view", "Maya")),
@@ -260,7 +247,7 @@ class ActivityScreenInteractionTest {
                 }
             }
 
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Likes, null)) }
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Flirts, null)) }
             onNodeWithText("Views").performClick()
             waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Views, null)) }
 
@@ -271,6 +258,44 @@ class ActivityScreenInteractionTest {
 
             onNodeWithTag(ActivityFomoTags.tile("view-1")).performClick()
             waitUntil(timeoutMillis = 5_000) { openedProfiles == listOf("view-1-actor") }
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun matchesTabTileOpensConversation() =
+        runComposeUiTest {
+            val repository =
+                StaticActivityScreenRepository(
+                    responses =
+                        mutableMapOf(
+                            ActivityRequest(ActivityTabUi.Flirts, null) to ActivityFeedUi(items = emptyList()),
+                            ActivityRequest(ActivityTabUi.Matches, null) to
+                                ActivityFeedUi(
+                                    items = listOf(activityEvent("match-1", "match", "Taylor", matchId = "match-id-1")),
+                                ),
+                        ),
+                )
+            val stateHolder = ActivityStateHolder(repository)
+            val openedMatches = mutableListOf<String>()
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        ActivityScreen(
+                            stateHolder = stateHolder,
+                            onOpenMatch = { openedMatches += it.eventId },
+                        )
+                    }
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Flirts, null)) }
+            onNodeWithText("Matches").performClick()
+            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Matches, null)) }
+
+            onNodeWithTag(ActivityFomoTags.GRID).assertExists()
+            onNodeWithTag(ActivityFomoTags.tile("match-1")).performClick()
+            waitUntil(timeoutMillis = 5_000) { openedMatches == listOf("match-1") }
         }
 }
 

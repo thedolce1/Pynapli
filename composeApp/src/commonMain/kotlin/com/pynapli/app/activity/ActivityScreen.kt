@@ -170,7 +170,15 @@ private fun ActivityScreenContent(
                     focusedEventId = state.focusedEventId,
                     pendingDismissEventId = state.pendingDismissEventId,
                     distanceUnit = distanceUnit,
-                    onOpenProfile = onOpenProfile,
+                    // Matches open the conversation (like the Messages rail); Views/Flirts open the
+                    // actor's profile.
+                    onTileClick = { event ->
+                        if (state.selectedTab == ActivityTabUi.Matches) {
+                            onOpenMatch(event)
+                        } else {
+                            onOpenProfile(event)
+                        }
+                    },
                     onDismissEvent = onDismissEvent,
                     onOpenStore = onOpenStore,
                     onLoadMore = onLoadMore,

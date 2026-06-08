@@ -6,7 +6,7 @@ import com.pynapli.shared.network.dto.ActivityEventDto
 @Immutable
 data class ActivityUiState(
     val items: List<ActivityEventDto> = emptyList(),
-    val selectedTab: ActivityTabUi = ActivityTabUi.Likes,
+    val selectedTab: ActivityTabUi = ActivityTabUi.Flirts,
     val summary: ActivitySummaryUi = ActivitySummaryUi.Empty,
     val nextCursor: String? = null,
     val isLoading: Boolean = false,
@@ -58,19 +58,20 @@ enum class ActivityTabUi(
     val label: String,
     val apiValue: String,
 ) {
-    // Mobile Activity surface: Likes (premium reveal), Views, Flirts, and Requests
-    // (album-access + partner/psync/tonight invites). New matches live in Messages.
-    Likes("Likes", "likes"),
-    Views("Views", "views"),
+    // Mobile Activity surface: Flirts (unified inbound interest — taps + swipe-likes + pineapples +
+    // intro notes — and the premium reveal money surface), Views, Matches (all swipe matches), and
+    // Requests (album-access + partner/psync/tonight invites).
     Flirts("Flirts", "flirts"),
+    Views("Views", "views"),
+    Matches("Matches", "matches"),
     Requests("Requests", "requests"),
 }
 
 /**
- * Views and Flirts render as a 2-up profile grid (FOMO teaser). Likes keeps its premium-reveal
- * list and Requests keeps action rows, so both stay as the list layout.
+ * Flirts, Views, and Matches render as a 2-up profile grid (FOMO teaser). Requests keeps action
+ * rows (album review / invite CTAs), so it stays the list layout.
  */
-internal fun ActivityTabUi.isFomoGridTab(): Boolean = this == ActivityTabUi.Views || this == ActivityTabUi.Flirts
+internal fun ActivityTabUi.isFomoGridTab(): Boolean = this == ActivityTabUi.Flirts || this == ActivityTabUi.Views || this == ActivityTabUi.Matches
 
 @Immutable
 data class ActivityFeedUi(
