@@ -29,6 +29,7 @@ fun SwipeScreen(
     matchNotificationsEnabled: Boolean = true,
     notificationDetail: String = AppSettings.NOTIFICATION_DISCREET,
     onOpenStore: () -> Unit = {},
+    onOpenAgeVerification: () -> Unit = {},
     onOpenPsync: (() -> Unit)? = null,
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
@@ -247,6 +248,7 @@ fun SwipeScreen(
                 scope.launch { stateHolder.applyFilters(SwipeFilters.defaults) }
             },
             onOpenStore = onOpenStore,
+            onOpenAgeVerification = onOpenAgeVerification,
             savedState = savedSwipeFiltersState,
             onSavePreset = { name, filters ->
                 scope.launch { savedSwipeFilterStateHolder?.save(name, filters) }
@@ -285,6 +287,10 @@ fun SwipeScreen(
             onOpenStore = {
                 travelSheetVisible = false
                 onOpenStore()
+            },
+            onOpenAgeVerification = {
+                travelSheetVisible = false
+                onOpenAgeVerification()
             },
         )
     }

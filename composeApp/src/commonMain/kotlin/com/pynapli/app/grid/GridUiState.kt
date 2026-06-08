@@ -16,9 +16,15 @@ data class GridUiState(
     val nextCursor: String? = null,
     val adSupported: Boolean = false,
     val paywallMessage: String? = null,
+    // Set when the server rejects a gated action with AGE_VERIFICATION_REQUIRED. Drives the
+    // "Verify your age" prompt row; its CTA routes into the Profile-Hub age-verification flow.
+    // Mirrors [paywallMessage]'s ENTITLEMENT_REQUIRED handling.
+    val verificationMessage: String? = null,
     val errorCode: String? = null,
     val errorMessage: String? = null,
-)
+) {
+    val verificationRequired: Boolean get() = verificationMessage != null
+}
 
 @Immutable
 data class GridFilters(

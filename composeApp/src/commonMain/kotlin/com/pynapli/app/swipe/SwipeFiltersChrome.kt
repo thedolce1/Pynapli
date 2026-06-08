@@ -227,6 +227,8 @@ internal object SwipeFilterTags {
     const val ADVANCED_PAYWALL = "swipe-filters-advanced-paywall"
     const val ADVANCED_PAYWALL_SUBSCRIBE = "swipe-filters-advanced-paywall-subscribe"
     const val SAVED_PRESETS = "swipe-filters-saved-presets"
+    const val SAVED_VERIFICATION = "swipe-filters-saved-verification"
+    const val SAVED_VERIFICATION_VERIFY = "swipe-filters-saved-verification-verify"
     const val SAVE_PRESET_NAME = "swipe-filters-save-preset-name"
     const val SAVE_PRESET_SUBMIT = "swipe-filters-save-preset-submit"
 

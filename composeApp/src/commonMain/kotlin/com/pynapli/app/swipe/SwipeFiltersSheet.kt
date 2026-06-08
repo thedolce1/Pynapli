@@ -34,6 +34,7 @@ internal fun SwipeFiltersSheet(
     onApply: (SwipeFilters) -> Unit,
     onClearAll: () -> Unit,
     onOpenStore: () -> Unit = {},
+    onOpenAgeVerification: () -> Unit = {},
     savedState: SavedSwipeFiltersUiState = SavedSwipeFiltersUiState(),
     onSavePreset: (name: String, SwipeFilters) -> Unit = { _, _ -> },
     onApplySavedPreset: (SavedSwipeFilterDto) -> Unit = {},
@@ -51,6 +52,7 @@ internal fun SwipeFiltersSheet(
             onApply = onApply,
             onClearAll = onClearAll,
             onOpenStore = onOpenStore,
+            onOpenAgeVerification = onOpenAgeVerification,
             savedState = savedState,
             onSavePreset = onSavePreset,
             onApplySavedPreset = onApplySavedPreset,
@@ -66,6 +68,7 @@ internal fun SwipeFiltersSheetBody(
     onApply: (SwipeFilters) -> Unit,
     onClearAll: () -> Unit,
     onOpenStore: () -> Unit = {},
+    onOpenAgeVerification: () -> Unit = {},
     savedState: SavedSwipeFiltersUiState = SavedSwipeFiltersUiState(),
     onSavePreset: (name: String, SwipeFilters) -> Unit = { _, _ -> },
     onApplySavedPreset: (SavedSwipeFilterDto) -> Unit = {},
@@ -91,6 +94,10 @@ internal fun SwipeFiltersSheetBody(
             savedState = savedState,
             onApplySavedPreset = onApplySavedPreset,
             onDeleteSavedPreset = onDeleteSavedPreset,
+            onOpenAgeVerification = {
+                onDismiss()
+                onOpenAgeVerification()
+            },
         )
         SwipeWhoAgeDistanceFilters(
             draft = draft,

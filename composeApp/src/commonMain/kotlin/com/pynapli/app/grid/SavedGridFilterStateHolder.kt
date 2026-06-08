@@ -27,11 +27,12 @@ class SavedGridFilterStateHolder(
             is AppResult.Failure ->
                 _state.update {
                     val entitlement = result.error.code == "ENTITLEMENT_REQUIRED"
+                    val verification = result.error.code == "AGE_VERIFICATION_REQUIRED"
                     it.copy(
                         isLoading = false,
-                        items = if (entitlement) emptyList() else it.items,
+                        items = if (entitlement || verification) emptyList() else it.items,
                         errorCode = result.error.code,
-                        errorMessage = if (entitlement) null else result.error.message,
+                        errorMessage = if (entitlement || verification) null else result.error.message,
                     )
                 }
         }
@@ -103,6 +104,7 @@ data class SavedGridFiltersUiState(
     val errorMessage: String? = null,
 ) {
     val entitlementRequired: Boolean get() = errorCode == "ENTITLEMENT_REQUIRED"
+    val ageVerificationRequired: Boolean get() = errorCode == "AGE_VERIFICATION_REQUIRED"
 }
 
 interface SavedGridFilterRepository {

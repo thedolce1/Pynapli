@@ -58,10 +58,12 @@ class TravelLocationStateHolder(
                 }
             is AppResult.Failure ->
                 _state.update {
+                    val verification = result.error.code == "AGE_VERIFICATION_REQUIRED"
                     it.copy(
                         isSaving = false,
                         errorCode = result.error.code,
-                        errorMessage = result.error.message,
+                        // Age-verification is surfaced via the sheet's verify prompt, not a raw error.
+                        errorMessage = if (verification) null else result.error.message,
                     )
                 }
         }
@@ -99,6 +101,7 @@ data class TravelLocationUiState(
     val errorMessage: String? = null,
 ) {
     val entitlementRequired: Boolean get() = errorCode == "ENTITLEMENT_REQUIRED"
+    val ageVerificationRequired: Boolean get() = errorCode == "AGE_VERIFICATION_REQUIRED"
     val isActive: Boolean get() = current != null
 }
 

@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.location.TravelCityPreset
 import com.pynapli.app.location.TravelCityPresets
@@ -51,6 +53,7 @@ internal fun TravelModeSheet(
     onPickCity: (TravelCityPreset) -> Unit,
     onClear: () -> Unit,
     onOpenStore: () -> Unit,
+    onOpenAgeVerification: () -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -80,7 +83,9 @@ internal fun TravelModeSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            if (state.entitlementRequired) {
+            if (state.ageVerificationRequired) {
+                TravelVerificationBanner(onVerify = onOpenAgeVerification)
+            } else if (state.entitlementRequired) {
                 TravelPaywallBanner(onSubscribe = onOpenStore)
             } else {
                 state.current?.let { dto ->
@@ -115,7 +120,7 @@ internal fun TravelModeSheet(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (state.isActive && !state.entitlementRequired) {
+                if (state.isActive && !state.entitlementRequired && !state.ageVerificationRequired) {
                     TextButton(
                         onClick = onClear,
                         modifier = Modifier.testTag(TravelModeTags.CLEAR),
@@ -163,12 +168,53 @@ private fun TravelPaywallBanner(onSubscribe: () -> Unit) {
     }
 }
 
+/**
+ * Surfaced when the server rejects a travel-region change with AGE_VERIFICATION_REQUIRED
+ * (e.g. a restricted region requires age verification). Routes into the Profile-Hub
+ * age-verification flow rather than the Store. Gold accent per the design north-star.
+ */
+@Composable
+private fun TravelVerificationBanner(onVerify: () -> Unit) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .testTag(TravelModeTags.VERIFICATION),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.VerifiedUser,
+            contentDescription = null,
+            tint = PynapliColors.Accent,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = "Verify your age to set travel mode for this region.",
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Button(
+            onClick = onVerify,
+            modifier = Modifier.testTag(TravelModeTags.VERIFICATION_VERIFY),
+        ) { Text(text = "Verify", maxLines = 1) }
+    }
+}
+
 internal object TravelModeTags {
     const val OPEN_SHEET: String = "travel-mode-open-sheet"
     const val SHEET: String = "travel-mode-sheet"
     const val CLEAR: String = "travel-mode-clear"
     const val PAYWALL: String = "travel-mode-paywall"
     const val PAYWALL_SUBSCRIBE: String = "travel-mode-paywall-subscribe"
+    const val VERIFICATION: String = "travel-mode-verification"
+    const val VERIFICATION_VERIFY: String = "travel-mode-verification-verify"
 
     fun cityTag(id: String): String = "travel-mode-city-$id"
 }
