@@ -52,7 +52,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 ## Current Security Coverage
 
 - Auth: private endpoints require `Authorization: Bearer`; session lookup is server-side and status-aware.
-- BOLA: core profile, media, messages, activity, saved filters, profile links, Psync, Swipe, and account lifecycle paths enforce owner/membership/participant checks in services or repositories.
+- BOLA: core profile, media, messages, activity, saved filters, profile links, Psync, Swipe, and account lifecycle paths enforce owner/membership/participant checks in services or repositories. At the HTTP layer, `WrongUserObjectAccessRouteTest` pins the route contract those checks rely on across 9 surfaces (profiles, message delete/read/send, media upload-complete/private-album/grant-revoke, activity dismiss/album-respond, profile-link accept, appeal withdraw, saved grid/swipe filter delete, swipe action): the acting identity passed to every domain service is the token-derived user (caller-supplied IDs only ever arrive as object/target data), and the wrong-user outcome maps to 404 — not 200, not 5xx.
 - Rate limits: auth signup/login/refresh, grid queries, profile views, flirts, album requests, first messages, reports, swipe actions, Psync nudges, media uploads, age-verification start, store purchase submissions, and boost activation.
 - Idempotency: implemented for message send, swipe action IDs, notification outbox, Play RTDN event ingestion, and selected activity producers.
 - Secrets: service accounts, signing keys, admin token, webhook token, cursor secrets, and deck-token secrets are server config/env only.
@@ -61,7 +61,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 ## Remaining Hardening
 
 - Replace admin shared-token bootstrap with real admin identities, MFA, roles, and step-up auth before production.
-- Expand object-level authorization tests into a full wrong-user matrix for every object-ID route.
+- Wrong-user matrix shipped 2026-06-09 (`WrongUserObjectAccessRouteTest`, see BOLA above); it also caught `MESSAGE_NOT_FOUND` mapping to 400 instead of 404 (fixed). Extend to new object-ID routes as they land (Psync/Tonight session routes are covered at the service layer).
 - Add idempotency keys to remaining high-value mutations where duplicates could spend inventory or create duplicate state.
 - Add provider-grade App Check/device attestation and WAF/IP-level throttles before a public launch.
 - Add alert thresholds for repeated auth failures, media upload abuse, verification abuse, scraping patterns, and suspicious account creation.

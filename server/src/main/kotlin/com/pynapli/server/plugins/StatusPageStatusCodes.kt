@@ -171,6 +171,7 @@ internal fun messagingStatusFor(code: String): HttpStatusCode =
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "RISK_RESTRICTED" -> HttpStatusCode.Forbidden
         "CONVERSATION_NOT_FOUND",
+        "MESSAGE_NOT_FOUND",
         "LINKED_PARTNER_NOT_FOUND",
         "PARTNER_INVITE_NOT_FOUND",
         -> HttpStatusCode.NotFound
