@@ -784,6 +784,31 @@ Fields:
 - `created_at`
 - `resolved_at`
 
+### moderation_appeals
+
+Fields:
+
+- `id`
+- `user_id`
+- `action_type`: account_suspension, account_ban, risk_restriction, media_removal, message_removal, other
+- `target_type`: account, media, message, profile, other
+- `target_id`
+- `related_report_id`
+- `status`: open, under_review, upheld, reduced, restored, verification_required, escalated, withdrawn
+- `user_reason`
+- `admin_reason`
+- `admin_note`
+- `reviewed_by_admin_id`
+- `created_at`
+- `updated_at`
+- `reviewed_at`
+
+Rules:
+
+- One open/under-review appeal per user/action/target.
+- User-facing appeal history must not expose `admin_reason` or audit metadata.
+- Severe legal/CSAM non-appealable policy is enforced above the table by moderation/legal policy.
+
 ### moderation_actions
 
 Fields:

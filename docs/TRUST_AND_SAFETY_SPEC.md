@@ -667,6 +667,7 @@ Reject:
 - [x] Severe media scanner decisions create system safety reports and media-moderation risk events.
 - [x] Media reports support audited target-media removal.
 - [x] Risk review queue supports audited clear/set-tier/review actions.
+- [x] Appeal API supports user submission/status/withdraw and audited admin decisions.
 - [x] Album request throttles exist.
 - [x] Swipe velocity detection exists.
 - [x] Profile view velocity detection exists.
@@ -674,7 +675,7 @@ Reject:
 - [ ] Location spoofing signals exist.
 - [x] Partner subscription abuse cooldown exists.
 - [ ] Verification lowers risk where appropriate.
-- [ ] Appeal/support review flow exists.
+- [ ] Partial: appeal review flow exists; support review workflow, account notices, roles/MFA, and senior-review separation remain.
 - [x] Moderator dashboard requirements are tracked.
 - [ ] False-positive metrics exist.
 - [x] Severe hard-ban triggers exist.

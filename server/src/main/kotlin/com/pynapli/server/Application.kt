@@ -14,6 +14,7 @@ import com.pynapli.server.location.configureTravelLocationRoutes
 import com.pynapli.server.media.configureMediaRoutes
 import com.pynapli.server.messaging.configureMessageStreamRoutes
 import com.pynapli.server.messaging.configureMessagingRoutes
+import com.pynapli.server.moderation.configureAdminAppealRoutes
 import com.pynapli.server.moderation.configureAdminModerationRoutes
 import com.pynapli.server.moderation.configureAdminReportRoutes
 import com.pynapli.server.moderation.configureAdminRiskRoutes
@@ -31,6 +32,7 @@ import com.pynapli.server.profilelink.configureProfileLinkRoutes
 import com.pynapli.server.psync.configurePsyncRoutes
 import com.pynapli.server.psync.configurePsyncStreamRoutes
 import com.pynapli.server.routing.configureHealthRoutes
+import com.pynapli.server.safety.configureAppealRoutes
 import com.pynapli.server.safety.configureSafetyRoutes
 import com.pynapli.server.subscriptions.configurePlayStoreRtdnRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionAdminRoutes
@@ -72,6 +74,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureMonitoring()
     configureHTTP()
     configureHealthRoutes(dependencies)
+    configureAdminAppealRoutes(dependencies.config, dependencies.adminAppealService)
     configureAdminModerationRoutes(dependencies.config, dependencies.messageModerationService)
     configureAdminReportRoutes(dependencies.config, dependencies.adminReportService)
     configureAdminRiskRoutes(dependencies.config, dependencies.adminRiskService)
@@ -116,6 +119,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         hiddenProfileService = dependencies.hiddenProfileService,
         reportService = dependencies.reportService,
     )
+    configureAppealRoutes(dependencies.authService, dependencies.appealService)
     configureSwipeRoutes(
         authService = dependencies.authService,
         swipeService = dependencies.swipeService,

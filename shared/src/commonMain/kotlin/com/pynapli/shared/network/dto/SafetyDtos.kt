@@ -108,3 +108,62 @@ data class SupportContactDto(
     val subject: String,
     val body: String,
 )
+
+object AppealActionType {
+    const val ACCOUNT_SUSPENSION = "account_suspension"
+    const val ACCOUNT_BAN = "account_ban"
+    const val RISK_RESTRICTION = "risk_restriction"
+    const val MEDIA_REMOVAL = "media_removal"
+    const val MESSAGE_REMOVAL = "message_removal"
+    const val OTHER = "other"
+}
+
+object AppealTargetType {
+    const val ACCOUNT = "account"
+    const val MEDIA = "media"
+    const val MESSAGE = "message"
+    const val PROFILE = "profile"
+    const val OTHER = "other"
+}
+
+object AppealStatus {
+    const val OPEN = "open"
+    const val UNDER_REVIEW = "under_review"
+    const val UPHELD = "upheld"
+    const val REDUCED = "reduced"
+    const val RESTORED = "restored"
+    const val VERIFICATION_REQUIRED = "verification_required"
+    const val ESCALATED = "escalated"
+    const val WITHDRAWN = "withdrawn"
+}
+
+const val APPEAL_REASON_MAX_LENGTH = 2_000
+
+@Serializable
+data class CreateAppealRequestDto(
+    val actionType: String,
+    val targetType: String,
+    val targetId: String? = null,
+    val relatedReportId: String? = null,
+    val reason: String,
+)
+
+@Serializable
+data class AppealDto(
+    val appealId: String,
+    val actionType: String,
+    val targetType: String,
+    val targetId: String? = null,
+    val relatedReportId: String? = null,
+    val status: String,
+    val userReason: String,
+    val adminNote: String? = null,
+    val createdAt: String,
+    val updatedAt: String,
+    val reviewedAt: String? = null,
+)
+
+@Serializable
+data class AppealListDto(
+    val appeals: List<AppealDto>,
+)

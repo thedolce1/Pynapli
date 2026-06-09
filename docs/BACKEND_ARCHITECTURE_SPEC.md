@@ -294,7 +294,7 @@ Push notifications must avoid explicit lifestyle terms by default.
 
 ### Moderation And Age Verification
 
-Ktor owns age-gate state, market-driven verification requirements, moderation queues, report intake, and enforcement decisions.
+Ktor owns age-gate state, market-driven verification requirements, moderation queues, report intake, appeal intake, and enforcement decisions.
 
 Public profile content should not become visible until moderation allows it. Private content remains reportable and subject to legally required safety scanning.
 
@@ -802,6 +802,7 @@ Keep sensitive payloads out of logs.
 - [ ] Partial: Grid presence, Activity, and Messages have reconnecting WebSocket clients that keep HTTP state authoritative; remaining realtime surfaces still need implementation.
 - [x] Rate limits exist for messaging/flirts/album requests.
 - [x] Blocks are enforced across grid/swipe/activity/messages.
+- [x] User appeal submission/status and admin appeal decisions are server-owned.
 - [ ] Location is not trusted from client for ranking without server validation.
 - [ ] Sensitive logs are redacted.
 

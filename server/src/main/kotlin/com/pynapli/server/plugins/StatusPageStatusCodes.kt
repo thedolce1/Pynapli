@@ -193,9 +193,22 @@ internal fun messagingStatusFor(code: String): HttpStatusCode =
 internal fun safetyStatusFor(code: String): HttpStatusCode =
     when (code) {
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
+        "APPEAL_NOT_FOUND",
+        "APPEAL_REPORT_NOT_FOUND",
+        -> HttpStatusCode.NotFound
+        "APPEAL_ALREADY_OPEN" -> HttpStatusCode.Conflict
+        "APPEAL_TARGET_NOT_APPEALABLE" -> HttpStatusCode.Forbidden
         "BLOCK_SELF_FORBIDDEN",
         "REPORT_SELF_FORBIDDEN",
         -> HttpStatusCode.Forbidden
+        "INVALID_APPEAL_ID",
+        "INVALID_APPEAL_ACTION",
+        "INVALID_APPEAL_TARGET",
+        "INVALID_APPEAL_REPORT",
+        "APPEAL_TARGET_REQUIRED",
+        "APPEAL_REASON_REQUIRED",
+        "APPEAL_REASON_TOO_LONG",
+        -> HttpStatusCode.BadRequest
         else -> HttpStatusCode.BadRequest
     }
 
@@ -265,6 +278,7 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
         "MESSAGE_REVIEW_NOT_FOUND",
         "REPORT_REVIEW_NOT_FOUND",
         "RISK_REVIEW_NOT_FOUND",
+        "APPEAL_REVIEW_NOT_FOUND",
         -> HttpStatusCode.NotFound
         "INVALID_ID",
         "INVALID_ADMIN_ACTOR",
@@ -272,6 +286,9 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
         "MODERATION_REASON_TOO_LONG",
         "INVALID_REVIEW_LIMIT",
         "INVALID_REPORT_REVIEW_STATUS",
+        "INVALID_APPEAL_REVIEW_STATUS",
+        "INVALID_APPEAL_OUTCOME",
+        "APPEAL_ADMIN_NOTE_TOO_LONG",
         "INVALID_RISK_TIER",
         "INVALID_RISK_TIER_FILTER",
         -> HttpStatusCode.BadRequest

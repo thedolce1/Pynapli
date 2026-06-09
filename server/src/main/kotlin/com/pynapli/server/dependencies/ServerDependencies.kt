@@ -26,8 +26,10 @@ import com.pynapli.server.media.MediaCleanupWorker
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.messaging.MessageBroadcaster
 import com.pynapli.server.messaging.MessagingService
+import com.pynapli.server.moderation.AdminAppealService
 import com.pynapli.server.moderation.AdminReportService
 import com.pynapli.server.moderation.AdminRiskService
+import com.pynapli.server.moderation.JdbcAdminAppealRepository
 import com.pynapli.server.moderation.MessageModerationService
 import com.pynapli.server.notifications.FirebaseAdminPushNotificationSender
 import com.pynapli.server.notifications.JdbcNotificationRepository
@@ -48,10 +50,12 @@ import com.pynapli.server.profilelink.JdbcProfileLinkRepository
 import com.pynapli.server.profilelink.ProfileLinkService
 import com.pynapli.server.profiling.RequestProfilerFactory
 import com.pynapli.server.psync.PsyncSessionService
+import com.pynapli.server.safety.AppealService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockService
 import com.pynapli.server.safety.HiddenProfileRepository
 import com.pynapli.server.safety.HiddenProfileService
+import com.pynapli.server.safety.JdbcAppealRepository
 import com.pynapli.server.safety.JdbcBlockRepository
 import com.pynapli.server.safety.JdbcHiddenProfileRepository
 import com.pynapli.server.safety.JdbcReportRepository
@@ -97,6 +101,7 @@ class ServerDependencies(
     val messagingService: MessagingService?,
     val mediaService: MediaService?,
     val messageModerationService: MessageModerationService?,
+    val adminAppealService: AdminAppealService?,
     val adminReportService: AdminReportService?,
     val adminRiskService: AdminRiskService?,
     val activityService: ActivityService?,
@@ -106,6 +111,7 @@ class ServerDependencies(
     val notificationDispatchWorker: NotificationDispatchWorker?,
     val blockService: BlockService?,
     val hiddenProfileService: HiddenProfileService?,
+    val appealService: AppealService?,
     val reportService: ReportService?,
     val swipeService: SwipeService?,
     val subscriptionService: SubscriptionService?,
@@ -203,6 +209,8 @@ class ServerDependencies(
                     rateLimitService = rateLimitService,
                     supportEmail = config.supportEmail,
                 )
+            val appealService = AppealService(JdbcAppealRepository(database.dataSource))
+            val adminAppealService = AdminAppealService(JdbcAdminAppealRepository(database.dataSource))
             val notificationRepository = JdbcNotificationRepository(database.dataSource)
             val notificationService = NotificationService(notificationRepository)
             val activityBroadcaster = ActivityBroadcaster()
@@ -395,6 +403,7 @@ class ServerDependencies(
                 messagingService = messaging.messagingService,
                 mediaService = media.mediaService,
                 messageModerationService = messaging.messageModerationService,
+                adminAppealService = adminAppealService,
                 adminReportService = messaging.adminReportService,
                 adminRiskService = messaging.adminRiskService,
                 activityService = activityService,
@@ -404,6 +413,7 @@ class ServerDependencies(
                 notificationDispatchWorker = notificationDispatchWorker,
                 blockService = blockService,
                 hiddenProfileService = hiddenProfileService,
+                appealService = appealService,
                 reportService = reportService,
                 swipeService = swipe.swipeService,
                 subscriptionService = subscriptionService,
@@ -456,6 +466,7 @@ class ServerDependencies(
                 messagingService = null,
                 mediaService = null,
                 messageModerationService = null,
+                adminAppealService = null,
                 adminReportService = null,
                 adminRiskService = null,
                 activityService = null,
@@ -465,6 +476,7 @@ class ServerDependencies(
                 notificationDispatchWorker = null,
                 blockService = null,
                 hiddenProfileService = null,
+                appealService = null,
                 reportService = null,
                 swipeService = null,
                 subscriptionService = null,

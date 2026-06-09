@@ -190,9 +190,9 @@ Avoid:
 - [x] Public/profile media moderation is enforced before discovery visibility.
 - [x] Private album grants and report flow exist; consent-gated private media stays hidden from non-grantees, removed media is filtered, and severe scanner decisions remove the asset before escalating.
 - [x] Report categories implemented.
-- [ ] Partial: reports/risk/message review queues and actions exist; full moderator console, roles, MFA, appeals, and production admin separation are not complete.
+- [ ] Partial: reports/risk/message/appeal review queues and actions exist; full moderator console, roles, MFA, senior-review separation, and production admin separation are not complete.
 - [ ] Partial: severe scanner decisions create system reports and risk events; CSAM/hash-matching provider integration, legal retention policy, and live provider tuning remain.
-- [ ] Appeals flow.
+- [x] Appeals flow exists for user submission/status/withdraw plus admin queue decisions.
 - [ ] Public community guidelines URL.
 - [ ] App-store-safe screenshots and copy.
 

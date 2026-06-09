@@ -479,6 +479,9 @@ Rules:
 ```http
 POST /v1/reports
 GET  /v1/reports
+POST /v1/appeals
+GET  /v1/appeals
+POST /v1/appeals/{appealId}/withdraw
 POST /v1/blocks/{userId}
 DELETE /v1/blocks/{userId}
 GET  /v1/blocks
@@ -497,6 +500,9 @@ Rules:
 - Hidden profiles remove the target from the viewer's discovery surfaces without treating the target as blocked.
 - Report history is reporter-scoped and returns only user-safe status, category, target type, display name, and timestamps.
 - Report history must not expose moderator notes, internal risk state, admin reasons, or private reported-user data.
+- Appeal history is owner-scoped and returns only user-safe status, user reason, optional admin note, target metadata, and timestamps.
+- Appeals are available for account/risk/media/message/other decisions where the server can verify an appealable target; one open appeal per target is allowed.
+- Appeal admin reasons and audit metadata must not be exposed to normal clients.
 - Support contact is never premium and returns server-configured contact details with a user-safe account reference.
 
 ## Verification API
@@ -596,6 +602,8 @@ Groups:
 /v1/admin/moderation-cases
 /v1/admin/risk
 /v1/admin/appeals
+/v1/admin/appeals/{appealId}/mark-under-review
+/v1/admin/appeals/{appealId}/decide
 /v1/admin/audit
 ```
 
