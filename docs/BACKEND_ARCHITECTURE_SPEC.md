@@ -756,6 +756,13 @@ Defaults are intentionally conservative for local development: max pool 10, min 
 
 When API profiling is enabled and the request includes `X-Pynapli-Profile: true`, Grid/profile/presence responses include timing headers for route, service, DB, Redis, and Hikari pool snapshots. Keep this local/staging-only until a production observability system replaces it.
 
+Client-side structured concurrency does not mean server handlers should fan out unbounded JDBC work. On the Ktor side:
+
+- Prefer one well-shaped SQL query or a bounded small set of queries over many parallel database calls.
+- Parallelize only independent non-authoritative side work when the Hikari pool, Redis latency, and endpoint budgets have been profiled.
+- Keep mutations that affect safety, billing, inventory, match state, moderation, blocks, or partner consent transactional and ordered.
+- Treat Hikari wait time and p95 route timing as the evidence for whether concurrency helped or just moved the bottleneck.
+
 For geospatial queries, prefer explicit SQL over hiding PostGIS behind a weak abstraction.
 
 ## Observability

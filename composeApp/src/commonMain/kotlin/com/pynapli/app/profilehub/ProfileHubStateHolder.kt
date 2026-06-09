@@ -3,6 +3,8 @@ package com.pynapli.app.profilehub
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.DeleteAccountRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,56 +16,63 @@ class ProfileHubStateHolder(
     private val _state = MutableStateFlow(ProfileHubUiState())
     val state: StateFlow<ProfileHubUiState> = _state.asStateFlow()
 
-    suspend fun load() {
-        if (state.value.isLoading) return
-        _state.update { it.copy(isLoading = true, errorMessage = null) }
+    suspend fun load() =
+        coroutineScope {
+            if (state.value.isLoading) return@coroutineScope
+            _state.update { it.copy(isLoading = true, errorMessage = null) }
 
-        when (val result = repository.loadMe()) {
-            is AppResult.Success -> {
-                val ageVerificationStatus =
-                    when (val status = repository.loadAgeVerificationStatus()) {
-                        is AppResult.Success -> status.value
-                        is AppResult.Failure -> null
+            val meDeferred = async { repository.loadMe() }
+            val ageVerificationDeferred = async { repository.loadAgeVerificationStatus() }
+            val latestDataExportDeferred = async { repository.latestDataExportRequest() }
+
+            when (val result = meDeferred.await()) {
+                is AppResult.Success -> {
+                    val ageVerificationStatus =
+                        when (val status = ageVerificationDeferred.await()) {
+                            is AppResult.Success -> status.value
+                            is AppResult.Failure -> null
+                        }
+                    val latestDataExport =
+                        when (val export = latestDataExportDeferred.await()) {
+                            is AppResult.Success -> export.value
+                            is AppResult.Failure -> null
+                        }
+                    _state.update { existing ->
+                        existing.copy(
+                            me = result.value,
+                            ageVerificationStatus = ageVerificationStatus,
+                            latestDataExport = latestDataExport,
+                            draft = if (existing.editVisible) existing.draft else result.value.profile.toDraft(),
+                            privacyDraft =
+                                if (existing.privacyVisible) {
+                                    existing.privacyDraft
+                                } else {
+                                    result.value.discoverySettings.toPrivacyDraft()
+                                },
+                            activityDraft =
+                                if (existing.activityVisible) {
+                                    existing.activityDraft
+                                } else {
+                                    result.value.discoverySettings.toActivityDraft()
+                                },
+                            isLoading = false,
+                            errorMessage = null,
+                        )
                     }
-                val latestDataExport =
-                    when (val export = repository.latestDataExportRequest()) {
-                        is AppResult.Success -> export.value
-                        is AppResult.Failure -> null
-                    }
-                _state.update { existing ->
-                    existing.copy(
-                        me = result.value,
-                        ageVerificationStatus = ageVerificationStatus,
-                        latestDataExport = latestDataExport,
-                        draft = if (existing.editVisible) existing.draft else result.value.profile.toDraft(),
-                        privacyDraft =
-                            if (existing.privacyVisible) {
-                                existing.privacyDraft
-                            } else {
-                                result.value.discoverySettings.toPrivacyDraft()
-                            },
-                        activityDraft =
-                            if (existing.activityVisible) {
-                                existing.activityDraft
-                            } else {
-                                result.value.discoverySettings.toActivityDraft()
-                            },
-                        isLoading = false,
-                        errorMessage = null,
-                    )
                 }
-            }
 
-            is AppResult.Failure -> {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = result.error.message,
-                    )
+                is AppResult.Failure -> {
+                    ageVerificationDeferred.cancel()
+                    latestDataExportDeferred.cancel()
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = result.error.message,
+                        )
+                    }
                 }
             }
         }
-    }
 
     fun openEditor() {
         _state.update { existing ->
@@ -511,12 +520,17 @@ class ProfileHubStateHolder(
         }
     }
 
-    suspend fun loadSafetyLists() {
-        loadBlocks()
-        loadHiddenProfiles()
-        loadReportHistory()
-        loadSupportContact()
-    }
+    suspend fun loadSafetyLists() =
+        coroutineScope {
+            val blocks = async { loadBlocks() }
+            val hidden = async { loadHiddenProfiles() }
+            val reports = async { loadReportHistory() }
+            val support = async { loadSupportContact() }
+            blocks.await()
+            hidden.await()
+            reports.await()
+            support.await()
+        }
 
     suspend fun unblockUser(userId: String) {
         val current = state.value

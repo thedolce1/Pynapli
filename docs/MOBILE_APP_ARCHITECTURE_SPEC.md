@@ -207,6 +207,26 @@ Rules:
 - Do not log message bodies, private media URLs, exact location, or sensitive tags.
 - All API errors map to typed client errors.
 
+## Structured Concurrency
+
+Use Kotlin coroutines to make screens feel fast without weakening product rules.
+
+Rules:
+
+- If two client reads are independent, start them together with structured concurrency (`coroutineScope` + `async`) and merge their results into one immutable state update path.
+- Do not wait for Task B when Task A does not need Task B's result.
+- Keep screen state cache-first where possible: render the last known usable state, then refresh canonical server data.
+- Do not parallelize mutations that depend on each other, consume inventory, affect billing, alter safety state, or change chat/match/partner consent.
+- Do not put authorization assumptions in concurrent client code. Ktor remains the authority for entitlements, visibility, blocks, age gates, and moderation.
+- Use labeled returns such as `return@coroutineScope` inside scoped loaders so early-exit guards do not break structured cancellation.
+
+Current pattern examples:
+
+- Playing Tonight loads feed, current session, and photo options together.
+- Profile Hub loads account, age-verification status, and latest data-export status together.
+- Profile Hub safety center loads blocks, hidden profiles, report history, and support contact together.
+- Media Albums loads profile album, private album, and private grants together.
+
 ## Realtime
 
 Use Ktor WebSocket client.

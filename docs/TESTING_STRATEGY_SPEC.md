@@ -20,6 +20,18 @@ For production release gates, load targets, security matrices, and CI/CD quality
 - Performance tests: grid, swipe, messages, location, battery.
 - Security/abuse tests: bots, spam, blocks, moderation.
 
+## Client Concurrency Tests
+
+When a `StateHolder` intentionally starts independent reads together, add a deterministic coroutine test for that contract.
+
+Pattern:
+
+- Use fake repositories with `CompletableDeferred` start gates.
+- Start the state-holder load in `async`.
+- Assert every independent repository call has started before releasing any of them.
+- Use `withTimeout` so an accidental sequential implementation fails quickly.
+- Keep dependent mutations out of this pattern unless the server contract explicitly makes them idempotent and order-safe.
+
 ## Critical E2E Journeys
 
 - Signup to first grid.

@@ -1,6 +1,8 @@
 package com.pynapli.app.media
 
 import com.pynapli.shared.core.result.AppResult
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,54 +17,59 @@ class MediaAlbumsStateHolder(
     val primaryOwnerProfilePhotoUrl: String?
         get() = state.value.primaryOwnerProfilePhotoUrl()
 
-    suspend fun load() {
-        if (state.value.isLoading) return
+    suspend fun load() =
+        coroutineScope {
+            if (state.value.isLoading) return@coroutineScope
 
-        _state.update { existing ->
-            existing.copy(isLoading = true, errorMessage = null)
-        }
+            _state.update { existing ->
+                existing.copy(isLoading = true, errorMessage = null)
+            }
 
-        val profileResult = repository.loadAlbum(MediaAlbumKindUi.Profile)
-        val privateResult = repository.loadAlbum(MediaAlbumKindUi.Private)
-        val grantsResult = repository.loadPrivateGrants()
+            val profileDeferred = async { repository.loadAlbum(MediaAlbumKindUi.Profile) }
+            val privateDeferred = async { repository.loadAlbum(MediaAlbumKindUi.Private) }
+            val grantsDeferred = async { repository.loadPrivateGrants() }
 
-        _state.update { existing ->
-            when {
-                profileResult is AppResult.Success &&
-                    privateResult is AppResult.Success &&
-                    grantsResult is AppResult.Success ->
-                    existing.copy(
-                        profileItems = profileResult.value,
-                        privateItems = privateResult.value,
-                        privateGrants = grantsResult.value,
-                        isLoading = false,
-                        errorMessage = null,
-                    )
+            val profileResult = profileDeferred.await()
+            val privateResult = privateDeferred.await()
+            val grantsResult = grantsDeferred.await()
 
-                profileResult is AppResult.Failure ->
-                    existing.copy(
-                        isLoading = false,
-                        errorMessage = profileResult.error.message,
-                    )
+            _state.update { existing ->
+                when {
+                    profileResult is AppResult.Success &&
+                        privateResult is AppResult.Success &&
+                        grantsResult is AppResult.Success ->
+                        existing.copy(
+                            profileItems = profileResult.value,
+                            privateItems = privateResult.value,
+                            privateGrants = grantsResult.value,
+                            isLoading = false,
+                            errorMessage = null,
+                        )
 
-                privateResult is AppResult.Failure ->
-                    existing.copy(
-                        isLoading = false,
-                        errorMessage = privateResult.error.message,
-                    )
+                    profileResult is AppResult.Failure ->
+                        existing.copy(
+                            isLoading = false,
+                            errorMessage = profileResult.error.message,
+                        )
 
-                grantsResult is AppResult.Failure ->
-                    existing.copy(
-                        profileItems = (profileResult as? AppResult.Success)?.value ?: existing.profileItems,
-                        privateItems = (privateResult as? AppResult.Success)?.value ?: existing.privateItems,
-                        isLoading = false,
-                        errorMessage = grantsResult.error.message,
-                    )
+                    privateResult is AppResult.Failure ->
+                        existing.copy(
+                            isLoading = false,
+                            errorMessage = privateResult.error.message,
+                        )
 
-                else -> existing.copy(isLoading = false)
+                    grantsResult is AppResult.Failure ->
+                        existing.copy(
+                            profileItems = (profileResult as? AppResult.Success)?.value ?: existing.profileItems,
+                            privateItems = (privateResult as? AppResult.Success)?.value ?: existing.privateItems,
+                            isLoading = false,
+                            errorMessage = grantsResult.error.message,
+                        )
+
+                    else -> existing.copy(isLoading = false)
+                }
             }
         }
-    }
 
     suspend fun revokeGrant(granteeUserId: String) {
         val current = state.value

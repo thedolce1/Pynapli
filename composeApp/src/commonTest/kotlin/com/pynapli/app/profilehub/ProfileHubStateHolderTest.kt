@@ -21,7 +21,10 @@ import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.SupportContactDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -45,6 +48,49 @@ class ProfileHubStateHolderTest {
                     ?.displayName,
             )
             assertNull(stateHolder.state.value.ageVerificationStatus)
+            assertNull(stateHolder.state.value.errorMessage)
+        }
+
+    @Test
+    fun loadStartsIndependentAccountRequestsTogether() =
+        runBlocking {
+            val loadMeStarted = CompletableDeferred<Unit>()
+            val loadAgeStarted = CompletableDeferred<Unit>()
+            val latestExportStarted = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val repository =
+                FakeProfileHubRepository(
+                    beforeLoadMe = {
+                        loadMeStarted.complete(Unit)
+                        release.await()
+                    },
+                    beforeLoadAge = {
+                        loadAgeStarted.complete(Unit)
+                        release.await()
+                    },
+                    beforeLatestDataExport = {
+                        latestExportStarted.complete(Unit)
+                        release.await()
+                    },
+                )
+            val stateHolder = ProfileHubStateHolder(repository)
+
+            val load = async { stateHolder.load() }
+
+            withTimeout(1_000) {
+                loadMeStarted.await()
+                loadAgeStarted.await()
+                latestExportStarted.await()
+            }
+            release.complete(Unit)
+            load.await()
+
+            assertEquals(
+                "Maya",
+                stateHolder.state.value.me
+                    ?.profile
+                    ?.displayName,
+            )
             assertNull(stateHolder.state.value.errorMessage)
         }
 
@@ -129,6 +175,51 @@ class ProfileHubStateHolderTest {
                     .blockedDisplayName,
             )
             assertEquals(null, stateHolder.state.value.errorMessage)
+        }
+
+    @Test
+    fun loadSafetyListsStartsIndependentRequestsTogether() =
+        runBlocking {
+            val blocksStarted = CompletableDeferred<Unit>()
+            val hiddenProfilesStarted = CompletableDeferred<Unit>()
+            val reportsStarted = CompletableDeferred<Unit>()
+            val supportStarted = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val repository =
+                FakeProfileHubRepository(
+                    beforeListBlocks = {
+                        blocksStarted.complete(Unit)
+                        release.await()
+                    },
+                    beforeListHiddenProfiles = {
+                        hiddenProfilesStarted.complete(Unit)
+                        release.await()
+                    },
+                    beforeListReportHistory = {
+                        reportsStarted.complete(Unit)
+                        release.await()
+                    },
+                    beforeGetSupportContact = {
+                        supportStarted.complete(Unit)
+                        release.await()
+                    },
+                )
+            val stateHolder = ProfileHubStateHolder(repository)
+
+            stateHolder.openSafetyCenter()
+            val load = async { stateHolder.loadSafetyLists() }
+
+            withTimeout(1_000) {
+                blocksStarted.await()
+                hiddenProfilesStarted.await()
+                reportsStarted.await()
+                supportStarted.await()
+            }
+            release.complete(Unit)
+            load.await()
+
+            assertEquals(true, stateHolder.state.value.safetyCenterVisible)
+            assertNull(stateHolder.state.value.errorMessage)
         }
 
     @Test
@@ -396,6 +487,13 @@ private class FakeProfileHubRepository(
         AppResult.Failure(
             AppError("UNIMPLEMENTED", "Not implemented."),
         ),
+    private val beforeLoadMe: suspend () -> Unit = {},
+    private val beforeLoadAge: suspend () -> Unit = {},
+    private val beforeLatestDataExport: suspend () -> Unit = {},
+    private val beforeListBlocks: suspend () -> Unit = {},
+    private val beforeListHiddenProfiles: suspend () -> Unit = {},
+    private val beforeListReportHistory: suspend () -> Unit = {},
+    private val beforeGetSupportContact: suspend () -> Unit = {},
 ) : ProfileHubRepository {
     var lastStartRequest: StartAgeVerificationRequestDto? = null
         private set
@@ -406,9 +504,15 @@ private class FakeProfileHubRepository(
     var lastDeleteAccountRequest: DeleteAccountRequestDto? = null
         private set
 
-    override suspend fun loadMe(): AppResult<MeDto> = loadMeResult
+    override suspend fun loadMe(): AppResult<MeDto> {
+        beforeLoadMe()
+        return loadMeResult
+    }
 
-    override suspend fun loadAgeVerificationStatus(): AppResult<AgeVerificationStatusDto> = loadAgeResult
+    override suspend fun loadAgeVerificationStatus(): AppResult<AgeVerificationStatusDto> {
+        beforeLoadAge()
+        return loadAgeResult
+    }
 
     override suspend fun startAgeVerification(
         request: StartAgeVerificationRequestDto,
@@ -421,25 +525,40 @@ private class FakeProfileHubRepository(
 
     override suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
-    override suspend fun listBlocks(): AppResult<BlocksListDto> = listBlocksResult
+    override suspend fun listBlocks(): AppResult<BlocksListDto> {
+        beforeListBlocks()
+        return listBlocksResult
+    }
 
     override suspend fun unblockUser(userId: String): AppResult<Unit> {
         lastUnblockedUserId = userId
         return unblockResult
     }
 
-    override suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto> = listHiddenProfilesResult
+    override suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto> {
+        beforeListHiddenProfiles()
+        return listHiddenProfilesResult
+    }
 
     override suspend fun unhideProfile(userId: String): AppResult<Unit> {
         lastUnhiddenUserId = userId
         return unhideResult
     }
 
-    override suspend fun listReportHistory(): AppResult<ReportHistoryListDto> = listReportsResult
+    override suspend fun listReportHistory(): AppResult<ReportHistoryListDto> {
+        beforeListReportHistory()
+        return listReportsResult
+    }
 
-    override suspend fun getSupportContact(): AppResult<SupportContactDto> = supportContactResult
+    override suspend fun getSupportContact(): AppResult<SupportContactDto> {
+        beforeGetSupportContact()
+        return supportContactResult
+    }
 
-    override suspend fun latestDataExportRequest(): AppResult<AccountDataExportDto?> = latestDataExportResult
+    override suspend fun latestDataExportRequest(): AppResult<AccountDataExportDto?> {
+        beforeLatestDataExport()
+        return latestDataExportResult
+    }
 
     override suspend fun requestDataExport(): AppResult<AccountDataExportDto> = requestDataExportResult
 
