@@ -1,6 +1,8 @@
 package com.pynapli.server.media
 
 import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MEDIA_IMAGE_MAX_BYTES
@@ -22,11 +24,13 @@ class MediaService(
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val moderationScanner: MediaModerationScanner = ManualReviewMediaModerationScanner(),
     private val moderationEscalationPublisher: MediaModerationEscalationPublisher = NoOpMediaModerationEscalationPublisher,
+    private val rateLimitService: RateLimitService? = null,
 ) {
     suspend fun createUploadSlot(
         ownerUserId: UUID,
         request: CreateMediaUploadRequestDto,
     ): MediaUploadSlotDto {
+        enforceUploadRateLimit(ownerUserId)
         val albumKind = request.albumKind.trim().lowercase()
         if (albumKind !in ALBUM_KINDS) throw MediaException("INVALID_MEDIA_ALBUM_KIND")
 
@@ -90,6 +94,7 @@ class MediaService(
         mediaAssetIdText: String,
         request: CompleteMediaUploadRequestDto,
     ): MediaAlbumItemDto {
+        enforceUploadRateLimit(ownerUserId)
         val mediaAssetId = mediaAssetIdText.toUuidOrThrow()
         val albumId = request.albumId.toUuidOrThrow()
         if (request.sortOrder < 0) throw MediaException("INVALID_MEDIA_SORT_ORDER")
@@ -138,6 +143,12 @@ class MediaService(
             album = album.toDto(),
             items = items.map { item -> item.toDto() },
         )
+    }
+
+    private suspend fun enforceUploadRateLimit(ownerUserId: UUID) {
+        if (rateLimitService?.check(ownerUserId, RateLimitedAction.MEDIA_UPLOAD)?.allowed == false) {
+            throw MediaException("RATE_LIMITED")
+        }
     }
 
     suspend fun listPrivateAlbumForViewer(

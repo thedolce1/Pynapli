@@ -82,6 +82,7 @@ fun authStatusFor(code: String): HttpStatusCode =
         "EMAIL_ALREADY_EXISTS" -> HttpStatusCode.Conflict
         "INVALID_CREDENTIALS", "INVALID_REFRESH_TOKEN", "UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
         "ACCOUNT_NOT_ACTIVE" -> HttpStatusCode.Forbidden
+        "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "INVALID_EMAIL",
         "PASSWORD_TOO_SHORT",
         "INVALID_BIRTHDATE",

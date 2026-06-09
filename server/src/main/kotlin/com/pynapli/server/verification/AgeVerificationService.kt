@@ -1,5 +1,7 @@
 package com.pynapli.server.verification
 
+import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationMethodDto
@@ -16,6 +18,7 @@ class AgeVerificationService(
     private val repository: AgeVerificationRepository,
     private val clock: Clock = Clock.systemUTC(),
     private val provider: AgeVerificationProvider? = null,
+    private val rateLimitService: RateLimitService? = null,
 ) {
     suspend fun requirements(userId: UUID): AgeVerificationRequirementsDto {
         val profile = repository.getProfileState(userId) ?: throw VerificationException("PROFILE_NOT_FOUND")
@@ -49,6 +52,9 @@ class AgeVerificationService(
         userId: UUID,
         request: StartAgeVerificationRequestDto,
     ): AgeVerificationStatusDto {
+        if (rateLimitService?.check(userId, RateLimitedAction.AGE_VERIFICATION_START)?.allowed == false) {
+            throw VerificationException("RATE_LIMITED")
+        }
         val profile = repository.getProfileState(userId) ?: throw VerificationException("PROFILE_NOT_FOUND")
         val latest = repository.latestForUser(userId)
 

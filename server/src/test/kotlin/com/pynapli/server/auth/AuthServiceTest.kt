@@ -1,6 +1,9 @@
 package com.pynapli.server.auth
 
 import com.pynapli.server.auth.security.PasswordHash
+import com.pynapli.server.safety.RateLimitCounter
+import com.pynapli.server.safety.RateLimitRepository
+import com.pynapli.server.safety.RateLimitService
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import java.time.Instant
@@ -194,6 +197,35 @@ class AuthServiceTest {
             assertEquals("TERMS_ACCEPTANCE_REQUIRED", termsError.code)
             assertEquals("PRIVACY_ACCEPTANCE_REQUIRED", privacyError.code)
         }
+
+    @Test
+    fun signupRejectsRateLimitedEmailBeforeCreatingUser() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository, rateLimitService = denyingRateLimitService())
+
+            val error =
+                assertFailsWith<AuthException> {
+                    signup(service)
+                }
+
+            assertEquals("RATE_LIMITED", error.code)
+            assertEquals(0, repository.signupProfiles.size)
+        }
+
+    @Test
+    fun loginRejectsRateLimitedEmailBeforeCredentialLookup() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository, rateLimitService = denyingRateLimitService())
+
+            val error =
+                assertFailsWith<AuthException> {
+                    service.loginEmail("alex@example.com", "correct horse battery", null, null, null)
+                }
+
+            assertEquals("RATE_LIMITED", error.code)
+        }
 }
 
 private suspend fun signup(
@@ -332,3 +364,13 @@ private data class SignupProfile(
     val termsAccepted: Boolean,
     val privacyAccepted: Boolean,
 )
+
+private fun denyingRateLimitService(): RateLimitService =
+    RateLimitService(
+        object : RateLimitRepository {
+            override suspend fun increment(
+                key: String,
+                windowSeconds: Long,
+            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
+        },
+    )

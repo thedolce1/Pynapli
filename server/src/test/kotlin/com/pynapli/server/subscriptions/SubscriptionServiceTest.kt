@@ -1,5 +1,8 @@
 package com.pynapli.server.subscriptions
 
+import com.pynapli.server.safety.RateLimitCounter
+import com.pynapli.server.safety.RateLimitRepository
+import com.pynapli.server.safety.RateLimitService
 import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.PremiumInventoryType
 import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
@@ -15,6 +18,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -250,6 +254,25 @@ class SubscriptionServiceTest {
             assertEquals(SubscriptionTier.SELECT, response.entitlement.tier)
             assertEquals(EntitlementSource.OWN_SUBSCRIPTION, response.entitlement.source)
             assertEquals(SubscriptionTier.SELECT, repository.verifiedPurchases.single().tier)
+        }
+
+    @Test
+    fun devStorePurchaseRejectsRateLimitedUserBeforeGrantingEntitlement() =
+        runBlocking {
+            val user = uuid(351)
+            val repository = InMemorySubscriptionRepository()
+            val service = SubscriptionService(repository, clock, rateLimitService = denyingRateLimitService())
+
+            val error =
+                assertFailsWith<SubscriptionException> {
+                    service.recordDevStorePurchase(
+                        userId = user,
+                        request = SubmitDevStorePurchaseRequestDto(SubscriptionProductId.PLAY_SELECT_MONTHLY),
+                    )
+                }
+
+            assertEquals("RATE_LIMITED", error.code)
+            assertEquals(0, repository.verifiedPurchases.size)
         }
 
     @Test
@@ -1096,3 +1119,13 @@ private class MutableEntitlementRepository(
 }
 
 private fun uuid(value: Int): UUID = UUID.fromString("00000000-0000-0000-0000-${value.toString().padStart(12, '0')}")
+
+private fun denyingRateLimitService(): RateLimitService =
+    RateLimitService(
+        object : RateLimitRepository {
+            override suspend fun increment(
+                key: String,
+                windowSeconds: Long,
+            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
+        },
+    )

@@ -169,7 +169,6 @@ class ServerDependencies(
             val postgres = PostgresDependencyProbe(database)
             val redis = RedisDependencyProbe(redisCache)
             val profileActivityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-            val authService = AuthService(JdbcAuthRepository(database.dataSource))
             val accountLifecycleService =
                 AccountLifecycleService(
                     JdbcAccountLifecycleRepository(database.dataSource),
@@ -201,6 +200,11 @@ class ServerDependencies(
                 RateLimitService(
                     repository = RedisRateLimitRepository(redisCache),
                     riskSignalPublisher = riskService,
+                )
+            val authService =
+                AuthService(
+                    repository = JdbcAuthRepository(database.dataSource),
+                    rateLimitService = rateLimitService,
                 )
             val reportService =
                 ReportService(
@@ -234,7 +238,14 @@ class ServerDependencies(
                 } else {
                     null
                 }
-            val media = buildMediaDependencies(config, blockRepository, riskService, database.dataSource)
+            val media =
+                buildMediaDependencies(
+                    config = config,
+                    blockRepository = blockRepository,
+                    riskService = riskService,
+                    rateLimitService = rateLimitService,
+                    dataSource = database.dataSource,
+                )
             val subscriptionService =
                 SubscriptionService(
                     repository = JdbcSubscriptionRepository(database.dataSource),
@@ -248,6 +259,7 @@ class ServerDependencies(
                     playStoreSyncStaleAfter = Duration.ofHours(config.playStoreSubscriptionSyncStaleAfterHours),
                     playStoreSyncRenewalLookahead =
                         Duration.ofHours(config.playStoreSubscriptionSyncRenewalLookaheadHours),
+                    rateLimitService = rateLimitService,
                 )
             val travelLocationService =
                 TravelLocationService(
@@ -360,6 +372,7 @@ class ServerDependencies(
                 AgeVerificationService(
                     repository = JdbcAgeVerificationRepository(database.dataSource),
                     provider = ageVerificationProvider,
+                    rateLimitService = rateLimitService,
                 )
             val messaging =
                 buildMessagingDependencies(

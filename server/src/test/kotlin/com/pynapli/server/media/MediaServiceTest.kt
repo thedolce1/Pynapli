@@ -1,5 +1,8 @@
 package com.pynapli.server.media
 
+import com.pynapli.server.safety.RateLimitCounter
+import com.pynapli.server.safety.RateLimitRepository
+import com.pynapli.server.safety.RateLimitService
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MEDIA_IMAGE_MAX_BYTES
@@ -37,6 +40,32 @@ class MediaServiceTest {
             assertEquals("PUT", slot.uploadMethod)
             assertEquals("image/jpeg", slot.uploadHeaders["Content-Type"])
             assertEquals("users/$ownerId/private/${slot.mediaAsset.mediaAssetId}.jpg", slot.storageObjectKey)
+        }
+
+    @Test
+    fun createUploadSlotRejectsRateLimitedOwnerBeforeSigningUpload() =
+        runBlocking {
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    rateLimitService = denyingRateLimitService(),
+                )
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.createUploadSlot(
+                        UUID.randomUUID(),
+                        CreateMediaUploadRequestDto(
+                            albumKind = "private",
+                            mediaType = "image",
+                            contentType = "image/jpeg",
+                            byteSize = 1_024,
+                        ),
+                    )
+                }
+
+            assertEquals("RATE_LIMITED", error.code)
         }
 
     @Test
@@ -760,3 +789,13 @@ private class InMemoryMediaRepository : MediaRepository {
             }
     }
 }
+
+private fun denyingRateLimitService(): RateLimitService =
+    RateLimitService(
+        object : RateLimitRepository {
+            override suspend fun increment(
+                key: String,
+                windowSeconds: Long,
+            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
+        },
+    )

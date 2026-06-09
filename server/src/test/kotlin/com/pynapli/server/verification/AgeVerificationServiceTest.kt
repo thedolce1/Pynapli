@@ -1,5 +1,8 @@
 package com.pynapli.server.verification
 
+import com.pynapli.server.safety.RateLimitCounter
+import com.pynapli.server.safety.RateLimitRepository
+import com.pynapli.server.safety.RateLimitService
 import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
@@ -34,6 +37,27 @@ class AgeVerificationServiceTest {
                 }
 
             assertEquals("ADULT_CONFIRMATION_REQUIRED", error.code)
+        }
+
+    @Test
+    fun startRejectsRateLimitedUserBeforeCreatingVerification() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01")))
+            val service =
+                AgeVerificationService(
+                    repository,
+                    clock,
+                    rateLimitService = denyingRateLimitService(),
+                )
+
+            val error =
+                assertFailsWith<VerificationException> {
+                    service.start(userId, StartAgeVerificationRequestDto(confirmedAdult = true))
+                }
+
+            assertEquals("RATE_LIMITED", error.code)
+            assertEquals(0, repository.records.size)
         }
 
     @Test
@@ -388,3 +412,13 @@ private class InMemoryAgeVerificationRepository(
         return record
     }
 }
+
+private fun denyingRateLimitService(): RateLimitService =
+    RateLimitService(
+        object : RateLimitRepository {
+            override suspend fun increment(
+                key: String,
+                windowSeconds: Long,
+            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
+        },
+    )

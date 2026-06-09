@@ -247,6 +247,7 @@ internal fun notificationStatusFor(code: String): HttpStatusCode =
 
 internal fun subscriptionStatusFor(code: String): HttpStatusCode =
     when (code) {
+        "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "RTDN_UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
         "RTDN_FORBIDDEN" -> HttpStatusCode.Forbidden
         "RTDN_VERIFICATION_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
@@ -297,6 +298,7 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
 
 internal fun verificationStatusFor(code: String): HttpStatusCode =
     when (code) {
+        "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "PROFILE_NOT_FOUND",
         "VERIFICATION_NOT_FOUND",
         -> HttpStatusCode.NotFound
@@ -314,6 +316,7 @@ internal fun verificationStatusFor(code: String): HttpStatusCode =
 
 internal fun mediaStatusFor(code: String): HttpStatusCode =
     when (code) {
+        "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "MEDIA_ASSET_NOT_FOUND",
         "MEDIA_ALBUM_NOT_FOUND",
         "MEDIA_GRANT_NOT_FOUND",

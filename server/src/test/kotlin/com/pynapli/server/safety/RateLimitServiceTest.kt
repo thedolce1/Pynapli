@@ -64,6 +64,22 @@ class RateLimitServiceTest {
             assertEquals(RateLimitedAction.PROFILE_VIEW, riskSignals.captured.single().action)
             assertEquals("pynapli:rate:profile_view:$userId", repository.keys.single())
         }
+
+    @Test
+    fun subjectRateLimitsHashTheSubjectBeforeWritingCounterKey() =
+        runBlocking {
+            val repository = SequencedRateLimitRepository(listOf(1))
+            val service = RateLimitService(repository)
+
+            val decision = service.checkSubject("Alex@Example.com", RateLimitedAction.AUTH_LOGIN)
+
+            assertTrue(decision.allowed)
+            assertEquals(RateLimitedAction.AUTH_LOGIN, decision.action)
+            val key = repository.keys.single()
+            assertTrue(key.startsWith("pynapli:rate:${RateLimitedAction.AUTH_LOGIN}:subject:"))
+            assertFalse(key.contains("alex", ignoreCase = true))
+            assertFalse(key.contains("example", ignoreCase = true))
+        }
 }
 
 private class SequencedRateLimitRepository(

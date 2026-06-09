@@ -21,6 +21,7 @@ import com.pynapli.server.media.StaticMediaUploadSigner
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.JdbcReportRepository
 import com.pynapli.server.safety.MediaModerationEscalationService
+import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RiskService
 import java.io.ByteArrayInputStream
 import java.io.FileInputStream
@@ -46,8 +47,19 @@ internal fun buildMediaDependencies(
     config: ServerConfig,
     blockRepository: BlockRepository,
     riskService: RiskService,
+    rateLimitService: RateLimitService,
     dataSource: DataSource,
 ): MediaDependencies {
+    if (
+        config.mediaStorageProvider.equals("local", ignoreCase = true) &&
+        config.environment !in LOCAL_MEDIA_ALLOWED_ENVIRONMENTS
+    ) {
+        throw IllegalStateException(
+            "Local media upload storage is allowed only for local/test environments. " +
+                "Use PYNAPLI_MEDIA_STORAGE_PROVIDER=gcs for production-like environments.",
+        )
+    }
+
     // Media signing credentials, loaded once and shared by the GCS signer and the Cloud
     // Vision moderation scanner (both ride the same service account).
     val mediaSigningCredentials =
@@ -142,6 +154,7 @@ internal fun buildMediaDependencies(
                     reportRepository = JdbcReportRepository(dataSource),
                     riskSignalPublisher = riskService,
                 ),
+            rateLimitService = rateLimitService,
         )
     return MediaDependencies(
         mediaAssetUrlResolver = mediaAssetUrlResolver,
@@ -149,6 +162,8 @@ internal fun buildMediaDependencies(
         mediaService = mediaService,
     )
 }
+
+private val LOCAL_MEDIA_ALLOWED_ENVIRONMENTS = setOf("local", "test")
 
 // GCS V4 signing needs a service-account private key. Prefer a media-specific service
 // account (least privilege: storage object access only); fall back to the Firebase service

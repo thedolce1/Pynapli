@@ -1,5 +1,7 @@
 package com.pynapli.server.subscriptions
 
+import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.shared.network.dto.BoostActivationDto
 import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.PremiumInventoryBalanceDto
@@ -27,6 +29,7 @@ class SubscriptionService(
     private val playStoreSyncRenewalLookahead: Duration = Duration.ofHours(24),
     private val entitlementCacheTtl: Duration = Duration.ofSeconds(5),
     private val entitlementCacheMaxSize: Int = 10_000,
+    private val rateLimitService: RateLimitService? = null,
 ) {
     private val entitlementCache =
         SubscriptionEntitlementCache(
@@ -136,6 +139,7 @@ class SubscriptionService(
         userId: UUID,
         request: SubmitDevStorePurchaseRequestDto,
     ): StorePurchaseResponseDto {
+        enforceRateLimit(userId, RateLimitedAction.STORE_PURCHASE)
         val productId = request.productId.trim()
         if (productId.isEmpty()) throw SubscriptionException("INVALID_STORE_PRODUCT")
         val now = clock.instant()
@@ -194,6 +198,7 @@ class SubscriptionService(
         userId: UUID,
         request: SubmitPlayStoreSubscriptionPurchaseRequestDto,
     ): SubscriptionPurchaseSyncResponseDto {
+        enforceRateLimit(userId, RateLimitedAction.STORE_PURCHASE)
         val productId = request.productId.trim()
         val purchaseToken = request.purchaseToken.trim()
         val packageName = request.packageName.trim()
@@ -334,6 +339,7 @@ class SubscriptionService(
     suspend fun refundPineappleLikeInventory(inventoryId: UUID): Boolean = repository.refundInventoryById(inventoryId, clock.instant())
 
     suspend fun activateBoost(userId: UUID): BoostActivationDto {
+        enforceRateLimit(userId, RateLimitedAction.BOOST_ACTIVATE)
         val result =
             repository.activateBoost(
                 userId = userId,
@@ -364,6 +370,13 @@ class SubscriptionService(
             expiresAt = now.plus(DEV_INVENTORY_PERIOD),
             now = now,
         ) ?: throw SubscriptionException("INVALID_STORE_PRODUCT")
+    }
+
+    private suspend fun enforceRateLimit(
+        userId: UUID,
+        action: String,
+    ) {
+        if (rateLimitService?.check(userId, action)?.allowed == false) throw SubscriptionException("RATE_LIMITED")
     }
 
     private fun PremiumInventoryBalanceRecord.toDto(): PremiumInventoryBalanceDto =

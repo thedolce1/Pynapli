@@ -221,6 +221,10 @@ function Invoke-PynapliUploadBytes {
     }
 }
 
+# Unique per run: the server rate-limits signups/logins per device subject, so a
+# fixed device id would make repeated seed/QA runs trip 429s on shared counters.
+$script:SeedDeviceId = "local-dev-seed-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+
 function Get-DevSession {
     param(
         [string]$Email
@@ -236,7 +240,7 @@ function Get-DevSession {
             confirmedAdult = $true
             acceptedTerms = $true
             acceptedPrivacy = $true
-            deviceId = "local-dev-seed"
+            deviceId = $script:SeedDeviceId
             platform = "seed"
             appVersion = "0.1.0"
         }
@@ -245,7 +249,9 @@ function Get-DevSession {
         return $signup.Body
     }
 
-    if ($signup.StatusCode -ne 409) {
+    # 409 = account already seeded; 429 = signup budget spent on an earlier run.
+    # Both mean the account most likely exists, so fall through to login.
+    if ($signup.StatusCode -ne 409 -and $signup.StatusCode -ne 429) {
         Assert-Success -Response $signup -Action "Signup $Email"
     }
 
@@ -255,7 +261,7 @@ function Get-DevSession {
         -Body @{
             email = $Email
             password = $Password
-            deviceId = "local-dev-seed"
+            deviceId = $script:SeedDeviceId
             platform = "seed"
             appVersion = "0.1.0"
         }

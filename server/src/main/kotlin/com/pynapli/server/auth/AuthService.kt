@@ -4,6 +4,8 @@ import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.auth.security.Sha256
 import com.pynapli.server.auth.security.TokenGenerator
 import com.pynapli.server.auth.security.normalizeEmail
+import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.AuthUserDto
 import java.sql.SQLException
@@ -21,6 +23,7 @@ class AuthService(
     private val clock: Clock = Clock.systemUTC(),
     private val accessSessionCacheTtl: Duration = Duration.ofSeconds(5),
     private val accessSessionCacheMaxSize: Int = 20_000,
+    private val rateLimitService: RateLimitService? = null,
 ) {
     private val accessSessionCache = ConcurrentHashMap<String, CachedAccessSession>()
 
@@ -35,6 +38,7 @@ class AuthService(
         platform: String?,
         appVersion: String?,
     ): AuthSessionDto {
+        enforceAnonymousRateLimit(RateLimitedAction.AUTH_SIGNUP, email, deviceId)
         validateEmailPassword(email, password)
         val ageGate =
             validateSignupAgeGate(
@@ -75,6 +79,7 @@ class AuthService(
         platform: String?,
         appVersion: String?,
     ): AuthSessionDto {
+        enforceAnonymousRateLimit(RateLimitedAction.AUTH_LOGIN, email, deviceId)
         validateEmailPassword(email, password)
         val identity =
             repository.findEmailIdentity(Sha256.hash(normalizeEmail(email)))
@@ -88,6 +93,7 @@ class AuthService(
     }
 
     suspend fun refresh(refreshToken: String): AuthSessionDto {
+        enforceAnonymousRateLimit(RateLimitedAction.AUTH_REFRESH, refreshToken)
         val now = clock.instant()
         val session =
             repository.findSessionByRefreshTokenHash(Sha256.hash(refreshToken))
@@ -243,6 +249,23 @@ class AuthService(
         if (cacheExpiresAt.isAfter(now)) {
             accessSessionCache[accessTokenHash] = CachedAccessSession(user = user, expiresAt = cacheExpiresAt)
         }
+    }
+
+    private suspend fun enforceAnonymousRateLimit(
+        action: String,
+        primarySubject: String,
+        secondarySubject: String? = null,
+    ) {
+        val limiter = rateLimitService ?: return
+        if (limiter.checkSubject(primarySubject, action).allowed == false) throw AuthException("RATE_LIMITED")
+        secondarySubject
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { subject ->
+                if (limiter.checkSubject("$action:$subject", action).allowed == false) {
+                    throw AuthException("RATE_LIMITED")
+                }
+            }
     }
 
     companion object {
