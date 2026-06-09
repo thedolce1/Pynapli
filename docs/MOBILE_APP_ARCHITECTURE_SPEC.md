@@ -226,6 +226,7 @@ Current pattern examples:
 - Profile Hub loads account, age-verification status, and latest data-export status together.
 - Profile Hub safety center loads blocks, hidden profiles, report history, and support contact together.
 - Media Albums loads profile album, private album, and private grants together.
+- Server-backed App Settings loads local settings and remote notification preferences together, then merges after both complete.
 
 ## Realtime
 

@@ -5,7 +5,10 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.NotificationPreferencesDto
 import com.pynapli.shared.network.dto.UpdateNotificationPreferencesRequestDto
 import com.pynapli.shared.settings.AppSettings
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -109,6 +112,40 @@ class AppSettingsStateHolderTest {
             assertEquals(7 * 60, settings.quietHoursEndMinute)
             assertEquals("America/Toronto", settings.quietHoursTimezone)
             assertEquals(settings, localRepository.settings)
+        }
+
+    @Test
+    fun serverBackedRepositoryStartsIndependentLocalAndRemoteLoadsTogether() =
+        runBlocking {
+            val localStarted = CompletableDeferred<Unit>()
+            val remoteStarted = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val localRepository =
+                InMemoryAppSettingsRepository(
+                    beforeLoad = {
+                        localStarted.complete(Unit)
+                        release.await()
+                    },
+                )
+            val gateway =
+                FakeNotificationPreferencesGateway(
+                    beforeLoad = {
+                        remoteStarted.complete(Unit)
+                        release.await()
+                    },
+                )
+            val repository = ServerBackedAppSettingsRepository(localRepository, gateway)
+
+            val load = async { repository.load() }
+
+            withTimeout(1_000) {
+                localStarted.await()
+                remoteStarted.await()
+            }
+            release.complete(Unit)
+            load.await()
+
+            assertEquals(1, gateway.loadCount)
         }
 
     @Test
@@ -245,10 +282,14 @@ class AppSettingsStateHolderTest {
 
 private class InMemoryAppSettingsRepository(
     initialSettings: AppSettings = AppSettings(),
+    private val beforeLoad: suspend () -> Unit = {},
 ) : AppSettingsRepository {
     var settings: AppSettings = initialSettings
 
-    override suspend fun load(): AppSettings = settings
+    override suspend fun load(): AppSettings {
+        beforeLoad()
+        return settings
+    }
 
     override suspend fun save(settings: AppSettings) {
         this.settings = settings
@@ -258,11 +299,13 @@ private class InMemoryAppSettingsRepository(
 private class FakeNotificationPreferencesGateway(
     var loadResult: AppResult<NotificationPreferencesDto> = AppResult.Success(notificationPreferences()),
     var updateResult: AppResult<NotificationPreferencesDto> = AppResult.Success(notificationPreferences()),
+    private val beforeLoad: suspend () -> Unit = {},
 ) : NotificationPreferencesGateway {
     var lastUpdateRequest: UpdateNotificationPreferencesRequestDto? = null
     var loadCount: Int = 0
 
     override suspend fun getNotificationPreferences(): AppResult<NotificationPreferencesDto> {
+        beforeLoad()
         loadCount += 1
         return loadResult
     }

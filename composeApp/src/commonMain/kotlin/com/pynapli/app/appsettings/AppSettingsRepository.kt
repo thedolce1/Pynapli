@@ -6,6 +6,8 @@ import com.pynapli.shared.network.dto.NotificationPreferencesDto
 import com.pynapli.shared.network.dto.UpdateNotificationPreferencesRequestDto
 import com.pynapli.shared.settings.AppSettings
 import com.pynapli.shared.settings.AppSettingsStore
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 interface AppSettingsRepository {
     suspend fun load(): AppSettings
@@ -47,18 +49,22 @@ class ServerBackedAppSettingsRepository(
     private val timezoneProvider: () -> String? = { null },
     private val remoteSyncEnabled: () -> Boolean = { true },
 ) : AppSettingsRepository {
-    override suspend fun load(): AppSettings {
-        val localSettings = localRepository.load().normalized()
-        if (!remoteSyncEnabled()) return localSettings
+    override suspend fun load(): AppSettings =
+        coroutineScope {
+            if (!remoteSyncEnabled()) return@coroutineScope localRepository.load().normalized()
 
-        return when (val result = notificationPreferencesGateway.getNotificationPreferences()) {
-            is AppResult.Success ->
-                localSettings.mergeNotificationPreferences(result.value).also { merged ->
-                    localRepository.save(merged)
-                }
-            is AppResult.Failure -> localSettings
+            val localSettingsDeferred = async { localRepository.load().normalized() }
+            val remotePreferencesDeferred = async { notificationPreferencesGateway.getNotificationPreferences() }
+
+            val localSettings = localSettingsDeferred.await()
+            when (val result = remotePreferencesDeferred.await()) {
+                is AppResult.Success ->
+                    localSettings.mergeNotificationPreferences(result.value).also { merged ->
+                        localRepository.save(merged)
+                    }
+                is AppResult.Failure -> localSettings
+            }
         }
-    }
 
     override suspend fun save(settings: AppSettings) {
         val normalized =
