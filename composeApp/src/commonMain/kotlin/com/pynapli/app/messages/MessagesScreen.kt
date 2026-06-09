@@ -125,8 +125,12 @@ private fun MessagesScreenContent(
             else -> {
                 // New matches (swipe conversations with no messages yet) ride a Tinder-style rail
                 // at the top; they are kept out of the conversation list until someone says hi.
-                val newMatches = state.conversations.filter { it.isNewMatch() }
-                val listConversations = state.conversations.filterNot { it.isNewMatch() }
+                val conversationGroups =
+                    remember(state.conversations) {
+                        state.conversations.partition { conversation -> conversation.isNewMatch() }
+                    }
+                val newMatches = conversationGroups.first
+                val listConversations = conversationGroups.second
                 LazyColumn(
                     modifier =
                         Modifier
@@ -134,7 +138,10 @@ private fun MessagesScreenContent(
                             .testTag(MessagesTestTags.LIST),
                 ) {
                     if (newMatches.isNotEmpty()) {
-                        item(key = "new-matches-rail") {
+                        item(
+                            key = "new-matches-rail",
+                            contentType = "new-matches-rail",
+                        ) {
                             MessagesNewMatchesRail(
                                 matches = newMatches,
                                 viewerUserId = viewerUserId,
@@ -147,6 +154,7 @@ private fun MessagesScreenContent(
                     items(
                         items = listConversations,
                         key = { conversation -> conversation.conversationId },
+                        contentType = { "conversation-row" },
                     ) { conversation ->
                         ConversationRow(
                             conversation = conversation,
@@ -159,7 +167,10 @@ private fun MessagesScreenContent(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                     }
                     if (listConversations.isEmpty() && newMatches.isNotEmpty()) {
-                        item(key = "new-matches-only-hint") {
+                        item(
+                            key = "new-matches-only-hint",
+                            contentType = "new-matches-only-hint",
+                        ) {
                             Text(
                                 text = "Say hi to your new matches to start a conversation.",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -136,6 +136,23 @@ Rules:
 - Do not keep product-critical authorization logic only in ViewModels.
 - Do not block animations on network calls.
 
+## Compose Performance Rules
+
+Prioritize performance on Discovery/Grid, Swipe, Messages, and Profile before secondary surfaces.
+
+Rules:
+
+- Keep UI state immutable and render-ready. State holders/repositories should sort, filter, and map expensive data before the composable receives it.
+- Use stable keys and content types in lazy grids/lists/rails (`key = { id }`) so Compose can preserve item identity and scroll position.
+- Keep lazy scroll state stable with `rememberLazyGridState` / `rememberLazyListState` owned at the screen boundary when scroll position matters.
+- Avoid repeated list splitting, sorting, filtering, and label-building directly in composition. Use `remember(...)` / `derivedStateOf` when the calculation depends on stable inputs and is not already done upstream.
+- Use `derivedStateOf` for values tied to scroll/layout state or expensive derived values. Do not add it for trivial constants or one-off labels.
+- Split large screens into focused composables so state changes recompose the smallest useful surface.
+- Grid cards and rails must use thumbnail URLs. Full-size media belongs in profile/detail/media surfaces only.
+- Image prefetch should be bounded to nearby visible cards and cancelled naturally by leaving composition.
+- Presence changes should update only in-memory/visible cards where possible, never rebuild the whole discovery surface for unrelated users.
+- Do not pass huge mutable objects or unstable lambdas deep into hot card composables when a small render model/callback is enough.
+
 ## Navigation
 
 Bottom tabs:

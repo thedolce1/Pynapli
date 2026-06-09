@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,6 +73,7 @@ internal fun MessagesNewMatchesRail(
             items(
                 items = matches,
                 key = { match -> match.conversationId },
+                contentType = { "new-match-avatar" },
             ) { match ->
                 NewMatchAvatar(
                     name = match.titleFor(viewerUserId),
@@ -93,6 +95,7 @@ private fun NewMatchAvatar(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val brush = remember(seed) { avatarBrush(seed) }
     Column(
         modifier = modifier.width(68.dp).clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -104,7 +107,7 @@ private fun NewMatchAvatar(
                     Modifier
                         .size(64.dp)
                         .clip(CircleShape)
-                        .background(avatarBrush(seed))
+                        .background(brush)
                         .border(2.dp, PynapliColors.Accent, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {

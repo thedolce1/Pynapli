@@ -102,7 +102,10 @@ internal fun SwipeFilterRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         filters.forEach { filter ->
-            item(key = filter.type.name) {
+            item(
+                key = filter.type.name,
+                contentType = "swipe-filter-chip",
+            ) {
                 PynapliPill(
                     text = filter.label,
                     selected = filter.active,

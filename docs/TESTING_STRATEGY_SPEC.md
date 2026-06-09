@@ -48,6 +48,17 @@ Pattern:
 - Subscription purchase/restore/linked partner entitlement.
 - Block/report removes visibility.
 
+## Compose Performance Audits
+
+For Grid, Swipe, Messages, and Profile UI changes, include a lightweight Compose performance audit before merge:
+
+- Lazy collections use stable item keys and content types where available.
+- Scroll state is remembered at the screen boundary for surfaces that must preserve position.
+- Expensive list transforms, sorting, grouping, and label construction are upstream or memoized.
+- Image surfaces use the correct size class: thumbnails for grid/rails/card previews, full media only in detail surfaces.
+- Presence/realtime updates are scoped to affected rows/cards and do not force full-list replacement unless the server changed ordering.
+- Hot card/row composables are split from headers, filters, sheets, and overlays.
+
 ## Visual Regression
 
 Current Grid coverage:

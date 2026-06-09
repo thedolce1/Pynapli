@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -20,7 +21,8 @@ internal fun SwipeCardStack(
     onLinkedPartnerTap: (SwipeCardDto) -> Unit,
     onSwiped: (SwipeCardDto, String) -> Unit,
 ) {
-    val visibleStack = cards.take(3)
+    val visibleStack = remember(cards) { cards.take(3) }
+    val renderStack = remember(visibleStack) { visibleStack.asReversed() }
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -30,7 +32,7 @@ internal fun SwipeCardStack(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            visibleStack.asReversed().forEachIndexed { reverseIndex, card ->
+            renderStack.forEachIndexed { reverseIndex, card ->
                 val depth = visibleStack.lastIndex - reverseIndex
                 SwipeCard(
                     card = card,

@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,13 +40,15 @@ internal fun ProfileFacts(profileState: ProfileDetailUiState) {
     val card = profileState.selectedCard ?: return
     val profile = profileState.profile ?: return
     val chips =
-        buildList {
-            profile.displayAge?.let { add("$it") }
-            add(profile.discoveryStyle.toDisplayLabel())
-            profile.relationshipContext?.let { add(it.toDisplayLabel()) }
-            profile.gender?.let { add(it.toDisplayLabel()) }
-            profile.orientation?.let { add(it.toDisplayLabel()) }
-            if (profile.linkedPartner != null || card.linkedPartner != null) add("Linked")
+        remember(profile, card.linkedPartner) {
+            buildList {
+                profile.displayAge?.let { add("$it") }
+                add(profile.discoveryStyle.toDisplayLabel())
+                profile.relationshipContext?.let { add(it.toDisplayLabel()) }
+                profile.gender?.let { add(it.toDisplayLabel()) }
+                profile.orientation?.let { add(it.toDisplayLabel()) }
+                if (profile.linkedPartner != null || card.linkedPartner != null) add("Linked")
+            }
         }
 
     FlowRow(
