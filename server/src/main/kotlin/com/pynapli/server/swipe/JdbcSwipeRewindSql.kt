@@ -30,19 +30,14 @@ internal fun Connection.findLatestRewindableAction(
                p.bio,
                COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
                p.verified_at IS NOT NULL AS verified,
-               EXISTS (
-                   SELECT 1 FROM travel_locations tlt
-                   WHERE tlt.user_id = u.id
-                     AND tlt.status = 'active'
-                     AND tlt.active_until IS NULL
-               ) AS visiting,
+               target_travel.id IS NOT NULL AS visiting,
                profile_photos.thumbnail_media_asset_id,
                profile_photos.media_asset_ids AS profile_photo_ids,
                linked_partner.linked_partner_user_id,
                linked_partner.linked_partner_display_name,
                linked_partner.linked_partner_thumbnail_media_asset_id,
                ds.show_distance,
-               ST_Distance(v.geom, ul.geom) AS distance_meters
+               ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters
         FROM swipe_actions sa
         JOIN viewer_location v ON true
         JOIN users u
@@ -53,6 +48,12 @@ internal fun Connection.findLatestRewindableAction(
           ON p.user_id = u.id
         JOIN discovery_settings ds
           ON ds.user_id = u.id
+        -- Target-side travel must mirror queryDeck so a Liked visiting
+        -- card remains rewindable and keeps its destination distance.
+        LEFT JOIN travel_locations target_travel
+          ON target_travel.user_id = u.id
+         AND target_travel.status = 'active'
+         AND target_travel.active_until IS NULL
         LEFT JOIN account_risk_states ars
           ON ars.user_id = u.id
         LEFT JOIN LATERAL (
@@ -139,8 +140,12 @@ internal fun Connection.findLatestRewindableAction(
           AND p.visibility_status = 'visible'
           AND ds.swipe_visible = true
           AND ds.incognito = false
+          AND (target_travel.id IS NULL OR ds.visible_while_traveling = true)
           AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
-          AND ST_DWithin(v.geom, ul.geom, ?)
+          AND (
+              ST_DWithin(v.geom, ul.geom, ?)
+              OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
+          )
           AND NOT EXISTS (
               SELECT 1
               FROM user_blocks ub
@@ -174,9 +179,10 @@ internal fun Connection.findLatestRewindableAction(
         statement.setObject(3, viewerUserId)
         statement.setObject(4, viewerUserId)
         statement.setDouble(5, radiusMeters.toDouble())
-        statement.setObject(6, viewerUserId)
+        statement.setDouble(6, radiusMeters.toDouble())
         statement.setObject(7, viewerUserId)
         statement.setObject(8, viewerUserId)
+        statement.setObject(9, viewerUserId)
         statement.executeQuery().use { rs ->
             if (!rs.next()) {
                 null

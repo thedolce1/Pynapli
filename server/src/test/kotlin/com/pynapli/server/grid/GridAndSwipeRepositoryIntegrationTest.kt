@@ -684,6 +684,45 @@ class GridAndSwipeRepositoryIntegrationTest :
             }
         }
 
+        "travel-mode target liked in destination deck remains rewindable" {
+            // Rewind must mirror the deck's target-side travel override: a Like on
+            // a visiting card (target physically in SF, traveling to NYC) stays
+            // rewindable even though the target's home is outside MAX_RADIUS.
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000995")
+                val visitingTarget = UUID.fromString("00000000-0000-0000-0000-000000000996")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -74.0060, latitude = 40.7128)
+                dataSource.insertDiscoverableUser(visitingTarget, "Maya", age = 34, longitude = -122.4194, latitude = 37.7749)
+                dataSource.insertActiveTravelLocation(
+                    userId = visitingTarget,
+                    city = "New York",
+                    latitude = 40.7128,
+                    longitude = -74.0060,
+                )
+                val service = SwipeService(JdbcSwipeRepository(dataSource))
+
+                val deck = service.queryDeck(viewer, SwipeDeckRequestDto(radiusMeters = 5_000, limit = 5))
+                val card = assertNotNull(deck.items.singleOrNull { it.userId == visitingTarget.toString() })
+                service.submitAction(
+                    viewer,
+                    SwipeActionRequestDto(
+                        actionId = UUID.randomUUID().toString(),
+                        deckSessionId = deck.deckSessionId,
+                        cardToken = card.rankToken,
+                        targetUserId = visitingTarget.toString(),
+                        action = SwipeAction.LIKE,
+                    ),
+                )
+
+                val rewind = service.rewind(viewer)
+
+                assertTrue(rewind.rewound, "Like on a visiting card must be rewindable")
+                val rewoundCard = assertNotNull(rewind.card)
+                assertEquals(visitingTarget.toString(), rewoundCard.userId)
+                assertTrue(rewoundCard.visiting, "Rewound card must keep the visiting flag")
+            }
+        }
+
         "travel-mode Like still creates a match when reciprocated within the 24h tail" {
             // SWIPE_IMPLEMENTATION_SPEC L347, L353: a Like sent in travel mode
             // remains matchable while the session is active. Active session =
