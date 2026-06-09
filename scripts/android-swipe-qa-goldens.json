@@ -5,14 +5,12 @@
     "swipeInitial": {
       "requiredTexts": [
         "Swipe",
-        "Pass or like nearby profiles",
         "Travel",
         "Filters",
         "For You",
+        "Top Picks",
         "Linked",
         "Age",
-        "Today's Top Pick",
-        "Refreshes daily",
         "Rewind",
         "Pass",
         "Intro Note",
@@ -91,12 +89,39 @@
         "minColorBucketCount": 8
       }
     },
+    "topPicksDeck": {
+      "requiredTexts": [
+        "Swipe",
+        "Today's Top Picks",
+        "For You",
+        "Top Picks",
+        "Rewind",
+        "Pass",
+        "Intro Note",
+        "Pineapple Like",
+        "Like"
+      ],
+      "forbiddenTexts": [
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Request failed",
+        "You've seen today's Top Picks",
+        "1 pending"
+      ],
+      "image": {
+        "minWidth": 720,
+        "minHeight": 1280,
+        "minDarkRatio": 0.35,
+        "maxBrightRatio": 0.24,
+        "minNonBlackRatio": 0.25,
+        "minAccentYellowRatio": 0.0005,
+        "minColorBucketCount": 12
+      }
+    },
     "linkedDeck": {
       "requiredTexts": [
         "Swipe",
-        "Pass or like nearby profiles",
         "Linked",
-        "Today's Top Pick",
         "Rewind",
         "Pass",
         "Intro Note",

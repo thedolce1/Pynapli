@@ -677,15 +677,14 @@ function Get-MainSwipeSnapshot {
 
     $chromeTexts = @(
         "Swipe",
-        "Pass or like nearby profiles",
+        "Psync",
         "Travel",
         "Filters",
         "For You",
+        "Top Picks",
         "Linked",
         "Age",
-        "Today's Top Picks",
-        "Today's Top Pick",
-        "Refreshes daily",
+        "Today's Top Picks · refreshes daily",
         "Rewind",
         "Pass",
         "Intro Note",
@@ -943,6 +942,19 @@ $script:VisualSignatures.travelSheet = Assert-GoldenStage "travelSheet" $travelX
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_BACK") | Out-Null
 Wait-ForAnyText @("For You", "Like") 20 | Out-Null
 
+Tap-Text "Top Picks"
+Wait-ForAnyText @("Today's Top Picks") 45 | Out-Null
+Start-Sleep -Milliseconds 1000
+$topPicksXml = Dump-Ui "05b_swipe_top_picks_deck" -Keep
+Assert-NoAppErrorText $topPicksXml "Top Picks deck"
+$topPicksSnapshot = @(Get-MainSwipeSnapshot $topPicksXml)
+Assert-MainSwipeSnapshotPresent $topPicksSnapshot "Top Picks deck"
+$script:Screenshots.topPicksDeck = Save-Screen "05b_swipe_top_picks_deck"
+$script:VisualSignatures.topPicksDeck = Assert-GoldenStage "topPicksDeck" $topPicksXml $script:Screenshots.topPicksDeck
+Write-Host "[ok] Top Picks main Swipe card: $((Get-SnapshotTexts $topPicksSnapshot) -join ', ')"
+Tap-Text "For You"
+Wait-ForAnyText @("For You", "Like") 20 | Out-Null
+
 Tap-Text "Linked"
 Wait-ForAnyText @("Maya", "Alex", "Jules", "Rae") 45 | Out-Null
 Start-Sleep -Milliseconds 1000
@@ -954,7 +966,8 @@ $script:Screenshots.linkedDeck = Save-Screen "06_swipe_linked_deck"
 $script:VisualSignatures.linkedDeck = Assert-GoldenStage "linkedDeck" $linkedXml $script:Screenshots.linkedDeck
 Write-Host "[ok] Linked main Swipe card: $((Get-SnapshotTexts $linkedSnapshot) -join ', ')"
 
-Tap-ContentDescription "Linked partner" -MinTop 650 -MaxTop 1300 -MinLeftRatio 0.55
+# Slim header (#93) pulled the card and its top-right Linked-partner badge up.
+Tap-ContentDescription "Linked partner" -MinTop 420 -MaxTop 1300 -MinLeftRatio 0.55
 Wait-ForAnyText @("Linked with") 20 | Out-Null
 Start-Sleep -Milliseconds 600
 $partnerXml = Dump-Ui "07_swipe_linked_partner_preview" -Keep
