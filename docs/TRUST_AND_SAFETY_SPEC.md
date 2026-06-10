@@ -677,7 +677,7 @@ Reject:
 - [x] Verification lowers risk where appropriate: a verified age-verification outcome (admin review or provider callback) publishes a -20 risk event; the account score stays floored at 0.
 - [ ] Partial: appeal review flow exists; support review workflow, account notices, roles/MFA, and senior-review separation remain.
 - [x] Moderator dashboard requirements are tracked.
-- [ ] False-positive metrics exist.
+- [x] False-positive metrics exist: `RiskFalsePositiveMetrics` counts every admin appeal decision by outcome (in-process, low-cardinality labels only — never user identifiers or appeal content, mirroring `NotificationMetrics`), so the enforcement overturn rate (restored+reduced vs decided) is observable; hooked into `AdminAppealService.decideAppeal`. A metrics exporter/scrape endpoint remains future work alongside the push-metrics exporter.
 - [x] Severe hard-ban triggers exist.
 - [x] Fake/deceptive degradation is not implemented.
 

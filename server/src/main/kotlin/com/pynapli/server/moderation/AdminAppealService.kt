@@ -4,6 +4,7 @@ import java.util.UUID
 
 class AdminAppealService(
     private val repository: AdminAppealRepository,
+    private val falsePositiveMetrics: com.pynapli.server.safety.RiskFalsePositiveMetrics? = null,
 ) {
     suspend fun listAppeals(
         statusText: String?,
@@ -56,13 +57,19 @@ class AdminAppealService(
         if (normalizedNote != null && normalizedNote.length > MAX_ADMIN_NOTE_LENGTH) {
             throw ModerationException("APPEAL_ADMIN_NOTE_TOO_LONG")
         }
-        return repository.decideAppeal(
-            appealId = appealIdText.toUuidOrThrow(),
-            status = outcome,
-            actorId = actorId.normalizedActorIdOrThrow(),
-            reason = reason.normalizedReasonOrThrow(),
-            adminNote = normalizedNote,
-        ) ?: throw ModerationException("APPEAL_REVIEW_NOT_FOUND")
+        val decided =
+            repository.decideAppeal(
+                appealId = appealIdText.toUuidOrThrow(),
+                status = outcome,
+                actorId = actorId.normalizedActorIdOrThrow(),
+                reason = reason.normalizedReasonOrThrow(),
+                adminNote = normalizedNote,
+            ) ?: throw ModerationException("APPEAL_REVIEW_NOT_FOUND")
+        // False-positive observability (TRUST_AND_SAFETY_SPEC): every decision is
+        // counted by outcome so the overturn rate is derivable; outcome labels are
+        // the validated low-cardinality set above, never appeal content.
+        falsePositiveMetrics?.recordAppealDecision(outcome)
+        return decided
     }
 
     private fun String.toUuidOrThrow(): UUID = runCatching { UUID.fromString(this) }.getOrElse { throw ModerationException("INVALID_ID") }
