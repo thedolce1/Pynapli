@@ -19,18 +19,25 @@ class AgeVerificationService(
     private val clock: Clock = Clock.systemUTC(),
     private val provider: AgeVerificationProvider? = null,
     private val rateLimitService: RateLimitService? = null,
+    private val marketPolicy: AgeVerificationMarketPolicy = BaselineAgeVerificationMarketPolicy,
 ) {
-    suspend fun requirements(userId: UUID): AgeVerificationRequirementsDto {
+    suspend fun requirements(
+        userId: UUID,
+        market: String? = null,
+    ): AgeVerificationRequirementsDto {
         val profile = repository.getProfileState(userId) ?: throw VerificationException("PROFILE_NOT_FOUND")
         val latest = repository.latestForUser(userId)
+        val enhancedRequired = enhancedRequiredFor(market.cleanMarket())
         val acceptedMethods =
             buildList {
-                add(AgeVerificationMethodDto(METHOD_MANUAL_REVIEW, "Manual review"))
+                // Enhanced markets accept only the provider method; manual review
+                // would not satisfy the legal requirement there.
+                if (!enhancedRequired) add(AgeVerificationMethodDto(METHOD_MANUAL_REVIEW, "Manual review"))
                 provider?.let { add(AgeVerificationMethodDto(it.methodKey, it.label)) }
             }
         return AgeVerificationRequirementsDto(
             required = profile.ageVerifiedAt == null,
-            enhancedRequired = false,
+            enhancedRequired = enhancedRequired,
             acceptedMethods = acceptedMethods,
             status =
                 latest?.toDto(profile.ageVerifiedAt)
@@ -74,6 +81,10 @@ class AgeVerificationService(
                 ?.lowercase()
                 ?.takeIf { it.isNotEmpty() } ?: METHOD_MANUAL_REVIEW
         val market = request.market.cleanMarket()
+
+        if (method == METHOD_MANUAL_REVIEW && enhancedRequiredFor(market)) {
+            throw VerificationException("ENHANCED_VERIFICATION_REQUIRED")
+        }
 
         if (provider != null && method == provider.methodKey) {
             val session = provider.startSession(userId, market)
@@ -190,6 +201,11 @@ class AgeVerificationService(
             expiresAt = null,
             message = messageFor(STATUS_VERIFIED),
         )
+
+    // A market flag is only honored while a provider is configured: with none,
+    // manual review stays available so a policy misconfiguration cannot lock
+    // users out of verification entirely.
+    private fun enhancedRequiredFor(market: String): Boolean = provider != null && marketPolicy.enhancedRequired(market)
 
     private fun isAdult(birthdate: LocalDate): Boolean = Period.between(birthdate, LocalDate.now(clock)).years >= 18
 

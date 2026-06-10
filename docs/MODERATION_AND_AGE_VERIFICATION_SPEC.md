@@ -185,7 +185,7 @@ Avoid:
 - [x] 18+ DOB and confirmation exist for email signup and profile-hub verification start.
 - [x] Terms/privacy acceptance exists for email signup.
 - [x] Client detects `AGE_VERIFICATION_REQUIRED` on gated surfaces (Grid lifestyle filters, saved grid/swipe filter presets, travel mode), reverts the blocked change, shows a "Verify your age" prompt, and routes into the Profile-Hub age-verification flow (A1).
-- [ ] Market-driven enhanced verification flags.
+- [x] Market-driven enhanced verification flags: server-side `AgeVerificationMarketPolicy` seam (baseline default flags nothing; ops/legal swaps a real policy via DI, mirroring `TravelRegionPolicy`). In a flagged market with a provider configured, `requirements` reports `enhancedRequired` and accepts only the provider method, and `start` rejects manual review with `ENHANCED_VERIFICATION_REQUIRED`; without a provider the flag fails open to manual review so misconfiguration cannot strand users. Which markets to flag (and the provider choice) remains an ops/legal decision.
 - [x] Verification data minimization.
 - [x] Public/profile media moderation is enforced before discovery visibility.
 - [x] Private album grants and report flow exist; consent-gated private media stays hidden from non-grantees, removed media is filtered, and severe scanner decisions remove the asset before escalating.
