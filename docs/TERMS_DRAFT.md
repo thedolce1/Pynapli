@@ -140,10 +140,10 @@ Legal contact placeholder:
 
 ## Implementation Checklist
 
-- [ ] Terms acceptance in onboarding.
-- [ ] Community guidelines linked.
-- [ ] Privacy policy linked.
+- [x] Terms acceptance in onboarding: explicit Terms checkbox in the signup stepper, plus a "Read the Terms" link to the canonical URL (`LegalLinks.TERMS_OF_SERVICE`).
+- [x] Community guidelines linked: Settings -> Legal opens `LegalLinks.COMMUNITY_GUIDELINES`.
+- [x] Privacy policy linked: separate acceptance checkbox + read link in onboarding, and Settings -> Legal opens `LegalLinks.PRIVACY_POLICY`. (Publishing the finalized documents at the pynapli.com URLs is a founder/legal ops step.)
 - [ ] Subscription terms linked.
 - [x] Report/block available.
-- [ ] Account deletion available.
+- [x] Account deletion available (server-authoritative deletion with GDPR/CCPA erasure shipped; see PROFILE settings).
 - [x] Enforcement actions supported.

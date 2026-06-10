@@ -1,18 +1,29 @@
 package com.pynapli.app.profilehub
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.appsettings.AppSettingsUiState
+import com.pynapli.shared.core.config.LegalLinks
 
 @Composable
 internal fun AppSettingsContent(
@@ -51,7 +62,8 @@ internal fun AppSettingsContent(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(1f)
+                    .testTag(AppSettingsTestTags.LIST),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -174,12 +186,54 @@ internal fun AppSettingsContent(
                     }
                 }
             }
+
+            item {
+                val uriHandler = LocalUriHandler.current
+                ProfileHubSection("Legal") {
+                    LegalLinkRow("Terms of Service") { uriHandler.openUri(LegalLinks.TERMS_OF_SERVICE) }
+                    LegalLinkRow("Privacy Policy") { uriHandler.openUri(LegalLinks.PRIVACY_POLICY) }
+                    LegalLinkRow("Community Guidelines") { uriHandler.openUri(LegalLinks.COMMUNITY_GUIDELINES) }
+                }
+            }
         }
 
         ProfileHubSaveButton(
             label = "Save settings",
             isSaving = state.isSaving,
             onSave = onSave,
+        )
+    }
+}
+
+internal object AppSettingsTestTags {
+    const val LIST = "appSettingsList"
+}
+
+@Composable
+private fun LegalLinkRow(
+    label: String,
+    onOpen: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpen)
+                .padding(horizontal = 12.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+            contentDescription = "Opens in browser",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
         )
     }
 }

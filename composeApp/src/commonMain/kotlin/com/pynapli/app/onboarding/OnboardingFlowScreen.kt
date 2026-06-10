@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.media.MediaAlbumsUiState
+import com.pynapli.shared.core.config.LegalLinks
 import kotlinx.datetime.LocalDate
 
 /**
@@ -253,6 +255,7 @@ private fun AccountStep(
         enabled = !state.isSubmitting,
         onCheckedChange = onAcceptedPrivacyChanged,
     )
+    LegalDocumentLinks(enabled = !state.isSubmitting)
     StepError(state.errorMessage)
     Spacer(modifier = Modifier.height(20.dp))
     SubmittingButton(
@@ -449,6 +452,29 @@ private fun SubmittingButton(
             )
         } else {
             Text(text)
+        }
+    }
+}
+
+@Composable
+private fun LegalDocumentLinks(enabled: Boolean) {
+    val uriHandler = LocalUriHandler.current
+    Row(
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        TextButton(
+            onClick = { uriHandler.openUri(LegalLinks.TERMS_OF_SERVICE) },
+            enabled = enabled,
+        ) {
+            Text("Read the Terms", style = MaterialTheme.typography.bodySmall)
+        }
+        TextButton(
+            onClick = { uriHandler.openUri(LegalLinks.PRIVACY_POLICY) },
+            enabled = enabled,
+        ) {
+            Text("Read the Privacy Policy", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
