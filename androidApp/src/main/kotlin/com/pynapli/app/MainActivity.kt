@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
                 psyncRepository = appGraph.psyncRepository,
                 psyncStreamClient = appGraph.psyncStreamClient,
                 deepLinkStateHolder = appGraph.deepLinkStateHolder,
+                onboardingStateHolder = appGraph.onboardingStateHolder,
                 onUseCurrentLocation = ::requestCurrentLocation,
                 onPickMediaForAlbum = ::pickMediaForAlbum,
                 onSetDiscreetIcon = ::applyLauncherIcon,

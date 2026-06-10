@@ -40,6 +40,9 @@ fun AuthScreen(
     onModeSelected: (AuthMode) -> Unit,
     onSubmit: () -> Unit,
     onDevLogin: (() -> Unit)? = null,
+    // When provided, "Create account" leaves this screen for the onboarding stepper
+    // instead of switching to the legacy inline signup form.
+    onStartCreateAccount: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -171,9 +174,13 @@ fun AuthScreen(
         ) {
             TextButton(
                 onClick = {
-                    onModeSelected(
-                        if (state.mode == AuthMode.SignIn) AuthMode.CreateAccount else AuthMode.SignIn,
-                    )
+                    if (state.mode == AuthMode.SignIn && onStartCreateAccount != null) {
+                        onStartCreateAccount()
+                    } else {
+                        onModeSelected(
+                            if (state.mode == AuthMode.SignIn) AuthMode.CreateAccount else AuthMode.SignIn,
+                        )
+                    }
                 },
                 enabled = !state.isSubmitting,
             ) {

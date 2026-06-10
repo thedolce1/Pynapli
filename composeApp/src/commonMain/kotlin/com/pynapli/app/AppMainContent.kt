@@ -1,7 +1,11 @@
 package com.pynapli.app
 
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -24,6 +28,8 @@ import com.pynapli.app.media.MediaAlbumsStateHolder
 import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
 import com.pynapli.app.messages.MessagesScreen
 import com.pynapli.app.messages.MessagesStateHolder
+import com.pynapli.app.onboarding.OnboardingStateHolder
+import com.pynapli.app.onboarding.PhotoNudgeBanner
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilehub.ProfileHubScreen
 import com.pynapli.app.profilehub.ProfileHubStateHolder
@@ -65,6 +71,7 @@ internal fun ColumnScope.PynapliMainContent(
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder?,
     travelLocationStateHolder: TravelLocationStateHolder?,
     tonightAvailabilityStateHolder: TonightAvailabilityStateHolder?,
+    onboardingStateHolder: OnboardingStateHolder?,
     conversationActions: ConversationActions,
     scope: CoroutineScope,
     onProfileSurface: (ProfileSurface) -> Unit,
@@ -139,9 +146,36 @@ internal fun ColumnScope.PynapliMainContent(
         )
     } else {
         when (selectedTab) {
-            PynapliTab.Grid ->
+            PynapliTab.Grid -> {
+                // Bounded add-a-photo nudge (ONBOARDING_AUTH_SPEC): only over the
+                // grid, only while the profile has no photo, capped/dismissible via
+                // the onboarding settings counters.
+                val onboardingState = onboardingStateHolder?.state?.collectAsState()?.value
+                val showPhotoNudge =
+                    onboardingState?.photoNudgeEligible == true &&
+                        !onboardingState.active &&
+                        profileImageUrl == null &&
+                        !mediaAlbumsState.isLoading
+                if (onboardingStateHolder != null && showPhotoNudge) {
+                    PhotoNudgeBanner(
+                        onAddPhoto = { onProfileSurface(ProfileSurface.MediaAlbums) },
+                        onDismiss = { scope.launch { onboardingStateHolder.dismissPhotoNudge() } },
+                    )
+                    LaunchedEffect(onboardingStateHolder) {
+                        onboardingStateHolder.recordPhotoNudgeShown()
+                    }
+                }
                 GridScreen(
-                    modifier = Modifier.weight(1f),
+                    // The banner already consumed the status-bar inset when shown;
+                    // without this the grid header would double-pad below it.
+                    modifier =
+                        if (showPhotoNudge) {
+                            Modifier
+                                .weight(1f)
+                                .consumeWindowInsets(WindowInsets.statusBars)
+                        } else {
+                            Modifier.weight(1f)
+                        },
                     stateHolder = gridStateHolder,
                     profileDetailStateHolder = profileDetailStateHolder,
                     conversationStateHolder = conversationStateHolder,
@@ -159,6 +193,7 @@ internal fun ColumnScope.PynapliMainContent(
                     onOpenAgeVerification = onOpenAgeVerification,
                     onOpenTonight = onOpenTonight,
                 )
+            }
 
             PynapliTab.Messages -> {
                 if (conversationState.visible) {

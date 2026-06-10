@@ -67,6 +67,61 @@ class AuthStateHolder(
         )
     }
 
+    /**
+     * Onboarding signup (ONBOARDING_AUTH_SPEC): the stepper collects DOB on its own
+     * wheel and Terms/Privacy as separate explicit acceptances, so this entry point
+     * takes them individually instead of the legacy single combined checkbox. On
+     * success the session lands in [state] exactly like [submit].
+     * Returns true when the account was created and the session is live.
+     */
+    suspend fun signupWithDetails(
+        email: String,
+        password: String,
+        birthdate: String,
+        confirmedAdult: Boolean,
+        acceptedTerms: Boolean,
+        acceptedPrivacy: Boolean,
+    ): Boolean {
+        if (state.value.isSubmitting) return false
+        val normalizedEmail = email.trim()
+        _state.update { it.copy(isSubmitting = true, errorMessage = null, mode = AuthMode.CreateAccount) }
+        val result =
+            authRepository.signupEmail(
+                email = normalizedEmail,
+                password = password,
+                birthdate = birthdate,
+                confirmedAdult = confirmedAdult,
+                acceptedTerms = acceptedTerms,
+                acceptedPrivacy = acceptedPrivacy,
+                platform = platform,
+                appVersion = appVersion,
+            )
+        return when (result) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        email = normalizedEmail,
+                        password = "",
+                        isSubmitting = false,
+                        errorMessage = null,
+                        session = result.value,
+                    )
+                }
+                true
+            }
+
+            is AppResult.Failure -> {
+                _state.update {
+                    it.copy(
+                        isSubmitting = false,
+                        errorMessage = result.error.message,
+                    )
+                }
+                false
+            }
+        }
+    }
+
     suspend fun submitDevLogin(credentials: DevLoginCredentials) {
         if (state.value.isSubmitting) return
 

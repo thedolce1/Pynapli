@@ -36,6 +36,8 @@ import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
 import com.pynapli.app.messages.MessageProfilePeekSheet
 import com.pynapli.app.messages.MessagesScreen
 import com.pynapli.app.messages.MessagesStateHolder
+import com.pynapli.app.onboarding.OnboardingFlowScreen
+import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilehub.ProfileHubScreen
 import com.pynapli.app.profilehub.ProfileHubStateHolder
@@ -70,6 +72,7 @@ fun PynapliApp(
     psyncRepository: com.pynapli.app.psync.PsyncRepository? = null,
     psyncStreamClient: com.pynapli.shared.network.PsyncStreamClient? = null,
     deepLinkStateHolder: AppDeepLinkStateHolder? = null,
+    onboardingStateHolder: OnboardingStateHolder? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
     onSetDiscreetIcon: (Boolean) -> Unit = {},
@@ -117,6 +120,14 @@ fun PynapliApp(
             onClearProfileSurface = { profileSurface = ProfileSurface.None },
         )
 
+        // Once the session is settled, re-enter an interrupted signup stepper and
+        // decide this session's add-a-photo nudge (ONBOARDING_AUTH_SPEC).
+        LaunchedEffect(authState.isCheckingSession, authState.authenticated, onboardingStateHolder) {
+            if (!authState.isCheckingSession && authState.authenticated) {
+                onboardingStateHolder?.onSessionReady()
+            }
+        }
+
         if (authState.isCheckingSession) {
             Column(
                 modifier =
@@ -129,6 +140,38 @@ fun PynapliApp(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+            return@PynapliTheme
+        }
+
+        // The signup stepper owns the screen while active: pre-auth steps (DOB,
+        // underage stop, account) replace AuthScreen; post-auth steps (location,
+        // name, photo) run before the main surfaces appear.
+        val onboardingState = onboardingStateHolder?.state?.collectAsState()?.value
+        if (onboardingStateHolder != null && onboardingState != null && onboardingState.active) {
+            val locationState by locationStateHolder.state.collectAsState()
+            val mediaAlbumsState by mediaAlbumsStateHolder.state.collectAsState()
+            OnboardingFlowScreen(
+                state = onboardingState,
+                locationState = locationState,
+                mediaState = mediaAlbumsState,
+                today = onboardingStateHolder.today(),
+                onDobChanged = onboardingStateHolder::updateDob,
+                onConfirmDob = onboardingStateHolder::confirmDob,
+                onBackToDob = onboardingStateHolder::backToDob,
+                onCancelToSignIn = onboardingStateHolder::cancelToSignIn,
+                onEmailChanged = onboardingStateHolder::updateEmail,
+                onPasswordChanged = onboardingStateHolder::updatePassword,
+                onAcceptedTermsChanged = onboardingStateHolder::updateAcceptedTerms,
+                onAcceptedPrivacyChanged = onboardingStateHolder::updateAcceptedPrivacy,
+                onSubmitAccount = { scope.launch { onboardingStateHolder.submitAccount() } },
+                onShareLocation = onUseCurrentLocation,
+                onContinueFromLocation = onboardingStateHolder::continueFromLocation,
+                onDisplayNameChanged = onboardingStateHolder::updateDisplayName,
+                onSaveDisplayName = { scope.launch { onboardingStateHolder.saveDisplayName() } },
+                onSkipDisplayName = onboardingStateHolder::skipDisplayName,
+                onPickPhoto = { onPickMediaForAlbum(MediaAlbumKindUi.Profile) },
+                onFinish = { scope.launch { onboardingStateHolder.finish() } },
+            )
             return@PynapliTheme
         }
 
@@ -146,6 +189,10 @@ fun PynapliApp(
                 onDevLogin =
                     devLoginCredentials?.let { credentials ->
                         { scope.launch { authStateHolder.submitDevLogin(credentials) } }
+                    },
+                onStartCreateAccount =
+                    onboardingStateHolder?.let { holder ->
+                        { holder.startCreateAccount() }
                     },
             )
             return@PynapliTheme
@@ -199,6 +246,7 @@ fun PynapliApp(
                     savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
                     travelLocationStateHolder = travelLocationStateHolder,
                     tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
+                    onboardingStateHolder = onboardingStateHolder,
                     conversationActions = conversationActions,
                     scope = scope,
                     onProfileSurface = { profileSurface = it },

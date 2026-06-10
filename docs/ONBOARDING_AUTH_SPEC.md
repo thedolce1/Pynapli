@@ -1,6 +1,6 @@
 # Pynapli Onboarding And Auth Spec
 
-Last updated: 2026-05-13
+Last updated: 2026-06-10
 
 ## Purpose
 
@@ -31,18 +31,20 @@ Session security:
 
 ## Signup Flow
 
-Recommended steps:
+Shipped ordering (founder decision 2026-06-09, DOB-first Grindr-style — an underage
+visitor is stopped before any account data is collected):
 
-1. Create account with email/password.
-2. Date of birth.
-3. Display name.
-4. Gender/orientation basics.
-5. Lifestyle tags, skippable.
-6. Looking for, skippable.
-7. Photo, skippable.
-8. Age verification and terms.
-9. Permissions: location and notifications.
-10. First grid.
+1. Date of birth (wheel picker; underage stop screen on failure).
+2. Create account with email/password + explicit Terms and Privacy acceptances.
+3. Location permission, after value is explained; skippable.
+4. Display name, skippable.
+5. Photo, skippable.
+6. First grid.
+
+Gender/orientation basics, lifestyle tags, and looking-for are deferred entirely to
+profile edit — the stepper collects only what the first grid needs. Notifications
+permission is requested post-signup by the existing authenticated prompt flow, not
+inside the stepper.
 
 ## Deferred Until Profile Edit
 
@@ -115,12 +117,12 @@ Do not:
 
 - [ ] Partial: email auth is implemented; social auth and full onboarding auth set are not complete.
 - [ ] Partial: token storage exists, but secure platform storage is not complete.
-- [ ] Signup progress saved.
-- [ ] Skippable photo/tags/looking-for.
-- [x] Age gate before access for email signup: DOB, explicit 18+ confirmation, Terms acceptance, and Privacy acceptance are required before the session is created.
-- [ ] Partial: some permission-denied states exist; full onboarding QA coverage is not complete.
-- [ ] First grid uses signup data.
-- [ ] Post-signup nudges are bounded.
+- [x] Signup progress saved: signup arms a local resume flag pinned to the signing-up account (`AppSettings.onboardingCompleted` + `onboardingUserId`); next launch re-enters the stepper at the first incomplete post-auth step (blank display name -> Name, else Photo). A different account signing in on the same device never inherits the stepper.
+- [x] Skippable photo (stepper photo step uploads to the profile album with moderation-pending honesty copy, or skips). Tags/looking-for are deferred entirely to profile edit by design — nothing to skip at signup.
+- [x] Age gate before access for email signup: DOB wheel before any account data is collected (underage stop screen), explicit 18+ confirmation, separate Terms and Privacy acceptances required before the session is created.
+- [x] Permission-denied onboarding QA: location step asks after value is explained, with denied/skip continuing to the grid's location-required empty state; notification permission unchanged (post-signup prompt + denied QA already covered). `scripts/android-onboarding-qa.ps1` covers signup happy path, denied location, force-stop resume, and nudge show/dismiss on the emulator.
+- [x] First grid uses signup data: the location submitted at the Location step feeds the distance-ordered first grid; DOB drives display age.
+- [x] Post-signup nudges are bounded: add-a-photo grid banner, dismissible, capped at 3 impression sessions, skipped in the signup session itself, deep-links to Media Albums. (Tags/complete-profile/partner-link nudges remain future work.)
 
 ## Do Not Implement
 
