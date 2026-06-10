@@ -44,6 +44,7 @@ class PsyncSessionService(
     private val notificationPublisher: com.pynapli.server.notifications.NotificationPublisher? = null,
     private val broadcaster: PsyncBroadcaster? = null,
     private val rateLimitService: com.pynapli.server.safety.RateLimitService? = null,
+    private val riskPolicyService: com.pynapli.server.safety.RiskPolicyService? = null,
     private val subscriptionService: com.pynapli.server.subscriptions.SubscriptionService? = null,
     private val deckTokenCodec: com.pynapli.server.swipe.SwipeDeckTokenCodec =
         com.pynapli.server.swipe
@@ -55,6 +56,11 @@ class PsyncSessionService(
         userId: UUID,
         request: CreatePsyncSessionRequestDto,
     ): PsyncSessionDto {
+        // A Psync session's swipes resolve into real matches with third parties,
+        // so starting one is an outbound social action (TRUST_AND_SAFETY_SPEC).
+        if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
+            throw PsyncException("RISK_RESTRICTED")
+        }
         if (request.deckSize !in MIN_DECK_SIZE..MAX_DECK_SIZE) {
             throw PsyncException("INVALID_PSYNC_DECK_SIZE")
         }
@@ -127,7 +133,13 @@ class PsyncSessionService(
     suspend fun accept(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = repository.accept(sessionId, userId, clock.instant()).orThrow()
+    ): PsyncSessionDto {
+        // Accepting makes the partner an acting swiper too; denying stays open.
+        if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
+            throw PsyncException("RISK_RESTRICTED")
+        }
+        return repository.accept(sessionId, userId, clock.instant()).orThrow()
+    }
 
     suspend fun deny(
         sessionId: UUID,

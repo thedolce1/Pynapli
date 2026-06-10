@@ -6,6 +6,7 @@ import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profile.TonightAvailabilityService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.HiddenProfileRepository
+import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.tonight.JdbcTonightFeedRepository
 import com.pynapli.server.tonight.JdbcTonightSessionRepository
@@ -35,6 +36,7 @@ internal fun buildTonightDependencies(
     mediaAssetUrlResolver: MediaAssetUrlResolver?,
     blockRepository: BlockRepository,
     hiddenProfileRepository: HiddenProfileRepository,
+    riskPolicyService: RiskPolicyService,
 ): TonightDependencies {
     val tonightAvailabilityService = TonightAvailabilityService(dataSource)
     val tonightSessionService =
@@ -43,6 +45,7 @@ internal fun buildTonightDependencies(
             subscriptionService = subscriptionService,
             notificationPublisher = notificationService,
             presenceService = presenceService,
+            riskPolicyService = riskPolicyService,
         )
     val tonightFeedService =
         TonightFeedService(

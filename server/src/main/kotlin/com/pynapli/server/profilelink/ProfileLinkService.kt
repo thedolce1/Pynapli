@@ -5,6 +5,7 @@ import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.shared.network.dto.CreateProfileLinkInvitationRequestDto
 import com.pynapli.shared.network.dto.ProfileLinkDto
 import com.pynapli.shared.network.dto.ProfileLinksSummaryDto
@@ -17,6 +18,7 @@ class ProfileLinkService(
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val blockRepository: BlockRepository? = null,
     private val notificationPublisher: NotificationPublisher? = null,
+    private val riskPolicyService: RiskPolicyService? = null,
     private val clock: Clock = Clock.systemUTC(),
     private val linkActivationCooldown: Duration = LINK_ACTIVATION_COOLDOWN,
 ) {
@@ -26,6 +28,11 @@ class ProfileLinkService(
         requesterUserId: UUID,
         request: CreateProfileLinkInvitationRequestDto,
     ): ProfileLinksSummaryDto {
+        // Inviting a partner is an outbound social action (TRUST_AND_SAFETY_SPEC);
+        // accepting/declining an inbound invite stays unrestricted.
+        if (riskPolicyService?.isSocialActionRestricted(requesterUserId) == true) {
+            throw ProfileLinkException("RISK_RESTRICTED")
+        }
         val targetUserId = request.targetUserId.toUuidOrThrow()
         validateCanRequestLink(requesterUserId, targetUserId)
 

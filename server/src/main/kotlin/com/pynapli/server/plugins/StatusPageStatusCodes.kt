@@ -23,6 +23,7 @@ internal fun profileStatusFor(code: String): HttpStatusCode =
 
 internal fun profileLinkStatusFor(code: String): HttpStatusCode =
     when (code) {
+        "RISK_RESTRICTED" -> HttpStatusCode.Forbidden
         "PROFILE_LINK_INVITE_NOT_FOUND",
         "PROFILE_LINK_NOT_FOUND",
         "PROFILE_LINK_TARGET_NOT_FOUND",
@@ -111,6 +112,7 @@ internal fun tonightAvailabilityStatusFor(code: String): HttpStatusCode =
 
 internal fun tonightSessionStatusFor(code: String): HttpStatusCode =
     when (code) {
+        "RISK_RESTRICTED" -> HttpStatusCode.Forbidden
         "INVALID_TONIGHT_MODE",
         "INVALID_TONIGHT_INTENT",
         "INVALID_TONIGHT_HOST_MODE",
@@ -131,6 +133,7 @@ internal fun tonightSessionStatusFor(code: String): HttpStatusCode =
 
 internal fun psyncStatusFor(code: String): HttpStatusCode =
     when (code) {
+        "RISK_RESTRICTED" -> HttpStatusCode.Forbidden
         "PSYNC_NO_LINKED_PARTNER",
         "INVALID_PSYNC_DECK_SIZE",
         "PSYNC_INVALID_ACTION",

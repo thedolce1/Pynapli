@@ -347,6 +347,7 @@ class ServerDependencies(
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     blockRepository = blockRepository,
                     notificationPublisher = notificationService,
+                    riskPolicyService = riskPolicyService,
                 )
             val grid =
                 buildGridDependencies(
@@ -369,6 +370,7 @@ class ServerDependencies(
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     blockRepository = blockRepository,
                     hiddenProfileRepository = hiddenProfileRepository,
+                    riskPolicyService = riskPolicyService,
                 )
             // Provider-hosted age verification is opt-in: built only when both the provider name and
             // its redirect base URL are configured. Otherwise the service keeps manual-review-only

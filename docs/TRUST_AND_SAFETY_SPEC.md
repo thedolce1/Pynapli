@@ -656,7 +656,7 @@ Reject:
 - [x] Risk score model exists.
 - [x] Risk event table exists.
 - [x] Redis-backed rate limits exist.
-- [ ] Ktor risk middleware exists.
+- [x] Risk enforcement across the Ktor surface: by architecture this lives in the domain services, not a route plugin (routes stay thin; services own product rules). Outbound social mutations consult `RiskPolicyService.isSocialActionRestricted` (quarantine/terminate -> `RISK_RESTRICTED`, HTTP 403): flirts, album requests, partner-chat invites (ActivityService), first/ongoing messages (MessagingService), swipe actions + rewind (SwipeService), Playing Tonight propose/approve (TonightSessionService), Psync create/accept (PsyncSessionService), and partner-link invitations (ProfileLinkService). Discovery hides restricted tiers (grid/profile/passive activity). Declining/ending/blocking/reporting are never restricted. Coverage proven storage-untouched in `SocialActionRiskCoverageTest`.
 - [x] Tier policies exist.
 - [x] Domain risk gates restrict quarantined/terminated social actions.
 - [x] Quarantined/terminated accounts are suppressed from discovery-facing surfaces.
