@@ -96,6 +96,30 @@ class MediaRepositoryIntegrationTest {
             assertTrue(assetExists(approved.mediaAssetId))
         }
 
+    @Test
+    fun decidingAnAlreadyDecidedAlbumRequestReplaysTheRecordedOutcome() =
+        runBlocking {
+            val owner = UUID.fromString("00000000-0000-0000-0000-000000000311")
+            val requester = UUID.fromString("00000000-0000-0000-0000-000000000312")
+            dataSource.insertUser(owner)
+            dataSource.insertUser(requester)
+            val repository = JdbcMediaRepository(dataSource)
+            assertNotNull(repository.requestAlbumAccess(owner, requester))
+
+            val decided = assertNotNull(repository.decideAlbumAccessRequest(owner, requester, approved = true))
+            assertEquals("approved", decided.status)
+
+            // A retried decide whose response was lost replays the recorded outcome
+            // instead of a not-found — and never flips the decision, even when the
+            // retry carries the opposite flag.
+            val replaySame = assertNotNull(repository.decideAlbumAccessRequest(owner, requester, approved = true))
+            assertEquals(decided.requestId, replaySame.requestId)
+            assertEquals("approved", replaySame.status)
+
+            val replayOpposite = assertNotNull(repository.decideAlbumAccessRequest(owner, requester, approved = false))
+            assertEquals("approved", replayOpposite.status)
+        }
+
     private fun sampleAssetCreate(
         ownerId: UUID,
         label: String,

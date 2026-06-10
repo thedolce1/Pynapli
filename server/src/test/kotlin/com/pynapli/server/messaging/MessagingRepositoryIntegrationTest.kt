@@ -95,6 +95,45 @@ class MessagingRepositoryIntegrationTest {
         }
 
     @Test
+    fun concurrentDuplicateConversationCreateReplaysTheExistingConversation() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000841")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000842")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.insertMatch(viewer, target)
+            val repository = JdbcMessagingRepository(dataSource)
+            val rival = JdbcMessagingRepository(dataSource)
+
+            // Deterministically provoke the pair unique-index race: the id factory runs
+            // after the existing-conversation lookup missed and before the insert, so a
+            // rival create committed inside it forces the unique violation the replay
+            // path must absorb (instead of surfacing a 500).
+            var rivalConversationId: UUID? = null
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = viewer,
+                    targetUserId = target,
+                    origin = "swipe",
+                    conversationIdFactory = {
+                        rivalConversationId =
+                            runBlocking {
+                                rival
+                                    .getOrCreateDirectConversation(
+                                        viewerUserId = target,
+                                        targetUserId = viewer,
+                                        origin = "swipe",
+                                    )?.conversationId
+                            }
+                        UUID.randomUUID()
+                    },
+                )
+
+            val replayed = assertNotNull(conversation, "racing create must replay, not fail")
+            assertEquals(assertNotNull(rivalConversationId), replayed.conversationId)
+        }
+
+    @Test
     fun introNoteOriginIsRejectedUntilEntitlementExists() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000821")

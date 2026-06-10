@@ -38,15 +38,35 @@ class JdbcMessagingRepository(
                     }
 
                     val existingId = connection.findDirectConversationId(viewerUserId, targetUserId)
-                    val conversationId = existingId ?: conversationIdFactory()
-                    if (existingId == null) {
-                        connection.insertDirectConversation(
-                            conversationId = conversationId,
-                            viewerUserId = viewerUserId,
-                            targetUserId = targetUserId,
-                            origin = origin,
-                        )
-                    }
+                    val conversationId =
+                        if (existingId != null) {
+                            existingId
+                        } else {
+                            val newId = conversationIdFactory()
+                            try {
+                                connection.insertDirectConversation(
+                                    conversationId = newId,
+                                    viewerUserId = viewerUserId,
+                                    targetUserId = targetUserId,
+                                    origin = origin,
+                                )
+                                newId
+                            } catch (error: SQLException) {
+                                // Concurrent duplicate create lost the pair unique-index race:
+                                // replay the conversation the other request committed instead of
+                                // surfacing a 500. A new connection is needed because this one is
+                                // in a failed transaction state.
+                                if (error.sqlState == UNIQUE_VIOLATION_SQLSTATE) {
+                                    connection.rollback()
+                                    return@withContext dataSource.connection.use { lookup ->
+                                        lookup.findDirectConversationId(viewerUserId, targetUserId)?.let { racedId ->
+                                            lookup.loadConversation(viewerUserId, racedId)
+                                        }
+                                    }
+                                }
+                                throw error
+                            }
+                        }
 
                     connection.commit()
                     connection.loadConversation(viewerUserId, conversationId)

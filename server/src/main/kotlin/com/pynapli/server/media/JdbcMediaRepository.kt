@@ -397,8 +397,13 @@ class JdbcMediaRepository(
                             }
 
                     if (request == null) {
+                        // Retry replay: when no pending row matched, return the most recent
+                        // decided request for the pair (without changing it) so a retried
+                        // approve/deny whose response was lost reads back the recorded outcome
+                        // instead of a not-found. The retried `approved` flag never flips a
+                        // decision — changing one requires a fresh request (or a grant revoke).
                         connection.rollback()
-                        return@withContext null
+                        return@withContext connection.findLatestDecidedAlbumAccessRequest(ownerUserId, requesterUserId)
                     }
 
                     if (approved) {
@@ -639,6 +644,35 @@ class JdbcMediaRepository(
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
                 connection.hasAlbumAccess(viewerUserId, albumId)
+            }
+        }
+
+    private fun Connection.findLatestDecidedAlbumAccessRequest(
+        ownerUserId: UUID,
+        requesterUserId: UUID,
+    ): MediaAlbumAccessRequestRecord? =
+        prepareStatement(
+            """
+            SELECT id,
+                   album_id,
+                   owner_user_id,
+                   requester_user_id,
+                   status,
+                   requested_at,
+                   decided_at,
+                   decided_by_user_id
+            FROM media_album_access_requests
+            WHERE owner_user_id = ?
+              AND requester_user_id = ?
+              AND status IN ('approved', 'denied')
+            ORDER BY decided_at DESC NULLS LAST, id DESC
+            LIMIT 1
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, ownerUserId)
+            statement.setObject(2, requesterUserId)
+            statement.executeQuery().use { rs ->
+                if (rs.next()) rs.toMediaAlbumAccessRequestRecord() else null
             }
         }
 

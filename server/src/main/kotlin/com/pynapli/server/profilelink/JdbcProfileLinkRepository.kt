@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
 import java.sql.ResultSet
+import java.sql.SQLException
 import java.sql.Timestamp
 import java.sql.Types
 import java.time.Instant
@@ -181,24 +182,34 @@ class JdbcProfileLinkRepository(
     ): ProfileLinkRecord =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        INSERT INTO user_profile_links (id, user_id, linked_user_id, status, accepted_at, unlinked_at)
-                        VALUES (?, ?, ?, 'pending', NULL, NULL)
-                        ON CONFLICT (user_id, linked_user_id) DO UPDATE
-                        SET status = 'pending',
-                            accepted_at = NULL,
-                            unlinked_at = NULL,
-                            updated_at = now()
-                        WHERE user_profile_links.status IN ('declined', 'unlinked')
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, linkIdFactory())
-                        statement.setObject(2, requesterUserId)
-                        statement.setObject(3, targetUserId)
-                        statement.executeUpdate()
+                try {
+                    connection
+                        .prepareStatement(
+                            """
+                            INSERT INTO user_profile_links (id, user_id, linked_user_id, status, accepted_at, unlinked_at)
+                            VALUES (?, ?, ?, 'pending', NULL, NULL)
+                            ON CONFLICT (user_id, linked_user_id) DO UPDATE
+                            SET status = 'pending',
+                                accepted_at = NULL,
+                                unlinked_at = NULL,
+                                updated_at = now()
+                            WHERE user_profile_links.status IN ('declined', 'unlinked')
+                            """.trimIndent(),
+                        ).use { statement ->
+                            statement.setObject(1, linkIdFactory())
+                            statement.setObject(2, requesterUserId)
+                            statement.setObject(3, targetUserId)
+                            statement.executeUpdate()
+                        }
+                } catch (error: SQLException) {
+                    // A reverse-direction invite won the pending-pair unique-index race
+                    // (V71): surface the same code the sequential duplicate check uses
+                    // instead of a 500.
+                    if (error.sqlState == UNIQUE_VIOLATION_SQLSTATE) {
+                        throw ProfileLinkException("PROFILE_LINK_INVITE_EXISTS")
                     }
+                    throw error
+                }
 
                 connection
                     .queryLinks(requesterUserId, LinkQueryKind.Outgoing)
@@ -522,5 +533,9 @@ class JdbcProfileLinkRepository(
         Current,
         Incoming,
         Outgoing,
+    }
+
+    private companion object {
+        private const val UNIQUE_VIOLATION_SQLSTATE = "23505"
     }
 }
