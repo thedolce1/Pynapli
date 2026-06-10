@@ -129,6 +129,53 @@ class RiskServiceTest {
             assertEquals(8, event.delta)
             assertTrue(event.metadataJson.contains(messageId.toString()))
         }
+
+    @Test
+    fun recordImpossibleTravelStoresCoarseLocationSignal() =
+        runBlocking {
+            val repository = InMemoryRiskRepository()
+            val service = RiskService(repository)
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000331")
+
+            service.recordImpossibleTravel(
+                userId = userId,
+                distanceKm = 5234.7,
+                elapsedSeconds = 600,
+                speedKmh = 31408.2,
+            )
+
+            val event = repository.events.single()
+            assertEquals(userId, event.userId)
+            assertEquals(RiskService.SOURCE_LOCATION, event.source)
+            assertEquals("location.impossible_travel", event.reason)
+            assertEquals(RiskService.IMPOSSIBLE_TRAVEL_DELTA, event.delta)
+            // Coarse facts only — never exact coordinates.
+            assertTrue(event.metadataJson.contains("\"distanceKm\":\"5235\""))
+            assertTrue(event.metadataJson.contains("\"elapsedSeconds\":\"600\""))
+        }
+
+    @Test
+    fun ageVerificationPassedLowersScoreWithoutGoingNegative() =
+        runBlocking {
+            val repository = InMemoryRiskRepository()
+            val service = RiskService(repository)
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000332")
+
+            // Some prior risk, then verification.
+            service.recordMessageHeld(userId, UUID.randomUUID(), "link_first_message")
+            service.recordAgeVerificationPassed(userId)
+
+            val event = repository.events.last()
+            assertEquals(RiskService.SOURCE_VERIFICATION, event.source)
+            assertEquals("verification.age_verified", event.reason)
+            assertEquals(RiskService.AGE_VERIFIED_DELTA, event.delta)
+            assertEquals(0, repository.states.getValue(userId).score)
+
+            // Verification on a clean account stays clamped at zero.
+            val cleanUserId = UUID.fromString("00000000-0000-0000-0000-000000000333")
+            service.recordAgeVerificationPassed(cleanUserId)
+            assertEquals(0, repository.states.getValue(cleanUserId).score)
+        }
 }
 
 private class InMemoryRiskRepository : RiskRepository {

@@ -8,7 +8,21 @@ interface LocationRepository {
         userId: UUID,
         update: LocationUpdate,
     ): CurrentLocationRecord
+
+    /**
+     * Server-internal read of the stored fix for spoof-signal comparison
+     * (TRUST_AND_SAFETY_SPEC). Never exposed through the API: current location
+     * is write-only from the client's perspective.
+     */
+    suspend fun getCurrentCoordinates(userId: UUID): CurrentCoordinatesRecord?
 }
+
+data class CurrentCoordinatesRecord(
+    val latitude: Double,
+    val longitude: Double,
+    val source: String,
+    val updatedAt: Instant,
+)
 
 data class LocationUpdate(
     val latitude: Double,

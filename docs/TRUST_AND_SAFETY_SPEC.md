@@ -672,9 +672,9 @@ Reject:
 - [x] Swipe velocity detection exists.
 - [x] Profile view velocity detection exists.
 - [ ] Device/account-farm hash signals exist.
-- [ ] Location spoofing signals exist.
+- [x] Location spoofing signals exist: impossible-travel detection on device-fix location updates (>=100 km at >=1,000 km/h vs the previous gps/network fix; travel/manual sources excluded as legitimate jumps) publishes a +25 risk event with coarse facts only (distance/elapsed/speed, never coordinates). Signal-only: the location update always proceeds and risk-path failures never break it.
 - [x] Partner subscription abuse cooldown exists.
-- [ ] Verification lowers risk where appropriate.
+- [x] Verification lowers risk where appropriate: a verified age-verification outcome (admin review or provider callback) publishes a -20 risk event; the account score stays floored at 0.
 - [ ] Partial: appeal review flow exists; support review workflow, account notices, roles/MFA, and senior-review separation remain.
 - [x] Moderator dashboard requirements are tracked.
 - [ ] False-positive metrics exist.

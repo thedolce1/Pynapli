@@ -2,6 +2,7 @@ package com.pynapli.server.verification
 
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
+import com.pynapli.server.safety.VerificationRiskSignalPublisher
 import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationMethodDto
@@ -20,6 +21,7 @@ class AgeVerificationService(
     private val provider: AgeVerificationProvider? = null,
     private val rateLimitService: RateLimitService? = null,
     private val marketPolicy: AgeVerificationMarketPolicy = BaselineAgeVerificationMarketPolicy,
+    private val verificationRiskSignals: VerificationRiskSignalPublisher? = null,
 ) {
     suspend fun requirements(
         userId: UUID,
@@ -139,6 +141,9 @@ class AgeVerificationService(
                 reason = request.reason.cleanReason(),
                 reviewedAt = now,
             ) ?: throw VerificationException("VERIFICATION_NOT_FOUND")
+        if (normalizedStatus == STATUS_VERIFIED) {
+            publishVerifiedRiskSignal(record.userId)
+        }
         return record.toDto(if (normalizedStatus == STATUS_VERIFIED) now else null)
     }
 
@@ -174,7 +179,17 @@ class AgeVerificationService(
                 reason = request.reason.cleanReason() ?: fallbackReason.cleanReason(),
                 reviewedAt = clock.instant(),
             )
+        if (normalizedStatus == STATUS_VERIFIED) {
+            publishVerifiedRiskSignal(userId)
+        }
         return record.toDto(if (normalizedStatus == STATUS_VERIFIED) verifiedAt else profile.ageVerifiedAt)
+    }
+
+    // Verification lowers risk (TRUST_AND_SAFETY_SPEC); a risk-path failure must
+    // never break the verification outcome itself.
+    private suspend fun publishVerifiedRiskSignal(userId: UUID) {
+        val publisher = verificationRiskSignals ?: return
+        runCatching { publisher.recordAgeVerificationPassed(userId) }
     }
 
     private fun AgeVerificationRecord.toDto(profileAgeVerifiedAt: Instant?): AgeVerificationStatusDto {
