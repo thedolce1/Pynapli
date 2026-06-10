@@ -12,6 +12,7 @@ import com.pynapli.shared.network.dto.SavedSwipeFiltersListDto
 import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
 import com.pynapli.shared.network.dto.TopPicksResponseDto
 import com.pynapli.shared.network.dto.TravelLocationDto
+import com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -141,5 +142,14 @@ internal class KtorGridApi(
             } else {
                 response.toAppResult<Unit>(support.json)
             }
+        }
+
+    override suspend fun searchTravelPlaces(query: String): AppResult<TravelPlaceSearchResponseDto> =
+        support.authenticated { token ->
+            support.httpClient
+                .get(support.endpoint("/v1/location/travel/search")) {
+                    bearerAuth(token)
+                    url.parameters.append("q", query)
+                }.toAppResult(support.json)
         }
 }

@@ -182,8 +182,10 @@ Rules:
 
 ```http
 POST /v1/location/current
+GET /v1/location/travel
 POST /v1/location/travel
 DELETE /v1/location/travel
+GET /v1/location/travel/search?q={cityOrPostal}
 ```
 
 Rules:
@@ -191,6 +193,7 @@ Rules:
 - Client sends location updates only after thresholds.
 - Ktor rounds/fuzzes where needed.
 - Ktor never trusts client distance display as authority.
+- Travel destinations are picked through `GET /v1/location/travel/search` (free-text city name or ZIP/postal code, resolved server-side against the packaged GeoNames-derived place directory; rate-limited per user). The picked place's fields feed `POST /v1/location/travel` verbatim.
 
 ## Grid API
 

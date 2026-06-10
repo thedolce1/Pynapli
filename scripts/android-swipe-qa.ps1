@@ -933,7 +933,7 @@ Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_BACK") | Out-Null
 Wait-ForAnyText @("For You", "Like") 20 | Out-Null
 
 Tap-Text "Travel"
-Wait-ForAnyText @("Travel mode", "Set a city") | Out-Null
+Wait-ForAnyText @("Travel mode", "Type a city") | Out-Null
 Start-Sleep -Milliseconds 600
 $travelXml = Dump-Ui "05_swipe_travel_sheet" -Keep
 Assert-NoAppErrorText $travelXml "Travel sheet"

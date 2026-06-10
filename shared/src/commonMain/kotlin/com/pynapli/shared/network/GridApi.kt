@@ -12,6 +12,7 @@ import com.pynapli.shared.network.dto.SavedSwipeFiltersListDto
 import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
 import com.pynapli.shared.network.dto.TopPicksResponseDto
 import com.pynapli.shared.network.dto.TravelLocationDto
+import com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto
 
 /**
  * Grid/discovery slice of the API surface, split out of the monolithic [PynapliApiClient]
@@ -40,4 +41,7 @@ interface GridApi {
     suspend fun setTravelLocation(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto>
 
     suspend fun clearTravelLocation(): AppResult<Unit>
+
+    /** Type-ahead place search for the free-text travel picker (city name or ZIP/postal code). */
+    suspend fun searchTravelPlaces(query: String): AppResult<TravelPlaceSearchResponseDto>
 }

@@ -88,7 +88,11 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)
     configureProfileLinkRoutes(dependencies.authService, dependencies.profileLinkService)
     configureLocationRoutes(dependencies.authService, dependencies.locationService)
-    configureTravelLocationRoutes(dependencies.authService, dependencies.travelLocationService)
+    configureTravelLocationRoutes(
+        dependencies.authService,
+        dependencies.travelLocationService,
+        dependencies.travelPlaceSearchService,
+    )
     configurePresenceRoutes(dependencies.authService, dependencies.presenceService, dependencies.requestProfilerFactory)
     configurePresenceStreamRoutes(
         authService = dependencies.authService,

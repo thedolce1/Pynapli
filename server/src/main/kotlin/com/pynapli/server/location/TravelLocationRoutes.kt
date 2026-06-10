@@ -23,10 +23,21 @@ import io.ktor.server.routing.routing
 fun Application.configureTravelLocationRoutes(
     authService: AuthService?,
     travelLocationService: TravelLocationService?,
+    travelPlaceSearchService: TravelPlaceSearchService? = null,
 ) {
     if (authService == null || travelLocationService == null) return
 
     routing {
+        // Type-ahead place resolution for the free-text travel picker. Sub-minimum
+        // queries return an empty list so the client needs no length special-casing.
+        travelPlaceSearchService?.let { searchService ->
+            get("/v1/location/travel/search") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                val query = call.request.queryParameters["q"].orEmpty()
+                call.respond(searchService.search(user.id, query))
+            }
+        }
+
         get("/v1/location/travel") {
             val user = authService.authenticate(call.requiredBearerToken())
             val current = travelLocationService.getCurrent(user.id)

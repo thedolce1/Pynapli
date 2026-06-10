@@ -70,9 +70,10 @@
     "travelSheet": {
       "requiredTexts": [
         "Travel mode",
-        "Set a city",
+        "Type a city or ZIP/postal code",
         "One location at a time",
-        "Clear it to go back to local"
+        "Clear it to go back to local",
+        "City, ZIP, or postal code"
       ],
       "forbiddenTexts": [
         "Illegal input",

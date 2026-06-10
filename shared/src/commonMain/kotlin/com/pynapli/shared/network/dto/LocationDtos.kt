@@ -54,3 +54,21 @@ object TravelLocationStatus {
     const val CLEARED = "cleared"
     const val EXPIRED = "expired"
 }
+
+// Travel-mode type-ahead search: free-text city or ZIP/postal query resolved
+// server-side against the packaged place directory. The picked item's fields
+// feed SetTravelLocationRequestDto verbatim.
+@Serializable
+data class TravelPlaceDto(
+    val displayName: String,
+    val city: String,
+    val region: String? = null,
+    val country: String? = null,
+    val latitude: Double,
+    val longitude: Double,
+)
+
+@Serializable
+data class TravelPlaceSearchResponseDto(
+    val items: List<TravelPlaceDto>,
+)

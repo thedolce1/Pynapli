@@ -268,9 +268,13 @@ fun SwipeScreen(
         TravelModeSheet(
             state = travelLocationState,
             onDismiss = { travelSheetVisible = false },
-            onPickCity = { preset ->
+            onSearchQueryChange = { query -> travelLocationStateHolder?.updateSearchQuery(query) },
+            onRunSearch = {
+                scope.launch { travelLocationStateHolder?.runSearch() }
+            },
+            onPickPlace = { place ->
                 scope.launch {
-                    travelLocationStateHolder?.setActive(preset)
+                    travelLocationStateHolder?.setActive(place)
                     // Refresh the deck so the new travel location takes effect
                     // immediately rather than waiting for the next manual reload.
                     stateHolder.load(ownerUserId = viewerUserId)

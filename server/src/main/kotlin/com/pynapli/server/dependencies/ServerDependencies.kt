@@ -17,8 +17,11 @@ import com.pynapli.server.grid.JdbcGridViewerTrustRepository
 import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.location.JdbcLocationRepository
 import com.pynapli.server.location.JdbcTravelLocationRepository
+import com.pynapli.server.location.JdbcTravelPlaceRepository
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationService
+import com.pynapli.server.location.TravelPlaceDatasetLoader
+import com.pynapli.server.location.TravelPlaceSearchService
 import com.pynapli.server.media.JdbcMediaCleanupRepository
 import com.pynapli.server.media.LocalMediaUploadStorage
 import com.pynapli.server.media.MediaCleanupService
@@ -96,6 +99,7 @@ class ServerDependencies(
     val profileLinkService: ProfileLinkService?,
     val locationService: LocationService?,
     val travelLocationService: TravelLocationService?,
+    val travelPlaceSearchService: TravelPlaceSearchService?,
     val presenceService: PresenceService?,
     val gridService: GridService?,
     val messagingService: MessagingService?,
@@ -270,6 +274,14 @@ class ServerDependencies(
                     // safety review is in place — see TravelRegionPolicy.
                     viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
                 )
+            val travelPlaceRepository = JdbcTravelPlaceRepository(database.dataSource)
+            // One-time per dataset version (~77k rows, a few seconds); steady restarts skip it.
+            TravelPlaceDatasetLoader(travelPlaceRepository).loadIfStale()
+            val travelPlaceSearchService =
+                TravelPlaceSearchService(
+                    repository = travelPlaceRepository,
+                    rateLimitService = rateLimitService,
+                )
             val playStoreSubscriptionSyncWorker =
                 if (config.playStoreVerificationEnabled && config.playStoreSubscriptionSyncEnabled) {
                     PlayStoreSubscriptionSyncWorker(
@@ -411,6 +423,7 @@ class ServerDependencies(
                 profileLinkService = profileLinkService,
                 locationService = locationService,
                 travelLocationService = travelLocationService,
+                travelPlaceSearchService = travelPlaceSearchService,
                 presenceService = presenceService,
                 gridService = grid.gridService,
                 messagingService = messaging.messagingService,
@@ -474,6 +487,7 @@ class ServerDependencies(
                 profileLinkService = null,
                 locationService = null,
                 travelLocationService = null,
+                travelPlaceSearchService = null,
                 presenceService = null,
                 gridService = null,
                 messagingService = null,

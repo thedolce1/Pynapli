@@ -272,6 +272,10 @@ private class FakeApiClient(
 
     override suspend fun clearTravelLocation(): AppResult<Unit> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun searchTravelPlaces(
+        query: String,
+    ): AppResult<com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun getTonightAvailability(): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun setTonightAvailability(

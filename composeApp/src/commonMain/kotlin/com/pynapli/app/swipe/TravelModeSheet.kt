@@ -1,9 +1,9 @@
 package com.pynapli.app.swipe
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,17 +13,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,31 +36,43 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
-import com.pynapli.app.design.PynapliPill
-import com.pynapli.app.location.TravelCityPreset
-import com.pynapli.app.location.TravelCityPresets
+import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.location.TravelLocationUiState
+import com.pynapli.shared.network.dto.TravelPlaceDto
+import kotlinx.coroutines.delay
 
 /**
  * Travel mode picker (SWIPE_IMPLEMENTATION_SPEC L339-354).
  *
- * MVP UX: pick from a small preset list (`TravelCityPresets.ALL`). When a
- * destination is active, the active chip shows selected and a "Clear travel
- * mode" button surfaces. Free/Social-tier users see a paywall hint instead of
- * the picker — the server returns `ENTITLEMENT_REQUIRED` and the sheet folds
- * the items list to the paywall copy.
+ * Free-text UX (founder decision 2026-06-09): type a city name or ZIP/postal code
+ * — e.g. a Toronto user typing "Las Vegas" or "89101" before a weekend trip — and
+ * pick from server-resolved suggestions. When a destination is active, the sheet
+ * shows it with a "Clear travel mode" action. Free-tier users see a paywall hint
+ * instead of the picker — the server returns `ENTITLEMENT_REQUIRED` and the sheet
+ * folds the picker to the paywall copy.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TravelModeSheet(
     state: TravelLocationUiState,
     onDismiss: () -> Unit,
-    onPickCity: (TravelCityPreset) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onRunSearch: () -> Unit,
+    onPickPlace: (TravelPlaceDto) -> Unit,
     onClear: () -> Unit,
     onOpenStore: () -> Unit,
     onOpenAgeVerification: () -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Debounced type-ahead: re-query when the user pauses typing.
+    LaunchedEffect(state.searchQuery) {
+        if (state.searchQuery.trim().length >= TravelLocationStateHolder.MIN_SEARCH_QUERY_LENGTH) {
+            delay(SEARCH_DEBOUNCE_MILLIS)
+            onRunSearch()
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -77,7 +94,7 @@ internal fun TravelModeSheet(
             )
             Text(
                 text =
-                    "Set a city and your deck shows people there. " +
+                    "Type a city or ZIP/postal code and your deck shows people there. " +
                         "One location at a time. Clear it to go back to local.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -95,18 +112,48 @@ internal fun TravelModeSheet(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    TravelCityPresets.ALL.forEach { preset ->
-                        val active = state.current?.city?.equals(preset.city, ignoreCase = true) == true
-                        PynapliPill(
-                            text = preset.displayName,
-                            selected = active,
-                            onClick = { onPickCity(preset) },
-                            modifier = Modifier.testTag(TravelModeTags.cityTag(preset.id)),
+                OutlinedTextField(
+                    value = state.searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(TravelModeTags.SEARCH_FIELD),
+                    placeholder = { Text(text = "City, ZIP, or postal code") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                    trailingIcon =
+                        if (state.isSearching) {
+                            {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                    singleLine = true,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    state.searchResults.forEach { place ->
+                        TravelPlaceRow(place = place, onPick = { onPickPlace(place) })
+                    }
+                    if (
+                        state.searchResults.isEmpty() &&
+                        !state.isSearching &&
+                        state.searchQuery.trim().length >= TravelLocationStateHolder.MIN_SEARCH_QUERY_LENGTH
+                    ) {
+                        Text(
+                            text = "No places match yet — keep typing.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 4.dp),
                         )
                     }
                 }
@@ -131,6 +178,38 @@ internal fun TravelModeSheet(
                 OutlinedButton(onClick = onDismiss) { Text(text = "Close") }
             }
         }
+    }
+}
+
+@Composable
+private fun TravelPlaceRow(
+    place: TravelPlaceDto,
+    onPick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onPick)
+                .padding(horizontal = 8.dp, vertical = 10.dp)
+                .testTag(TravelModeTags.placeTag(place.displayName)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Place,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = place.displayName,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -207,14 +286,17 @@ private fun TravelVerificationBanner(onVerify: () -> Unit) {
     }
 }
 
+private const val SEARCH_DEBOUNCE_MILLIS = 300L
+
 internal object TravelModeTags {
     const val OPEN_SHEET: String = "travel-mode-open-sheet"
     const val SHEET: String = "travel-mode-sheet"
     const val CLEAR: String = "travel-mode-clear"
+    const val SEARCH_FIELD: String = "travel-mode-search-field"
     const val PAYWALL: String = "travel-mode-paywall"
     const val PAYWALL_SUBSCRIBE: String = "travel-mode-paywall-subscribe"
     const val VERIFICATION: String = "travel-mode-verification"
     const val VERIFICATION_VERIFY: String = "travel-mode-verification-verify"
 
-    fun cityTag(id: String): String = "travel-mode-city-$id"
+    fun placeTag(displayName: String): String = "travel-mode-place-$displayName"
 }

@@ -84,6 +84,8 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.FIRST_MESSAGE, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.GRID_QUERY, limit = 720, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.MEDIA_UPLOAD, limit = 120, windowSeconds = ONE_HOUR_SECONDS),
+                // Type-ahead: every debounced keystroke is a query, so the budget is generous.
+                RateLimitPolicy(action = RateLimitedAction.TRAVEL_SEARCH, limit = 600, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AGE_VERIFICATION_START, limit = 5, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.STORE_PURCHASE, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.BOOST_ACTIVATE, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
@@ -108,6 +110,7 @@ object RateLimitedAction {
     const val FIRST_MESSAGE = "first_message"
     const val GRID_QUERY = "grid_query"
     const val MEDIA_UPLOAD = "media_upload"
+    const val TRAVEL_SEARCH = "travel_search"
     const val AGE_VERIFICATION_START = "age_verification_start"
     const val STORE_PURCHASE = "store_purchase"
     const val BOOST_ACTIVATE = "boost_activate"
