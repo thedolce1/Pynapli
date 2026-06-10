@@ -223,7 +223,14 @@ class ServerDependencies(
                     supportEmail = config.supportEmail,
                 )
             val appealService = AppealService(JdbcAppealRepository(database.dataSource))
-            val adminAppealService = AdminAppealService(JdbcAdminAppealRepository(database.dataSource))
+            val adminAppealService =
+                AdminAppealService(
+                    repository = JdbcAdminAppealRepository(database.dataSource),
+                    // Appeal outcomes feed the false-positive rate (TRUST_AND_SAFETY_SPEC).
+                    falsePositiveMetrics =
+                        com.pynapli.server.safety
+                            .RiskFalsePositiveMetrics(),
+                )
             val notificationRepository = JdbcNotificationRepository(database.dataSource)
             val notificationService = NotificationService(notificationRepository)
             val activityBroadcaster = ActivityBroadcaster()
