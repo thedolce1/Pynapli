@@ -9,29 +9,36 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -40,36 +47,36 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.shared.core.config.LegalLinks
-import kotlinx.datetime.LocalDate
 
 /**
- * The DOB-first signup stepper (ONBOARDING_AUTH_SPEC). Pre-auth steps: DOB wheel ->
- * underage stop or account+legal. Post-auth steps (all skippable): location ->
- * display name -> photo -> grid. Driven entirely by [OnboardingStateHolder] state;
- * platform work (OS location prompt, photo picker) arrives via callbacks.
+ * The DOB-first signup stepper (ONBOARDING_AUTH_SPEC), aligned to the founder's
+ * Grindr reference capture (2026-06-10): typed DD/MM/YYYY birthday fields, a
+ * dedicated policies step with read links and one Accept, then email+password,
+ * location, and a single consolidated "Your profile" step (photo + display name).
+ * Driven entirely by [OnboardingStateHolder] state; platform work (OS location
+ * prompt, photo picker) arrives via callbacks.
  */
 @Composable
 fun OnboardingFlowScreen(
     state: OnboardingUiState,
     locationState: LocationUiState,
     mediaState: MediaAlbumsUiState,
-    today: LocalDate,
-    onDobChanged: (LocalDate) -> Unit,
+    onDobDayChanged: (String) -> Unit,
+    onDobMonthChanged: (String) -> Unit,
+    onDobYearChanged: (String) -> Unit,
     onConfirmDob: () -> Unit,
     onBackToDob: () -> Unit,
     onCancelToSignIn: () -> Unit,
+    onAcceptPolicies: () -> Unit,
+    onBackToPolicies: () -> Unit,
     onEmailChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
-    onAcceptedTermsChanged: (Boolean) -> Unit,
-    onAcceptedPrivacyChanged: (Boolean) -> Unit,
     onSubmitAccount: () -> Unit,
     onShareLocation: () -> Unit,
     onContinueFromLocation: () -> Unit,
     onDisplayNameChanged: (String) -> Unit,
-    onSaveDisplayName: () -> Unit,
-    onSkipDisplayName: () -> Unit,
     onPickPhoto: () -> Unit,
-    onFinish: () -> Unit,
+    onFinishProfile: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -78,6 +85,9 @@ fun OnboardingFlowScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .statusBarsPadding()
+                // Keep focused fields above the soft keyboard: the Profile step's
+                // display-name field sits low enough to be covered otherwise.
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -91,17 +101,16 @@ fun OnboardingFlowScreen(
         Spacer(modifier = Modifier.height(12.dp))
         if (state.step != OnboardingStep.UnderageStop) {
             StepProgressDots(step = state.step)
-            Spacer(modifier = Modifier.height(28.dp))
-        } else {
-            Spacer(modifier = Modifier.height(28.dp))
         }
+        Spacer(modifier = Modifier.height(28.dp))
 
         when (state.step) {
             OnboardingStep.Dob ->
                 DobStep(
                     state = state,
-                    today = today,
-                    onDobChanged = onDobChanged,
+                    onDobDayChanged = onDobDayChanged,
+                    onDobMonthChanged = onDobMonthChanged,
+                    onDobYearChanged = onDobYearChanged,
                     onConfirmDob = onConfirmDob,
                     onCancelToSignIn = onCancelToSignIn,
                 )
@@ -112,15 +121,19 @@ fun OnboardingFlowScreen(
                     onCancelToSignIn = onCancelToSignIn,
                 )
 
+            OnboardingStep.Policies ->
+                PoliciesStep(
+                    onAcceptPolicies = onAcceptPolicies,
+                    onBackToDob = onBackToDob,
+                )
+
             OnboardingStep.Account ->
                 AccountStep(
                     state = state,
                     onEmailChanged = onEmailChanged,
                     onPasswordChanged = onPasswordChanged,
-                    onAcceptedTermsChanged = onAcceptedTermsChanged,
-                    onAcceptedPrivacyChanged = onAcceptedPrivacyChanged,
                     onSubmitAccount = onSubmitAccount,
-                    onBackToDob = onBackToDob,
+                    onBackToPolicies = onBackToPolicies,
                 )
 
             OnboardingStep.Location ->
@@ -130,19 +143,13 @@ fun OnboardingFlowScreen(
                     onContinue = onContinueFromLocation,
                 )
 
-            OnboardingStep.Name ->
-                NameStep(
+            OnboardingStep.Profile ->
+                ProfileStep(
                     state = state,
-                    onDisplayNameChanged = onDisplayNameChanged,
-                    onSaveDisplayName = onSaveDisplayName,
-                    onSkipDisplayName = onSkipDisplayName,
-                )
-
-            OnboardingStep.Photo ->
-                PhotoStep(
                     mediaState = mediaState,
+                    onDisplayNameChanged = onDisplayNameChanged,
                     onPickPhoto = onPickPhoto,
-                    onFinish = onFinish,
+                    onFinishProfile = onFinishProfile,
                 )
         }
     }
@@ -151,33 +158,85 @@ fun OnboardingFlowScreen(
 @Composable
 private fun DobStep(
     state: OnboardingUiState,
-    today: LocalDate,
-    onDobChanged: (LocalDate) -> Unit,
+    onDobDayChanged: (String) -> Unit,
+    onDobMonthChanged: (String) -> Unit,
+    onDobYearChanged: (String) -> Unit,
     onConfirmDob: () -> Unit,
     onCancelToSignIn: () -> Unit,
 ) {
     StepTitle(
-        title = "When's your birthday?",
-        subtitle = "Pynapli is for adults. Your birthday is never shown on your profile — only your age.",
+        title = "Your birthday",
+        subtitle = "You must be at least 18 years old to use Pynapli. Only your age shows on your profile.",
     )
     Spacer(modifier = Modifier.height(24.dp))
-    DobWheelPicker(
-        value = state.dob,
-        yearRange = (today.year - 100)..today.year,
-        onValueChange = onDobChanged,
-    )
+    val monthFocus = remember { FocusRequester() }
+    val yearFocus = remember { FocusRequester() }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        DobField(
+            value = state.dobDay,
+            label = "DD",
+            onValueChange = { value ->
+                onDobDayChanged(value)
+                if (value.count { it.isDigit() } >= 2) monthFocus.requestFocus()
+            },
+            modifier = Modifier.weight(1f),
+        )
+        DobField(
+            value = state.dobMonth,
+            label = "MM",
+            onValueChange = { value ->
+                onDobMonthChanged(value)
+                if (value.count { it.isDigit() } >= 2) yearFocus.requestFocus()
+            },
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .focusRequester(monthFocus),
+        )
+        DobField(
+            value = state.dobYear,
+            label = "YYYY",
+            onValueChange = onDobYearChanged,
+            modifier =
+                Modifier
+                    .weight(1.4f)
+                    .focusRequester(yearFocus),
+        )
+    }
     StepError(state.errorMessage)
     Spacer(modifier = Modifier.height(24.dp))
     Button(
         onClick = onConfirmDob,
+        enabled = state.dobComplete,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Text("Continue")
+        Text("Next")
     }
     Spacer(modifier = Modifier.height(10.dp))
     TextButton(onClick = onCancelToSignIn) {
         Text("Already have an account? Sign in")
     }
+}
+
+@Composable
+private fun DobField(
+    value: String,
+    label: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        colors = onboardingTextFieldColors(),
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -205,14 +264,75 @@ private fun UnderageStopStep(
 }
 
 @Composable
+private fun PoliciesStep(
+    onAcceptPolicies: () -> Unit,
+    onBackToDob: () -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    StepTitle(
+        title = "Review our policies",
+        subtitle = "To continue, you'll need to accept our Terms of Service and Privacy Policy.",
+    )
+    Spacer(modifier = Modifier.height(28.dp))
+    PolicyReadRow(
+        label = "Terms of Service",
+        onRead = { uriHandler.openUri(LegalLinks.TERMS_OF_SERVICE) },
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    PolicyReadRow(
+        label = "Privacy Policy",
+        onRead = { uriHandler.openUri(LegalLinks.PRIVACY_POLICY) },
+    )
+    Spacer(modifier = Modifier.height(28.dp))
+    Text(
+        text = "By tapping Accept, you agree to Pynapli's Terms of Service and Privacy Policy.",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodySmall,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    Button(
+        onClick = onAcceptPolicies,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text("Accept")
+    }
+    Spacer(modifier = Modifier.height(10.dp))
+    TextButton(onClick = onBackToDob) {
+        Text("Back")
+    }
+}
+
+@Composable
+private fun PolicyReadRow(
+    label: String,
+    onRead: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
+        OutlinedButton(onClick = onRead) {
+            Text("Read")
+        }
+    }
+}
+
+@Composable
 private fun AccountStep(
     state: OnboardingUiState,
     onEmailChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
-    onAcceptedTermsChanged: (Boolean) -> Unit,
-    onAcceptedPrivacyChanged: (Boolean) -> Unit,
     onSubmitAccount: () -> Unit,
-    onBackToDob: () -> Unit,
+    onBackToPolicies: () -> Unit,
 ) {
     StepTitle(
         title = "Create your account",
@@ -242,20 +362,6 @@ private fun AccountStep(
         colors = onboardingTextFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )
-    Spacer(modifier = Modifier.height(16.dp))
-    LegalAcceptanceRow(
-        text = "I accept the Terms of Service.",
-        checked = state.acceptedTerms,
-        enabled = !state.isSubmitting,
-        onCheckedChange = onAcceptedTermsChanged,
-    )
-    LegalAcceptanceRow(
-        text = "I accept the Privacy Policy.",
-        checked = state.acceptedPrivacy,
-        enabled = !state.isSubmitting,
-        onCheckedChange = onAcceptedPrivacyChanged,
-    )
-    LegalDocumentLinks(enabled = !state.isSubmitting)
     StepError(state.errorMessage)
     Spacer(modifier = Modifier.height(20.dp))
     SubmittingButton(
@@ -264,7 +370,7 @@ private fun AccountStep(
         onClick = onSubmitAccount,
     )
     Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onBackToDob, enabled = !state.isSubmitting) {
+    TextButton(onClick = onBackToPolicies, enabled = !state.isSubmitting) {
         Text("Back")
     }
 }
@@ -303,21 +409,72 @@ private fun LocationStep(
 }
 
 @Composable
-private fun NameStep(
+private fun ProfileStep(
     state: OnboardingUiState,
+    mediaState: MediaAlbumsUiState,
     onDisplayNameChanged: (String) -> Unit,
-    onSaveDisplayName: () -> Unit,
-    onSkipDisplayName: () -> Unit,
+    onPickPhoto: () -> Unit,
+    onFinishProfile: () -> Unit,
 ) {
+    val hasPhoto = mediaState.profileItems.isNotEmpty()
     StepTitle(
-        title = "What should we call you?",
-        subtitle = "Your display name is what people see on the grid. You can change it any time.",
+        title = "Your profile",
+        subtitle = "Add a photo and a display name — or skip and do it later.",
     )
+    Spacer(modifier = Modifier.height(20.dp))
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier
+                .size(120.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Person,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(64.dp),
+        )
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    if (hasPhoto) {
+        Text(
+            text = "Photo added! It will appear once it's approved.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+    } else {
+        SubmittingButton(
+            text = "Add photo",
+            isSubmitting = mediaState.isUploadingProfile,
+            onClick = onPickPhoto,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = "Profiles with photos get seen more.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(12.dp),
+            )
+        }
+    }
+    StepError(mediaState.errorMessage)
     Spacer(modifier = Modifier.height(20.dp))
     OutlinedTextField(
         value = state.displayName,
         onValueChange = onDisplayNameChanged,
         label = { Text("Display name") },
+        supportingText = {
+            Text("${state.displayName.length}/${OnboardingStateHolder.DISPLAY_NAME_MAX_LENGTH}")
+        },
         singleLine = true,
         enabled = !state.isSubmitting,
         colors = onboardingTextFieldColors(),
@@ -326,52 +483,10 @@ private fun NameStep(
     StepError(state.errorMessage)
     Spacer(modifier = Modifier.height(20.dp))
     SubmittingButton(
-        text = "Continue",
-        isSubmitting = state.isSubmitting,
-        onClick = onSaveDisplayName,
+        text = "Next",
+        isSubmitting = state.isSubmitting || mediaState.isUploadingProfile,
+        onClick = onFinishProfile,
     )
-    Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onSkipDisplayName, enabled = !state.isSubmitting) {
-        Text("Skip for now")
-    }
-}
-
-@Composable
-private fun PhotoStep(
-    mediaState: MediaAlbumsUiState,
-    onPickPhoto: () -> Unit,
-    onFinish: () -> Unit,
-) {
-    val hasPhoto = mediaState.profileItems.isNotEmpty()
-    StepTitle(
-        title = "Add a photo",
-        subtitle =
-            if (hasPhoto) {
-                "Photo added! It will appear on your profile once it's approved."
-            } else {
-                "Profiles with photos get seen more. One is enough to start — you can add more later."
-            },
-    )
-    StepError(mediaState.errorMessage)
-    Spacer(modifier = Modifier.height(28.dp))
-    if (hasPhoto) {
-        Button(
-            onClick = onFinish,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Start browsing")
-        }
-    } else {
-        SubmittingButton(
-            text = "Choose a photo",
-            isSubmitting = mediaState.isUploadingProfile,
-            onClick = onPickPhoto,
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        TextButton(onClick = onFinish, enabled = !mediaState.isUploadingProfile) {
-            Text("Skip for now")
-        }
-    }
 }
 
 @Composable
@@ -457,65 +572,6 @@ private fun SubmittingButton(
 }
 
 @Composable
-private fun LegalDocumentLinks(enabled: Boolean) {
-    val uriHandler = LocalUriHandler.current
-    Row(
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        TextButton(
-            onClick = { uriHandler.openUri(LegalLinks.TERMS_OF_SERVICE) },
-            enabled = enabled,
-        ) {
-            Text("Read the Terms", style = MaterialTheme.typography.bodySmall)
-        }
-        TextButton(
-            onClick = { uriHandler.openUri(LegalLinks.PRIVACY_POLICY) },
-            enabled = enabled,
-        ) {
-            Text("Read the Privacy Policy", style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-private fun LegalAcceptanceRow(
-    text: String,
-    checked: Boolean,
-    enabled: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    // Whole-row toggle with a null-callback Checkbox: one semantics node for
-    // accessibility, and the full row is the tap target.
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .toggleable(
-                    value = checked,
-                    enabled = enabled,
-                    role = Role.Checkbox,
-                    onValueChange = onCheckedChange,
-                ),
-    ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = null,
-            enabled = enabled,
-        )
-        Text(
-            text = text,
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-@Composable
 private fun onboardingTextFieldColors() =
     OutlinedTextFieldDefaults.colors(
         focusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -530,8 +586,8 @@ private fun onboardingTextFieldColors() =
 private val progressSteps =
     listOf(
         OnboardingStep.Dob,
+        OnboardingStep.Policies,
         OnboardingStep.Account,
         OnboardingStep.Location,
-        OnboardingStep.Name,
-        OnboardingStep.Photo,
+        OnboardingStep.Profile,
     )
