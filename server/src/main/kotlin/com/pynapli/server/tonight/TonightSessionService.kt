@@ -4,6 +4,7 @@ import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.presence.PresenceService
+import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.CurrentTonightSessionDto
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
@@ -25,12 +26,18 @@ class TonightSessionService(
     private val subscriptionService: SubscriptionService?,
     private val notificationPublisher: NotificationPublisher? = null,
     private val presenceService: PresenceService? = null,
+    private val riskPolicyService: RiskPolicyService? = null,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     suspend fun propose(
         userId: UUID,
         request: ProposeTonightSessionRequestDto,
     ): TonightSessionDto {
+        // Starting a session is an outbound social signal: restricted tiers cannot
+        // (TRUST_AND_SAFETY_SPEC). Declining/ending stays unrestricted.
+        if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
+            throw TonightSessionException("RISK_RESTRICTED")
+        }
         val mode = request.mode.trim().lowercase()
         if (mode !in VALID_MODES) throw TonightSessionException("INVALID_TONIGHT_MODE")
 
@@ -165,6 +172,11 @@ class TonightSessionService(
         sessionId: UUID,
         userId: UUID,
     ): TonightSessionDto {
+        // Approving makes the approver publicly live too — same outbound-social
+        // restriction as proposing. Declining stays unrestricted.
+        if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
+            throw TonightSessionException("RISK_RESTRICTED")
+        }
         val now = clock.instant()
         return when (val outcome = repository.approveParticipant(sessionId, userId, now)) {
             is TonightSessionRepository.ApproveOutcome.Updated -> outcome.session.toDto()

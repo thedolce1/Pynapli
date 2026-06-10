@@ -76,6 +76,7 @@ internal fun buildSwipeDependencies(
             notificationPublisher = notificationService,
             broadcaster = psyncBroadcaster,
             rateLimitService = rateLimitService,
+            riskPolicyService = riskPolicyService,
             subscriptionService = subscriptionService,
         )
     val topPicksService =
