@@ -116,7 +116,7 @@ Do not:
 ## Implementation Checklist
 
 - [ ] Partial: email auth is implemented; social auth and full onboarding auth set are not complete.
-- [ ] Partial: token storage exists, but secure platform storage is not complete.
+- [x] Android secure token storage: the persisted session is encrypted at rest with a non-exportable AndroidKeyStore AES-256-GCM key (`SessionTokenCipher` expect/actual; `enc1:` format), legacy plaintext rows upgrade on first read, and an undecryptable value surfaces as a signed-out session. Proven on-device by `scripts/android-secure-token-qa.ps1` (ciphertext in the SQLite DB+WAL, no plaintext token JSON, session survives restart). iOS Keychain actual lands with the iOS phase (pass-through until then, per ANDROID_PRODUCTION_GAMEPLAN scope).
 - [x] Signup progress saved: signup arms a local resume flag pinned to the signing-up account (`AppSettings.onboardingCompleted` + `onboardingUserId`); next launch re-enters the stepper at the first incomplete post-auth step (blank display name -> Name, else Photo). A different account signing in on the same device never inherits the stepper.
 - [x] Skippable photo (stepper photo step uploads to the profile album with moderation-pending honesty copy, or skips). Tags/looking-for are deferred entirely to profile edit by design — nothing to skip at signup.
 - [x] Age gate before access for email signup: DOB wheel before any account data is collected (underage stop screen), explicit 18+ confirmation, separate Terms and Privacy acceptances required before the session is created.

@@ -11,16 +11,24 @@ import kotlin.time.ExperimentalTime
 class SqlDelightSessionStore(
     private val database: PynapliDatabase,
     private val json: Json = PynapliJson,
+    cipher: SessionTokenCipher = createPlatformSessionTokenCipher(),
 ) : SessionStore {
+    private val codec = SessionPayloadCodec(cipher, json)
+
     override suspend fun currentSession(): StoredSession? {
         val value =
             database.appMetaQueries
                 .selectByKey(SESSION_KEY)
                 .executeAsOneOrNull()
                 ?.value_ ?: return null
-        return runCatching {
-            json.decodeFromString<StoredSessionPayload>(value).toStoredSession()
-        }.getOrNull()
+        val decoded = codec.decode(value)
+        val payload = decoded.payload ?: return null
+        if (decoded.needsEncryptionUpgrade) {
+            // Pre-encryption plaintext row: upgrade on first read so the
+            // plaintext-at-rest window closes immediately, not at the next save.
+            runCatching { persist(codec.encode(payload)) }
+        }
+        return payload.toStoredSession()
     }
 
     override suspend fun save(session: AuthSessionDto) {
@@ -31,15 +39,19 @@ class SqlDelightSessionStore(
                 userId = session.user.userId,
                 userStatus = session.user.status,
             )
-        database.appMetaQueries.upsert(
-            key = SESSION_KEY,
-            value_ = json.encodeToString(StoredSessionPayload.serializer(), payload),
-            updated_at_epoch_ms = currentTimeMillis(),
-        )
+        persist(codec.encode(payload))
     }
 
     override suspend fun clear() {
         database.appMetaQueries.deleteByKey(SESSION_KEY)
+    }
+
+    private fun persist(value: String) {
+        database.appMetaQueries.upsert(
+            key = SESSION_KEY,
+            value_ = value,
+            updated_at_epoch_ms = currentTimeMillis(),
+        )
     }
 
     private fun StoredSessionPayload.toStoredSession(): StoredSession =
@@ -58,8 +70,40 @@ class SqlDelightSessionStore(
     }
 }
 
+/**
+ * Serializes the session payload and applies the platform [SessionTokenCipher] at
+ * rest (ONBOARDING_AUTH_SPEC "Secure token storage"). Decoding accepts both
+ * encrypted values and pre-encryption plaintext rows; an encrypted value that no
+ * longer decrypts (key invalidated, tampering) decodes to null, which callers
+ * surface as a signed-out session.
+ */
+internal class SessionPayloadCodec(
+    private val cipher: SessionTokenCipher,
+    private val json: Json,
+) {
+    internal data class Decoded(
+        val payload: StoredSessionPayload?,
+        val needsEncryptionUpgrade: Boolean,
+    )
+
+    fun encode(payload: StoredSessionPayload): String = cipher.encrypt(json.encodeToString(StoredSessionPayload.serializer(), payload))
+
+    fun decode(value: String): Decoded {
+        val decrypted = cipher.decrypt(value)
+        val payloadJson = decrypted ?: value
+        val payload =
+            runCatching {
+                json.decodeFromString(StoredSessionPayload.serializer(), payloadJson)
+            }.getOrNull()
+        return Decoded(
+            payload = payload,
+            needsEncryptionUpgrade = payload != null && decrypted == null,
+        )
+    }
+}
+
 @Serializable
-private data class StoredSessionPayload(
+internal data class StoredSessionPayload(
     val accessToken: String,
     val refreshToken: String,
     val userId: String,
