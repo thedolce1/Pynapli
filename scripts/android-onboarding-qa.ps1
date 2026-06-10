@@ -1,0 +1,556 @@
+# Connected-Android QA for the DOB-first signup stepper (ONBOARDING_AUTH_SPEC). Proves the happy
+# path end-to-end on a real emulator: Create account -> DOB wheel -> account+legal -> denied
+# location permission (useful error + skip) -> mid-signup force-stop resume at the Name step ->
+# name -> skipped photo -> first grid with no error text -> next-session bounded photo nudge that
+# dismisses. Mirrors scripts/android-notification-permission-qa.ps1.
+param(
+    [string]$BaseUrl = "http://127.0.0.1:8080",
+    [string]$PackageName = "com.pynapli.app",
+    [string]$LaunchActivity = ".MainActivity",
+    [string]$DeviceId = "",
+    [string]$OutputRoot = "artifacts\android-onboarding-qa",
+    [switch]$SkipSeed,
+    [switch]$SkipBuild,
+    [switch]$SkipInstall,
+    [int]$WaitSeconds = 35
+)
+
+$ErrorActionPreference = "Stop"
+
+function Find-Adb {
+    $command = Get-Command "adb" -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    $sdkCandidates = @(
+        $env:ANDROID_HOME,
+        $env:ANDROID_SDK_ROOT,
+        (Join-Path $env:LOCALAPPDATA "Android\Sdk")
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    foreach ($sdk in $sdkCandidates) {
+        $candidate = Join-Path $sdk "platform-tools\adb.exe"
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw "adb was not found. Start Android Studio once or install Android SDK Platform Tools."
+}
+
+function Invoke-Adb {
+    param([string[]]$Arguments)
+
+    $output = $null
+    if ([string]::IsNullOrWhiteSpace($script:DeviceId)) {
+        $output = & $script:Adb @Arguments 2>&1
+    } else {
+        $output = & $script:Adb -s $script:DeviceId @Arguments 2>&1
+    }
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "adb failed: $($Arguments -join ' '). Output: $(($output | Out-String).Trim())"
+    }
+
+    return $output
+}
+
+function Invoke-AdbBestEffort {
+    param([string[]]$Arguments)
+
+    if ([string]::IsNullOrWhiteSpace($script:DeviceId)) {
+        & $script:Adb @Arguments 2>&1 | Out-Null
+    } else {
+        & $script:Adb -s $script:DeviceId @Arguments 2>&1 | Out-Null
+    }
+}
+
+function Select-AdbDevice {
+    $lines = & $script:Adb devices
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to list adb devices."
+    }
+
+    $devices = @(
+        $lines |
+            Where-Object { $_ -match "^\S+\s+device$" } |
+            ForEach-Object { ($_ -split "\s+")[0] }
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($script:DeviceId)) {
+        if ($devices -notcontains $script:DeviceId) {
+            throw "Requested adb device '$script:DeviceId' is not connected. Connected devices: $($devices -join ', ')"
+        }
+        return
+    }
+
+    if ($devices.Count -eq 0) {
+        throw "No connected Android emulator/device found. Start an emulator or connect a device and retry."
+    }
+
+    if ($devices.Count -gt 1) {
+        throw "Multiple Android devices are connected. Rerun with -DeviceId. Connected devices: $($devices -join ', ')"
+    }
+
+    $script:DeviceId = $devices[0]
+}
+
+function Save-Screen {
+    param([string]$Name)
+
+    $remote = "/sdcard/$Name.png"
+    $local = Join-Path $script:ArtifactDir "$Name.png"
+    Invoke-Adb @("shell", "screencap", "-p", $remote) | Out-Null
+    Invoke-Adb @("pull", $remote, $local) | Out-Null
+    Invoke-Adb @("shell", "rm", $remote) | Out-Null
+    return (Resolve-Path $local).Path
+}
+
+function Dump-Ui {
+    param(
+        [string]$Name,
+        [switch]$Keep
+    )
+
+    $remote = "/sdcard/window.xml"
+    $fileName = if ($Keep) { "$Name.xml" } else { "_latest.xml" }
+    $local = Join-Path $script:ArtifactDir $fileName
+    $lastDumpOutput = ""
+
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        $dumpOutput = & $script:Adb -s $script:DeviceId shell uiautomator dump $remote 2>&1
+        $dumpExit = $LASTEXITCODE
+        $lastDumpOutput = ($dumpOutput | Out-String).Trim()
+
+        if ($dumpExit -eq 0 -and $lastDumpOutput -notmatch "ERROR:\s+null root") {
+            & $script:Adb -s $script:DeviceId pull $remote $local 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $local)) {
+                throw "Unable to pull Android UI hierarchy."
+            }
+
+            try {
+                return [xml](Get-Content -Raw -Path $local)
+            } catch {
+                if ($attempt -eq 5) {
+                    throw "Unable to parse Android UI hierarchy at $local"
+                }
+            }
+        }
+
+        Start-Sleep -Milliseconds 300
+    }
+
+    throw "Unable to dump Android UI hierarchy after retries. Last output: $lastDumpOutput"
+}
+
+function Get-UiTextNodes {
+    param([xml]$Xml)
+
+    @($Xml.SelectNodes("//*[@text or @content-desc]"))
+}
+
+function Get-VisibleTexts {
+    param([xml]$Xml)
+
+    Get-UiTextNodes $Xml |
+        ForEach-Object {
+            $text = $_.GetAttribute("text")
+            if ([string]::IsNullOrWhiteSpace($text)) {
+                $text = $_.GetAttribute("content-desc")
+            }
+            $text
+        } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+}
+
+function Find-NodeByText {
+    param(
+        [xml]$Xml,
+        [string]$Text
+    )
+
+    foreach ($node in Get-UiTextNodes $Xml) {
+        $nodeText = $node.GetAttribute("text")
+        if ($nodeText.Contains($Text)) {
+            return $node
+        }
+    }
+
+    foreach ($node in Get-UiTextNodes $Xml) {
+        $nodeDescription = $node.GetAttribute("content-desc")
+        if ($nodeDescription.Contains($Text)) {
+            return $node
+        }
+    }
+
+    return $null
+}
+
+function Find-NodeByExactText {
+    param(
+        [xml]$Xml,
+        [string]$Text
+    )
+
+    foreach ($node in Get-UiTextNodes $Xml) {
+        if ($node.GetAttribute("text") -eq $Text) {
+            return $node
+        }
+    }
+
+    foreach ($node in Get-UiTextNodes $Xml) {
+        if ($node.GetAttribute("content-desc") -eq $Text) {
+            return $node
+        }
+    }
+
+    return $null
+}
+
+function Get-Bounds {
+    param($Node)
+
+    $bounds = $Node.GetAttribute("bounds")
+    if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
+        throw "Invalid node bounds: $bounds"
+    }
+
+    return [pscustomobject]@{
+        CenterX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
+        CenterY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
+    }
+}
+
+function Wait-ForAnyText {
+    param(
+        [string[]]$Texts,
+        [int]$TimeoutSeconds = $script:WaitSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $xml = Dump-Ui "wait"
+        foreach ($text in $Texts) {
+            if ($null -ne (Find-NodeByText $xml $text)) {
+                return [pscustomobject]@{
+                    Text = $text
+                    Xml = $xml
+                }
+            }
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    $visible = (Get-VisibleTexts $xml) -join " | "
+    throw "Timed out waiting for one of: $($Texts -join ', '). Visible text: $visible"
+}
+
+function Tap-Text {
+    param([string]$Text)
+
+    $wait = Wait-ForAnyText @($Text)
+    $node = Find-NodeByText $wait.Xml $Text
+    $bounds = Get-Bounds $node
+    Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+    Write-Host "[tap] '$Text' at $($bounds.CenterX),$($bounds.CenterY)"
+}
+
+function Tap-ExactText {
+    param([string]$Text)
+
+    $wait = Wait-ForAnyText @($Text)
+    $node = Find-NodeByExactText $wait.Xml $Text
+    if ($null -eq $node) {
+        throw "Text '$Text' was visible but no exact node match was found."
+    }
+    $bounds = Get-Bounds $node
+    Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+    Write-Host "[tap] '$Text' at $($bounds.CenterX),$($bounds.CenterY)"
+}
+
+function Tap-FirstAvailableText {
+    param([string[]]$Texts)
+
+    $wait = Wait-ForAnyText $Texts
+    $node = Find-NodeByText $wait.Xml $wait.Text
+    $bounds = Get-Bounds $node
+    Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+    Write-Host "[tap] '$($wait.Text)' at $($bounds.CenterX),$($bounds.CenterY)"
+    return $wait.Text
+}
+
+function Enter-Text {
+    param(
+        [string]$FieldLabel,
+        [string]$Value
+    )
+
+    Tap-Text $FieldLabel
+    Start-Sleep -Milliseconds 600
+    Invoke-Adb @("shell", "input", "text", $Value) | Out-Null
+    Write-Host "[type] '$FieldLabel' <- '$Value'"
+}
+
+function Hide-Keyboard {
+    # BACK with the IME open only dismisses the keyboard; it does not reach the app.
+    Invoke-AdbBestEffort @("shell", "input", "keyevent", "4")
+    Start-Sleep -Milliseconds 400
+}
+
+function Assert-TextPresent {
+    param(
+        [xml]$Xml,
+        [string]$Text,
+        [string]$Stage
+    )
+
+    if ($null -eq (Find-NodeByText $Xml $Text)) {
+        $visible = (Get-VisibleTexts $Xml) -join " | "
+        throw "$Stage did not show expected text '$Text'. Visible text: $visible"
+    }
+}
+
+function Assert-TextAbsent {
+    param(
+        [xml]$Xml,
+        [string]$Text,
+        [string]$Stage
+    )
+
+    if ($null -ne (Find-NodeByText $Xml $Text)) {
+        $visible = (Get-VisibleTexts $Xml) -join " | "
+        throw "$Stage showed forbidden text '$Text'. Visible text: $visible"
+    }
+}
+
+function Assert-NoAppErrorText {
+    param(
+        [xml]$Xml,
+        [string]$Stage
+    )
+
+    $allText = (Get-VisibleTexts $Xml) -join "`n"
+    $errorPatterns = @(
+        "Illegal input",
+        "NETWORK_ERROR",
+        "Network request failed",
+        "Request failed",
+        "UNAUTHENTICATED",
+        "HTTP_",
+        "Exception"
+    )
+
+    foreach ($pattern in $errorPatterns) {
+        if ($allText.Contains($pattern)) {
+            throw "$Stage displayed app error text matching '$pattern'. Visible text: $allText"
+        }
+    }
+}
+
+function Dismiss-NotificationPromptIfPresent {
+    # The OS POST_NOTIFICATIONS prompt appears once after the session authenticates
+    # (Android 13+). Allow it so notification state stays out of this QA's scope.
+    # Exact match only: the dialog TITLE also contains the word "Allow".
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        Start-Sleep -Milliseconds 1500
+        $xml = Dump-Ui "notification_prompt_check"
+        $allowButton = Find-NodeByExactText $xml "Allow"
+        if ($null -eq $allowButton) {
+            return
+        }
+        $bounds = Get-Bounds $allowButton
+        Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+        Write-Host "[note] OS notification prompt allowed (tap at $($bounds.CenterX),$($bounds.CenterY))."
+    }
+}
+
+function Write-Summary {
+    param([hashtable]$Summary)
+
+    $path = Join-Path $script:ArtifactDir "qa-summary.json"
+    ($Summary | ConvertTo-Json -Depth 6) | Set-Content -Path $path -Encoding UTF8
+    Write-Host ""
+    Write-Host "Android onboarding QA passed."
+    Write-Host "Artifact directory: $script:ArtifactDir"
+    Write-Host "Summary: $path"
+}
+
+if (-not (Test-Path ".\gradlew.bat")) {
+    throw "Run this script from the Pynapli repo root."
+}
+
+$script:Adb = Find-Adb
+$script:DeviceId = $DeviceId
+Select-AdbDevice
+
+$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$script:ArtifactDir = Join-Path (Get-Location) (Join-Path $OutputRoot $timestamp)
+New-Item -ItemType Directory -Force -Path $script:ArtifactDir | Out-Null
+
+$signupEmail = "qa-onboarding-$timestamp@pynapli.local"
+$signupPassword = "OnboardingQaPass123!"
+$displayName = "QaTester"
+
+Write-Host "Pynapli Android onboarding QA"
+Write-Host "-----------------------------"
+Write-Host "Device: $script:DeviceId"
+Write-Host "ADB: $script:Adb"
+Write-Host "Artifacts: $script:ArtifactDir"
+Write-Host "Signup email: $signupEmail"
+
+$health = Invoke-RestMethod -Uri "$BaseUrl/health/deep" -TimeoutSec 5
+if ($health.status -ne "ok") {
+    throw "Unexpected health status: $($health | ConvertTo-Json -Compress)"
+}
+Write-Host "[ok] Ktor health: $BaseUrl/health/deep"
+
+if (-not $SkipSeed) {
+    Write-Host "[step] Seeding dev data"
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File ".\scripts\seed-dev-data.ps1" -BaseUrl $BaseUrl -SetAndroidEmulatorLocation
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dev data seed failed."
+    }
+}
+
+if (-not $SkipBuild) {
+    Write-Host "[step] Building androidApp debug APK"
+    .\gradlew.bat :androidApp:assembleDebug --console=plain
+    if ($LASTEXITCODE -ne 0) {
+        throw "Android debug build failed."
+    }
+}
+
+$apk = Get-ChildItem -Path ".\androidApp\build\outputs\apk\debug" -Filter "*.apk" |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+if ($null -eq $apk) {
+    throw "No debug APK found. Run without -SkipBuild first."
+}
+
+if (-not $SkipInstall) {
+    Write-Host "[step] Installing $($apk.FullName)"
+    Invoke-Adb @("install", "-r", $apk.FullName) | Out-Null
+}
+
+Write-Host "[step] Clearing app data + permissions for a fresh signup"
+Invoke-Adb @("shell", "pm", "clear", $PackageName) | Out-Null
+foreach ($permission in @(
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS"
+    )) {
+    Invoke-AdbBestEffort @("shell", "pm", "revoke", $PackageName, $permission)
+    Invoke-AdbBestEffort @("shell", "pm", "clear-permission-flags", $PackageName, $permission, "user-set", "user-fixed")
+}
+
+$component = "$PackageName/$LaunchActivity"
+Write-Host "[step] Launching $component"
+Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
+
+# --- Auth screen -> stepper entry ---
+Wait-ForAnyText @("Create account") | Out-Null
+$authXml = Dump-Ui "00_auth" -Keep
+Assert-NoAppErrorText $authXml "Auth screen"
+$authShot = Save-Screen "00_auth"
+Tap-ExactText "Create account"
+
+# --- DOB step (wheel defaults to a plausible adult age) ---
+Wait-ForAnyText @("When's your birthday?") | Out-Null
+$dobXml = Dump-Ui "01_dob" -Keep
+Assert-NoAppErrorText $dobXml "DOB step"
+$dobShot = Save-Screen "01_dob"
+Tap-ExactText "Continue"
+
+# --- Account + legal step ---
+Wait-ForAnyText @("Create your account") | Out-Null
+Enter-Text "Email" $signupEmail
+Enter-Text "Password" $signupPassword
+Hide-Keyboard
+Tap-Text "I accept the Terms of Service."
+Tap-Text "I accept the Privacy Policy."
+$accountXml = Dump-Ui "02_account" -Keep
+$accountShot = Save-Screen "02_account"
+Tap-ExactText "Create account"
+
+Dismiss-NotificationPromptIfPresent
+
+# --- Location step: deny the OS prompt, expect a useful error, then skip ---
+Wait-ForAnyText @("See who's nearby") 45 | Out-Null
+$locationShot = Save-Screen "03_location"
+Tap-ExactText "Share my location"
+Wait-ForAnyText @("While using", "Only this time", "Don", "Deny") 20 | Out-Null
+$locationPromptShot = Save-Screen "04_location_prompt"
+$deniedButton = Tap-FirstAvailableText @("Don", "Deny")
+Wait-ForAnyText @("Location permission is required") 20 | Out-Null
+$locationDeniedXml = Dump-Ui "05_location_denied" -Keep
+$locationDeniedShot = Save-Screen "05_location_denied"
+Tap-ExactText "Skip for now"
+
+# --- Mid-signup resume: force-stop at the Name step and relaunch ---
+Wait-ForAnyText @("What should we call you?") | Out-Null
+Write-Host "[step] Force-stopping mid-signup to prove resume"
+Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
+Start-Sleep -Milliseconds 1200
+Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
+Wait-ForAnyText @("What should we call you?") 45 | Out-Null
+$resumeXml = Dump-Ui "06_resume_name" -Keep
+Assert-NoAppErrorText $resumeXml "Resume after force-stop"
+$resumeShot = Save-Screen "06_resume_name"
+
+# --- Name step ---
+Enter-Text "Display name" $displayName
+Hide-Keyboard
+Tap-ExactText "Continue"
+
+# --- Photo step: skip ---
+Wait-ForAnyText @("Add a photo") | Out-Null
+$photoShot = Save-Screen "07_photo"
+Tap-ExactText "Skip for now"
+
+# --- First grid (location denied -> useful empty state, no error text) ---
+Wait-ForAnyText @("Use current location", "Filters", "Grid") 45 | Out-Null
+Start-Sleep -Milliseconds 1000
+$gridXml = Dump-Ui "08_first_grid" -Keep
+Assert-NoAppErrorText $gridXml "First grid"
+Assert-TextAbsent $gridXml "When's your birthday?" "First grid"
+$gridShot = Save-Screen "08_first_grid"
+
+# --- Next session: bounded photo nudge appears (photoless profile), then dismisses ---
+Write-Host "[step] Relaunching for the photo-nudge session"
+Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
+Start-Sleep -Milliseconds 1200
+Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
+Wait-ForAnyText @("Profiles with photos get seen more.") 45 | Out-Null
+$nudgeXml = Dump-Ui "09_photo_nudge" -Keep
+Assert-TextAbsent $nudgeXml "What should we call you?" "Photo-nudge session"
+$nudgeShot = Save-Screen "09_photo_nudge"
+Tap-Text "Dismiss photo reminder"
+Start-Sleep -Milliseconds 800
+$afterDismissXml = Dump-Ui "10_nudge_dismissed" -Keep
+Assert-TextAbsent $afterDismissXml "Profiles with photos get seen more." "After nudge dismiss"
+Assert-NoAppErrorText $afterDismissXml "After nudge dismiss"
+$afterDismissShot = Save-Screen "10_nudge_dismissed"
+
+Write-Summary @{
+    passed = $true
+    baseUrl = $BaseUrl
+    deviceId = $script:DeviceId
+    packageName = $PackageName
+    signupEmail = $signupEmail
+    locationDeniedButton = $deniedButton
+    screenshots = @{
+        auth = $authShot
+        dob = $dobShot
+        account = $accountShot
+        location = $locationShot
+        locationPrompt = $locationPromptShot
+        locationDenied = $locationDeniedShot
+        resumeName = $resumeShot
+        photo = $photoShot
+        firstGrid = $gridShot
+        photoNudge = $nudgeShot
+        nudgeDismissed = $afterDismissShot
+    }
+}

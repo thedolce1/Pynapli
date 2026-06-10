@@ -37,6 +37,8 @@ import com.pynapli.app.notifications.AndroidFirebasePushTokenProvider
 import com.pynapli.app.notifications.AndroidPushRegistrationStore
 import com.pynapli.app.notifications.ApiPushDeviceRegistrationRepository
 import com.pynapli.app.notifications.PushRegistrationCoordinator
+import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
+import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.profile.ApiPublicProfileRepository
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilehub.ApiProfileHubRepository
@@ -63,6 +65,7 @@ import com.pynapli.shared.network.buildAndroidMessageStreamClient
 import com.pynapli.shared.network.buildAndroidPresenceStreamClient
 import com.pynapli.shared.network.buildAndroidPsyncStreamClient
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
+import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
 import java.util.Locale
 import java.util.TimeZone
@@ -134,6 +137,15 @@ class AndroidAppGraph(
                     timezoneProvider = { TimeZone.getDefault().id },
                     remoteSyncEnabled = { authStateHolder.state.value.authenticated },
                 ),
+        )
+
+    val onboardingStateHolder =
+        OnboardingStateHolder(
+            authStateHolder = authStateHolder,
+            profileRepository = ApiOnboardingProfileRepository(apiClient),
+            // Dedicated store: onboarding progress must not share the AppSettings
+            // blob that the server-backed settings sync read-merge-saves.
+            progressStore = SqlDelightOnboardingProgressStore(database),
         )
 
     val gridStateHolder =

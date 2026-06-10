@@ -1,20 +1,31 @@
 package com.pynapli.shared.auth
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.AuthApi
+import com.pynapli.shared.network.ProfileApi
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 
 class AuthRepository(
-    private val apiClient: PynapliApiClient,
+    private val authApi: AuthApi,
+    private val profileApi: ProfileApi,
     private val sessionStore: SessionStore,
 ) {
+    // Convenience for production call sites that hold the aggregate client; the
+    // primary constructor takes only the segments this repository actually uses.
+    constructor(apiClient: PynapliApiClient, sessionStore: SessionStore) : this(
+        authApi = apiClient,
+        profileApi = apiClient,
+        sessionStore = sessionStore,
+    )
+
     suspend fun currentSession(): StoredSession? = sessionStore.currentSession()
 
     suspend fun currentSessionValidated(): StoredSession? {
         val session = sessionStore.currentSession() ?: return null
-        return when (val result = apiClient.getMe()) {
+        return when (val result = profileApi.getMe()) {
             is AppResult.Success -> session
             is AppResult.Failure -> {
                 if (result.error.code in terminalAuthErrorCodes) {
@@ -34,7 +45,7 @@ class AuthRepository(
         appVersion: String,
     ): AppResult<StoredSession> {
         val result =
-            apiClient.emailLogin(
+            authApi.emailLogin(
                 EmailLoginRequestDto(
                     email = email,
                     password = password,
@@ -56,7 +67,7 @@ class AuthRepository(
         appVersion: String,
     ): AppResult<StoredSession> {
         val result =
-            apiClient.emailSignup(
+            authApi.emailSignup(
                 EmailSignupRequestDto(
                     email = email,
                     password = password,
@@ -72,7 +83,7 @@ class AuthRepository(
     }
 
     suspend fun logout() {
-        apiClient.logout()
+        authApi.logout()
         sessionStore.clear()
     }
 
