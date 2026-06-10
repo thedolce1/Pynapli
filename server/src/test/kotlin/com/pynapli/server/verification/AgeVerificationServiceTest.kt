@@ -391,6 +391,63 @@ class AgeVerificationServiceTest {
             assertEquals("manual_review", repository.records.single().method)
         }
 
+    @Test
+    fun approvedReviewPublishesRiskLoweringSignal() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01")))
+            val riskSignals = RecordingVerificationRiskSignals()
+            val service = AgeVerificationService(repository, clock, verificationRiskSignals = riskSignals)
+            service.start(userId, StartAgeVerificationRequestDto(confirmedAdult = true))
+            val verificationId =
+                repository.records
+                    .single()
+                    .id
+                    .toString()
+
+            service.review(
+                verificationId,
+                AdminAgeVerificationReviewRequestDto(status = "approved", reason = "manual age check"),
+                actorId = "admin-1",
+            )
+
+            assertEquals(listOf(userId), riskSignals.passedUserIds)
+        }
+
+    @Test
+    fun rejectedOutcomesDoNotPublishRiskSignalAndVerifiedCallbackDoes() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01")))
+            val riskSignals = RecordingVerificationRiskSignals()
+            val service = AgeVerificationService(repository, clock, verificationRiskSignals = riskSignals)
+            service.start(userId, StartAgeVerificationRequestDto(confirmedAdult = true))
+            val verificationId =
+                repository.records
+                    .single()
+                    .id
+                    .toString()
+
+            service.review(
+                verificationId,
+                AdminAgeVerificationReviewRequestDto(status = "rejected", reason = "could not verify"),
+                actorId = "admin-1",
+            )
+            assertEquals(emptyList(), riskSignals.passedUserIds)
+
+            service.callback(
+                AgeVerificationCallbackRequestDto(
+                    userId = userId.toString(),
+                    provider = "persona",
+                    providerReference = "provider-ref-9",
+                    status = "verified",
+                ),
+                actorId = "provider-worker",
+                fallbackReason = "provider callback",
+            )
+            assertEquals(listOf(userId), riskSignals.passedUserIds)
+        }
+
     private fun enhancedMarkets(vararg markets: String): AgeVerificationMarketPolicy = AgeVerificationMarketPolicy { market -> market in markets }
 
     private fun testProvider(): AgeVerificationProvider =
@@ -409,6 +466,14 @@ class AgeVerificationServiceTest {
             birthdate = birthdate,
             ageVerifiedAt = null,
         )
+}
+
+private class RecordingVerificationRiskSignals : com.pynapli.server.safety.VerificationRiskSignalPublisher {
+    val passedUserIds = mutableListOf<UUID>()
+
+    override suspend fun recordAgeVerificationPassed(userId: UUID) {
+        passedUserIds += userId
+    }
 }
 
 private class InMemoryAgeVerificationRepository(

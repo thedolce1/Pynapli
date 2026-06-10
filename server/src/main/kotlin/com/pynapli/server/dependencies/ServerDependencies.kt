@@ -177,7 +177,6 @@ class ServerDependencies(
                 AccountLifecycleService(
                     JdbcAccountLifecycleRepository(database.dataSource),
                 )
-            val locationService = LocationService(JdbcLocationRepository(database.dataSource))
             val travelLocationRepository = JdbcTravelLocationRepository(database.dataSource)
             val presenceRepository = RedisPresenceRepository(redisCache)
             val presenceBroadcaster = PresenceBroadcaster()
@@ -200,6 +199,12 @@ class ServerDependencies(
             val hiddenProfileService = HiddenProfileService(hiddenProfileRepository)
             val riskService = RiskService(JdbcRiskRepository(database.dataSource))
             val riskPolicyService = RiskPolicyService(riskService)
+            val locationService =
+                LocationService(
+                    repository = JdbcLocationRepository(database.dataSource),
+                    // Impossible-travel fixes feed the risk model (TRUST_AND_SAFETY_SPEC).
+                    locationRiskSignals = riskService,
+                )
             val rateLimitService =
                 RateLimitService(
                     repository = RedisRateLimitRepository(redisCache),
@@ -385,6 +390,8 @@ class ServerDependencies(
                     repository = JdbcAgeVerificationRepository(database.dataSource),
                     provider = ageVerificationProvider,
                     rateLimitService = rateLimitService,
+                    // Successful verification lowers account risk (TRUST_AND_SAFETY_SPEC).
+                    verificationRiskSignals = riskService,
                 )
             val messaging =
                 buildMessagingDependencies(

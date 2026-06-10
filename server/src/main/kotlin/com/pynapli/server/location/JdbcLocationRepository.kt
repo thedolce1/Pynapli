@@ -63,4 +63,35 @@ class JdbcLocationRepository(
                     }
             }
         }
+
+    override suspend fun getCurrentCoordinates(userId: UUID): CurrentCoordinatesRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT ST_Y(geom::geometry) AS latitude,
+                               ST_X(geom::geometry) AS longitude,
+                               location_source,
+                               updated_at
+                        FROM user_locations
+                        WHERE user_id = ?
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, userId)
+                        statement.executeQuery().use { rs ->
+                            if (!rs.next()) {
+                                null
+                            } else {
+                                CurrentCoordinatesRecord(
+                                    latitude = rs.getDouble("latitude"),
+                                    longitude = rs.getDouble("longitude"),
+                                    source = rs.getString("location_source"),
+                                    updatedAt = rs.getTimestamp("updated_at").toInstant(),
+                                )
+                            }
+                        }
+                    }
+            }
+        }
 }

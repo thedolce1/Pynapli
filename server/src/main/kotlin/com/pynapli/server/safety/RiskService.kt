@@ -41,12 +41,29 @@ interface MediaModerationRiskSignalPublisher {
     )
 }
 
+interface LocationRiskSignalPublisher {
+    /** A device-fix location update implies physically impossible travel. */
+    suspend fun recordImpossibleTravel(
+        userId: UUID,
+        distanceKm: Double,
+        elapsedSeconds: Long,
+        speedKmh: Double,
+    )
+}
+
+interface VerificationRiskSignalPublisher {
+    /** Successful age verification lowers risk (TRUST_AND_SAFETY_SPEC). */
+    suspend fun recordAgeVerificationPassed(userId: UUID)
+}
+
 class RiskService(
     private val repository: RiskRepository,
 ) : ReportRiskSignalPublisher,
     RateLimitRiskSignalPublisher,
     MessageReviewRiskSignalPublisher,
-    MediaModerationRiskSignalPublisher {
+    MediaModerationRiskSignalPublisher,
+    LocationRiskSignalPublisher,
+    VerificationRiskSignalPublisher {
     override suspend fun recordReportCreated(
         reportId: UUID,
         reporterUserId: UUID,
@@ -137,11 +154,52 @@ class RiskService(
         )
     }
 
+    override suspend fun recordImpossibleTravel(
+        userId: UUID,
+        distanceKm: Double,
+        elapsedSeconds: Long,
+        speedKmh: Double,
+    ) {
+        repository.recordEvent(
+            userId = userId,
+            actorUserId = null,
+            source = SOURCE_LOCATION,
+            reason = "location.impossible_travel",
+            delta = IMPOSSIBLE_TRAVEL_DELTA,
+            metadataJson =
+                mapOf(
+                    // Coarse signal facts only — never exact coordinates
+                    // (sensitive-data logging rule).
+                    "distanceKm" to "%.0f".format(distanceKm),
+                    "elapsedSeconds" to elapsedSeconds.toString(),
+                    "speedKmh" to "%.0f".format(speedKmh),
+                ).toJsonObjectString(),
+        )
+    }
+
+    override suspend fun recordAgeVerificationPassed(userId: UUID) {
+        repository.recordEvent(
+            userId = userId,
+            actorUserId = null,
+            source = SOURCE_VERIFICATION,
+            reason = "verification.age_verified",
+            delta = AGE_VERIFIED_DELTA,
+        )
+    }
+
     companion object {
         const val SOURCE_REPORT = "report"
         const val SOURCE_RATE_LIMIT = "rate_limit"
         const val SOURCE_MESSAGE_REVIEW = "message_review"
         const val SOURCE_MEDIA_MODERATION = "media_moderation"
+        const val SOURCE_LOCATION = "location"
+        const val SOURCE_VERIFICATION = "verification"
+
+        const val IMPOSSIBLE_TRAVEL_DELTA = 25
+
+        // Verification lowers risk (TRUST_AND_SAFETY_SPEC): the score floor stays
+        // at 0 in the repository, so this can never go negative overall.
+        const val AGE_VERIFIED_DELTA = -20
 
         fun reportDelta(category: String): Int =
             when (category) {
