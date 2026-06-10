@@ -282,6 +282,117 @@ class AgeVerificationServiceTest {
             assertEquals("manual_review", repository.records.single().method)
         }
 
+    @Test
+    fun requirementsInEnhancedMarketAcceptsOnlyTheProviderMethod() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service =
+                AgeVerificationService(
+                    InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01"))),
+                    clock,
+                    provider = testProvider(),
+                    marketPolicy = enhancedMarkets("uk"),
+                )
+
+            // Mixed case proves the market token is normalized before the policy sees it.
+            val requirements = service.requirements(userId, market = "UK")
+
+            assertEquals(true, requirements.enhancedRequired)
+            assertEquals(listOf("provider_hosted"), requirements.acceptedMethods.map { it.method })
+        }
+
+    @Test
+    fun requirementsMarketFlagIsIgnoredWithoutAProvider() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service =
+                AgeVerificationService(
+                    InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01"))),
+                    clock,
+                    marketPolicy = enhancedMarkets("uk"),
+                )
+
+            // Fail-open: a flagged market without a configured provider must not
+            // strand users with no accepted verification method.
+            val requirements = service.requirements(userId, market = "uk")
+
+            assertEquals(false, requirements.enhancedRequired)
+            assertEquals(listOf("manual_review"), requirements.acceptedMethods.map { it.method })
+        }
+
+    @Test
+    fun startRejectsManualReviewInEnhancedMarket() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01")))
+            val service =
+                AgeVerificationService(
+                    repository,
+                    clock,
+                    provider = testProvider(),
+                    marketPolicy = enhancedMarkets("uk"),
+                )
+
+            val error =
+                assertFailsWith<VerificationException> {
+                    service.start(
+                        userId,
+                        StartAgeVerificationRequestDto(confirmedAdult = true, market = "uk"),
+                    )
+                }
+
+            assertEquals("ENHANCED_VERIFICATION_REQUIRED", error.code)
+            assertEquals(0, repository.records.size)
+        }
+
+    @Test
+    fun startAllowsProviderMethodInEnhancedMarket() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01")))
+            val service =
+                AgeVerificationService(
+                    repository,
+                    clock,
+                    provider = testProvider(),
+                    marketPolicy = enhancedMarkets("uk"),
+                )
+
+            val status =
+                service.start(
+                    userId,
+                    StartAgeVerificationRequestDto(confirmedAdult = true, method = "provider_hosted", market = "uk"),
+                )
+
+            assertEquals("pending", status.status)
+            assertEquals("provider_hosted", repository.records.single().method)
+        }
+
+    @Test
+    fun baselineMarketsKeepManualReviewWithAPolicyConfigured() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01")))
+            val service =
+                AgeVerificationService(
+                    repository,
+                    clock,
+                    provider = testProvider(),
+                    marketPolicy = enhancedMarkets("uk"),
+                )
+
+            val status =
+                service.start(
+                    userId,
+                    StartAgeVerificationRequestDto(confirmedAdult = true, market = "us"),
+                )
+
+            assertEquals("pending", status.status)
+            assertEquals("manual_review", repository.records.single().method)
+        }
+
+    private fun enhancedMarkets(vararg markets: String): AgeVerificationMarketPolicy = AgeVerificationMarketPolicy { market -> market in markets }
+
     private fun testProvider(): AgeVerificationProvider =
         RedirectAgeVerificationProvider(
             providerName = "persona",

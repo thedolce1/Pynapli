@@ -28,7 +28,12 @@ fun Application.configureAgeVerificationRoutes(
     routing {
         get("/v1/verification/requirements") {
             val user = authService.authenticate(call.requiredBearerToken())
-            call.respond(ageVerificationService.requirements(user.id))
+            call.respond(
+                ageVerificationService.requirements(
+                    userId = user.id,
+                    market = call.request.queryParameters["market"],
+                ),
+            )
         }
 
         get("/v1/verification/status") {
