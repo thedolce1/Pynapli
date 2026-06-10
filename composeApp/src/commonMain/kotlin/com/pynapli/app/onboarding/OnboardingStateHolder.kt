@@ -19,20 +19,22 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 
 /**
- * Drives the DOB-first signup stepper (ONBOARDING_AUTH_SPEC, founder ordering
- * decision 2026-06-09: DOB wheel before account creation, Grindr-style, so an
- * underage visitor is stopped before any account data is collected).
+ * Drives the DOB-first signup stepper (ONBOARDING_AUTH_SPEC), aligned to the
+ * founder's Grindr reference capture (2026-06-10): the birthday is typed into
+ * DD/MM/YYYY fields (DD/MM/YYYY ordering founder-confirmed for the future Europe
+ * launch), policies are reviewed on a dedicated step with read links and a single
+ * Accept, and photo + display name share one skippable "Your profile" step.
  *
- * Steps: Dob -> (UnderageStop) -> Account(+legal) -> Location -> Name -> Photo -> grid.
- * Everything after Account is skippable — "do it all later" lands on the grid in
- * seconds. Sign-in mode bypasses the stepper entirely.
+ * Steps: Dob -> (UnderageStop) -> Policies -> Account -> Location -> Profile -> grid.
+ * An underage visitor is stopped before any account data is collected. Everything
+ * after Account is skippable — "do it all later" lands on the grid in seconds.
+ * Sign-in mode bypasses the stepper entirely.
  *
  * Resume (spec "app closed mid-signup"): signup flips the device-local
  * [OnboardingProgressStore] `completed` flag false (pinned to the signing-up
- * account); [resumeIfNeeded] re-enters the post-auth steps on next launch at the
- * first incomplete one (blank display name -> Name, otherwise Photo) until the
- * user finishes or skips to the grid, which flips the flag back. Plain sign-ins
- * never see the stepper: the flag defaults true and only signup clears it.
+ * account); [resumeIfNeeded] re-enters at the Profile step on next launch until
+ * the user finishes, which flips the flag back. Plain sign-ins never see the
+ * stepper: the flag defaults true and only signup clears it.
  */
 class OnboardingStateHolder(
     private val authStateHolder: AuthStateHolder,
@@ -40,15 +42,12 @@ class OnboardingStateHolder(
     private val progressStore: OnboardingProgressStore,
     private val todayProvider: () -> LocalDate = ::systemToday,
 ) {
-    private val _state = MutableStateFlow(OnboardingUiState(dob = defaultDob(todayProvider())))
+    private val _state = MutableStateFlow(OnboardingUiState())
     val state: StateFlow<OnboardingUiState> = _state.asStateFlow()
 
     // Per-process guard so a nudge impression counts one settings session, not one
     // per recomposition of the banner.
     private var photoNudgeCountedThisSession = false
-
-    /** The DOB wheel bounds its year range from the same clock that gates the 18+ check. */
-    fun today(): LocalDate = todayProvider()
 
     fun startCreateAccount() {
         _state.update {
@@ -64,23 +63,57 @@ class OnboardingStateHolder(
         _state.update { it.copy(active = false, step = OnboardingStep.Dob, errorMessage = null) }
     }
 
-    fun updateDob(value: LocalDate) {
-        _state.update { it.copy(dob = value, errorMessage = null) }
+    fun updateDobDay(value: String) {
+        _state.update { it.copy(dobDay = value.digits(2), errorMessage = null) }
     }
 
+    fun updateDobMonth(value: String) {
+        _state.update { it.copy(dobMonth = value.digits(2), errorMessage = null) }
+    }
+
+    fun updateDobYear(value: String) {
+        _state.update { it.copy(dobYear = value.digits(4), errorMessage = null) }
+    }
+
+    /** Validates the typed date, then gates 18+ before any account data is collected. */
     fun confirmDob() {
         val current = _state.value
+        val dob = parseDob(current.dobDay, current.dobMonth, current.dobYear, todayProvider())
+        if (dob == null) {
+            _state.update { it.copy(errorMessage = "Enter a valid date of birth.") }
+            return
+        }
         val nextStep =
-            if (current.dob.isAtLeastYearsOld(MINIMUM_AGE_YEARS, todayProvider())) {
-                OnboardingStep.Account
+            if (dob.isAtLeastYearsOld(MINIMUM_AGE_YEARS, todayProvider())) {
+                OnboardingStep.Policies
             } else {
                 OnboardingStep.UnderageStop
             }
-        _state.update { it.copy(step = nextStep, errorMessage = null) }
+        _state.update { it.copy(dob = dob, step = nextStep, errorMessage = null) }
     }
 
     fun backToDob() {
         _state.update { it.copy(step = OnboardingStep.Dob, errorMessage = null) }
+    }
+
+    fun backToPolicies() {
+        _state.update { it.copy(step = OnboardingStep.Policies, errorMessage = null) }
+    }
+
+    /**
+     * The Policies step presents both documents with read links; one Accept tap
+     * records both acceptances (Grindr-reference pattern) and the server contract
+     * still receives them as separate explicit fields.
+     */
+    fun acceptPolicies() {
+        _state.update {
+            it.copy(
+                acceptedTerms = true,
+                acceptedPrivacy = true,
+                step = OnboardingStep.Account,
+                errorMessage = null,
+            )
+        }
     }
 
     fun updateEmail(value: String) {
@@ -91,16 +124,8 @@ class OnboardingStateHolder(
         _state.update { it.copy(password = value, errorMessage = null) }
     }
 
-    fun updateAcceptedTerms(value: Boolean) {
-        _state.update { it.copy(acceptedTerms = value, errorMessage = null) }
-    }
-
-    fun updateAcceptedPrivacy(value: Boolean) {
-        _state.update { it.copy(acceptedPrivacy = value, errorMessage = null) }
-    }
-
     fun updateDisplayName(value: String) {
-        _state.update { it.copy(displayName = value, errorMessage = null) }
+        _state.update { it.copy(displayName = value.take(DISPLAY_NAME_MAX_LENGTH), errorMessage = null) }
     }
 
     /** Creates the account; on success enters the skippable post-auth steps. */
@@ -108,6 +133,11 @@ class OnboardingStateHolder(
         val current = _state.value
         if (current.isSubmitting) return
         val email = current.email.trim()
+        val dob = current.dob
+        if (dob == null) {
+            _state.update { it.copy(step = OnboardingStep.Dob, errorMessage = "Enter your date of birth.") }
+            return
+        }
         if (!email.contains("@")) {
             _state.update { it.copy(errorMessage = "Enter a valid email address.") }
             return
@@ -126,8 +156,8 @@ class OnboardingStateHolder(
             authStateHolder.signupWithDetails(
                 email = email,
                 password = current.password,
-                birthdate = current.dob.toString(),
-                // The wheel already gated 18+; passing it explicitly keeps the
+                birthdate = dob.toString(),
+                // The DOB step already gated 18+; passing it explicitly keeps the
                 // server contract's explicit-adult-confirmation semantics.
                 confirmedAdult = true,
                 acceptedTerms = current.acceptedTerms,
@@ -157,23 +187,29 @@ class OnboardingStateHolder(
 
     /** Location step exits the same way whether the OS prompt was accepted or skipped. */
     fun continueFromLocation() {
-        _state.update { it.copy(step = OnboardingStep.Name, errorMessage = null) }
+        _state.update { it.copy(step = OnboardingStep.Profile, errorMessage = null) }
     }
 
-    suspend fun saveDisplayName() {
+    /**
+     * Finishes the consolidated "Your profile" step: saves the display name when
+     * one was typed (photo upload already ran through the media flow), then
+     * releases the user to the grid. A blank name just skips — the spec keeps
+     * every post-auth step optional.
+     */
+    suspend fun finishProfile() {
         val current = _state.value
         if (current.isSubmitting) return
         val name = current.displayName.trim()
         if (name.isEmpty()) {
-            _state.update { it.copy(errorMessage = "Enter a display name, or skip for now.") }
+            finish()
             return
         }
         _state.update { it.copy(isSubmitting = true, errorMessage = null) }
         when (val result = profileRepository.updateDisplayName(name)) {
-            is AppResult.Success ->
-                _state.update {
-                    it.copy(isSubmitting = false, displayName = name, step = OnboardingStep.Photo)
-                }
+            is AppResult.Success -> {
+                _state.update { it.copy(isSubmitting = false, displayName = name) }
+                finish()
+            }
 
             is AppResult.Failure ->
                 _state.update {
@@ -182,20 +218,27 @@ class OnboardingStateHolder(
         }
     }
 
-    fun skipDisplayName() {
-        _state.update { it.copy(step = OnboardingStep.Photo, errorMessage = null) }
-    }
-
-    /** Finishes the stepper (photo uploaded or skipped) and releases the user to the grid. */
+    /** Releases the user to the grid and marks onboarding complete. */
     suspend fun finish() {
         markOnboardingCompleted()
         _state.update { it.copy(active = false, errorMessage = null) }
     }
 
     /**
-     * Re-enters the post-auth steps after a mid-signup app close. No-op for
-     * completed onboarding (the default), unauthenticated sessions, or when the
-     * profile already has a display name and the user previously reached Photo.
+     * Post-auth session entry point: re-enter an interrupted stepper, then decide
+     * the add-a-photo nudge for this session. The nudge is deliberately skipped in
+     * the same session the stepper runs — the user just saw (or will see) the
+     * profile step, so the first nudge lands a session later (spec: bounded,
+     * non-naggy).
+     */
+    suspend fun onSessionReady() {
+        resumeIfNeeded()
+        evaluatePhotoNudge()
+    }
+
+    /**
+     * Re-enters the consolidated Profile step after a mid-signup app close. No-op
+     * for completed onboarding (the default) or unauthenticated sessions.
      */
     suspend fun resumeIfNeeded() {
         if (_state.value.active) return
@@ -214,29 +257,18 @@ class OnboardingStateHolder(
                 is AppResult.Success ->
                     me.value.profile.displayName
                         .orEmpty()
-                // Offline resume: fall back to the first post-auth step; saving
-                // the name again is harmless.
+                // Offline resume: an empty prefill is harmless — saving again later
+                // is idempotent.
                 is AppResult.Failure -> ""
             }
         _state.update {
             it.copy(
                 active = true,
                 displayName = displayName,
-                step = if (displayName.isBlank()) OnboardingStep.Name else OnboardingStep.Photo,
+                step = OnboardingStep.Profile,
                 errorMessage = null,
             )
         }
-    }
-
-    /**
-     * Post-auth session entry point: re-enter an interrupted stepper, then decide
-     * the add-a-photo nudge for this session. The nudge is deliberately skipped in
-     * the same session the stepper runs — the user just saw (or will see) the photo
-     * step, so the first nudge lands a session later (spec: bounded, non-naggy).
-     */
-    suspend fun onSessionReady() {
-        resumeIfNeeded()
-        evaluatePhotoNudge()
     }
 
     /**
@@ -285,13 +317,48 @@ class OnboardingStateHolder(
         }
     }
 
+    private fun String.digits(maxLength: Int): String = filter { it.isDigit() }.take(maxLength)
+
     companion object {
         const val MINIMUM_AGE_YEARS = 18
         const val MIN_PASSWORD_LENGTH = 12
         const val MAX_PHOTO_NUDGE_SESSIONS = 3
+        const val DISPLAY_NAME_MAX_LENGTH = 15
 
-        /** Wheel starting position: a plausible adult age, not the 18 boundary. */
-        fun defaultDob(today: LocalDate): LocalDate = LocalDate(today.year - 25, today.month.number, 1)
+        /**
+         * Strict calendar parse of the typed DD/MM/YYYY fields: real day for the
+         * month (leap-aware), and a sane year window (no future dates, no >120y).
+         */
+        fun parseDob(
+            day: String,
+            month: String,
+            year: String,
+            today: LocalDate,
+        ): LocalDate? {
+            val dayValue = day.toIntOrNull() ?: return null
+            val monthValue = month.toIntOrNull() ?: return null
+            val yearValue = year.takeIf { it.length == 4 }?.toIntOrNull() ?: return null
+            if (yearValue !in (today.year - MAX_AGE_YEARS)..today.year) return null
+            if (monthValue !in 1..12) return null
+            if (dayValue !in 1..daysInMonth(yearValue, monthValue)) return null
+            val date = LocalDate(yearValue, monthValue, dayValue)
+            if (date > today) return null
+            return date
+        }
+
+        internal fun daysInMonth(
+            year: Int,
+            month: Int,
+        ): Int =
+            when (month) {
+                1, 3, 5, 7, 8, 10, 12 -> 31
+                4, 6, 9, 11 -> 30
+                else -> if (isLeapYear(year)) 29 else 28
+            }
+
+        internal fun isLeapYear(year: Int): Boolean = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+
+        private const val MAX_AGE_YEARS = 120
     }
 }
 
@@ -316,17 +383,20 @@ internal fun LocalDate.isAtLeastYearsOld(
 enum class OnboardingStep {
     Dob,
     UnderageStop,
+    Policies,
     Account,
     Location,
-    Name,
-    Photo,
+    Profile,
 }
 
 @Immutable
 data class OnboardingUiState(
     val active: Boolean = false,
     val step: OnboardingStep = OnboardingStep.Dob,
-    val dob: LocalDate,
+    val dobDay: String = "",
+    val dobMonth: String = "",
+    val dobYear: String = "",
+    val dob: LocalDate? = null,
     val email: String = "",
     val password: String = "",
     val acceptedTerms: Boolean = false,
@@ -335,7 +405,10 @@ data class OnboardingUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val photoNudgeEligible: Boolean = false,
-)
+) {
+    val dobComplete: Boolean
+        get() = dobDay.isNotEmpty() && dobMonth.isNotEmpty() && dobYear.length == 4
+}
 
 interface OnboardingProfileRepository {
     suspend fun updateDisplayName(displayName: String): AppResult<MeDto>

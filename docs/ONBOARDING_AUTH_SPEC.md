@@ -31,14 +31,20 @@ Session security:
 
 ## Signup Flow
 
-Shipped ordering (founder decision 2026-06-09, DOB-first Grindr-style — an underage
-visitor is stopped before any account data is collected):
+Shipped ordering (founder Grindr-reference capture 2026-06-10, refining the
+2026-06-09 DOB-first decision — an underage visitor is stopped before any account
+data is collected):
 
-1. Date of birth (wheel picker; underage stop screen on failure).
-2. Create account with email/password + explicit Terms and Privacy acceptances.
-3. Location permission, after value is explained; skippable.
-4. Display name, skippable.
-5. Photo, skippable.
+1. Date of birth: typed DD/MM/YYYY numeric fields (DD/MM/YYYY ordering
+   founder-confirmed for the future Europe launch); calendar-strict validation;
+   underage stop screen on failure.
+2. Policies: dedicated "Review our policies" step — Terms of Service and Privacy
+   Policy rows each with a Read link to the canonical URLs, one Accept button
+   recording both acceptances.
+3. Create account with email/password.
+4. Location permission, after value is explained; skippable.
+5. "Your profile": one consolidated, skippable step — photo (honest nudge copy)
+   plus display name (15-char cap), single Next.
 6. First grid.
 
 Gender/orientation basics, lifestyle tags, and looking-for are deferred entirely to
@@ -117,10 +123,10 @@ Do not:
 
 - [ ] Partial: email auth is implemented; social auth and full onboarding auth set are not complete.
 - [x] Android secure token storage: the persisted session is encrypted at rest with a non-exportable AndroidKeyStore AES-256-GCM key (`SessionTokenCipher` expect/actual; `enc1:` format), legacy plaintext rows upgrade on first read, and an undecryptable value surfaces as a signed-out session. Proven on-device by `scripts/android-secure-token-qa.ps1` (ciphertext in the SQLite DB+WAL, no plaintext token JSON, session survives restart). iOS Keychain actual lands with the iOS phase (pass-through until then, per ANDROID_PRODUCTION_GAMEPLAN scope).
-- [x] Signup progress saved: signup arms a local resume flag pinned to the signing-up account (`AppSettings.onboardingCompleted` + `onboardingUserId`); next launch re-enters the stepper at the first incomplete post-auth step (blank display name -> Name, else Photo). A different account signing in on the same device never inherits the stepper.
-- [x] Skippable photo (stepper photo step uploads to the profile album with moderation-pending honesty copy, or skips). Tags/looking-for are deferred entirely to profile edit by design — nothing to skip at signup.
-- [x] Age gate before access for email signup: DOB wheel before any account data is collected (underage stop screen), explicit 18+ confirmation, separate Terms and Privacy acceptances required before the session is created.
-- [x] Permission-denied onboarding QA: location step asks after value is explained, with denied/skip continuing to the grid's location-required empty state; notification permission unchanged (post-signup prompt + denied QA already covered). `scripts/android-onboarding-qa.ps1` covers signup happy path, denied location, force-stop resume, and nudge show/dismiss on the emulator.
+- [x] Signup progress saved: signup arms a device-local resume flag pinned to the signing-up account (`OnboardingProgressStore`, deliberately separate from the server-synced `AppSettings` blob); next launch re-enters the stepper at the consolidated "Your profile" step with the saved display name prefilled. A different account signing in on the same device never inherits the stepper.
+- [x] Skippable photo (the consolidated "Your profile" step uploads to the profile album with moderation-pending honesty copy, or skips). Tags/looking-for are deferred entirely to profile edit by design — nothing to skip at signup.
+- [x] Age gate before access for email signup: typed DD/MM/YYYY birthday before any account data is collected (calendar-strict validation, underage stop screen), explicit 18+ confirmation, and Terms+Privacy acceptance on the dedicated Policies step required before the session is created.
+- [x] Permission-denied onboarding QA: location step asks after value is explained, with denied/skip continuing to the grid's location-required empty state; notification permission unchanged (post-signup prompt + denied QA already covered). `scripts/android-onboarding-qa.ps1` covers signup happy path (typed DOB, policies Accept), denied location, force-stop resume, and nudge show/dismiss on the emulator.
 - [x] First grid uses signup data: the location submitted at the Location step feeds the distance-ordered first grid; DOB drives display age.
 - [x] Post-signup nudges are bounded: add-a-photo grid banner, dismissible, capped at 3 impression sessions, skipped in the signup session itself, deep-links to Media Albums. (Tags/complete-profile/partner-link nudges remain future work.)
 

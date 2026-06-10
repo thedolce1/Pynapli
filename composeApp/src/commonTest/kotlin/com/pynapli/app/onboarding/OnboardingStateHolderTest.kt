@@ -35,47 +35,99 @@ class OnboardingStateHolderTest {
     private val today = LocalDate(2026, 6, 10)
 
     @Test
+    fun confirmDobValidatesTheTypedDate() =
+        runBlocking {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+
+            // Impossible calendar date.
+            fixture.enterDob(day = "31", month = "02", year = "2001")
+            fixture.onboarding.confirmDob()
+            assertEquals("Enter a valid date of birth.", fixture.onboarding.state.value.errorMessage)
+            assertEquals(OnboardingStep.Dob, fixture.onboarding.state.value.step)
+
+            // Future date.
+            fixture.enterDob(day = "01", month = "01", year = "2030")
+            fixture.onboarding.confirmDob()
+            assertEquals("Enter a valid date of birth.", fixture.onboarding.state.value.errorMessage)
+
+            // Valid leap day proceeds.
+            fixture.enterDob(day = "29", month = "02", year = "2000")
+            fixture.onboarding.confirmDob()
+            assertEquals(OnboardingStep.Policies, fixture.onboarding.state.value.step)
+            assertEquals(LocalDate(2000, 2, 29), fixture.onboarding.state.value.dob)
+        }
+
+    @Test
     fun confirmDobStopsUnderageBeforeAccountCreation() =
         runBlocking {
             val fixture = Fixture()
             fixture.onboarding.startCreateAccount()
 
             // One day short of 18.
-            fixture.onboarding.updateDob(LocalDate(2008, 6, 11))
+            fixture.enterDob(day = "11", month = "06", year = "2008")
             fixture.onboarding.confirmDob()
             assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
 
             // Exactly 18 today passes.
             fixture.onboarding.backToDob()
-            fixture.onboarding.updateDob(LocalDate(2008, 6, 10))
+            fixture.enterDob(day = "10", month = "06", year = "2008")
             fixture.onboarding.confirmDob()
-            assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
+            assertEquals(OnboardingStep.Policies, fixture.onboarding.state.value.step)
         }
 
     @Test
-    fun ageGateIsCalendarCorrectAcrossMonthBoundaries() {
-        // Birthday later this year, month not yet reached.
-        assertFalse(LocalDate(2008, 7, 1).isAtLeastYearsOld(18, today))
-        // Birthday month passed already this year.
-        assertTrue(LocalDate(2008, 5, 31).isAtLeastYearsOld(18, today))
-        // Older than the threshold by years.
-        assertTrue(LocalDate(1990, 12, 31).isAtLeastYearsOld(18, today))
-        // Younger by years.
-        assertFalse(LocalDate(2020, 1, 1).isAtLeastYearsOld(18, today))
+    fun dobFieldsKeepDigitsOnlyAndClampLength() {
+        val fixture = Fixture()
+        fixture.onboarding.updateDobDay("3a1x9")
+        fixture.onboarding.updateDobMonth("0/6")
+        fixture.onboarding.updateDobYear("19789")
+
+        val state = fixture.onboarding.state.value
+        assertEquals("31", state.dobDay)
+        assertEquals("06", state.dobMonth)
+        assertEquals("1978", state.dobYear)
     }
+
+    @Test
+    fun parseDobIsCalendarStrict() {
+        assertNull(OnboardingStateHolder.parseDob("31", "04", "2000", today))
+        assertNull(OnboardingStateHolder.parseDob("29", "02", "2001", today))
+        assertNull(OnboardingStateHolder.parseDob("29", "02", "1900", today))
+        assertNotNull(OnboardingStateHolder.parseDob("29", "02", "2000", today))
+        assertNull(OnboardingStateHolder.parseDob("01", "13", "2000", today))
+        assertNull(OnboardingStateHolder.parseDob("00", "01", "2000", today))
+        // Year must be four typed digits within a sane window.
+        assertNull(OnboardingStateHolder.parseDob("01", "01", "200", today))
+        assertNull(OnboardingStateHolder.parseDob("01", "01", "1899", today))
+        assertNull(OnboardingStateHolder.parseDob("11", "06", "2026", today))
+        assertNotNull(OnboardingStateHolder.parseDob("10", "06", "2026", today))
+    }
+
+    @Test
+    fun acceptPoliciesRecordsBothAcceptancesAndAdvances() =
+        runBlocking {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+            fixture.enterDob(day = "01", month = "06", year = "2000")
+            fixture.onboarding.confirmDob()
+
+            fixture.onboarding.acceptPolicies()
+
+            val state = fixture.onboarding.state.value
+            assertEquals(OnboardingStep.Account, state.step)
+            assertTrue(state.acceptedTerms)
+            assertTrue(state.acceptedPrivacy)
+        }
 
     @Test
     fun submitAccountValidatesBeforeCallingTheApi() =
         runBlocking {
             val fixture = Fixture()
-            fixture.onboarding.startCreateAccount()
-            fixture.onboarding.updateDob(LocalDate(2000, 1, 1))
-            fixture.onboarding.confirmDob()
+            fixture.advanceToAccount()
 
             fixture.onboarding.updateEmail("not-an-email")
             fixture.onboarding.updatePassword("LongEnoughPassword1!")
-            fixture.onboarding.updateAcceptedTerms(true)
-            fixture.onboarding.updateAcceptedPrivacy(true)
             fixture.onboarding.submitAccount()
             assertEquals("Enter a valid email address.", fixture.onboarding.state.value.errorMessage)
 
@@ -87,14 +139,6 @@ class OnboardingStateHolderTest {
                 fixture.onboarding.state.value.errorMessage,
             )
 
-            fixture.onboarding.updatePassword("LongEnoughPassword1!")
-            fixture.onboarding.updateAcceptedPrivacy(false)
-            fixture.onboarding.submitAccount()
-            assertEquals(
-                "Accept the Terms and Privacy Policy to continue.",
-                fixture.onboarding.state.value.errorMessage,
-            )
-
             assertNull(fixture.authApi.lastSignupRequest)
             assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
         }
@@ -103,13 +147,9 @@ class OnboardingStateHolderTest {
     fun submitAccountSuccessEntersPostAuthStepsAndMarksInProgress() =
         runBlocking {
             val fixture = Fixture()
-            fixture.onboarding.startCreateAccount()
-            fixture.onboarding.updateDob(LocalDate(2000, 2, 29))
-            fixture.onboarding.confirmDob()
+            fixture.advanceToAccount(day = "29", month = "02", year = "2000")
             fixture.onboarding.updateEmail(" new@pynapli.local ")
             fixture.onboarding.updatePassword("LongEnoughPassword1!")
-            fixture.onboarding.updateAcceptedTerms(true)
-            fixture.onboarding.updateAcceptedPrivacy(true)
 
             fixture.onboarding.submitAccount()
 
@@ -139,13 +179,9 @@ class OnboardingStateHolderTest {
                             },
                         ),
                 )
-            fixture.onboarding.startCreateAccount()
-            fixture.onboarding.updateDob(LocalDate(2000, 1, 1))
-            fixture.onboarding.confirmDob()
+            fixture.advanceToAccount()
             fixture.onboarding.updateEmail("taken@pynapli.local")
             fixture.onboarding.updatePassword("LongEnoughPassword1!")
-            fixture.onboarding.updateAcceptedTerms(true)
-            fixture.onboarding.updateAcceptedPrivacy(true)
 
             fixture.onboarding.submitAccount()
 
@@ -158,27 +194,7 @@ class OnboardingStateHolderTest {
         }
 
     @Test
-    fun saveDisplayNameAdvancesToPhotoAndBlankIsRejected() =
-        runBlocking {
-            val fixture = Fixture()
-            fixture.onboarding.startCreateAccount()
-
-            fixture.onboarding.updateDisplayName("   ")
-            fixture.onboarding.saveDisplayName()
-            assertEquals(
-                "Enter a display name, or skip for now.",
-                fixture.onboarding.state.value.errorMessage,
-            )
-            assertNull(fixture.profileRepository.lastDisplayName)
-
-            fixture.onboarding.updateDisplayName(" Alex ")
-            fixture.onboarding.saveDisplayName()
-            assertEquals("Alex", fixture.profileRepository.lastDisplayName)
-            assertEquals(OnboardingStep.Photo, fixture.onboarding.state.value.step)
-        }
-
-    @Test
-    fun finishCompletesOnboardingAndReleasesTheStepper() =
+    fun finishProfileWithBlankNameSkipsTheApiAndCompletes() =
         runBlocking {
             val fixture =
                 Fixture(
@@ -189,12 +205,64 @@ class OnboardingStateHolderTest {
                 )
             fixture.onboarding.startCreateAccount()
 
-            fixture.onboarding.finish()
+            fixture.onboarding.finishProfile()
 
+            assertNull(fixture.profileRepository.lastDisplayName)
             assertFalse(fixture.onboarding.state.value.active)
             assertTrue(fixture.progressStore.progress.completed)
             assertNull(fixture.progressStore.progress.userId)
         }
+
+    @Test
+    fun finishProfileSavesTypedNameThenCompletes() =
+        runBlocking {
+            val fixture =
+                Fixture(
+                    progressStore =
+                        InMemoryProgressStore(
+                            OnboardingProgress(completed = false, userId = "user-1"),
+                        ),
+                )
+            fixture.onboarding.startCreateAccount()
+            fixture.onboarding.updateDisplayName(" Alex ")
+
+            fixture.onboarding.finishProfile()
+
+            assertEquals("Alex", fixture.profileRepository.lastDisplayName)
+            assertFalse(fixture.onboarding.state.value.active)
+            assertTrue(fixture.progressStore.progress.completed)
+        }
+
+    @Test
+    fun finishProfileKeepsTheStepperOnSaveFailure() =
+        runBlocking {
+            val fixture =
+                Fixture(
+                    progressStore =
+                        InMemoryProgressStore(
+                            OnboardingProgress(completed = false, userId = "user-1"),
+                        ),
+                    profileRepository =
+                        FakeOnboardingProfileRepository(
+                            updateDisplayNameResult = { AppResult.Failure(AppError("NETWORK", "Offline.")) },
+                        ),
+                )
+            fixture.onboarding.startCreateAccount()
+            fixture.onboarding.updateDisplayName("Alex")
+
+            fixture.onboarding.finishProfile()
+
+            assertTrue(fixture.onboarding.state.value.active)
+            assertEquals("Offline.", fixture.onboarding.state.value.errorMessage)
+            assertFalse(fixture.progressStore.progress.completed)
+        }
+
+    @Test
+    fun displayNameIsCappedAtFifteenCharacters() {
+        val fixture = Fixture()
+        fixture.onboarding.updateDisplayName("ABCDEFGHIJKLMNOPQRST")
+        assertEquals("ABCDEFGHIJKLMNO", fixture.onboarding.state.value.displayName)
+    }
 
     @Test
     fun resumeSkipsCompletedSignedOutAndForeignAccounts() =
@@ -230,23 +298,10 @@ class OnboardingStateHolderTest {
         }
 
     @Test
-    fun resumeReentersAtFirstIncompleteStep() =
+    fun resumeReentersTheProfileStepWithPrefilledName() =
         runBlocking {
             val armedProgress = OnboardingProgress(completed = false, userId = "user-1")
 
-            // Blank display name -> Name step.
-            val blankName =
-                Fixture(
-                    progressStore = InMemoryProgressStore(armedProgress),
-                    profileRepository =
-                        FakeOnboardingProfileRepository(getMeResult = { AppResult.Success(meDto(null)) }),
-                )
-            blankName.signIn()
-            blankName.onboarding.resumeIfNeeded()
-            assertTrue(blankName.onboarding.state.value.active)
-            assertEquals(OnboardingStep.Name, blankName.onboarding.state.value.step)
-
-            // Name already saved -> Photo step.
             val namedAlready =
                 Fixture(
                     progressStore = InMemoryProgressStore(armedProgress),
@@ -255,10 +310,11 @@ class OnboardingStateHolderTest {
                 )
             namedAlready.signIn()
             namedAlready.onboarding.resumeIfNeeded()
-            assertEquals(OnboardingStep.Photo, namedAlready.onboarding.state.value.step)
+            assertTrue(namedAlready.onboarding.state.value.active)
+            assertEquals(OnboardingStep.Profile, namedAlready.onboarding.state.value.step)
             assertEquals("Alex", namedAlready.onboarding.state.value.displayName)
 
-            // Offline profile fetch -> safe fallback to the first post-auth step.
+            // Offline profile fetch -> still resumes with an empty prefill.
             val offline =
                 Fixture(
                     progressStore = InMemoryProgressStore(armedProgress),
@@ -269,7 +325,8 @@ class OnboardingStateHolderTest {
                 )
             offline.signIn()
             offline.onboarding.resumeIfNeeded()
-            assertEquals(OnboardingStep.Name, offline.onboarding.state.value.step)
+            assertEquals(OnboardingStep.Profile, offline.onboarding.state.value.step)
+            assertEquals("", offline.onboarding.state.value.displayName)
         }
 
     @Test
@@ -296,7 +353,7 @@ class OnboardingStateHolderTest {
             capped.onboarding.evaluatePhotoNudge()
             assertFalse(capped.onboarding.state.value.photoNudgeEligible)
 
-            // Mid-stepper session: the user just saw (or will see) the photo step.
+            // Mid-stepper session: the user just saw (or will see) the profile step.
             val midStepper =
                 Fixture(
                     progressStore =
@@ -330,12 +387,6 @@ class OnboardingStateHolderTest {
             assertTrue(fixture.progressStore.progress.photoNudgeDismissed)
         }
 
-    @Test
-    fun defaultDobIsAPlausibleAdultNotTheBoundary() {
-        val default = OnboardingStateHolder.defaultDob(today)
-        assertEquals(LocalDate(2001, 6, 1), default)
-    }
-
     private inner class Fixture(
         val progressStore: InMemoryProgressStore = InMemoryProgressStore(),
         val authApi: FakeAuthApi = FakeAuthApi(),
@@ -360,6 +411,28 @@ class OnboardingStateHolderTest {
                 progressStore = progressStore,
                 todayProvider = { today },
             )
+
+        fun enterDob(
+            day: String,
+            month: String,
+            year: String,
+        ) {
+            onboarding.updateDobDay(day)
+            onboarding.updateDobMonth(month)
+            onboarding.updateDobYear(year)
+        }
+
+        /** Drives the pre-auth steps to the Account form. */
+        fun advanceToAccount(
+            day: String = "01",
+            month: String = "06",
+            year: String = "2000",
+        ) {
+            onboarding.startCreateAccount()
+            enterDob(day, month, year)
+            onboarding.confirmDob()
+            onboarding.acceptPolicies()
+        }
 
         /** Puts a live session into the auth state without going through signup. */
         suspend fun signIn(userId: String = "user-1") {
