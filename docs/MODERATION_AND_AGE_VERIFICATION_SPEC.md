@@ -193,7 +193,7 @@ Avoid:
 - [ ] Partial: reports/risk/message/appeal review queues and actions exist; full moderator console, roles, MFA, senior-review separation, and production admin separation are not complete.
 - [ ] Partial: severe scanner decisions create system reports and risk events; CSAM/hash-matching provider integration, legal retention policy, and live provider tuning remain.
 - [x] Appeals flow exists for user submission/status/withdraw plus admin queue decisions.
-- [ ] Public community guidelines URL.
+- [x] Public community guidelines URL: canonical `LegalLinks.COMMUNITY_GUIDELINES` (`pynapli.com/guidelines`) wired into the Settings Legal section (PR #109). Publishing the finalized document at that URL is founder/legal ops.
 - [ ] App-store-safe screenshots and copy.
 
 ## Do Not Implement
