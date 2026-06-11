@@ -101,6 +101,8 @@ internal fun userSafeMessage(code: String): String =
         "MEDIA_FILE_TOO_LARGE" -> "File is too large."
         "INVALID_MEDIA_DIMENSIONS" -> "Media dimensions are not valid."
         "INVALID_MEDIA_SORT_ORDER" -> "Media order is not valid."
+        "MEDIA_ALBUM_PHOTO_CAP_EXCEEDED" -> "This album is full. Remove a photo to add another."
+        "MEDIA_ALBUM_ORDER_MISMATCH" -> "Photo order is out of date. Refresh and try again."
         "MEDIA_ASSET_NOT_FOUND" -> "Media item was not found."
         "MEDIA_ALBUM_NOT_FOUND" -> "Album was not found."
         "MEDIA_GRANT_NOT_FOUND" -> "Album access was not found."

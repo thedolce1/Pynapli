@@ -339,6 +339,8 @@ internal fun mediaStatusFor(code: String): HttpStatusCode =
         "MEDIA_FILE_TOO_LARGE",
         "INVALID_MEDIA_DIMENSIONS",
         "INVALID_MEDIA_SORT_ORDER",
+        "MEDIA_ALBUM_PHOTO_CAP_EXCEEDED",
+        "MEDIA_ALBUM_ORDER_MISMATCH",
         -> HttpStatusCode.BadRequest
         else -> HttpStatusCode.BadRequest
     }

@@ -32,6 +32,41 @@ interface MediaRepository {
         mediaAssetId: UUID,
     ): MediaAssetRecord?
 
+    /**
+     * Soft-deletes an asset the caller owns (sets `deleted_at`, mirrors the account-deletion
+     * pattern) and marks its album items removed in the same transaction. Returns the asset
+     * record (already-deleted assets are returned unchanged, so retries are idempotent) or
+     * null when the asset does not exist or is not owned by [ownerUserId].
+     */
+    suspend fun softDeleteAsset(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord?
+
+    /**
+     * Rewrites `sort_order` to 0..n-1 following [orderedAssetIds] in one transaction.
+     * Returns the reordered active items, or null when [orderedAssetIds] is not exactly
+     * the set of the album's active (non-removed, non-deleted) items.
+     */
+    suspend fun reorderAlbumItems(
+        ownerUserId: UUID,
+        albumId: UUID,
+        orderedAssetIds: List<UUID>,
+    ): List<MediaAlbumItemRecord>?
+
+    /** Counts active (non-removed) album items whose backing asset is not soft-deleted. */
+    suspend fun countActiveAlbumItems(
+        ownerUserId: UUID,
+        albumId: UUID,
+        excludingMediaAssetId: UUID? = null,
+    ): Int
+
+    /** Counts open upload slots (pending_upload, non-deleted) opened for [intendedAlbumKind]. */
+    suspend fun countPendingUploadAssets(
+        ownerUserId: UUID,
+        intendedAlbumKind: String,
+    ): Int
+
     suspend fun findAlbum(
         ownerUserId: UUID,
         albumId: UUID,
@@ -101,6 +136,8 @@ data class MediaAssetCreate(
     val byteSize: Long,
     val pixelWidth: Int? = null,
     val pixelHeight: Int? = null,
+    /** Album kind this upload slot was opened for; used to count open slots against album caps. */
+    val intendedAlbumKind: String? = null,
 )
 
 data class MediaAssetRecord(

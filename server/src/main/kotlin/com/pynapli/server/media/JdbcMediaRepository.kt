@@ -60,9 +60,10 @@ class JdbcMediaRepository(
                             content_type,
                             byte_size,
                             pixel_width,
-                            pixel_height
+                            pixel_height,
+                            intended_album_kind
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         RETURNING id,
                                   owner_user_id,
                                   media_type,
@@ -90,6 +91,7 @@ class JdbcMediaRepository(
                         statement.setLong(8, create.byteSize)
                         create.pixelWidth?.let { statement.setInt(9, it) } ?: statement.setNull(9, Types.INTEGER)
                         create.pixelHeight?.let { statement.setInt(10, it) } ?: statement.setNull(10, Types.INTEGER)
+                        create.intendedAlbumKind?.let { statement.setString(11, it) } ?: statement.setNull(11, Types.VARCHAR)
                         statement.executeQuery().use { rs ->
                             rs.next()
                             rs.toMediaAssetRecord()
@@ -223,6 +225,246 @@ class JdbcMediaRepository(
                         statement.setObject(2, ownerUserId)
                         statement.executeQuery().use { rs ->
                             if (rs.next()) rs.toMediaAssetRecord() else null
+                        }
+                    }
+            }
+        }
+
+    override suspend fun softDeleteAsset(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val previousAutoCommit = connection.autoCommit
+                connection.autoCommit = false
+                try {
+                    // COALESCE keeps the original deleted_at, so a retried delete is a no-op
+                    // that still returns the owned row (idempotent success for the caller).
+                    val asset =
+                        connection
+                            .prepareStatement(
+                                """
+                                UPDATE media_assets
+                                SET deleted_at = COALESCE(deleted_at, now()),
+                                    updated_at = now()
+                                WHERE id = ?
+                                  AND owner_user_id = ?
+                                RETURNING id,
+                                          owner_user_id,
+                                          media_type,
+                                          storage_provider,
+                                          storage_bucket,
+                                          storage_object_key,
+                                          content_type,
+                                          byte_size,
+                                          pixel_width,
+                                          pixel_height,
+                                          moderation_status,
+                                          processing_status,
+                                          created_at,
+                                          updated_at,
+                                          deleted_at
+                                """.trimIndent(),
+                            ).use { statement ->
+                                statement.setObject(1, mediaAssetId)
+                                statement.setObject(2, ownerUserId)
+                                statement.executeQuery().use { rs ->
+                                    if (rs.next()) rs.toMediaAssetRecord() else null
+                                }
+                            }
+
+                    if (asset == null) {
+                        connection.rollback()
+                        return@withContext null
+                    }
+
+                    connection
+                        .prepareStatement(
+                            """
+                            UPDATE media_album_items
+                            SET removed_at = now()
+                            WHERE media_asset_id = ?
+                              AND owner_user_id = ?
+                              AND removed_at IS NULL
+                            """.trimIndent(),
+                        ).use { statement ->
+                            statement.setObject(1, mediaAssetId)
+                            statement.setObject(2, ownerUserId)
+                            statement.executeUpdate()
+                        }
+
+                    connection.commit()
+                    asset
+                } catch (error: Throwable) {
+                    connection.rollback()
+                    throw error
+                } finally {
+                    connection.autoCommit = previousAutoCommit
+                }
+            }
+        }
+
+    override suspend fun reorderAlbumItems(
+        ownerUserId: UUID,
+        albumId: UUID,
+        orderedAssetIds: List<UUID>,
+    ): List<MediaAlbumItemRecord>? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val previousAutoCommit = connection.autoCommit
+                connection.autoCommit = false
+                try {
+                    if (connection.findActiveAlbum(ownerUserId, albumId) == null) {
+                        connection.rollback()
+                        return@withContext null
+                    }
+
+                    val activeAssetIds =
+                        connection
+                            .prepareStatement(
+                                """
+                                SELECT i.media_asset_id
+                                FROM media_album_items i
+                                JOIN media_assets m
+                                  ON m.id = i.media_asset_id
+                                 AND m.owner_user_id = i.owner_user_id
+                                 AND m.deleted_at IS NULL
+                                WHERE i.album_id = ?
+                                  AND i.owner_user_id = ?
+                                  AND i.removed_at IS NULL
+                                FOR UPDATE OF i
+                                """.trimIndent(),
+                            ).use { statement ->
+                                statement.setObject(1, albumId)
+                                statement.setObject(2, ownerUserId)
+                                statement.executeQuery().use { rs ->
+                                    buildList {
+                                        while (rs.next()) add(rs.getObject("media_asset_id", UUID::class.java))
+                                    }
+                                }
+                            }
+
+                    if (orderedAssetIds.size != activeAssetIds.size || orderedAssetIds.toSet() != activeAssetIds.toSet()) {
+                        connection.rollback()
+                        return@withContext null
+                    }
+
+                    connection
+                        .prepareStatement(
+                            """
+                            UPDATE media_album_items i
+                            SET sort_order = (u.ord - 1)::int
+                            FROM unnest(?::uuid[]) WITH ORDINALITY AS u(media_asset_id, ord)
+                            WHERE i.album_id = ?
+                              AND i.owner_user_id = ?
+                              AND i.media_asset_id = u.media_asset_id
+                              AND i.removed_at IS NULL
+                            """.trimIndent(),
+                        ).use { statement ->
+                            statement.setArray(1, connection.createArrayOf("uuid", orderedAssetIds.toTypedArray()))
+                            statement.setObject(2, albumId)
+                            statement.setObject(3, ownerUserId)
+                            statement.executeUpdate()
+                        }
+
+                    val items =
+                        connection
+                            .prepareStatement(
+                                """
+                                SELECT i.album_id,
+                                       i.media_asset_id,
+                                       i.owner_user_id,
+                                       i.sort_order,
+                                       i.added_at,
+                                       i.removed_at
+                                FROM media_album_items i
+                                JOIN media_assets m
+                                  ON m.id = i.media_asset_id
+                                 AND m.owner_user_id = i.owner_user_id
+                                 AND m.deleted_at IS NULL
+                                WHERE i.album_id = ?
+                                  AND i.owner_user_id = ?
+                                  AND i.removed_at IS NULL
+                                ORDER BY i.sort_order ASC, i.added_at DESC, i.media_asset_id ASC
+                                """.trimIndent(),
+                            ).use { statement ->
+                                statement.setObject(1, albumId)
+                                statement.setObject(2, ownerUserId)
+                                statement.executeQuery().use { rs ->
+                                    buildList {
+                                        while (rs.next()) add(rs.toMediaAlbumItemRecord(connection))
+                                    }
+                                }
+                            }
+
+                    connection.commit()
+                    items
+                } catch (error: Throwable) {
+                    connection.rollback()
+                    throw error
+                } finally {
+                    connection.autoCommit = previousAutoCommit
+                }
+            }
+        }
+
+    override suspend fun countActiveAlbumItems(
+        ownerUserId: UUID,
+        albumId: UUID,
+        excludingMediaAssetId: UUID?,
+    ): Int =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val exclusionClause = if (excludingMediaAssetId != null) "AND i.media_asset_id <> ?" else ""
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT COUNT(*)
+                        FROM media_album_items i
+                        JOIN media_assets m
+                          ON m.id = i.media_asset_id
+                         AND m.owner_user_id = i.owner_user_id
+                         AND m.deleted_at IS NULL
+                        WHERE i.album_id = ?
+                          AND i.owner_user_id = ?
+                          AND i.removed_at IS NULL
+                          $exclusionClause
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, albumId)
+                        statement.setObject(2, ownerUserId)
+                        excludingMediaAssetId?.let { statement.setObject(3, it) }
+                        statement.executeQuery().use { rs ->
+                            rs.next()
+                            rs.getInt(1)
+                        }
+                    }
+            }
+        }
+
+    override suspend fun countPendingUploadAssets(
+        ownerUserId: UUID,
+        intendedAlbumKind: String,
+    ): Int =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT COUNT(*)
+                        FROM media_assets
+                        WHERE owner_user_id = ?
+                          AND deleted_at IS NULL
+                          AND processing_status = 'pending_upload'
+                          AND intended_album_kind = ?
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, ownerUserId)
+                        statement.setString(2, intendedAlbumKind)
+                        statement.executeQuery().use { rs ->
+                            rs.next()
+                            rs.getInt(1)
                         }
                     }
             }
@@ -475,18 +717,17 @@ class JdbcMediaRepository(
                         WHERE i.album_id = ?
                           AND i.removed_at IS NULL
                           AND (
-                              (
-                                  a.owner_user_id = ?
-                                  AND m.processing_status IN ('uploaded', 'processing', 'ready')
-                                  AND m.moderation_status IN ('pending', 'approved')
-                              )
+                              -- Owner sees every active item, including held/removed moderation
+                              -- and failed/pending processing, so the client can render honest
+                              -- "in review" / "not approved" / "failed" states.
+                              a.owner_user_id = ?
                               OR (
                                   a.owner_user_id <> ?
                                   AND m.processing_status = 'ready'
                                   AND m.moderation_status = 'approved'
                               )
                           )
-                        ORDER BY sort_order ASC, added_at ASC, media_asset_id ASC
+                        ORDER BY sort_order ASC, added_at DESC, media_asset_id ASC
                         """.trimIndent(),
                     ).use { statement ->
                         statement.setObject(1, albumId)

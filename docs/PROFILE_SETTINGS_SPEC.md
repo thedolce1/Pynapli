@@ -107,6 +107,20 @@ Profile management includes:
 - Social links, if supported later
 - Preview profile
 
+Canonical gender/orientation taxonomies (founder decision 2026-06-10: Grindr's
+structured-chips-plus-self-describe pattern, with option lists tuned for the
+swingers lifestyle community; accounts stay individual — couple dynamics come
+from partner linking and discovery style, never a "couple" gender):
+
+- Gender: Man, Woman, Trans Man, Trans Woman, Non-Binary, + free-text
+  self-describe.
+- Orientation: Straight, Heteroflexible, Bicurious, Bisexual, Pansexual, Gay,
+  Lesbian, Queer, + free-text self-describe.
+
+Both fields store the structured key for filtering; self-describe stores the
+custom label alongside a `self_describe` key and is excluded from structured
+filters.
+
 Rules:
 
 - Profile fields should use structured data for filters.

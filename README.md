@@ -128,6 +128,8 @@ POST http://localhost:8080/v1/messages/threads/{threadId}/read
 POST http://localhost:8080/v1/messages/threads/{threadId}/messages
 POST http://localhost:8080/v1/media/uploads
 POST http://localhost:8080/v1/media/uploads/{assetId}/complete
+DELETE http://localhost:8080/v1/media/assets/{assetId}
+PUT  http://localhost:8080/v1/media/albums/{kind}/order
 POST   http://localhost:8080/v1/tonight/sessions
 GET    http://localhost:8080/v1/tonight/feed
 GET    http://localhost:8080/v1/me/tonight/session

@@ -6,6 +6,7 @@ import com.pynapli.server.safety.RateLimitService
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MEDIA_IMAGE_MAX_BYTES
+import com.pynapli.shared.network.dto.ReorderMediaAlbumRequestDto
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import java.time.Instant
@@ -469,6 +470,258 @@ class MediaServiceTest {
 
             assertEquals("MEDIA_ALBUM_NOT_FOUND", error.code)
         }
+
+    @Test
+    fun createUploadSlotRejectsWhenProfileAlbumIsAtCap() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = AutoApproveMediaModerationScanner())
+            repeat(MediaService.PROFILE_ALBUM_PHOTO_CAP) { service.uploadAndComplete(ownerId, albumKind = "profile") }
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.createUploadSlot(
+                        ownerId,
+                        CreateMediaUploadRequestDto(albumKind = "profile", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+                    )
+                }
+
+            assertEquals("MEDIA_ALBUM_PHOTO_CAP_EXCEEDED", error.code)
+        }
+
+    @Test
+    fun createUploadSlotCountsOpenSlotsTowardCapWithoutBlockingOtherAlbum() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+            repeat(MediaService.PROFILE_ALBUM_PHOTO_CAP) {
+                service.createUploadSlot(
+                    ownerId,
+                    CreateMediaUploadRequestDto(albumKind = "profile", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+                )
+            }
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.createUploadSlot(
+                        ownerId,
+                        CreateMediaUploadRequestDto(albumKind = "profile", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+                    )
+                }
+            assertEquals("MEDIA_ALBUM_PHOTO_CAP_EXCEEDED", error.code)
+
+            // Open profile slots must not consume the private album's cap.
+            val privateSlot =
+                service.createUploadSlot(
+                    ownerId,
+                    CreateMediaUploadRequestDto(albumKind = "private", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+                )
+            assertEquals("private", privateSlot.album.kind)
+        }
+
+    @Test
+    fun createUploadSlotEnforcesPrivateAlbumCapAtTwelve() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+            repeat(MediaService.PRIVATE_ALBUM_PHOTO_CAP) {
+                service.createUploadSlot(
+                    ownerId,
+                    CreateMediaUploadRequestDto(albumKind = "private", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+                )
+            }
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.createUploadSlot(
+                        ownerId,
+                        CreateMediaUploadRequestDto(albumKind = "private", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+                    )
+                }
+
+            assertEquals("MEDIA_ALBUM_PHOTO_CAP_EXCEEDED", error.code)
+        }
+
+    @Test
+    fun completeUploadRejectsWhenAlbumFilledAfterSlotWasOpened() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val repository = InMemoryMediaRepository()
+            val service = MediaService(repository, FixedMediaUploadSigner())
+            val slot =
+                service.createUploadSlot(
+                    ownerId,
+                    CreateMediaUploadRequestDto(albumKind = "profile", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+                )
+            val albumId = UUID.fromString(slot.album.albumId)
+            repeat(MediaService.PROFILE_ALBUM_PHOTO_CAP) { index ->
+                val asset = repository.createAsset(ownerId, fillerAssetCreate(ownerId, "filler-$index"))
+                repository.addAssetToAlbum(ownerId, albumId, asset.mediaAssetId, sortOrder = index)
+            }
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.completeUpload(
+                        ownerId,
+                        slot.mediaAsset.mediaAssetId,
+                        CompleteMediaUploadRequestDto(albumId = slot.album.albumId),
+                    )
+                }
+
+            assertEquals("MEDIA_ALBUM_PHOTO_CAP_EXCEEDED", error.code)
+        }
+
+    @Test
+    fun completeUploadRetryDoesNotCountTheCompletingAssetAgainstTheCap() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val repository = InMemoryMediaRepository()
+            val service = MediaService(repository, FixedMediaUploadSigner())
+            val slot =
+                service.createUploadSlot(
+                    ownerId,
+                    CreateMediaUploadRequestDto(albumKind = "profile", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+                )
+            val albumId = UUID.fromString(slot.album.albumId)
+            repeat(MediaService.PROFILE_ALBUM_PHOTO_CAP - 1) { index ->
+                val asset = repository.createAsset(ownerId, fillerAssetCreate(ownerId, "filler-$index"))
+                repository.addAssetToAlbum(ownerId, albumId, asset.mediaAssetId, sortOrder = index)
+            }
+
+            val first =
+                service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, CompleteMediaUploadRequestDto(albumId = slot.album.albumId))
+            // Retried complete (lost response) replays success instead of tripping the now-full cap.
+            val retried =
+                service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, CompleteMediaUploadRequestDto(albumId = slot.album.albumId))
+
+            assertEquals(first.mediaAsset.mediaAssetId, retried.mediaAsset.mediaAssetId)
+        }
+
+    @Test
+    fun deleteAssetSoftDeletesAndIsIdempotentForOwner() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = AutoApproveMediaModerationScanner())
+            val item = service.uploadAndComplete(ownerId, albumKind = "profile")
+
+            service.deleteAsset(ownerId, item.mediaAsset.mediaAssetId)
+
+            assertEquals(0, service.listOwnAlbum(ownerId, "profile").items.size)
+            // Deleting an already-deleted owned asset replays success.
+            service.deleteAsset(ownerId, item.mediaAsset.mediaAssetId)
+        }
+
+    @Test
+    fun deleteAssetRejectsNonOwnerWithoutExistenceLeak() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val otherUserId = UUID.randomUUID()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = AutoApproveMediaModerationScanner())
+            val item = service.uploadAndComplete(ownerId, albumKind = "profile")
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.deleteAsset(otherUserId, item.mediaAsset.mediaAssetId)
+                }
+
+            assertEquals("MEDIA_ASSET_NOT_FOUND", error.code)
+        }
+
+    @Test
+    fun deleteAssetRejectsUnknownAsset() =
+        runBlocking {
+            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner())
+
+            val error =
+                assertFailsWith<MediaException> {
+                    service.deleteAsset(UUID.randomUUID(), UUID.randomUUID().toString())
+                }
+
+            assertEquals("MEDIA_ASSET_NOT_FOUND", error.code)
+        }
+
+    @Test
+    fun reorderAlbumRewritesSortOrderFromRequestedOrder() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = AutoApproveMediaModerationScanner())
+            val first = service.uploadAndComplete(ownerId, albumKind = "profile")
+            val second = service.uploadAndComplete(ownerId, albumKind = "profile")
+            val third = service.uploadAndComplete(ownerId, albumKind = "profile")
+
+            val response =
+                service.reorderAlbum(
+                    ownerId,
+                    "profile",
+                    ReorderMediaAlbumRequestDto(
+                        orderedAssetIds =
+                            listOf(
+                                third.mediaAsset.mediaAssetId,
+                                first.mediaAsset.mediaAssetId,
+                                second.mediaAsset.mediaAssetId,
+                            ),
+                    ),
+                )
+
+            assertEquals(
+                listOf(third.mediaAsset.mediaAssetId, first.mediaAsset.mediaAssetId, second.mediaAsset.mediaAssetId),
+                response.items.map { item -> item.mediaAsset.mediaAssetId },
+            )
+            assertEquals(listOf(0, 1, 2), response.items.map { item -> item.sortOrder })
+        }
+
+    @Test
+    fun reorderAlbumRejectsAnyListThatIsNotExactlyTheActiveItemSet() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = AutoApproveMediaModerationScanner())
+            val first = service.uploadAndComplete(ownerId, albumKind = "profile")
+            service.uploadAndComplete(ownerId, albumKind = "profile")
+
+            val missing =
+                assertFailsWith<MediaException> {
+                    service.reorderAlbum(ownerId, "profile", ReorderMediaAlbumRequestDto(listOf(first.mediaAsset.mediaAssetId)))
+                }
+            assertEquals("MEDIA_ALBUM_ORDER_MISMATCH", missing.code)
+
+            val foreign =
+                assertFailsWith<MediaException> {
+                    service.reorderAlbum(
+                        ownerId,
+                        "profile",
+                        ReorderMediaAlbumRequestDto(listOf(first.mediaAsset.mediaAssetId, UUID.randomUUID().toString())),
+                    )
+                }
+            assertEquals("MEDIA_ALBUM_ORDER_MISMATCH", foreign.code)
+
+            val duplicated =
+                assertFailsWith<MediaException> {
+                    service.reorderAlbum(
+                        ownerId,
+                        "profile",
+                        ReorderMediaAlbumRequestDto(listOf(first.mediaAsset.mediaAssetId, first.mediaAsset.mediaAssetId)),
+                    )
+                }
+            assertEquals("MEDIA_ALBUM_ORDER_MISMATCH", duplicated.code)
+        }
+
+    private fun fillerAssetCreate(
+        ownerId: UUID,
+        label: String,
+    ) = MediaAssetCreate(
+        mediaType = "image",
+        storageProvider = "gcs",
+        storageBucket = "pynapli-test-media",
+        storageObjectKey = "users/$ownerId/profile/$label.jpg",
+        contentType = "image/jpeg",
+        byteSize = 1_024,
+        intendedAlbumKind = null,
+    )
 }
 
 private class FixedMediaUploadSigner : MediaUploadSigner {
@@ -568,7 +821,10 @@ private class InMemoryMediaRepository : MediaRepository {
             createdAt = now,
             updatedAt = now,
             deletedAt = null,
-        ).also { asset -> assets[asset.mediaAssetId] = asset }
+        ).also { asset ->
+            assets[asset.mediaAssetId] = asset
+            create.intendedAlbumKind?.let { kind -> intendedAlbumKinds[asset.mediaAssetId] = kind }
+        }
 
     override suspend fun markAssetUploaded(
         ownerUserId: UUID,
@@ -610,6 +866,64 @@ private class InMemoryMediaRepository : MediaRepository {
         updateAlbumItems(rejected)
         return rejected
     }
+
+    override suspend fun softDeleteAsset(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord? {
+        val asset = assets[mediaAssetId]?.takeIf { it.ownerUserId == ownerUserId } ?: return null
+        val deleted = if (asset.deletedAt == null) asset.copy(deletedAt = now) else asset
+        assets[mediaAssetId] = deleted
+        items.keys
+            .filter { (_, assetId) -> assetId == mediaAssetId }
+            .forEach { key ->
+                val item = items.getValue(key)
+                items[key] = item.copy(mediaAsset = deleted, removedAt = item.removedAt ?: now)
+            }
+        return deleted
+    }
+
+    override suspend fun reorderAlbumItems(
+        ownerUserId: UUID,
+        albumId: UUID,
+        orderedAssetIds: List<UUID>,
+    ): List<MediaAlbumItemRecord>? {
+        albums[albumId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null } ?: return null
+        val activeAssetIds =
+            items.values
+                .filter { it.albumId == albumId && it.removedAt == null && it.mediaAsset.deletedAt == null }
+                .map { it.mediaAsset.mediaAssetId }
+        if (orderedAssetIds.size != activeAssetIds.size || orderedAssetIds.toSet() != activeAssetIds.toSet()) return null
+        orderedAssetIds.forEachIndexed { index, assetId ->
+            val key = albumId to assetId
+            items[key] = items.getValue(key).copy(sortOrder = index)
+        }
+        return orderedAssetIds.map { assetId -> items.getValue(albumId to assetId) }
+    }
+
+    override suspend fun countActiveAlbumItems(
+        ownerUserId: UUID,
+        albumId: UUID,
+        excludingMediaAssetId: UUID?,
+    ): Int =
+        items.values.count { item ->
+            item.albumId == albumId &&
+                item.removedAt == null &&
+                item.mediaAsset.ownerUserId == ownerUserId &&
+                item.mediaAsset.deletedAt == null &&
+                item.mediaAsset.mediaAssetId != excludingMediaAssetId
+        }
+
+    override suspend fun countPendingUploadAssets(
+        ownerUserId: UUID,
+        intendedAlbumKind: String,
+    ): Int =
+        assets.values.count { asset ->
+            asset.ownerUserId == ownerUserId &&
+                asset.deletedAt == null &&
+                asset.processingStatus == "pending_upload" &&
+                intendedAlbumKinds[asset.mediaAssetId] == intendedAlbumKind
+        }
 
     override suspend fun findAlbum(
         ownerUserId: UUID,
@@ -780,6 +1094,7 @@ private class InMemoryMediaRepository : MediaRepository {
     }
 
     private val displayNamesByUserId = mutableMapOf<UUID, String>()
+    private val intendedAlbumKinds = mutableMapOf<UUID, String>()
 
     private fun updateAlbumItems(asset: MediaAssetRecord) {
         items.keys
