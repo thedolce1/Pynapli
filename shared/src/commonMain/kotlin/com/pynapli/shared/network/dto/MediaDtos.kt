@@ -35,6 +35,11 @@ data class CompleteMediaUploadRequestDto(
 )
 
 @Serializable
+data class ReorderMediaAlbumRequestDto(
+    val orderedAssetIds: List<String>,
+)
+
+@Serializable
 data class MediaAlbumItemDto(
     val albumId: String,
     val mediaAsset: MediaAssetDto,

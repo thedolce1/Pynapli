@@ -5,6 +5,7 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MEDIA_VIDEO_MAX_BYTES
+import com.pynapli.shared.network.dto.ReorderMediaAlbumRequestDto
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -14,6 +15,7 @@ import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
@@ -70,11 +72,25 @@ fun Application.configureMediaRoutes(
             }
         }
 
+        delete("/v1/media/assets/{assetId}") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val assetId = call.parameters["assetId"] ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
+            mediaService.deleteAsset(user.id, assetId)
+            call.respond(HttpStatusCode.OK)
+        }
+
         route("/v1/media/albums") {
             get("/{kind}") {
                 val user = authService.authenticate(call.requiredBearerToken())
                 val kind = call.parameters["kind"] ?: throw MediaException("INVALID_MEDIA_ALBUM_KIND")
                 call.respond(mediaService.listOwnAlbum(user.id, kind))
+            }
+
+            put("/{kind}/order") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                val kind = call.parameters["kind"] ?: throw MediaException("INVALID_MEDIA_ALBUM_KIND")
+                val request = call.receive<ReorderMediaAlbumRequestDto>()
+                call.respond(mediaService.reorderAlbum(user.id, kind, request))
             }
 
             get("/private/grants") {

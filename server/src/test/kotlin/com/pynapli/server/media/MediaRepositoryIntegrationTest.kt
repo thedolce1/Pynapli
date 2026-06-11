@@ -1,5 +1,6 @@
 package com.pynapli.server.media
 
+import com.pynapli.server.grid.hydrateGridCards
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import kotlinx.coroutines.runBlocking
@@ -11,6 +12,7 @@ import org.junit.BeforeClass
 import org.junit.Test
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
+import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -123,6 +125,7 @@ class MediaRepositoryIntegrationTest {
     private fun sampleAssetCreate(
         ownerId: UUID,
         label: String,
+        intendedAlbumKind: String? = null,
     ) = MediaAssetCreate(
         mediaType = "image",
         storageProvider = "gcs",
@@ -132,6 +135,7 @@ class MediaRepositoryIntegrationTest {
         byteSize = 1_024,
         pixelWidth = 800,
         pixelHeight = 600,
+        intendedAlbumKind = intendedAlbumKind,
     )
 
     private fun assetExists(id: UUID): Boolean =
@@ -250,7 +254,13 @@ class MediaRepositoryIntegrationTest {
             val ownerItems = repository.listAlbumItemsForViewer(ownerId, album.albumId).orEmpty()
             val granteeItems = repository.listAlbumItemsForViewer(granteeId, album.albumId).orEmpty()
 
-            assertEquals(setOf(pending.mediaAssetId, approved.mediaAssetId), ownerItems.map { it.mediaAsset.mediaAssetId }.toSet())
+            // Owner listing is honest: pending review AND moderation-removed items stay visible
+            // to the owner (so the client can show "in review" / "not approved" states), while
+            // other viewers only ever see ready+approved media.
+            assertEquals(
+                setOf(pending.mediaAssetId, approved.mediaAssetId, removed.mediaAssetId),
+                ownerItems.map { it.mediaAsset.mediaAssetId }.toSet(),
+            )
             assertEquals(listOf(approved.mediaAssetId), granteeItems.map { it.mediaAsset.mediaAssetId })
         }
 
@@ -309,6 +319,293 @@ class MediaRepositoryIntegrationTest {
 
             assertTrue(repository.hasAlbumAccess(viewerId, album.albumId))
         }
+
+    @Test
+    fun softDeleteAssetHidesItemFromViewersAndGridHydration() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000601")
+            val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000602")
+            val repository = JdbcMediaRepository(dataSource)
+            dataSource.insertUser(ownerId)
+            dataSource.insertUser(viewerId)
+            val album =
+                repository.ensureAlbum(
+                    ownerUserId = ownerId,
+                    kind = "profile",
+                    title = "Profile photos",
+                    albumIdFactory = { UUID.fromString("10000000-0000-0000-0000-000000000601") },
+                )
+            val asset =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "grid-photo"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000601")
+                })
+            repository.markAssetUploaded(ownerId, asset.mediaAssetId)
+            repository.markAssetReadyApproved(ownerId, asset.mediaAssetId)
+            repository.addAssetToAlbum(ownerId, album.albumId, asset.mediaAssetId, sortOrder = 0)
+
+            assertEquals(1, repository.listAlbumItemsForViewer(viewerId, album.albumId)?.size)
+            val hydrationBefore = dataSource.connection.use { it.hydrateGridCards(viewerId, listOf(ownerId)) }
+            assertEquals(asset.mediaAssetId, hydrationBefore[ownerId]?.thumbnailMediaAssetId)
+
+            // Non-owner delete reads as not-found (no existence leak) and changes nothing.
+            assertNull(repository.softDeleteAsset(viewerId, asset.mediaAssetId))
+            assertEquals(1, repository.listAlbumItemsForViewer(viewerId, album.albumId)?.size)
+
+            val deleted = assertNotNull(repository.softDeleteAsset(ownerId, asset.mediaAssetId))
+            assertNotNull(deleted.deletedAt)
+
+            assertEquals(0, repository.listAlbumItemsForViewer(viewerId, album.albumId)?.size)
+            assertEquals(0, repository.listAlbumItemsForViewer(ownerId, album.albumId)?.size)
+            val hydrationAfter = dataSource.connection.use { it.hydrateGridCards(viewerId, listOf(ownerId)) }
+            assertNull(hydrationAfter[ownerId]?.thumbnailMediaAssetId)
+
+            // Retried delete replays success and keeps the original deletion timestamp.
+            val retried = assertNotNull(repository.softDeleteAsset(ownerId, asset.mediaAssetId))
+            assertEquals(deleted.deletedAt, retried.deletedAt)
+        }
+
+    @Test
+    fun reorderAlbumItemsRewritesSortOrderAndRejectsSetMismatch() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000611")
+            val repository = JdbcMediaRepository(dataSource)
+            dataSource.insertUser(ownerId)
+            val album =
+                repository.ensureAlbum(
+                    ownerUserId = ownerId,
+                    kind = "profile",
+                    title = "Profile photos",
+                    albumIdFactory = { UUID.fromString("10000000-0000-0000-0000-000000000611") },
+                )
+            val assetIds =
+                (1..3).map { index ->
+                    val asset =
+                        repository.createAsset(ownerId, sampleAssetCreate(ownerId, "reorder-$index"), {
+                            UUID.fromString("20000000-0000-0000-0000-00000000061$index")
+                        })
+                    repository.markAssetUploaded(ownerId, asset.mediaAssetId)
+                    repository.markAssetReadyApproved(ownerId, asset.mediaAssetId)
+                    repository.addAssetToAlbum(ownerId, album.albumId, asset.mediaAssetId, sortOrder = index - 1)
+                    asset.mediaAssetId
+                }
+            val (first, second, third) = assetIds
+
+            val reordered =
+                assertNotNull(repository.reorderAlbumItems(ownerId, album.albumId, listOf(third, first, second)))
+
+            assertEquals(listOf(third, first, second), reordered.map { it.mediaAsset.mediaAssetId })
+            assertEquals(listOf(0, 1, 2), reordered.map { it.sortOrder })
+            assertEquals(
+                listOf(third, first, second),
+                repository.listAlbumItemsForViewer(ownerId, album.albumId)?.map { it.mediaAsset.mediaAssetId },
+            )
+
+            // A list that is not exactly the active set is rejected and leaves the order untouched.
+            assertNull(repository.reorderAlbumItems(ownerId, album.albumId, listOf(first, second)))
+            assertNull(
+                repository.reorderAlbumItems(
+                    ownerId,
+                    album.albumId,
+                    listOf(first, second, UUID.fromString("20000000-0000-0000-0000-000000000619")),
+                ),
+            )
+            assertEquals(
+                listOf(third, first, second),
+                repository.listAlbumItemsForViewer(ownerId, album.albumId)?.map { it.mediaAsset.mediaAssetId },
+            )
+        }
+
+    @Test
+    fun ownerSeesHeldRemovedAndFailedItemsButGranteesDoNot() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000621")
+            val granteeId = UUID.fromString("00000000-0000-0000-0000-000000000622")
+            val repository = JdbcMediaRepository(dataSource)
+            dataSource.insertUser(ownerId)
+            dataSource.insertUser(granteeId)
+            val album =
+                repository.ensureAlbum(
+                    ownerUserId = ownerId,
+                    kind = "private",
+                    title = "Private album",
+                    albumIdFactory = { UUID.fromString("10000000-0000-0000-0000-000000000621") },
+                )
+
+            val held =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "held"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000621")
+                })
+            repository.markAssetUploaded(ownerId, held.mediaAssetId)
+            dataSource.setAssetModerationStatus(held.mediaAssetId, "held")
+            repository.addAssetToAlbum(ownerId, album.albumId, held.mediaAssetId, sortOrder = 0)
+
+            val removed =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "removed"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000622")
+                })
+            repository.markAssetUploaded(ownerId, removed.mediaAssetId)
+            repository.markAssetModerationRejected(ownerId, removed.mediaAssetId)
+            repository.addAssetToAlbum(ownerId, album.albumId, removed.mediaAssetId, sortOrder = 1)
+
+            val failed =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "failed"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000623")
+                })
+            dataSource.setAssetProcessingStatus(failed.mediaAssetId, "failed")
+            repository.addAssetToAlbum(ownerId, album.albumId, failed.mediaAssetId, sortOrder = 2)
+
+            val approved =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "approved"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000624")
+                })
+            repository.markAssetUploaded(ownerId, approved.mediaAssetId)
+            repository.markAssetReadyApproved(ownerId, approved.mediaAssetId)
+            repository.addAssetToAlbum(ownerId, album.albumId, approved.mediaAssetId, sortOrder = 3)
+
+            repository.grantAlbumAccess(ownerId, album.albumId, granteeId)
+
+            val ownerItems = repository.listAlbumItemsForViewer(ownerId, album.albumId).orEmpty()
+            val granteeItems = repository.listAlbumItemsForViewer(granteeId, album.albumId).orEmpty()
+
+            assertEquals(
+                setOf(held.mediaAssetId, removed.mediaAssetId, failed.mediaAssetId, approved.mediaAssetId),
+                ownerItems.map { it.mediaAsset.mediaAssetId }.toSet(),
+            )
+            assertEquals(
+                setOf("held", "removed", "pending", "approved"),
+                ownerItems.map { it.mediaAsset.moderationStatus }.toSet(),
+            )
+            assertEquals(listOf(approved.mediaAssetId), granteeItems.map { it.mediaAsset.mediaAssetId })
+        }
+
+    @Test
+    fun ownerListingOrdersBySortOrderThenNewestAddedToMatchDiscoveryPick() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000631")
+            val repository = JdbcMediaRepository(dataSource)
+            dataSource.insertUser(ownerId)
+            val album =
+                repository.ensureAlbum(
+                    ownerUserId = ownerId,
+                    kind = "profile",
+                    title = "Profile photos",
+                    albumIdFactory = { UUID.fromString("10000000-0000-0000-0000-000000000631") },
+                )
+            val older =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "older"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000631")
+                })
+            val newer =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "newer"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000632")
+                })
+            val trailing =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "trailing"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000633")
+                })
+            listOf(older, newer, trailing).forEach { asset ->
+                repository.markAssetUploaded(ownerId, asset.mediaAssetId)
+                repository.markAssetReadyApproved(ownerId, asset.mediaAssetId)
+            }
+            repository.addAssetToAlbum(ownerId, album.albumId, older.mediaAssetId, sortOrder = 0)
+            repository.addAssetToAlbum(ownerId, album.albumId, newer.mediaAssetId, sortOrder = 0)
+            repository.addAssetToAlbum(ownerId, album.albumId, trailing.mediaAssetId, sortOrder = 1)
+            dataSource.setItemAddedAt(album.albumId, older.mediaAssetId, Instant.now().minus(Duration.ofHours(1)))
+
+            val items = repository.listAlbumItemsForViewer(ownerId, album.albumId).orEmpty()
+
+            // sort_order ASC first; within a tied sort_order the newest added wins,
+            // matching the discovery thumbnail pick (sort_order ASC, added_at DESC).
+            assertEquals(
+                listOf(newer.mediaAssetId, older.mediaAssetId, trailing.mediaAssetId),
+                items.map { it.mediaAsset.mediaAssetId },
+            )
+        }
+
+    @Test
+    fun capCountsTrackActiveItemsOpenSlotsAndExclusions() =
+        runBlocking {
+            val ownerId = UUID.fromString("00000000-0000-0000-0000-000000000641")
+            val repository = JdbcMediaRepository(dataSource)
+            dataSource.insertUser(ownerId)
+            val album =
+                repository.ensureAlbum(
+                    ownerUserId = ownerId,
+                    kind = "profile",
+                    title = "Profile photos",
+                    albumIdFactory = { UUID.fromString("10000000-0000-0000-0000-000000000641") },
+                )
+            val kept =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "kept"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000641")
+                })
+            val dropped =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "dropped"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000642")
+                })
+            listOf(kept, dropped).forEach { asset ->
+                repository.markAssetUploaded(ownerId, asset.mediaAssetId)
+                repository.addAssetToAlbum(ownerId, album.albumId, asset.mediaAssetId, sortOrder = 0)
+            }
+            assertEquals(2, repository.countActiveAlbumItems(ownerId, album.albumId))
+
+            repository.softDeleteAsset(ownerId, dropped.mediaAssetId)
+            assertEquals(1, repository.countActiveAlbumItems(ownerId, album.albumId))
+            assertEquals(0, repository.countActiveAlbumItems(ownerId, album.albumId, excludingMediaAssetId = kept.mediaAssetId))
+
+            val pendingSlot =
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "pending-slot", intendedAlbumKind = "profile"), {
+                    UUID.fromString("20000000-0000-0000-0000-000000000643")
+                })
+            assertEquals(1, repository.countPendingUploadAssets(ownerId, "profile"))
+            assertEquals(0, repository.countPendingUploadAssets(ownerId, "private"))
+
+            repository.markAssetUploaded(ownerId, pendingSlot.mediaAssetId)
+            assertEquals(0, repository.countPendingUploadAssets(ownerId, "profile"))
+        }
+
+    private fun DataSource.setAssetModerationStatus(
+        mediaAssetId: UUID,
+        status: String,
+    ) {
+        connection.use { connection ->
+            connection.prepareStatement("UPDATE media_assets SET moderation_status = ? WHERE id = ?").use { statement ->
+                statement.setString(1, status)
+                statement.setObject(2, mediaAssetId)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    private fun DataSource.setAssetProcessingStatus(
+        mediaAssetId: UUID,
+        status: String,
+    ) {
+        connection.use { connection ->
+            connection.prepareStatement("UPDATE media_assets SET processing_status = ? WHERE id = ?").use { statement ->
+                statement.setString(1, status)
+                statement.setObject(2, mediaAssetId)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    private fun DataSource.setItemAddedAt(
+        albumId: UUID,
+        mediaAssetId: UUID,
+        addedAt: Instant,
+    ) {
+        connection.use { connection ->
+            connection
+                .prepareStatement("UPDATE media_album_items SET added_at = ? WHERE album_id = ? AND media_asset_id = ?")
+                .use { statement ->
+                    statement.setTimestamp(1, Timestamp.from(addedAt))
+                    statement.setObject(2, albumId)
+                    statement.setObject(3, mediaAssetId)
+                    statement.executeUpdate()
+                }
+        }
+    }
 
     private fun DataSource.insertUser(userId: UUID) {
         connection.use { connection ->

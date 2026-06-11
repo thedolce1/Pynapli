@@ -14,6 +14,7 @@ import com.pynapli.shared.network.dto.MediaAlbumItemDto
 import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaAssetDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
+import com.pynapli.shared.network.dto.ReorderMediaAlbumRequestDto
 import org.slf4j.LoggerFactory
 import java.util.UUID
 
@@ -51,6 +52,13 @@ class MediaService(
                 kind = albumKind,
                 title = albumKind.defaultTitle(),
             )
+        // Cap counts active album items plus already-open upload slots, so a full album
+        // cannot be bypassed by opening many slots before completing any of them.
+        val activeCount = repository.countActiveAlbumItems(ownerUserId, album.albumId)
+        val pendingSlotCount = repository.countPendingUploadAssets(ownerUserId, albumKind)
+        if (activeCount + pendingSlotCount >= albumKind.albumPhotoCap()) {
+            throw MediaException("MEDIA_ALBUM_PHOTO_CAP_EXCEEDED")
+        }
         val mediaAssetId = UUID.randomUUID()
         val destination =
             uploadSigner.createUploadDestination(
@@ -72,6 +80,7 @@ class MediaService(
                         byteSize = request.byteSize,
                         pixelWidth = request.pixelWidth,
                         pixelHeight = request.pixelHeight,
+                        intendedAlbumKind = albumKind,
                     ),
                 assetIdFactory = { mediaAssetId },
             )
@@ -102,6 +111,17 @@ class MediaService(
         val album =
             repository.findAlbum(ownerUserId, albumId)
                 ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
+        // Re-check the cap at attach time (slots are created before items exist). The completing
+        // asset is excluded from the count so a retried complete stays idempotent.
+        val activeCount =
+            repository.countActiveAlbumItems(
+                ownerUserId = ownerUserId,
+                albumId = albumId,
+                excludingMediaAssetId = mediaAssetId,
+            )
+        if (activeCount >= album.kind.albumPhotoCap()) {
+            throw MediaException("MEDIA_ALBUM_PHOTO_CAP_EXCEEDED")
+        }
         val item =
             repository.addAssetToAlbum(
                 ownerUserId = ownerUserId,
@@ -138,6 +158,49 @@ class MediaService(
                 viewerUserId = ownerUserId,
                 albumId = album.albumId,
             ) ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
+
+        return MediaAlbumItemsResponseDto(
+            album = album.toDto(),
+            items = items.map { item -> item.toDto() },
+        )
+    }
+
+    suspend fun deleteAsset(
+        ownerUserId: UUID,
+        mediaAssetIdText: String,
+    ) {
+        val mediaAssetId = mediaAssetIdText.toUuidOrThrow()
+        // Missing or non-owned assets surface the same not-found (no existence leak);
+        // deleting an already-deleted owned asset replays success (idempotent).
+        repository.softDeleteAsset(ownerUserId, mediaAssetId)
+            ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
+    }
+
+    suspend fun reorderAlbum(
+        ownerUserId: UUID,
+        albumKindText: String,
+        request: ReorderMediaAlbumRequestDto,
+    ): MediaAlbumItemsResponseDto {
+        val albumKind = albumKindText.trim().lowercase()
+        if (albumKind !in ALBUM_KINDS) throw MediaException("INVALID_MEDIA_ALBUM_KIND")
+
+        val orderedAssetIds = request.orderedAssetIds.map { it.toUuidOrThrow() }
+        if (orderedAssetIds.toSet().size != orderedAssetIds.size) {
+            throw MediaException("MEDIA_ALBUM_ORDER_MISMATCH")
+        }
+
+        val album =
+            repository.ensureAlbum(
+                ownerUserId = ownerUserId,
+                kind = albumKind,
+                title = albumKind.defaultTitle(),
+            )
+        val items =
+            repository.reorderAlbumItems(
+                ownerUserId = ownerUserId,
+                albumId = album.albumId,
+                orderedAssetIds = orderedAssetIds,
+            ) ?: throw MediaException("MEDIA_ALBUM_ORDER_MISMATCH")
 
         return MediaAlbumItemsResponseDto(
             album = album.toDto(),
@@ -344,9 +407,19 @@ class MediaService(
             else -> "Media"
         }
 
+    private fun String.albumPhotoCap(): Int =
+        when (this) {
+            "profile" -> PROFILE_ALBUM_PHOTO_CAP
+            else -> PRIVATE_ALBUM_PHOTO_CAP
+        }
+
     companion object {
         private val logger = LoggerFactory.getLogger(MediaService::class.java)
         private val ALBUM_KINDS = setOf("profile", "private")
+
+        // Founder-adjustable album caps; counted as active items plus open upload slots.
+        const val PROFILE_ALBUM_PHOTO_CAP = 6
+        const val PRIVATE_ALBUM_PHOTO_CAP = 12
         private val MEDIA_TYPES = setOf("image", "video")
         private val CONTENT_TYPES =
             mapOf(
