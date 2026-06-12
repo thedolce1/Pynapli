@@ -5,6 +5,8 @@ import com.pynapli.shared.network.MediaByteUploader
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
+import com.pynapli.shared.network.dto.MediaAlbumItemDto
+import com.pynapli.shared.network.dto.ReorderMediaAlbumRequestDto
 
 class ApiMediaAlbumsRepository(
     private val apiClient: PynapliApiClient,
@@ -12,22 +14,36 @@ class ApiMediaAlbumsRepository(
 ) : MediaAlbumsRepository {
     override suspend fun loadAlbum(kind: MediaAlbumKindUi): AppResult<List<MediaAlbumItemUi>> =
         when (val result = apiClient.listMediaAlbum(kind.apiValue)) {
-            is AppResult.Success ->
-                AppResult.Success(
-                    result.value.items.map { item ->
-                        item.toUi(
-                            kind = kind,
-                            // Prefer the server-issued (signed, in production) URL; fall back to the
-                            // local-dev content endpoint when the server did not supply one.
-                            mediaUrl =
-                                item.mediaAsset.contentUrl
-                                    ?: apiClient.mediaAssetContentUrl(item.mediaAsset.mediaAssetId),
-                        )
-                    },
-                )
-
+            is AppResult.Success -> AppResult.Success(result.value.items.map { item -> item.toUiWithUrl(kind) })
             is AppResult.Failure -> result
         }
+
+    override suspend fun deleteMedia(assetId: String): AppResult<Unit> = apiClient.deleteMediaAsset(assetId)
+
+    override suspend fun reorderAlbum(
+        kind: MediaAlbumKindUi,
+        orderedAssetIds: List<String>,
+    ): AppResult<List<MediaAlbumItemUi>> =
+        when (
+            val result =
+                apiClient.reorderMediaAlbum(
+                    albumKind = kind.apiValue,
+                    request = ReorderMediaAlbumRequestDto(orderedAssetIds = orderedAssetIds),
+                )
+        ) {
+            is AppResult.Success -> AppResult.Success(result.value.items.map { item -> item.toUiWithUrl(kind) })
+            is AppResult.Failure -> result
+        }
+
+    private fun MediaAlbumItemDto.toUiWithUrl(kind: MediaAlbumKindUi): MediaAlbumItemUi =
+        toUi(
+            kind = kind,
+            // Prefer the server-issued (signed, in production) URL; fall back to the
+            // local-dev content endpoint when the server did not supply one.
+            mediaUrl =
+                mediaAsset.contentUrl
+                    ?: apiClient.mediaAssetContentUrl(mediaAsset.mediaAssetId),
+        )
 
     override suspend fun uploadMedia(
         kind: MediaAlbumKindUi,

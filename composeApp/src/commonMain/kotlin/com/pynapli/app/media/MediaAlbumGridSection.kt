@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,25 +15,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,25 +49,49 @@ internal fun LazyGridScope.albumSection(
     kind: MediaAlbumKindUi,
     items: List<MediaAlbumItemUi>,
     isUploading: Boolean,
+    canAdd: Boolean,
+    capCountLabel: String,
+    busyAssetIds: Set<String>,
+    canRetryUpload: Boolean,
     onAdd: () -> Unit,
+    onRetryUpload: () -> Unit,
+    onRequestDelete: (MediaAlbumItemUi) -> Unit,
+    onMove: (MediaAlbumItemUi, MediaMoveDirection) -> Unit,
 ) {
     item(span = { GridItemSpan(maxLineSpan) }) {
         AlbumSectionHeader(kind = kind)
+    }
+
+    if (canRetryUpload && !isUploading) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            RetryUploadRow(kind = kind, onRetry = onRetryUpload)
+        }
     }
 
     item {
         AddMediaTile(
             kind = kind,
             isUploading = isUploading,
+            canAdd = canAdd,
+            capCountLabel = capCountLabel,
             onClick = onAdd,
         )
     }
 
-    items(
+    itemsIndexed(
         items = items,
-        key = { item -> item.mediaAssetId },
-    ) { item ->
-        MediaTile(item = item)
+        key = { _, item -> item.mediaAssetId },
+    ) { index, item ->
+        MediaTile(
+            item = item,
+            isPrimary = kind == MediaAlbumKindUi.Profile && index == 0,
+            isBusy = item.mediaAssetId in busyAssetIds,
+            canMoveEarlier = index > 0,
+            canMoveLater = index < items.lastIndex,
+            onMoveEarlier = { onMove(item, MediaMoveDirection.Up) },
+            onMoveLater = { onMove(item, MediaMoveDirection.Down) },
+            onDelete = { onRequestDelete(item) },
+        )
     }
 
     if (items.isEmpty() && !isUploading) {
@@ -120,9 +150,33 @@ private fun AlbumSectionHeader(kind: MediaAlbumKindUi) {
 }
 
 @Composable
+private fun RetryUploadRow(
+    kind: MediaAlbumKindUi,
+    onRetry: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Last upload didn't finish.",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onRetry) {
+            Text(text = "Retry ${kind.title.lowercase()} upload")
+        }
+    }
+}
+
+@Composable
 private fun AddMediaTile(
     kind: MediaAlbumKindUi,
     isUploading: Boolean,
+    canAdd: Boolean,
+    capCountLabel: String,
     onClick: () -> Unit,
 ) {
     Box(
@@ -133,49 +187,81 @@ private fun AddMediaTile(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                .clickable(enabled = !isUploading, onClick = onClick),
+                .clickable(enabled = !isUploading && canAdd, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        if (isUploading) {
-            CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(26.dp),
-            )
-        } else {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center,
+        when {
+            isUploading ->
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(26.dp),
+                )
+
+            !canAdd ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = "Add ${kind.title}",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(22.dp),
+                    Text(
+                        text = capCountLabel,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        text = "Album full",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
-                Text(
-                    text = "Add",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
+
+            else ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Add ${kind.title}",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Text(
+                        text = "Add",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        text = capCountLabel,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
         }
     }
 }
 
 @Composable
-private fun MediaTile(item: MediaAlbumItemUi) {
+private fun MediaTile(
+    item: MediaAlbumItemUi,
+    isPrimary: Boolean,
+    isBusy: Boolean,
+    canMoveEarlier: Boolean,
+    canMoveLater: Boolean,
+    onMoveEarlier: () -> Unit,
+    onMoveLater: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val tone = item.mediaAssetId.tone()
-    val mediaUrl = item.mediaUrl
     Box(
         modifier =
             Modifier
@@ -185,16 +271,16 @@ private fun MediaTile(item: MediaAlbumItemUi) {
                 .background(tone)
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
     ) {
-        if (mediaUrl != null && item.mediaType == "image") {
+        if (item.isOwnerVisibleImage) {
             AsyncImage(
-                model = mediaUrl,
+                model = item.mediaUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
             Icon(
-                imageVector = if (item.processingStatus == "pending_upload") Icons.Filled.CloudUpload else Icons.Filled.CheckCircle,
+                imageVector = if (item.isUploadFailed) Icons.Filled.CloudUpload else Icons.Filled.CheckCircle,
                 contentDescription = null,
                 tint = Color.White.copy(alpha = 0.86f),
                 modifier =
@@ -203,6 +289,43 @@ private fun MediaTile(item: MediaAlbumItemUi) {
                         .size(28.dp),
             )
         }
+
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            if (isPrimary) {
+                Text(
+                    text = "Main",
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(100.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                )
+            }
+            item.statusBadgeLabel?.let { badge ->
+                Text(
+                    text = badge,
+                    color = if (item.isUploadFailed || item.moderationStatus == "removed") MaterialTheme.colorScheme.error else Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                )
+            }
+        }
+
         if (item.albumKind == MediaAlbumKindUi.Private) {
             Box(
                 modifier =
@@ -221,18 +344,76 @@ private fun MediaTile(item: MediaAlbumItemUi) {
                 )
             }
         }
-        Text(
-            text = item.statusLabel,
-            color = Color.White,
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier =
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.54f))
-                    .padding(horizontal = 7.dp, vertical = 6.dp),
+
+        if (isBusy) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        } else {
+            Row(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (canMoveEarlier) {
+                    TileActionButton(
+                        icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = "Move earlier",
+                        onClick = onMoveEarlier,
+                    )
+                }
+                if (canMoveLater) {
+                    TileActionButton(
+                        icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "Move later",
+                        onClick = onMoveLater,
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                TileActionButton(
+                    icon = Icons.Filled.Delete,
+                    contentDescription = "Delete photo",
+                    onClick = onDelete,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TileActionButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .padding(2.dp)
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(17.dp),
         )
     }
 }

@@ -7,12 +7,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
@@ -30,6 +36,7 @@ fun MediaAlbumsScreen(
     val state by stateHolder.state.collectAsState()
     val profileLinksState by profileLinksStateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
+    var pendingDelete by remember { mutableStateOf<MediaAlbumItemUi?>(null) }
 
     LaunchedEffect(stateHolder) {
         stateHolder.load()
@@ -45,6 +52,13 @@ fun MediaAlbumsScreen(
         onBack = onBack,
         onAddProfile = { onPickMedia(MediaAlbumKindUi.Profile) },
         onAddPrivate = { onPickMedia(MediaAlbumKindUi.Private) },
+        onRetryUpload = { kind ->
+            scope.launch { stateHolder.retryUpload(kind) }
+        },
+        onRequestDelete = { item -> pendingDelete = item },
+        onMove = { item, direction ->
+            scope.launch { stateHolder.moveMedia(item.albumKind, item.mediaAssetId, direction) }
+        },
         onRevokeGrant = { granteeUserId ->
             scope.launch { stateHolder.revokeGrant(granteeUserId) }
         },
@@ -61,6 +75,49 @@ fun MediaAlbumsScreen(
         onClearProfileLinkMessage = profileLinksStateHolder::clearMessages,
         modifier = modifier,
     )
+
+    pendingDelete?.let { item ->
+        DeleteMediaDialog(
+            item = item,
+            onConfirm = {
+                pendingDelete = null
+                scope.launch { stateHolder.deleteMedia(item.albumKind, item.mediaAssetId) }
+            },
+            onDismiss = { pendingDelete = null },
+        )
+    }
+}
+
+@Composable
+private fun DeleteMediaDialog(
+    item: MediaAlbumItemUi,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "Delete this photo?") },
+        text = {
+            Text(
+                text =
+                    if (item.albumKind == MediaAlbumKindUi.Private) {
+                        "It will be removed from your private album for everyone you've shared it with."
+                    } else {
+                        "It will be removed from your profile."
+                    },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = "Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Cancel")
+            }
+        },
+    )
 }
 
 @Composable
@@ -70,6 +127,9 @@ private fun MediaAlbumsContent(
     onBack: () -> Unit,
     onAddProfile: () -> Unit,
     onAddPrivate: () -> Unit,
+    onRetryUpload: (MediaAlbumKindUi) -> Unit,
+    onRequestDelete: (MediaAlbumItemUi) -> Unit,
+    onMove: (MediaAlbumItemUi, MediaMoveDirection) -> Unit,
     onRevokeGrant: (String) -> Unit,
     onAcceptProfileLink: (String) -> Unit,
     onDeclineProfileLink: (String) -> Unit,
@@ -119,14 +179,28 @@ private fun MediaAlbumsContent(
             kind = MediaAlbumKindUi.Profile,
             items = state.profileItems,
             isUploading = state.isUploadingProfile,
+            canAdd = state.canAddMore(MediaAlbumKindUi.Profile),
+            capCountLabel = state.capCountLabel(MediaAlbumKindUi.Profile),
+            busyAssetIds = state.busyAssetIds,
+            canRetryUpload = MediaAlbumKindUi.Profile in state.retryableUploadKinds,
             onAdd = onAddProfile,
+            onRetryUpload = { onRetryUpload(MediaAlbumKindUi.Profile) },
+            onRequestDelete = onRequestDelete,
+            onMove = onMove,
         )
 
         albumSection(
             kind = MediaAlbumKindUi.Private,
             items = state.privateItems,
             isUploading = state.isUploadingPrivate,
+            canAdd = state.canAddMore(MediaAlbumKindUi.Private),
+            capCountLabel = state.capCountLabel(MediaAlbumKindUi.Private),
+            busyAssetIds = state.busyAssetIds,
+            canRetryUpload = MediaAlbumKindUi.Private in state.retryableUploadKinds,
             onAdd = onAddPrivate,
+            onRetryUpload = { onRetryUpload(MediaAlbumKindUi.Private) },
+            onRequestDelete = onRequestDelete,
+            onMove = onMove,
         )
 
         privateGrantsSection(

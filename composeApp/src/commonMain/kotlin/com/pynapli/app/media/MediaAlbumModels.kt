@@ -2,17 +2,65 @@ package com.pynapli.app.media
 
 import androidx.compose.runtime.Immutable
 
+/**
+ * Client mirror of the server album caps (`MediaService.PROFILE_ALBUM_PHOTO_CAP` /
+ * `PRIVATE_ALBUM_PHOTO_CAP`). The server owns enforcement — exceeding a cap returns
+ * MEDIA_ALBUM_PHOTO_CAP_EXCEEDED (400) — these constants only drive the disabled
+ * Add tile and the "6 of 6" affordance.
+ */
+object MediaAlbumCaps {
+    const val PROFILE_PHOTO_CAP = 6
+    const val PRIVATE_PHOTO_CAP = 12
+
+    fun capFor(kind: MediaAlbumKindUi): Int =
+        when (kind) {
+            MediaAlbumKindUi.Profile -> PROFILE_PHOTO_CAP
+            MediaAlbumKindUi.Private -> PRIVATE_PHOTO_CAP
+        }
+}
+
 @Immutable
 data class MediaAlbumsUiState(
     val profileItems: List<MediaAlbumItemUi> = emptyList(),
     val privateItems: List<MediaAlbumItemUi> = emptyList(),
     val privateGrants: List<MediaPrivateGrantUi> = emptyList(),
     val revokingGranteeIds: Set<String> = emptySet(),
+    // Per-item busy tracking for delete/reorder, mirroring the revokingGranteeIds pattern.
+    val busyAssetIds: Set<String> = emptySet(),
+    // Album kinds whose last upload failed with the picked media retained for retryUpload().
+    val retryableUploadKinds: Set<MediaAlbumKindUi> = emptySet(),
     val isLoading: Boolean = false,
     val isUploadingProfile: Boolean = false,
     val isUploadingPrivate: Boolean = false,
     val errorMessage: String? = null,
-)
+) {
+    fun itemsFor(kind: MediaAlbumKindUi): List<MediaAlbumItemUi> =
+        when (kind) {
+            MediaAlbumKindUi.Profile -> profileItems
+            MediaAlbumKindUi.Private -> privateItems
+        }
+
+    /** Owner listings only contain active items, so the count vs cap is just the list size. */
+    fun canAddMore(kind: MediaAlbumKindUi): Boolean = itemsFor(kind).size < MediaAlbumCaps.capFor(kind)
+
+    /** e.g. "4 of 6"; rendered on the Add tile when the album is at cap. */
+    fun capCountLabel(kind: MediaAlbumKindUi): String = "${itemsFor(kind).size} of ${MediaAlbumCaps.capFor(kind)}"
+
+    fun isUploading(kind: MediaAlbumKindUi): Boolean =
+        when (kind) {
+            MediaAlbumKindUi.Profile -> isUploadingProfile
+            MediaAlbumKindUi.Private -> isUploadingPrivate
+        }
+
+    internal fun withItems(
+        kind: MediaAlbumKindUi,
+        items: List<MediaAlbumItemUi>,
+    ): MediaAlbumsUiState =
+        when (kind) {
+            MediaAlbumKindUi.Profile -> copy(profileItems = items)
+            MediaAlbumKindUi.Private -> copy(privateItems = items)
+        }
+}
 
 @Immutable
 data class MediaPrivateGrantUi(
@@ -38,15 +86,21 @@ data class MediaAlbumItemUi(
     val mediaUrl: String? = null,
     val uploadUrl: String? = null,
 ) {
-    val statusLabel: String
+    /** Upload never finished (or processing failed); the bytes never became a visible photo. */
+    val isUploadFailed: Boolean
+        get() = processingStatus in failedProcessingStatuses
+
+    /**
+     * Owner-facing moderation/processing badge derived from the server's nested asset states.
+     * Null means approved-and-ready: no badge. The server owns visibility; this is presentation only.
+     */
+    val statusBadgeLabel: String?
         get() =
-            when (processingStatus) {
-                "pending_upload" -> "Pending upload"
-                "uploaded" -> "Uploaded"
-                "processing" -> "Processing"
-                "ready" -> "Ready"
-                "failed" -> "Failed"
-                else -> processingStatus.replace('_', ' ').replaceFirstChar { it.uppercase() }
+            when {
+                isUploadFailed -> "Upload failed"
+                moderationStatus == "removed" -> "Not approved"
+                moderationStatus == "pending" || moderationStatus == "held" -> "In review — only you can see this"
+                else -> null
             }
 
     val isOwnerVisibleImage: Boolean
@@ -72,6 +126,12 @@ enum class MediaAlbumKindUi(
     Private("private", "Private album"),
 }
 
+/** Direction for one-step reordering of an album item. */
+enum class MediaMoveDirection {
+    Up,
+    Down,
+}
+
 class PickedMediaForUpload(
     val contentType: String,
     val byteSize: Long,
@@ -89,5 +149,6 @@ private fun List<MediaAlbumItemUi>.primaryOwnerVisibleImageUrl(): String? =
         .firstOrNull()
         ?.mediaUrl
 
+private val failedProcessingStatuses = setOf("pending_upload", "failed")
 private val ownerVisibleProcessingStatuses = setOf("uploaded", "processing", "ready")
 private val ownerVisibleModerationStatuses = setOf("pending", "approved")

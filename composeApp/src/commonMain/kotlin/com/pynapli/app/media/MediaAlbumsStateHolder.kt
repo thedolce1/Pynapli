@@ -14,6 +14,10 @@ class MediaAlbumsStateHolder(
     private val _state = MutableStateFlow(MediaAlbumsUiState())
     val state: StateFlow<MediaAlbumsUiState> = _state.asStateFlow()
 
+    // Retained picked bytes for failed uploads, keyed by album kind; kept out of
+    // MediaAlbumsUiState so the UI state stays cheap to copy and compare.
+    private val retryableUploadMedia = mutableMapOf<MediaAlbumKindUi, PickedMediaForUpload>()
+
     val primaryOwnerProfilePhotoUrl: String?
         get() = state.value.primaryOwnerProfilePhotoUrl()
 
@@ -115,6 +119,7 @@ class MediaAlbumsStateHolder(
         when (val result = repository.uploadMedia(kind, media)) {
             is AppResult.Success -> {
                 val item = result.value
+                retryableUploadMedia.remove(kind)
                 _state.update { existing ->
                     val profileItems =
                         if (kind == MediaAlbumKindUi.Profile) {
@@ -131,6 +136,7 @@ class MediaAlbumsStateHolder(
                     existing.copy(
                         profileItems = profileItems,
                         privateItems = privateItems,
+                        retryableUploadKinds = existing.retryableUploadKinds - kind,
                         isUploadingProfile = if (kind == MediaAlbumKindUi.Profile) false else existing.isUploadingProfile,
                         isUploadingPrivate = if (kind == MediaAlbumKindUi.Private) false else existing.isUploadingPrivate,
                         errorMessage = null,
@@ -139,14 +145,88 @@ class MediaAlbumsStateHolder(
             }
 
             is AppResult.Failure -> {
+                retryableUploadMedia[kind] = media
                 _state.update { existing ->
                     existing.copy(
+                        retryableUploadKinds = existing.retryableUploadKinds + kind,
                         isUploadingProfile = if (kind == MediaAlbumKindUi.Profile) false else existing.isUploadingProfile,
                         isUploadingPrivate = if (kind == MediaAlbumKindUi.Private) false else existing.isUploadingPrivate,
                         errorMessage = result.error.message,
                     )
                 }
             }
+        }
+    }
+
+    suspend fun retryUpload(kind: MediaAlbumKindUi) {
+        val media = retryableUploadMedia[kind] ?: return
+        uploadPickedMedia(kind, media)
+    }
+
+    suspend fun deleteMedia(
+        kind: MediaAlbumKindUi,
+        assetId: String,
+    ) {
+        if (assetId in state.value.busyAssetIds) return
+
+        _state.update { existing ->
+            existing.copy(busyAssetIds = existing.busyAssetIds + assetId, errorMessage = null)
+        }
+
+        when (val result = repository.deleteMedia(assetId)) {
+            is AppResult.Success ->
+                _state.update { existing ->
+                    existing
+                        .withItems(kind, existing.itemsFor(kind).filterNot { it.mediaAssetId == assetId })
+                        .copy(busyAssetIds = existing.busyAssetIds - assetId)
+                }
+
+            is AppResult.Failure ->
+                _state.update { existing ->
+                    existing.copy(
+                        busyAssetIds = existing.busyAssetIds - assetId,
+                        errorMessage = result.error.message,
+                    )
+                }
+        }
+    }
+
+    suspend fun moveMedia(
+        kind: MediaAlbumKindUi,
+        assetId: String,
+        direction: MediaMoveDirection,
+    ) {
+        val items = state.value.itemsFor(kind)
+        // The server validates the reorder request against the exact active set, so
+        // hold off while any item in this album is still mid delete/reorder.
+        if (items.any { it.mediaAssetId in state.value.busyAssetIds }) return
+
+        val fromIndex = items.indexOfFirst { it.mediaAssetId == assetId }
+        if (fromIndex < 0) return
+        val toIndex = if (direction == MediaMoveDirection.Up) fromIndex - 1 else fromIndex + 1
+        if (toIndex !in items.indices) return
+
+        val reordered = items.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+
+        _state.update { existing ->
+            existing.copy(busyAssetIds = existing.busyAssetIds + assetId, errorMessage = null)
+        }
+
+        when (val result = repository.reorderAlbum(kind, reordered.map { it.mediaAssetId })) {
+            is AppResult.Success ->
+                _state.update { existing ->
+                    existing
+                        .withItems(kind, result.value)
+                        .copy(busyAssetIds = existing.busyAssetIds - assetId)
+                }
+
+            is AppResult.Failure ->
+                _state.update { existing ->
+                    existing.copy(
+                        busyAssetIds = existing.busyAssetIds - assetId,
+                        errorMessage = result.error.message,
+                    )
+                }
         }
     }
 
