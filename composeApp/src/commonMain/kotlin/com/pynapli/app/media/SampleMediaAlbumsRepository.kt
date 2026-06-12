@@ -11,6 +11,26 @@ class SampleMediaAlbumsRepository : MediaAlbumsRepository {
 
     override suspend fun loadAlbum(kind: MediaAlbumKindUi): AppResult<List<MediaAlbumItemUi>> = AppResult.Success(itemsByKind[kind].orEmpty())
 
+    override suspend fun deleteMedia(assetId: String): AppResult<Unit> {
+        itemsByKind.keys.forEach { kind ->
+            itemsByKind[kind] = itemsByKind[kind].orEmpty().filterNot { it.mediaAssetId == assetId }
+        }
+        return AppResult.Success(Unit)
+    }
+
+    override suspend fun reorderAlbum(
+        kind: MediaAlbumKindUi,
+        orderedAssetIds: List<String>,
+    ): AppResult<List<MediaAlbumItemUi>> {
+        val byId = itemsByKind[kind].orEmpty().associateBy { it.mediaAssetId }
+        val reordered =
+            orderedAssetIds
+                .mapNotNull(byId::get)
+                .mapIndexed { index, item -> item.copy(sortOrder = index) }
+        itemsByKind[kind] = reordered
+        return AppResult.Success(reordered)
+    }
+
     override suspend fun loadPrivateGrants(): AppResult<List<MediaPrivateGrantUi>> = AppResult.Success(grants.toList())
 
     override suspend fun revokePrivateGrant(granteeUserId: String): AppResult<Unit> {

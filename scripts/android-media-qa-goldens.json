@@ -1,0 +1,60 @@
+{
+  "description": "Loose text + luminance signatures for the Android media albums management QA. Floors are intentionally generous: dark-first UI, emulator GPU variance.",
+  "stages": {
+    "albumsInitial": {
+      "requiredTexts": ["Profile photos", "Private album", "Add", "3 of 6", "Main"],
+      "forbiddenTexts": ["Something went wrong"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 10
+      }
+    },
+    "albumsReordered": {
+      "requiredTexts": ["Profile photos", "3 of 6", "Main"],
+      "forbiddenTexts": ["Something went wrong"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 10
+      }
+    },
+    "deleteConfirm": {
+      "requiredTexts": ["Delete this photo?", "Delete", "Cancel"],
+      "forbiddenTexts": ["Something went wrong"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.04,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 6
+      }
+    },
+    "albumsAfterDelete": {
+      "requiredTexts": ["Profile photos", "2 of 6", "Main"],
+      "forbiddenTexts": ["Something went wrong", "Delete this photo?"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 8
+      }
+    },
+    "albumsAtCap": {
+      "requiredTexts": ["Profile photos", "6 of 6", "Album full"],
+      "forbiddenTexts": ["Something went wrong"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 10
+      }
+    }
+  }
+}

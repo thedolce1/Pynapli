@@ -471,6 +471,13 @@ private class FakeApiClient(
 
     override suspend fun listMediaAlbum(albumKind: String): AppResult<MediaAlbumItemsResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun deleteMediaAsset(mediaAssetId: String): AppResult<Unit> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun reorderMediaAlbum(
+        albumKind: String,
+        request: com.pynapli.shared.network.dto.ReorderMediaAlbumRequestDto,
+    ): AppResult<MediaAlbumItemsResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun listUserPrivateAlbum(ownerUserId: String): AppResult<MediaAlbumItemsResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun listOwnPrivateAlbumGrants(): AppResult<MediaAlbumGrantsResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
