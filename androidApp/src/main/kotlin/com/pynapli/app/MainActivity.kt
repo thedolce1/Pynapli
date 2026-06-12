@@ -267,7 +267,9 @@ class MainActivity : ComponentActivity() {
             if (pickedMedia == null) {
                 appGraph.mediaAlbumsStateHolder.showError("Could not read the selected image.")
             } else {
-                appGraph.mediaAlbumsStateHolder.uploadPickedMedia(kind, pickedMedia)
+                // Profile photos pause at the shared square-crop step; private album
+                // media uploads as picked.
+                appGraph.mediaAlbumsStateHolder.stagePickedMedia(kind, pickedMedia)
             }
         }
     }

@@ -163,6 +163,31 @@ class MediaAlbumsStateHolder(
         uploadPickedMedia(kind, media)
     }
 
+    /**
+     * Entry point for freshly picked media. Profile photos pause at the square crop
+     * step (the crop overlay watches [MediaAlbumsUiState.pendingCropMedia]); private
+     * album media uploads as picked — crop is a profile-only affordance.
+     */
+    suspend fun stagePickedMedia(
+        kind: MediaAlbumKindUi,
+        media: PickedMediaForUpload,
+    ) {
+        when (kind) {
+            MediaAlbumKindUi.Profile -> _state.update { it.copy(pendingCropMedia = media) }
+            MediaAlbumKindUi.Private -> uploadPickedMedia(kind, media)
+        }
+    }
+
+    /** Uploads the crop result (or the original media when cropping is unavailable). */
+    suspend fun confirmPendingCrop(media: PickedMediaForUpload) {
+        _state.update { it.copy(pendingCropMedia = null) }
+        uploadPickedMedia(MediaAlbumKindUi.Profile, media)
+    }
+
+    fun cancelPendingCrop() {
+        _state.update { it.copy(pendingCropMedia = null) }
+    }
+
     suspend fun deleteMedia(
         kind: MediaAlbumKindUi,
         assetId: String,

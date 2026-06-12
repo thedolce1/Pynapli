@@ -45,6 +45,28 @@
         "minColorBucketCount": 8
       }
     },
+    "cropScreen": {
+      "requiredTexts": ["Crop photo", "Use photo", "Cancel", "Drag to reposition"],
+      "forbiddenTexts": ["Something went wrong"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.08,
+        "maxBrightRatio": 0.7,
+        "minColorBucketCount": 8
+      }
+    },
+    "albumsAfterCrop": {
+      "requiredTexts": ["Profile photos", "3 of 6", "Main"],
+      "forbiddenTexts": ["Something went wrong", "Crop photo"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 10
+      }
+    },
     "albumsAtCap": {
       "requiredTexts": ["Profile photos", "6 of 6", "Album full"],
       "forbiddenTexts": ["Something went wrong"],
