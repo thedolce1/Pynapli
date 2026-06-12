@@ -12,6 +12,7 @@ param(
     [switch]$KeepAppData,
     [string]$GoldenSpec = "scripts\android-media-qa-goldens.json",
     [switch]$SkipGoldenAssertions,
+    [switch]$SkipCropStage,
     [int]$WaitSeconds = 35
 )
 
@@ -476,6 +477,49 @@ function Assert-ApiSuccess {
     }
 }
 
+function Get-Sha256Base64Url {
+    param([string]$Value)
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value.Trim().ToLowerInvariant())
+        $hash = $sha.ComputeHash($bytes)
+        return [Convert]::ToBase64String($hash).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    } finally {
+        $sha.Dispose()
+    }
+}
+
+function Invoke-DevSql {
+    param([string]$Sql)
+
+    $docker = Get-Command docker -ErrorAction SilentlyContinue
+    if ($null -eq $docker) {
+        throw "Docker was not found; Android Media QA needs direct dev database cleanup."
+    }
+
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -v ON_ERROR_STOP=1 -c $Sql 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dev SQL failed: $output"
+    }
+    return ($output | Out-String).Trim()
+}
+
+function Reset-StaleUploadSlots {
+    # An interrupted prior run can leave open pending_upload slots, which the server
+    # deliberately counts toward the album cap. Purge them so the cap stage's API
+    # top-up is deterministic (production relies on MediaCleanupWorker for this).
+    $viewerHash = Get-Sha256Base64Url $ViewerEmail
+    $sql = @"
+DELETE FROM media_assets
+WHERE owner_user_id = (SELECT id FROM users WHERE email_hash = '$viewerHash')
+  AND processing_status = 'pending_upload'
+  AND deleted_at IS NULL;
+"@
+    Invoke-DevSql $sql | Out-Null
+    Write-Host "[ok] Cleared stale pending upload slots for $ViewerEmail"
+}
+
 function Get-ViewerSession {
     $login = Invoke-PynapliJson -Method POST -Path "/v1/auth/email/login" -Body @{
         email = $ViewerEmail
@@ -594,6 +638,71 @@ function Set-ProfileAlbumPhotoCount {
     return $assetIds
 }
 
+function New-CropSourcePngBytes {
+    # Landscape 1200x800 on purpose: a square crop of it can be at most 800px, so the
+    # server-side dimension assertion proves the crop actually ran.
+    $width = 1200
+    $height = 800
+    $bitmap = [System.Drawing.Bitmap]::new($width, $height)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $stream = [System.IO.MemoryStream]::new()
+    try {
+        $graphics.Clear([System.Drawing.ColorTranslator]::FromHtml("#C2563A"))
+        $rightHalf = [System.Drawing.SolidBrush]::new([System.Drawing.ColorTranslator]::FromHtml("#2E6E62"))
+        $graphics.FillRectangle($rightHalf, 600, 0, 600, 800)
+        $rightHalf.Dispose()
+        $font = [System.Drawing.Font]::new([System.Drawing.FontFamily]::GenericSansSerif, 180, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+        $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::White)
+        $format = [System.Drawing.StringFormat]::new()
+        $format.Alignment = [System.Drawing.StringAlignment]::Center
+        $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+        $graphics.DrawString("QA", $font, $brush, [System.Drawing.RectangleF]::new(0, 0, $width, $height), $format)
+        $format.Dispose()
+        $brush.Dispose()
+        $font.Dispose()
+        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        return $stream.ToArray()
+    } finally {
+        $stream.Dispose()
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+}
+
+function Push-CropSourceImage {
+    $localPath = Join-Path $script:ArtifactDir "crop-source.png"
+    [byte[]]$bytes = New-CropSourcePngBytes
+    [System.IO.File]::WriteAllBytes($localPath, $bytes)
+    Invoke-Adb @("push", $localPath, "/sdcard/Pictures/pynapli-qa-crop.png") | Out-Null
+    Invoke-Adb @(
+        "shell", "am", "broadcast",
+        "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+        "-d", "file:///sdcard/Pictures/pynapli-qa-crop.png"
+    ) | Out-Null
+    Start-Sleep -Milliseconds 1500
+    Write-Host "[ok] Pushed crop source image into the emulator gallery"
+}
+
+function Tap-FirstPickerPhoto {
+    param([int]$TimeoutSeconds = 30)
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $xml = Dump-Ui "wait_picker"
+        foreach ($node in Get-UiTextNodes $xml) {
+            $desc = $node.GetAttribute("content-desc")
+            if ($desc -like "Photo taken*" -or $desc -like "*pynapli-qa-crop*") {
+                Tap-Node $node "Picker photo ($desc)"
+                return
+            }
+        }
+        Start-Sleep -Milliseconds 600
+    } while ((Get-Date) -lt $deadline)
+
+    $visible = (Get-VisibleTexts $xml) -join " | "
+    throw "Timed out waiting for a photo in the system picker. Visible text: $visible"
+}
+
 function Start-App {
     $component = "$PackageName/$LaunchActivity"
     Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
@@ -678,6 +787,7 @@ if (-not $SkipSeed) {
 
 Write-Host "[step] Topping the dev profile album up to 3 photos via the API"
 $session = Get-ViewerSession
+Reset-StaleUploadSlots
 $initialAssetIds = Set-ProfileAlbumPhotoCount -AccessToken $session.accessToken -TargetCount 3
 
 if (-not $SkipBuild) {
@@ -749,14 +859,64 @@ Write-Host "[ok] Server confirmed the delete: $($orderAfterDelete.Count) photos 
 $afterDeleteXml = Capture-MediaStage "albumsAfterDelete" "04_albums_after_delete"
 Assert-TextPresent $afterDeleteXml "2 of 6" "Albums after delete"
 
-# Stage 4: top the album up to the cap via the API and confirm the disabled Add tile.
+# Stage 4: pick a real gallery photo through the system picker, crop it, and verify
+# the uploaded asset is the square JPEG the crop produced (side <= the 800px source
+# height proves a pass-through upload would fail this stage).
+$stageNames = @("albumsInitial", "albumsReordered", "deleteConfirm", "albumsAfterDelete")
+if (-not $SkipCropStage) {
+    Write-Host "[step] Crop stage: picking the pushed gallery photo"
+    Push-CropSourceImage
+    $preCropIds = Get-ProfileAlbumAssetIds $session.accessToken
+
+    Tap-ExactText "Add"
+    Tap-FirstPickerPhoto
+    Wait-ForAnyText @("Crop photo") 30 | Out-Null
+
+    # One pan across the square exercises the gesture path before confirming.
+    Invoke-Adb @("shell", "input", "swipe", "540", "1150", "760", "1150", "260") | Out-Null
+    Start-Sleep -Milliseconds 600
+    $cropScreenXml = Capture-MediaStage "cropScreen" "05_crop_screen"
+    Assert-TextPresent $cropScreenXml "Use photo" "Crop screen"
+
+    Tap-ExactText "Use photo"
+
+    $deadline = (Get-Date).AddSeconds(40)
+    $newIds = @()
+    do {
+        Start-Sleep -Milliseconds 1500
+        $ids = Get-ProfileAlbumAssetIds $session.accessToken
+        $newIds = @($ids | Where-Object { $preCropIds -notcontains $_ })
+    } while ($newIds.Count -eq 0 -and (Get-Date) -lt $deadline)
+    if ($newIds.Count -eq 0) { throw "Cropped upload never appeared in the profile album." }
+
+    $album = Invoke-PynapliJson -Method GET -Path "/v1/media/albums/profile" -AccessToken $session.accessToken
+    Assert-ApiSuccess $album "List profile album after crop"
+    $cropAsset = @($album.Body.items | Where-Object { $_.mediaAsset.mediaAssetId -eq $newIds[0] })[0].mediaAsset
+    if ($cropAsset.pixelWidth -ne $cropAsset.pixelHeight) {
+        throw "Cropped upload is not square: $($cropAsset.pixelWidth)x$($cropAsset.pixelHeight)."
+    }
+    if ([int]$cropAsset.pixelWidth -gt 800) {
+        throw "Cropped side $($cropAsset.pixelWidth) exceeds the 800px source height - the crop did not happen."
+    }
+    if ($cropAsset.contentType -ne "image/jpeg") {
+        throw "Cropped upload contentType was $($cropAsset.contentType); expected image/jpeg."
+    }
+    Write-Host "[ok] Server confirmed the cropped upload: $($cropAsset.pixelWidth)x$($cropAsset.pixelHeight) JPEG"
+
+    $afterCropXml = Capture-MediaStage "albumsAfterCrop" "06_albums_after_crop"
+    Assert-TextPresent $afterCropXml "3 of 6" "Albums after crop"
+    $stageNames += @("cropScreen", "albumsAfterCrop")
+}
+
+# Stage 5: top the album up to the cap via the API and confirm the disabled Add tile.
 Set-ProfileAlbumPhotoCount -AccessToken $session.accessToken -TargetCount 6 | Out-Null
 Tap-Text "Back"
 Tap-Text "Photos and private album"
 Wait-ForAnyText @("Profile photos") 45 | Out-Null
-$capXml = Capture-MediaStage "albumsAtCap" "05_albums_at_cap"
+$capXml = Capture-MediaStage "albumsAtCap" "07_albums_at_cap"
 Assert-TextPresent $capXml "6 of 6" "Albums at cap"
 Assert-TextPresent $capXml "Album full" "Albums at cap"
+$stageNames += "albumsAtCap"
 
 # Leave the dev album in the usual 3-photo state for other QA surfaces.
 Set-ProfileAlbumPhotoCount -AccessToken $session.accessToken -TargetCount 3 | Out-Null
@@ -767,5 +927,5 @@ Write-Summary @{
     artifactDir = $script:ArtifactDir
     screenshots = $script:Screenshots
     visualSignatures = $script:VisualSignatures
-    stages = @("albumsInitial", "albumsReordered", "deleteConfirm", "albumsAfterDelete", "albumsAtCap")
+    stages = $stageNames
 }

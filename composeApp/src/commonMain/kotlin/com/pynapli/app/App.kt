@@ -32,6 +32,7 @@ import com.pynapli.app.location.LocationStateHolder
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.MediaAlbumsScreen
 import com.pynapli.app.media.MediaAlbumsStateHolder
+import com.pynapli.app.media.PhotoCropOverlay
 import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
 import com.pynapli.app.messages.MessageProfilePeekSheet
 import com.pynapli.app.messages.MessagesScreen
@@ -171,6 +172,9 @@ fun PynapliApp(
                 onPickPhoto = { onPickMediaForAlbum(MediaAlbumKindUi.Profile) },
                 onFinishProfile = { scope.launch { onboardingStateHolder.finishProfile() } },
             )
+            // Composed after the stepper so the crop step draws above it; the main
+            // shell hosts its own copy because this branch returns early.
+            PhotoCropOverlay(mediaAlbumsStateHolder, scope)
             return@PynapliTheme
         }
 
@@ -310,6 +314,10 @@ fun PynapliApp(
             conversationActions = conversationActions,
             scope = scope,
         )
+
+        // Square-crop step for a freshly picked profile photo; composed last so it
+        // draws above the shell and every overlay.
+        PhotoCropOverlay(mediaAlbumsStateHolder, scope)
     }
 }
 

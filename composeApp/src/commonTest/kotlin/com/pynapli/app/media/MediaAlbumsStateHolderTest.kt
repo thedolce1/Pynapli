@@ -241,7 +241,77 @@ class MediaAlbumsStateHolderTest {
             stateHolder.retryUpload(MediaAlbumKindUi.Profile)
             assertEquals(2, repository.uploadRequests.size)
         }
+
+    @Test
+    fun stagedProfilePickPausesAtCropWithoutUploading() =
+        runBlocking {
+            val repository = FakeMediaAlbumsRepository()
+            val stateHolder = MediaAlbumsStateHolder(repository)
+            val media = testPickedMedia()
+
+            stateHolder.stagePickedMedia(MediaAlbumKindUi.Profile, media)
+
+            assertSame(media, stateHolder.state.value.pendingCropMedia)
+            assertTrue(repository.uploadRequests.isEmpty())
+        }
+
+    @Test
+    fun stagedPrivatePickUploadsImmediatelyWithoutCrop() =
+        runBlocking {
+            val repository =
+                FakeMediaAlbumsRepository().apply {
+                    uploadResults += AppResult.Success(testMediaItem(MediaAlbumKindUi.Private, "asset-new", 0))
+                }
+            val stateHolder = MediaAlbumsStateHolder(repository)
+            val media = testPickedMedia()
+
+            stateHolder.stagePickedMedia(MediaAlbumKindUi.Private, media)
+
+            assertNull(stateHolder.state.value.pendingCropMedia)
+            assertSame(media, repository.uploadRequests.single().second)
+            assertEquals(MediaAlbumKindUi.Private, repository.uploadRequests.single().first)
+        }
+
+    @Test
+    fun confirmPendingCropUploadsTheCropResultAndClears() =
+        runBlocking {
+            val repository =
+                FakeMediaAlbumsRepository().apply {
+                    uploadResults += AppResult.Success(testMediaItem(MediaAlbumKindUi.Profile, "asset-new", 0))
+                }
+            val stateHolder = MediaAlbumsStateHolder(repository)
+            stateHolder.stagePickedMedia(MediaAlbumKindUi.Profile, testPickedMedia())
+            val cropped = testPickedMedia()
+
+            stateHolder.confirmPendingCrop(cropped)
+
+            assertNull(stateHolder.state.value.pendingCropMedia)
+            assertSame(cropped, repository.uploadRequests.single().second)
+            assertEquals(MediaAlbumKindUi.Profile, repository.uploadRequests.single().first)
+        }
+
+    @Test
+    fun cancelPendingCropClearsWithoutUploading() =
+        runBlocking {
+            val repository = FakeMediaAlbumsRepository()
+            val stateHolder = MediaAlbumsStateHolder(repository)
+            stateHolder.stagePickedMedia(MediaAlbumKindUi.Profile, testPickedMedia())
+
+            stateHolder.cancelPendingCrop()
+
+            assertNull(stateHolder.state.value.pendingCropMedia)
+            assertTrue(repository.uploadRequests.isEmpty())
+        }
 }
+
+private fun testPickedMedia(): PickedMediaForUpload =
+    PickedMediaForUpload(
+        contentType = "image/jpeg",
+        byteSize = 3,
+        pixelWidth = 900,
+        pixelHeight = 1200,
+        bytes = byteArrayOf(1, 2, 3),
+    )
 
 private class FakeMediaAlbumsRepository(
     private val profileItems: List<MediaAlbumItemUi> = listOf(testMediaItem(MediaAlbumKindUi.Profile, "profile-1", 0)),
