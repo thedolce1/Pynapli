@@ -77,7 +77,26 @@ interface MessagingRepository {
         userId: UUID,
         conversationId: UUID,
     ): Boolean
+
+    /**
+     * Sets the caller's disappearing-messages timer ([expirySeconds] null = off) and records a
+     * system message describing the change, in one transaction. Returns the refreshed detail
+     * (with the new effective timer) and the system message, or null if the caller is not an
+     * active participant.
+     */
+    suspend fun setConversationExpiry(
+        userId: UUID,
+        conversationId: UUID,
+        expirySeconds: Int?,
+        systemMessageBody: String,
+        messageIdFactory: () -> UUID = UUID::randomUUID,
+    ): SetConversationExpiryResult?
 }
+
+data class SetConversationExpiryResult(
+    val conversation: ConversationRecord,
+    val systemMessage: MessageRecord,
+)
 
 data class ConversationRecord(
     val conversationId: UUID,
@@ -88,6 +107,10 @@ data class ConversationRecord(
     val unreadCount: Int = 0,
     val updatedAt: Instant,
     val partnerInvite: PartnerChatInviteRecord? = null,
+    // The viewer's own disappearing-messages timer (null = off).
+    val viewerExpirySeconds: Int? = null,
+    // Strictest non-null timer across active participants — what messages actually expire on.
+    val effectiveExpirySeconds: Int? = null,
 )
 
 data class ConversationParticipantRecord(
@@ -96,6 +119,7 @@ data class ConversationParticipantRecord(
     val online: Boolean = false,
     val status: String = "active",
     val invitedByUserId: UUID? = null,
+    val messageExpirySeconds: Int? = null,
 )
 
 data class ConversationDetailRecord(
@@ -123,6 +147,7 @@ data class MessageRecord(
     val status: String,
     val deliveryStatus: String,
     val deletedAt: Instant? = null,
+    val messageType: String = "user",
 )
 
 data class PartnerChatInviteRecord(

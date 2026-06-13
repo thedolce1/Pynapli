@@ -20,6 +20,7 @@ import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
 import com.pynapli.shared.network.dto.MESSAGE_IDEMPOTENCY_KEY_MAX_LENGTH
 import com.pynapli.shared.network.dto.MessageDeltaType
 import com.pynapli.shared.network.dto.MessageDto
+import com.pynapli.shared.network.dto.MessageExpiryOption
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import org.slf4j.LoggerFactory
@@ -458,6 +459,55 @@ class MessagingService(
             )
         }
     }
+
+    suspend fun setConversationExpiry(
+        userId: UUID,
+        conversationIdText: String,
+        expirySeconds: Int?,
+    ): ConversationDto {
+        val conversationId = conversationIdText.toUuidOrThrow()
+        // Normalize 0/negative to "off"; otherwise must be one of the allowed durations.
+        val normalized = expirySeconds?.takeIf { it > 0 }
+        if (normalized != null && normalized !in MessageExpiryOption.ALL) {
+            throw MessagingException("INVALID_MESSAGE_EXPIRY")
+        }
+        if (!featureAccess.messageExpiryAllowed(userId)) {
+            throw MessagingException("ENTITLEMENT_REQUIRED")
+        }
+
+        val result =
+            repository.setConversationExpiry(
+                userId = userId,
+                conversationId = conversationId,
+                expirySeconds = normalized,
+                systemMessageBody = expirySystemMessageBody(normalized),
+            ) ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+
+        publishMessageDelta(
+            type = MessageDeltaType.MESSAGE_CREATED,
+            conversationId = conversationId,
+            participants = result.conversation.participants,
+            messageId = result.systemMessage.messageId,
+            statuses = activeParticipantStatuses,
+        )
+        publishMessageDelta(
+            type = MessageDeltaType.CONVERSATION_UPDATED,
+            conversationId = conversationId,
+            participants = result.conversation.participants,
+            statuses = activeParticipantStatuses,
+        )
+        return dtoMapper.toDto(result.conversation, userId)
+    }
+
+    private fun expirySystemMessageBody(expirySeconds: Int?): String =
+        when (expirySeconds) {
+            null -> "Disappearing messages turned off."
+            MessageExpiryOption.OneHour -> "Disappearing messages set to 1 hour."
+            MessageExpiryOption.OneDay -> "Disappearing messages set to 24 hours."
+            MessageExpiryOption.OneWeek -> "Disappearing messages set to 7 days."
+            MessageExpiryOption.ThirtyDays -> "Disappearing messages set to 30 days."
+            else -> "Disappearing messages updated."
+        }
 
     private suspend fun publishMessageDelta(
         type: String,

@@ -37,6 +37,7 @@ fun ConversationSheet(
     onDeclineInvite: () -> Unit = {},
     onLeaveConversation: () -> Unit = {},
     onDeleteMessage: (String) -> Unit = {},
+    onSetExpiry: (Int?) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (!state.visible) return
@@ -74,6 +75,7 @@ fun ConversationSheet(
                 onDeclineInvite = onDeclineInvite,
                 onLeaveConversation = onLeaveConversation,
                 onDeleteMessage = onDeleteMessage,
+                onSetExpiry = onSetExpiry,
                 fillAvailableHeight = false,
                 showLeaveAction = true,
                 showPartnerStatusFeedback = true,
@@ -97,6 +99,7 @@ fun ConversationScreen(
     onDeclineInvite: () -> Unit = {},
     onLeaveConversation: () -> Unit = {},
     onDeleteMessage: (String) -> Unit = {},
+    onSetExpiry: (Int?) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -128,6 +131,7 @@ fun ConversationScreen(
             onDeclineInvite = onDeclineInvite,
             onLeaveConversation = onLeaveConversation,
             onDeleteMessage = onDeleteMessage,
+            onSetExpiry = onSetExpiry,
             fillAvailableHeight = true,
             showLeaveAction = false,
             showPartnerStatusFeedback = false,
@@ -148,6 +152,7 @@ private fun ColumnScope.ConversationContent(
     onDeclineInvite: () -> Unit,
     onLeaveConversation: () -> Unit,
     onDeleteMessage: (String) -> Unit,
+    onSetExpiry: (Int?) -> Unit,
     fillAvailableHeight: Boolean,
     showLeaveAction: Boolean,
     showPartnerStatusFeedback: Boolean,
@@ -197,6 +202,14 @@ private fun ColumnScope.ConversationContent(
                     showLeaveAction = showLeaveAction,
                     showPartnerStatusFeedback = showPartnerStatusFeedback,
                 )
+                if (!state.isViewerInvited) {
+                    ConversationExpiryControl(
+                        effectiveExpirySeconds = state.effectiveExpirySeconds,
+                        viewerExpirySeconds = state.viewerExpirySeconds,
+                        isSettingExpiry = state.isSettingExpiry,
+                        onSetExpiry = onSetExpiry,
+                    )
+                }
                 MessageList(
                     messages = state.detail?.messages.orEmpty(),
                     viewerUserId = state.viewerUserId,

@@ -158,6 +158,7 @@ Current implementation note:
 - Typing deltas are lightweight UI hints only: `POST /v1/messages/threads/{threadId}/typing` is Select-only, emits only to active Select recipients, includes actor display metadata, and expires client-side after a short TTL.
 - Read receipt visibility is server-masked. Free viewers never see `read`; paid senders see `read` only when every active recipient participant is Social/Select eligible.
 - Connected Android Messages QA covers login -> Messages -> open thread -> send -> delete placeholder -> third-party partner approval -> invited-partner acceptance with structural screenshot/golden checks.
+- Message expiry (2026-06-13): each participant sets their own disappearing-messages timer (1h/24h/7d/30d or off) via `PUT /v1/messages/threads/{threadId}/expiry`, Social/Select-gated (`ENTITLEMENT_REQUIRED`); the effective timer is the strictest non-null across active participants (`message_expiry_seconds` on `conversation_participants`, V75). Every change records a centered `message_type='system'` notice both participants see. Expired `user` messages are filtered from delivery (the message-page + last-message SQL) but rows are retained for moderation/legal; system notices never expire from view.
 
 ## Implementation Checklist
 
@@ -173,7 +174,7 @@ Current implementation note:
 - [x] Select typing indicators use recipient-scoped realtime hints.
 - [x] Block archives/disables thread.
 - [x] Report is separate from block.
-- [ ] Message expiry exists only with clear system messaging.
+- [x] Message expiry exists only with clear system messaging.
 - [x] Server owns message permissions.
 - [x] Message/conversation realtime refetches canonical HTTP state.
 

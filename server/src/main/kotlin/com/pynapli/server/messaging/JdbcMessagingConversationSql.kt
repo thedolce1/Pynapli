@@ -5,6 +5,14 @@ import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * Hides expired `user` messages from delivery while leaving the rows intact for moderation/legal
+ * retention (MESSAGING_SPEC). The two bind params are the same effective expiry-seconds value (null
+ * = no timer). System messages never expire from view, so the timer-change history stays legible.
+ */
+private const val EXPIRY_FILTER =
+    "(? IS NULL OR message_type <> 'user' OR created_at > now() - make_interval(secs => ?))"
+
 internal fun Connection.listConversationIds(
     userId: UUID,
     limit: Int,
@@ -120,6 +128,7 @@ internal fun Connection.insertDirectConversation(
 internal fun Connection.loadLastMessage(
     userId: UUID,
     conversationId: UUID,
+    effectiveExpirySeconds: Int?,
 ): MessageRecord? =
     prepareStatement(
         """
@@ -130,6 +139,7 @@ internal fun Connection.loadLastMessage(
                created_at,
                moderation_status,
                deleted_at,
+               message_type,
                CASE
                    WHEN deleted_at IS NOT NULL THEN 'deleted'
                    WHEN moderation_status = 'held' THEN 'held_for_review'
@@ -163,6 +173,7 @@ internal fun Connection.loadLastMessage(
                   )
               )
           )
+          AND $EXPIRY_FILTER
         ORDER BY created_at DESC, id DESC
         LIMIT 1
         """.trimIndent(),
@@ -171,6 +182,8 @@ internal fun Connection.loadLastMessage(
         statement.setObject(2, conversationId)
         statement.setObject(3, userId)
         statement.setObject(4, userId)
+        statement.setObject(5, effectiveExpirySeconds, java.sql.Types.INTEGER)
+        statement.setObject(6, effectiveExpirySeconds, java.sql.Types.INTEGER)
         statement.executeQuery().use { rs ->
             if (rs.next()) rs.toMessageRecord(deliveryStatus = rs.getString("delivery_status")) else null
         }
@@ -181,6 +194,7 @@ internal fun Connection.loadMessages(
     conversationId: UUID,
     limit: Int,
     before: MessagePageCursor?,
+    effectiveExpirySeconds: Int?,
 ): MessagePageRecord {
     val pageSize = limit.coerceIn(1, 100)
     val query =
@@ -194,6 +208,7 @@ internal fun Connection.loadMessages(
                        created_at,
                        moderation_status,
                        deleted_at,
+                       message_type,
                        CASE
                            WHEN deleted_at IS NOT NULL THEN 'deleted'
                            WHEN moderation_status = 'held' THEN 'held_for_review'
@@ -227,6 +242,7 @@ internal fun Connection.loadMessages(
                           )
                       )
                   )
+                  AND $EXPIRY_FILTER
                 """.trimIndent(),
             )
             append('\n')
@@ -256,6 +272,9 @@ internal fun Connection.loadMessages(
             statement.setObject(index++, conversationId)
             statement.setObject(index++, userId)
             statement.setObject(index++, userId)
+            // EXPIRY_FILTER references the effective seconds twice.
+            statement.setObject(index++, effectiveExpirySeconds, java.sql.Types.INTEGER)
+            statement.setObject(index++, effectiveExpirySeconds, java.sql.Types.INTEGER)
             if (before != null) {
                 val beforeTimestamp = Timestamp.from(before.createdAt)
                 statement.setTimestamp(index++, beforeTimestamp)
@@ -415,23 +434,34 @@ internal fun Connection.loadConversation(
                         displayName = rs.getString("display_name"),
                         status = rs.getString("invitation_status"),
                         invitedByUserId = rs.getObject("invited_by_user_id", UUID::class.java),
+                        messageExpirySeconds = rs.getInt("message_expiry_seconds").takeUnless { rs.wasNull() },
                     ),
                 )
             }
         }
     }
 
+    val effectiveExpirySeconds = participants.effectiveExpirySeconds()
     return ConversationRecord(
         conversationId = conversationId,
         kind = kind ?: return null,
         origin = origin ?: return null,
         participants = participants,
-        lastMessage = loadLastMessage(userId, conversationId),
+        lastMessage = loadLastMessage(userId, conversationId, effectiveExpirySeconds),
         unreadCount = loadUnreadCount(userId, conversationId),
         updatedAt = updatedAt ?: return null,
         partnerInvite = loadOpenPartnerInvite(conversationId, forUpdate = false),
+        viewerExpirySeconds = participants.firstOrNull { it.userId == userId }?.messageExpirySeconds,
+        effectiveExpirySeconds = effectiveExpirySeconds,
     )
 }
+
+/** Strictest (smallest) non-null timer across active participants; null when all are off. */
+internal fun List<ConversationParticipantRecord>.effectiveExpirySeconds(): Int? =
+    asSequence()
+        .filter { it.status == "active" }
+        .mapNotNull { it.messageExpirySeconds }
+        .minOrNull()
 
 private val CONVERSATION_QUERY =
     """
@@ -441,6 +471,7 @@ private val CONVERSATION_QUERY =
            cp.user_id AS participant_user_id,
            cp.invitation_status,
            cp.invited_by_user_id,
+           cp.message_expiry_seconds,
            COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name
     FROM conversations c
     JOIN conversation_participants viewer_cp

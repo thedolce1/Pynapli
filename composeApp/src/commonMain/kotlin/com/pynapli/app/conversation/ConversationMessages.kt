@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pynapli.shared.network.dto.MessageDto
+import com.pynapli.shared.network.dto.MessageType
 
 @Composable
 internal fun MessageList(
@@ -87,17 +88,43 @@ internal fun MessageList(
                     DayDivider(label = dateKey.messageDateLabel())
                     lastDateKey = dateKey
                 }
-                val mine = message.senderUserId == viewerUserId
-                MessageBubble(
-                    message = message,
-                    mine = mine,
-                    senderDisplayName = senderDisplayNames[message.senderUserId],
-                    showDeliveryStatus = mine && message.messageId == lastOwnMessageId,
-                    isDeleting = message.messageId in isDeletingMessageIds,
-                    onDeleteMessage = onDeleteMessage,
-                )
+                if (message.messageType == MessageType.SYSTEM) {
+                    SystemNotice(text = message.body)
+                } else {
+                    val mine = message.senderUserId == viewerUserId
+                    MessageBubble(
+                        message = message,
+                        mine = mine,
+                        senderDisplayName = senderDisplayNames[message.senderUserId],
+                        showDeliveryStatus = mine && message.messageId == lastOwnMessageId,
+                        isDeleting = message.messageId in isDeletingMessageIds,
+                        onDeleteMessage = onDeleteMessage,
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun SystemNotice(text: String) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = text,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium,
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(100.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+        )
     }
 }
 

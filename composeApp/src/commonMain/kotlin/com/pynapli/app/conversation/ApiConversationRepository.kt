@@ -9,6 +9,7 @@ import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
+import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
 
 class ApiConversationRepository(
     private val apiClient: PynapliApiClient,
@@ -45,6 +46,11 @@ class ApiConversationRepository(
         conversationId: String,
         isTyping: Boolean,
     ): AppResult<Unit> = apiClient.sendTypingIndicator(conversationId, SendTypingIndicatorRequestDto(isTyping = isTyping))
+
+    override suspend fun setConversationExpiry(
+        conversationId: String,
+        expirySeconds: Int?,
+    ): AppResult<ConversationDto> = apiClient.setConversationExpiry(conversationId, SetConversationExpiryRequestDto(expirySeconds = expirySeconds))
 
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> = apiClient.deleteMessage(messageId)
 

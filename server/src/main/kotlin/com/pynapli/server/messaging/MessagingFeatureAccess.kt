@@ -20,4 +20,10 @@ internal class MessagingFeatureAccess(
         val tier = subscriptionService?.getPolicy(userId)?.tier ?: SubscriptionTier.SELECT
         return tier == SubscriptionTier.SELECT
     }
+
+    // MESSAGING_SPEC: message expiry is a Social/Select premium privacy control.
+    suspend fun messageExpiryAllowed(userId: UUID): Boolean {
+        val tier = subscriptionService?.getPolicy(userId)?.tier ?: SubscriptionTier.SELECT
+        return tier == SubscriptionTier.SOCIAL || tier == SubscriptionTier.SELECT
+    }
 }

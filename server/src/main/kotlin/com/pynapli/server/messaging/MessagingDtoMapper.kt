@@ -55,6 +55,8 @@ internal class MessagingDtoMapper(
             unreadCount = record.unreadCount,
             updatedAt = record.updatedAt.toString(),
             partnerInvite = record.partnerInvite?.toDto(),
+            messageExpirySeconds = record.viewerExpirySeconds,
+            effectiveMessageExpirySeconds = record.effectiveExpirySeconds,
         )
 
     suspend fun toDto(
@@ -78,6 +80,7 @@ internal class MessagingDtoMapper(
                     readReceiptCache = readReceiptCache,
                 ),
             deletedAt = record.deletedAt?.toString(),
+            messageType = record.messageType,
         )
 
     suspend fun toDto(

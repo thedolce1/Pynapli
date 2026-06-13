@@ -115,6 +115,27 @@ class SampleConversationRepository : ConversationRepository {
         isTyping: Boolean,
     ): AppResult<Unit> = AppResult.Success(Unit)
 
+    override suspend fun setConversationExpiry(
+        conversationId: String,
+        expirySeconds: Int?,
+    ): AppResult<ConversationDto> =
+        AppResult.Success(
+            ConversationDto(
+                conversationId = conversationId,
+                kind = "direct",
+                origin = "grid",
+                participants =
+                    listOf(
+                        ConversationParticipantDto("viewer", "You"),
+                        ConversationParticipantDto("target", "Maya"),
+                    ),
+                unreadCount = 0,
+                updatedAt = "2026-04-24T18:00:00Z",
+                messageExpirySeconds = expirySeconds,
+                effectiveMessageExpirySeconds = expirySeconds,
+            ),
+        )
+
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
         AppResult.Success(
             MessageDto(

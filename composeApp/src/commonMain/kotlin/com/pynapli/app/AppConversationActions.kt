@@ -25,6 +25,7 @@ internal data class ConversationActions(
     val onDeclineInvite: () -> Unit,
     val onLeave: () -> Unit,
     val onDeleteMessage: (String) -> Unit,
+    val onSetExpiry: (Int?) -> Unit,
 )
 
 @Composable
@@ -76,6 +77,12 @@ internal fun rememberConversationActions(
             onDeleteMessage = { messageId ->
                 scope.launch {
                     conversationStateHolder.deleteMessage(messageId)
+                    messagesStateHolder.refreshSilently()
+                }
+            },
+            onSetExpiry = { expirySeconds ->
+                scope.launch {
+                    conversationStateHolder.setExpiry(expirySeconds)
                     messagesStateHolder.refreshSilently()
                 }
             },

@@ -516,6 +516,38 @@ class ConversationStateHolder(
         }
     }
 
+    suspend fun setExpiry(expirySeconds: Int?) {
+        val current = state.value
+        if (current.isSettingExpiry || current.isOpening) return
+        if (current.viewerExpirySeconds == expirySeconds) return
+        val conversationId = current.detail?.conversation?.conversationId ?: return
+
+        _state.update { it.copy(isSettingExpiry = true, partnerInviteFeedback = null, errorMessage = null) }
+
+        when (val result = repository.setConversationExpiry(conversationId, expirySeconds)) {
+            is AppResult.Success -> {
+                _state.update { existing ->
+                    existing.copy(
+                        detail = existing.detail?.copy(conversation = result.value),
+                        isSettingExpiry = false,
+                        errorMessage = null,
+                    )
+                }
+                // Pull the server-authored system message into the thread.
+                refreshOpenConversation()
+            }
+
+            is AppResult.Failure -> {
+                _state.update { existing ->
+                    existing.copy(
+                        isSettingExpiry = false,
+                        errorMessage = result.error.message,
+                    )
+                }
+            }
+        }
+    }
+
     suspend fun sendDraft() {
         val current = state.value
         if (current.isSending || current.isViewerInvited) return

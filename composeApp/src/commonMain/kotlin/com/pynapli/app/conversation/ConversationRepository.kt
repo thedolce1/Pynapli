@@ -30,6 +30,11 @@ interface ConversationRepository {
         isTyping: Boolean,
     ): AppResult<Unit>
 
+    suspend fun setConversationExpiry(
+        conversationId: String,
+        expirySeconds: Int?,
+    ): AppResult<ConversationDto>
+
     suspend fun deleteMessage(messageId: String): AppResult<MessageDto>
 
     suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto>

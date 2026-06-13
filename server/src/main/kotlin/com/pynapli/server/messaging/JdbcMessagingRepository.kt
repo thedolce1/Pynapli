@@ -88,7 +88,7 @@ class JdbcMessagingRepository(
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
                 val conversation = connection.loadConversation(userId, conversationId) ?: return@withContext null
-                val page = connection.loadMessages(userId, conversationId, limit, before)
+                val page = connection.loadMessages(userId, conversationId, limit, before, conversation.effectiveExpirySeconds)
                 ConversationDetailRecord(
                     conversation = conversation,
                     messages = page.messages,
@@ -334,7 +334,14 @@ class JdbcMessagingRepository(
                     connection.acceptOpenPartnerInvite(conversationId, userId, invite, userRole)
                     val detail =
                         connection.loadConversation(userId, conversationId)?.let { conversation ->
-                            val page = connection.loadMessages(userId, conversationId, DEFAULT_MESSAGE_PAGE_LIMIT, before = null)
+                            val page =
+                                connection.loadMessages(
+                                    userId,
+                                    conversationId,
+                                    DEFAULT_MESSAGE_PAGE_LIMIT,
+                                    before = null,
+                                    conversation.effectiveExpirySeconds,
+                                )
                             ConversationDetailRecord(
                                 conversation = conversation,
                                 messages = page.messages,
@@ -394,6 +401,41 @@ class JdbcMessagingRepository(
                 val updated = connection.leaveConversationParticipant(userId, conversationId)
                 if (updated > 0) connection.touchConversation(conversationId)
                 updated > 0
+            }
+        }
+
+    override suspend fun setConversationExpiry(
+        userId: UUID,
+        conversationId: UUID,
+        expirySeconds: Int?,
+        systemMessageBody: String,
+        messageIdFactory: () -> UUID,
+    ): SetConversationExpiryResult? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val previousAutoCommit = connection.autoCommit
+                connection.autoCommit = false
+                try {
+                    val updated = connection.setParticipantExpiry(userId, conversationId, expirySeconds)
+                    if (updated == 0) {
+                        connection.rollback()
+                        return@withContext null
+                    }
+                    val systemMessage = connection.insertSystemMessage(messageIdFactory(), userId, conversationId, systemMessageBody)
+                    connection.touchConversation(conversationId)
+                    val conversation =
+                        connection.loadConversation(userId, conversationId) ?: run {
+                            connection.rollback()
+                            return@withContext null
+                        }
+                    connection.commit()
+                    SetConversationExpiryResult(conversation = conversation, systemMessage = systemMessage)
+                } catch (error: Throwable) {
+                    connection.rollback()
+                    throw error
+                } finally {
+                    connection.autoCommit = previousAutoCommit
+                }
             }
         }
 

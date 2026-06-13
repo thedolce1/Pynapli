@@ -5,6 +5,7 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
+import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -13,6 +14,7 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 
@@ -65,6 +67,13 @@ fun Application.configureMessagingRoutes(
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 val request = call.receive<SendMessageRequestDto>()
                 call.respond(messagingService.sendMessage(user.id, threadId, request))
+            }
+
+            put("/{threadId}/expiry") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+                val request = call.receive<SetConversationExpiryRequestDto>()
+                call.respond(messagingService.setConversationExpiry(user.id, threadId, request.expirySeconds))
             }
 
             post("/{threadId}/typing") {
