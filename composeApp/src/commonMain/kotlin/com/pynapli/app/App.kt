@@ -76,6 +76,7 @@ fun PynapliApp(
     onboardingStateHolder: OnboardingStateHolder? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
+    onPickConversationPhoto: () -> Unit = {},
     onSetDiscreetIcon: (Boolean) -> Unit = {},
     devLoginCredentials: DevLoginCredentials? = null,
 ) {
@@ -264,6 +265,7 @@ fun PynapliApp(
                     onOpenPsync = psyncStateHolder?.let { { psyncVisible = true } },
                     onUseCurrentLocation = onUseCurrentLocation,
                     onPickMediaForAlbum = onPickMediaForAlbum,
+                    onPickConversationPhoto = onPickConversationPhoto,
                     onSetDiscreetIcon = onSetDiscreetIcon,
                 )
 
@@ -312,6 +314,7 @@ fun PynapliApp(
             authStateHolder = authStateHolder,
             appSettingsStateHolder = appSettingsStateHolder,
             conversationActions = conversationActions,
+            onPickConversationPhoto = onPickConversationPhoto,
             scope = scope,
         )
 

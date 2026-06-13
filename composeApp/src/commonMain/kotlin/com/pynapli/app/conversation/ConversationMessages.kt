@@ -1,9 +1,12 @@
 package com.pynapli.app.conversation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -13,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,9 +28,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.MessageType
 
@@ -38,8 +44,10 @@ internal fun MessageList(
     hasOlderMessages: Boolean,
     isLoadingOlder: Boolean,
     isDeletingMessageIds: Set<String>,
+    revealingMessageIds: Set<String>,
     onLoadOlder: () -> Unit,
     onDeleteMessage: (String) -> Unit,
+    onRevealMedia: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
@@ -98,9 +106,60 @@ internal fun MessageList(
                         senderDisplayName = senderDisplayNames[message.senderUserId],
                         showDeliveryStatus = mine && message.messageId == lastOwnMessageId,
                         isDeleting = message.messageId in isDeletingMessageIds,
+                        isRevealing = message.messageId in revealingMessageIds,
                         onDeleteMessage = onDeleteMessage,
+                        onRevealMedia = onRevealMedia,
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageMedia(
+    message: MessageDto,
+    isRevealing: Boolean,
+    onRevealMedia: (String) -> Unit,
+) {
+    val url = message.mediaUrl
+    Box(
+        modifier =
+            Modifier
+                .widthIn(max = 240.dp)
+                .size(width = 240.dp, height = 240.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .then(if (url == null) Modifier.clickable(enabled = !isRevealing) { onRevealMedia(message.messageId) } else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (url != null) {
+            AsyncImage(
+                model = url,
+                contentDescription = "Photo",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (isRevealing) {
+                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+                Text(
+                    text = if (isRevealing) "Loading…" else "Tap to reveal photo",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                )
             }
         }
     }
@@ -154,10 +213,13 @@ private fun MessageBubble(
     senderDisplayName: String?,
     showDeliveryStatus: Boolean,
     isDeleting: Boolean,
+    isRevealing: Boolean,
     onDeleteMessage: (String) -> Unit,
+    onRevealMedia: (String) -> Unit,
 ) {
     val deleted = message.deletedAt != null
     val timeLabel = message.createdAt.messageTimeLabel()
+    val hasMedia = message.mediaAssetId != null && !deleted
     val bubbleText =
         if (deleted) {
             "${if (mine) "You" else senderDisplayName ?: "Someone"} deleted a message"
@@ -186,18 +248,29 @@ private fun MessageBubble(
                 Modifier
                     .fillMaxWidth(0.86f),
             horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(
-                text = bubbleText,
-                color = textColor,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier =
-                    Modifier
-                        .widthIn(max = 312.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(bubbleColor)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-            )
+            if (hasMedia) {
+                MessageMedia(
+                    message = message,
+                    isRevealing = isRevealing,
+                    onRevealMedia = onRevealMedia,
+                )
+            }
+            // Skip the empty caption bubble for photo-only messages.
+            if (!hasMedia || bubbleText.isNotEmpty()) {
+                Text(
+                    text = bubbleText,
+                    color = textColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier =
+                        Modifier
+                            .widthIn(max = 312.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(bubbleColor)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+            }
             Row(
                 modifier = Modifier.padding(top = 2.dp, end = if (mine) 2.dp else 0.dp, start = if (mine) 0.dp else 2.dp),
                 verticalAlignment = Alignment.CenterVertically,

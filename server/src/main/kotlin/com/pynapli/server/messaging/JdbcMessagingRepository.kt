@@ -404,6 +404,53 @@ class JdbcMessagingRepository(
             }
         }
 
+    override suspend fun sendMediaMessage(
+        userId: UUID,
+        conversationId: UUID,
+        mediaAssetId: UUID,
+        contentType: String?,
+        pixelWidth: Int?,
+        pixelHeight: Int?,
+        body: String,
+        clientIdempotencyKey: String?,
+        messageIdFactory: () -> UUID,
+    ): MessageRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                if (!connection.isActiveParticipant(userId, conversationId)) return@withContext null
+                clientIdempotencyKey?.let { key ->
+                    connection.findMessageByIdempotencyKey(userId, conversationId, key)?.let { return@withContext it }
+                }
+                val message =
+                    connection.insertMediaMessage(
+                        messageId = messageIdFactory(),
+                        userId = userId,
+                        conversationId = conversationId,
+                        mediaAssetId = mediaAssetId,
+                        contentType = contentType,
+                        pixelWidth = pixelWidth,
+                        pixelHeight = pixelHeight,
+                        body = body,
+                        clientIdempotencyKey = clientIdempotencyKey,
+                    )
+                connection.touchConversationAt(conversationId, message.createdAt)
+                message
+            }
+        }
+
+    override suspend fun recordMediaReveal(
+        userId: UUID,
+        messageId: UUID,
+    ): MessageRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val message = connection.loadMessageForViewer(userId, messageId) ?: return@withContext null
+                if (message.mediaAssetId == null) return@withContext null
+                connection.insertMessageMediaReveal(userId, messageId)
+                connection.loadMessageForViewer(userId, messageId)
+            }
+        }
+
     override suspend fun setConversationExpiry(
         userId: UUID,
         conversationId: UUID,

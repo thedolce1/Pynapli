@@ -638,6 +638,85 @@ class MessagingRepositoryIntegrationTest {
             assertEquals(86_400, viewerView.conversation.viewerExpirySeconds)
         }
 
+    @Test
+    fun mediaMessageIsRevealedPerRecipientAndSenderAlwaysSeesOwn() =
+        runBlocking {
+            val sender = UUID.fromString("00000000-0000-0000-0000-0000000008c1")
+            val recipient = UUID.fromString("00000000-0000-0000-0000-0000000008c2")
+            dataSource.insertUserWithProfile(sender, "Sender")
+            dataSource.insertUserWithProfile(recipient, "Recipient")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(sender, recipient, origin = "grid")!!
+            val assetId = UUID.fromString("00000000-0000-0000-0000-0000000008c9")
+            dataSource.insertMessageMediaAsset(sender, assetId)
+
+            val sent =
+                repository.sendMediaMessage(
+                    userId = sender,
+                    conversationId = conversation.conversationId,
+                    mediaAssetId = assetId,
+                    contentType = "image/jpeg",
+                    pixelWidth = 800,
+                    pixelHeight = 600,
+                    body = "",
+                )!!
+            assertEquals(assetId, sent.mediaAssetId)
+            assertEquals(true, sent.mediaRevealedByViewer) // sender always sees own
+
+            // Recipient sees the photo attached but not yet revealed.
+            val beforeReveal =
+                repository
+                    .getConversationDetail(recipient, conversation.conversationId, limit = 10)!!
+                    .messages
+                    .single { it.mediaAssetId != null }
+            assertEquals(assetId, beforeReveal.mediaAssetId)
+            assertEquals("image/jpeg", beforeReveal.mediaContentType)
+            assertEquals(false, beforeReveal.mediaRevealedByViewer)
+
+            // After revealing, the recipient's ledger row flips them to revealed; a re-query confirms it.
+            val revealed = repository.recordMediaReveal(recipient, sent.messageId)!!
+            assertEquals(true, revealed.mediaRevealedByViewer)
+            val recipientAfter =
+                repository
+                    .getConversationDetail(recipient, conversation.conversationId, limit = 10)!!
+                    .messages
+                    .single { it.mediaAssetId != null }
+            assertEquals(true, recipientAfter.mediaRevealedByViewer)
+            // The sender has no reveal row — repository-level mediaRevealedByViewer is false; the
+            // DTO mapper grants the sender their own media URL (covered in MessagingServiceTest).
+            val senderView =
+                repository
+                    .getConversationDetail(sender, conversation.conversationId, limit = 10)!!
+                    .messages
+                    .single { it.mediaAssetId != null }
+            assertEquals(false, senderView.mediaRevealedByViewer)
+        }
+
+    private fun DataSource.insertMessageMediaAsset(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO media_assets (
+                        id, owner_user_id, media_type, storage_provider, storage_bucket,
+                        storage_object_key, content_type, byte_size, intended_album_kind,
+                        processing_status, moderation_status
+                    )
+                    VALUES (?, ?, 'image', 'local', 'pynapli-dev', ?, 'image/jpeg', 1024, 'message', 'ready', 'approved')
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, mediaAssetId)
+                    statement.setObject(2, ownerUserId)
+                    statement.setString(3, "media/$mediaAssetId")
+                    statement.executeUpdate()
+                }
+        }
+    }
+
     private fun DataSource.ageUserMessages(
         conversationId: UUID,
         interval: String,

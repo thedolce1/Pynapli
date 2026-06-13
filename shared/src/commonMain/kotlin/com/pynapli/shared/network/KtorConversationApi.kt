@@ -6,7 +6,10 @@ import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
 import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
+import com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MessageDto
+import com.pynapli.shared.network.dto.MessageMediaUploadSlotDto
+import com.pynapli.shared.network.dto.SendMediaMessageRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
@@ -106,6 +109,39 @@ internal class KtorConversationApi(
                     bearerAuth(token)
                     contentType(ContentType.Application.Json)
                     setBody(request)
+                }.toAppResult(support.json)
+        }
+
+    override suspend fun createMessageMediaUploadSlot(
+        request: CreateMessageMediaUploadRequestDto,
+    ): AppResult<MessageMediaUploadSlotDto> =
+        support.authenticated { token ->
+            support.httpClient
+                .post(support.endpoint("/v1/messages/media/uploads")) {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }.toAppResult(support.json)
+        }
+
+    override suspend fun sendMediaMessage(
+        conversationId: String,
+        request: SendMediaMessageRequestDto,
+    ): AppResult<MessageDto> =
+        support.authenticated { token ->
+            support.httpClient
+                .post(support.endpoint("/v1/messages/threads/$conversationId/media")) {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }.toAppResult(support.json)
+        }
+
+    override suspend fun revealMessageMedia(messageId: String): AppResult<MessageDto> =
+        support.authenticated { token ->
+            support.httpClient
+                .post(support.endpoint("/v1/messages/$messageId/reveal")) {
+                    bearerAuth(token)
                 }.toAppResult(support.json)
         }
 

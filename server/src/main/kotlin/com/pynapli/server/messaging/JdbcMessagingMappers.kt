@@ -14,6 +14,7 @@ internal fun ResultSet.toMessageRecord(deliveryStatus: String): MessageRecord =
         deliveryStatus = deliveryStatus,
         deletedAt = getTimestamp("deleted_at")?.toInstant(),
         messageType = getString("message_type"),
+        mediaAssetId = getObject("media_asset_id", UUID::class.java),
     )
 
 internal fun MessageRecord.toCursor(): MessagePageCursor =

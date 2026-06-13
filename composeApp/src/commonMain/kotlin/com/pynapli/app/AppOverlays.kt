@@ -47,6 +47,7 @@ internal fun PynapliOverlays(
     authStateHolder: AuthStateHolder,
     appSettingsStateHolder: AppSettingsStateHolder,
     conversationActions: ConversationActions,
+    onPickConversationPhoto: () -> Unit,
     scope: CoroutineScope,
 ) {
     val authState by authStateHolder.state.collectAsState()
@@ -130,6 +131,8 @@ internal fun PynapliOverlays(
             onLeaveConversation = conversationActions.onLeave,
             onDeleteMessage = conversationActions.onDeleteMessage,
             onSetExpiry = conversationActions.onSetExpiry,
+            onRevealMedia = conversationActions.onRevealMedia,
+            onPickPhoto = onPickConversationPhoto,
         )
     }
 }

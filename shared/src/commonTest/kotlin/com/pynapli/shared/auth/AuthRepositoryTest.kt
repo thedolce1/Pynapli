@@ -455,6 +455,17 @@ private class FakeApiClient(
         request: com.pynapli.shared.network.dto.SetConversationExpiryRequestDto,
     ): AppResult<ConversationDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun createMessageMediaUploadSlot(
+        request: com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto,
+    ): AppResult<com.pynapli.shared.network.dto.MessageMediaUploadSlotDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun sendMediaMessage(
+        conversationId: String,
+        request: com.pynapli.shared.network.dto.SendMediaMessageRequestDto,
+    ): AppResult<MessageDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun revealMessageMedia(messageId: String): AppResult<MessageDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))

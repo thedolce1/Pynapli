@@ -81,6 +81,7 @@ internal fun ColumnScope.PynapliMainContent(
     onOpenPsync: (() -> Unit)?,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit,
+    onPickConversationPhoto: () -> Unit,
     onSetDiscreetIcon: (Boolean) -> Unit,
 ) {
     val authState by authStateHolder.state.collectAsState()
@@ -223,6 +224,8 @@ internal fun ColumnScope.PynapliMainContent(
                         onLeaveConversation = conversationActions.onLeave,
                         onDeleteMessage = conversationActions.onDeleteMessage,
                         onSetExpiry = conversationActions.onSetExpiry,
+                        onRevealMedia = conversationActions.onRevealMedia,
+                        onPickPhoto = onPickConversationPhoto,
                     )
                 } else {
                     MessagesScreen(

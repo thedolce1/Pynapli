@@ -13,6 +13,13 @@ interface MediaByteUploader {
         slot: MediaUploadSlotDto,
         bytes: ByteArray,
     ): AppResult<Unit>
+
+    /** Lower-level overload for slots that aren't album uploads (e.g. chat photo media). */
+    suspend fun upload(
+        uploadUrl: String,
+        uploadHeaders: Map<String, String>,
+        bytes: ByteArray,
+    ): AppResult<Unit>
 }
 
 class KtorMediaByteUploader(
@@ -21,12 +28,18 @@ class KtorMediaByteUploader(
     override suspend fun upload(
         slot: MediaUploadSlotDto,
         bytes: ByteArray,
+    ): AppResult<Unit> = upload(slot.uploadUrl, slot.uploadHeaders, bytes)
+
+    override suspend fun upload(
+        uploadUrl: String,
+        uploadHeaders: Map<String, String>,
+        bytes: ByteArray,
     ): AppResult<Unit> =
         runCatching {
             val response =
-                httpClient.put(slot.uploadUrl) {
+                httpClient.put(uploadUrl) {
                     headers {
-                        slot.uploadHeaders.forEach { (name, value) ->
+                        uploadHeaders.forEach { (name, value) ->
                             append(name, value)
                         }
                     }

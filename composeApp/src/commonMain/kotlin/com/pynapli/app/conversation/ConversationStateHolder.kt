@@ -1,10 +1,10 @@
 package com.pynapli.app.conversation
 
 import com.pynapli.app.grid.GridProfileCardUi
+import com.pynapli.app.media.PickedMediaForUpload
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
-import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
 import com.pynapli.shared.network.dto.MatchDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,93 +17,73 @@ class ConversationStateHolder(
 ) {
     private val _state = MutableStateFlow(ConversationUiState())
     val state: StateFlow<ConversationUiState> = _state.asStateFlow()
-    private var lastTypingConversationId: String? = null
-    private var lastTypingActive: Boolean = false
-    private var lastTypingSentAtMillis: Long = 0L
 
-    // Idempotency key for the in-flight/failed send. Generated for a fresh draft and reused when the
-    // user re-taps Send after a failure (the draft is preserved on failure), so a retry of a send
-    // whose response was lost collapses to one server-side message. Cleared on success.
-    private var pendingSendKey: String? = null
+    private val stateAccess =
+        object : ConversationStateAccess {
+            override val current: ConversationUiState
+                get() = _state.value
+
+            override fun update(transform: (ConversationUiState) -> ConversationUiState) {
+                _state.update(transform)
+            }
+
+            override fun set(value: ConversationUiState) {
+                _state.value = value
+            }
+        }
+
+    private val typingCoordinator = ConversationTypingCoordinator(repository, stateAccess)
+    private val messageActions =
+        ConversationMessageActions(
+            repository = repository,
+            state = stateAccess,
+            idempotencyKeyFactory = idempotencyKeyFactory,
+            sendTypingStopped = typingCoordinator::sendTypingStopped,
+        )
+    private val partnerActions =
+        ConversationPartnerActionCoordinator(
+            repository = repository,
+            state = stateAccess,
+            refreshOpenConversation = { refreshOpenConversation() },
+            dismissConversation = { dismiss() },
+        )
 
     suspend fun openDirect(
         card: GridProfileCardUi,
         viewerUserId: String?,
     ) {
-        _state.update {
+        stateAccess.set(
             ConversationUiState(
                 selectedCard = card,
                 viewerUserId = viewerUserId,
                 isOpening = true,
-            )
-        }
-
-        when (val result = repository.createDirectConversation(card.id)) {
-            is AppResult.Success -> {
-                val detail = result.value.withReadConversation(repository)
-                _state.update { current ->
-                    current.copy(
-                        detail = detail,
-                        isOpening = false,
-                        partnerInviteFeedback = null,
-                        errorMessage = null,
-                    )
-                }
-            }
-
-            is AppResult.Failure -> {
-                _state.update { current ->
-                    current.copy(
-                        isOpening = false,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
+            ),
+        )
+        openWithResult(resultProvider = { repository.createDirectConversation(card.id) })
     }
 
     suspend fun openSwipeMatch(
         match: MatchDto,
         viewerUserId: String?,
     ) {
-        _state.update {
+        stateAccess.set(
             ConversationUiState(
                 titleOverride = match.matchedDisplayName ?: "Match",
                 viewerUserId = viewerUserId,
                 isOpening = true,
-            )
-        }
-
-        when (val result = repository.createDirectConversation(match.matchedUserId, origin = "swipe")) {
-            is AppResult.Success -> {
-                val detail = result.value.withReadConversation(repository)
-                _state.update { current ->
-                    current.copy(
-                        detail = detail,
-                        titleOverride = detail.conversation.titleFor(viewerUserId),
-                        isOpening = false,
-                        partnerInviteFeedback = null,
-                        errorMessage = null,
-                    )
-                }
-            }
-
-            is AppResult.Failure -> {
-                _state.update { current ->
-                    current.copy(
-                        isOpening = false,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
+            ),
+        )
+        openWithResult(
+            resultProvider = { repository.createDirectConversation(match.matchedUserId, origin = "swipe") },
+            titleForDetail = { detail, _ -> detail.conversation.titleFor(viewerUserId) },
+        )
     }
 
     suspend fun openConversation(
         conversation: ConversationDto,
         viewerUserId: String?,
     ) {
-        _state.update {
+        stateAccess.set(
             ConversationUiState(
                 titleOverride = conversation.titleFor(viewerUserId),
                 viewerUserId = viewerUserId,
@@ -113,32 +93,9 @@ class ConversationStateHolder(
                         messages = emptyList(),
                     ),
                 isOpening = true,
-            )
-        }
-
-        when (val result = repository.getConversationDetail(conversation.conversationId)) {
-            is AppResult.Success -> {
-                val detail = result.value.withReadConversation(repository)
-                _state.update { current ->
-                    current.copy(
-                        detail = detail,
-                        titleOverride = detail.conversation.titleFor(viewerUserId),
-                        isOpening = false,
-                        partnerInviteFeedback = null,
-                        errorMessage = null,
-                    )
-                }
-            }
-
-            is AppResult.Failure -> {
-                _state.update { current ->
-                    current.copy(
-                        isOpening = false,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
+            ),
+        )
+        openConversationDetail(conversation.conversationId, viewerUserId)
     }
 
     suspend fun openConversationById(
@@ -146,37 +103,14 @@ class ConversationStateHolder(
         viewerUserId: String?,
         title: String = "Conversation",
     ) {
-        _state.update {
+        stateAccess.set(
             ConversationUiState(
                 titleOverride = title,
                 viewerUserId = viewerUserId,
                 isOpening = true,
-            )
-        }
-
-        when (val result = repository.getConversationDetail(conversationId)) {
-            is AppResult.Success -> {
-                val detail = result.value.withReadConversation(repository)
-                _state.update { current ->
-                    current.copy(
-                        detail = detail,
-                        titleOverride = detail.conversation.titleFor(viewerUserId),
-                        isOpening = false,
-                        partnerInviteFeedback = null,
-                        errorMessage = null,
-                    )
-                }
-            }
-
-            is AppResult.Failure -> {
-                _state.update { current ->
-                    current.copy(
-                        isOpening = false,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
+            ),
+        )
+        openConversationDetail(conversationId, viewerUserId)
     }
 
     suspend fun refreshOpenConversation(silent: Boolean = true) {
@@ -187,7 +121,7 @@ class ConversationStateHolder(
         when (val result = repository.getConversationDetail(conversationId)) {
             is AppResult.Success -> {
                 val detail = result.value.withReadConversation(repository)
-                _state.update { existing ->
+                stateAccess.update { existing ->
                     val existingDetail = existing.detail ?: return@update existing
                     if (existingDetail.conversation.conversationId != conversationId) {
                         existing
@@ -204,9 +138,7 @@ class ConversationStateHolder(
 
             is AppResult.Failure -> {
                 if (!silent) {
-                    _state.update { existing ->
-                        existing.copy(errorMessage = result.error.message)
-                    }
+                    stateAccess.update { existing -> existing.copy(errorMessage = result.error.message) }
                 }
             }
         }
@@ -228,10 +160,10 @@ class ConversationStateHolder(
         val cursor = detail.nextCursor ?: return
         val conversationId = detail.conversation.conversationId
 
-        _state.update { it.copy(isLoadingOlder = true, errorMessage = null) }
+        stateAccess.update { it.copy(isLoadingOlder = true, errorMessage = null) }
         when (val result = repository.getConversationDetail(conversationId, before = cursor)) {
             is AppResult.Success -> {
-                _state.update { existing ->
+                stateAccess.update { existing ->
                     val existingDetail = existing.detail
                     if (existingDetail?.conversation?.conversationId != conversationId) {
                         existing.copy(isLoadingOlder = false)
@@ -246,7 +178,7 @@ class ConversationStateHolder(
             }
 
             is AppResult.Failure -> {
-                _state.update { existing ->
+                stateAccess.update { existing ->
                     existing.copy(
                         isLoadingOlder = false,
                         errorMessage = result.error.message,
@@ -256,391 +188,89 @@ class ConversationStateHolder(
         }
     }
 
-    fun updateDraft(value: String) {
-        _state.update { current ->
-            current.copy(
-                draft = value,
-                errorMessage = null,
-            )
-        }
-    }
+    fun updateDraft(value: String) = messageActions.updateDraft(value)
 
     suspend fun sendTypingSignal(
         isTyping: Boolean,
         force: Boolean = false,
-    ) {
-        val current = state.value
-        val conversationId = current.detail?.conversation?.conversationId ?: return
-        if (!current.visible || current.isOpening || current.isViewerInvited) return
-        val now = currentTimeMillis()
-        val sameState = lastTypingConversationId == conversationId && lastTypingActive == isTyping
-        if (!force && sameState && now - lastTypingSentAtMillis < TYPING_SIGNAL_THROTTLE_MS) return
+    ) = typingCoordinator.sendTypingSignal(isTyping, force)
 
-        when (repository.sendTypingIndicator(conversationId, isTyping)) {
-            is AppResult.Success -> {
-                lastTypingConversationId = conversationId
-                lastTypingActive = isTyping
-                lastTypingSentAtMillis = now
-            }
-            is AppResult.Failure -> Unit
-        }
-    }
-
-    suspend fun sendTypingStopped(conversationId: String?) {
-        val threadId = conversationId ?: return
-        if (lastTypingConversationId != threadId || !lastTypingActive) return
-        when (repository.sendTypingIndicator(threadId, isTyping = false)) {
-            is AppResult.Success -> {
-                lastTypingConversationId = null
-                lastTypingActive = false
-                lastTypingSentAtMillis = 0L
-            }
-            is AppResult.Failure -> Unit
-        }
-    }
+    suspend fun sendTypingStopped(conversationId: String?) = typingCoordinator.sendTypingStopped(conversationId)
 
     fun applyTypingStarted(
         conversationId: String,
         actorUserId: String?,
         actorDisplayName: String?,
         expiresAt: String?,
-    ) {
-        val userId = actorUserId ?: return
-        val current = state.value
-        if (current.detail?.conversation?.conversationId != conversationId || userId == current.viewerUserId) return
-        val expiresAtMillis =
-            expiresAt?.let { parseInstantMillis(it) }
-                ?: (currentTimeMillis() + TYPING_INDICATOR_TTL_MS)
-        val displayName =
-            actorDisplayName?.takeIf { it.isNotBlank() }
-                ?: current.detail.conversation.participants
-                    .firstOrNull { it.userId == userId }
-                    ?.displayName
-                ?: "Someone"
-
-        _state.update { existing ->
-            existing.copy(
-                typingParticipants =
-                    (
-                        existing.typingParticipants.filterNot { it.userId == userId } +
-                            TypingParticipantUi(userId, displayName, expiresAtMillis)
-                    ).sortedBy { it.displayName },
-            )
-        }
-    }
+    ) = typingCoordinator.applyTypingStarted(conversationId, actorUserId, actorDisplayName, expiresAt)
 
     fun applyTypingStopped(
         conversationId: String,
         actorUserId: String?,
-    ) {
-        val userId = actorUserId ?: return
-        if (state.value.detail
-                ?.conversation
-                ?.conversationId != conversationId
-        ) {
-            return
-        }
-        _state.update { existing ->
-            existing.copy(typingParticipants = existing.typingParticipants.filterNot { it.userId == userId })
-        }
-    }
+    ) = typingCoordinator.applyTypingStopped(conversationId, actorUserId)
 
-    fun clearExpiredTypingIndicators(nowMillis: Long = currentTimeMillis()) {
-        _state.update { existing ->
-            val active = existing.typingParticipants.filter { it.expiresAtMillis > nowMillis }
-            if (active == existing.typingParticipants) existing else existing.copy(typingParticipants = active)
-        }
-    }
+    fun clearExpiredTypingIndicators(nowMillis: Long = currentTimeMillis()) = typingCoordinator.clearExpiredTypingIndicators(nowMillis)
 
-    suspend fun inviteLinkedPartner() {
-        val current = state.value
-        if (current.isInvitingPartner || current.isOpening || current.isViewerInvited) return
-        val conversationId = current.detail?.conversation?.conversationId ?: return
+    suspend fun inviteLinkedPartner() = partnerActions.inviteLinkedPartner()
 
-        _state.update {
-            it.copy(
-                isInvitingPartner = true,
-                partnerInviteFeedback = null,
-                errorMessage = null,
-            )
-        }
+    suspend fun acceptPartnerInvite() = partnerActions.acceptPartnerInvite()
 
-        when (val result = repository.inviteLinkedPartner(conversationId)) {
-            is AppResult.Success -> {
-                _state.update { existing ->
-                    val existingDetail = existing.detail
-                    existing.copy(
-                        detail = existingDetail?.copy(conversation = result.value),
-                        titleOverride = result.value.titleFor(existing.viewerUserId),
-                        isInvitingPartner = false,
-                        partnerInviteFeedback = "Partner invited",
-                        errorMessage = null,
-                    )
-                }
-            }
+    suspend fun declinePartnerInvite() = partnerActions.declinePartnerInvite()
 
-            is AppResult.Failure -> {
-                _state.update { existing ->
-                    existing.copy(
-                        isInvitingPartner = false,
-                        partnerInviteFeedback = null,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
-    }
+    suspend fun leaveConversation() = partnerActions.leaveConversation()
 
-    suspend fun acceptPartnerInvite() {
-        val current = state.value
-        if (current.isRespondingToInvite || !current.canRespondToPartnerInvite) return
-        val conversationId = current.detail?.conversation?.conversationId ?: return
+    suspend fun setExpiry(expirySeconds: Int?) = partnerActions.setExpiry(expirySeconds)
 
-        _state.update {
-            it.copy(
-                isRespondingToInvite = true,
-                partnerInviteFeedback = null,
-                errorMessage = null,
-            )
-        }
+    suspend fun sendDraft() = messageActions.sendDraft()
 
-        when (val result = repository.acceptPartnerInvite(conversationId)) {
-            is AppResult.Success -> {
-                val detail = result.value.withReadConversation(repository)
-                _state.update { existing ->
-                    existing.copy(
-                        detail = detail,
-                        titleOverride = detail.conversation.titleFor(existing.viewerUserId),
-                        isRespondingToInvite = false,
-                        partnerInviteFeedback = current.partnerInviteAcceptedFeedback(detail),
-                        errorMessage = null,
-                    )
-                }
-            }
+    suspend fun sendPhoto(media: PickedMediaForUpload) = messageActions.sendPhoto(media)
 
-            is AppResult.Failure -> {
-                _state.update { existing ->
-                    existing.copy(
-                        isRespondingToInvite = false,
-                        partnerInviteFeedback = null,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
-    }
+    suspend fun revealMedia(messageId: String) = messageActions.revealMedia(messageId)
 
-    suspend fun declinePartnerInvite() {
-        val current = state.value
-        if (current.isRespondingToInvite || !current.canRespondToPartnerInvite) return
-        val conversationId = current.detail?.conversation?.conversationId ?: return
-
-        _state.update {
-            it.copy(
-                isRespondingToInvite = true,
-                partnerInviteFeedback = null,
-                errorMessage = null,
-            )
-        }
-
-        when (val result = repository.declinePartnerInvite(conversationId)) {
-            is AppResult.Success -> {
-                if (current.isViewerInvited) {
-                    dismiss()
-                } else {
-                    refreshOpenConversationAfterInviteDecline(conversationId)
-                }
-            }
-            is AppResult.Failure -> {
-                _state.update { existing ->
-                    existing.copy(
-                        isRespondingToInvite = false,
-                        partnerInviteFeedback = null,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
-    }
-
-    private suspend fun refreshOpenConversationAfterInviteDecline(conversationId: String) {
-        when (val detailResult = repository.getConversationDetail(conversationId)) {
-            is AppResult.Success -> {
-                _state.update { existing ->
-                    existing.copy(
-                        detail = detailResult.value.withReadConversation(repository),
-                        titleOverride = detailResult.value.conversation.titleFor(existing.viewerUserId),
-                        isRespondingToInvite = false,
-                        partnerInviteFeedback = "Invite declined",
-                        errorMessage = null,
-                    )
-                }
-            }
-
-            is AppResult.Failure -> {
-                _state.update { existing ->
-                    existing.copy(
-                        isRespondingToInvite = false,
-                        partnerInviteFeedback = null,
-                        errorMessage = detailResult.error.message,
-                    )
-                }
-            }
-        }
-    }
-
-    suspend fun leaveConversation() {
-        val current = state.value
-        if (current.isLeaving || current.isOpening) return
-        val conversationId = current.detail?.conversation?.conversationId ?: return
-
-        _state.update {
-            it.copy(
-                isLeaving = true,
-                partnerInviteFeedback = null,
-                errorMessage = null,
-            )
-        }
-
-        when (val result = repository.leaveConversation(conversationId)) {
-            is AppResult.Success -> dismiss()
-            is AppResult.Failure -> {
-                _state.update { existing ->
-                    existing.copy(
-                        isLeaving = false,
-                        partnerInviteFeedback = null,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
-    }
-
-    suspend fun setExpiry(expirySeconds: Int?) {
-        val current = state.value
-        if (current.isSettingExpiry || current.isOpening) return
-        if (current.viewerExpirySeconds == expirySeconds) return
-        val conversationId = current.detail?.conversation?.conversationId ?: return
-
-        _state.update { it.copy(isSettingExpiry = true, partnerInviteFeedback = null, errorMessage = null) }
-
-        when (val result = repository.setConversationExpiry(conversationId, expirySeconds)) {
-            is AppResult.Success -> {
-                _state.update { existing ->
-                    existing.copy(
-                        detail = existing.detail?.copy(conversation = result.value),
-                        isSettingExpiry = false,
-                        errorMessage = null,
-                    )
-                }
-                // Pull the server-authored system message into the thread.
-                refreshOpenConversation()
-            }
-
-            is AppResult.Failure -> {
-                _state.update { existing ->
-                    existing.copy(
-                        isSettingExpiry = false,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
-    }
-
-    suspend fun sendDraft() {
-        val current = state.value
-        if (current.isSending || current.isViewerInvited) return
-        val conversationId = current.detail?.conversation?.conversationId ?: return
-        val body = current.draft.trim()
-        when {
-            body.isEmpty() -> {
-                _state.update { existing ->
-                    existing.copy(errorMessage = "Enter a message before sending.")
-                }
-                return
-            }
-
-            current.draftOverLimit -> {
-                _state.update { existing ->
-                    existing.copy(errorMessage = "Message is too long. Keep it under $MESSAGE_BODY_MAX_LENGTH characters.")
-                }
-                return
-            }
-        }
-
-        // Reuse the key from a prior failed attempt of this draft; otherwise mint a fresh one.
-        val idempotencyKey = pendingSendKey ?: idempotencyKeyFactory().also { pendingSendKey = it }
-
-        _state.update { it.copy(isSending = true, partnerInviteFeedback = null, errorMessage = null) }
-        when (val result = repository.sendMessage(conversationId, body, idempotencyKey)) {
-            is AppResult.Success -> {
-                pendingSendKey = null
-                sendTypingStopped(conversationId)
-                _state.update { existing ->
-                    val updatedDetail = existing.detail?.withAppendedMessage(result.value)
-                    existing.copy(
-                        detail = updatedDetail,
-                        draft = "",
-                        isSending = false,
-                        errorMessage = null,
-                    )
-                }
-            }
-
-            is AppResult.Failure -> {
-                // Keep pendingSendKey so a re-tap of the same draft retries idempotently.
-                _state.update { existing ->
-                    existing.copy(
-                        isSending = false,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
-    }
-
-    suspend fun deleteMessage(messageId: String) {
-        val current = state.value
-        val detail = current.detail ?: return
-        val message = detail.messages.firstOrNull { it.messageId == messageId } ?: return
-        if (message.senderUserId != current.viewerUserId || message.deletedAt != null) return
-        if (messageId in current.isDeletingMessageIds) return
-
-        _state.update { existing ->
-            existing.copy(
-                isDeletingMessageIds = existing.isDeletingMessageIds + messageId,
-                partnerInviteFeedback = null,
-                errorMessage = null,
-            )
-        }
-
-        when (val result = repository.deleteMessage(messageId)) {
-            is AppResult.Success -> {
-                _state.update { existing ->
-                    existing.copy(
-                        detail = existing.detail?.withUpdatedMessage(result.value),
-                        isDeletingMessageIds = existing.isDeletingMessageIds - messageId,
-                        errorMessage = null,
-                    )
-                }
-            }
-
-            is AppResult.Failure -> {
-                _state.update { existing ->
-                    existing.copy(
-                        isDeletingMessageIds = existing.isDeletingMessageIds - messageId,
-                        errorMessage = result.error.message,
-                    )
-                }
-            }
-        }
-    }
+    suspend fun deleteMessage(messageId: String) = messageActions.deleteMessage(messageId)
 
     fun dismiss() {
-        lastTypingConversationId = null
-        lastTypingActive = false
-        lastTypingSentAtMillis = 0L
-        _state.value = ConversationUiState()
+        typingCoordinator.reset()
+        messageActions.reset()
+        stateAccess.set(ConversationUiState())
+    }
+
+    private suspend fun openConversationDetail(
+        conversationId: String,
+        viewerUserId: String?,
+    ) {
+        openWithResult(
+            resultProvider = { repository.getConversationDetail(conversationId) },
+            titleForDetail = { detail, _ -> detail.conversation.titleFor(viewerUserId) },
+        )
+    }
+
+    private suspend fun openWithResult(
+        resultProvider: suspend () -> AppResult<ConversationDetailDto>,
+        titleForDetail: (ConversationDetailDto, ConversationUiState) -> String? = { _, current -> current.titleOverride },
+    ) {
+        when (val result = resultProvider()) {
+            is AppResult.Success -> {
+                val detail = result.value.withReadConversation(repository)
+                stateAccess.update { current ->
+                    current.copy(
+                        detail = detail,
+                        titleOverride = titleForDetail(detail, current),
+                        isOpening = false,
+                        partnerInviteFeedback = null,
+                        errorMessage = null,
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                stateAccess.update { current ->
+                    current.copy(
+                        isOpening = false,
+                        errorMessage = result.error.message,
+                    )
+                }
+            }
+        }
     }
 }

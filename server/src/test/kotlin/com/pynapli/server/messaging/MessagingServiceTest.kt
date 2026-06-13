@@ -42,6 +42,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class MessagingServiceTest {
@@ -429,6 +430,93 @@ class MessagingServiceTest {
                     service.setConversationExpiry(viewerId, UUID.randomUUID().toString(), 3_600)
                 }
             assertEquals("CONVERSATION_NOT_FOUND", error.code)
+        }
+
+    @Test
+    fun sendMediaMessageAttachesPhotoAndSenderSeesUrl() =
+        runBlocking {
+            val viewerId = UUID.fromString("00000000-0000-0000-0000-0000000000b1")
+            val targetId = UUID.fromString("00000000-0000-0000-0000-0000000000b2")
+            val repository = InMemoryMessagingRepository(setOf(targetId))
+            val service =
+                MessagingService(repository = repository, messageMediaGateway = FakeMessageMediaGateway())
+            val detail =
+                service.createDirectConversation(
+                    viewerId,
+                    CreateDirectConversationRequestDto(targetUserId = targetId.toString()),
+                )
+            val assetId = UUID.randomUUID().toString()
+
+            val message =
+                service.sendMediaMessage(
+                    viewerId,
+                    detail.conversation.conversationId,
+                    com.pynapli.shared.network.dto
+                        .SendMediaMessageRequestDto(mediaAssetId = assetId),
+                )
+
+            assertEquals(assetId, message.mediaAssetId)
+            assertEquals("image/jpeg", message.mediaContentType)
+            assertEquals(true, message.mediaRevealed)
+            assertEquals("url://$assetId", message.mediaUrl)
+        }
+
+    @Test
+    fun sendMediaMessageRejectsModerationFailure() =
+        runBlocking {
+            val viewerId = UUID.fromString("00000000-0000-0000-0000-0000000000b3")
+            val targetId = UUID.fromString("00000000-0000-0000-0000-0000000000b4")
+            val repository = InMemoryMessagingRepository(setOf(targetId))
+            val service =
+                MessagingService(repository = repository, messageMediaGateway = FakeMessageMediaGateway(rejectAll = true))
+            val detail =
+                service.createDirectConversation(
+                    viewerId,
+                    CreateDirectConversationRequestDto(targetUserId = targetId.toString()),
+                )
+
+            val error =
+                assertFailsWith<MessagingException> {
+                    service.sendMediaMessage(
+                        viewerId,
+                        detail.conversation.conversationId,
+                        com.pynapli.shared.network.dto
+                            .SendMediaMessageRequestDto(mediaAssetId = UUID.randomUUID().toString()),
+                    )
+                }
+            assertEquals("INVALID_MEDIA", error.code)
+        }
+
+    @Test
+    fun recipientSeesLockedPhotoUntilReveal() =
+        runBlocking {
+            val viewerId = UUID.fromString("00000000-0000-0000-0000-0000000000b5")
+            val targetId = UUID.fromString("00000000-0000-0000-0000-0000000000b6")
+            val repository = InMemoryMessagingRepository(setOf(targetId))
+            val service =
+                MessagingService(repository = repository, messageMediaGateway = FakeMessageMediaGateway())
+            val detail =
+                service.createDirectConversation(
+                    viewerId,
+                    CreateDirectConversationRequestDto(targetUserId = targetId.toString()),
+                )
+            val sent =
+                service.sendMediaMessage(
+                    viewerId,
+                    detail.conversation.conversationId,
+                    com.pynapli.shared.network.dto
+                        .SendMediaMessageRequestDto(mediaAssetId = UUID.randomUUID().toString()),
+                )
+
+            // Recipient sees the photo locked (no URL) until they reveal.
+            val targetView = service.getConversationDetail(targetId, detail.conversation.conversationId)
+            val targetMessage = targetView.messages.single { it.mediaAssetId != null }
+            assertEquals(false, targetMessage.mediaRevealed)
+            assertNull(targetMessage.mediaUrl)
+
+            val revealed = service.revealMessageMedia(targetId, sent.messageId)
+            assertNotNull(revealed.mediaUrl)
+            assertEquals(true, revealed.mediaRevealed)
         }
 
     @Test
@@ -975,6 +1063,7 @@ private class InMemoryMessagingRepository(
     private val idempotencyKeys = mutableMapOf<UUID, String>()
     private val partnerInvitesByConversation = mutableMapOf<UUID, PartnerChatInviteRecord>()
     private val expiryByParticipant = mutableMapOf<Pair<UUID, UUID>, Int?>()
+    private val mediaRevealsByMessage = mutableMapOf<UUID, MutableSet<UUID>>()
     private var nextConversationIndex = 1
     private var nextMessageIndex = 1
     private var nextInviteIndex = 1
@@ -1185,6 +1274,54 @@ private class InMemoryMessagingRepository(
             )
         conversationsByPair[entry.key] = updated
         return true
+    }
+
+    override suspend fun sendMediaMessage(
+        userId: UUID,
+        conversationId: UUID,
+        mediaAssetId: UUID,
+        contentType: String?,
+        pixelWidth: Int?,
+        pixelHeight: Int?,
+        body: String,
+        clientIdempotencyKey: String?,
+        messageIdFactory: () -> UUID,
+    ): MessageRecord? {
+        val isParticipant =
+            conversationsByPair.values.any {
+                it.conversationId == conversationId &&
+                    it.participants.any { p -> p.userId == userId && p.status == ConversationParticipantStatus.ACTIVE }
+            }
+        if (!isParticipant) return null
+        val record =
+            MessageRecord(
+                messageId = messageIdFactory(),
+                conversationId = conversationId,
+                senderUserId = userId,
+                body = body,
+                createdAt = Instant.parse("2026-04-24T18:00:08Z"),
+                status = "visible",
+                deliveryStatus = "sent",
+                mediaAssetId = mediaAssetId,
+                mediaContentType = contentType,
+                mediaWidth = pixelWidth,
+                mediaHeight = pixelHeight,
+                mediaRevealedByViewer = true,
+            )
+        messagesByConversation.getOrPut(conversationId) { mutableListOf() }.add(record)
+        return record
+    }
+
+    override suspend fun recordMediaReveal(
+        userId: UUID,
+        messageId: UUID,
+    ): MessageRecord? {
+        val message =
+            messagesByConversation.values.flatten().firstOrNull { it.messageId == messageId }
+                ?: return null
+        if (message.mediaAssetId == null) return null
+        mediaRevealsByMessage.getOrPut(messageId) { mutableSetOf() }.add(userId)
+        return message.withDeliveryStatus(userId)
     }
 
     override suspend fun setConversationExpiry(
@@ -1424,6 +1561,16 @@ private class InMemoryMessagingRepository(
     }
 
     private fun MessageRecord.withDeliveryStatus(viewerUserId: UUID): MessageRecord {
+        val withMedia =
+            if (mediaAssetId != null) {
+                copy(mediaRevealedByViewer = senderUserId == viewerUserId || mediaRevealsByMessage[messageId]?.contains(viewerUserId) == true)
+            } else {
+                this
+            }
+        return withMedia.deliveryFor(viewerUserId)
+    }
+
+    private fun MessageRecord.deliveryFor(viewerUserId: UUID): MessageRecord {
         if (deletedAt != null) return copy(body = "", deliveryStatus = "deleted")
         if (status == MessageModerationStatus.HELD) return copy(deliveryStatus = "held_for_review")
         if (senderUserId != viewerUserId) return copy(deliveryStatus = "received")
@@ -1527,6 +1674,29 @@ private data class HeldMessageRiskSignal(
     val messageId: UUID,
     val reason: String,
 )
+
+private class FakeMessageMediaGateway(
+    private val rejectAll: Boolean = false,
+) : MessageMediaGateway {
+    override suspend fun createUploadSlot(
+        ownerUserId: UUID,
+        request: com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto,
+    ): com.pynapli.shared.network.dto.MessageMediaUploadSlotDto =
+        com.pynapli.shared.network.dto.MessageMediaUploadSlotDto(
+            mediaAssetId = UUID.randomUUID().toString(),
+            uploadUrl = "url://upload",
+            uploadMethod = "PUT",
+            uploadHeaders = emptyMap(),
+            expiresAt = "2026-04-24T18:10:00Z",
+        )
+
+    override suspend fun prepareOutboundMedia(
+        senderUserId: UUID,
+        mediaAssetId: UUID,
+    ): PreparedMessageMedia? = if (rejectAll) null else PreparedMessageMedia(contentType = "image/jpeg", pixelWidth = 800, pixelHeight = 600)
+
+    override fun contentUrl(mediaAssetId: UUID): String = "url://$mediaAssetId"
+}
 
 private fun subscriptionService(tiersByUserId: Map<UUID, String>): SubscriptionService =
     SubscriptionService(

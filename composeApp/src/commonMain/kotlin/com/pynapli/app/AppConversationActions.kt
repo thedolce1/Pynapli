@@ -26,6 +26,7 @@ internal data class ConversationActions(
     val onLeave: () -> Unit,
     val onDeleteMessage: (String) -> Unit,
     val onSetExpiry: (Int?) -> Unit,
+    val onRevealMedia: (String) -> Unit,
 )
 
 @Composable
@@ -85,6 +86,9 @@ internal fun rememberConversationActions(
                     conversationStateHolder.setExpiry(expirySeconds)
                     messagesStateHolder.refreshSilently()
                 }
+            },
+            onRevealMedia = { messageId ->
+                scope.launch { conversationStateHolder.revealMedia(messageId) }
             },
         )
     }

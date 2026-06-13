@@ -38,6 +38,8 @@ fun ConversationSheet(
     onLeaveConversation: () -> Unit = {},
     onDeleteMessage: (String) -> Unit = {},
     onSetExpiry: (Int?) -> Unit = {},
+    onRevealMedia: (String) -> Unit = {},
+    onPickPhoto: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (!state.visible) return
@@ -76,6 +78,8 @@ fun ConversationSheet(
                 onLeaveConversation = onLeaveConversation,
                 onDeleteMessage = onDeleteMessage,
                 onSetExpiry = onSetExpiry,
+                onRevealMedia = onRevealMedia,
+                onPickPhoto = onPickPhoto,
                 fillAvailableHeight = false,
                 showLeaveAction = true,
                 showPartnerStatusFeedback = true,
@@ -100,6 +104,8 @@ fun ConversationScreen(
     onLeaveConversation: () -> Unit = {},
     onDeleteMessage: (String) -> Unit = {},
     onSetExpiry: (Int?) -> Unit = {},
+    onRevealMedia: (String) -> Unit = {},
+    onPickPhoto: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -132,6 +138,8 @@ fun ConversationScreen(
             onLeaveConversation = onLeaveConversation,
             onDeleteMessage = onDeleteMessage,
             onSetExpiry = onSetExpiry,
+            onRevealMedia = onRevealMedia,
+            onPickPhoto = onPickPhoto,
             fillAvailableHeight = true,
             showLeaveAction = false,
             showPartnerStatusFeedback = false,
@@ -153,6 +161,8 @@ private fun ColumnScope.ConversationContent(
     onLeaveConversation: () -> Unit,
     onDeleteMessage: (String) -> Unit,
     onSetExpiry: (Int?) -> Unit,
+    onRevealMedia: (String) -> Unit,
+    onPickPhoto: () -> Unit,
     fillAvailableHeight: Boolean,
     showLeaveAction: Boolean,
     showPartnerStatusFeedback: Boolean,
@@ -222,8 +232,10 @@ private fun ColumnScope.ConversationContent(
                     hasOlderMessages = state.detail?.nextCursor != null,
                     isLoadingOlder = state.isLoadingOlder,
                     isDeletingMessageIds = state.isDeletingMessageIds,
+                    revealingMessageIds = state.revealingMessageIds,
                     onLoadOlder = onLoadOlder,
                     onDeleteMessage = onDeleteMessage,
+                    onRevealMedia = onRevealMedia,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -235,11 +247,13 @@ private fun ColumnScope.ConversationContent(
                         draft = state.draft,
                         canSend = state.canSend,
                         isSending = state.isSending,
+                        isSendingPhoto = state.isSendingPhoto,
                         isOverLimit = state.draftOverLimit,
                         remainingCharacters = state.draftRemaining,
                         errorMessage = state.errorMessage,
                         onDraftChanged = onDraftChanged,
                         onSend = onSend,
+                        onPickPhoto = onPickPhoto,
                     )
                 }
             }

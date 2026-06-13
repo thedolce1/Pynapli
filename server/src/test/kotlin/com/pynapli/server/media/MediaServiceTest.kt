@@ -837,6 +837,11 @@ private class InMemoryMediaRepository : MediaRepository {
         return uploaded
     }
 
+    override suspend fun findMessageMediaAsset(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord? = assets[mediaAssetId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null }
+
     override suspend fun markAssetReadyApproved(
         ownerUserId: UUID,
         mediaAssetId: UUID,

@@ -3,6 +3,8 @@ package com.pynapli.server.messaging
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
+import com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto
+import com.pynapli.shared.network.dto.SendMediaMessageRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
@@ -29,6 +31,18 @@ fun Application.configureMessagingRoutes(
             val user = authService.authenticate(call.requiredBearerToken())
             val messageId = call.parameters["messageId"] ?: throw MessagingException("MESSAGE_NOT_FOUND")
             call.respond(messagingService.deleteOwnMessage(user.id, messageId))
+        }
+
+        post("/v1/messages/{messageId}/reveal") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val messageId = call.parameters["messageId"] ?: throw MessagingException("MESSAGE_NOT_FOUND")
+            call.respond(messagingService.revealMessageMedia(user.id, messageId))
+        }
+
+        post("/v1/messages/media/uploads") {
+            val user = authService.authenticate(call.requiredBearerToken())
+            val request = call.receive<CreateMessageMediaUploadRequestDto>()
+            call.respond(messagingService.createMessageMediaUploadSlot(user.id, request))
         }
 
         route("/v1/messages/threads") {
@@ -74,6 +88,13 @@ fun Application.configureMessagingRoutes(
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 val request = call.receive<SetConversationExpiryRequestDto>()
                 call.respond(messagingService.setConversationExpiry(user.id, threadId, request.expirySeconds))
+            }
+
+            post("/{threadId}/media") {
+                val user = authService.authenticate(call.requiredBearerToken())
+                val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+                val request = call.receive<SendMediaMessageRequestDto>()
+                call.respond(messagingService.sendMediaMessage(user.id, threadId, request))
             }
 
             post("/{threadId}/typing") {

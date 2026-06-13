@@ -104,6 +104,15 @@ data class MessageDto(
     // "user" (default) or "system" (e.g. an expiry-timer change notice). Defaulted so older
     // clients keep treating every message as a normal user message.
     val messageType: String = MessageType.USER,
+    // Per-recipient media reveal (MESSAGING_SPEC). When a photo is attached, [mediaAssetId] is set;
+    // [mediaUrl] is populated only for the sender or a recipient who has revealed it (otherwise the
+    // client shows a locked "tap to reveal" placeholder). [mediaRevealed] reflects the viewer.
+    val mediaAssetId: String? = null,
+    val mediaContentType: String? = null,
+    val mediaWidth: Int? = null,
+    val mediaHeight: Int? = null,
+    val mediaUrl: String? = null,
+    val mediaRevealed: Boolean = false,
 )
 
 @Serializable
@@ -134,6 +143,30 @@ data class SendTypingIndicatorRequestDto(
 data class SetConversationExpiryRequestDto(
     // Seconds from the allowed set, or null to turn disappearing messages off.
     val expirySeconds: Int? = null,
+)
+
+@Serializable
+data class CreateMessageMediaUploadRequestDto(
+    val contentType: String,
+    val byteSize: Long,
+    val pixelWidth: Int? = null,
+    val pixelHeight: Int? = null,
+)
+
+@Serializable
+data class MessageMediaUploadSlotDto(
+    val mediaAssetId: String,
+    val uploadUrl: String,
+    val uploadMethod: String,
+    val uploadHeaders: Map<String, String>,
+    val expiresAt: String,
+)
+
+@Serializable
+data class SendMediaMessageRequestDto(
+    val mediaAssetId: String,
+    val body: String = "",
+    val clientIdempotencyKey: String? = null,
 )
 
 @Serializable

@@ -120,6 +120,59 @@ class ConversationStateHolderTest {
         }
 
     @Test
+    fun sendPhotoAppendsMediaMessageToThread() =
+        runBlocking {
+            val repository = FakeConversationRepository()
+            val stateHolder = ConversationStateHolder(repository)
+            stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+            stateHolder.sendPhoto(
+                com.pynapli.app.media.PickedMediaForUpload(
+                    contentType = "image/jpeg",
+                    byteSize = 4,
+                    pixelWidth = 800,
+                    pixelHeight = 600,
+                    bytes = byteArrayOf(1, 2, 3, 4),
+                ),
+            )
+
+            assertEquals(listOf("image/jpeg"), repository.sendPhotoCalls)
+            val photo =
+                stateHolder.state.value.detail
+                    ?.messages
+                    ?.last()
+            assertEquals("asset-1", photo?.mediaAssetId)
+            assertEquals("https://media.example/photo-1", photo?.mediaUrl)
+            assertFalse(stateHolder.state.value.isSendingPhoto)
+        }
+
+    @Test
+    fun revealMediaSwapsLockedPlaceholderForRevealedMessage() =
+        runBlocking {
+            val locked =
+                message(senderUserId = "target", body = "").copy(
+                    messageId = "message-1",
+                    mediaAssetId = "asset-1",
+                    mediaUrl = null,
+                    mediaRevealed = false,
+                )
+            val repository = FakeConversationRepository(initialMessage = locked)
+            val stateHolder = ConversationStateHolder(repository)
+            stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+            stateHolder.revealMedia("message-1")
+
+            assertEquals(listOf("message-1"), repository.revealCalls)
+            val revealed =
+                stateHolder.state.value.detail
+                    ?.messages
+                    ?.single { it.messageId == "message-1" }
+            assertEquals("https://media.example/message-1", revealed?.mediaUrl)
+            assertEquals(true, revealed?.mediaRevealed)
+            assertEquals(emptySet(), stateHolder.state.value.revealingMessageIds)
+        }
+
+    @Test
     fun refreshOpenConversationIfConversationIdOnlyRefreshesMatchingThread() =
         runBlocking {
             val repository = FakeConversationRepository()
@@ -313,6 +366,40 @@ private class FakeConversationRepository(
         val updated = detailConversation.copy(messageExpirySeconds = expirySeconds, effectiveMessageExpirySeconds = expirySeconds)
         detailConversation = updated
         return expiryResult ?: AppResult.Success(updated)
+    }
+
+    val sendPhotoCalls = mutableListOf<String>()
+    val revealCalls = mutableListOf<String>()
+
+    override suspend fun sendPhoto(
+        conversationId: String,
+        contentType: String,
+        byteSize: Long,
+        pixelWidth: Int?,
+        pixelHeight: Int?,
+        bytes: ByteArray,
+    ): AppResult<MessageDto> {
+        sendPhotoCalls += contentType
+        return AppResult.Success(
+            message(senderUserId = "viewer", body = "").copy(
+                messageId = "photo-1",
+                mediaAssetId = "asset-1",
+                mediaUrl = "https://media.example/photo-1",
+                mediaRevealed = true,
+            ),
+        )
+    }
+
+    override suspend fun revealMedia(messageId: String): AppResult<MessageDto> {
+        revealCalls += messageId
+        return AppResult.Success(
+            message(senderUserId = "target", body = "").copy(
+                messageId = messageId,
+                mediaAssetId = "asset-1",
+                mediaUrl = "https://media.example/$messageId",
+                mediaRevealed = true,
+            ),
+        )
     }
 
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> {
