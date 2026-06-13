@@ -13,6 +13,7 @@ import com.pynapli.shared.network.dto.PartnerChatInviteStatus
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 class ConversationStateHolderTest {
@@ -82,6 +83,40 @@ class ConversationStateHolderTest {
                     ?.single()
                     ?.body,
             )
+        }
+
+    @Test
+    fun setExpiryUpdatesConversationAndIsANoOpForTheSameValue() =
+        runBlocking {
+            val repository = FakeConversationRepository()
+            val stateHolder = ConversationStateHolder(repository)
+            stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+            stateHolder.setExpiry(86_400)
+            assertEquals(listOf<Int?>(86_400), repository.expiryCalls)
+            assertEquals(86_400, stateHolder.state.value.viewerExpirySeconds)
+            assertEquals(86_400, stateHolder.state.value.effectiveExpirySeconds)
+            assertFalse(stateHolder.state.value.isSettingExpiry)
+
+            // Re-selecting the current value does not call the server again.
+            stateHolder.setExpiry(86_400)
+            assertEquals(listOf<Int?>(86_400), repository.expiryCalls)
+        }
+
+    @Test
+    fun setExpiryFailureSurfacesErrorAndLeavesTimerUnchanged() =
+        runBlocking {
+            val repository =
+                FakeConversationRepository().apply {
+                    expiryResult = AppResult.Failure(AppError("ENTITLEMENT_REQUIRED", "Upgrade is required for this feature."))
+                }
+            val stateHolder = ConversationStateHolder(repository)
+            stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+            stateHolder.setExpiry(3_600)
+
+            assertEquals("Upgrade is required for this feature.", stateHolder.state.value.errorMessage)
+            assertFalse(stateHolder.state.value.isSettingExpiry)
         }
 
     @Test
@@ -265,6 +300,19 @@ private class FakeConversationRepository(
     ): AppResult<Unit> {
         typingCalls += conversationId to isTyping
         return AppResult.Success(Unit)
+    }
+
+    val expiryCalls = mutableListOf<Int?>()
+    var expiryResult: AppResult<ConversationDto>? = null
+
+    override suspend fun setConversationExpiry(
+        conversationId: String,
+        expirySeconds: Int?,
+    ): AppResult<ConversationDto> {
+        expiryCalls += expirySeconds
+        val updated = detailConversation.copy(messageExpirySeconds = expirySeconds, effectiveMessageExpirySeconds = expirySeconds)
+        detailConversation = updated
+        return expiryResult ?: AppResult.Success(updated)
     }
 
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> {

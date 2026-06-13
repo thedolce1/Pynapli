@@ -13,6 +13,7 @@ internal fun ResultSet.toMessageRecord(deliveryStatus: String): MessageRecord =
         status = getString("moderation_status"),
         deliveryStatus = deliveryStatus,
         deletedAt = getTimestamp("deleted_at")?.toInstant(),
+        messageType = getString("message_type"),
     )
 
 internal fun MessageRecord.toCursor(): MessagePageCursor =

@@ -573,6 +573,100 @@ class MessagingRepositoryIntegrationTest {
             assertEquals(null, repository.getConversationDetail(partner, conversation.conversationId, limit = 10))
         }
 
+    @Test
+    fun expiryHidesOldUserMessagesButRetainsRowsAndKeepsSystemNotice() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008a1")
+            val target = UUID.fromString("00000000-0000-0000-0000-0000000008a2")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(viewer, target, origin = "grid")!!
+            repository.sendMessage(viewer, conversation.conversationId, "older one")
+            repository.sendMessage(viewer, conversation.conversationId, "older two")
+            // Age both user messages two hours into the past.
+            dataSource.ageUserMessages(conversation.conversationId, "2 hours")
+
+            // Viewer sets a 1-hour timer; the older messages now fall outside it.
+            val result =
+                repository.setConversationExpiry(
+                    userId = viewer,
+                    conversationId = conversation.conversationId,
+                    expirySeconds = 3_600,
+                    systemMessageBody = "Disappearing messages set to 1 hour.",
+                )!!
+            assertEquals(3_600, result.conversation.effectiveExpirySeconds)
+            assertEquals(3_600, result.conversation.viewerExpirySeconds)
+
+            val detail = repository.getConversationDetail(viewer, conversation.conversationId, limit = 50)!!
+            // The two aged user messages are hidden; only the fresh system notice shows.
+            assertEquals(listOf("system"), detail.messages.map { it.messageType })
+            assertEquals("Disappearing messages set to 1 hour.", detail.messages.single().body)
+            // Rows are retained for moderation/legal (3 = 2 user + 1 system).
+            assertEquals(3, dataSource.countMessages(conversation.conversationId))
+
+            // A fresh message is still visible under the timer.
+            repository.sendMessage(viewer, conversation.conversationId, "fresh")
+            val afterFresh = repository.getConversationDetail(viewer, conversation.conversationId, limit = 50)!!
+            assertEquals(
+                setOf("fresh"),
+                afterFresh.messages
+                    .filter { it.messageType == "user" }
+                    .map { it.body }
+                    .toSet(),
+            )
+        }
+
+    @Test
+    fun strictestParticipantExpiryTimerWins() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008b1")
+            val target = UUID.fromString("00000000-0000-0000-0000-0000000008b2")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation =
+                repository.getOrCreateDirectConversation(viewer, target, origin = "grid")!!
+
+            repository.setConversationExpiry(viewer, conversation.conversationId, 86_400, "set 24h")
+            repository.setConversationExpiry(target, conversation.conversationId, 3_600, "set 1h")
+
+            // Effective = strictest (smallest) of the two active participants' timers.
+            val viewerView = repository.getConversationDetail(viewer, conversation.conversationId, limit = 1)!!
+            assertEquals(3_600, viewerView.conversation.effectiveExpirySeconds)
+            assertEquals(86_400, viewerView.conversation.viewerExpirySeconds)
+        }
+
+    private fun DataSource.ageUserMessages(
+        conversationId: UUID,
+        interval: String,
+    ) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    "UPDATE messages SET created_at = now() - ?::interval WHERE conversation_id = ? AND message_type = 'user'",
+                ).use { statement ->
+                    statement.setString(1, interval)
+                    statement.setObject(2, conversationId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
+    private fun DataSource.countMessages(conversationId: UUID): Int =
+        connection.use { connection ->
+            connection
+                .prepareStatement("SELECT COUNT(*) FROM messages WHERE conversation_id = ?")
+                .use { statement ->
+                    statement.setObject(1, conversationId)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getInt(1)
+                    }
+                }
+        }
+
     private fun DataSource.insertUserWithProfile(
         userId: UUID,
         displayName: String,

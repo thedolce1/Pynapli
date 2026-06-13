@@ -222,6 +222,7 @@ internal fun ColumnScope.PynapliMainContent(
                         onDeclineInvite = conversationActions.onDeclineInvite,
                         onLeaveConversation = conversationActions.onLeave,
                         onDeleteMessage = conversationActions.onDeleteMessage,
+                        onSetExpiry = conversationActions.onSetExpiry,
                     )
                 } else {
                     MessagesScreen(

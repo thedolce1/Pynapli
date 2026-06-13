@@ -9,10 +9,12 @@ import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
+import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
@@ -92,6 +94,19 @@ internal class KtorConversationApi(
             } else {
                 response.toAppResult<Unit>(support.json)
             }
+        }
+
+    override suspend fun setConversationExpiry(
+        conversationId: String,
+        request: SetConversationExpiryRequestDto,
+    ): AppResult<ConversationDto> =
+        support.authenticated { token ->
+            support.httpClient
+                .put(support.endpoint("/v1/messages/threads/$conversationId/expiry")) {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }.toAppResult(support.json)
         }
 
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =

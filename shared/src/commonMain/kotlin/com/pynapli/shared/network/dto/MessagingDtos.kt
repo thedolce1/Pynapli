@@ -29,6 +29,24 @@ object MessageDeltaType {
     const val TYPING_STOPPED = "typing_stopped"
 }
 
+object MessageType {
+    const val USER = "user"
+    const val SYSTEM = "system"
+}
+
+/**
+ * Allowed conversation expiry timer values in seconds (MESSAGING_SPEC: 1h / 24h / 7d / 30d).
+ * null = disappearing messages off. The server enforces the same set.
+ */
+object MessageExpiryOption {
+    const val OneHour = 3_600
+    const val OneDay = 86_400
+    const val OneWeek = 604_800
+    const val ThirtyDays = 2_592_000
+
+    val ALL = listOf(OneHour, OneDay, OneWeek, ThirtyDays)
+}
+
 @Serializable
 data class CreateDirectConversationRequestDto(
     val targetUserId: String,
@@ -45,6 +63,10 @@ data class ConversationDto(
     val unreadCount: Int,
     val updatedAt: String,
     val partnerInvite: PartnerChatInviteDto? = null,
+    // The viewer's own disappearing-messages timer (null = off) and the effective timer for the
+    // conversation (strictest of all active participants; what messages actually expire on).
+    val messageExpirySeconds: Int? = null,
+    val effectiveMessageExpirySeconds: Int? = null,
 )
 
 @Serializable
@@ -79,6 +101,9 @@ data class MessageDto(
     val status: String,
     val deliveryStatus: String,
     val deletedAt: String? = null,
+    // "user" (default) or "system" (e.g. an expiry-timer change notice). Defaulted so older
+    // clients keep treating every message as a normal user message.
+    val messageType: String = MessageType.USER,
 )
 
 @Serializable
@@ -103,6 +128,12 @@ data class SendMessageRequestDto(
 @Serializable
 data class SendTypingIndicatorRequestDto(
     val isTyping: Boolean,
+)
+
+@Serializable
+data class SetConversationExpiryRequestDto(
+    // Seconds from the allowed set, or null to turn disappearing messages off.
+    val expirySeconds: Int? = null,
 )
 
 @Serializable

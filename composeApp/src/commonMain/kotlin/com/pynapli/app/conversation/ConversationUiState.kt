@@ -26,6 +26,7 @@ data class ConversationUiState(
     val isInvitingPartner: Boolean = false,
     val isRespondingToInvite: Boolean = false,
     val isLeaving: Boolean = false,
+    val isSettingExpiry: Boolean = false,
     val isLoadingOlder: Boolean = false,
     val isDeletingMessageIds: Set<String> = emptySet(),
     val typingParticipants: List<TypingParticipantUi> = emptyList(),
@@ -43,6 +44,14 @@ data class ConversationUiState(
 
     val draftOverLimit: Boolean
         get() = draftLength > MESSAGE_BODY_MAX_LENGTH
+
+    /** The conversation's effective disappearing-messages timer in seconds, or null when off. */
+    val effectiveExpirySeconds: Int?
+        get() = detail?.conversation?.effectiveMessageExpirySeconds
+
+    /** The viewer's own disappearing-messages timer in seconds, or null when off. */
+    val viewerExpirySeconds: Int?
+        get() = detail?.conversation?.messageExpirySeconds
 
     val viewerParticipantStatus: String?
         get() =

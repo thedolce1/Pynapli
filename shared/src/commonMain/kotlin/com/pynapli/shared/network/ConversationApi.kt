@@ -9,6 +9,7 @@ import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
+import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
 
 /**
  * Conversation / messaging slice of the API surface, split out of [PynapliApiClient]
@@ -36,6 +37,11 @@ interface ConversationApi {
         conversationId: String,
         request: SendTypingIndicatorRequestDto,
     ): AppResult<Unit>
+
+    suspend fun setConversationExpiry(
+        conversationId: String,
+        request: SetConversationExpiryRequestDto,
+    ): AppResult<ConversationDto>
 
     suspend fun deleteMessage(messageId: String): AppResult<MessageDto>
 

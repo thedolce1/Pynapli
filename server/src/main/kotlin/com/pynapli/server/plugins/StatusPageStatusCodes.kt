@@ -183,7 +183,9 @@ internal fun activityStatusFor(code: String): HttpStatusCode =
 internal fun messagingStatusFor(code: String): HttpStatusCode =
     when (code) {
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
-        "RISK_RESTRICTED" -> HttpStatusCode.Forbidden
+        "RISK_RESTRICTED",
+        "ENTITLEMENT_REQUIRED",
+        -> HttpStatusCode.Forbidden
         "CONVERSATION_NOT_FOUND",
         "MESSAGE_NOT_FOUND",
         "LINKED_PARTNER_NOT_FOUND",
@@ -193,6 +195,7 @@ internal fun messagingStatusFor(code: String): HttpStatusCode =
         "PARTNER_INVITE_ALREADY_SENT",
         "PARTNER_ALREADY_IN_CONVERSATION",
         -> HttpStatusCode.Conflict
+        "INVALID_MESSAGE_EXPIRY",
         "INVALID_ID",
         "INVALID_CONVERSATION_TARGET",
         "INVALID_CONVERSATION_ORIGIN",

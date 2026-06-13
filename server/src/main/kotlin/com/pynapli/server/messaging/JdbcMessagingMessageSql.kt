@@ -32,7 +32,7 @@ internal fun Connection.insertMessage(
             client_idempotency_key
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at
+        RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at, message_type
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, messageId)
@@ -68,7 +68,7 @@ internal fun Connection.findMessageByIdempotencyKey(
 ): MessageRecord? =
     prepareStatement(
         """
-        SELECT id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at
+        SELECT id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at, message_type
         FROM messages
         WHERE conversation_id = ?
           AND sender_user_id = ?
@@ -160,7 +160,8 @@ internal fun Connection.deleteOwnVisibleMessage(
                   '' AS body,
                   created_at,
                   moderation_status,
-                  deleted_at
+                  deleted_at,
+                  message_type
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, messageId)
@@ -168,6 +169,52 @@ internal fun Connection.deleteOwnVisibleMessage(
         statement.setObject(3, userId)
         statement.executeQuery().use { rs ->
             if (rs.next()) rs.toMessageRecord(deliveryStatus = DELIVERY_DELETED) else null
+        }
+    }
+
+/** Sets the caller's own disappearing-messages timer; returns rows updated (0 = not active). */
+internal fun Connection.setParticipantExpiry(
+    userId: UUID,
+    conversationId: UUID,
+    expirySeconds: Int?,
+): Int =
+    prepareStatement(
+        """
+        UPDATE conversation_participants
+        SET message_expiry_seconds = ?
+        WHERE conversation_id = ?
+          AND user_id = ?
+          AND left_at IS NULL
+          AND invitation_status = 'active'
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, expirySeconds, java.sql.Types.INTEGER)
+        statement.setObject(2, conversationId)
+        statement.setObject(3, userId)
+        statement.executeUpdate()
+    }
+
+/** Records a centered system notice (authored by [userId], type='system') describing a change. */
+internal fun Connection.insertSystemMessage(
+    messageId: UUID,
+    userId: UUID,
+    conversationId: UUID,
+    body: String,
+): MessageRecord =
+    prepareStatement(
+        """
+        INSERT INTO messages (id, conversation_id, sender_user_id, body, moderation_status, message_type)
+        VALUES (?, ?, ?, ?, 'visible', 'system')
+        RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at, message_type
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, messageId)
+        statement.setObject(2, conversationId)
+        statement.setObject(3, userId)
+        statement.setString(4, body)
+        statement.executeQuery().use { rs ->
+            rs.next()
+            rs.toMessageRecord(deliveryStatus = DELIVERY_SENT)
         }
     }
 

@@ -333,6 +333,105 @@ class MessagingServiceTest {
         }
 
     @Test
+    fun setConversationExpiryRequiresPaidTier() =
+        runBlocking {
+            val viewerId = UUID.fromString("00000000-0000-0000-0000-0000000000a1")
+            val targetId = UUID.fromString("00000000-0000-0000-0000-0000000000a2")
+            val repository = InMemoryMessagingRepository(setOf(targetId))
+            val service =
+                MessagingService(
+                    repository = repository,
+                    subscriptionService = subscriptionService(mapOf(viewerId to SubscriptionTier.FREE)),
+                )
+            val detail =
+                service.createDirectConversation(
+                    viewerId,
+                    CreateDirectConversationRequestDto(targetUserId = targetId.toString()),
+                )
+
+            val error =
+                assertFailsWith<MessagingException> {
+                    service.setConversationExpiry(viewerId, detail.conversation.conversationId, 86_400)
+                }
+            assertEquals("ENTITLEMENT_REQUIRED", error.code)
+        }
+
+    @Test
+    fun setConversationExpiryRejectsUnsupportedTimer() =
+        runBlocking {
+            val viewerId = UUID.fromString("00000000-0000-0000-0000-0000000000a3")
+            val targetId = UUID.fromString("00000000-0000-0000-0000-0000000000a4")
+            val repository = InMemoryMessagingRepository(setOf(targetId))
+            val service =
+                MessagingService(
+                    repository = repository,
+                    subscriptionService = subscriptionService(mapOf(viewerId to SubscriptionTier.SOCIAL)),
+                )
+            val detail =
+                service.createDirectConversation(
+                    viewerId,
+                    CreateDirectConversationRequestDto(targetUserId = targetId.toString()),
+                )
+
+            val error =
+                assertFailsWith<MessagingException> {
+                    service.setConversationExpiry(viewerId, detail.conversation.conversationId, 99)
+                }
+            assertEquals("INVALID_MESSAGE_EXPIRY", error.code)
+        }
+
+    @Test
+    fun setConversationExpiryStoresTimerAndRecordsSystemMessage() =
+        runBlocking {
+            val viewerId = UUID.fromString("00000000-0000-0000-0000-0000000000a5")
+            val targetId = UUID.fromString("00000000-0000-0000-0000-0000000000a6")
+            val repository = InMemoryMessagingRepository(setOf(targetId))
+            val broadcaster = MessageBroadcaster()
+            val service =
+                MessagingService(
+                    repository = repository,
+                    messageBroadcaster = broadcaster,
+                    subscriptionService = subscriptionService(mapOf(viewerId to SubscriptionTier.SOCIAL)),
+                )
+            val detail =
+                service.createDirectConversation(
+                    viewerId,
+                    CreateDirectConversationRequestDto(targetUserId = targetId.toString()),
+                )
+            val createdDeltaJob = async { broadcaster.deltas.first { it.type == MessageDeltaType.MESSAGE_CREATED } }
+            delay(10)
+
+            val conversation = service.setConversationExpiry(viewerId, detail.conversation.conversationId, 86_400)
+
+            assertEquals(86_400, conversation.messageExpirySeconds)
+            assertEquals(86_400, conversation.effectiveMessageExpirySeconds)
+            withTimeout(1_000) { createdDeltaJob.await() }
+
+            // The server-authored system notice is visible in the thread.
+            val afterSet = service.getConversationDetail(viewerId, detail.conversation.conversationId)
+            val systemMessage = afterSet.messages.firstOrNull { it.messageType == "system" }
+            assertEquals("Disappearing messages set to 24 hours.", systemMessage?.body)
+        }
+
+    @Test
+    fun setConversationExpiryOnUnknownConversationIsNotFound() =
+        runBlocking {
+            val viewerId = UUID.fromString("00000000-0000-0000-0000-0000000000a7")
+            val repository = InMemoryMessagingRepository(emptySet())
+            val service =
+                MessagingService(
+                    repository = repository,
+                    subscriptionService = subscriptionService(mapOf(viewerId to SubscriptionTier.SELECT)),
+                )
+
+            val error =
+                assertFailsWith<MessagingException> {
+                    service.setConversationExpiry(viewerId, UUID.randomUUID().toString(), 3_600)
+                }
+            assertEquals("CONVERSATION_NOT_FOUND", error.code)
+        }
+
+    @Test
     fun paidReaderPublishesReadDeltaButFreeReaderDoesNot() =
         runBlocking {
             val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000065")
@@ -875,6 +974,7 @@ private class InMemoryMessagingRepository(
     private val messageFingerprints = mutableMapOf<UUID, String?>()
     private val idempotencyKeys = mutableMapOf<UUID, String>()
     private val partnerInvitesByConversation = mutableMapOf<UUID, PartnerChatInviteRecord>()
+    private val expiryByParticipant = mutableMapOf<Pair<UUID, UUID>, Int?>()
     private var nextConversationIndex = 1
     private var nextMessageIndex = 1
     private var nextInviteIndex = 1
@@ -1085,6 +1185,56 @@ private class InMemoryMessagingRepository(
             )
         conversationsByPair[entry.key] = updated
         return true
+    }
+
+    override suspend fun setConversationExpiry(
+        userId: UUID,
+        conversationId: UUID,
+        expirySeconds: Int?,
+        systemMessageBody: String,
+        messageIdFactory: () -> UUID,
+    ): SetConversationExpiryResult? {
+        val entry =
+            conversationsByPair.entries.firstOrNull { (_, conversation) ->
+                conversation.conversationId == conversationId &&
+                    conversation.participants.any {
+                        it.userId == userId && it.status == ConversationParticipantStatus.ACTIVE
+                    }
+            } ?: return null
+        expiryByParticipant[conversationId to userId] = expirySeconds
+        val updatedParticipants =
+            entry.value.participants.map { participant ->
+                if (participant.userId == userId) {
+                    participant.copy(messageExpirySeconds = expirySeconds)
+                } else {
+                    participant
+                }
+            }
+        val effective =
+            updatedParticipants
+                .filter { it.status == ConversationParticipantStatus.ACTIVE }
+                .mapNotNull { it.messageExpirySeconds }
+                .minOrNull()
+        val systemMessage =
+            MessageRecord(
+                messageId = messageIdFactory(),
+                conversationId = conversationId,
+                senderUserId = userId,
+                body = systemMessageBody,
+                createdAt = Instant.parse("2026-04-24T18:00:09Z"),
+                status = "visible",
+                deliveryStatus = "sent",
+                messageType = "system",
+            )
+        messagesByConversation.getOrPut(conversationId) { mutableListOf() }.add(systemMessage)
+        val updated =
+            entry.value.copy(
+                participants = updatedParticipants,
+                viewerExpirySeconds = expirySeconds,
+                effectiveExpirySeconds = effective,
+            )
+        conversationsByPair[entry.key] = updated
+        return SetConversationExpiryResult(conversation = updated, systemMessage = systemMessage)
     }
 
     override suspend fun getConversationDetail(
