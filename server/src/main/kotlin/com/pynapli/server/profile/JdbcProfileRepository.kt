@@ -39,9 +39,12 @@ class JdbcProfileRepository(
                         statement.setObject(3, viewerUserId)
                         statement.setObject(4, viewerUserId)
                         statement.setObject(5, viewerUserId)
-                        statement.setObject(6, viewerUserId)
-                        statement.setObject(7, viewerUserId)
-                        statement.setObject(8, targetUserId)
+                        statement.setObject(6, viewerUserId) // partner block check (blocker side)
+                        statement.setObject(7, viewerUserId) // partner block check (blocked side)
+                        statement.setObject(8, viewerUserId) // partner-visibility verified_only gate
+                        statement.setObject(9, viewerUserId) // partner-visibility matches_only gate (LEAST)
+                        statement.setObject(10, viewerUserId) // partner-visibility matches_only gate (GREATEST)
+                        statement.setObject(11, targetUserId)
                         statement.executeQuery().use { rs ->
                             if (rs.next()) rs.toPublicProfileRecord() else null
                         }
@@ -131,6 +134,7 @@ class JdbcProfileRepository(
                             allow_album_requests = COALESCE(?::boolean, allow_album_requests),
                             visible_while_traveling = COALESCE(?::boolean, visible_while_traveling),
                             share_psync_solo_matches = COALESCE(?::boolean, share_psync_solo_matches),
+                            partner_visibility = COALESCE(?::text, partner_visibility),
                             updated_at = now()
                         WHERE user_id = ?
                         """.trimIndent(),
@@ -146,7 +150,8 @@ class JdbcProfileRepository(
                         statement.setObject(9, update.allowAlbumRequests)
                         statement.setObject(10, update.visibleWhileTraveling)
                         statement.setObject(11, update.sharePsyncSoloMatches)
-                        statement.setObject(12, userId)
+                        statement.setString(12, update.partnerVisibility)
+                        statement.setObject(13, userId)
                         if (statement.executeUpdate() == 0) return@withContext null
                     }
             }
@@ -226,6 +231,7 @@ class JdbcProfileRepository(
                     socialEnabled = getBoolean("social_enabled"),
                     visibleWhileTraveling = getBoolean("visible_while_traveling"),
                     sharePsyncSoloMatches = getBoolean("share_psync_solo_matches"),
+                    partnerVisibility = getString("partner_visibility"),
                 ),
         )
     }
@@ -267,7 +273,8 @@ class JdbcProfileRepository(
                    ds.together_enabled,
                    ds.social_enabled,
                    ds.visible_while_traveling,
-                   ds.share_psync_solo_matches
+                   ds.share_psync_solo_matches,
+                   ds.partner_visibility
             FROM users u
             JOIN profiles p ON p.user_id = u.id
             JOIN discovery_settings ds ON ds.user_id = u.id
@@ -418,6 +425,26 @@ class JdbcProfileRepository(
                       FROM user_blocks ub
                       WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
                          OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
+                  )
+                  -- Owner-controlled partner visibility (PROFILE_SETTINGS_SPEC). ds is the
+                  -- owner's discovery settings; 'hidden' falls through to no row.
+                  AND (
+                      ds.partner_visibility = 'public'
+                      OR (
+                          ds.partner_visibility = 'verified_only'
+                          AND EXISTS (
+                              SELECT 1 FROM profiles vp
+                              WHERE vp.user_id = ? AND vp.verified_at IS NOT NULL
+                          )
+                      )
+                      OR (
+                          ds.partner_visibility = 'matches_only'
+                          AND EXISTS (
+                              SELECT 1 FROM matches mm
+                              WHERE LEAST(mm.user_a, mm.user_b) = LEAST(?::uuid, u.id)
+                                AND GREATEST(mm.user_a, mm.user_b) = GREATEST(?::uuid, u.id)
+                          )
+                      )
                   )
                 ORDER BY upl.accepted_at DESC NULLS LAST, upl.created_at DESC, upl.id ASC
                 LIMIT 1

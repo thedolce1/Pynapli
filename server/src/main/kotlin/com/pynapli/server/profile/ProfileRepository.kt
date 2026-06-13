@@ -67,6 +67,7 @@ data class DiscoverySettingsRecord(
     val socialEnabled: Boolean,
     val visibleWhileTraveling: Boolean,
     val sharePsyncSoloMatches: Boolean,
+    val partnerVisibility: String = "public",
 )
 
 data class PublicProfileRecord(
@@ -127,4 +128,5 @@ data class DiscoverySettingsUpdate(
     val allowAlbumRequests: Boolean?,
     val visibleWhileTraveling: Boolean?,
     val sharePsyncSoloMatches: Boolean?,
+    val partnerVisibility: String? = null,
 )

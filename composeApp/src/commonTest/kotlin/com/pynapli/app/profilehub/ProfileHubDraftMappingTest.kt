@@ -1,5 +1,6 @@
 package com.pynapli.app.profilehub
 
+import com.pynapli.shared.network.dto.DiscoverySettingsDto
 import com.pynapli.shared.network.dto.ProfileDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -56,6 +57,16 @@ class ProfileHubDraftMappingTest {
     }
 
     @Test
+    fun privacyDraftRoundTripsPartnerVisibilityAndFallsBackForUnknown() {
+        val draft = discoverySettingsDto(partnerVisibility = "matches_only").toPrivacyDraft()
+        assertEquals("matches_only", draft.partnerVisibility)
+        assertEquals("matches_only", draft.toRequest().partnerVisibility)
+
+        // An unrecognized stored value falls back to the safe default in the picker.
+        assertEquals("public", discoverySettingsDto(partnerVisibility = "friends").toPrivacyDraft().partnerVisibility)
+    }
+
+    @Test
     fun validationCatchesOverlongBioAndMissingSelfDescribeLabel() {
         val base = testProfileDto(displayName = "Alex").toDraft()
 
@@ -66,6 +77,25 @@ class ProfileHubDraftMappingTest {
         assertNull(base.copy(gender = "self_describe", genderDetail = "Genderfluid").validationError())
     }
 }
+
+private fun discoverySettingsDto(partnerVisibility: String): DiscoverySettingsDto =
+    DiscoverySettingsDto(
+        gridVisible = true,
+        swipeVisible = true,
+        eventsVisible = true,
+        showDistance = true,
+        showInViewedLists = true,
+        incognito = false,
+        allowGridMessages = true,
+        gridMessagePolicy = "everyone",
+        allowFlirts = true,
+        allowIntroNotes = true,
+        allowAlbumRequests = true,
+        soloEnabled = true,
+        togetherEnabled = false,
+        socialEnabled = true,
+        partnerVisibility = partnerVisibility,
+    )
 
 private fun testProfileDto(
     displayName: String = "Alex",

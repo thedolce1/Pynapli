@@ -241,6 +241,85 @@ class ProfileRepositoryIntegrationTest {
                 }
         }
 
+    @Test
+    fun publicProfileGatesLinkedPartnerMiniByOwnerVisibility() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000741")
+            val owner = UUID.fromString("00000000-0000-0000-0000-000000000742")
+            val partner = UUID.fromString("00000000-0000-0000-0000-000000000743")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(owner, "Owner")
+            dataSource.insertUserWithProfile(partner, "Partner")
+            dataSource.insertActiveProfileLink(userId = owner, linkedUserId = partner)
+            val repository = JdbcProfileRepository(dataSource)
+
+            // Default 'public' projects the partner mini.
+            assertEquals(partner, requireNotNull(repository.getPublicProfile(viewer, owner)).linkedPartnerUserId)
+
+            // 'hidden' suppresses the mini while the profile itself stays visible.
+            dataSource.setPartnerVisibility(owner, "hidden")
+            requireNotNull(repository.getPublicProfile(viewer, owner)).let {
+                assertEquals(owner, it.userId)
+                assertNull(it.linkedPartnerUserId)
+            }
+
+            // 'matches_only' hides until a match exists between viewer and owner.
+            dataSource.setPartnerVisibility(owner, "matches_only")
+            assertNull(requireNotNull(repository.getPublicProfile(viewer, owner)).linkedPartnerUserId)
+            dataSource.insertMatch(viewer, owner)
+            assertEquals(partner, requireNotNull(repository.getPublicProfile(viewer, owner)).linkedPartnerUserId)
+
+            // 'verified_only' ignores the match and requires the VIEWER to be verified.
+            dataSource.setPartnerVisibility(owner, "verified_only")
+            assertNull(requireNotNull(repository.getPublicProfile(viewer, owner)).linkedPartnerUserId)
+            dataSource.setVerified(viewer)
+            assertEquals(partner, requireNotNull(repository.getPublicProfile(viewer, owner)).linkedPartnerUserId)
+        }
+
+    private fun DataSource.setPartnerVisibility(
+        userId: UUID,
+        value: String,
+    ) {
+        connection.use { connection ->
+            connection
+                .prepareStatement("UPDATE discovery_settings SET partner_visibility = ? WHERE user_id = ?")
+                .use { statement ->
+                    statement.setString(1, value)
+                    statement.setObject(2, userId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
+    private fun DataSource.insertMatch(
+        userIdA: UUID,
+        userIdB: UUID,
+    ) {
+        // matches enforces canonical user_a < user_b ordering.
+        val (low, high) = if (userIdA.toString() < userIdB.toString()) userIdA to userIdB else userIdB to userIdA
+        connection.use { connection ->
+            connection
+                .prepareStatement("INSERT INTO matches (id, user_a, user_b) VALUES (?, ?, ?)")
+                .use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, low)
+                    statement.setObject(3, high)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
+    private fun DataSource.setVerified(userId: UUID) {
+        connection.use { connection ->
+            connection
+                .prepareStatement("UPDATE profiles SET verified_at = now() WHERE user_id = ?")
+                .use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
     private fun DataSource.insertUserWithProfile(
         userId: UUID,
         displayName: String,

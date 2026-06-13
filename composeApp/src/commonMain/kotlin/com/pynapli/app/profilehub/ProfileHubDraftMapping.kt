@@ -49,6 +49,7 @@ internal fun DiscoverySettingsDto.toPrivacyDraft(): PrivacySettingsDraft =
         showDistance = showDistance,
         visibleWhileTraveling = visibleWhileTraveling,
         sharePsyncSoloMatches = sharePsyncSoloMatches,
+        partnerVisibility = partnerVisibility.takeIf { it in partnerVisibilities } ?: "public",
     )
 
 internal fun DiscoverySettingsDto.toActivityDraft(): ActivitySettingsDraft =
@@ -68,6 +69,7 @@ internal fun PrivacySettingsDraft.toRequest(): UpdateDiscoverySettingsRequestDto
         showDistance = showDistance,
         visibleWhileTraveling = visibleWhileTraveling,
         sharePsyncSoloMatches = sharePsyncSoloMatches,
+        partnerVisibility = partnerVisibility,
     )
 
 internal fun ActivitySettingsDraft.toRequest(): UpdateDiscoverySettingsRequestDto =
@@ -126,3 +128,5 @@ private val birthdatePattern = Regex("""\d{4}-\d{2}-\d{2}""")
 private val discoveryStyles = setOf("solo", "together", "both", "social", "ask_in_chat")
 
 internal val gridMessagePolicies = setOf("everyone", "matches_only", "no_one")
+
+internal val partnerVisibilities = setOf("public", "matches_only", "verified_only", "hidden")

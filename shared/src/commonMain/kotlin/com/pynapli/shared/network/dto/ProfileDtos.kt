@@ -81,6 +81,9 @@ data class DiscoverySettingsDto(
     // PSYNC_SPEC: solo passthrough matches are private by default; opt in to let a
     // linked partner see them in the shared Psync recap. Defaults false (private).
     val sharePsyncSoloMatches: Boolean = false,
+    // PROFILE_SETTINGS_SPEC partner visibility: public | matches_only | verified_only | hidden.
+    // Controls who can see this profile's linked-partner mini. Defaults public.
+    val partnerVisibility: String = "public",
 )
 
 @Serializable
@@ -115,4 +118,5 @@ data class UpdateDiscoverySettingsRequestDto(
     val allowAlbumRequests: Boolean? = null,
     val visibleWhileTraveling: Boolean? = null,
     val sharePsyncSoloMatches: Boolean? = null,
+    val partnerVisibility: String? = null,
 )

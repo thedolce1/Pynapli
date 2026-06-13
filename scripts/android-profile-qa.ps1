@@ -555,6 +555,8 @@ SET display_name = 'Seb Dev',
 WHERE user_id = (SELECT id FROM users WHERE email_hash = '$viewerHash');
 "@
     Invoke-DevSql $sql | Out-Null
+    # Reset partner visibility to the default so the selector starts at a known state.
+    Invoke-DevSql "UPDATE discovery_settings SET partner_visibility = 'public' WHERE user_id = (SELECT id FROM users WHERE email_hash = '$viewerHash');" | Out-Null
     Write-Host "[ok] Reset + age-verified dev profile for a clean edit slate"
 }
 
@@ -729,6 +731,28 @@ Scroll-Until-Text @("Lifestyle") | Out-Null
 $reopenXml = Capture-Stage "editReopened" "05_edit_reopened"
 Assert-TextPresent $reopenXml "Lifestyle" "Edit reopened"
 
+# Partner stage: the dedicated Partner surface renders the visibility selector, and a
+# selection saves through the discovery-settings write path (server-verified).
+Tap-Text "Back"
+Tap-Text "Linked partner"
+$partnerXml = Wait-ForAnyText @("Partner visibility") 45
+$partnerXml = Capture-Stage "partner" "06_partner" $partnerXml.Xml
+Assert-TextPresent $partnerXml "Show partner publicly" "Partner"
+Assert-TextPresent $partnerXml "Matches only" "Partner"
+Assert-TextPresent $partnerXml "Hide partner" "Partner"
+
+Tap-Text "Matches only"
+Tap-Text "Save partner settings"
+Wait-ForAnyText @("Partner settings updated", "Linked partner") 45 | Out-Null
+
+$me2 = Invoke-PynapliJson -Method GET -Path "/v1/me" -AccessToken $session.accessToken
+Assert-ApiSuccess $me2 "GET /v1/me after partner save"
+$partnerVisibility = $me2.Body.discoverySettings.partnerVisibility
+if ($partnerVisibility -ne "matches_only") {
+    throw "Partner visibility did not persist: got '$partnerVisibility', expected matches_only."
+}
+Write-Host "[ok] Server confirmed partner visibility = matches_only"
+
 Write-Summary @{
     baseUrl = $BaseUrl
     deviceId = $script:DeviceId
@@ -741,6 +765,7 @@ Write-Summary @{
         intents = @($profile.intents)
         logisticsTags = @($profile.logisticsTags)
         lifestyleTags = @($profile.lifestyleTags)
+        partnerVisibility = $partnerVisibility
     }
-    stages = @("editInitial", "editTaxonomy", "editTags", "saved", "editReopened")
+    stages = @("editInitial", "editTaxonomy", "editTags", "saved", "editReopened", "partner")
 }

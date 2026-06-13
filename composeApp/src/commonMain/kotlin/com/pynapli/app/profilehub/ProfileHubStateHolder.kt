@@ -128,12 +128,44 @@ class ProfileHubStateHolder(
         }
     }
 
+    fun openPartner() {
+        _state.update { existing ->
+            existing.copy(
+                partnerVisible = true,
+                editVisible = false,
+                privacyVisible = false,
+                activityVisible = false,
+                appSettingsVisible = false,
+                notificationCenterVisible = false,
+                safetyCenterVisible = false,
+                ageVerificationDialogVisible = false,
+                // Partner visibility rides the privacy draft (it's a discovery_settings field).
+                privacyDraft = existing.me?.discoverySettings?.toPrivacyDraft() ?: existing.privacyDraft,
+                feedbackMessage = null,
+                errorMessage = null,
+            )
+        }
+    }
+
+    fun dismissPartner() {
+        _state.update { existing ->
+            existing.copy(
+                partnerVisible = false,
+                privacyDraft = existing.me?.discoverySettings?.toPrivacyDraft() ?: existing.privacyDraft,
+                errorMessage = null,
+            )
+        }
+    }
+
+    fun updatePartnerVisibility(value: String) = updatePrivacyDraft { it.copy(partnerVisibility = value) }
+
     fun openActivityControls() {
         _state.update { existing ->
             existing.copy(
                 activityVisible = true,
                 editVisible = false,
                 privacyVisible = false,
+                partnerVisible = false,
                 appSettingsVisible = false,
                 notificationCenterVisible = false,
                 safetyCenterVisible = false,
@@ -701,6 +733,39 @@ class ProfileHubStateHolder(
                         errorMessage = result.error.message,
                     )
                 }
+            }
+        }
+    }
+
+    /**
+     * Saves the partner-visibility selection from the Partner surface. Partner
+     * visibility is a discovery_settings field, so it round-trips through the same
+     * privacy draft/request as [savePrivacySettings] — sending the other privacy
+     * fields at their current loaded values, unchanged.
+     */
+    suspend fun savePartner() {
+        val current = state.value
+        if (current.isSaving) return
+
+        _state.update { it.copy(isSaving = true, errorMessage = null, feedbackMessage = null) }
+
+        when (val result = repository.updateDiscoverySettings(current.privacyDraft.toRequest())) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        me = result.value,
+                        privacyDraft = result.value.discoverySettings.toPrivacyDraft(),
+                        activityDraft = result.value.discoverySettings.toActivityDraft(),
+                        partnerVisible = false,
+                        isSaving = false,
+                        errorMessage = null,
+                        feedbackMessage = "Partner settings updated",
+                    )
+                }
+            }
+
+            is AppResult.Failure -> {
+                _state.update { it.copy(isSaving = false, errorMessage = result.error.message) }
             }
         }
     }

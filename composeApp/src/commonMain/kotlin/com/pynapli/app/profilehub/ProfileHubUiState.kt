@@ -17,6 +17,7 @@ data class ProfileHubUiState(
     val activityDraft: ActivitySettingsDraft = ActivitySettingsDraft(),
     val editVisible: Boolean = false,
     val privacyVisible: Boolean = false,
+    val partnerVisible: Boolean = false,
     val activityVisible: Boolean = false,
     val appSettingsVisible: Boolean = false,
     val notificationCenterVisible: Boolean = false,
@@ -72,6 +73,8 @@ data class PrivacySettingsDraft(
     // PSYNC_SPEC: opt in to let a linked partner see your Psync solo matches in
     // the shared recap. Private (false) by default.
     val sharePsyncSoloMatches: Boolean = false,
+    // PROFILE_SETTINGS_SPEC partner visibility: public | matches_only | verified_only | hidden.
+    val partnerVisibility: String = "public",
 )
 
 @Immutable

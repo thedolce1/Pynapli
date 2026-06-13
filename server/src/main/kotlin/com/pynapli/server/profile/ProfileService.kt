@@ -142,6 +142,11 @@ class ProfileService(
             throw ProfileException("INVALID_GRID_MESSAGE_POLICY")
         }
 
+        val normalizedPartnerVisibility = partnerVisibility?.trim()?.lowercase()
+        if (normalizedPartnerVisibility != null && normalizedPartnerVisibility !in PARTNER_VISIBILITIES) {
+            throw ProfileException("INVALID_PARTNER_VISIBILITY")
+        }
+
         return DiscoverySettingsUpdate(
             gridVisible = gridVisible,
             swipeVisible = swipeVisible,
@@ -154,6 +159,7 @@ class ProfileService(
             allowAlbumRequests = allowAlbumRequests,
             visibleWhileTraveling = visibleWhileTraveling,
             sharePsyncSoloMatches = sharePsyncSoloMatches,
+            partnerVisibility = normalizedPartnerVisibility,
         )
     }
 
@@ -333,6 +339,7 @@ class ProfileService(
             socialEnabled = socialEnabled,
             visibleWhileTraveling = visibleWhileTraveling,
             sharePsyncSoloMatches = sharePsyncSoloMatches,
+            partnerVisibility = partnerVisibility,
         )
 
     private fun String?.cleanOptional(maxLength: Int): String? {
@@ -363,6 +370,7 @@ class ProfileService(
         private val logger = LoggerFactory.getLogger(ProfileService::class.java)
         private val DISCOVERY_STYLES = setOf("solo", "together", "both", "social", "ask_in_chat")
         private val GRID_MESSAGE_POLICIES = setOf("everyone", "matches_only", "no_one")
+        private val PARTNER_VISIBILITIES = setOf("public", "matches_only", "verified_only", "hidden")
     }
 }
 
