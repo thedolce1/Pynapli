@@ -38,7 +38,7 @@ class ProfileServiceTest {
                         displayName = " Alex ",
                         birthdate = "1990-01-15",
                         gender = "Man",
-                        orientation = "Bi",
+                        orientation = "Bisexual",
                         relationshipContext = "Single",
                         discoveryStyle = "solo",
                     ),
@@ -156,7 +156,7 @@ class ProfileServiceTest {
                     displayName = "Maya",
                     birthdate = "1991-02-11",
                     gender = "Woman",
-                    orientation = "Open",
+                    orientation = "Pansexual",
                     relationshipContext = "Linked",
                     discoveryStyle = "both",
                 ),
@@ -253,6 +253,157 @@ class ProfileServiceTest {
             assertEquals("PROFILE_NOT_FOUND", error.code)
             assertEquals(emptyList(), activityRepository.profileViews)
         }
+
+    @Test
+    fun updateProfileStoresBioTagsAndSelfDescribe() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId, ageVerified = true), clock)
+
+            val me =
+                service.updateProfile(
+                    userId,
+                    UpdateProfileRequestDto(
+                        displayName = "Alex",
+                        bio = "  Friendly couple-adjacent human. ",
+                        gender = "Self_Describe",
+                        genderDetail = " Genderfluid ",
+                        orientation = "Heteroflexible",
+                        lifestyleTags = listOf("Soft_Swap", "enm", "enm"),
+                        logisticsTags = listOf("hosts"),
+                        intents = listOf("events", "chat_first"),
+                    ),
+                )
+
+            assertEquals("Friendly couple-adjacent human.", me.profile.bio)
+            assertEquals("self_describe", me.profile.gender)
+            assertEquals("Genderfluid", me.profile.genderDetail)
+            assertEquals("heteroflexible", me.profile.orientation)
+            assertEquals(null, me.profile.orientationDetail)
+            assertEquals(listOf("soft_swap", "enm"), me.profile.lifestyleTags)
+            assertEquals(listOf("hosts"), me.profile.logisticsTags)
+            assertEquals(listOf("events", "chat_first"), me.profile.intents)
+        }
+
+    @Test
+    fun updateProfileRejectsUnknownGenderKeyAndTag() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId, ageVerified = true), clock)
+
+            assertEquals(
+                "INVALID_GENDER",
+                assertFailsWith<ProfileException> {
+                    service.updateProfile(userId, UpdateProfileRequestDto(gender = "couple"))
+                }.code,
+            )
+            assertEquals(
+                "INVALID_ORIENTATION",
+                assertFailsWith<ProfileException> {
+                    service.updateProfile(userId, UpdateProfileRequestDto(orientation = "open"))
+                }.code,
+            )
+            assertEquals(
+                "INVALID_PROFILE_TAG",
+                assertFailsWith<ProfileException> {
+                    service.updateProfile(userId, UpdateProfileRequestDto(lifestyleTags = listOf("polycule")))
+                }.code,
+            )
+        }
+
+    @Test
+    fun updateProfileRequiresSelfDescribeLabelAndDropsStrayDetail() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId), clock)
+
+            assertEquals(
+                "INVALID_GENDER",
+                assertFailsWith<ProfileException> {
+                    service.updateProfile(userId, UpdateProfileRequestDto(gender = "self_describe", genderDetail = "  "))
+                }.code,
+            )
+
+            // A structured key silently drops a stray detail so filters stay structured.
+            val me = service.updateProfile(userId, UpdateProfileRequestDto(gender = "man", genderDetail = "ignored"))
+            assertEquals("man", me.profile.gender)
+            assertEquals(null, me.profile.genderDetail)
+        }
+
+    @Test
+    fun updateProfileRejectsOverlongBio() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId), clock)
+
+            val error =
+                assertFailsWith<ProfileException> {
+                    service.updateProfile(userId, UpdateProfileRequestDto(bio = "x".repeat(501)))
+                }
+
+            assertEquals("INVALID_BIO", error.code)
+        }
+
+    @Test
+    fun lifestyleTagsRequireAgeVerification() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val unverified = ProfileService(InMemoryProfileRepository(userId), clock)
+
+            val error =
+                assertFailsWith<ProfileException> {
+                    unverified.updateProfile(userId, UpdateProfileRequestDto(lifestyleTags = listOf("enm")))
+                }
+            assertEquals("AGE_VERIFICATION_REQUIRED", error.code)
+
+            // Logistics/intents are not sensitivity-gated.
+            val me = unverified.updateProfile(userId, UpdateProfileRequestDto(logisticsTags = listOf("hosts"), intents = listOf("events")))
+            assertEquals(listOf("hosts"), me.profile.logisticsTags)
+        }
+
+    @Test
+    fun bioScannerRejectionBlocksTheSaveBeforeStorage() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryProfileRepository(userId)
+            val service =
+                ProfileService(
+                    repository = repository,
+                    clock = clock,
+                    bioScanner = { ProfileBioScanner.Decision.Reject },
+                )
+
+            val error =
+                assertFailsWith<ProfileException> {
+                    service.updateProfile(userId, UpdateProfileRequestDto(bio = "anything"))
+                }
+
+            assertEquals("BIO_REJECTED", error.code)
+            assertEquals(0, repository.updateProfileCalls)
+        }
+
+    @Test
+    fun omittedBioAndTagsLeaveStoredValuesUnchangedWhileEmptyClears() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId, ageVerified = true), clock)
+            service.updateProfile(
+                userId,
+                UpdateProfileRequestDto(bio = "Keep me", lifestyleTags = listOf("enm"), intents = listOf("events")),
+            )
+
+            // Omitted fields (null) leave the stored values alone.
+            val unchanged = service.updateProfile(userId, UpdateProfileRequestDto(displayName = "Alex"))
+            assertEquals("Keep me", unchanged.profile.bio)
+            assertEquals(listOf("enm"), unchanged.profile.lifestyleTags)
+            assertEquals(listOf("events"), unchanged.profile.intents)
+
+            // Explicitly empty values clear them.
+            val cleared = service.updateProfile(userId, UpdateProfileRequestDto(bio = " ", lifestyleTags = emptyList()))
+            assertEquals(null, cleared.profile.bio)
+            assertEquals(emptyList(), cleared.profile.lifestyleTags)
+            assertEquals(listOf("events"), cleared.profile.intents)
+        }
 }
 
 private class InMemoryActivityRepository : ActivityRepository {
@@ -329,7 +480,11 @@ private class InMemoryProfileRepository(
     private val linkedPartnerUserId: UUID? = null,
     private val linkedPartnerDisplayName: String? = "Noa",
     private val linkedPartnerThumbnailMediaAssetId: UUID? = null,
+    ageVerified: Boolean = false,
 ) : ProfileRepository {
+    var updateProfileCalls = 0
+        private set
+
     private var record =
         MeRecord(
             userId = userId,
@@ -347,6 +502,7 @@ private class InMemoryProfileRepository(
                     profileCompletenessScore = 0,
                     moderationStatus = "pending",
                     visibilityStatus = "visible",
+                    ageVerified = ageVerified,
                 ),
             discoverySettings =
                 DiscoverySettingsRecord(
@@ -408,6 +564,7 @@ private class InMemoryProfileRepository(
         update: ProfileUpdate,
     ): MeRecord? {
         if (record.userId != userId) return null
+        updateProfileCalls += 1
         record =
             record.copy(
                 profile =
@@ -416,9 +573,16 @@ private class InMemoryProfileRepository(
                         birthdate = update.birthdate,
                         displayAge = update.displayAge,
                         gender = update.gender,
+                        genderDetail = update.genderDetail,
                         orientation = update.orientation,
+                        orientationDetail = update.orientationDetail,
                         relationshipContext = update.relationshipContext,
                         discoveryStyle = update.discoveryStyle ?: record.profile.discoveryStyle,
+                        // Mirrors the JDBC CASE/COALESCE semantics for the late-added fields.
+                        bio = if (update.bioProvided) update.bio else record.profile.bio,
+                        lifestyleTags = update.lifestyleTags ?: record.profile.lifestyleTags,
+                        logisticsTags = update.logisticsTags ?: record.profile.logisticsTags,
+                        intents = update.intents ?: record.profile.intents,
                         profileCompletenessScore = update.profileCompletenessScore,
                     ),
             )

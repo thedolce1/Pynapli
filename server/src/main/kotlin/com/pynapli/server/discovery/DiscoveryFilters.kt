@@ -145,53 +145,68 @@ private const val MAX_FILTER_AGE = 99
 private const val MAX_RELATIONSHIP_CONTEXT_FILTERS = 8
 private const val MAX_RELATIONSHIP_CONTEXT_LENGTH = 40
 
-// Mirrors the CHECK constraint on profiles.discovery_style (V3__create_profile_foundation.sql).
-private val ALLOWED_DISCOVERY_STYLES = setOf("solo", "together", "both", "social", "ask_in_chat")
+/**
+ * Canonical tag/style vocabularies shared by the discovery filter parser and the
+ * profile write path (ProfileService) — a profile can only carry values a filter
+ * can match, so the two must validate against the same sets.
+ */
+object DiscoveryTagTaxonomies {
+    // Mirrors the CHECK constraint on profiles.discovery_style (V3__create_profile_foundation.sql).
+    val discoveryStyles = setOf("solo", "together", "both", "social", "ask_in_chat")
+
+    // Curated subset of LANGUAGE_AND_TAXONOMY_SPEC lifestyle terms surfaced as filterable tags.
+    // Profiles store the canonical lower-cased token in profiles.lifestyle_tags.
+    val lifestyleTags =
+        setOf(
+            "soft_swap",
+            "full_swap",
+            "same_room",
+            "separate_room",
+            "new_to_lifestyle",
+            "experienced",
+            "kink_friendly",
+            "vanilla_social",
+            "enm",
+            "swinging",
+        )
+
+    // FILTERS_SPEC L170-184. "Distance radius" / "City/neighborhood" / "Travel dates" are
+    // modeled separately and are intentionally not in this set.
+    val logisticsTags =
+        setOf(
+            "hosts",
+            "travels",
+            "hotel_friendly",
+            "public_meet_first",
+            "club_event_only",
+        )
+
+    // FILTERS_SPEC L114-138 Intent group, minus values already covered by `discovery_style`
+    // (solo/together/both/social/ask_in_chat).
+    val intents =
+        setOf(
+            "dating",
+            "chat_first",
+            "events",
+            "open_to_singles",
+            "open_to_couples",
+            "open_to_linked_partners",
+            "open_to_groups",
+        )
+}
+
+private val ALLOWED_DISCOVERY_STYLES = DiscoveryTagTaxonomies.discoveryStyles
 
 private const val MAX_LIFESTYLE_TAG_FILTERS = 12
 
-// Curated subset of LANGUAGE_AND_TAXONOMY_SPEC lifestyle terms surfaced as filterable tags.
-// Profiles store the canonical lower-cased token in profiles.lifestyle_tags.
-private val ALLOWED_LIFESTYLE_TAGS =
-    setOf(
-        "soft_swap",
-        "full_swap",
-        "same_room",
-        "separate_room",
-        "new_to_lifestyle",
-        "experienced",
-        "kink_friendly",
-        "vanilla_social",
-        "enm",
-        "swinging",
-    )
+private val ALLOWED_LIFESTYLE_TAGS = DiscoveryTagTaxonomies.lifestyleTags
 
 private const val MAX_LOGISTICS_TAG_FILTERS = 8
 
-// FILTERS_SPEC L170-184. "Distance radius" / "City/neighborhood" / "Travel dates" are
-// modeled separately and are intentionally not in this set.
-private val ALLOWED_LOGISTICS_TAGS =
-    setOf(
-        "hosts",
-        "travels",
-        "hotel_friendly",
-        "public_meet_first",
-        "club_event_only",
-    )
+private val ALLOWED_LOGISTICS_TAGS = DiscoveryTagTaxonomies.logisticsTags
 
 private val ADVANCED_LOGISTICS_TAGS = ALLOWED_LOGISTICS_TAGS - "public_meet_first"
 
 private const val MAX_INTENT_FILTERS = 8
 
-// FILTERS_SPEC L114-138 Intent group, minus values already covered by `discovery_style`
-// (solo/together/both/social/ask_in_chat).
-private val ALLOWED_INTENTS =
-    setOf(
-        "dating",
-        "chat_first",
-        "events",
-        "open_to_singles",
-        "open_to_couples",
-        "open_to_linked_partners",
-        "open_to_groups",
-    )
+private val ALLOWED_INTENTS = DiscoveryTagTaxonomies.intents

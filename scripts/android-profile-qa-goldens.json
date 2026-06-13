@@ -1,0 +1,60 @@
+{
+  "description": "Loose text + luminance signatures for the Android profile bio/tags edit QA. Floors are intentionally generous: dark-first UI, emulator GPU variance.",
+  "stages": {
+    "editInitial": {
+      "requiredTexts": ["Edit profile", "Display name", "Bio"],
+      "forbiddenTexts": ["Something went wrong"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 8
+      }
+    },
+    "editTaxonomy": {
+      "requiredTexts": ["Gender", "Orientation"],
+      "forbiddenTexts": ["Something went wrong"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 8
+      }
+    },
+    "editTags": {
+      "requiredTexts": ["Lifestyle", "Logistics", "Intents"],
+      "forbiddenTexts": ["Something went wrong", "Verify your age to add lifestyle tags."],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 8
+      }
+    },
+    "saved": {
+      "requiredTexts": ["Edit profile"],
+      "forbiddenTexts": ["Something went wrong"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 8
+      }
+    },
+    "editReopened": {
+      "requiredTexts": ["Lifestyle"],
+      "forbiddenTexts": ["Something went wrong"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 8
+      }
+    }
+  }
+}

@@ -33,7 +33,11 @@ import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.grid.GridLinkedPartnerUi
+import com.pynapli.app.grid.Intent
+import com.pynapli.app.grid.LifestyleTag
+import com.pynapli.app.grid.LogisticsTag
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
+import com.pynapli.shared.profile.ProfileTaxonomies
 
 @Composable
 internal fun ProfileFacts(profileState: ProfileDetailUiState) {
@@ -45,38 +49,87 @@ internal fun ProfileFacts(profileState: ProfileDetailUiState) {
                 profile.displayAge?.let { add("$it") }
                 add(profile.discoveryStyle.toDisplayLabel())
                 profile.relationshipContext?.let { add(it.toDisplayLabel()) }
-                profile.gender?.let { add(it.toDisplayLabel()) }
-                profile.orientation?.let { add(it.toDisplayLabel()) }
+                profile.gender?.let { add(selfDescribableLabel(it, profile.genderDetail)) }
+                profile.orientation?.let { add(selfDescribableLabel(it, profile.orientationDetail)) }
                 if (profile.linkedPartner != null || card.linkedPartner != null) add("Linked")
             }
         }
+    val tagChips =
+        remember(profile) {
+            buildList {
+                profile.lifestyleTags.forEach { value -> add(lifestyleTagLabel(value)) }
+                profile.logisticsTags.forEach { value -> add(logisticsTagLabel(value)) }
+                profile.intents.forEach { value -> add(intentLabel(value)) }
+            }
+        }
 
-    FlowRow(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        chips.forEach { label ->
-            PynapliPill(
-                text = label,
-                selected = false,
-                leading =
-                    if (label == "Linked") {
-                        {
-                            Icon(
-                                imageVector = Icons.Filled.Person,
-                                contentDescription = null,
-                                tint = PynapliColors.Accent,
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
-                    } else {
-                        null
-                    },
+        profile.bio?.takeIf { it.isNotBlank() }?.let { bio ->
+            Text(
+                text = bio,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyMedium,
             )
+        }
+
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            chips.forEach { label ->
+                PynapliPill(
+                    text = label,
+                    selected = false,
+                    leading =
+                        if (label == "Linked") {
+                            {
+                                Icon(
+                                    imageVector = Icons.Filled.Person,
+                                    contentDescription = null,
+                                    tint = PynapliColors.Accent,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                )
+            }
+        }
+
+        if (tagChips.isNotEmpty()) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                tagChips.forEach { label ->
+                    PynapliPill(text = label, selected = false)
+                }
+            }
         }
     }
 }
+
+private fun selfDescribableLabel(
+    key: String,
+    detail: String?,
+): String =
+    if (key == ProfileTaxonomies.SELF_DESCRIBE) {
+        detail?.takeIf { it.isNotBlank() } ?: "Self-described"
+    } else {
+        key.toDisplayLabel()
+    }
+
+private fun lifestyleTagLabel(value: String): String = LifestyleTag.entries.firstOrNull { it.serverValue == value }?.label ?: value.toDisplayLabel()
+
+private fun logisticsTagLabel(value: String): String = LogisticsTag.entries.firstOrNull { it.serverValue == value }?.label ?: value.toDisplayLabel()
+
+private fun intentLabel(value: String): String = Intent.entries.firstOrNull { it.serverValue == value }?.label ?: value.toDisplayLabel()
 
 @Composable
 internal fun LinkedPartnerSection(

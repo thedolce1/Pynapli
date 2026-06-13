@@ -64,9 +64,15 @@ class JdbcProfileRepository(
                             birthdate = ?,
                             display_age = ?,
                             gender = ?,
+                            gender_detail = ?,
                             orientation = ?,
+                            orientation_detail = ?,
                             relationship_context = ?,
                             discovery_style = COALESCE(?, discovery_style),
+                            bio = CASE WHEN ? THEN ?::text ELSE bio END,
+                            lifestyle_tags = CASE WHEN ? THEN ?::text[] ELSE lifestyle_tags END,
+                            logistics_tags = CASE WHEN ? THEN ?::text[] ELSE logistics_tags END,
+                            intents = CASE WHEN ? THEN ?::text[] ELSE intents END,
                             profile_completeness_score = ?,
                             updated_at = now()
                         WHERE user_id = ?
@@ -76,17 +82,33 @@ class JdbcProfileRepository(
                         statement.setDate(2, update.birthdate?.let { Date.valueOf(it) })
                         update.displayAge?.let { statement.setInt(3, it) } ?: statement.setNull(3, java.sql.Types.INTEGER)
                         statement.setString(4, update.gender)
-                        statement.setString(5, update.orientation)
-                        statement.setString(6, update.relationshipContext)
-                        statement.setString(7, update.discoveryStyle)
-                        statement.setInt(8, update.profileCompletenessScore)
-                        statement.setObject(9, userId)
+                        statement.setString(5, update.genderDetail)
+                        statement.setString(6, update.orientation)
+                        statement.setString(7, update.orientationDetail)
+                        statement.setString(8, update.relationshipContext)
+                        statement.setString(9, update.discoveryStyle)
+                        statement.setBoolean(10, update.bioProvided)
+                        statement.setString(11, update.bio)
+                        // Provided-but-empty tag lists store NULL: the V36 "opted out"
+                        // shape, so cleared profiles drop out of tag-filtered discovery.
+                        statement.setBoolean(12, update.lifestyleTags != null)
+                        statement.setArray(13, connection.toTextArrayOrNull(update.lifestyleTags))
+                        statement.setBoolean(14, update.logisticsTags != null)
+                        statement.setArray(15, connection.toTextArrayOrNull(update.logisticsTags))
+                        statement.setBoolean(16, update.intents != null)
+                        statement.setArray(17, connection.toTextArrayOrNull(update.intents))
+                        statement.setInt(18, update.profileCompletenessScore)
+                        statement.setObject(19, userId)
                         if (statement.executeUpdate() == 0) return@withContext null
                     }
             }
 
             getMe(userId)
         }
+
+    private fun java.sql.Connection.toTextArrayOrNull(values: List<String>?): java.sql.Array? = values?.takeIf { it.isNotEmpty() }?.let { createArrayOf("text", it.toTypedArray()) }
+
+    private fun ResultSet.getStringList(column: String): List<String> = (getArray(column)?.array as? Array<*>)?.mapNotNull { it as? String } ?: emptyList()
 
     override suspend fun updateDiscoverySettings(
         userId: UUID,
@@ -142,10 +164,16 @@ class JdbcProfileRepository(
             linkedPartnerDisplayName = getString("linked_partner_display_name"),
             linkedPartnerThumbnailMediaAssetId = getObject("linked_partner_thumbnail_media_asset_id", UUID::class.java),
             displayAge = getInt("display_age").takeUnless { wasNull() },
+            bio = getString("bio"),
             gender = getString("gender"),
+            genderDetail = getString("gender_detail"),
             orientation = getString("orientation"),
+            orientationDetail = getString("orientation_detail"),
             relationshipContext = getString("relationship_context"),
             discoveryStyle = getString("discovery_style"),
+            lifestyleTags = getStringList("lifestyle_tags"),
+            logisticsTags = getStringList("logistics_tags"),
+            intents = getStringList("intents"),
             distanceMeters = distanceMeters,
             privateAlbumAccessStatus = getString("private_album_access_status"),
             allowGridMessages = getBoolean("allow_grid_messages"),
@@ -165,10 +193,16 @@ class JdbcProfileRepository(
                     displayName = getString("display_name"),
                     birthdate = getDate("birthdate")?.toLocalDate(),
                     displayAge = getInt("display_age").takeUnless { wasNull() },
+                    bio = getString("bio"),
                     gender = getString("gender"),
+                    genderDetail = getString("gender_detail"),
                     orientation = getString("orientation"),
+                    orientationDetail = getString("orientation_detail"),
                     relationshipContext = getString("relationship_context"),
                     discoveryStyle = getString("discovery_style"),
+                    lifestyleTags = getStringList("lifestyle_tags"),
+                    logisticsTags = getStringList("logistics_tags"),
+                    intents = getStringList("intents"),
                     profileCompletenessScore = getInt("profile_completeness_score"),
                     moderationStatus = getString("moderation_status"),
                     visibilityStatus = getString("visibility_status"),
@@ -204,10 +238,16 @@ class JdbcProfileRepository(
                    p.display_name,
                    p.birthdate,
                    p.display_age,
+                   p.bio,
                    p.gender,
+                   p.gender_detail,
                    p.orientation,
+                   p.orientation_detail,
                    p.relationship_context,
                    p.discovery_style,
+                   p.lifestyle_tags,
+                   p.logistics_tags,
+                   p.intents,
                    p.profile_completeness_score,
                    p.moderation_status,
                    p.visibility_status,
@@ -244,10 +284,16 @@ class JdbcProfileRepository(
                    linked_partner.linked_partner_display_name,
                    linked_partner.linked_partner_thumbnail_media_asset_id,
                    p.display_age,
+                   p.bio,
                    p.gender,
+                   p.gender_detail,
                    p.orientation,
+                   p.orientation_detail,
                    p.relationship_context,
                    p.discovery_style,
+                   p.lifestyle_tags,
+                   p.logistics_tags,
+                   p.intents,
                    CASE
                        WHEN ds.allow_grid_messages = false OR ds.grid_message_policy = 'no_one'
                        THEN false

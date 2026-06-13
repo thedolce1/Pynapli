@@ -12,11 +12,17 @@ internal fun accountLifecycleStatusFor(code: String): HttpStatusCode =
 internal fun profileStatusFor(code: String): HttpStatusCode =
     when (code) {
         "PROFILE_NOT_FOUND" -> HttpStatusCode.NotFound
+        "AGE_VERIFICATION_REQUIRED" -> HttpStatusCode.Forbidden
         "INVALID_DISPLAY_NAME",
         "INVALID_BIRTHDATE",
         "AGE_RESTRICTED",
         "INVALID_DISCOVERY_STYLE",
         "INVALID_PROFILE_FIELD",
+        "INVALID_GENDER",
+        "INVALID_ORIENTATION",
+        "INVALID_BIO",
+        "INVALID_PROFILE_TAG",
+        "BIO_REJECTED",
         -> HttpStatusCode.BadRequest
         else -> HttpStatusCode.BadRequest
     }

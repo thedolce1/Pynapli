@@ -1,6 +1,7 @@
 package com.pynapli.server.profile
 
 import com.pynapli.server.activity.ActivityService
+import com.pynapli.server.discovery.DiscoveryTagTaxonomies
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
@@ -15,6 +16,7 @@ import com.pynapli.shared.network.dto.ProfileDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import com.pynapli.shared.profile.ProfileTaxonomies
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -33,6 +35,7 @@ class ProfileService(
     private val activityService: ActivityService? = null,
     private val blockRepository: BlockRepository? = null,
     private val riskPolicyService: RiskPolicyService? = null,
+    private val bioScanner: ProfileBioScanner = AcceptAllProfileBioScanner,
     private val profileViewRecordScope: CoroutineScope? = null,
     profileViewRecordConcurrency: Int = 4,
 ) {
@@ -110,6 +113,18 @@ class ProfileService(
         request: UpdateProfileRequestDto,
     ): MeDto {
         val update = request.toProfileUpdate()
+
+        // PROFILE_SETTINGS_SPEC: high-sensitivity lifestyle terms are age-gated,
+        // mirroring the filter-side gate in SavedGridFilterService/deck requests.
+        if (!update.lifestyleTags.isNullOrEmpty()) {
+            val current = repository.getMe(userId) ?: throw ProfileException("PROFILE_NOT_FOUND")
+            if (!current.profile.ageVerified) throw ProfileException("AGE_VERIFICATION_REQUIRED")
+        }
+
+        if (update.bioProvided && update.bio != null && bioScanner.scan(update.bio) == ProfileBioScanner.Decision.Reject) {
+            throw ProfileException("BIO_REJECTED")
+        }
+
         return repository.updateProfile(userId, update)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
     }
 
@@ -165,11 +180,31 @@ class ProfileService(
             throw ProfileException("INVALID_DISCOVERY_STYLE")
         }
 
+        val normalizedGender = gender.cleanOptional(40)
+        if (normalizedGender != null && normalizedGender !in ProfileTaxonomies.genderKeys) {
+            throw ProfileException("INVALID_GENDER")
+        }
+        val cleanGenderDetail = selfDescribeDetail(normalizedGender, genderDetail, "INVALID_GENDER")
+
+        val normalizedOrientation = orientation.cleanOptional(40)
+        if (normalizedOrientation != null && normalizedOrientation !in ProfileTaxonomies.orientationKeys) {
+            throw ProfileException("INVALID_ORIENTATION")
+        }
+        val cleanOrientationDetail = selfDescribeDetail(normalizedOrientation, orientationDetail, "INVALID_ORIENTATION")
+
+        val bioProvided = bio != null
+        val cleanBio = bio?.trim()?.takeIf { it.isNotEmpty() }
+        if (cleanBio != null && cleanBio.length > ProfileTaxonomies.BIO_MAX_LENGTH) {
+            throw ProfileException("INVALID_BIO")
+        }
+
         return ProfileUpdate(
             displayName = trimmedName,
             birthdate = parsedBirthdate,
-            gender = gender.cleanOptional(40),
-            orientation = orientation.cleanOptional(40),
+            gender = normalizedGender,
+            genderDetail = cleanGenderDetail,
+            orientation = normalizedOrientation,
+            orientationDetail = cleanOrientationDetail,
             relationshipContext = relationshipContext.cleanOptional(40),
             discoveryStyle = normalizedDiscoveryStyle,
             displayAge = displayAge,
@@ -182,7 +217,39 @@ class ProfileService(
                     relationshipContext = relationshipContext,
                     discoveryStyle = normalizedDiscoveryStyle,
                 ),
+            bioProvided = bioProvided,
+            bio = cleanBio,
+            lifestyleTags = lifestyleTags.cleanTags(DiscoveryTagTaxonomies.lifestyleTags),
+            logisticsTags = logisticsTags.cleanTags(DiscoveryTagTaxonomies.logisticsTags),
+            intents = intents.cleanTags(DiscoveryTagTaxonomies.intents),
         )
+    }
+
+    /**
+     * The free-text label is only meaningful with the self_describe key (where it is
+     * required); structured keys drop any stray detail so filters stay structured.
+     */
+    private fun selfDescribeDetail(
+        normalizedKey: String?,
+        detail: String?,
+        errorCode: String,
+    ): String? {
+        if (normalizedKey != ProfileTaxonomies.SELF_DESCRIBE) return null
+        val cleaned = detail?.trim()?.takeIf { it.isNotEmpty() } ?: throw ProfileException(errorCode)
+        if (cleaned.length > ProfileTaxonomies.SELF_DESCRIBE_MAX_LENGTH) throw ProfileException(errorCode)
+        return cleaned
+    }
+
+    private fun List<String>?.cleanTags(allowed: Set<String>): List<String>? {
+        if (this == null) return null
+        val cleaned =
+            map { it.trim().lowercase() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+        cleaned.forEach { value ->
+            if (value !in allowed) throw ProfileException("INVALID_PROFILE_TAG")
+        }
+        return cleaned
     }
 
     private fun MeRecord.toDto(): MeDto =
@@ -198,10 +265,16 @@ class ProfileService(
             displayName = displayName,
             birthdate = birthdate?.toString(),
             displayAge = displayAge,
+            bio = bio,
             gender = gender,
+            genderDetail = genderDetail,
             orientation = orientation,
+            orientationDetail = orientationDetail,
             relationshipContext = relationshipContext,
             discoveryStyle = discoveryStyle,
+            lifestyleTags = lifestyleTags,
+            logisticsTags = logisticsTags,
+            intents = intents,
             profileCompletenessScore = profileCompletenessScore,
             moderationStatus = moderationStatus,
             visibilityStatus = visibilityStatus,
@@ -213,10 +286,16 @@ class ProfileService(
             userId = userId.toString(),
             displayName = displayName,
             displayAge = displayAge,
+            bio = bio,
             gender = gender,
+            genderDetail = genderDetail,
             orientation = orientation,
+            orientationDetail = orientationDetail,
             relationshipContext = relationshipContext,
             discoveryStyle = discoveryStyle,
+            lifestyleTags = lifestyleTags,
+            logisticsTags = logisticsTags,
+            intents = intents,
             distanceLabel = distanceMeters?.toPublicDistanceLabel(),
             distanceMeters = distanceMeters?.toPublicDistanceMeters(),
             profilePhotoUrl = profilePhotoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
