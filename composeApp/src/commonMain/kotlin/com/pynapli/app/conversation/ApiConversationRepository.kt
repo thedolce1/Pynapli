@@ -1,18 +1,22 @@
 package com.pynapli.app.conversation
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.MediaByteUploader
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
+import com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MessageDto
+import com.pynapli.shared.network.dto.SendMediaMessageRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
 
 class ApiConversationRepository(
     private val apiClient: PynapliApiClient,
+    private val mediaByteUploader: MediaByteUploader,
 ) : ConversationRepository {
     override suspend fun createDirectConversation(
         targetUserId: String,
@@ -51,6 +55,43 @@ class ApiConversationRepository(
         conversationId: String,
         expirySeconds: Int?,
     ): AppResult<ConversationDto> = apiClient.setConversationExpiry(conversationId, SetConversationExpiryRequestDto(expirySeconds = expirySeconds))
+
+    override suspend fun sendPhoto(
+        conversationId: String,
+        contentType: String,
+        byteSize: Long,
+        pixelWidth: Int?,
+        pixelHeight: Int?,
+        bytes: ByteArray,
+    ): AppResult<MessageDto> {
+        val slot =
+            when (
+                val result =
+                    apiClient.createMessageMediaUploadSlot(
+                        CreateMessageMediaUploadRequestDto(
+                            contentType = contentType,
+                            byteSize = byteSize,
+                            pixelWidth = pixelWidth,
+                            pixelHeight = pixelHeight,
+                        ),
+                    )
+            ) {
+                is AppResult.Success -> result.value
+                is AppResult.Failure -> return result
+            }
+
+        when (val result = mediaByteUploader.upload(slot.uploadUrl, slot.uploadHeaders, bytes)) {
+            is AppResult.Success -> Unit
+            is AppResult.Failure -> return result
+        }
+
+        return apiClient.sendMediaMessage(
+            conversationId,
+            SendMediaMessageRequestDto(mediaAssetId = slot.mediaAssetId),
+        )
+    }
+
+    override suspend fun revealMedia(messageId: String): AppResult<MessageDto> = apiClient.revealMessageMedia(messageId)
 
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> = apiClient.deleteMessage(messageId)
 

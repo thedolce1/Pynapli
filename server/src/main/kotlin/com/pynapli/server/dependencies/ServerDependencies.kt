@@ -413,6 +413,7 @@ class ServerDependencies(
                     riskPolicyService = riskPolicyService,
                     subscriptionService = subscriptionService,
                     activityService = activityService,
+                    messageMediaGateway = media.messageMediaGateway,
                 )
             val swipe =
                 buildSwipeDependencies(

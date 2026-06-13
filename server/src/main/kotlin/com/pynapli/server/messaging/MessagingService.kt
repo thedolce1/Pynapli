@@ -42,9 +42,10 @@ class MessagingService(
     private val subscriptionService: SubscriptionService? = null,
     private val clock: Clock = Clock.systemUTC(),
     private val activityService: ActivityService? = null,
+    private val messageMediaGateway: MessageMediaGateway? = null,
 ) {
     private val featureAccess = MessagingFeatureAccess(subscriptionService)
-    private val dtoMapper = MessagingDtoMapper(featureAccess)
+    private val dtoMapper = MessagingDtoMapper(featureAccess, messageMediaGateway)
 
     suspend fun listConversations(userId: UUID): ConversationListResponseDto {
         val conversations = repository.listConversations(userId, THREAD_LIMIT)
@@ -248,6 +249,100 @@ class MessagingService(
             }
 
         return message
+    }
+
+    suspend fun createMessageMediaUploadSlot(
+        userId: UUID,
+        request: com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto,
+    ): com.pynapli.shared.network.dto.MessageMediaUploadSlotDto {
+        val gateway = messageMediaGateway ?: throw MessagingException("MEDIA_NOT_AVAILABLE")
+        if (riskPolicyService?.isSocialActionRestricted(userId) == true) throw MessagingException("RISK_RESTRICTED")
+        return gateway.createUploadSlot(userId, request)
+    }
+
+    suspend fun sendMediaMessage(
+        userId: UUID,
+        conversationIdText: String,
+        request: com.pynapli.shared.network.dto.SendMediaMessageRequestDto,
+    ): MessageDto {
+        val gateway = messageMediaGateway ?: throw MessagingException("MEDIA_NOT_AVAILABLE")
+        val conversationId = conversationIdText.toUuidOrThrow()
+        val mediaAssetId = request.mediaAssetId.toUuidOrThrow()
+        val caption = request.body.trim()
+        if (caption.length > MESSAGE_BODY_MAX_LENGTH) throw MessagingException("MESSAGE_BODY_TOO_LONG")
+        val clientIdempotencyKey = request.clientIdempotencyKey?.trim()?.takeIf { it.isNotEmpty() }
+        if (clientIdempotencyKey != null && clientIdempotencyKey.length > MESSAGE_IDEMPOTENCY_KEY_MAX_LENGTH) {
+            throw MessagingException("INVALID_IDEMPOTENCY_KEY")
+        }
+        if (riskPolicyService?.isSocialActionRestricted(userId) == true) throw MessagingException("RISK_RESTRICTED")
+
+        val detail =
+            repository.getConversationDetail(userId, conversationId, limit = 1)
+                ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+        if (detail.conversation.hasBlockedOtherParticipant(userId)) {
+            throw MessagingException("MESSAGING_NOT_ALLOWED")
+        }
+
+        // Verify + moderate the asset before it becomes a message.
+        val prepared =
+            gateway.prepareOutboundMedia(userId, mediaAssetId)
+                ?: throw MessagingException("INVALID_MEDIA")
+
+        val messageRecord =
+            repository.sendMediaMessage(
+                userId = userId,
+                conversationId = conversationId,
+                mediaAssetId = mediaAssetId,
+                contentType = prepared.contentType,
+                pixelWidth = prepared.pixelWidth,
+                pixelHeight = prepared.pixelHeight,
+                body = caption,
+                clientIdempotencyKey = clientIdempotencyKey,
+            ) ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+
+        val conversation = repository.getConversationDetail(userId, conversationId, limit = 1)?.conversation
+        val message = dtoMapper.toDto(record = messageRecord, viewerUserId = userId, conversation = conversation)
+
+        val participants = conversation?.participants.orEmpty()
+        publishMessageDelta(
+            type = MessageDeltaType.MESSAGE_CREATED,
+            conversationId = conversationId,
+            participants = participants,
+            messageId = UUID.fromString(message.messageId),
+            statuses = activeParticipantStatuses,
+        )
+        participants
+            .filter { it.userId != userId && it.status == ConversationParticipantStatus.ACTIVE }
+            .forEach { participant ->
+                notificationPublisher?.enqueue(
+                    NotificationEventDraft(
+                        recipientUserId = participant.userId,
+                        actorUserId = userId,
+                        kind = NotificationKind.MESSAGE,
+                        subjectId = conversationId,
+                        idempotencyKey = "message:${message.messageId}:${participant.userId}",
+                        payload =
+                            mapOf(
+                                "target" to "messages",
+                                "conversationId" to conversationId.toString(),
+                                "messageId" to message.messageId,
+                            ),
+                    ),
+                )
+            }
+        return message
+    }
+
+    suspend fun revealMessageMedia(
+        userId: UUID,
+        messageIdText: String,
+    ): MessageDto {
+        val messageId = messageIdText.toUuidOrThrow()
+        val revealed =
+            repository.recordMediaReveal(userId, messageId)
+                ?: throw MessagingException("MESSAGE_NOT_FOUND")
+        val conversation = repository.getConversationDetail(userId, revealed.conversationId, limit = 1)?.conversation
+        return dtoMapper.toDto(record = revealed, viewerUserId = userId, conversation = conversation)
     }
 
     suspend fun deleteOwnMessage(

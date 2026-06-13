@@ -142,6 +142,46 @@ class JdbcMediaRepository(
             }
         }
 
+    override suspend fun findMessageMediaAsset(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord? =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT id,
+                               owner_user_id,
+                               media_type,
+                               storage_provider,
+                               storage_bucket,
+                               storage_object_key,
+                               content_type,
+                               byte_size,
+                               pixel_width,
+                               pixel_height,
+                               moderation_status,
+                               processing_status,
+                               created_at,
+                               updated_at,
+                               deleted_at
+                        FROM media_assets
+                        WHERE id = ?
+                          AND owner_user_id = ?
+                          AND intended_album_kind = 'message'
+                          AND deleted_at IS NULL
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, mediaAssetId)
+                        statement.setObject(2, ownerUserId)
+                        statement.executeQuery().use { rs ->
+                            if (rs.next()) rs.toMediaAssetRecord() else null
+                        }
+                    }
+            }
+        }
+
     override suspend fun markAssetReadyApproved(
         ownerUserId: UUID,
         mediaAssetId: UUID,

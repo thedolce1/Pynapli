@@ -212,7 +212,7 @@ class AndroidAppGraph(
 
     val conversationStateHolder =
         ConversationStateHolder(
-            repository = ApiConversationRepository(apiClient),
+            repository = ApiConversationRepository(apiClient, KtorMediaByteUploader()),
         )
 
     val messagesStateHolder =

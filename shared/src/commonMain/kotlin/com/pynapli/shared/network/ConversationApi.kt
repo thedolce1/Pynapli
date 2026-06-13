@@ -6,7 +6,10 @@ import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
 import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
+import com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MessageDto
+import com.pynapli.shared.network.dto.MessageMediaUploadSlotDto
+import com.pynapli.shared.network.dto.SendMediaMessageRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
@@ -42,6 +45,15 @@ interface ConversationApi {
         conversationId: String,
         request: SetConversationExpiryRequestDto,
     ): AppResult<ConversationDto>
+
+    suspend fun createMessageMediaUploadSlot(request: CreateMessageMediaUploadRequestDto): AppResult<MessageMediaUploadSlotDto>
+
+    suspend fun sendMediaMessage(
+        conversationId: String,
+        request: SendMediaMessageRequestDto,
+    ): AppResult<MessageDto>
+
+    suspend fun revealMessageMedia(messageId: String): AppResult<MessageDto>
 
     suspend fun deleteMessage(messageId: String): AppResult<MessageDto>
 

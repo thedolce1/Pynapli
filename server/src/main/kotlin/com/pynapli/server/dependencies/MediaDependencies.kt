@@ -17,6 +17,7 @@ import com.pynapli.server.media.ManualReviewMediaModerationScanner
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.media.MediaModerationScanner
 import com.pynapli.server.media.MediaService
+import com.pynapli.server.media.MediaServiceMessageMediaGateway
 import com.pynapli.server.media.StaticMediaUploadSigner
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.JdbcReportRepository
@@ -41,6 +42,7 @@ internal class MediaDependencies(
     val mediaAssetUrlResolver: MediaAssetUrlResolver?,
     val localMediaUploadStorage: LocalMediaUploadStorage?,
     val mediaService: MediaService,
+    val messageMediaGateway: com.pynapli.server.messaging.MessageMediaGateway,
 )
 
 internal fun buildMediaDependencies(
@@ -142,13 +144,15 @@ internal fun buildMediaDependencies(
                     uploadBaseUrl = config.mediaUploadBaseUrl,
                 )
         }
+    val mediaRepository = JdbcMediaRepository(dataSource)
+    val moderationScanner = createMediaModerationScanner(config, mediaSigningCredentials)
     val mediaService =
         MediaService(
-            repository = JdbcMediaRepository(dataSource),
+            repository = mediaRepository,
             uploadSigner = uploadSigner,
             blockRepository = blockRepository,
             mediaAssetUrlResolver = mediaAssetUrlResolver,
-            moderationScanner = createMediaModerationScanner(config, mediaSigningCredentials),
+            moderationScanner = moderationScanner,
             moderationEscalationPublisher =
                 MediaModerationEscalationService(
                     reportRepository = JdbcReportRepository(dataSource),
@@ -156,10 +160,20 @@ internal fun buildMediaDependencies(
                 ),
             rateLimitService = rateLimitService,
         )
+    // Chat photo media reuses the same signer/asset/scanner/resolver as album media.
+    val messageMediaGateway =
+        MediaServiceMessageMediaGateway(
+            repository = mediaRepository,
+            uploadSigner = uploadSigner,
+            mediaAssetUrlResolver = mediaAssetUrlResolver,
+            moderationScanner = moderationScanner,
+            rateLimitService = rateLimitService,
+        )
     return MediaDependencies(
         mediaAssetUrlResolver = mediaAssetUrlResolver,
         localMediaUploadStorage = localMediaUploadStorage,
         mediaService = mediaService,
+        messageMediaGateway = messageMediaGateway,
     )
 }
 

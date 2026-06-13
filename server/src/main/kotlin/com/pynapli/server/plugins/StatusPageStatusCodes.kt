@@ -192,10 +192,16 @@ internal fun messagingStatusFor(code: String): HttpStatusCode =
         "PARTNER_INVITE_NOT_FOUND",
         -> HttpStatusCode.NotFound
         "MESSAGING_NOT_ALLOWED" -> HttpStatusCode.Forbidden
+        "MEDIA_NOT_AVAILABLE" -> HttpStatusCode.ServiceUnavailable
         "PARTNER_INVITE_ALREADY_SENT",
         "PARTNER_ALREADY_IN_CONVERSATION",
         -> HttpStatusCode.Conflict
         "INVALID_MESSAGE_EXPIRY",
+        "INVALID_MEDIA",
+        "INVALID_MEDIA_CONTENT_TYPE",
+        "INVALID_MEDIA_BYTE_SIZE",
+        "MEDIA_FILE_TOO_LARGE",
+        "INVALID_MEDIA_DIMENSIONS",
         "INVALID_ID",
         "INVALID_CONVERSATION_TARGET",
         "INVALID_CONVERSATION_ORIGIN",

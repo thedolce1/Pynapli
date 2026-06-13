@@ -32,7 +32,7 @@ internal fun Connection.insertMessage(
             client_idempotency_key
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at, message_type
+        RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at, message_type, media_asset_id
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, messageId)
@@ -68,7 +68,7 @@ internal fun Connection.findMessageByIdempotencyKey(
 ): MessageRecord? =
     prepareStatement(
         """
-        SELECT id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at, message_type
+        SELECT id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at, message_type, media_asset_id
         FROM messages
         WHERE conversation_id = ?
           AND sender_user_id = ?
@@ -161,7 +161,8 @@ internal fun Connection.deleteOwnVisibleMessage(
                   created_at,
                   moderation_status,
                   deleted_at,
-                  message_type
+                  message_type,
+                  media_asset_id
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, messageId)
@@ -205,7 +206,7 @@ internal fun Connection.insertSystemMessage(
         """
         INSERT INTO messages (id, conversation_id, sender_user_id, body, moderation_status, message_type)
         VALUES (?, ?, ?, ?, 'visible', 'system')
-        RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at, message_type
+        RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at, message_type, media_asset_id
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, messageId)
@@ -217,6 +218,78 @@ internal fun Connection.insertSystemMessage(
             rs.toMessageRecord(deliveryStatus = DELIVERY_SENT)
         }
     }
+
+/**
+ * Inserts a media message (one chat photo + optional caption). Returns the record with media facts
+ * + mediaRevealedByViewer=true, since the sender always sees their own photo.
+ */
+internal fun Connection.insertMediaMessage(
+    messageId: UUID,
+    userId: UUID,
+    conversationId: UUID,
+    mediaAssetId: UUID,
+    contentType: String?,
+    pixelWidth: Int?,
+    pixelHeight: Int?,
+    body: String,
+    clientIdempotencyKey: String?,
+): MessageRecord =
+    prepareStatement(
+        """
+        INSERT INTO messages (
+            id, conversation_id, sender_user_id, body, moderation_status, media_asset_id, client_idempotency_key
+        )
+        VALUES (?, ?, ?, ?, 'visible', ?, ?)
+        RETURNING id, conversation_id, sender_user_id, body, created_at, moderation_status, deleted_at, message_type, media_asset_id
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, messageId)
+        statement.setObject(2, conversationId)
+        statement.setObject(3, userId)
+        statement.setString(4, body)
+        statement.setObject(5, mediaAssetId)
+        statement.setString(6, clientIdempotencyKey)
+        statement.executeQuery().use { rs ->
+            rs.next()
+            rs.toMessageRecord(deliveryStatus = DELIVERY_SENT).copy(
+                mediaContentType = contentType,
+                mediaWidth = pixelWidth,
+                mediaHeight = pixelHeight,
+                mediaRevealedByViewer = true,
+            )
+        }
+    }
+
+/**
+ * Records [userId]'s reveal of a media message, but only when the message carries media and the
+ * viewer is an active participant (the INSERT...SELECT no-ops otherwise). Idempotent.
+ */
+internal fun Connection.insertMessageMediaReveal(
+    userId: UUID,
+    messageId: UUID,
+) {
+    prepareStatement(
+        """
+        INSERT INTO message_media_reveals (message_id, user_id)
+        SELECT m.id, ?
+        FROM messages m
+        JOIN conversation_participants cp
+          ON cp.conversation_id = m.conversation_id
+         AND cp.user_id = ?
+         AND cp.left_at IS NULL
+         AND cp.invitation_status = 'active'
+        WHERE m.id = ?
+          AND m.media_asset_id IS NOT NULL
+          AND m.deleted_at IS NULL
+        ON CONFLICT (message_id, user_id) DO NOTHING
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, userId)
+        statement.setObject(2, userId)
+        statement.setObject(3, messageId)
+        statement.executeUpdate()
+    }
+}
 
 internal fun Connection.countRecentMessagesByFingerprint(
     userId: UUID,

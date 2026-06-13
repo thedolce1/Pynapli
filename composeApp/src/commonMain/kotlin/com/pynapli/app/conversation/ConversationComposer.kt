@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -69,11 +70,13 @@ internal fun Composer(
     draft: String,
     canSend: Boolean,
     isSending: Boolean,
+    isSendingPhoto: Boolean,
     isOverLimit: Boolean,
     remainingCharacters: Int,
     errorMessage: String?,
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit,
+    onPickPhoto: () -> Unit,
 ) {
     val showCharacterCount = draft.length >= MESSAGE_BODY_MAX_LENGTH - 200 || isOverLimit
     val helperText =
@@ -115,6 +118,25 @@ internal fun Composer(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            IconButton(
+                onClick = onPickPhoto,
+                enabled = !isSending && !isSendingPhoto,
+                modifier = Modifier.size(44.dp),
+            ) {
+                if (isSendingPhoto) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(20.dp),
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.Image,
+                        contentDescription = "Send a photo",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             OutlinedTextField(
                 value = draft,
                 onValueChange = onDraftChanged,

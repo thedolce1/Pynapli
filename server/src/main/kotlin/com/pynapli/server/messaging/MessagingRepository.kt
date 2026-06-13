@@ -44,6 +44,29 @@ interface MessagingRepository {
         messageId: UUID,
     ): MessageRecord?
 
+    /** Creates a media message ([mediaAssetId] attached, [body] optional caption). */
+    suspend fun sendMediaMessage(
+        userId: UUID,
+        conversationId: UUID,
+        mediaAssetId: UUID,
+        contentType: String?,
+        pixelWidth: Int?,
+        pixelHeight: Int?,
+        body: String,
+        clientIdempotencyKey: String? = null,
+        messageIdFactory: () -> UUID = UUID::randomUUID,
+    ): MessageRecord?
+
+    /**
+     * Records [userId]'s reveal of a media message (idempotent) and returns the message loaded for
+     * that viewer (mediaRevealedByViewer = true), or null when the message has no media or the
+     * viewer is not an active participant.
+     */
+    suspend fun recordMediaReveal(
+        userId: UUID,
+        messageId: UUID,
+    ): MessageRecord?
+
     suspend fun hasSentMessageInConversation(
         userId: UUID,
         conversationId: UUID,
@@ -148,6 +171,13 @@ data class MessageRecord(
     val deliveryStatus: String,
     val deletedAt: Instant? = null,
     val messageType: String = "user",
+    // Per-recipient media reveal: a chat photo attached to this message.
+    val mediaAssetId: UUID? = null,
+    val mediaContentType: String? = null,
+    val mediaWidth: Int? = null,
+    val mediaHeight: Int? = null,
+    // Whether the viewer the record was loaded for has revealed the media (sender counts as revealed).
+    val mediaRevealedByViewer: Boolean = false,
 )
 
 data class PartnerChatInviteRecord(

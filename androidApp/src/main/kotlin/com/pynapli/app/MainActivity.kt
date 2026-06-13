@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
     private var activityStreamJob: Job? = null
     private var messageStreamJob: Job? = null
     private var pendingMediaAlbumKind: MediaAlbumKindUi? = null
+    private var pendingConversationPhoto: Boolean = false
     private val locationPermissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions(),
@@ -99,6 +100,7 @@ class MainActivity : ComponentActivity() {
                 onboardingStateHolder = appGraph.onboardingStateHolder,
                 onUseCurrentLocation = ::requestCurrentLocation,
                 onPickMediaForAlbum = ::pickMediaForAlbum,
+                onPickConversationPhoto = ::pickConversationPhoto,
                 onSetDiscreetIcon = ::applyLauncherIcon,
                 devLoginCredentials = appGraph.devLoginCredentials.takeIf { isDebuggable() },
             )
@@ -229,6 +231,15 @@ class MainActivity : ComponentActivity() {
 
     private fun pickMediaForAlbum(kind: MediaAlbumKindUi) {
         pendingMediaAlbumKind = kind
+        pendingConversationPhoto = false
+        mediaPickerLauncher.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+        )
+    }
+
+    private fun pickConversationPhoto() {
+        pendingMediaAlbumKind = null
+        pendingConversationPhoto = true
         mediaPickerLauncher.launch(
             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
         )
@@ -258,18 +269,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handlePickedMedia(uri: Uri?) {
-        val kind = pendingMediaAlbumKind ?: return
+        val sendToConversation = pendingConversationPhoto
+        val kind = pendingMediaAlbumKind
+        pendingConversationPhoto = false
         pendingMediaAlbumKind = null
         if (uri == null) return
 
         activityScope.launch {
             val pickedMedia = readPickedImage(uri)
-            if (pickedMedia == null) {
-                appGraph.mediaAlbumsStateHolder.showError("Could not read the selected image.")
-            } else {
+            when {
+                pickedMedia == null -> appGraph.mediaAlbumsStateHolder.showError("Could not read the selected image.")
+                // Chat photo: upload + send as a per-recipient consent-tap media message.
+                sendToConversation -> appGraph.conversationStateHolder.sendPhoto(pickedMedia)
                 // Profile photos pause at the shared square-crop step; private album
                 // media uploads as picked.
-                appGraph.mediaAlbumsStateHolder.stagePickedMedia(kind, pickedMedia)
+                kind != null -> appGraph.mediaAlbumsStateHolder.stagePickedMedia(kind, pickedMedia)
             }
         }
     }

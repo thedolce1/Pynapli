@@ -12,6 +12,7 @@ import java.util.UUID
 
 internal class MessagingDtoMapper(
     private val featureAccess: MessagingFeatureAccess,
+    private val messageMediaGateway: MessageMediaGateway? = null,
 ) {
     suspend fun toDto(
         detail: ConversationDetailRecord,
@@ -81,6 +82,16 @@ internal class MessagingDtoMapper(
                 ),
             deletedAt = record.deletedAt?.toString(),
             messageType = record.messageType,
+            mediaAssetId = record.mediaAssetId?.toString(),
+            mediaContentType = record.mediaContentType,
+            mediaWidth = record.mediaWidth,
+            mediaHeight = record.mediaHeight,
+            // The sender always sees their own photo; recipients only after a consent-tap reveal.
+            mediaRevealed = record.mediaRevealedByViewer || record.senderUserId == viewerUserId,
+            mediaUrl =
+                record.mediaAssetId
+                    ?.takeIf { record.mediaRevealedByViewer || record.senderUserId == viewerUserId }
+                    ?.let { messageMediaGateway?.contentUrl(it) },
         )
 
     suspend fun toDto(

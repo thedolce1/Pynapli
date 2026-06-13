@@ -136,6 +136,46 @@ class SampleConversationRepository : ConversationRepository {
             ),
         )
 
+    override suspend fun sendPhoto(
+        conversationId: String,
+        contentType: String,
+        byteSize: Long,
+        pixelWidth: Int?,
+        pixelHeight: Int?,
+        bytes: ByteArray,
+    ): AppResult<MessageDto> =
+        AppResult.Success(
+            MessageDto(
+                messageId = "sample-photo",
+                conversationId = conversationId,
+                senderUserId = "viewer",
+                body = "",
+                createdAt = "2026-04-24T18:00:00Z",
+                status = "visible",
+                deliveryStatus = "sent",
+                mediaAssetId = "sample-asset",
+                mediaContentType = contentType,
+                mediaUrl = "https://media.example/sample-photo",
+                mediaRevealed = true,
+            ),
+        )
+
+    override suspend fun revealMedia(messageId: String): AppResult<MessageDto> =
+        AppResult.Success(
+            MessageDto(
+                messageId = messageId,
+                conversationId = "sample-conversation",
+                senderUserId = "target",
+                body = "",
+                createdAt = "2026-04-24T18:00:00Z",
+                status = "visible",
+                deliveryStatus = "received",
+                mediaAssetId = "sample-asset",
+                mediaUrl = "https://media.example/sample-photo",
+                mediaRevealed = true,
+            ),
+        )
+
     override suspend fun deleteMessage(messageId: String): AppResult<MessageDto> =
         AppResult.Success(
             MessageDto(

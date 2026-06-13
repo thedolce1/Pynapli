@@ -13,6 +13,31 @@ import java.util.UUID
 private const val EXPIRY_FILTER =
     "(? IS NULL OR message_type <> 'user' OR created_at > now() - make_interval(secs => ?))"
 
+/**
+ * SELECT columns for per-recipient media reveal. Correlated subqueries (not a JOIN) avoid
+ * `media_assets` vs `messages` column-name clashes. The single bind param is the viewer; sender-
+ * sees-own is applied in the DTO mapper. Place after the message columns, before delivery_status.
+ */
+private const val MEDIA_SELECT_COLUMNS =
+    """
+    media_asset_id,
+    (SELECT ma.content_type FROM media_assets ma WHERE ma.id = messages.media_asset_id) AS media_content_type,
+    (SELECT ma.pixel_width FROM media_assets ma WHERE ma.id = messages.media_asset_id) AS media_width,
+    (SELECT ma.pixel_height FROM media_assets ma WHERE ma.id = messages.media_asset_id) AS media_height,
+    EXISTS (
+        SELECT 1 FROM message_media_reveals mr
+        WHERE mr.message_id = messages.id AND mr.user_id = ?
+    ) AS media_revealed,
+    """
+
+internal fun java.sql.ResultSet.enrichMessageMedia(base: MessageRecord): MessageRecord =
+    base.copy(
+        mediaContentType = getString("media_content_type"),
+        mediaWidth = getInt("media_width").takeUnless { wasNull() },
+        mediaHeight = getInt("media_height").takeUnless { wasNull() },
+        mediaRevealedByViewer = getBoolean("media_revealed"),
+    )
+
 internal fun Connection.listConversationIds(
     userId: UUID,
     limit: Int,
@@ -140,6 +165,7 @@ internal fun Connection.loadLastMessage(
                moderation_status,
                deleted_at,
                message_type,
+               $MEDIA_SELECT_COLUMNS
                CASE
                    WHEN deleted_at IS NOT NULL THEN 'deleted'
                    WHEN moderation_status = 'held' THEN 'held_for_review'
@@ -178,14 +204,58 @@ internal fun Connection.loadLastMessage(
         LIMIT 1
         """.trimIndent(),
     ).use { statement ->
-        statement.setObject(1, userId)
-        statement.setObject(2, conversationId)
-        statement.setObject(3, userId)
+        statement.setObject(1, userId) // MEDIA_SELECT_COLUMNS media_revealed (viewer)
+        statement.setObject(2, userId) // delivery_status CASE (viewer)
+        statement.setObject(3, conversationId)
         statement.setObject(4, userId)
-        statement.setObject(5, effectiveExpirySeconds, java.sql.Types.INTEGER)
+        statement.setObject(5, userId)
         statement.setObject(6, effectiveExpirySeconds, java.sql.Types.INTEGER)
+        statement.setObject(7, effectiveExpirySeconds, java.sql.Types.INTEGER)
         statement.executeQuery().use { rs ->
-            if (rs.next()) rs.toMessageRecord(deliveryStatus = rs.getString("delivery_status")) else null
+            if (rs.next()) rs.enrichMessageMedia(rs.toMessageRecord(deliveryStatus = rs.getString("delivery_status"))) else null
+        }
+    }
+
+/** Loads a single message enriched with media facts for [userId], gated to an active participant. */
+internal fun Connection.loadMessageForViewer(
+    userId: UUID,
+    messageId: UUID,
+): MessageRecord? =
+    prepareStatement(
+        """
+        SELECT id,
+               conversation_id,
+               sender_user_id,
+               CASE WHEN deleted_at IS NULL THEN body ELSE '' END AS body,
+               created_at,
+               moderation_status,
+               deleted_at,
+               message_type,
+               $MEDIA_SELECT_COLUMNS
+               CASE
+                   WHEN deleted_at IS NOT NULL THEN 'deleted'
+                   WHEN moderation_status = 'held' THEN 'held_for_review'
+                   WHEN sender_user_id <> ? THEN 'received'
+                   ELSE 'sent'
+               END AS delivery_status
+        FROM messages
+        WHERE id = ?
+          AND deleted_at IS NULL
+          AND EXISTS (
+              SELECT 1 FROM conversation_participants cp
+              WHERE cp.conversation_id = messages.conversation_id
+                AND cp.user_id = ?
+                AND cp.left_at IS NULL
+                AND cp.invitation_status = 'active'
+          )
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, userId) // MEDIA_SELECT_COLUMNS media_revealed (viewer)
+        statement.setObject(2, userId) // delivery_status CASE (viewer)
+        statement.setObject(3, messageId)
+        statement.setObject(4, userId) // participant gate
+        statement.executeQuery().use { rs ->
+            if (rs.next()) rs.enrichMessageMedia(rs.toMessageRecord(deliveryStatus = rs.getString("delivery_status"))) else null
         }
     }
 
@@ -209,6 +279,7 @@ internal fun Connection.loadMessages(
                        moderation_status,
                        deleted_at,
                        message_type,
+                       $MEDIA_SELECT_COLUMNS
                        CASE
                            WHEN deleted_at IS NOT NULL THEN 'deleted'
                            WHEN moderation_status = 'held' THEN 'held_for_review'
@@ -268,7 +339,8 @@ internal fun Connection.loadMessages(
     val newestFirst =
         prepareStatement(query).use { statement ->
             var index = 1
-            statement.setObject(index++, userId)
+            statement.setObject(index++, userId) // MEDIA_SELECT_COLUMNS media_revealed (viewer)
+            statement.setObject(index++, userId) // delivery_status CASE (viewer)
             statement.setObject(index++, conversationId)
             statement.setObject(index++, userId)
             statement.setObject(index++, userId)
@@ -284,7 +356,9 @@ internal fun Connection.loadMessages(
             statement.setInt(index, pageSize + 1)
             statement.executeQuery().use { rs ->
                 buildList {
-                    while (rs.next()) add(rs.toMessageRecord(deliveryStatus = rs.getString("delivery_status")))
+                    while (rs.next()) {
+                        add(rs.enrichMessageMedia(rs.toMessageRecord(deliveryStatus = rs.getString("delivery_status"))))
+                    }
                 }
             }
         }

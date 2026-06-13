@@ -22,6 +22,12 @@ interface MediaRepository {
         mediaAssetId: UUID,
     ): MediaAssetRecord?
 
+    /** Loads a chat-photo asset (intended_album_kind='message') owned by [ownerUserId], or null. */
+    suspend fun findMessageMediaAsset(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ): MediaAssetRecord?
+
     suspend fun markAssetReadyApproved(
         ownerUserId: UUID,
         mediaAssetId: UUID,

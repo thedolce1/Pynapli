@@ -35,6 +35,18 @@ interface ConversationRepository {
         expirySeconds: Int?,
     ): AppResult<ConversationDto>
 
+    /** Uploads a chat photo and sends it as a media message in one call. */
+    suspend fun sendPhoto(
+        conversationId: String,
+        contentType: String,
+        byteSize: Long,
+        pixelWidth: Int?,
+        pixelHeight: Int?,
+        bytes: ByteArray,
+    ): AppResult<MessageDto>
+
+    suspend fun revealMedia(messageId: String): AppResult<MessageDto>
+
     suspend fun deleteMessage(messageId: String): AppResult<MessageDto>
 
     suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto>
