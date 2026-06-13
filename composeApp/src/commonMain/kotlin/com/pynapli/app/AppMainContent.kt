@@ -117,6 +117,12 @@ internal fun ColumnScope.PynapliMainContent(
                     profileLinksStateHolder.declineInvitation(linkId)
                 }
             },
+            onUnlinkProfileLink = {
+                scope.launch {
+                    profileLinksStateHolder.unlinkCurrent()
+                    profileHubStateHolder.load()
+                }
+            },
             onAcceptPartnerChatInvite = { conversationId ->
                 scope.launch {
                     messagesStateHolder.acceptPartnerInvite(conversationId)

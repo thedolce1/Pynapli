@@ -39,6 +39,7 @@ fun ProfileHubScreen(
     onOpenAlbums: () -> Unit,
     onAcceptProfileLinkInvite: (String) -> Unit,
     onDeclineProfileLinkInvite: (String) -> Unit,
+    onUnlinkProfileLink: () -> Unit,
     onAcceptPartnerChatInvite: (String) -> Unit,
     onDeclinePartnerChatInvite: (String) -> Unit,
     onClearProfileLinkMessages: () -> Unit,
@@ -90,6 +91,18 @@ fun ProfileHubScreen(
             onVisibleWhileTravelingChanged = stateHolder::updateVisibleWhileTraveling,
             onSharePsyncSoloMatchesChanged = stateHolder::updateSharePsyncSoloMatches,
             onSave = { scope.launch { stateHolder.savePrivacySettings() } },
+            modifier = modifier,
+        )
+    } else if (state.partnerVisible) {
+        PartnerManagementContent(
+            state = state,
+            profileLinksState = profileLinksState,
+            onBack = stateHolder::dismissPartner,
+            onAcceptInvite = onAcceptProfileLinkInvite,
+            onDeclineInvite = onDeclineProfileLinkInvite,
+            onUnlink = onUnlinkProfileLink,
+            onPartnerVisibilityChanged = stateHolder::updatePartnerVisibility,
+            onSave = { scope.launch { stateHolder.savePartner() } },
             modifier = modifier,
         )
     } else if (state.activityVisible) {
@@ -184,6 +197,7 @@ fun ProfileHubScreen(
                 stateHolder.openAppSettings()
             },
             onOpenAlbums = onOpenAlbums,
+            onOpenPartner = stateHolder::openPartner,
             onRequestDataExport = { scope.launch { stateHolder.requestDataExport() } },
             onDeleteAccountClick = {
                 deleteAccountConfirmation = ""

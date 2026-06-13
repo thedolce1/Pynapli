@@ -128,6 +128,41 @@ class ProfileServiceTest {
         }
 
     @Test
+    fun updateDiscoverySettingsStoresPartnerVisibility() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId), clock)
+
+            // Default before any write.
+            assertEquals("public", service.getMe(userId).discoverySettings.partnerVisibility)
+
+            val me =
+                service.updateDiscoverySettings(
+                    userId,
+                    UpdateDiscoverySettingsRequestDto(partnerVisibility = "Matches_Only"),
+                )
+
+            assertEquals("matches_only", me.discoverySettings.partnerVisibility)
+        }
+
+    @Test
+    fun updateDiscoverySettingsRejectsUnsupportedPartnerVisibility() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId), clock)
+
+            val error =
+                assertFailsWith<ProfileException> {
+                    service.updateDiscoverySettings(
+                        userId,
+                        UpdateDiscoverySettingsRequestDto(partnerVisibility = "friends"),
+                    )
+                }
+
+            assertEquals("INVALID_PARTNER_VISIBILITY", error.code)
+        }
+
+    @Test
     fun updateDiscoverySettingsRejectsUnsupportedGridMessagePolicy() =
         runBlocking {
             val userId = UUID.randomUUID()
@@ -607,6 +642,7 @@ private class InMemoryProfileRepository(
                         allowFlirts = update.allowFlirts ?: record.discoverySettings.allowFlirts,
                         allowIntroNotes = update.allowIntroNotes ?: record.discoverySettings.allowIntroNotes,
                         allowAlbumRequests = update.allowAlbumRequests ?: record.discoverySettings.allowAlbumRequests,
+                        partnerVisibility = update.partnerVisibility ?: record.discoverySettings.partnerVisibility,
                     ),
             )
         return record

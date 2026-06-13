@@ -75,6 +75,10 @@ internal fun Connection.hydrateGridCards(
               ON linked_profile.user_id = linked_user.id
             JOIN discovery_settings linked_ds
               ON linked_ds.user_id = linked_user.id
+            -- Owner's discovery settings drive the partner-visibility gate (the partner
+            -- mini belongs to pc.user_id, the card owner).
+            JOIN discovery_settings owner_ds
+              ON owner_ds.user_id = pc.user_id
             LEFT JOIN account_risk_states linked_risk
               ON linked_risk.user_id = linked_user.id
             LEFT JOIN LATERAL (
@@ -111,6 +115,26 @@ internal fun Connection.hydrateGridCards(
                   WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
                      OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
               )
+              -- Owner-controlled partner visibility (PROFILE_SETTINGS_SPEC). 'hidden'
+              -- falls through to no row; viewer = the grid querier.
+              AND (
+                  owner_ds.partner_visibility = 'public'
+                  OR (
+                      owner_ds.partner_visibility = 'verified_only'
+                      AND EXISTS (
+                          SELECT 1 FROM profiles vp
+                          WHERE vp.user_id = ? AND vp.verified_at IS NOT NULL
+                      )
+                  )
+                  OR (
+                      owner_ds.partner_visibility = 'matches_only'
+                      AND EXISTS (
+                          SELECT 1 FROM matches mm
+                          WHERE LEAST(mm.user_a, mm.user_b) = LEAST(?::uuid, pc.user_id)
+                            AND GREATEST(mm.user_a, mm.user_b) = GREATEST(?::uuid, pc.user_id)
+                      )
+                  )
+              )
             ORDER BY upl.accepted_at DESC NULLS LAST, upl.created_at DESC, upl.id ASC
             LIMIT 1
         ) linked_partner ON true
@@ -119,8 +143,11 @@ internal fun Connection.hydrateGridCards(
     return prepareStatement(sql).use { statement ->
         val ids = createArrayOf("uuid", userIds.toTypedArray())
         statement.setArray(1, ids)
-        statement.setObject(2, viewerUserId)
-        statement.setObject(3, viewerUserId)
+        statement.setObject(2, viewerUserId) // partner block check (blocker side)
+        statement.setObject(3, viewerUserId) // partner block check (blocked side)
+        statement.setObject(4, viewerUserId) // verified_only gate
+        statement.setObject(5, viewerUserId) // matches_only gate (LEAST)
+        statement.setObject(6, viewerUserId) // matches_only gate (GREATEST)
         statement.executeQuery().use { rs ->
             buildMap {
                 while (rs.next()) {

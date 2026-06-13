@@ -23,6 +23,8 @@ internal fun profileStatusFor(code: String): HttpStatusCode =
         "INVALID_BIO",
         "INVALID_PROFILE_TAG",
         "BIO_REJECTED",
+        "INVALID_PARTNER_VISIBILITY",
+        "INVALID_GRID_MESSAGE_POLICY",
         -> HttpStatusCode.BadRequest
         else -> HttpStatusCode.BadRequest
     }

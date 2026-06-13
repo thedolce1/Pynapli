@@ -47,6 +47,7 @@ internal fun ProfileHubContent(
     onOpenAgeVerification: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onOpenAlbums: () -> Unit,
+    onOpenPartner: () -> Unit,
     onRequestDataExport: () -> Unit,
     onDeleteAccountClick: () -> Unit,
     onLogoutClick: () -> Unit,
@@ -132,7 +133,7 @@ internal fun ProfileHubContent(
                     icon = Icons.Filled.People,
                     label = "Linked partner",
                     value = profileLinksState.current?.displayLabel ?: pendingPartnerStatus(profileLinksState),
-                    onClick = onOpenAlbums,
+                    onClick = onOpenPartner,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.ChatBubble,

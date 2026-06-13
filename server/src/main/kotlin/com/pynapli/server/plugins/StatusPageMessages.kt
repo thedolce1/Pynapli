@@ -31,6 +31,7 @@ internal fun userSafeMessage(code: String): String =
         "INVALID_BIO" -> "Bio can be up to 500 characters."
         "BIO_REJECTED" -> "This bio can't be used. Edit it and try again."
         "INVALID_PROFILE_TAG" -> "One or more selected tags are not recognized."
+        "INVALID_PARTNER_VISIBILITY" -> "Choose a valid partner visibility option."
         "INVALID_PROFILE_LINK_TARGET" -> "Request could not be completed."
         "PROFILE_LINK_SELF_FORBIDDEN" -> "You cannot link your own profile."
         "PROFILE_LINK_TARGET_NOT_FOUND" -> "Profile could not be linked."

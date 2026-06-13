@@ -55,6 +55,17 @@
         "maxBrightRatio": 0.6,
         "minColorBucketCount": 8
       }
+    },
+    "partner": {
+      "requiredTexts": ["Linked partner", "Partner visibility", "Show partner publicly", "Save partner settings"],
+      "forbiddenTexts": ["Something went wrong"],
+      "image": {
+        "minWidth": 700,
+        "minHeight": 1200,
+        "minNonBlackRatio": 0.05,
+        "maxBrightRatio": 0.6,
+        "minColorBucketCount": 8
+      }
     }
   }
 }
