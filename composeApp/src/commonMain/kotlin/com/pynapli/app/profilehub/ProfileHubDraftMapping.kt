@@ -4,15 +4,24 @@ import com.pynapli.shared.network.dto.DiscoverySettingsDto
 import com.pynapli.shared.network.dto.ProfileDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import com.pynapli.shared.profile.ProfileTaxonomies
 
 internal fun ProfileDto.toDraft(): ProfileEditDraft =
     ProfileEditDraft(
         displayName = displayName.orEmpty(),
         birthdate = birthdate.orEmpty(),
-        gender = gender.orEmpty(),
-        orientation = orientation.orEmpty(),
+        bio = bio.orEmpty(),
+        // Pre-taxonomy profiles may hold free text here; only structured keys map
+        // onto the chips, anything else starts unset rather than rendering a bogus chip.
+        gender = gender.orEmpty().takeIf { it in ProfileTaxonomies.genderKeys }.orEmpty(),
+        genderDetail = genderDetail.orEmpty(),
+        orientation = orientation.orEmpty().takeIf { it in ProfileTaxonomies.orientationKeys }.orEmpty(),
+        orientationDetail = orientationDetail.orEmpty(),
         relationshipContext = relationshipContext.orEmpty(),
         discoveryStyle = discoveryStyle.ifBlank { "both" },
+        lifestyleTags = lifestyleTags.toSet(),
+        logisticsTags = logisticsTags.toSet(),
+        intents = intents.toSet(),
     )
 
 internal fun ProfileEditDraft.toRequest(): UpdateProfileRequestDto =
@@ -20,9 +29,17 @@ internal fun ProfileEditDraft.toRequest(): UpdateProfileRequestDto =
         displayName = displayName.trim().emptyToNull(),
         birthdate = birthdate.trim().emptyToNull(),
         gender = gender.trim().emptyToNull(),
+        genderDetail = genderDetail.trim().emptyToNull(),
         orientation = orientation.trim().emptyToNull(),
+        orientationDetail = orientationDetail.trim().emptyToNull(),
         relationshipContext = relationshipContext.trim().emptyToNull(),
         discoveryStyle = discoveryStyle.trim().lowercase().emptyToNull(),
+        // Always sent: an empty bio/tag selection clears the stored value (the
+        // request's null-means-unchanged semantics are for older callers).
+        bio = bio.trim(),
+        lifestyleTags = lifestyleTags.toList(),
+        logisticsTags = logisticsTags.toList(),
+        intents = intents.toList(),
     )
 
 internal fun DiscoverySettingsDto.toPrivacyDraft(): PrivacySettingsDraft =
@@ -74,10 +91,31 @@ internal fun ProfileEditDraft.validationError(): String? {
         return "Birthdate must use YYYY-MM-DD."
     }
 
+    if (bio.trim().length > ProfileTaxonomies.BIO_MAX_LENGTH) {
+        return "Bio can be up to ${ProfileTaxonomies.BIO_MAX_LENGTH} characters."
+    }
+
+    selfDescribeError(gender, genderDetail, "gender")?.let { return it }
+    selfDescribeError(orientation, orientationDetail, "orientation")?.let { return it }
+
     if (discoveryStyle.trim().lowercase() !in discoveryStyles) {
         return "Choose a discovery style."
     }
 
+    return null
+}
+
+private fun selfDescribeError(
+    key: String,
+    detail: String,
+    fieldName: String,
+): String? {
+    if (key != ProfileTaxonomies.SELF_DESCRIBE) return null
+    val cleaned = detail.trim()
+    if (cleaned.isEmpty()) return "Add a short label for your self-described $fieldName."
+    if (cleaned.length > ProfileTaxonomies.SELF_DESCRIBE_MAX_LENGTH) {
+        return "Self-described $fieldName can be up to ${ProfileTaxonomies.SELF_DESCRIBE_MAX_LENGTH} characters."
+    }
     return null
 }
 

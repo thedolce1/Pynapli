@@ -260,9 +260,25 @@ class ProfileHubStateHolder(
 
     fun updateBirthdate(value: String) = updateDraft { it.copy(birthdate = value) }
 
-    fun updateGender(value: String) = updateDraft { it.copy(gender = value) }
+    // Gender/orientation are chip-driven structured keys: tapping the selected chip
+    // clears the field (both are optional).
+    fun updateGender(value: String) = updateDraft { it.copy(gender = if (it.gender == value) "" else value) }
 
-    fun updateOrientation(value: String) = updateDraft { it.copy(orientation = value) }
+    fun updateGenderDetail(value: String) = updateDraft { it.copy(genderDetail = value) }
+
+    fun updateOrientation(value: String) = updateDraft { it.copy(orientation = if (it.orientation == value) "" else value) }
+
+    fun updateOrientationDetail(value: String) = updateDraft { it.copy(orientationDetail = value) }
+
+    fun updateBio(value: String) = updateDraft { it.copy(bio = value) }
+
+    fun toggleLifestyleTag(value: String) = updateDraft { it.copy(lifestyleTags = it.lifestyleTags.toggled(value)) }
+
+    fun toggleLogisticsTag(value: String) = updateDraft { it.copy(logisticsTags = it.logisticsTags.toggled(value)) }
+
+    fun toggleIntent(value: String) = updateDraft { it.copy(intents = it.intents.toggled(value)) }
+
+    private fun Set<String>.toggled(value: String): Set<String> = if (value in this) this - value else this + value
 
     fun updateRelationshipContext(value: String) = updateDraft { it.copy(relationshipContext = value) }
 

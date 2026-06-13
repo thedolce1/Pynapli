@@ -47,10 +47,18 @@ data class ProfileHubUiState(
 data class ProfileEditDraft(
     val displayName: String = "",
     val birthdate: String = "",
+    val bio: String = "",
+    // Structured taxonomy key ("" = unset); the *Detail value only applies when the
+    // key is self_describe (ProfileTaxonomies).
     val gender: String = "",
+    val genderDetail: String = "",
     val orientation: String = "",
+    val orientationDetail: String = "",
     val relationshipContext: String = "",
     val discoveryStyle: String = "both",
+    val lifestyleTags: Set<String> = emptySet(),
+    val logisticsTags: Set<String> = emptySet(),
+    val intents: Set<String> = emptySet(),
 )
 
 @Immutable

@@ -105,6 +105,11 @@ class AccountLifecycleRepositoryIntegrationTest {
             assertNull(dataSource.stringValue("SELECT display_name FROM profiles WHERE user_id = ?", userId))
             assertNull(dataSource.stringValue("SELECT bio FROM profiles WHERE user_id = ?", userId))
             assertNull(dataSource.timestampValue("SELECT birthdate FROM profiles WHERE user_id = ?", userId))
+            assertNull(dataSource.stringValue("SELECT gender_detail FROM profiles WHERE user_id = ?", userId))
+            assertNull(dataSource.stringValue("SELECT orientation_detail FROM profiles WHERE user_id = ?", userId))
+            assertNull(dataSource.stringValue("SELECT lifestyle_tags::text FROM profiles WHERE user_id = ?", userId))
+            assertNull(dataSource.stringValue("SELECT logistics_tags::text FROM profiles WHERE user_id = ?", userId))
+            assertNull(dataSource.stringValue("SELECT intents::text FROM profiles WHERE user_id = ?", userId))
 
             // Exact location purged; media soft-deleted; partner link + benefit ended.
             assertEquals(0, dataSource.intValue("SELECT count(*) FROM user_locations WHERE user_id = ?", userId))
@@ -152,8 +157,14 @@ class AccountLifecycleRepositoryIntegrationTest {
             connection
                 .prepareStatement(
                     """
-                    INSERT INTO profiles (user_id, display_name, bio, birthdate, gender, orientation, moderation_status, visibility_status)
-                    VALUES (?, ?, 'My bio', DATE '1990-01-01', 'nonbinary', 'queer', 'approved', 'visible')
+                    INSERT INTO profiles (
+                        user_id, display_name, bio, birthdate, gender, gender_detail, orientation, orientation_detail,
+                        lifestyle_tags, logistics_tags, intents, moderation_status, visibility_status
+                    )
+                    VALUES (
+                        ?, ?, 'My bio', DATE '1990-01-01', 'self_describe', 'Genderfluid', 'queer', NULL,
+                        ARRAY['enm']::text[], ARRAY['hosts']::text[], ARRAY['events']::text[], 'approved', 'visible'
+                    )
                     """.trimIndent(),
                 ).use { statement ->
                     statement.setObject(1, userId)

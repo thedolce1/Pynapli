@@ -28,13 +28,16 @@ internal fun ProfileTextField(
     onValueChange: (String) -> Unit,
     label: String,
     supportingText: String? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         supportingText = supportingText?.let { { Text(it) } },
-        singleLine = true,
+        singleLine = singleLine,
+        minLines = minLines,
         modifier =
             Modifier
                 .fillMaxWidth()

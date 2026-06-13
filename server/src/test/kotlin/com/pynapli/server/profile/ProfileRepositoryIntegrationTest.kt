@@ -121,6 +121,126 @@ class ProfileRepositoryIntegrationTest {
             assertNull(profile.linkedPartnerUserId)
         }
 
+    @Test
+    fun updateProfilePersistsBioTagsAndSelfDescribeAndMatchesTheFilterPredicate() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000731")
+            dataSource.insertUserWithProfile(userId, "Seb Dev")
+            val repository = JdbcProfileRepository(dataSource)
+
+            val updated =
+                repository.updateProfile(
+                    userId = userId,
+                    update =
+                        ProfileUpdate(
+                            displayName = "Seb Dev",
+                            birthdate = null,
+                            gender = "self_describe",
+                            genderDetail = "Genderfluid",
+                            orientation = "queer",
+                            relationshipContext = null,
+                            discoveryStyle = null,
+                            displayAge = null,
+                            profileCompletenessScore = 40,
+                            bioProvided = true,
+                            bio = "Hosting-friendly and social-first.",
+                            lifestyleTags = listOf("enm", "soft_swap"),
+                            logisticsTags = listOf("hosts"),
+                            intents = listOf("events"),
+                        ),
+                )
+
+            val profile = requireNotNull(updated).profile
+            assertEquals("Hosting-friendly and social-first.", profile.bio)
+            assertEquals("self_describe", profile.gender)
+            assertEquals("Genderfluid", profile.genderDetail)
+            assertEquals("queer", profile.orientation)
+            assertEquals(listOf("enm", "soft_swap"), profile.lifestyleTags)
+            assertEquals(listOf("hosts"), profile.logisticsTags)
+            assertEquals(listOf("events"), profile.intents)
+
+            // The stored shape must satisfy the exact overlap predicate the grid/swipe
+            // filter SQL uses — this is what makes lifestyle filters match real profiles.
+            assertEquals(true, dataSource.lifestyleOverlapMatches(userId, listOf("enm")))
+            assertEquals(false, dataSource.lifestyleOverlapMatches(userId, listOf("full_swap")))
+
+            // Omitted late-added fields leave the stored values unchanged.
+            val unchanged =
+                repository.updateProfile(
+                    userId = userId,
+                    update =
+                        ProfileUpdate(
+                            displayName = "Seb Dev",
+                            birthdate = null,
+                            gender = null,
+                            genderDetail = null,
+                            orientation = null,
+                            orientationDetail = null,
+                            relationshipContext = null,
+                            discoveryStyle = null,
+                            displayAge = null,
+                            profileCompletenessScore = 20,
+                        ),
+                )
+            assertEquals("Hosting-friendly and social-first.", requireNotNull(unchanged).profile.bio)
+            assertEquals(listOf("enm", "soft_swap"), unchanged.profile.lifestyleTags)
+
+            // Provided-but-empty clears: bio to NULL, tags to NULL (the V36 opt-out
+            // shape), dropping the profile out of tag-filtered discovery.
+            val cleared =
+                repository.updateProfile(
+                    userId = userId,
+                    update =
+                        ProfileUpdate(
+                            displayName = "Seb Dev",
+                            birthdate = null,
+                            gender = null,
+                            genderDetail = null,
+                            orientation = null,
+                            orientationDetail = null,
+                            relationshipContext = null,
+                            discoveryStyle = null,
+                            displayAge = null,
+                            profileCompletenessScore = 20,
+                            bioProvided = true,
+                            bio = null,
+                            lifestyleTags = emptyList(),
+                        ),
+                )
+            assertNull(requireNotNull(cleared).profile.bio)
+            assertEquals(emptyList(), cleared.profile.lifestyleTags)
+            assertEquals(true, dataSource.lifestyleTagsColumnIsNull(userId))
+            assertEquals(false, dataSource.lifestyleOverlapMatches(userId, listOf("enm")))
+        }
+
+    private fun DataSource.lifestyleOverlapMatches(
+        userId: UUID,
+        tags: List<String>,
+    ): Boolean =
+        connection.use { connection ->
+            connection
+                .prepareStatement("SELECT EXISTS (SELECT 1 FROM profiles WHERE user_id = ? AND lifestyle_tags && ?::text[])")
+                .use { statement ->
+                    statement.setObject(1, userId)
+                    statement.setArray(2, connection.createArrayOf("text", tags.toTypedArray()))
+                    statement.executeQuery().use { rs ->
+                        rs.next() && rs.getBoolean(1)
+                    }
+                }
+        }
+
+    private fun DataSource.lifestyleTagsColumnIsNull(userId: UUID): Boolean =
+        connection.use { connection ->
+            connection
+                .prepareStatement("SELECT lifestyle_tags IS NULL FROM profiles WHERE user_id = ?")
+                .use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeQuery().use { rs ->
+                        rs.next() && rs.getBoolean(1)
+                    }
+                }
+        }
+
     private fun DataSource.insertUserWithProfile(
         userId: UUID,
         displayName: String,

@@ -246,7 +246,12 @@ class JdbcAccountLifecycleRepository(
                     bio = NULL,
                     birthdate = NULL,
                     gender = NULL,
+                    gender_detail = NULL,
                     orientation = NULL,
+                    orientation_detail = NULL,
+                    lifestyle_tags = NULL,
+                    logistics_tags = NULL,
+                    intents = NULL,
                     updated_at = now()
                 WHERE user_id = ?
                 """.trimIndent(),
