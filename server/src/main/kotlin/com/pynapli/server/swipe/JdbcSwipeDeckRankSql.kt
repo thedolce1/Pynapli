@@ -139,6 +139,10 @@ internal fun Connection.queryDeckRank(
           AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
           AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
           AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+          -- Structured identity filters: hard match against the profile's stored gender /
+          -- orientation key (self-describe keys never match a structured filter value).
+          AND (cardinality(?::text[]) = 0 OR p.gender = ANY(?::text[]))
+          AND (cardinality(?::text[]) = 0 OR p.orientation = ANY(?::text[]))
           AND (
               ?::boolean IS NULL
               OR ?::boolean = EXISTS (
@@ -200,6 +204,8 @@ internal fun Connection.queryDeckRank(
             val intents = createArrayOf("text", filters.intents.toTypedArray())
             val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
             val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+            val genders = createArrayOf("text", filters.genders.toTypedArray())
+            val orientations = createArrayOf("text", filters.orientations.toTypedArray())
             val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
             val forcedIds = createArrayOf("uuid", forcedTargetUserIds.toTypedArray())
             statement.setObject(1, viewerUserId)
@@ -229,17 +235,21 @@ internal fun Connection.queryDeckRank(
             statement.setArray(21, lifestyleTags)
             statement.setArray(22, logisticsTags)
             statement.setArray(23, logisticsTags)
-            statement.setObject(24, filters.linkedOnly)
-            statement.setObject(25, filters.linkedOnly)
-            statement.setObject(26, viewerUserId)
-            statement.setObject(27, viewerUserId)
-            statement.setNullableUuid(28, userSpecificViewerId)
-            statement.setNullableUuid(29, userSpecificViewerId)
-            statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
-            statement.setArray(31, excludedIds)
-            statement.setBoolean(32, forcedTargetUserIds.isNotEmpty())
-            statement.setArray(33, forcedIds)
-            statement.setInt(34, limit)
+            statement.setArray(24, genders)
+            statement.setArray(25, genders)
+            statement.setArray(26, orientations)
+            statement.setArray(27, orientations)
+            statement.setObject(28, filters.linkedOnly)
+            statement.setObject(29, filters.linkedOnly)
+            statement.setObject(30, viewerUserId)
+            statement.setObject(31, viewerUserId)
+            statement.setNullableUuid(32, userSpecificViewerId)
+            statement.setNullableUuid(33, userSpecificViewerId)
+            statement.setBoolean(34, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(35, excludedIds)
+            statement.setBoolean(36, forcedTargetUserIds.isNotEmpty())
+            statement.setArray(37, forcedIds)
+            statement.setInt(38, limit)
             statement.executeDeckRankRows()
         }
 

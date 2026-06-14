@@ -69,6 +69,8 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
           AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
           AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
           AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+          AND (cardinality(?::text[]) = 0 OR p.gender = ANY(?::text[]))
+          AND (cardinality(?::text[]) = 0 OR p.orientation = ANY(?::text[]))
           AND (
               ?::uuid IS NULL
               OR NOT EXISTS (
@@ -94,6 +96,8 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
             val intents = createArrayOf("text", filters.intents.toTypedArray())
             val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
             val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+            val genders = createArrayOf("text", filters.genders.toTypedArray())
+            val orientations = createArrayOf("text", filters.orientations.toTypedArray())
             val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
             statement.setObject(1, viewerUserId)
             statement.setArray(2, forcedIds)
@@ -118,11 +122,15 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
             statement.setArray(21, lifestyleTags)
             statement.setArray(22, logisticsTags)
             statement.setArray(23, logisticsTags)
-            statement.setNullableUuid(24, userSpecificViewerId)
-            statement.setNullableUuid(25, userSpecificViewerId)
-            statement.setBoolean(26, excludedTargetUserIds.isNotEmpty())
-            statement.setArray(27, excludedIds)
-            statement.setInt(28, limit)
+            statement.setArray(24, genders)
+            statement.setArray(25, genders)
+            statement.setArray(26, orientations)
+            statement.setArray(27, orientations)
+            statement.setNullableUuid(28, userSpecificViewerId)
+            statement.setNullableUuid(29, userSpecificViewerId)
+            statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(31, excludedIds)
+            statement.setInt(32, limit)
             statement.executeDeckRankRows()
         }.sortedByDescending { it.isBoosted }
 }
@@ -212,6 +220,8 @@ internal fun Connection.queryDeckRankForcedTargets(
           AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
           AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
           AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
+          AND (cardinality(?::text[]) = 0 OR p.gender = ANY(?::text[]))
+          AND (cardinality(?::text[]) = 0 OR p.orientation = ANY(?::text[]))
           AND (
               ?::uuid IS NULL
               OR NOT EXISTS (
@@ -237,6 +247,8 @@ internal fun Connection.queryDeckRankForcedTargets(
             val intents = createArrayOf("text", filters.intents.toTypedArray())
             val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
             val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
+            val genders = createArrayOf("text", filters.genders.toTypedArray())
+            val orientations = createArrayOf("text", filters.orientations.toTypedArray())
             val excludedIds = createArrayOf("uuid", excludedTargetUserIds.toTypedArray())
             statement.setObject(1, viewerUserId)
             statement.setArray(2, forcedIds)
@@ -262,11 +274,15 @@ internal fun Connection.queryDeckRankForcedTargets(
             statement.setArray(22, lifestyleTags)
             statement.setArray(23, logisticsTags)
             statement.setArray(24, logisticsTags)
-            statement.setNullableUuid(25, userSpecificViewerId)
-            statement.setNullableUuid(26, userSpecificViewerId)
-            statement.setBoolean(27, excludedTargetUserIds.isNotEmpty())
-            statement.setArray(28, excludedIds)
-            statement.setInt(29, limit)
+            statement.setArray(25, genders)
+            statement.setArray(26, genders)
+            statement.setArray(27, orientations)
+            statement.setArray(28, orientations)
+            statement.setNullableUuid(29, userSpecificViewerId)
+            statement.setNullableUuid(30, userSpecificViewerId)
+            statement.setBoolean(31, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(32, excludedIds)
+            statement.setInt(33, limit)
             statement.executeDeckRankRows()
         }.sortedByDescending { it.isBoosted }
 }

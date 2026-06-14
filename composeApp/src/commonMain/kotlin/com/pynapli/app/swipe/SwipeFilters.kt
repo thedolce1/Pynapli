@@ -38,6 +38,9 @@ data class SwipeFilters(
     val intents: Set<Intent> = emptySet(),
     val lifestyleTags: Set<LifestyleTag> = emptySet(),
     val logisticsTags: Set<LogisticsTag> = emptySet(),
+    // Structured gender/orientation keys from ProfileTaxonomies (self-describe excluded).
+    val genders: Set<String> = emptySet(),
+    val orientations: Set<String> = emptySet(),
     val dealbreakers: Set<String> = emptySet(),
 ) {
     val activeCount: Int
@@ -56,6 +59,8 @@ data class SwipeFilters(
             if (intents.isNotEmpty()) count += 1
             if (lifestyleTags.isNotEmpty()) count += 1
             if (logisticsTags.isNotEmpty()) count += 1
+            if (genders.isNotEmpty()) count += 1
+            if (orientations.isNotEmpty()) count += 1
             return count
         }
 
@@ -92,6 +97,8 @@ data class SwipeFilters(
             intents = intents.map { it.serverValue },
             lifestyleTags = lifestyleTags.map { it.serverValue },
             logisticsTags = logisticsTags.map { it.serverValue },
+            genders = genders.toList(),
+            orientations = orientations.toList(),
             dealbreakers = dealbreakers,
             verifiedPreferred = verifiedPreferred,
         )
@@ -146,6 +153,8 @@ data class SwipeFilters(
                 intents = request.intents.mapNotNull { intentByValue[it] }.toSet(),
                 lifestyleTags = request.lifestyleTags.mapNotNull { lifestyleByValue[it] }.toSet(),
                 logisticsTags = request.logisticsTags.mapNotNull { logisticsByValue[it] }.toSet(),
+                genders = request.genders.toSet(),
+                orientations = request.orientations.toSet(),
                 dealbreakers = dealbreakers,
             )
         }

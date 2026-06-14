@@ -109,6 +109,8 @@ class SavedSwipeFilterService(
             lifestyleTags = payload.lifestyleTags,
             logisticsTags = payload.logisticsTags,
             intents = payload.intents,
+            genders = payload.genders,
+            orientations = payload.orientations,
             verifiedPreferred = payload.verifiedPreferred,
         ) { _ -> SavedSwipeFilterException("INVALID_SAVED_FILTER_PAYLOAD") }
 

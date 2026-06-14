@@ -16,6 +16,7 @@ import com.pynapli.app.grid.DiscoveryStyle
 import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleTag
 import com.pynapli.app.grid.LogisticsTag
+import com.pynapli.shared.profile.ProfileTaxonomies
 
 @Composable
 internal fun WhoSection(
@@ -34,6 +35,45 @@ internal fun WhoSection(
         SwipeSheetChip(label = "Partnered", active = partnered) {
             onTogglesChanged(singles, linked, !partnered)
         }
+    }
+}
+
+@Composable
+internal fun GenderSection(
+    selected: Set<String>,
+    onChange: (Set<String>) -> Unit,
+) = IdentityChips(options = ProfileTaxonomies.genderOptions, selected = selected, onChange = onChange)
+
+@Composable
+internal fun OrientationSection(
+    selected: Set<String>,
+    onChange: (Set<String>) -> Unit,
+) = IdentityChips(options = ProfileTaxonomies.orientationOptions, selected = selected, onChange = onChange)
+
+/**
+ * Multi-select chips for a structured identity taxonomy (gender / orientation). Self-describe is a
+ * free-text profile value, not a structured filter option, so it is omitted (a self-describe profile
+ * never matches a structured filter — PROFILE_FILTER_SYNC_SPEC).
+ */
+@Composable
+private fun IdentityChips(
+    options: List<ProfileTaxonomies.Option>,
+    selected: Set<String>,
+    onChange: (Set<String>) -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options
+            .filter { it.key != ProfileTaxonomies.SELF_DESCRIBE }
+            .forEach { option ->
+                val active = option.key in selected
+                SwipeSheetChip(label = option.label, active = active) {
+                    onChange(if (active) selected - option.key else selected + option.key)
+                }
+            }
     }
 }
 

@@ -70,6 +70,18 @@ internal fun SwipeWhoAgeDistanceFilters(
         },
     )
 
+    SectionTitle("Gender")
+    GenderSection(
+        selected = draft.genders,
+        onChange = { onDraftChange(draft.copy(genders = it)) },
+    )
+
+    SectionTitle("Orientation")
+    OrientationSection(
+        selected = draft.orientations,
+        onChange = { onDraftChange(draft.copy(orientations = it)) },
+    )
+
     SectionHeader(
         title = "Age",
         dealbreakerKey = SwipeDealbreakerKey.AGE,
