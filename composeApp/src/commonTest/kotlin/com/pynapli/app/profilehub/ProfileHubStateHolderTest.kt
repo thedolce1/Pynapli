@@ -10,6 +10,7 @@ import com.pynapli.shared.network.dto.BlocksListDto
 import com.pynapli.shared.network.dto.DeleteAccountRequestDto
 import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import com.pynapli.shared.network.dto.DiscoverySettingsDto
+import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfilesListDto
 import com.pynapli.shared.network.dto.MeDto
@@ -18,6 +19,7 @@ import com.pynapli.shared.network.dto.ReportCategory
 import com.pynapli.shared.network.dto.ReportHistoryItemDto
 import com.pynapli.shared.network.dto.ReportHistoryListDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
+import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SupportContactDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
@@ -48,6 +50,52 @@ class ProfileHubStateHolderTest {
                     ?.displayName,
             )
             assertNull(stateHolder.state.value.ageVerificationStatus)
+            assertNull(stateHolder.state.value.errorMessage)
+        }
+
+    @Test
+    fun loadPopulatesSubscriptionEntitlementForSubscriptionSection() =
+        runBlocking {
+            val repository =
+                FakeProfileHubRepository(
+                    entitlementResult =
+                        AppResult.Success(
+                            SubscriptionEntitlementDto(
+                                tier = "select",
+                                source = EntitlementSource.OWN_SUBSCRIPTION,
+                                displayName = "Pynapli Select",
+                                adSupported = false,
+                                linkedPartnerIncluded = true,
+                            ),
+                        ),
+                )
+            val stateHolder = ProfileHubStateHolder(repository)
+
+            stateHolder.load()
+
+            assertEquals(
+                "Pynapli Select",
+                stateHolder.state.value.entitlement
+                    ?.displayName,
+            )
+            assertEquals("Pynapli Select", currentPlanSummary(stateHolder.state.value))
+            assertEquals("Select", planBadgeLabel(stateHolder.state.value))
+        }
+
+    @Test
+    fun loadKeepsHubUsableWhenEntitlementUnavailable() =
+        runBlocking {
+            val repository =
+                FakeProfileHubRepository(
+                    entitlementResult = AppResult.Failure(AppError("NETWORK_ERROR", "Offline")),
+                )
+            val stateHolder = ProfileHubStateHolder(repository)
+
+            stateHolder.load()
+
+            assertNull(stateHolder.state.value.entitlement)
+            assertEquals("Free", currentPlanSummary(stateHolder.state.value))
+            assertEquals("Free", planBadgeLabel(stateHolder.state.value))
             assertNull(stateHolder.state.value.errorMessage)
         }
 
@@ -445,6 +493,7 @@ class ProfileHubStateHolderTest {
 
 private class FakeProfileHubRepository(
     private val loadMeResult: AppResult<MeDto> = AppResult.Success(testMe()),
+    private val entitlementResult: AppResult<SubscriptionEntitlementDto> = AppResult.Success(testEntitlement()),
     private val loadAgeResult: AppResult<AgeVerificationStatusDto> =
         AppResult.Success(
             AgeVerificationStatusDto(status = "not_started", message = "Age verification has not started."),
@@ -509,6 +558,8 @@ private class FakeProfileHubRepository(
         return loadMeResult
     }
 
+    override suspend fun getSubscriptionEntitlement(): AppResult<SubscriptionEntitlementDto> = entitlementResult
+
     override suspend fun loadAgeVerificationStatus(): AppResult<AgeVerificationStatusDto> {
         beforeLoadAge()
         return loadAgeResult
@@ -567,6 +618,15 @@ private class FakeProfileHubRepository(
         return deleteAccountResult
     }
 }
+
+private fun testEntitlement(): SubscriptionEntitlementDto =
+    SubscriptionEntitlementDto(
+        tier = "free",
+        source = EntitlementSource.FREE,
+        displayName = "Free",
+        adSupported = true,
+        linkedPartnerIncluded = false,
+    )
 
 private fun testDataExport(): AccountDataExportDto =
     AccountDataExportDto(

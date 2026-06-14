@@ -140,6 +140,10 @@ internal fun ColumnScope.PynapliMainContent(
                 onProfileSurface(ProfileSurface.None)
                 scope.launch { authStateHolder.logout() }
             },
+            onOpenStore = {
+                onProfileSurface(ProfileSurface.None)
+                onOpenStore()
+            },
             onSetDiscreetIcon = onSetDiscreetIcon,
             modifier = Modifier.weight(1f),
         )

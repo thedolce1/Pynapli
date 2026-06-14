@@ -10,12 +10,15 @@ import com.pynapli.shared.network.dto.HiddenProfilesListDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.ReportHistoryListDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
+import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SupportContactDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 
 interface ProfileHubRepository {
     suspend fun loadMe(): AppResult<MeDto>
+
+    suspend fun getSubscriptionEntitlement(): AppResult<SubscriptionEntitlementDto>
 
     suspend fun loadAgeVerificationStatus(): AppResult<AgeVerificationStatusDto>
 

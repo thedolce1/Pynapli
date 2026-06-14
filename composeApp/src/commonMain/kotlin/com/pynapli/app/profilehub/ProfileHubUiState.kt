@@ -7,11 +7,13 @@ import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.ReportHistoryItemDto
+import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SupportContactDto
 
 @Immutable
 data class ProfileHubUiState(
     val me: MeDto? = null,
+    val entitlement: SubscriptionEntitlementDto? = null,
     val draft: ProfileEditDraft = ProfileEditDraft(),
     val privacyDraft: PrivacySettingsDraft = PrivacySettingsDraft(),
     val activityDraft: ActivitySettingsDraft = ActivitySettingsDraft(),

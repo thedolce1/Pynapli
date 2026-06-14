@@ -4,6 +4,8 @@ import com.pynapli.app.appsettings.AppSettingsDraft
 import com.pynapli.app.appsettings.AppSettingsUiState
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.app.profilelink.ProfileLinksUiState
+import com.pynapli.shared.network.dto.EntitlementSource
+import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.settings.AppSettings
 
 internal fun pendingPartnerStatus(state: ProfileLinksUiState): String =
@@ -21,6 +23,30 @@ internal fun partnerChatInviteSummary(count: Int): String = if (count == 0) "Ask
 internal fun albumSummary(state: MediaAlbumsUiState): String = "${state.profileItems.size} public, ${state.privateItems.size} private"
 
 internal fun grantSummary(state: MediaAlbumsUiState): String = if (state.privateGrants.isEmpty()) "No active grants" else "${state.privateGrants.size} active"
+
+internal fun currentPlanSummary(state: ProfileHubUiState): String = state.entitlement?.displayName ?: if (state.isLoading) "Loading" else "Free"
+
+// Compact tier label for the summary-card status pill ("Free"/"Social"/"Select").
+internal fun planBadgeLabel(state: ProfileHubUiState): String =
+    when (state.entitlement?.tier) {
+        SubscriptionTier.SELECT -> "Select"
+        SubscriptionTier.SOCIAL -> "Social"
+        else -> "Free"
+    }
+
+internal fun linkedPartnerBenefitSummary(
+    state: ProfileHubUiState,
+    profileLinksState: ProfileLinksUiState,
+): String {
+    val entitlement = state.entitlement
+    return when {
+        entitlement?.source == EntitlementSource.LINKED_PARTNER_BENEFIT -> "Active via your partner"
+        entitlement?.linkedPartnerIncluded == true ->
+            if (profileLinksState.current != null) "Shared with your partner" else "Included — link a partner"
+        entitlement == null && state.isLoading -> "Loading"
+        else -> "Not included on Free"
+    }
+}
 
 internal fun profileBasicsSummary(state: ProfileHubUiState): String {
     val profile = state.me?.profile ?: return if (state.isLoading) "Loading" else "Set up"
