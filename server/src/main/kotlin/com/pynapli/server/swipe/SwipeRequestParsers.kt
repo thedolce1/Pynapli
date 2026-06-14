@@ -41,6 +41,8 @@ internal object SwipeDeckRequestParser {
                 lifestyleTags = request.lifestyleTags,
                 logisticsTags = request.logisticsTags,
                 intents = request.intents,
+                genders = request.genders,
+                orientations = request.orientations,
                 verifiedPreferred = request.verifiedPreferred,
             ) { _ -> SwipeException("INVALID_SWIPE_FILTER") }
         return ParsedSwipeDeckRequest(

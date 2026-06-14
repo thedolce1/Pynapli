@@ -1324,6 +1324,30 @@ class GridAndSwipeRepositoryIntegrationTest :
             }
         }
 
+        "swipe deck with genders hard-filters to matching gender" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000e11")
+                val woman = UUID.fromString("00000000-0000-0000-0000-000000000e12")
+                val man = UUID.fromString("00000000-0000-0000-0000-000000000e13")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(woman, "Wanda", age = 30, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(man, "Manny", age = 31, longitude = -122.0838, latitude = 37.4228)
+                dataSource.setProfileGender(woman, "woman")
+                dataSource.setProfileGender(man, "man")
+
+                val womenOnly =
+                    JdbcSwipeRepository(dataSource)
+                        .queryDeck(
+                            viewerUserId = viewer,
+                            radiusMeters = 100_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(genders = setOf("woman")),
+                        ).cards
+
+                assertEquals(listOf(woman), womenOnly.map { it.userId })
+            }
+        }
+
         "grid query with facePhotoVerifiedOnly and ageVerifiedOnly each filter to their column" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b01")
