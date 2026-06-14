@@ -1263,6 +1263,67 @@ class GridAndSwipeRepositoryIntegrationTest :
             }
         }
 
+        "grid query with genders hard-filters to matching gender" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000e01")
+                val woman = UUID.fromString("00000000-0000-0000-0000-000000000e02")
+                val man = UUID.fromString("00000000-0000-0000-0000-000000000e03")
+                val blank = UUID.fromString("00000000-0000-0000-0000-000000000e04")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(woman, "Wanda", age = 30, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(man, "Manny", age = 31, longitude = -122.0838, latitude = 37.4228)
+                dataSource.insertDiscoverableUser(blank, "Blank", age = 32, longitude = -122.0830, latitude = 37.4230)
+                dataSource.setProfileGender(woman, "woman")
+                dataSource.setProfileGender(man, "man")
+
+                val repository = JdbcGridRepository(dataSource)
+                val womenOnly =
+                    repository
+                        .queryNearby(
+                            viewerUserId = viewer,
+                            radiusMeters = 100_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(genders = setOf("woman")),
+                        ).cards
+                val womenOrMen =
+                    repository
+                        .queryNearby(
+                            viewerUserId = viewer,
+                            radiusMeters = 100_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(genders = setOf("woman", "man")),
+                        ).cards
+
+                assertEquals(listOf(woman), womenOnly.map { it.userId })
+                assertEquals(setOf(woman, man), womenOrMen.map { it.userId }.toSet())
+            }
+        }
+
+        "grid query with orientations hard-filters to matching orientation" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000f01")
+                val pan = UUID.fromString("00000000-0000-0000-0000-000000000f02")
+                val straight = UUID.fromString("00000000-0000-0000-0000-000000000f03")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(pan, "Pat", age = 30, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(straight, "Sam", age = 31, longitude = -122.0838, latitude = 37.4228)
+                dataSource.setProfileOrientation(pan, "pansexual")
+                dataSource.setProfileOrientation(straight, "straight")
+
+                val repository = JdbcGridRepository(dataSource)
+                val panOnly =
+                    repository
+                        .queryNearby(
+                            viewerUserId = viewer,
+                            radiusMeters = 100_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(orientations = setOf("pansexual")),
+                        ).cards
+
+                assertEquals(listOf(pan), panOnly.map { it.userId })
+            }
+        }
+
         "grid query with facePhotoVerifiedOnly and ageVerifiedOnly each filter to their column" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b01")
@@ -1987,6 +2048,31 @@ private fun DataSource.setProfileDiscoveryStyle(
     connection.use { connection ->
         connection.prepareStatement("UPDATE profiles SET discovery_style = ? WHERE user_id = ?").use { statement ->
             statement.setString(1, style)
+            statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+    }
+}
+
+private fun DataSource.setProfileGender(
+    userId: UUID,
+    gender: String,
+) = setProfileTextColumn(userId, column = "gender", value = gender)
+
+private fun DataSource.setProfileOrientation(
+    userId: UUID,
+    orientation: String,
+) = setProfileTextColumn(userId, column = "orientation", value = orientation)
+
+private fun DataSource.setProfileTextColumn(
+    userId: UUID,
+    column: String,
+    value: String,
+) {
+    require(column in setOf("gender", "orientation")) { "Unexpected profile column: $column" }
+    connection.use { connection ->
+        connection.prepareStatement("UPDATE profiles SET $column = ? WHERE user_id = ?").use { statement ->
+            statement.setString(1, value)
             statement.setObject(2, userId)
             statement.executeUpdate()
         }

@@ -39,6 +39,9 @@ data class GridFilters(
     val lifestyleTags: Set<LifestyleTag> = emptySet(),
     val logisticsTags: Set<LogisticsTag> = emptySet(),
     val intents: Set<Intent> = emptySet(),
+    // Structured gender/orientation keys from ProfileTaxonomies (self-describe excluded).
+    val genders: Set<String> = emptySet(),
+    val orientations: Set<String> = emptySet(),
     val tonightAvailable: Boolean = false,
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
@@ -58,6 +61,8 @@ data class GridFilters(
             if (lifestyleTags.isNotEmpty()) count += 1
             if (logisticsTags.isNotEmpty()) count += 1
             if (intents.isNotEmpty()) count += 1
+            if (genders.isNotEmpty()) count += 1
+            if (orientations.isNotEmpty()) count += 1
             if (tonightAvailable) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
@@ -94,6 +99,8 @@ data class GridFilters(
             logisticsTags = logisticsTags.map { it.serverValue },
             tonightAvailableOnly = tonightAvailable,
             intents = intents.map { it.serverValue },
+            genders = genders.toList(),
+            orientations = orientations.toList(),
         )
     }
 
@@ -132,6 +139,8 @@ data class GridFilters(
                 lifestyleTags = request.lifestyleTags.mapNotNull { lifestyleByValue[it] }.toSet(),
                 logisticsTags = request.logisticsTags.mapNotNull { logisticsByValue[it] }.toSet(),
                 intents = request.intents.mapNotNull { intentByValue[it] }.toSet(),
+                genders = request.genders.toSet(),
+                orientations = request.orientations.toSet(),
                 tonightAvailable = request.tonightAvailableOnly,
                 radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
                 minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),

@@ -139,6 +139,10 @@ internal fun Connection.queryGridRank(
                   OR (p.tonight_available_until IS NOT NULL AND p.tonight_available_until > now())
               )
               AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
+              -- Structured identity filters: hard match against the profile's stored gender /
+              -- orientation key (self-describe keys never match a structured filter value).
+              AND (cardinality(?::text[]) = 0 OR p.gender = ANY(?::text[]))
+              AND (cardinality(?::text[]) = 0 OR p.orientation = ANY(?::text[]))
               -- Per-viewer self/block exclusion ONLY when userSpecificViewerId is
               -- set (uncached path). On the cached path these are applied in Kotlin
               -- (self) or post-repository in GridService (block).
@@ -198,6 +202,8 @@ internal fun Connection.queryGridRank(
         val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
         val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
         val intents = createArrayOf("text", filters.intents.toTypedArray())
+        val genders = createArrayOf("text", filters.genders.toTypedArray())
+        val orientations = createArrayOf("text", filters.orientations.toTypedArray())
         statement.setObject(1, viewerUserId)
         // has_visible_linked_partner gate + per-viewer block params (skipped when null).
         statement.setNullableUuid(2, userSpecificViewerId)
@@ -227,23 +233,27 @@ internal fun Connection.queryGridRank(
         statement.setBoolean(24, filters.tonightAvailableOnly)
         statement.setArray(25, intents)
         statement.setArray(26, intents)
+        statement.setArray(27, genders)
+        statement.setArray(28, genders)
+        statement.setArray(29, orientations)
+        statement.setArray(30, orientations)
         // per-viewer block exclusion (self path).
-        statement.setNullableUuid(27, userSpecificViewerId)
-        statement.setNullableUuid(28, userSpecificViewerId)
-        statement.setNullableUuid(29, userSpecificViewerId)
+        statement.setNullableUuid(31, userSpecificViewerId)
+        statement.setNullableUuid(32, userSpecificViewerId)
+        statement.setNullableUuid(33, userSpecificViewerId)
         // linkedOnly filter (?::boolean IS NULL / true / false).
-        statement.setObject(30, filters.linkedOnly)
-        statement.setObject(31, filters.linkedOnly)
-        statement.setObject(32, filters.linkedOnly)
+        statement.setObject(34, filters.linkedOnly)
+        statement.setObject(35, filters.linkedOnly)
+        statement.setObject(36, filters.linkedOnly)
         // Keyset cursor predicate (no-op when cursor is null).
-        statement.setBoolean(33, cursor != null)
-        statement.setObject(34, cursor?.boostBucket)
-        statement.setObject(35, cursor?.boostBucket)
-        statement.setObject(36, cursor?.distanceBucketMeters)
-        statement.setObject(37, cursor?.boostBucket)
-        statement.setObject(38, cursor?.distanceBucketMeters)
-        statement.setObject(39, cursor?.userId)
-        statement.setInt(40, limit)
+        statement.setBoolean(37, cursor != null)
+        statement.setObject(38, cursor?.boostBucket)
+        statement.setObject(39, cursor?.boostBucket)
+        statement.setObject(40, cursor?.distanceBucketMeters)
+        statement.setObject(41, cursor?.boostBucket)
+        statement.setObject(42, cursor?.distanceBucketMeters)
+        statement.setObject(43, cursor?.userId)
+        statement.setInt(44, limit)
         statement.executeQuery().use { rs ->
             buildList {
                 while (rs.next()) {

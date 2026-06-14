@@ -88,6 +88,8 @@ class SavedGridFilterService(
             logisticsTags = payload.logisticsTags,
             tonightAvailableOnly = payload.tonightAvailableOnly,
             intents = payload.intents,
+            genders = payload.genders,
+            orientations = payload.orientations,
         ) { _ -> SavedGridFilterException("INVALID_SAVED_FILTER_PAYLOAD") }
     }
 
