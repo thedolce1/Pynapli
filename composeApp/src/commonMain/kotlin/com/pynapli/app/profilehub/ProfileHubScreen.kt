@@ -45,6 +45,7 @@ fun ProfileHubScreen(
     onClearProfileLinkMessages: () -> Unit,
     onClearMessagesError: () -> Unit,
     onLogout: () -> Unit,
+    onOpenStore: () -> Unit = {},
     onSetDiscreetIcon: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -198,6 +199,7 @@ fun ProfileHubScreen(
             },
             onOpenAlbums = onOpenAlbums,
             onOpenPartner = stateHolder::openPartner,
+            onOpenStore = onOpenStore,
             onRequestDataExport = { scope.launch { stateHolder.requestDataExport() } },
             onDeleteAccountClick = {
                 deleteAccountConfirmation = ""

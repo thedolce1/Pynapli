@@ -48,6 +48,7 @@ internal fun ProfileHubContent(
     onOpenAppSettings: () -> Unit,
     onOpenAlbums: () -> Unit,
     onOpenPartner: () -> Unit,
+    onOpenStore: () -> Unit,
     onRequestDataExport: () -> Unit,
     onDeleteAccountClick: () -> Unit,
     onLogoutClick: () -> Unit,
@@ -164,12 +165,14 @@ internal fun ProfileHubContent(
                 ProfileHubRow(
                     icon = Icons.Filled.CardMembership,
                     label = "Current plan",
-                    value = "Free",
+                    value = currentPlanSummary(state),
+                    onClick = onOpenStore,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.People,
                     label = "Linked partner benefit",
-                    value = if (profileLinksState.current == null) "No active link" else "Eligible",
+                    value = linkedPartnerBenefitSummary(state, profileLinksState),
+                    onClick = onOpenStore,
                 )
             }
         }

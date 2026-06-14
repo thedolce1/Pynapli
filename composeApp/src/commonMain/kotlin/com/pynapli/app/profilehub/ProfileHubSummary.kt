@@ -75,7 +75,7 @@ internal fun ProfileSummary(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            StatusPill(text = "Free")
+            StatusPill(text = planBadgeLabel(state))
         }
 
         Row(

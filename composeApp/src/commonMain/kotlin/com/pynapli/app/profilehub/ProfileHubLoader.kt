@@ -18,6 +18,7 @@ internal class ProfileHubLoader(
             val meDeferred = async { repository.loadMe() }
             val ageVerificationDeferred = async { repository.loadAgeVerificationStatus() }
             val latestDataExportDeferred = async { repository.latestDataExportRequest() }
+            val entitlementDeferred = async { repository.getSubscriptionEntitlement() }
 
             when (val result = meDeferred.await()) {
                 is AppResult.Success -> {
@@ -31,9 +32,17 @@ internal class ProfileHubLoader(
                             is AppResult.Success -> export.value
                             is AppResult.Failure -> null
                         }
+                    // Entitlement is non-fatal: a failed lookup leaves the Subscription section
+                    // on its prior value rather than blocking the whole hub.
+                    val entitlement =
+                        when (val entitlementResult = entitlementDeferred.await()) {
+                            is AppResult.Success -> entitlementResult.value
+                            is AppResult.Failure -> state.value.entitlement
+                        }
                     state.update { existing ->
                         existing.copy(
                             me = result.value,
+                            entitlement = entitlement,
                             ageVerificationStatus = ageVerificationStatus,
                             latestDataExport = latestDataExport,
                             draft = if (existing.editVisible) existing.draft else result.value.profile.toDraft(),
@@ -58,6 +67,7 @@ internal class ProfileHubLoader(
                 is AppResult.Failure -> {
                     ageVerificationDeferred.cancel()
                     latestDataExportDeferred.cancel()
+                    entitlementDeferred.cancel()
                     state.update {
                         it.copy(
                             isLoading = false,
