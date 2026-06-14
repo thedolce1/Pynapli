@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -93,6 +94,11 @@ fun ProfileDetailSheet(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    // Present every profile peek (Grid, Swipe, Activity, hub preview) at a consistent
+                    // near-full height instead of letting the sheet wrap content — short profiles (or a
+                    // sheet that opened mid-load) otherwise render as a small partial sheet, while richer
+                    // ones cover most of the screen. One height = one consistent feel everywhere.
+                    .fillMaxHeight(0.94f)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 18.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
