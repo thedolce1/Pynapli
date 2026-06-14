@@ -127,6 +127,27 @@ class ProfileRepositoryIntegrationTest {
         }
 
     @Test
+    fun publicProfileReportsVerifiedFromVerifiedAt() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000751")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000752")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Vera")
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement("UPDATE profiles SET verified_at = now() WHERE user_id = ?")
+                    .use { statement ->
+                        statement.setObject(1, target)
+                        statement.executeUpdate()
+                    }
+            }
+            val repository = JdbcProfileRepository(dataSource)
+
+            assertEquals(false, requireNotNull(repository.getPublicProfile(viewer, viewer)).verified)
+            assertEquals(true, requireNotNull(repository.getPublicProfile(viewer, target)).verified)
+        }
+
+    @Test
     fun publicProfileHidesQuarantinedLinkedPartnerMini() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000721")

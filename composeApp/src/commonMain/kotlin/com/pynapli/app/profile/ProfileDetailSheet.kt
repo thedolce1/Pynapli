@@ -105,8 +105,11 @@ fun ProfileDetailSheet(
         ) {
             ProfileHero(
                 displayName = displayName,
+                age = profile?.displayAge,
+                verified = profile?.verified == true,
                 online = card.online,
                 distanceLabel = distanceLabel,
+                photoUrls = profile?.photoUrls.orEmpty(),
                 profilePhotoUrl = profilePhotoUrl,
                 onDismiss = onDismiss,
                 onHideClick = { showHideConfirm = true },

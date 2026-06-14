@@ -74,6 +74,8 @@ data class PublicProfileRecord(
     val userId: UUID,
     val displayName: String,
     val profilePhotoMediaAssetId: UUID?,
+    val profilePhotoMediaAssetIds: List<UUID> = emptyList(),
+    val verified: Boolean = false,
     val linkedPartnerUserId: UUID? = null,
     val linkedPartnerDisplayName: String? = null,
     val linkedPartnerThumbnailMediaAssetId: UUID? = null,

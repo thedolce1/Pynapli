@@ -46,7 +46,7 @@ internal fun ProfileFacts(profileState: ProfileDetailUiState) {
     val chips =
         remember(profile, card.linkedPartner) {
             buildList {
-                profile.displayAge?.let { add("$it") }
+                // Age now lives next to the name in the hero; keep it out of the chip row.
                 add(profile.discoveryStyle.toDisplayLabel())
                 profile.relationshipContext?.let { add(it.toDisplayLabel()) }
                 profile.gender?.let { add(selfDescribableLabel(it, profile.genderDetail)) }

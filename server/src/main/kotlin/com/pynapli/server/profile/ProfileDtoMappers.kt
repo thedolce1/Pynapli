@@ -57,6 +57,8 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
         distanceLabel = distanceMeters?.toPublicDistanceLabel(),
         distanceMeters = distanceMeters?.toPublicDistanceMeters(),
         profilePhotoUrl = profilePhotoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+        photoUrls = profilePhotoMediaAssetIds.mapNotNull { mediaAssetUrlResolver?.publicContentUrl(it) },
+        verified = verified,
         privateAlbumAccessStatus = privateAlbumAccessStatus,
         linkedPartner =
             linkedPartnerUserId?.let { partnerUserId ->

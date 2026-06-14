@@ -51,6 +51,8 @@ data class PublicProfileDto(
     val distanceLabel: String? = null,
     val distanceMeters: Int? = null,
     val profilePhotoUrl: String? = null,
+    val photoUrls: List<String> = emptyList(),
+    val verified: Boolean = false,
     val privateAlbumAccessStatus: String = "none",
     val linkedPartner: LinkedPartnerMiniDto? = null,
     val allowGridMessages: Boolean,

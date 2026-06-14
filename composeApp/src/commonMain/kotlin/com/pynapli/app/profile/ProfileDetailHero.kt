@@ -4,11 +4,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,12 +42,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliSemantic
+import com.pynapli.app.design.VerifiedBadge
 
 @Composable
 internal fun ProfileHero(
     displayName: String,
+    age: Int?,
+    verified: Boolean,
     online: Boolean,
     distanceLabel: String?,
+    photoUrls: List<String>,
     profilePhotoUrl: String?,
     onDismiss: () -> Unit,
     onHideClick: () -> Unit,
@@ -51,25 +60,73 @@ internal fun ProfileHero(
     onReportClick: () -> Unit,
     isOwnProfile: Boolean = false,
 ) {
+    val photos =
+        remember(photoUrls, profilePhotoUrl) {
+            photoUrls.ifEmpty { listOfNotNull(profilePhotoUrl) }
+        }
+    val pagerState = rememberPagerState(pageCount = { photos.size.coerceAtLeast(1) })
+
     Box(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(210.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .height(380.dp)
+                .clip(RoundedCornerShape(12.dp))
                 .background(
                     Brush.linearGradient(
                         listOf(Color(0xFF2B2622), Color(0xFF6D5D4F), Color(0xFF1C1B1A)),
                     ),
                 ),
     ) {
-        profilePhotoUrl?.let { photoUrl ->
-            AsyncImage(
-                model = photoUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().height(210.dp),
-            )
+        if (photos.isNotEmpty()) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                AsyncImage(
+                    model = photos[page],
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
+        // Bottom scrim so the name/meta stay legible over any photo.
+        Box(
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color(0x55000000), Color(0xCC000000)),
+                        ),
+                    ),
+        )
+
+        // Carousel pips (only when there is more than one photo).
+        if (photos.size > 1) {
+            Row(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                photos.indices.forEach { index ->
+                    Box(
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(
+                                    if (index == pagerState.currentPage) Color.White else Color.White.copy(alpha = 0.3f),
+                                ),
+                    )
+                }
+            }
         }
 
         Row(
@@ -103,47 +160,75 @@ internal fun ProfileHero(
             }
         }
 
-        Row(
+        Column(
             modifier =
                 Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, Color(0xD9000000)),
-                        ),
-                    ).padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (online) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF13E58A))
-                            .border(1.dp, Color.Black, CircleShape),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = displayName,
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                age?.let { value ->
+                    Text(
+                        text = value.toString(),
+                        color = Color.White.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Light,
+                    )
+                }
+                if (verified) {
+                    VerifiedBadge(size = 18.dp)
+                }
             }
 
-            Text(
-                text = displayName,
-                color = Color.White,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-
-            distanceLabel?.let {
-                Text(
-                    text = it,
-                    color = Color(0xFFE5E5E5),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                )
+            if (online || distanceLabel != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    if (online) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(PynapliSemantic.Online),
+                        )
+                        Text(
+                            text = "Online",
+                            color = PynapliSemantic.Online,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    distanceLabel?.let {
+                        if (online) {
+                            Text(
+                                text = "·",
+                                color = Color(0xFFE5E5E5),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        Text(
+                            text = it,
+                            color = Color(0xFFE5E5E5),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
         }
     }

@@ -8,12 +8,16 @@ internal fun Connection.toTextArrayOrNull(values: List<String>?): java.sql.Array
 
 private fun ResultSet.getStringList(column: String): List<String> = (getArray(column)?.array as? Array<*>)?.mapNotNull { it as? String } ?: emptyList()
 
+private fun ResultSet.getUuidList(column: String): List<UUID> = (getArray(column)?.array as? Array<*>)?.mapNotNull { it as? UUID } ?: emptyList()
+
 internal fun ResultSet.toPublicProfileRecord(): PublicProfileRecord {
     val distanceMeters = getDouble("distance_meters").takeUnless { wasNull() }
     return PublicProfileRecord(
         userId = getObject("user_id", UUID::class.java),
         displayName = getString("display_name"),
         profilePhotoMediaAssetId = getObject("profile_photo_media_asset_id", UUID::class.java),
+        profilePhotoMediaAssetIds = getUuidList("profile_photo_ids"),
+        verified = getBoolean("verified"),
         linkedPartnerUserId = getObject("linked_partner_user_id", UUID::class.java),
         linkedPartnerDisplayName = getString("linked_partner_display_name"),
         linkedPartnerThumbnailMediaAssetId = getObject("linked_partner_thumbnail_media_asset_id", UUID::class.java),
