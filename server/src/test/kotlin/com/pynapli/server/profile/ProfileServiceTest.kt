@@ -7,6 +7,9 @@ import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.activity.ActivitySummaryRecord
 import com.pynapli.server.activity.AlbumRequestEventRecord
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.presence.PresenceRepository
+import com.pynapli.server.presence.PresenceService
+import com.pynapli.server.presence.PresenceState
 import com.pynapli.server.safety.AccountRiskStateRecord
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
@@ -251,6 +254,40 @@ class ProfileServiceTest {
             service.getPublicProfile(viewerUserId, userId)
 
             assertEquals(listOf(viewerUserId to userId), activityRepository.profileViews)
+        }
+
+    @Test
+    fun getPublicProfileHydratesOnlineFromPresence() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service =
+                ProfileService(
+                    repository = InMemoryProfileRepository(userId),
+                    clock = clock,
+                    presenceService = PresenceService(StaticPresenceRepository(setOf(userId))),
+                )
+
+            val profile = service.getPublicProfile(UUID.randomUUID(), userId)
+
+            assertEquals(true, profile.online)
+        }
+
+    @Test
+    fun getPublicProfileReportsOfflineTargetAndDefaultsWithoutPresence() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            // Presence wired, but the target is not in the online set.
+            val withPresence =
+                ProfileService(
+                    repository = InMemoryProfileRepository(userId),
+                    clock = clock,
+                    presenceService = PresenceService(StaticPresenceRepository(emptySet())),
+                )
+            assertEquals(false, withPresence.getPublicProfile(UUID.randomUUID(), userId).online)
+
+            // No presence service at all -> defaults offline rather than failing the fetch.
+            val withoutPresence = ProfileService(InMemoryProfileRepository(userId), clock)
+            assertEquals(false, withoutPresence.getPublicProfile(UUID.randomUUID(), userId).online)
         }
 
     @Test
@@ -651,6 +688,14 @@ private class InMemoryProfileRepository(
 
 private class StaticMediaAssetUrlResolver : MediaAssetUrlResolver {
     override fun publicContentUrl(mediaAssetId: UUID): String = "https://media.example/$mediaAssetId"
+}
+
+private class StaticPresenceRepository(
+    private val onlineIds: Set<UUID>,
+) : PresenceRepository {
+    override suspend fun heartbeat(userId: UUID): PresenceState = PresenceState(online = true, expiresInSeconds = 300)
+
+    override suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> = userIds.filterTo(mutableSetOf()) { it in onlineIds }
 }
 
 private fun restrictedRiskPolicy(tier: String = "quarantine"): RiskPolicyService =

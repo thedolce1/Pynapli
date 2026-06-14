@@ -2,6 +2,7 @@ package com.pynapli.server.profile
 
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.RiskPolicyService
@@ -20,6 +21,7 @@ class ProfileService(
     activityService: ActivityService? = null,
     private val blockRepository: BlockRepository? = null,
     private val riskPolicyService: RiskPolicyService? = null,
+    private val presenceService: PresenceService? = null,
     private val bioScanner: ProfileBioScanner = AcceptAllProfileBioScanner,
     profileViewRecordScope: CoroutineScope? = null,
     profileViewRecordConcurrency: Int = 4,
@@ -51,8 +53,16 @@ class ProfileService(
         profile("profile.activityRecord") {
             profileViewRecorder.record(viewerUserId, targetUserId)
         }
-        return profile
+        val online = profile("profile.presence") { isOnline(targetUserId) }
+        return profile.copy(online = online)
     }
+
+    // Fail-safe presence lookup, mirroring GridService.onlineUserIdsFor: any presence/Redis
+    // error degrades to "offline" rather than failing the profile fetch.
+    private suspend fun isOnline(targetUserId: UUID): Boolean =
+        runCatching {
+            presenceService?.onlineUserIds(listOf(targetUserId))?.contains(targetUserId)
+        }.getOrNull() ?: false
 
     suspend fun updateProfile(
         userId: UUID,
