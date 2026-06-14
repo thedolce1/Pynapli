@@ -114,6 +114,29 @@ class GridStateHolderTest {
         }
 
     @Test
+    fun applyingGenderAndOrientationSerializesToTokensAndRoundTrips() =
+        runBlocking {
+            val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+            val stateHolder = GridStateHolder(repository)
+
+            stateHolder.load()
+            stateHolder.applyFilters(
+                stateHolder.state.value.filters.copy(
+                    genders = setOf("woman", "non_binary"),
+                    orientations = setOf("pansexual"),
+                ),
+            )
+
+            val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+            assertEquals(setOf("woman", "non_binary"), request.genders.toSet())
+            assertEquals(setOf("pansexual"), request.orientations.toSet())
+
+            val roundTripped = GridFilters.fromGridQueryRequest(request)
+            assertEquals(setOf("woman", "non_binary"), roundTripped.genders)
+            assertEquals(setOf("pansexual"), roundTripped.orientations)
+        }
+
+    @Test
     fun togglingVerifiedSetsVerifiedOnlyOnRequest() =
         runBlocking {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
