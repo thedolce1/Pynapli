@@ -10,6 +10,29 @@ Core rule:
 
 > A filter is a promise.
 
+## Single Source Of Truth
+
+The profile a user edits is the one canonical record. Everything else renders or queries that record —
+never a parallel copy:
+
+- **Profile = preview = card tap.** The public projection (`PublicProfileDto`) is rendered by one detail
+  sheet (`ProfileDetailSheet`) wherever a card is tapped — Grid, Swipe, Activity, and the hub "Preview
+  profile". What a user edits (fields, photos, tags, gender/orientation/status) is exactly what they
+  preview and exactly what others see on tap. Grid/Swipe cards are thumbnail summaries of the same record,
+  not a separate dataset.
+- **Filterable fields are drawn from the same taxonomy the profile stores.** Gender/orientation come from
+  `ProfileTaxonomies`; discovery style, lifestyle, logistics, and intent tokens come from
+  `DiscoveryTagTaxonomies` — both in `:shared`. The Ktor server validates profile writes AND
+  discovery-filter payloads against these same sets, and the clients build profile-edit chips and filter
+  chips from them. A profile can therefore only carry values a filter can match, and a filter can only
+  offer values a profile can store. Client filter enums are bound to the shared sets by a build-time
+  alignment test (`DiscoveryTaxonomiesAlignmentTest`) so the loop can never silently drift.
+- A filter selection returns real profiles whose stored fields satisfy it (array overlap for multi-value
+  tags/intents, equality for single-value fields), within the propagation targets below.
+- Gender and orientation are offered as explicit discovery filters (founder decision 2026-06-14; consistent
+  with the bidirectional "orientation/gender compatibility" filter below). Profiles that leave them blank
+  soft-include. This does not change the rule against inferring couple composition from gender alone.
+
 ## Indexing Principle
 
 Filterable profile fields must be structured and queryable.
