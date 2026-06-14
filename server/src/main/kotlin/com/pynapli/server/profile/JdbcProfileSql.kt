@@ -51,10 +51,12 @@ internal object JdbcProfileSql {
         SELECT u.id AS user_id,
                COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
                profile_photo.media_asset_id AS profile_photo_media_asset_id,
+               profile_photo.media_asset_ids AS profile_photo_ids,
                linked_partner.linked_partner_user_id,
                linked_partner.linked_partner_display_name,
                linked_partner.linked_partner_thumbnail_media_asset_id,
                p.display_age,
+               (p.verified_at IS NOT NULL) AS verified,
                p.bio,
                p.gender,
                p.gender_detail,
@@ -124,24 +126,29 @@ internal object JdbcProfileSql {
             END AS status
         ) private_album_access ON true
         LEFT JOIN LATERAL (
-            SELECT mai.media_asset_id
-            FROM media_albums ma
-            JOIN media_album_items mai
-              ON mai.album_id = ma.id
-             AND mai.removed_at IS NULL
-            JOIN media_assets m
-              ON m.id = mai.media_asset_id
-             AND m.owner_user_id = ma.owner_user_id
-             AND m.deleted_at IS NULL
-            WHERE ma.owner_user_id = u.id
-              AND ma.kind = 'profile'
-              AND ma.visibility_status = 'visible'
-              AND ma.deleted_at IS NULL
-              AND m.media_type = 'image'
-              AND m.processing_status = 'ready'
-              AND m.moderation_status = 'approved'
-            ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
-            LIMIT 1
+            SELECT (array_agg(media_asset_id ORDER BY rn))[1] AS media_asset_id,
+                   array_agg(media_asset_id ORDER BY rn) AS media_asset_ids
+            FROM (
+                SELECT mai.media_asset_id,
+                       row_number() OVER (ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC) AS rn
+                FROM media_albums ma
+                JOIN media_album_items mai
+                  ON mai.album_id = ma.id
+                 AND mai.removed_at IS NULL
+                JOIN media_assets m
+                  ON m.id = mai.media_asset_id
+                 AND m.owner_user_id = ma.owner_user_id
+                 AND m.deleted_at IS NULL
+                WHERE ma.owner_user_id = u.id
+                  AND ma.kind = 'profile'
+                  AND ma.visibility_status = 'visible'
+                  AND ma.deleted_at IS NULL
+                  AND m.media_type = 'image'
+                  AND m.processing_status = 'ready'
+                  AND m.moderation_status = 'approved'
+                ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
+                LIMIT 6
+            ) ranked
         ) profile_photo ON true
         LEFT JOIN LATERAL (
             SELECT upl.linked_user_id AS linked_partner_user_id,
