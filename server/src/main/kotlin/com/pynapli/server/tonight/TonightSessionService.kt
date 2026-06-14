@@ -1,18 +1,13 @@
 package com.pynapli.server.tonight
 
-import com.pynapli.server.notifications.NotificationEventDraft
-import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.CurrentTonightSessionDto
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
-import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.TonightSessionDto
-import com.pynapli.shared.network.dto.TonightSessionParticipantDto
 import java.time.Clock
-import java.time.Duration
 import java.util.UUID
 
 /**
@@ -23,150 +18,27 @@ import java.util.UUID
  */
 class TonightSessionService(
     private val repository: TonightSessionRepository,
-    private val subscriptionService: SubscriptionService?,
-    private val notificationPublisher: NotificationPublisher? = null,
-    private val presenceService: PresenceService? = null,
-    private val riskPolicyService: RiskPolicyService? = null,
+    subscriptionService: SubscriptionService?,
+    notificationPublisher: NotificationPublisher? = null,
+    presenceService: PresenceService? = null,
+    riskPolicyService: RiskPolicyService? = null,
     private val clock: Clock = Clock.systemUTC(),
 ) {
+    private val proposalCoordinator =
+        TonightProposalCoordinator(
+            repository = repository,
+            subscriptionService = subscriptionService,
+            notificationPublisher = notificationPublisher,
+            riskPolicyService = riskPolicyService,
+            clock = clock,
+        )
+    private val reminderSender = TonightReminderSender(repository, notificationPublisher, clock)
+    private val presenceReconciler = TonightPresenceReconciler(repository, presenceService, clock)
+
     suspend fun propose(
         userId: UUID,
         request: ProposeTonightSessionRequestDto,
-    ): TonightSessionDto {
-        // Starting a session is an outbound social signal: restricted tiers cannot
-        // (TRUST_AND_SAFETY_SPEC). Declining/ending stays unrestricted.
-        if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
-            throw TonightSessionException("RISK_RESTRICTED")
-        }
-        val mode = request.mode.trim().lowercase()
-        if (mode !in VALID_MODES) throw TonightSessionException("INVALID_TONIGHT_MODE")
-
-        val hostMode = request.hostMode.trim().lowercase()
-        if (hostMode !in VALID_HOST_MODES) throw TonightSessionException("INVALID_TONIGHT_HOST_MODE")
-
-        val intent = request.intent.trim().lowercase()
-        if (intent !in VALID_INTENTS) throw TonightSessionException("INVALID_TONIGHT_INTENT")
-        val allowedIntentsForMode = if (mode == MODE_SOLO) SOLO_INTENTS else TOGETHER_INTENTS
-        if (intent !in allowedIntentsForMode) throw TonightSessionException("INVALID_TONIGHT_INTENT")
-
-        val note = request.note?.trim()?.takeIf { it.isNotEmpty() }
-        if (note != null && note.length > MAX_NOTE_LENGTH) throw TonightSessionException("TONIGHT_NOTE_TOO_LONG")
-
-        val durationHours = request.durationHours ?: DEFAULT_DURATION_HOURS
-        if (durationHours !in MIN_DURATION_HOURS..MAX_DURATION_HOURS) {
-            throw TonightSessionException("INVALID_TONIGHT_DURATION")
-        }
-
-        val photoAssetId =
-            request.photoMediaAssetId?.let { raw ->
-                val parsed =
-                    runCatching { UUID.fromString(raw.trim()) }
-                        .getOrElse { throw TonightSessionException("TONIGHT_INVALID_PHOTO") }
-                if (!repository.isPhotoOwnedBy(userId, parsed)) {
-                    throw TonightSessionException("TONIGHT_INVALID_PHOTO")
-                }
-                parsed
-            }
-
-        val now = clock.instant()
-        if (repository.hasActiveOrProposedSession(userId, now)) {
-            throw TonightSessionException("TONIGHT_ALREADY_ACTIVE")
-        }
-
-        enforceWeeklyCap(userId, now)
-
-        val sessionId = UUID.randomUUID()
-        val expiresAt = now.plus(Duration.ofHours(durationHours.toLong()))
-
-        // Captured for the together path so we can notify the partner after persistence.
-        var togetherPartnerId: UUID? = null
-
-        val session =
-            when (mode) {
-                MODE_SOLO -> {
-                    TonightSession(
-                        id = sessionId,
-                        createdByUserId = userId,
-                        mode = mode,
-                        intent = intent,
-                        hostMode = hostMode,
-                        note = note,
-                        photoMediaAssetId = photoAssetId,
-                        mapVisible = request.mapVisible,
-                        status = "active",
-                        createdAt = now,
-                        startedAt = now,
-                        expiresAt = expiresAt,
-                        endedAt = null,
-                        participants =
-                            listOf(
-                                TonightSessionParticipant(
-                                    userId = userId,
-                                    role = ROLE_OWNER,
-                                    approvalStatus = "approved",
-                                    approvedAt = now,
-                                ),
-                            ),
-                    )
-                }
-
-                else -> {
-                    val partnerId =
-                        repository.findActiveLinkedPartner(userId)
-                            ?: throw TonightSessionException("TONIGHT_NO_LINKED_PARTNER")
-                    togetherPartnerId = partnerId
-                    TonightSession(
-                        id = sessionId,
-                        createdByUserId = userId,
-                        mode = mode,
-                        intent = intent,
-                        hostMode = hostMode,
-                        note = note,
-                        photoMediaAssetId = photoAssetId,
-                        mapVisible = request.mapVisible,
-                        status = "proposed",
-                        createdAt = now,
-                        startedAt = null,
-                        expiresAt = expiresAt,
-                        endedAt = null,
-                        participants =
-                            listOf(
-                                TonightSessionParticipant(
-                                    userId = userId,
-                                    role = ROLE_OWNER,
-                                    approvalStatus = "approved",
-                                    approvedAt = now,
-                                ),
-                                TonightSessionParticipant(
-                                    userId = partnerId,
-                                    role = ROLE_PARTNER,
-                                    approvalStatus = "pending",
-                                    approvedAt = null,
-                                ),
-                            ),
-                    )
-                }
-            }
-
-        val persisted = repository.insertSession(session)
-
-        // Best-effort: a notification failure must never break propose. Solo sessions notify
-        // nobody (no partner to invite).
-        togetherPartnerId?.let { partnerId ->
-            notificationPublisher?.enqueue(
-                NotificationEventDraft(
-                    recipientUserId = partnerId,
-                    actorUserId = userId,
-                    kind = NotificationKind.TONIGHT_INVITE,
-                    subjectId = sessionId,
-                    idempotencyKey = "tonight_invite:$sessionId:$partnerId",
-                    payload = mapOf("sessionId" to sessionId.toString()),
-                ),
-            )
-        }
-
-        return persisted.toDto()
-    }
+    ): TonightSessionDto = proposalCoordinator.propose(userId, request)
 
     suspend fun approve(
         sessionId: UUID,
@@ -174,7 +46,7 @@ class TonightSessionService(
     ): TonightSessionDto {
         // Approving makes the approver publicly live too — same outbound-social
         // restriction as proposing. Declining stays unrestricted.
-        if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
+        if (proposalCoordinator.isSocialActionRestricted(userId)) {
             throw TonightSessionException("RISK_RESTRICTED")
         }
         val now = clock.instant()
@@ -235,133 +107,16 @@ class TonightSessionService(
      * once — the repository stamps reminder_sent_at) and enqueue a TONIGHT_REMINDER to every
      * participant. Notifications are best-effort. Returns the number of sessions reminded.
      */
-    suspend fun sendExpiryReminders(): Int {
-        val targets = repository.claimSessionsDueForReminder(clock.instant(), REMINDER_LEAD_WINDOW)
-        targets.forEach { target ->
-            target.participantUserIds.forEach { participant ->
-                notificationPublisher?.enqueue(
-                    NotificationEventDraft(
-                        recipientUserId = participant,
-                        actorUserId = null,
-                        kind = NotificationKind.TONIGHT_REMINDER,
-                        subjectId = target.sessionId,
-                        idempotencyKey = "tonight_reminder:${target.sessionId}:$participant",
-                        payload = mapOf("sessionId" to target.sessionId.toString()),
-                    ),
-                )
-            }
-        }
-        return targets.size
-    }
+    suspend fun sendExpiryReminders(): Int = reminderSender.sendExpiryReminders()
 
     /**
      * Presence-driven pause/end for linked-together sessions (PLAYING_TONIGHT_SPEC Edge Cases:
      * "Partner goes offline: pause linked-together session briefly, then end if not restored").
      *
      * Applies ONLY to mode='together', status='active', not-yet-expired sessions. Solo sessions are
-     * never paused/ended by presence. Per session, comparing its participants to the live online set:
-     *  - all online + currently paused  → RESUME (clear paused_at).
-     *  - any offline + not paused        → PAUSE (set paused_at = now), hiding it from discovery.
-     *  - any offline + paused for ≥ [PAUSE_GRACE] → END (status='ended', ended_at=now).
-     *  - otherwise no change.
-     *
-     * No-op (zero summary) when [presenceService] is not wired. Discovery (feed/grid) hides paused
-     * sessions; current() still returns a paused session to its own participants.
+     * never paused/ended by presence.
      */
-    suspend fun reconcilePresence(): TonightReconcileSummary {
-        val presence = presenceService ?: return TonightReconcileSummary()
-        val now = clock.instant()
-        val sessions = repository.listActivePresenceSessions(now)
-        if (sessions.isEmpty()) return TonightReconcileSummary()
-
-        val allParticipantIds = sessions.flatMap { it.participantUserIds }.toSet()
-        val online = presence.onlineUserIds(allParticipantIds)
-
-        var paused = 0
-        var resumed = 0
-        var ended = 0
-        for (session in sessions) {
-            val anyOffline = session.participantUserIds.any { it !in online }
-            when {
-                !anyOffline && session.pausedAt != null -> {
-                    repository.resumeSession(session.sessionId)
-                    resumed++
-                }
-                anyOffline && session.pausedAt == null -> {
-                    repository.pauseSession(session.sessionId, now)
-                    paused++
-                }
-                anyOffline &&
-                    session.pausedAt != null &&
-                    !now.isBefore(session.pausedAt.plus(PAUSE_GRACE)) -> {
-                    repository.systemEndSession(session.sessionId, now)
-                    ended++
-                }
-                // else: still online & running, or paused but within grace → no change.
-            }
-        }
-        return TonightReconcileSummary(paused = paused, resumed = resumed, ended = ended)
-    }
-
-    private suspend fun enforceWeeklyCap(
-        userId: UUID,
-        now: java.time.Instant,
-    ) {
-        val tier = subscriptionService?.getPolicy(userId)?.tier ?: SubscriptionTier.SELECT
-        if (tier != SubscriptionTier.FREE) return
-        val createdInWindow = repository.countSessionsCreatedSince(userId, now.minus(WEEKLY_WINDOW))
-        if (createdInWindow >= FREE_WEEKLY_LIMIT) {
-            throw TonightSessionException("TONIGHT_WEEKLY_LIMIT_REACHED")
-        }
-    }
-
-    private fun TonightSession.toDto(): TonightSessionDto =
-        TonightSessionDto(
-            id = id.toString(),
-            mode = mode,
-            intent = intent,
-            hostMode = hostMode,
-            note = note,
-            photoMediaAssetId = photoMediaAssetId?.toString(),
-            mapVisible = mapVisible,
-            status = status,
-            createdAt = createdAt.toString(),
-            startedAt = startedAt?.toString(),
-            expiresAt = expiresAt.toString(),
-            participants = participants.map { it.toDto() },
-        )
-
-    private fun TonightSessionParticipant.toDto(): TonightSessionParticipantDto =
-        TonightSessionParticipantDto(
-            userId = userId.toString(),
-            displayName = displayName,
-            role = role,
-            approvalStatus = approvalStatus,
-        )
-
-    private companion object {
-        const val MODE_SOLO = "solo"
-        const val MODE_TOGETHER = "together"
-        const val ROLE_OWNER = "owner"
-        const val ROLE_PARTNER = "partner"
-        const val MAX_NOTE_LENGTH = 100
-        const val DEFAULT_DURATION_HOURS = 2
-        const val MIN_DURATION_HOURS = 1
-        const val MAX_DURATION_HOURS = 24
-        const val FREE_WEEKLY_LIMIT = 3
-        val WEEKLY_WINDOW: Duration = Duration.ofDays(7)
-
-        // PLAYING_TONIGHT_SPEC: "Recommended reminder: 15 minutes before expiration."
-        val REMINDER_LEAD_WINDOW: Duration = Duration.ofMinutes(15)
-
-        // PLAYING_TONIGHT_SPEC: "pause linked-together session briefly, then end if not restored."
-        val PAUSE_GRACE: Duration = Duration.ofMinutes(5)
-        val VALID_MODES = setOf(MODE_SOLO, MODE_TOGETHER)
-        val VALID_HOST_MODES = setOf("hosting", "traveling", "public_meet_first")
-        val VALID_INTENTS = setOf("solo", "together", "social", "event")
-        val SOLO_INTENTS = setOf("solo", "social", "event")
-        val TOGETHER_INTENTS = setOf("together", "social", "event")
-    }
+    suspend fun reconcilePresence(): TonightReconcileSummary = presenceReconciler.reconcilePresence()
 }
 
 class TonightSessionException(

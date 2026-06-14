@@ -1,68 +1,41 @@
 package com.pynapli.server.subscriptions
 
-import com.pynapli.server.moderation.insertAdminAuditLog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import java.sql.Connection
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
 class JdbcSubscriptionRepository(
-    private val dataSource: DataSource,
+    dataSource: DataSource,
 ) : SubscriptionRepository {
+    private val entitlements = JdbcSubscriptionEntitlementActions(dataSource)
+    private val inventory = JdbcSubscriptionInventoryRepositoryActions(dataSource)
+    private val purchases = JdbcSubscriptionPurchaseRepositoryActions(dataSource)
+
     override suspend fun findBestActiveEntitlement(
         userId: UUID,
         now: Instant,
-    ): ActiveEntitlementRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.loadBestActiveEntitlement(userId, now)
-            }
-        }
+    ): ActiveEntitlementRecord? = entitlements.findBestActiveEntitlement(userId, now)
 
     override suspend fun findBestActiveOwnSubscription(
         userId: UUID,
         now: Instant,
-    ): SubscriptionRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.loadBestActiveOwnSubscription(userId, now)
-            }
-        }
+    ): SubscriptionRecord? = entitlements.findBestActiveOwnSubscription(userId, now)
 
     override suspend fun findBestActiveLinkedPartnerSubscription(
         userId: UUID,
         now: Instant,
-    ): LinkedPartnerSubscriptionRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.loadBestActiveLinkedPartnerSubscription(userId, now)
-            }
-        }
+    ): LinkedPartnerSubscriptionRecord? = entitlements.findBestActiveLinkedPartnerSubscription(userId, now)
 
     override suspend fun findBestActiveStoredEntitlement(
         userId: UUID,
         now: Instant,
-    ): StoredEntitlementRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.loadBestActiveStoredEntitlement(userId, now)
-            }
-        }
+    ): StoredEntitlementRecord? = entitlements.findBestActiveStoredEntitlement(userId, now)
 
     override suspend fun listStoredEntitlementsForUser(
         userId: UUID,
         limit: Int,
-    ): List<StoredEntitlementRecord> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.listStoredEntitlementRecordsForUser(userId, limit)
-            }
-        }
+    ): List<StoredEntitlementRecord> = entitlements.listStoredEntitlementsForUser(userId, limit)
 
     override suspend fun grantStoredEntitlement(
         userId: UUID,
@@ -72,104 +45,38 @@ class JdbcSubscriptionRepository(
         endsAt: Instant?,
         actorId: String,
         reason: String,
-    ): StoredEntitlementRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runInTransaction {
-                    val record =
-                        grantStoredEntitlementRecord(
-                            userId = userId,
-                            tier = tier,
-                            source = source,
-                            startsAt = startsAt,
-                            endsAt = endsAt,
-                        ) ?: return@runInTransaction null
-                    insertAdminAuditLog(
-                        actorId = actorId,
-                        action = "subscription_entitlement.grant",
-                        targetType = "entitlement",
-                        targetId = record.entitlementId,
-                        reason = reason,
-                        metadataJson =
-                            buildJsonObject {
-                                put("userId", userId.toString())
-                                put("tier", tier)
-                                put("source", source)
-                                put("startsAt", startsAt.toString())
-                                put("endsAt", endsAt?.toString())
-                            }.toString(),
-                    )
-                    record
-                }
-            }
-        }
+    ): StoredEntitlementRecord? = entitlements.grantStoredEntitlement(userId, tier, source, startsAt, endsAt, actorId, reason)
 
     override suspend fun revokeStoredEntitlement(
         entitlementId: UUID,
         actorId: String,
         reason: String,
-    ): StoredEntitlementRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runInTransaction {
-                    val record = revokeStoredEntitlementRecord(entitlementId) ?: return@runInTransaction null
-                    insertAdminAuditLog(
-                        actorId = actorId,
-                        action = "subscription_entitlement.revoke",
-                        targetType = "entitlement",
-                        targetId = record.entitlementId,
-                        reason = reason,
-                        metadataJson =
-                            buildJsonObject {
-                                put("userId", record.userId.toString())
-                                put("tier", record.tier)
-                                put("source", record.source)
-                            }.toString(),
-                    )
-                    record
-                }
-            }
-        }
+    ): StoredEntitlementRecord? = entitlements.revokeStoredEntitlement(entitlementId, actorId, reason)
 
     override suspend fun consumeIntroNoteInventory(
         userId: UUID,
         now: Instant,
-    ): Boolean = consumePremiumInventory(userId = userId, inventoryType = "intro_note", now = now)
+    ): Boolean = inventory.consumeIntroNoteInventory(userId, now)
 
     override suspend fun consumePineappleLikeInventory(
         userId: UUID,
         now: Instant,
-    ): Boolean = consumePineappleLikeInventoryReturningId(userId, now) != null
+    ): Boolean = inventory.consumePineappleLikeInventory(userId, now)
 
     override suspend fun consumePineappleLikeInventoryReturningId(
         userId: UUID,
         now: Instant,
-    ): UUID? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.consumePremiumInventoryRecordReturningId(userId, "pineapple_like", now)
-            }
-        }
+    ): UUID? = inventory.consumePineappleLikeInventoryReturningId(userId, now)
 
     override suspend fun refundInventoryById(
         inventoryId: UUID,
         now: Instant,
-    ): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.refundPremiumInventoryRecord(inventoryId, now)
-            }
-        }
+    ): Boolean = inventory.refundInventoryById(inventoryId, now)
 
     override suspend fun listPremiumInventoryBalances(
         userId: UUID,
         now: Instant,
-    ): List<PremiumInventoryBalanceRecord> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.listPremiumInventoryBalances(userId, now)
-            }
-        }
+    ): List<PremiumInventoryBalanceRecord> = inventory.listPremiumInventoryBalances(userId, now)
 
     override suspend fun grantPremiumInventory(
         userId: UUID,
@@ -178,58 +85,13 @@ class JdbcSubscriptionRepository(
         source: String,
         expiresAt: Instant?,
         now: Instant,
-    ): PremiumInventoryBalanceRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runInTransaction {
-                    grantPremiumInventoryRecord(
-                        userId = userId,
-                        inventoryType = inventoryType,
-                        quantity = quantity,
-                        source = source,
-                        expiresAt = expiresAt,
-                        now = now,
-                    )
-                    listPremiumInventoryBalanceRecord(userId, inventoryType, now)
-                }
-            }
-        }
-
-    private suspend fun consumePremiumInventory(
-        userId: UUID,
-        inventoryType: String,
-        now: Instant,
-    ): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.consumePremiumInventoryRecord(userId, inventoryType, now)
-            }
-        }
+    ): PremiumInventoryBalanceRecord? = inventory.grantPremiumInventory(userId, inventoryType, quantity, source, expiresAt, now)
 
     override suspend fun activateBoost(
         userId: UUID,
         now: Instant,
         duration: Duration,
-    ): BoostActivationResult? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runInTransaction {
-                    findActiveBoostActivation(userId, now)?.let { active ->
-                        return@runInTransaction BoostActivationResult(
-                            activation = active,
-                            consumedInventory = false,
-                        )
-                    }
-                    if (!consumePremiumInventoryRecord(userId, "boost", now)) {
-                        return@runInTransaction null
-                    }
-                    BoostActivationResult(
-                        activation = insertBoostActivation(userId, now, duration),
-                        consumedInventory = true,
-                    )
-                }
-            }
-        }
+    ): BoostActivationResult? = inventory.activateBoost(userId, now, duration)
 
     override suspend fun upsertDevSubscriptionPurchase(
         userId: UUID,
@@ -237,50 +99,25 @@ class JdbcSubscriptionRepository(
         tier: String,
         startsAt: Instant,
         endsAt: Instant,
-    ): SubscriptionRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.upsertDevSubscriptionPurchaseRecord(userId, productId, tier, startsAt, endsAt)
-            }
-        }
+    ): SubscriptionRecord = purchases.upsertDevSubscriptionPurchase(userId, productId, tier, startsAt, endsAt)
 
     override suspend fun listPlayStoreSubscriptionsDueForVerification(
         staleBefore: Instant,
         renewalWindowEnd: Instant,
         limit: Int,
-    ): List<PlayStoreSubscriptionVerificationCandidate> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.listPlayStoreSubscriptionsDueForVerificationRecords(staleBefore, renewalWindowEnd, limit)
-            }
-        }
+    ): List<PlayStoreSubscriptionVerificationCandidate> = purchases.listPlayStoreSubscriptionsDueForVerification(staleBefore, renewalWindowEnd, limit)
 
     override suspend fun findPlayStoreSubscriptionByPurchaseToken(
         purchaseToken: String,
-    ): PlayStoreSubscriptionVerificationCandidate? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.findPlayStoreSubscriptionByPurchaseTokenRecord(purchaseToken)
-            }
-        }
+    ): PlayStoreSubscriptionVerificationCandidate? = purchases.findPlayStoreSubscriptionByPurchaseToken(purchaseToken)
 
-    override suspend fun insertPlayStoreRtdnEvent(event: PlayStoreRtdnEventInsert): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.insertPlayStoreRtdnEventRecord(event)
-            }
-        }
+    override suspend fun insertPlayStoreRtdnEvent(event: PlayStoreRtdnEventInsert): Boolean = purchases.insertPlayStoreRtdnEvent(event)
 
     override suspend fun updatePlayStoreRtdnEventStatus(
         messageId: String,
         processingStatus: String,
         errorCode: String?,
-    ): Unit =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.updatePlayStoreRtdnEventStatusRecord(messageId, processingStatus, errorCode)
-            }
-        }
+    ): Unit = purchases.updatePlayStoreRtdnEventStatus(messageId, processingStatus, errorCode)
 
     override suspend fun upsertPendingPlayStoreSubscriptionPurchase(
         userId: UUID,
@@ -288,12 +125,7 @@ class JdbcSubscriptionRepository(
         purchaseToken: String,
         tier: String,
         now: Instant,
-    ): SubscriptionRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.upsertPendingPlayStoreSubscriptionPurchaseRecord(userId, productId, purchaseToken, tier, now)
-            }
-        }
+    ): SubscriptionRecord = purchases.upsertPendingPlayStoreSubscriptionPurchase(userId, productId, purchaseToken, tier, now)
 
     override suspend fun upsertVerifiedPlayStoreSubscriptionPurchase(
         userId: UUID,
@@ -309,37 +141,18 @@ class JdbcSubscriptionRepository(
         currentPeriodEnd: Instant,
         verifiedAt: Instant,
     ): SubscriptionRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.upsertVerifiedPlayStoreSubscriptionPurchaseRecord(
-                    userId = userId,
-                    productId = productId,
-                    purchaseToken = purchaseToken,
-                    orderId = orderId,
-                    tier = tier,
-                    status = status,
-                    externalStatus = externalStatus,
-                    acknowledgementState = acknowledgementState,
-                    acknowledgedAt = acknowledgedAt,
-                    currentPeriodStart = currentPeriodStart,
-                    currentPeriodEnd = currentPeriodEnd,
-                    verifiedAt = verifiedAt,
-                )
-            }
-        }
-
-    private fun <T> Connection.runInTransaction(block: Connection.() -> T): T {
-        val previousAutoCommit = autoCommit
-        autoCommit = false
-        return try {
-            val result = block()
-            commit()
-            result
-        } catch (error: Throwable) {
-            rollback()
-            throw error
-        } finally {
-            autoCommit = previousAutoCommit
-        }
-    }
+        purchases.upsertVerifiedPlayStoreSubscriptionPurchase(
+            userId = userId,
+            productId = productId,
+            purchaseToken = purchaseToken,
+            orderId = orderId,
+            tier = tier,
+            status = status,
+            externalStatus = externalStatus,
+            acknowledgementState = acknowledgementState,
+            acknowledgedAt = acknowledgedAt,
+            currentPeriodStart = currentPeriodStart,
+            currentPeriodEnd = currentPeriodEnd,
+            verifiedAt = verifiedAt,
+        )
 }

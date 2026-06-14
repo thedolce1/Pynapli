@@ -1,0 +1,224 @@
+package com.pynapli.server.profile
+
+internal object JdbcProfileSql {
+    val ME_QUERY =
+        """
+        SELECT u.id AS user_id,
+               u.status AS user_status,
+               p.display_name,
+               p.birthdate,
+               p.display_age,
+               p.bio,
+               p.gender,
+               p.gender_detail,
+               p.orientation,
+               p.orientation_detail,
+               p.relationship_context,
+               p.discovery_style,
+               p.lifestyle_tags,
+               p.logistics_tags,
+               p.intents,
+               p.profile_completeness_score,
+               p.moderation_status,
+               p.visibility_status,
+               (p.age_verified_at IS NOT NULL) AS age_verified,
+               ds.grid_visible,
+               ds.swipe_visible,
+               ds.events_visible,
+               ds.show_distance,
+               ds.show_in_viewed_lists,
+               ds.incognito,
+               ds.allow_grid_messages,
+               ds.grid_message_policy,
+               ds.allow_flirts,
+               ds.allow_intro_notes,
+               ds.allow_album_requests,
+               ds.solo_enabled,
+               ds.together_enabled,
+               ds.social_enabled,
+               ds.visible_while_traveling,
+               ds.share_psync_solo_matches,
+               ds.partner_visibility
+        FROM users u
+        JOIN profiles p ON p.user_id = u.id
+        JOIN discovery_settings ds ON ds.user_id = u.id
+        WHERE u.id = ?
+          AND u.deleted_at IS NULL
+        """.trimIndent()
+
+    val PUBLIC_PROFILE_QUERY =
+        """
+        SELECT u.id AS user_id,
+               COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+               profile_photo.media_asset_id AS profile_photo_media_asset_id,
+               linked_partner.linked_partner_user_id,
+               linked_partner.linked_partner_display_name,
+               linked_partner.linked_partner_thumbnail_media_asset_id,
+               p.display_age,
+               p.bio,
+               p.gender,
+               p.gender_detail,
+               p.orientation,
+               p.orientation_detail,
+               p.relationship_context,
+               p.discovery_style,
+               p.lifestyle_tags,
+               p.logistics_tags,
+               p.intents,
+               CASE
+                   WHEN ds.allow_grid_messages = false OR ds.grid_message_policy = 'no_one'
+                   THEN false
+                   WHEN ds.grid_message_policy = 'matches_only'
+                   THEN EXISTS (
+                       SELECT 1
+                       FROM matches m
+                       WHERE LEAST(m.user_a, m.user_b) = LEAST(?::uuid, u.id)
+                         AND GREATEST(m.user_a, m.user_b) = GREATEST(?::uuid, u.id)
+                   )
+                   WHEN ds.grid_message_policy = 'everyone'
+                   THEN true
+                   ELSE false
+               END AS allow_grid_messages,
+               ds.allow_flirts,
+               ds.allow_album_requests,
+               COALESCE(private_album_access.status, 'none') AS private_album_access_status,
+               CASE
+                   WHEN ds.show_distance = true
+                        AND viewer_location.geom IS NOT NULL
+                        AND target_location.geom IS NOT NULL
+                   THEN ST_Distance(viewer_location.geom, target_location.geom)
+                   ELSE NULL
+               END AS distance_meters
+        FROM users u
+        JOIN profiles p ON p.user_id = u.id
+        JOIN discovery_settings ds ON ds.user_id = u.id
+        LEFT JOIN account_risk_states target_risk ON target_risk.user_id = u.id
+        LEFT JOIN user_locations viewer_location ON viewer_location.user_id = ?
+        LEFT JOIN user_locations target_location ON target_location.user_id = u.id
+        LEFT JOIN LATERAL (
+            SELECT CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM media_albums ma
+                    JOIN media_album_access_grants g
+                      ON g.album_id = ma.id
+                     AND g.grantee_user_id = ?
+                     AND g.revoked_at IS NULL
+                    WHERE ma.owner_user_id = u.id
+                      AND ma.kind = 'private'
+                      AND ma.visibility_status = 'visible'
+                      AND ma.deleted_at IS NULL
+                ) THEN 'granted'
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM media_albums ma
+                    JOIN media_album_access_requests r
+                      ON r.album_id = ma.id
+                     AND r.requester_user_id = ?
+                     AND r.status = 'pending'
+                    WHERE ma.owner_user_id = u.id
+                      AND ma.kind = 'private'
+                      AND ma.deleted_at IS NULL
+                ) THEN 'pending'
+                ELSE 'none'
+            END AS status
+        ) private_album_access ON true
+        LEFT JOIN LATERAL (
+            SELECT mai.media_asset_id
+            FROM media_albums ma
+            JOIN media_album_items mai
+              ON mai.album_id = ma.id
+             AND mai.removed_at IS NULL
+            JOIN media_assets m
+              ON m.id = mai.media_asset_id
+             AND m.owner_user_id = ma.owner_user_id
+             AND m.deleted_at IS NULL
+            WHERE ma.owner_user_id = u.id
+              AND ma.kind = 'profile'
+              AND ma.visibility_status = 'visible'
+              AND ma.deleted_at IS NULL
+              AND m.media_type = 'image'
+              AND m.processing_status = 'ready'
+              AND m.moderation_status = 'approved'
+            ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
+            LIMIT 1
+        ) profile_photo ON true
+        LEFT JOIN LATERAL (
+            SELECT upl.linked_user_id AS linked_partner_user_id,
+                   COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
+                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id
+            FROM user_profile_links upl
+            JOIN users linked_user
+              ON linked_user.id = upl.linked_user_id
+            JOIN profiles linked_profile
+              ON linked_profile.user_id = linked_user.id
+            JOIN discovery_settings linked_ds
+              ON linked_ds.user_id = linked_user.id
+            LEFT JOIN account_risk_states linked_risk
+              ON linked_risk.user_id = linked_user.id
+            LEFT JOIN LATERAL (
+                SELECT mai.media_asset_id
+                FROM media_albums ma
+                JOIN media_album_items mai
+                  ON mai.album_id = ma.id
+                 AND mai.removed_at IS NULL
+                JOIN media_assets m
+                  ON m.id = mai.media_asset_id
+                 AND m.owner_user_id = ma.owner_user_id
+                 AND m.deleted_at IS NULL
+                WHERE ma.owner_user_id = linked_user.id
+                  AND ma.kind = 'profile'
+                  AND ma.visibility_status = 'visible'
+                  AND ma.deleted_at IS NULL
+                  AND m.media_type = 'image'
+                  AND m.processing_status = 'ready'
+                  AND m.moderation_status = 'approved'
+                ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
+                LIMIT 1
+            ) linked_partner_photo ON true
+            WHERE upl.user_id = u.id
+              AND upl.status = 'active'
+              AND upl.unlinked_at IS NULL
+              AND linked_user.status = 'active'
+              AND linked_user.deleted_at IS NULL
+              AND linked_profile.visibility_status = 'visible'
+              AND linked_ds.incognito = false
+              AND COALESCE(linked_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM user_blocks ub
+                  WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
+                     OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
+              )
+              -- Owner-controlled partner visibility (PROFILE_SETTINGS_SPEC). ds is the
+              -- owner's discovery settings; 'hidden' falls through to no row.
+              AND (
+                  ds.partner_visibility = 'public'
+                  OR (
+                      ds.partner_visibility = 'verified_only'
+                      AND EXISTS (
+                          SELECT 1 FROM profiles vp
+                          WHERE vp.user_id = ? AND vp.verified_at IS NOT NULL
+                      )
+                  )
+                  OR (
+                      ds.partner_visibility = 'matches_only'
+                      AND EXISTS (
+                          SELECT 1 FROM matches mm
+                          WHERE LEAST(mm.user_a, mm.user_b) = LEAST(?::uuid, u.id)
+                            AND GREATEST(mm.user_a, mm.user_b) = GREATEST(?::uuid, u.id)
+                      )
+                  )
+              )
+            ORDER BY upl.accepted_at DESC NULLS LAST, upl.created_at DESC, upl.id ASC
+            LIMIT 1
+        ) linked_partner ON true
+        WHERE u.id = ?
+          AND u.status = 'active'
+          AND u.deleted_at IS NULL
+          AND p.visibility_status = 'visible'
+          AND ds.grid_visible = true
+          AND ds.incognito = false
+          AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+        """.trimIndent()
+}

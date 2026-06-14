@@ -1,0 +1,131 @@
+package com.pynapli.server.notifications
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.UUID
+import javax.sql.DataSource
+
+internal class JdbcPushDeviceActions(
+    private val dataSource: DataSource,
+) {
+    suspend fun upsertPushDevice(
+        userId: UUID,
+        registration: PushDeviceRegistration,
+        deviceIdFactory: () -> UUID,
+    ): PushDeviceRecord =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        INSERT INTO push_devices (
+                            id,
+                            user_id,
+                            platform,
+                            device_token,
+                            app_version,
+                            locale,
+                            timezone,
+                            notifications_enabled
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (platform, device_token) DO UPDATE
+                        SET user_id = EXCLUDED.user_id,
+                            app_version = EXCLUDED.app_version,
+                            locale = EXCLUDED.locale,
+                            timezone = EXCLUDED.timezone,
+                            notifications_enabled = EXCLUDED.notifications_enabled,
+                            disabled_at = NULL,
+                            last_seen_at = now(),
+                            updated_at = now()
+                        RETURNING id, user_id, platform, notifications_enabled, last_seen_at
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, deviceIdFactory())
+                        statement.setObject(2, userId)
+                        statement.setString(3, registration.platform)
+                        statement.setString(4, registration.deviceToken)
+                        statement.setString(5, registration.appVersion)
+                        statement.setString(6, registration.locale)
+                        statement.setString(7, registration.timezone)
+                        statement.setBoolean(8, registration.notificationsEnabled)
+                        statement.executeQuery().use { rs ->
+                            require(rs.next()) { "push device upsert returned no rows" }
+                            rs.toPushDeviceRecord()
+                        }
+                    }
+            }
+        }
+
+    suspend fun unregisterPushDevice(
+        userId: UUID,
+        platform: String,
+        deviceToken: String,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE push_devices
+                        SET disabled_at = now(),
+                            notifications_enabled = false,
+                            updated_at = now()
+                        WHERE user_id = ?
+                          AND platform = ?
+                          AND device_token = ?
+                          AND disabled_at IS NULL
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, userId)
+                        statement.setString(2, platform)
+                        statement.setString(3, deviceToken)
+                        statement.executeUpdate() > 0
+                    }
+            }
+        }
+
+    suspend fun deactivatePushDevice(deviceId: UUID): Boolean =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE push_devices
+                        SET disabled_at = now(),
+                            notifications_enabled = false,
+                            updated_at = now()
+                        WHERE id = ?
+                          AND disabled_at IS NULL
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, deviceId)
+                        statement.executeUpdate() > 0
+                    }
+            }
+        }
+
+    suspend fun listActivePushTargets(userId: UUID): List<PushDeliveryTarget> =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT id, user_id, platform, device_token
+                        FROM push_devices
+                        WHERE user_id = ?
+                          AND disabled_at IS NULL
+                          AND notifications_enabled = true
+                        ORDER BY last_seen_at DESC, id ASC
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, userId)
+                        statement.executeQuery().use { rs ->
+                            buildList {
+                                while (rs.next()) add(rs.toPushDeliveryTarget())
+                            }
+                        }
+                    }
+            }
+        }
+}

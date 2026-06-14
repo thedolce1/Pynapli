@@ -1,8 +1,5 @@
 package com.pynapli.server.messaging
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.sql.SQLException
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -13,14 +10,7 @@ class JdbcMessagingRepository(
     override suspend fun listConversations(
         userId: UUID,
         limit: Int,
-    ): List<ConversationRecord> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.listConversationIds(userId, limit).mapNotNull { conversationId ->
-                    connection.loadConversation(userId, conversationId)
-                }
-            }
-        }
+    ): List<ConversationRecord> = dataSource.listMessagingConversations(userId, limit)
 
     override suspend fun getOrCreateDirectConversation(
         viewerUserId: UUID,
@@ -28,56 +18,12 @@ class JdbcMessagingRepository(
         origin: String,
         conversationIdFactory: () -> UUID,
     ): ConversationRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.autoCommit = false
-                try {
-                    if (!connection.targetAllowsConversation(viewerUserId, targetUserId, origin)) {
-                        connection.rollback()
-                        return@withContext null
-                    }
-
-                    val existingId = connection.findDirectConversationId(viewerUserId, targetUserId)
-                    val conversationId =
-                        if (existingId != null) {
-                            existingId
-                        } else {
-                            val newId = conversationIdFactory()
-                            try {
-                                connection.insertDirectConversation(
-                                    conversationId = newId,
-                                    viewerUserId = viewerUserId,
-                                    targetUserId = targetUserId,
-                                    origin = origin,
-                                )
-                                newId
-                            } catch (error: SQLException) {
-                                // Concurrent duplicate create lost the pair unique-index race:
-                                // replay the conversation the other request committed instead of
-                                // surfacing a 500. A new connection is needed because this one is
-                                // in a failed transaction state.
-                                if (error.sqlState == UNIQUE_VIOLATION_SQLSTATE) {
-                                    connection.rollback()
-                                    return@withContext dataSource.connection.use { lookup ->
-                                        lookup.findDirectConversationId(viewerUserId, targetUserId)?.let { racedId ->
-                                            lookup.loadConversation(viewerUserId, racedId)
-                                        }
-                                    }
-                                }
-                                throw error
-                            }
-                        }
-
-                    connection.commit()
-                    connection.loadConversation(viewerUserId, conversationId)
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = true
-                }
-            }
-        }
+        dataSource.getOrCreateDirectMessagingConversation(
+            viewerUserId = viewerUserId,
+            targetUserId = targetUserId,
+            origin = origin,
+            conversationIdFactory = conversationIdFactory,
+        )
 
     override suspend fun getConversationDetail(
         userId: UUID,
@@ -85,29 +31,17 @@ class JdbcMessagingRepository(
         limit: Int,
         before: MessagePageCursor?,
     ): ConversationDetailRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val conversation = connection.loadConversation(userId, conversationId) ?: return@withContext null
-                val page = connection.loadMessages(userId, conversationId, limit, before, conversation.effectiveExpirySeconds)
-                ConversationDetailRecord(
-                    conversation = conversation,
-                    messages = page.messages,
-                    nextCursor = page.nextCursor,
-                )
-            }
-        }
+        dataSource.getMessagingConversationDetail(
+            userId = userId,
+            conversationId = conversationId,
+            limit = limit,
+            before = before,
+        )
 
     override suspend fun markConversationRead(
         userId: UUID,
         conversationId: UUID,
-    ): ConversationRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val updatedRows = connection.markRead(userId, conversationId)
-                if (updatedRows == 0) return@withContext null
-                connection.loadConversation(userId, conversationId)
-            }
-        }
+    ): ConversationRecord? = dataSource.markMessagingConversationRead(userId, conversationId)
 
     override suspend fun sendMessage(
         userId: UUID,
@@ -119,290 +53,60 @@ class JdbcMessagingRepository(
         clientIdempotencyKey: String?,
         messageIdFactory: () -> UUID,
     ): MessageRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.autoCommit = false
-                try {
-                    if (!connection.isActiveParticipant(userId, conversationId)) {
-                        connection.rollback()
-                        return@withContext null
-                    }
-
-                    // Idempotent replay: if this sender already created a message in this
-                    // conversation under the same key, return it instead of inserting again.
-                    if (clientIdempotencyKey != null) {
-                        val existing =
-                            connection.findMessageByIdempotencyKey(userId, conversationId, clientIdempotencyKey)
-                        if (existing != null) {
-                            connection.rollback()
-                            return@withContext existing
-                        }
-                    }
-
-                    val message =
-                        try {
-                            connection.insertMessage(
-                                messageId = messageIdFactory(),
-                                userId = userId,
-                                conversationId = conversationId,
-                                body = body,
-                                moderationStatus = moderationStatus,
-                                bodyFingerprint = bodyFingerprint,
-                                safetyReason = safetyReason,
-                                clientIdempotencyKey = clientIdempotencyKey,
-                            )
-                        } catch (error: SQLException) {
-                            // Concurrent retry won the unique index race: roll back and return the
-                            // row the other request committed. A new connection is needed because
-                            // this one is in a failed transaction state.
-                            if (clientIdempotencyKey != null && error.sqlState == UNIQUE_VIOLATION_SQLSTATE) {
-                                connection.rollback()
-                                return@withContext dataSource.connection.use { lookup ->
-                                    lookup.findMessageByIdempotencyKey(userId, conversationId, clientIdempotencyKey)
-                                }
-                            }
-                            throw error
-                        }
-
-                    if (moderationStatus == MessageModerationStatus.HELD && safetyReason != null) {
-                        connection.insertMessageReviewQueue(
-                            messageId = message.messageId,
-                            senderUserId = userId,
-                            conversationId = conversationId,
-                            reason = safetyReason,
-                        )
-                    }
-
-                    connection.touchConversationAt(conversationId, message.createdAt)
-                    connection.markSenderReadAt(userId, conversationId, message.createdAt)
-
-                    connection.commit()
-                    message
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = true
-                }
-            }
-        }
+        dataSource.sendMessagingTextMessage(
+            userId = userId,
+            conversationId = conversationId,
+            body = body,
+            moderationStatus = moderationStatus,
+            bodyFingerprint = bodyFingerprint,
+            safetyReason = safetyReason,
+            clientIdempotencyKey = clientIdempotencyKey,
+            messageIdFactory = messageIdFactory,
+        )
 
     override suspend fun deleteOwnMessage(
         userId: UUID,
         messageId: UUID,
-    ): MessageRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.autoCommit = false
-                try {
-                    val message = connection.deleteOwnVisibleMessage(userId, messageId)
-
-                    if (message == null) {
-                        connection.rollback()
-                        return@withContext null
-                    }
-
-                    connection.touchConversation(message.conversationId)
-                    connection.commit()
-                    message
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = true
-                }
-            }
-        }
+    ): MessageRecord? = dataSource.deleteOwnMessagingMessage(userId, messageId)
 
     override suspend fun countRecentMessagesByFingerprint(
         userId: UUID,
         bodyFingerprint: String,
         since: Instant,
-    ): Int =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.countRecentMessagesByFingerprint(userId, bodyFingerprint, since)
-            }
-        }
+    ): Int = dataSource.countRecentMessagingMessagesByFingerprint(userId, bodyFingerprint, since)
 
     override suspend fun hasSentMessageInConversation(
         userId: UUID,
         conversationId: UUID,
-    ): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.hasSentMessageInConversation(userId, conversationId)
-            }
-        }
+    ): Boolean = dataSource.hasSentMessagingMessageInConversation(userId, conversationId)
 
-    override suspend fun getActiveLinkedPartnerUserId(userId: UUID): UUID? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.loadActiveLinkedPartnerUserId(userId)
-            }
-        }
+    override suspend fun getActiveLinkedPartnerUserId(userId: UUID): UUID? = dataSource.getActiveLinkedPartnerUserId(userId)
 
     override suspend fun inviteLinkedPartner(
         inviterUserId: UUID,
         conversationId: UUID,
         partnerUserId: UUID,
     ): PartnerInviteResult =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val previousAutoCommit = connection.autoCommit
-                connection.autoCommit = false
-                try {
-                    if (!connection.isActiveParticipant(inviterUserId, conversationId)) {
-                        connection.rollback()
-                        return@withContext PartnerInviteResult.ConversationNotFound
-                    }
-
-                    when (connection.participantStatus(conversationId, partnerUserId)) {
-                        ParticipantStatus.Active -> {
-                            connection.rollback()
-                            return@withContext PartnerInviteResult.AlreadyInConversation
-                        }
-                        ParticipantStatus.Invited -> {
-                            connection.rollback()
-                            return@withContext PartnerInviteResult.AlreadyInvited
-                        }
-                        ParticipantStatus.None,
-                        ParticipantStatus.Inactive,
-                        -> Unit
-                    }
-
-                    if (connection.partnerInviteCooldownActive(conversationId, partnerUserId)) {
-                        connection.rollback()
-                        return@withContext PartnerInviteResult.CooldownActive
-                    }
-
-                    val inviteInserted =
-                        connection.insertPartnerChatInvite(
-                            conversationId = conversationId,
-                            inviterUserId = inviterUserId,
-                            partnerUserId = partnerUserId,
-                        )
-                    if (!inviteInserted) {
-                        connection.rollback()
-                        return@withContext PartnerInviteResult.AlreadyInvited
-                    }
-
-                    connection.upsertInvitedParticipant(
-                        conversationId = conversationId,
-                        partnerUserId = partnerUserId,
-                        inviterUserId = inviterUserId,
-                    )
-                    connection.markConversationGroup(conversationId)
-                    val conversation =
-                        connection.loadConversation(inviterUserId, conversationId)
-                            ?: run {
-                                connection.rollback()
-                                return@withContext PartnerInviteResult.ConversationNotFound
-                            }
-                    connection.commit()
-                    PartnerInviteResult.Invited(conversation)
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = previousAutoCommit
-                }
-            }
-        }
+        dataSource.inviteLinkedMessagingPartner(
+            inviterUserId = inviterUserId,
+            conversationId = conversationId,
+            partnerUserId = partnerUserId,
+        )
 
     override suspend fun acceptPartnerInvite(
         userId: UUID,
         conversationId: UUID,
-    ): ConversationDetailRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val previousAutoCommit = connection.autoCommit
-                connection.autoCommit = false
-                try {
-                    val invite =
-                        connection.loadOpenPartnerInvite(conversationId, forUpdate = true)
-                            ?: run {
-                                connection.rollback()
-                                return@withContext null
-                            }
-                    val userRole = connection.partnerInviteUserRole(userId, invite)
-                    if (userRole == PartnerInviteUserRole.None) {
-                        connection.rollback()
-                        return@withContext null
-                    }
-
-                    connection.acceptOpenPartnerInvite(conversationId, userId, invite, userRole)
-                    val detail =
-                        connection.loadConversation(userId, conversationId)?.let { conversation ->
-                            val page =
-                                connection.loadMessages(
-                                    userId,
-                                    conversationId,
-                                    DEFAULT_MESSAGE_PAGE_LIMIT,
-                                    before = null,
-                                    conversation.effectiveExpirySeconds,
-                                )
-                            ConversationDetailRecord(
-                                conversation = conversation,
-                                messages = page.messages,
-                                nextCursor = page.nextCursor,
-                            )
-                        }
-                    connection.commit()
-                    detail
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = previousAutoCommit
-                }
-            }
-        }
+    ): ConversationDetailRecord? = dataSource.acceptMessagingPartnerInvite(userId, conversationId)
 
     override suspend fun declinePartnerInvite(
         userId: UUID,
         conversationId: UUID,
-    ): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val previousAutoCommit = connection.autoCommit
-                connection.autoCommit = false
-                try {
-                    val invite =
-                        connection.loadOpenPartnerInvite(conversationId, forUpdate = true)
-                            ?: run {
-                                connection.rollback()
-                                return@withContext false
-                            }
-                    val userRole = connection.partnerInviteUserRole(userId, invite)
-                    if (userRole == PartnerInviteUserRole.None) {
-                        connection.rollback()
-                        return@withContext false
-                    }
-
-                    connection.declineOpenPartnerInvite(conversationId, invite, userRole)
-                    connection.commit()
-                    true
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = previousAutoCommit
-                }
-            }
-        }
+    ): Boolean = dataSource.declineMessagingPartnerInvite(userId, conversationId)
 
     override suspend fun leaveConversation(
         userId: UUID,
         conversationId: UUID,
-    ): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val updated = connection.leaveConversationParticipant(userId, conversationId)
-                if (updated > 0) connection.touchConversation(conversationId)
-                updated > 0
-            }
-        }
+    ): Boolean = dataSource.leaveMessagingConversation(userId, conversationId)
 
     override suspend fun sendMediaMessage(
         userId: UUID,
@@ -415,41 +119,22 @@ class JdbcMessagingRepository(
         clientIdempotencyKey: String?,
         messageIdFactory: () -> UUID,
     ): MessageRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                if (!connection.isActiveParticipant(userId, conversationId)) return@withContext null
-                clientIdempotencyKey?.let { key ->
-                    connection.findMessageByIdempotencyKey(userId, conversationId, key)?.let { return@withContext it }
-                }
-                val message =
-                    connection.insertMediaMessage(
-                        messageId = messageIdFactory(),
-                        userId = userId,
-                        conversationId = conversationId,
-                        mediaAssetId = mediaAssetId,
-                        contentType = contentType,
-                        pixelWidth = pixelWidth,
-                        pixelHeight = pixelHeight,
-                        body = body,
-                        clientIdempotencyKey = clientIdempotencyKey,
-                    )
-                connection.touchConversationAt(conversationId, message.createdAt)
-                message
-            }
-        }
+        dataSource.sendMessagingMediaMessage(
+            userId = userId,
+            conversationId = conversationId,
+            mediaAssetId = mediaAssetId,
+            contentType = contentType,
+            pixelWidth = pixelWidth,
+            pixelHeight = pixelHeight,
+            body = body,
+            clientIdempotencyKey = clientIdempotencyKey,
+            messageIdFactory = messageIdFactory,
+        )
 
     override suspend fun recordMediaReveal(
         userId: UUID,
         messageId: UUID,
-    ): MessageRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val message = connection.loadMessageForViewer(userId, messageId) ?: return@withContext null
-                if (message.mediaAssetId == null) return@withContext null
-                connection.insertMessageMediaReveal(userId, messageId)
-                connection.loadMessageForViewer(userId, messageId)
-            }
-        }
+    ): MessageRecord? = dataSource.recordMessagingMediaReveal(userId, messageId)
 
     override suspend fun setConversationExpiry(
         userId: UUID,
@@ -458,36 +143,11 @@ class JdbcMessagingRepository(
         systemMessageBody: String,
         messageIdFactory: () -> UUID,
     ): SetConversationExpiryResult? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val previousAutoCommit = connection.autoCommit
-                connection.autoCommit = false
-                try {
-                    val updated = connection.setParticipantExpiry(userId, conversationId, expirySeconds)
-                    if (updated == 0) {
-                        connection.rollback()
-                        return@withContext null
-                    }
-                    val systemMessage = connection.insertSystemMessage(messageIdFactory(), userId, conversationId, systemMessageBody)
-                    connection.touchConversation(conversationId)
-                    val conversation =
-                        connection.loadConversation(userId, conversationId) ?: run {
-                            connection.rollback()
-                            return@withContext null
-                        }
-                    connection.commit()
-                    SetConversationExpiryResult(conversation = conversation, systemMessage = systemMessage)
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = previousAutoCommit
-                }
-            }
-        }
-
-    companion object {
-        private const val DEFAULT_MESSAGE_PAGE_LIMIT = 50
-        private const val UNIQUE_VIOLATION_SQLSTATE = "23505"
-    }
+        dataSource.setMessagingConversationExpiry(
+            userId = userId,
+            conversationId = conversationId,
+            expirySeconds = expirySeconds,
+            systemMessageBody = systemMessageBody,
+            messageIdFactory = messageIdFactory,
+        )
 }
