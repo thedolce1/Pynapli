@@ -173,148 +173,33 @@ class ServerDependencies(
             val postgres = PostgresDependencyProbe(database)
             val redis = RedisDependencyProbe(redisCache)
             val profileActivityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-            val accountLifecycleService =
-                AccountLifecycleService(
-                    JdbcAccountLifecycleRepository(database.dataSource),
-                )
-            val travelLocationRepository = JdbcTravelLocationRepository(database.dataSource)
-            val presenceRepository = RedisPresenceRepository(redisCache)
-            val presenceBroadcaster = PresenceBroadcaster()
-            val onlinePresenceTracker = OnlinePresenceTracker()
-            val presenceService =
-                PresenceService(
-                    repository = presenceRepository,
-                    broadcaster = presenceBroadcaster,
-                    onlineTracker = onlinePresenceTracker,
-                )
-            val presenceOfflineScanner =
-                PresenceOfflineScanner(
-                    tracker = onlinePresenceTracker,
-                    repository = presenceRepository,
-                    broadcaster = presenceBroadcaster,
-                )
-            val blockRepository = JdbcBlockRepository(database.dataSource)
-            val blockService = BlockService(blockRepository)
-            val hiddenProfileRepository = JdbcHiddenProfileRepository(database.dataSource)
-            val hiddenProfileService = HiddenProfileService(hiddenProfileRepository)
-            val riskService = RiskService(JdbcRiskRepository(database.dataSource))
-            val riskPolicyService = RiskPolicyService(riskService)
-            val locationService =
-                LocationService(
-                    repository = JdbcLocationRepository(database.dataSource),
-                    // Impossible-travel fixes feed the risk model (TRUST_AND_SAFETY_SPEC).
-                    locationRiskSignals = riskService,
-                )
-            val rateLimitService =
-                RateLimitService(
-                    repository = RedisRateLimitRepository(redisCache),
-                    riskSignalPublisher = riskService,
-                )
-            val authService =
-                AuthService(
-                    repository = JdbcAuthRepository(database.dataSource),
-                    rateLimitService = rateLimitService,
-                )
-            val reportService =
-                ReportService(
-                    repository = JdbcReportRepository(database.dataSource),
-                    riskSignalPublisher = riskService,
-                    rateLimitService = rateLimitService,
-                    supportEmail = config.supportEmail,
-                )
-            val appealService = AppealService(JdbcAppealRepository(database.dataSource))
-            val adminAppealService =
-                AdminAppealService(
-                    repository = JdbcAdminAppealRepository(database.dataSource),
-                    // Appeal outcomes feed the false-positive rate (TRUST_AND_SAFETY_SPEC).
-                    falsePositiveMetrics =
-                        com.pynapli.server.safety
-                            .RiskFalsePositiveMetrics(),
-                )
-            val notificationRepository = JdbcNotificationRepository(database.dataSource)
-            val notificationService = NotificationService(notificationRepository)
-            val activityBroadcaster = ActivityBroadcaster()
-            val psyncBroadcaster =
-                com.pynapli.server.psync
-                    .PsyncBroadcaster()
-            val messageBroadcaster = MessageBroadcaster()
-            val notificationDispatchWorker =
-                if (config.notificationDispatchEnabled) {
-                    val pushNotificationSender = createPushNotificationSender(config)
-                    NotificationDispatchWorker(
-                        service =
-                            NotificationDispatchService(
-                                repository = notificationRepository,
-                                sender = pushNotificationSender,
-                                maxAttempts = config.notificationMaxAttempts,
-                            ),
-                        intervalMillis = config.notificationDispatchIntervalMillis,
-                        batchSize = config.notificationDispatchBatchSize,
-                    )
-                } else {
-                    null
-                }
+            val core = buildCoreDependencies(config, database, redisCache)
             val media =
                 buildMediaDependencies(
                     config = config,
-                    blockRepository = blockRepository,
-                    riskService = riskService,
-                    rateLimitService = rateLimitService,
+                    blockRepository = core.blockRepository,
+                    riskService = core.riskService,
+                    rateLimitService = core.rateLimitService,
                     dataSource = database.dataSource,
                 )
-            val subscriptionService =
-                SubscriptionService(
-                    repository = JdbcSubscriptionRepository(database.dataSource),
-                    playStorePackageName = config.playStorePackageName,
-                    playStorePurchaseVerifier =
-                        if (config.playStoreVerificationEnabled) {
-                            GooglePlayStorePurchaseVerifier.fromConfig(config)
-                        } else {
-                            DisabledPlayStorePurchaseVerifier
-                        },
-                    playStoreSyncStaleAfter = Duration.ofHours(config.playStoreSubscriptionSyncStaleAfterHours),
-                    playStoreSyncRenewalLookahead =
-                        Duration.ofHours(config.playStoreSubscriptionSyncRenewalLookaheadHours),
-                    rateLimitService = rateLimitService,
+            val commerceTravel =
+                buildCommerceTravelDependencies(
+                    config = config,
+                    dataSource = database.dataSource,
+                    travelLocationRepository = core.travelLocationRepository,
+                    rateLimitService = core.rateLimitService,
                 )
-            val travelLocationService =
-                TravelLocationService(
-                    repository = travelLocationRepository,
-                    subscriptionService = subscriptionService,
-                    // Production default is EmptyTravelRegionPolicy (no destinations
-                    // require extra verification). Ops swaps via DI when the region
-                    // safety review is in place — see TravelRegionPolicy.
-                    viewerTrustRepository = JdbcGridViewerTrustRepository(database.dataSource),
-                )
-            val travelPlaceRepository = JdbcTravelPlaceRepository(database.dataSource)
-            // One-time per dataset version (~77k rows, a few seconds); steady restarts skip it.
-            TravelPlaceDatasetLoader(travelPlaceRepository).loadIfStale()
-            val travelPlaceSearchService =
-                TravelPlaceSearchService(
-                    repository = travelPlaceRepository,
-                    rateLimitService = rateLimitService,
-                )
-            val playStoreSubscriptionSyncWorker =
-                if (config.playStoreVerificationEnabled && config.playStoreSubscriptionSyncEnabled) {
-                    PlayStoreSubscriptionSyncWorker(
-                        service = subscriptionService,
-                        intervalMillis = config.playStoreSubscriptionSyncIntervalMillis,
-                        batchSize = config.playStoreSubscriptionSyncBatchSize,
-                    )
-                } else {
-                    null
-                }
             val activityService =
                 ActivityService(
                     repository = JdbcActivityRepository(database.dataSource),
                     mediaService = media.mediaService,
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
-                    blockRepository = blockRepository,
-                    notificationPublisher = notificationService,
-                    rateLimitService = rateLimitService,
-                    riskPolicyService = riskPolicyService,
-                    subscriptionService = subscriptionService,
-                    activityBroadcaster = activityBroadcaster,
+                    blockRepository = core.blockRepository,
+                    notificationPublisher = core.notificationService,
+                    rateLimitService = core.rateLimitService,
+                    riskPolicyService = core.riskPolicyService,
+                    subscriptionService = commerceTravel.subscriptionService,
+                    activityBroadcaster = core.activityBroadcaster,
                     cursorCodec = ActivityCursorCodec(config.activityCursorSecret),
                 )
             val activityRetentionWorker =
@@ -343,8 +228,8 @@ class ServerDependencies(
                     repository = JdbcProfileRepository(database.dataSource),
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     activityService = activityService,
-                    blockRepository = blockRepository,
-                    riskPolicyService = riskPolicyService,
+                    blockRepository = core.blockRepository,
+                    riskPolicyService = core.riskPolicyService,
                     profileViewRecordScope = profileActivityScope,
                     profileViewRecordConcurrency = 4,
                 )
@@ -352,32 +237,32 @@ class ServerDependencies(
                 ProfileLinkService(
                     repository = JdbcProfileLinkRepository(database.dataSource),
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
-                    blockRepository = blockRepository,
-                    notificationPublisher = notificationService,
-                    riskPolicyService = riskPolicyService,
+                    blockRepository = core.blockRepository,
+                    notificationPublisher = core.notificationService,
+                    riskPolicyService = core.riskPolicyService,
                 )
             val grid =
                 buildGridDependencies(
                     config = config,
                     dataSource = database.dataSource,
                     redisCache = redisCache,
-                    presenceService = presenceService,
+                    presenceService = core.presenceService,
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
-                    blockRepository = blockRepository,
-                    hiddenProfileRepository = hiddenProfileRepository,
-                    subscriptionService = subscriptionService,
-                    rateLimitService = rateLimitService,
+                    blockRepository = core.blockRepository,
+                    hiddenProfileRepository = core.hiddenProfileRepository,
+                    subscriptionService = commerceTravel.subscriptionService,
+                    rateLimitService = core.rateLimitService,
                 )
             val tonight =
                 buildTonightDependencies(
                     dataSource = database.dataSource,
-                    subscriptionService = subscriptionService,
-                    notificationService = notificationService,
-                    presenceService = presenceService,
+                    subscriptionService = commerceTravel.subscriptionService,
+                    notificationService = core.notificationService,
+                    presenceService = core.presenceService,
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
-                    blockRepository = blockRepository,
-                    hiddenProfileRepository = hiddenProfileRepository,
-                    riskPolicyService = riskPolicyService,
+                    blockRepository = core.blockRepository,
+                    hiddenProfileRepository = core.hiddenProfileRepository,
+                    riskPolicyService = core.riskPolicyService,
                 )
             // Provider-hosted age verification is opt-in: built only when both the provider name and
             // its redirect base URL are configured. Otherwise the service keeps manual-review-only
@@ -398,20 +283,20 @@ class ServerDependencies(
                 AgeVerificationService(
                     repository = JdbcAgeVerificationRepository(database.dataSource),
                     provider = ageVerificationProvider,
-                    rateLimitService = rateLimitService,
+                    rateLimitService = core.rateLimitService,
                     // Successful verification lowers account risk (TRUST_AND_SAFETY_SPEC).
-                    verificationRiskSignals = riskService,
+                    verificationRiskSignals = core.riskService,
                 )
             val messaging =
                 buildMessagingDependencies(
                     dataSource = database.dataSource,
-                    blockRepository = blockRepository,
-                    notificationService = notificationService,
-                    messageBroadcaster = messageBroadcaster,
-                    rateLimitService = rateLimitService,
-                    riskService = riskService,
-                    riskPolicyService = riskPolicyService,
-                    subscriptionService = subscriptionService,
+                    blockRepository = core.blockRepository,
+                    notificationService = core.notificationService,
+                    messageBroadcaster = core.messageBroadcaster,
+                    rateLimitService = core.rateLimitService,
+                    riskService = core.riskService,
+                    riskPolicyService = core.riskPolicyService,
+                    subscriptionService = commerceTravel.subscriptionService,
                     activityService = activityService,
                     messageMediaGateway = media.messageMediaGateway,
                 )
@@ -420,55 +305,55 @@ class ServerDependencies(
                     config = config,
                     dataSource = database.dataSource,
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
-                    blockRepository = blockRepository,
-                    hiddenProfileRepository = hiddenProfileRepository,
-                    notificationService = notificationService,
-                    rateLimitService = rateLimitService,
-                    riskPolicyService = riskPolicyService,
-                    subscriptionService = subscriptionService,
-                    presenceService = presenceService,
-                    travelLocationRepository = travelLocationRepository,
+                    blockRepository = core.blockRepository,
+                    hiddenProfileRepository = core.hiddenProfileRepository,
+                    notificationService = core.notificationService,
+                    rateLimitService = core.rateLimitService,
+                    riskPolicyService = core.riskPolicyService,
+                    subscriptionService = commerceTravel.subscriptionService,
+                    presenceService = core.presenceService,
+                    travelLocationRepository = core.travelLocationRepository,
                     activityService = activityService,
-                    psyncBroadcaster = psyncBroadcaster,
+                    psyncBroadcaster = core.psyncBroadcaster,
                 )
             return ServerDependencies(
                 config = config,
                 database = database,
                 redisCache = redisCache,
-                authService = authService,
+                authService = core.authService,
                 profileService = profileService,
                 profileLinkService = profileLinkService,
-                locationService = locationService,
-                travelLocationService = travelLocationService,
-                travelPlaceSearchService = travelPlaceSearchService,
-                presenceService = presenceService,
+                locationService = core.locationService,
+                travelLocationService = commerceTravel.travelLocationService,
+                travelPlaceSearchService = commerceTravel.travelPlaceSearchService,
+                presenceService = core.presenceService,
                 gridService = grid.gridService,
                 messagingService = messaging.messagingService,
                 mediaService = media.mediaService,
                 messageModerationService = messaging.messageModerationService,
-                adminAppealService = adminAppealService,
+                adminAppealService = core.adminAppealService,
                 adminReportService = messaging.adminReportService,
                 adminRiskService = messaging.adminRiskService,
                 activityService = activityService,
                 activityRetentionWorker = activityRetentionWorker,
                 mediaCleanupWorker = mediaCleanupWorker,
-                notificationService = notificationService,
-                notificationDispatchWorker = notificationDispatchWorker,
-                blockService = blockService,
-                hiddenProfileService = hiddenProfileService,
-                appealService = appealService,
-                reportService = reportService,
+                notificationService = core.notificationService,
+                notificationDispatchWorker = core.notificationDispatchWorker,
+                blockService = core.blockService,
+                hiddenProfileService = core.hiddenProfileService,
+                appealService = core.appealService,
+                reportService = core.reportService,
                 swipeService = swipe.swipeService,
-                subscriptionService = subscriptionService,
-                playStoreSubscriptionSyncWorker = playStoreSubscriptionSyncWorker,
+                subscriptionService = commerceTravel.subscriptionService,
+                playStoreSubscriptionSyncWorker = commerceTravel.playStoreSubscriptionSyncWorker,
                 localMediaUploadStorage = media.localMediaUploadStorage,
-                activityBroadcaster = activityBroadcaster,
-                psyncBroadcaster = psyncBroadcaster,
-                messageBroadcaster = messageBroadcaster,
-                presenceBroadcaster = presenceBroadcaster,
-                presenceOfflineScanner = presenceOfflineScanner,
-                blockRepository = blockRepository,
-                hiddenProfileRepository = hiddenProfileRepository,
+                activityBroadcaster = core.activityBroadcaster,
+                psyncBroadcaster = core.psyncBroadcaster,
+                messageBroadcaster = core.messageBroadcaster,
+                presenceBroadcaster = core.presenceBroadcaster,
+                presenceOfflineScanner = core.presenceOfflineScanner,
+                blockRepository = core.blockRepository,
+                hiddenProfileRepository = core.hiddenProfileRepository,
                 savedGridFilterService = grid.savedGridFilterService,
                 savedSwipeFilterService = grid.savedSwipeFilterService,
                 topPicksService = swipe.topPicksService,
@@ -478,7 +363,7 @@ class ServerDependencies(
                 tonightSessionExpiryWorker = tonight.tonightSessionExpiryWorker,
                 psyncSessionService = swipe.psyncSessionService,
                 ageVerificationService = ageVerificationService,
-                accountLifecycleService = accountLifecycleService,
+                accountLifecycleService = core.accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,
                 profileActivityScope = profileActivityScope,
                 probes = listOf(postgres, redis),
