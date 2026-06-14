@@ -528,6 +528,71 @@ class GridServiceTest {
 
             assertEquals("INVALID_GRID_CURSOR", error.code)
         }
+
+    // FILTERS_SPEC "Default deck / never-empty": an empty first page at the requested radius
+    // widens once to the maximum radius so the viewer still sees nearby-ish people.
+    @Test
+    fun queryGridWidensToMaxRadiusWhenFirstPageEmpty() =
+        runBlocking {
+            val targetId = UUID.randomUUID()
+            val repository =
+                RadiusAwareGridRepository(
+                    cardsAtMaxRadius =
+                        listOf(GridCardRecord(targetId, "Far Alex", showDistance = true, distanceMeters = 80_000.0)),
+                )
+            val service = GridService(repository)
+
+            val response = service.queryGrid(UUID.randomUUID(), GridQueryRequestDto(radiusMeters = 25_000))
+
+            assertEquals(listOf(25_000, 100_000), repository.receivedRadii)
+            assertEquals(listOf(targetId.toString()), response.items.map { it.userId })
+        }
+
+    @Test
+    fun queryGridDoesNotPaginateAWidenedFallbackPage() =
+        runBlocking {
+            val targetId = UUID.randomUUID()
+            val repository =
+                RadiusAwareGridRepository(
+                    cardsAtMaxRadius =
+                        listOf(
+                            GridCardRecord(
+                                targetId,
+                                "Far Alex",
+                                showDistance = true,
+                                distanceMeters = 80_000.0,
+                                distanceBucketMeters = 80_000,
+                            ),
+                        ),
+                    nextCursorAnchorAtMax =
+                        GridCursorAnchor(boostBucket = 0, distanceBucketMeters = 80_000, userId = targetId),
+                )
+            val service = GridService(repository)
+
+            val response = service.queryGrid(UUID.randomUUID(), GridQueryRequestDto(radiusMeters = 25_000))
+
+            assertEquals(1, response.items.size)
+            assertNull(response.nextCursor)
+            assertEquals(false, response.resultLimitReached)
+        }
+
+    @Test
+    fun queryGridDoesNotWidenWhenFirstPageHasCards() =
+        runBlocking {
+            val targetId = UUID.randomUUID()
+            val repository =
+                RadiusAwareGridRepository(
+                    cardsAtMaxRadius =
+                        listOf(GridCardRecord(targetId, "Near Alex", showDistance = true, distanceMeters = 500.0)),
+                    minMatchRadiusMeters = 1_000,
+                )
+            val service = GridService(repository)
+
+            val response = service.queryGrid(UUID.randomUUID(), GridQueryRequestDto(radiusMeters = 25_000))
+
+            assertEquals(listOf(25_000), repository.receivedRadii)
+            assertEquals(listOf(targetId.toString()), response.items.map { it.userId })
+        }
 }
 
 private class StaticGridRepository(
@@ -556,6 +621,31 @@ private class CapturingGridRepository(
     ): GridQueryResult {
         receivedCursors += cursor
         return result
+    }
+}
+
+// Returns matches only at/above `minMatchRadiusMeters` (defaults to the service max), so a
+// narrow first page is empty and the never-empty widening re-query at the max radius fills it.
+private class RadiusAwareGridRepository(
+    private val cardsAtMaxRadius: List<GridCardRecord>,
+    private val nextCursorAnchorAtMax: GridCursorAnchor? = null,
+    private val minMatchRadiusMeters: Int = 100_000,
+) : GridRepository {
+    val receivedRadii = mutableListOf<Int>()
+
+    override suspend fun queryNearby(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        cursor: GridCursorAnchor?,
+    ): GridQueryResult {
+        receivedRadii += radiusMeters
+        return if (radiusMeters >= minMatchRadiusMeters) {
+            GridQueryResult(viewerHadLocation = true, cards = cardsAtMaxRadius, nextCursorAnchor = nextCursorAnchorAtMax)
+        } else {
+            GridQueryResult(viewerHadLocation = true, cards = emptyList())
+        }
     }
 }
 

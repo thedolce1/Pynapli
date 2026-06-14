@@ -451,6 +451,38 @@ Do not:
 - Show a full-screen spinner if old data exists.
 - Reset scroll to top unless the user chooses a radically different context or location.
 
+## Default Deck / Never-Empty
+
+The Grid must never look broken because a viewer left filters at their defaults or in a sparse
+area. Two layers guarantee this:
+
+1. **Default = all nearby.** With no filters selected, the Grid is an unfiltered proximity query:
+   every discoverable, eligible profile within the viewer's radius, ranked normally (Boosted →
+   proximity → recency). No structured filter means no `WHERE` predicate is applied for that
+   dimension — the cardinality gate (`cardinality(?::text[]) = 0 OR ...`) short-circuits an empty
+   filter to "match everyone", so an empty filter set never narrows the result.
+2. **Widen-on-empty.** If the **first page** at the requested radius returns zero candidates and
+   the radius is below the maximum (`MAX_RADIUS_METERS = 100_000`), the server re-queries once at
+   the maximum radius and returns that page instead. This is server-side and transparent to the
+   client; the viewer simply sees nearby-ish people rather than an empty grid. It mirrors the Swipe
+   deck's radius relaxation (`SwipeDeckRelaxation.relaxRadius`).
+
+Rules for the widen-on-empty fallback (`GridService.queryGrid`):
+
+- **First page only.** It fires when `cursor == null`. A later empty page is honest exhaustion of a
+  scrolled deck, not a broken-looking first impression — do not widen mid-pagination.
+- **Edge-fill, no pagination.** A widened page returns `nextCursor = null`. The wide radius is never
+  baked into a cursor scoped to the viewer's narrow radius (the follow-up request still carries the
+  narrow radius, so a wide-scoped cursor would be rejected as `INVALID_GRID_CURSOR`). One page of
+  wider results beats an empty grid; a viewer who wants more widens their own radius filter.
+- **Respects explicit filters.** Widening only relaxes *distance*. Any structured filters the viewer
+  did select (gender, orientation, intents, lifestyle, verified, online-only, etc.) still apply at
+  the wide radius — a filter is still a promise. Widening searches farther, it does not silently show
+  non-matching people.
+- **Honest empties remain.** Emptiness caused by a viewer-specific post-filter (block/hidden lists,
+  `onlineOnly` with nobody online nearby) is not "no candidates within radius", so it keeps its own
+  honest empty state rather than triggering a radius widen.
+
 ## Realtime Updates
 
 Use WebSocket deltas for:
@@ -630,6 +662,7 @@ Battery:
 - [x] Thumbnail prefetch is implemented: `planThumbnailPrefetch` derives the next `GRID_THUMBNAIL_PREFETCH_WINDOW` (12) cards beyond the last visible index, deduplicated and skipping null URLs, covered by `ThumbnailPrefetchPlannerTest`. `ProfileGrid` enqueues the planned URLs into the Coil 3 `SingletonImageLoader` from a `LaunchedEffect` keyed on the planned URL list, populating the memory/disk cache without rendering.
 - [x] Message rate limiting exists.
 - [x] Ranking does not reward spam volume.
+- [x] Default deck / never-empty: with no filters the Grid is an unfiltered proximity query (empty filter sets short-circuit to "match everyone" via the cardinality gate), and `GridService.queryGrid` widens once to `MAX_RADIUS_METERS` when the **first page** at the requested radius returns zero candidates. The widened page is edge-fill only (`nextCursor = null`, no depth-limit claim) so the wide radius never leaks into the narrow-radius cursor scope; explicit structured filters still apply at the wide radius (widening relaxes distance only); viewer-specific post-filter empties (block/hidden, `onlineOnly` with nobody online) keep their honest empty state. Covered by `GridServiceTest.queryGridWidensToMaxRadiusWhenFirstPageEmpty`, `...DoesNotPaginateAWidenedFallbackPage`, and `...DoesNotWidenWhenFirstPageHasCards`.
 
 ## Do Not Implement
 
