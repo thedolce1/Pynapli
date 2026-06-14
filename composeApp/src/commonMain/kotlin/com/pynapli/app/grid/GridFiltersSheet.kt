@@ -135,6 +135,12 @@ internal fun GridFiltersSheet(
                 },
             )
 
+            SectionTitle("Photos")
+            PhotosSection(
+                withPhotos = draft.withPhotos,
+                onToggle = { draft = draft.copy(withPhotos = !draft.withPhotos) },
+            )
+
             SectionTitle("Intent")
             IntentSection(
                 selected = draft.discoveryStyles,

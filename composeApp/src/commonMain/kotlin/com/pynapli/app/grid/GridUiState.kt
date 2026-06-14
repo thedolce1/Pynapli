@@ -42,6 +42,8 @@ data class GridFilters(
     // Structured gender/orientation keys from ProfileTaxonomies (self-describe excluded).
     val genders: Set<String> = emptySet(),
     val orientations: Set<String> = emptySet(),
+    // FILTERS_SPEC "Has photos": only show profiles with at least one approved public photo.
+    val withPhotos: Boolean = false,
     val tonightAvailable: Boolean = false,
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
@@ -63,6 +65,7 @@ data class GridFilters(
             if (intents.isNotEmpty()) count += 1
             if (genders.isNotEmpty()) count += 1
             if (orientations.isNotEmpty()) count += 1
+            if (withPhotos) count += 1
             if (tonightAvailable) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
@@ -98,6 +101,7 @@ data class GridFilters(
             lifestyleTags = lifestyleTags.map { it.serverValue },
             logisticsTags = logisticsTags.map { it.serverValue },
             tonightAvailableOnly = tonightAvailable,
+            withPhotosOnly = withPhotos,
             intents = intents.map { it.serverValue },
             genders = genders.toList(),
             orientations = orientations.toList(),
@@ -141,6 +145,7 @@ data class GridFilters(
                 intents = request.intents.mapNotNull { intentByValue[it] }.toSet(),
                 genders = request.genders.toSet(),
                 orientations = request.orientations.toSet(),
+                withPhotos = request.withPhotosOnly,
                 tonightAvailable = request.tonightAvailableOnly,
                 radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
                 minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),

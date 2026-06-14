@@ -2,6 +2,7 @@ package com.pynapli.app.swipe
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SwipeFiltersTest {
     @Test
@@ -19,5 +20,17 @@ class SwipeFiltersTest {
         val roundTripped = SwipeFilters.fromSwipeDeckRequest(request)
         assertEquals(setOf("woman", "non_binary"), roundTripped.genders)
         assertEquals(setOf("pansexual"), roundTripped.orientations)
+    }
+
+    @Test
+    fun withPhotosSerializesAndRoundTripsAndCounts() {
+        val request = SwipeFilters(withPhotos = true).toSwipeDeckRequest()
+        assertEquals(true, request.withPhotosOnly)
+
+        val roundTripped = SwipeFilters.fromSwipeDeckRequest(request)
+        assertEquals(true, roundTripped.withPhotos)
+        assertTrue(roundTripped.isAnyActive)
+        assertEquals(0, SwipeFilters().activeCount)
+        assertEquals(1, SwipeFilters(withPhotos = true).activeCount)
     }
 }
