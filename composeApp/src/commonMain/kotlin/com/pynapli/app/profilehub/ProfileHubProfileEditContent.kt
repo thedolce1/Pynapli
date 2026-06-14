@@ -27,6 +27,7 @@ internal fun ProfileEditContent(
     onDisplayNameChanged: (String) -> Unit,
     onBirthdateChanged: (String) -> Unit,
     onBioChanged: (String) -> Unit,
+    onNeighborhoodChanged: (String) -> Unit,
     onGenderChanged: (String) -> Unit,
     onGenderDetailChanged: (String) -> Unit,
     onOrientationChanged: (String) -> Unit,
@@ -101,6 +102,12 @@ internal fun ProfileEditContent(
                         supportingText = "${state.draft.bio.length} of ${ProfileTaxonomies.BIO_MAX_LENGTH}",
                         singleLine = false,
                         minLines = 3,
+                    )
+                    ProfileTextField(
+                        value = state.draft.neighborhood,
+                        onValueChange = onNeighborhoodChanged,
+                        label = "Neighborhood",
+                        supportingText = "Shown on your profile (e.g. Mission). Optional.",
                     )
                 }
             }

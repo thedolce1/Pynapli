@@ -71,6 +71,7 @@ fun ProfileHubScreen(
             onDisplayNameChanged = stateHolder::updateDisplayName,
             onBirthdateChanged = stateHolder::updateBirthdate,
             onBioChanged = stateHolder::updateBio,
+            onNeighborhoodChanged = stateHolder::updateNeighborhood,
             onGenderChanged = stateHolder::updateGender,
             onGenderDetailChanged = stateHolder::updateGenderDetail,
             onOrientationChanged = stateHolder::updateOrientation,

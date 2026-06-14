@@ -52,6 +52,7 @@ internal fun ProfileHero(
     verified: Boolean,
     online: Boolean,
     distanceLabel: String?,
+    neighborhood: String?,
     photoUrls: List<String>,
     profilePhotoUrl: String?,
     onDismiss: () -> Unit,
@@ -194,7 +195,7 @@ internal fun ProfileHero(
                 }
             }
 
-            if (online || distanceLabel != null) {
+            if (online || distanceLabel != null || neighborhood != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -213,13 +214,10 @@ internal fun ProfileHero(
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
+                    var precededBySegment = online
                     distanceLabel?.let {
-                        if (online) {
-                            Text(
-                                text = "·",
-                                color = Color(0xFFE5E5E5),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+                        if (precededBySegment) {
+                            MetaDivider()
                         }
                         Text(
                             text = it,
@@ -227,11 +225,37 @@ internal fun ProfileHero(
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
                         )
+                        precededBySegment = true
+                    }
+                    // User-declared neighborhood ("distance · hood · Online"). Self-described,
+                    // never derived from GPS, so it doesn't narrow the person's exact location.
+                    neighborhood?.let { hood ->
+                        if (precededBySegment) {
+                            MetaDivider()
+                        }
+                        Text(
+                            text = hood,
+                            color = Color(0xFFE5E5E5),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
                     }
                 }
             }
         }
     }
+}
+
+/** Mid-dot "·" separator between profile meta segments (online · distance · hood). */
+@Composable
+private fun MetaDivider() {
+    Text(
+        text = "·",
+        color = Color(0xFFE5E5E5),
+        style = MaterialTheme.typography.bodyMedium,
+    )
 }
 
 @Composable

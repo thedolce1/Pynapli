@@ -11,6 +11,7 @@ internal fun ProfileDto.toDraft(): ProfileEditDraft =
         displayName = displayName.orEmpty(),
         birthdate = birthdate.orEmpty(),
         bio = bio.orEmpty(),
+        neighborhood = neighborhood.orEmpty(),
         // Pre-taxonomy profiles may hold free text here; only structured keys map
         // onto the chips, anything else starts unset rather than rendering a bogus chip.
         gender = gender.orEmpty().takeIf { it in ProfileTaxonomies.genderKeys }.orEmpty(),
@@ -34,9 +35,10 @@ internal fun ProfileEditDraft.toRequest(): UpdateProfileRequestDto =
         orientationDetail = orientationDetail.trim().emptyToNull(),
         relationshipContext = relationshipContext.trim().emptyToNull(),
         discoveryStyle = discoveryStyle.trim().lowercase().emptyToNull(),
-        // Always sent: an empty bio/tag selection clears the stored value (the
+        // Always sent: an empty bio/neighborhood/tag selection clears the stored value (the
         // request's null-means-unchanged semantics are for older callers).
         bio = bio.trim(),
+        neighborhood = neighborhood.trim(),
         lifestyleTags = lifestyleTags.toList(),
         logisticsTags = logisticsTags.toList(),
         intents = intents.toList(),
@@ -95,6 +97,10 @@ internal fun ProfileEditDraft.validationError(): String? {
 
     if (bio.trim().length > ProfileTaxonomies.BIO_MAX_LENGTH) {
         return "Bio can be up to ${ProfileTaxonomies.BIO_MAX_LENGTH} characters."
+    }
+
+    if (neighborhood.trim().length > ProfileTaxonomies.NEIGHBORHOOD_MAX_LENGTH) {
+        return "Neighborhood can be up to ${ProfileTaxonomies.NEIGHBORHOOD_MAX_LENGTH} characters."
     }
 
     selfDescribeError(gender, genderDetail, "gender")?.let { return it }

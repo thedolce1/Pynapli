@@ -68,6 +68,8 @@ class ProfileHubStateHolder(
 
     fun updateBio(value: String) = drafts.updateBio(value)
 
+    fun updateNeighborhood(value: String) = drafts.updateNeighborhood(value)
+
     fun toggleLifestyleTag(value: String) = drafts.toggleLifestyleTag(value)
 
     fun toggleLogisticsTag(value: String) = drafts.toggleLogisticsTag(value)

@@ -403,6 +403,40 @@ class ProfileServiceTest {
         }
 
     @Test
+    fun neighborhoodRoundTripsThroughUpdateAndPublicProfileWithPartialSemantics() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId), clock)
+
+            // Set it; it surfaces on the public profile (the peek meta source).
+            service.updateProfile(userId, UpdateProfileRequestDto(displayName = "Alex", neighborhood = "  Mission  "))
+            assertEquals("Mission", service.getPublicProfile(UUID.randomUUID(), userId).neighborhood)
+            assertEquals("Mission", service.getMe(userId).profile.neighborhood)
+
+            // Omitted (null) leaves it unchanged.
+            service.updateProfile(userId, UpdateProfileRequestDto(displayName = "Alex"))
+            assertEquals("Mission", service.getMe(userId).profile.neighborhood)
+
+            // Explicit empty clears it.
+            service.updateProfile(userId, UpdateProfileRequestDto(neighborhood = "  "))
+            assertEquals(null, service.getMe(userId).profile.neighborhood)
+        }
+
+    @Test
+    fun updateProfileRejectsOverlongNeighborhood() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId), clock)
+
+            val error =
+                assertFailsWith<ProfileException> {
+                    service.updateProfile(userId, UpdateProfileRequestDto(neighborhood = "x".repeat(51)))
+                }
+
+            assertEquals("INVALID_NEIGHBORHOOD", error.code)
+        }
+
+    @Test
     fun updateProfileRejectsOverlongBio() =
         runBlocking {
             val userId = UUID.randomUUID()
@@ -619,6 +653,7 @@ private class InMemoryProfileRepository(
                     linkedPartnerDisplayName = linkedPartnerDisplayName,
                     linkedPartnerThumbnailMediaAssetId = linkedPartnerThumbnailMediaAssetId,
                     displayAge = it.profile.displayAge,
+                    neighborhood = it.profile.neighborhood,
                     gender = it.profile.gender,
                     orientation = it.profile.orientation,
                     relationshipContext = it.profile.relationshipContext,
@@ -652,6 +687,7 @@ private class InMemoryProfileRepository(
                         discoveryStyle = update.discoveryStyle ?: record.profile.discoveryStyle,
                         // Mirrors the JDBC CASE/COALESCE semantics for the late-added fields.
                         bio = if (update.bioProvided) update.bio else record.profile.bio,
+                        neighborhood = if (update.neighborhoodProvided) update.neighborhood else record.profile.neighborhood,
                         lifestyleTags = update.lifestyleTags ?: record.profile.lifestyleTags,
                         logisticsTags = update.logisticsTags ?: record.profile.logisticsTags,
                         intents = update.intents ?: record.profile.intents,

@@ -121,6 +121,7 @@ fun ProfileDetailSheet(
                     // fall back to the card's flag while the profile is still loading.
                     online = profile?.online ?: card.online,
                     distanceLabel = distanceLabel,
+                    neighborhood = profile?.neighborhood,
                     photoUrls = profile?.photoUrls.orEmpty(),
                     profilePhotoUrl = profilePhotoUrl,
                     onDismiss = onDismiss,

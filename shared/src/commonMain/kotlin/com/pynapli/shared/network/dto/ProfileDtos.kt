@@ -16,6 +16,9 @@ data class ProfileDto(
     val birthdate: String? = null,
     val displayAge: Int? = null,
     val bio: String? = null,
+    // User-declared neighborhood / area label (e.g. "Mission"); self-declared, never derived
+    // from GPS. Shown in the profile peek meta row. Optional.
+    val neighborhood: String? = null,
     // Structured taxonomy key (ProfileTaxonomies); the *Detail field carries the
     // free-text label only when the key is "self_describe".
     val gender: String? = null,
@@ -39,6 +42,8 @@ data class PublicProfileDto(
     val displayName: String,
     val displayAge: Int? = null,
     val bio: String? = null,
+    // User-declared neighborhood / area label shown in the peek meta row (distance · hood · online).
+    val neighborhood: String? = null,
     val gender: String? = null,
     val genderDetail: String? = null,
     val orientation: String? = null,
@@ -107,6 +112,7 @@ data class UpdateProfileRequestDto(
     // which predate them): null/omitted leaves the stored value unchanged; an
     // empty string / empty list clears it.
     val bio: String? = null,
+    val neighborhood: String? = null,
     val lifestyleTags: List<String>? = null,
     val logisticsTags: List<String>? = null,
     val intents: List<String>? = null,
