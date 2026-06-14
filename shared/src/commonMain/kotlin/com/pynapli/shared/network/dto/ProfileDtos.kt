@@ -53,6 +53,11 @@ data class PublicProfileDto(
     val profilePhotoUrl: String? = null,
     val photoUrls: List<String> = emptyList(),
     val verified: Boolean = false,
+    // Live presence at fetch time, hydrated server-side from PresenceService so the peek
+    // shows an accurate online dot from any entry point (Grid/Swipe/Activity/Hub) rather
+    // than depending on a card the caller may not have. Convenience snapshot — WebSocket
+    // presence deltas remain the live channel for surfaces that subscribe.
+    val online: Boolean = false,
     val privateAlbumAccessStatus: String = "none",
     val linkedPartner: LinkedPartnerMiniDto? = null,
     val allowGridMessages: Boolean,
