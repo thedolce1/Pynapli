@@ -216,9 +216,18 @@ internal object JdbcProfileSql {
         WHERE u.id = ?
           AND u.status = 'active'
           AND u.deleted_at IS NULL
-          AND p.visibility_status = 'visible'
-          AND ds.grid_visible = true
-          AND ds.incognito = false
-          AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+          -- Discovery-visibility gates apply to OTHER profiles. A viewer may always preview their
+          -- OWN public profile ("Preview profile" in the hub) regardless of grid/incognito/risk
+          -- visibility, so self (u.id = viewer) bypasses these gates. For every other view the
+          -- self branch is false and the gates apply unchanged.
+          AND (
+              u.id = ?
+              OR (
+                  p.visibility_status = 'visible'
+                  AND ds.grid_visible = true
+                  AND ds.incognito = false
+                  AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+              )
+          )
         """.trimIndent()
 }

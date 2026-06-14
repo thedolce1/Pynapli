@@ -49,6 +49,7 @@ internal fun ProfileHero(
     onHideClick: () -> Unit,
     onBlockClick: () -> Unit,
     onReportClick: () -> Unit,
+    isOwnProfile: Boolean = false,
 ) {
     Box(
         modifier =
@@ -78,11 +79,13 @@ internal fun ProfileHero(
                     .padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            ProfileOverflowMenu(
-                onHideClick = onHideClick,
-                onBlockClick = onBlockClick,
-                onReportClick = onReportClick,
-            )
+            if (!isOwnProfile) {
+                ProfileOverflowMenu(
+                    onHideClick = onHideClick,
+                    onBlockClick = onBlockClick,
+                    onReportClick = onReportClick,
+                )
+            }
 
             IconButton(
                 onClick = onDismiss,

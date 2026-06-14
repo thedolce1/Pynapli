@@ -26,6 +26,9 @@ data class ProfileDetailUiState(
     // Origin of the surface that opened this profile, carried onto a subsequent flirt so the
     // recipient's Activity feed can show a "via Playing Tonight" label. Null for normal opens.
     val flirtSource: String? = null,
+    // True when the viewer opened their OWN public profile from the Hub "Preview profile" row:
+    // the sheet renders read-only (no block/hide/report, no message/spark/album actions).
+    val isOwnProfile: Boolean = false,
 ) {
     val visible: Boolean
         get() = selectedCard != null

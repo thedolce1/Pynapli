@@ -103,6 +103,30 @@ class ProfileRepositoryIntegrationTest {
         }
 
     @Test
+    fun publicProfileAllowsSelfPreviewEvenWhenGridHidden() =
+        runBlocking {
+            val user = UUID.fromString("00000000-0000-0000-0000-000000000741")
+            val other = UUID.fromString("00000000-0000-0000-0000-000000000742")
+            dataSource.insertUserWithProfile(user, "Seb Dev")
+            dataSource.insertUserWithProfile(other, "Viewer")
+            // Make the user swipe-only (hidden from grid); the discovery query normally excludes them.
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement("UPDATE discovery_settings SET grid_visible = false WHERE user_id = ?")
+                    .use { statement ->
+                        statement.setObject(1, user)
+                        statement.executeUpdate()
+                    }
+            }
+            val repository = JdbcProfileRepository(dataSource)
+
+            // Self-preview ("Preview profile") returns the profile despite grid_visible = false...
+            assertEquals(user, requireNotNull(repository.getPublicProfile(user, user)).userId)
+            // ...but another viewer still cannot see the grid-hidden profile.
+            assertNull(repository.getPublicProfile(other, user))
+        }
+
+    @Test
     fun publicProfileHidesQuarantinedLinkedPartnerMini() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000721")

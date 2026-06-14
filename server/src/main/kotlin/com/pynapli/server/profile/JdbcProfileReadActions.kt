@@ -42,6 +42,7 @@ internal class JdbcProfileReadActions(
                         statement.setObject(9, viewerUserId) // partner-visibility matches_only gate (LEAST)
                         statement.setObject(10, viewerUserId) // partner-visibility matches_only gate (GREATEST)
                         statement.setObject(11, targetUserId)
+                        statement.setObject(12, viewerUserId) // self-preview bypass of discovery-visibility gates
                         statement.executeQuery().use { rs ->
                             if (rs.next()) rs.toPublicProfileRecord() else null
                         }
