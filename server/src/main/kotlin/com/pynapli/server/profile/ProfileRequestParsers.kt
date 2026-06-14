@@ -1,8 +1,8 @@
 package com.pynapli.server.profile
 
-import com.pynapli.server.discovery.DiscoveryTagTaxonomies
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import com.pynapli.shared.profile.DiscoveryTagTaxonomies
 import com.pynapli.shared.profile.ProfileTaxonomies
 import java.time.Clock
 import java.time.LocalDate
