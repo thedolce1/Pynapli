@@ -141,7 +141,7 @@ Ktor owns filter correctness.
 - [ ] Has-photo excludes profiles with no public photo.
 - [x] Verified-only excludes unverified profiles.
 - [x] Blocks exclude bidirectionally.
-- [ ] Dealbreakers are respected.
+- [x] Dealbreakers are respected. Swipe dealbreakers (`SwipeDealbreakerKey`: age, distance, verified, discoveryStyles, intents, linkedOnly) are validated server-side against an allow-list and honored as hard gates that are skipped from deck relaxation (`SwipeDeckRelaxation`); identity filters (gender/orientation) are likewise kept hard through relaxation. See SWIPE_IMPLEMENTATION_SPEC "Default Deck / Never-Empty" + checklist; coverage in `SwipeServiceTest` (relaxation policy) and `SwipeFiltersSheetInteractionTest`.
 - [x] Linked does not imply together.
 - [ ] Partial: partner unlink removes active linked visibility in implemented profile-link flows; regression coverage still needed.
 - [x] Suspension removes profile from all discovery quickly.

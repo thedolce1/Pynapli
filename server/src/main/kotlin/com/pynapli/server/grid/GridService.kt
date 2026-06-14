@@ -104,11 +104,27 @@ class GridService(
             )
         }
 
-        val result =
+        val initial =
             profile("grid.repository") {
                 repository.queryNearby(viewerUserId, radiusMeters, limit, filters, cursor)
             }
-        if (!result.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
+        if (!initial.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
+
+        // FILTERS_SPEC "Default deck / never-empty": when the first page at the requested
+        // radius returns no candidates, widen once to the maximum radius so a viewer with no
+        // (or sparse) matches still sees nearby-ish people rather than an empty grid. Mirrors
+        // the Swipe deck's radius relaxation (SwipeDeckRelaxation.relaxRadius). Edge-fill only:
+        // a widened page does not paginate (nextCursor stays null), so the wide radius never
+        // leaks into the narrow-radius cursor scope on a follow-up page request.
+        val widened = cursor == null && initial.cards.isEmpty() && radiusMeters < MAX_RADIUS_METERS
+        val result =
+            if (widened) {
+                profile("grid.repositoryWiden") {
+                    repository.queryNearby(viewerUserId, MAX_RADIUS_METERS, limit, filters, cursor = null)
+                }
+            } else {
+                initial
+            }
 
         val blockedRelatedIds =
             profile("grid.blockList") {
@@ -159,15 +175,18 @@ class GridService(
             }
         val dtoCards = profile("grid.dto") { filteredCards.map { it.toDto(onlineUserIds) } }
         val seenCount = (cursor?.seenCount ?: 0) + dtoCards.size
+        // A widened fallback page is edge-fill only: do not hand back a cursor scoped to the
+        // max radius, since the next request still carries the viewer's narrow radius.
+        val effectiveNextAnchor = if (widened) null else result.nextCursorAnchor
         val resultLimitReached =
-            result.nextCursorAnchor != null &&
+            effectiveNextAnchor != null &&
                 policy.gridResultDepthLimit != Int.MAX_VALUE &&
                 seenCount >= policy.gridResultDepthLimit
 
         return GridQueryResponseDto(
             items = dtoCards,
             nextCursor =
-                result.nextCursorAnchor
+                effectiveNextAnchor
                     ?.takeUnless { resultLimitReached }
                     ?.let { cursorCodec.encodeGridCursor(cursorScopeHash, it.copy(seenCount = seenCount)) },
             adSupported = policy.adSupported,
