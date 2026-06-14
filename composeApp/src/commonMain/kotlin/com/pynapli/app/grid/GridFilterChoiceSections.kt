@@ -83,6 +83,16 @@ internal fun PresenceSection(
 }
 
 @Composable
+internal fun PhotosSection(
+    withPhotos: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SheetToggleChip(label = "Has photos", active = withPhotos, onClick = onToggle)
+    }
+}
+
+@Composable
 internal fun TonightAvailabilityRow(
     state: TonightAvailabilityUiState,
     onSet: () -> Unit,

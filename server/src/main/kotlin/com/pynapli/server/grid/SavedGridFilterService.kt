@@ -87,6 +87,7 @@ class SavedGridFilterService(
             lifestyleTags = payload.lifestyleTags,
             logisticsTags = payload.logisticsTags,
             tonightAvailableOnly = payload.tonightAvailableOnly,
+            withPhotosOnly = payload.withPhotosOnly,
             intents = payload.intents,
             genders = payload.genders,
             orientations = payload.orientations,

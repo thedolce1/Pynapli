@@ -67,7 +67,16 @@ internal fun DiscoveryFilters.rankCacheKey(): String =
         append(';')
         append(tonightAvailableOnly)
         append(';')
+        append(withPhotosOnly)
+        append(';')
         append(intents.sorted().joinToString("|"))
+        append(';')
+        // Identity filters are hard predicates in the deck SQL, so they MUST be part of the
+        // cache class — otherwise two viewers with different gender/orientation filters would
+        // share one ranked window. (Added with withPhotosOnly; previously omitted.)
+        append(genders.sorted().joinToString("|"))
+        append(';')
+        append(orientations.sorted().joinToString("|"))
         append(';')
         append(verifiedPreferred)
     }

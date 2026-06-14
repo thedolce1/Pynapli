@@ -71,6 +71,29 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
           AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
           AND (cardinality(?::text[]) = 0 OR p.gender = ANY(?::text[]))
           AND (cardinality(?::text[]) = 0 OR p.orientation = ANY(?::text[]))
+          -- FILTERS_SPEC L377 "Has photos": opt-in gate to at least one approved, visible
+          -- public (profile-album) photo.
+          AND (
+              ?::boolean = false
+              OR EXISTS (
+                  SELECT 1
+                  FROM media_albums has_photo_ma
+                  JOIN media_album_items has_photo_mai
+                    ON has_photo_mai.album_id = has_photo_ma.id
+                   AND has_photo_mai.removed_at IS NULL
+                  JOIN media_assets has_photo_m
+                    ON has_photo_m.id = has_photo_mai.media_asset_id
+                   AND has_photo_m.owner_user_id = has_photo_ma.owner_user_id
+                   AND has_photo_m.deleted_at IS NULL
+                  WHERE has_photo_ma.owner_user_id = u.id
+                    AND has_photo_ma.kind = 'profile'
+                    AND has_photo_ma.visibility_status = 'visible'
+                    AND has_photo_ma.deleted_at IS NULL
+                    AND has_photo_m.media_type = 'image'
+                    AND has_photo_m.processing_status = 'ready'
+                    AND has_photo_m.moderation_status = 'approved'
+              )
+          )
           AND (
               ?::uuid IS NULL
               OR NOT EXISTS (
@@ -126,11 +149,13 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
             statement.setArray(25, genders)
             statement.setArray(26, orientations)
             statement.setArray(27, orientations)
-            statement.setNullableUuid(28, userSpecificViewerId)
+            // $28: FILTERS_SPEC "Has photos" gate.
+            statement.setBoolean(28, filters.withPhotosOnly)
             statement.setNullableUuid(29, userSpecificViewerId)
-            statement.setBoolean(30, excludedTargetUserIds.isNotEmpty())
-            statement.setArray(31, excludedIds)
-            statement.setInt(32, limit)
+            statement.setNullableUuid(30, userSpecificViewerId)
+            statement.setBoolean(31, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(32, excludedIds)
+            statement.setInt(33, limit)
             statement.executeDeckRankRows()
         }.sortedByDescending { it.isBoosted }
 }
@@ -222,6 +247,29 @@ internal fun Connection.queryDeckRankForcedTargets(
           AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
           AND (cardinality(?::text[]) = 0 OR p.gender = ANY(?::text[]))
           AND (cardinality(?::text[]) = 0 OR p.orientation = ANY(?::text[]))
+          -- FILTERS_SPEC L377 "Has photos": opt-in gate to at least one approved, visible
+          -- public (profile-album) photo.
+          AND (
+              ?::boolean = false
+              OR EXISTS (
+                  SELECT 1
+                  FROM media_albums has_photo_ma
+                  JOIN media_album_items has_photo_mai
+                    ON has_photo_mai.album_id = has_photo_ma.id
+                   AND has_photo_mai.removed_at IS NULL
+                  JOIN media_assets has_photo_m
+                    ON has_photo_m.id = has_photo_mai.media_asset_id
+                   AND has_photo_m.owner_user_id = has_photo_ma.owner_user_id
+                   AND has_photo_m.deleted_at IS NULL
+                  WHERE has_photo_ma.owner_user_id = u.id
+                    AND has_photo_ma.kind = 'profile'
+                    AND has_photo_ma.visibility_status = 'visible'
+                    AND has_photo_ma.deleted_at IS NULL
+                    AND has_photo_m.media_type = 'image'
+                    AND has_photo_m.processing_status = 'ready'
+                    AND has_photo_m.moderation_status = 'approved'
+              )
+          )
           AND (
               ?::uuid IS NULL
               OR NOT EXISTS (
@@ -278,11 +326,13 @@ internal fun Connection.queryDeckRankForcedTargets(
             statement.setArray(26, genders)
             statement.setArray(27, orientations)
             statement.setArray(28, orientations)
-            statement.setNullableUuid(29, userSpecificViewerId)
+            // $29: FILTERS_SPEC "Has photos" gate.
+            statement.setBoolean(29, filters.withPhotosOnly)
             statement.setNullableUuid(30, userSpecificViewerId)
-            statement.setBoolean(31, excludedTargetUserIds.isNotEmpty())
-            statement.setArray(32, excludedIds)
-            statement.setInt(33, limit)
+            statement.setNullableUuid(31, userSpecificViewerId)
+            statement.setBoolean(32, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(33, excludedIds)
+            statement.setInt(34, limit)
             statement.executeDeckRankRows()
         }.sortedByDescending { it.isBoosted }
 }

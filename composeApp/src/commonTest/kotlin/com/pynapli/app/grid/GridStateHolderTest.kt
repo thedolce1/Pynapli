@@ -137,6 +137,23 @@ class GridStateHolderTest {
         }
 
     @Test
+    fun applyingWithPhotosSerializesAndRoundTrips() =
+        runBlocking {
+            val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+            val stateHolder = GridStateHolder(repository)
+
+            stateHolder.load()
+            stateHolder.applyFilters(
+                stateHolder.state.value.filters
+                    .copy(withPhotos = true),
+            )
+
+            val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+            assertEquals(true, request.withPhotosOnly)
+            assertEquals(true, GridFilters.fromGridQueryRequest(request).withPhotos)
+        }
+
+    @Test
     fun togglingVerifiedSetsVerifiedOnlyOnRequest() =
         runBlocking {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))

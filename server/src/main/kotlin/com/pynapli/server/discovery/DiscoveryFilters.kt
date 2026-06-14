@@ -15,6 +15,10 @@ data class DiscoveryFilters(
     val lifestyleTags: Set<String> = emptySet(),
     val logisticsTags: Set<String> = emptySet(),
     val tonightAvailableOnly: Boolean = false,
+    // FILTERS_SPEC L377 "Has photos": only surface profiles that have at least one approved,
+    // visible public (profile-album) photo. Opt-in quality filter — default shows everyone,
+    // including photo-less profiles. A hard existence gate, like verifiedOnly.
+    val withPhotosOnly: Boolean = false,
     val intents: Set<String> = emptySet(),
     // Structured identity filters (PROFILE_FILTER_SYNC_SPEC: "orientation/gender compatibility" is
     // bidirectional). Hard match against profiles.gender / profiles.orientation, like the other grid
@@ -41,6 +45,7 @@ data class DiscoveryFilters(
                 lifestyleTags.isNotEmpty() ||
                 logisticsTags.isNotEmpty() ||
                 tonightAvailableOnly ||
+                withPhotosOnly ||
                 intents.isNotEmpty() ||
                 genders.isNotEmpty() ||
                 orientations.isNotEmpty()
@@ -65,6 +70,7 @@ fun discoveryFiltersFrom(
     lifestyleTags: List<String> = emptyList(),
     logisticsTags: List<String> = emptyList(),
     tonightAvailableOnly: Boolean = false,
+    withPhotosOnly: Boolean = false,
     intents: List<String> = emptyList(),
     genders: List<String> = emptyList(),
     orientations: List<String> = emptyList(),
@@ -165,6 +171,7 @@ fun discoveryFiltersFrom(
         lifestyleTags = tags,
         logisticsTags = logistics,
         tonightAvailableOnly = tonightAvailableOnly,
+        withPhotosOnly = withPhotosOnly,
         intents = intentValues,
         genders = genderValues,
         orientations = orientationValues,

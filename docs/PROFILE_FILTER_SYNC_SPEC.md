@@ -138,7 +138,7 @@ Ktor owns filter correctness.
 ## QA Checklist
 
 - [x] Optional lifestyle/logistics fields soft-include by default and only hard-exclude when the viewer explicitly applies the matching overlap filter; full taxonomy coverage remains intentionally curated.
-- [ ] Has-photo excludes profiles with no public photo.
+- [x] Has-photo excludes profiles with no public photo. Opt-in `withPhotosOnly` filter (free, FILTERS_SPEC L377) on Grid + Swipe: a hard `EXISTS` gate to at least one approved (`media_assets` image/ready/approved), visible profile-album photo — the same definition as the public profile-photo projection. Wired through `DiscoveryFilters` (in `hasAdvancedFilters`, not entitlement-gated) into the grid rank SQL + all four swipe deck SQL functions + both rank-cache class keys, plus client Grid/Swipe filter sheets ("Has photos" chip). Covered by `GridAndSwipeRepositoryIntegrationTest` "grid/swipe … withPhotosOnly excludes profiles without an approved public photo", `SwipeRankCacheKeyTest`/`GridRankCacheKeyTest`, and client round-trip tests.
 - [x] Verified-only excludes unverified profiles.
 - [x] Blocks exclude bidirectionally.
 - [x] Dealbreakers are respected. Swipe dealbreakers (`SwipeDealbreakerKey`: age, distance, verified, discoveryStyles, intents, linkedOnly) are validated server-side against an allow-list and honored as hard gates that are skipped from deck relaxation (`SwipeDeckRelaxation`); identity filters (gender/orientation) are likewise kept hard through relaxation. See SWIPE_IMPLEMENTATION_SPEC "Default Deck / Never-Empty" + checklist; coverage in `SwipeServiceTest` (relaxation policy) and `SwipeFiltersSheetInteractionTest`.

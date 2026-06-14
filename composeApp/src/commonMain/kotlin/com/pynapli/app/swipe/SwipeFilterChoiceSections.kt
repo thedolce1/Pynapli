@@ -204,6 +204,16 @@ internal fun FacePhotoAndAgeVerifiedSection(
 }
 
 @Composable
+internal fun PhotosSection(
+    withPhotos: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SwipeSheetChip(label = "Has photos", active = withPhotos, onClick = onToggle)
+    }
+}
+
+@Composable
 internal fun LifestyleTagsSection(
     selected: Set<LifestyleTag>,
     onChange: (Set<LifestyleTag>) -> Unit,

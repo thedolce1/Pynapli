@@ -41,6 +41,8 @@ data class SwipeFilters(
     // Structured gender/orientation keys from ProfileTaxonomies (self-describe excluded).
     val genders: Set<String> = emptySet(),
     val orientations: Set<String> = emptySet(),
+    // FILTERS_SPEC "Has photos": only show profiles with at least one approved public photo.
+    val withPhotos: Boolean = false,
     val dealbreakers: Set<String> = emptySet(),
 ) {
     val activeCount: Int
@@ -61,6 +63,7 @@ data class SwipeFilters(
             if (logisticsTags.isNotEmpty()) count += 1
             if (genders.isNotEmpty()) count += 1
             if (orientations.isNotEmpty()) count += 1
+            if (withPhotos) count += 1
             return count
         }
 
@@ -99,6 +102,7 @@ data class SwipeFilters(
             logisticsTags = logisticsTags.map { it.serverValue },
             genders = genders.toList(),
             orientations = orientations.toList(),
+            withPhotosOnly = withPhotos,
             dealbreakers = dealbreakers,
             verifiedPreferred = verifiedPreferred,
         )
@@ -155,6 +159,7 @@ data class SwipeFilters(
                 logisticsTags = request.logisticsTags.mapNotNull { logisticsByValue[it] }.toSet(),
                 genders = request.genders.toSet(),
                 orientations = request.orientations.toSet(),
+                withPhotos = request.withPhotosOnly,
                 dealbreakers = dealbreakers,
             )
         }

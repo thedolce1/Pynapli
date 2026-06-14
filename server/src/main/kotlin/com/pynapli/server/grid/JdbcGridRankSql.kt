@@ -143,6 +143,29 @@ internal fun Connection.queryGridRank(
               -- orientation key (self-describe keys never match a structured filter value).
               AND (cardinality(?::text[]) = 0 OR p.gender = ANY(?::text[]))
               AND (cardinality(?::text[]) = 0 OR p.orientation = ANY(?::text[]))
+              -- FILTERS_SPEC L377 "Has photos": opt-in gate to at least one approved, visible
+              -- public (profile-album) photo. Same definition as the profile_photo projection.
+              AND (
+                  ?::boolean = false
+                  OR EXISTS (
+                      SELECT 1
+                      FROM media_albums has_photo_ma
+                      JOIN media_album_items has_photo_mai
+                        ON has_photo_mai.album_id = has_photo_ma.id
+                       AND has_photo_mai.removed_at IS NULL
+                      JOIN media_assets has_photo_m
+                        ON has_photo_m.id = has_photo_mai.media_asset_id
+                       AND has_photo_m.owner_user_id = has_photo_ma.owner_user_id
+                       AND has_photo_m.deleted_at IS NULL
+                      WHERE has_photo_ma.owner_user_id = u.id
+                        AND has_photo_ma.kind = 'profile'
+                        AND has_photo_ma.visibility_status = 'visible'
+                        AND has_photo_ma.deleted_at IS NULL
+                        AND has_photo_m.media_type = 'image'
+                        AND has_photo_m.processing_status = 'ready'
+                        AND has_photo_m.moderation_status = 'approved'
+                  )
+              )
               -- Per-viewer self/block exclusion ONLY when userSpecificViewerId is
               -- set (uncached path). On the cached path these are applied in Kotlin
               -- (self) or post-repository in GridService (block).
@@ -237,23 +260,25 @@ internal fun Connection.queryGridRank(
         statement.setArray(28, genders)
         statement.setArray(29, orientations)
         statement.setArray(30, orientations)
+        // FILTERS_SPEC "Has photos" gate.
+        statement.setBoolean(31, filters.withPhotosOnly)
         // per-viewer block exclusion (self path).
-        statement.setNullableUuid(31, userSpecificViewerId)
         statement.setNullableUuid(32, userSpecificViewerId)
         statement.setNullableUuid(33, userSpecificViewerId)
+        statement.setNullableUuid(34, userSpecificViewerId)
         // linkedOnly filter (?::boolean IS NULL / true / false).
-        statement.setObject(34, filters.linkedOnly)
         statement.setObject(35, filters.linkedOnly)
         statement.setObject(36, filters.linkedOnly)
+        statement.setObject(37, filters.linkedOnly)
         // Keyset cursor predicate (no-op when cursor is null).
-        statement.setBoolean(37, cursor != null)
-        statement.setObject(38, cursor?.boostBucket)
+        statement.setBoolean(38, cursor != null)
         statement.setObject(39, cursor?.boostBucket)
-        statement.setObject(40, cursor?.distanceBucketMeters)
-        statement.setObject(41, cursor?.boostBucket)
-        statement.setObject(42, cursor?.distanceBucketMeters)
-        statement.setObject(43, cursor?.userId)
-        statement.setInt(44, limit)
+        statement.setObject(40, cursor?.boostBucket)
+        statement.setObject(41, cursor?.distanceBucketMeters)
+        statement.setObject(42, cursor?.boostBucket)
+        statement.setObject(43, cursor?.distanceBucketMeters)
+        statement.setObject(44, cursor?.userId)
+        statement.setInt(45, limit)
         statement.executeQuery().use { rs ->
             buildList {
                 while (rs.next()) {

@@ -1348,6 +1348,62 @@ class GridAndSwipeRepositoryIntegrationTest :
             }
         }
 
+        "grid query with withPhotosOnly excludes profiles without an approved public photo" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-0000000a0e01")
+                val withPhoto = UUID.fromString("00000000-0000-0000-0000-0000000a0e02")
+                val noPhoto = UUID.fromString("00000000-0000-0000-0000-0000000a0e03")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(withPhoto, "Pia", age = 30, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(noPhoto, "Noah", age = 31, longitude = -122.0838, latitude = 37.4228)
+                dataSource.insertApprovedProfilePhoto(withPhoto)
+
+                val repository = JdbcGridRepository(dataSource)
+                val withPhotosOnly =
+                    repository
+                        .queryNearby(
+                            viewerUserId = viewer,
+                            radiusMeters = 100_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(withPhotosOnly = true),
+                        ).cards
+                val unfiltered =
+                    repository
+                        .queryNearby(
+                            viewerUserId = viewer,
+                            radiusMeters = 100_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(),
+                        ).cards
+
+                assertEquals(listOf(withPhoto), withPhotosOnly.map { it.userId })
+                assertEquals(setOf(withPhoto, noPhoto), unfiltered.map { it.userId }.toSet())
+            }
+        }
+
+        "swipe deck with withPhotosOnly excludes profiles without an approved public photo" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-0000000a0e11")
+                val withPhoto = UUID.fromString("00000000-0000-0000-0000-0000000a0e12")
+                val noPhoto = UUID.fromString("00000000-0000-0000-0000-0000000a0e13")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(withPhoto, "Pia", age = 30, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(noPhoto, "Noah", age = 31, longitude = -122.0838, latitude = 37.4228)
+                dataSource.insertApprovedProfilePhoto(withPhoto)
+
+                val withPhotosOnly =
+                    JdbcSwipeRepository(dataSource)
+                        .queryDeck(
+                            viewerUserId = viewer,
+                            radiusMeters = 100_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(withPhotosOnly = true),
+                        ).cards
+
+                assertEquals(listOf(withPhoto), withPhotosOnly.map { it.userId })
+            }
+        }
+
         "grid query with facePhotoVerifiedOnly and ageVerifiedOnly each filter to their column" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000b01")
@@ -2075,6 +2131,49 @@ private fun DataSource.setProfileDiscoveryStyle(
             statement.setObject(2, userId)
             statement.executeUpdate()
         }
+    }
+}
+
+// Seeds one approved, visible public (profile-album) photo so the "Has photos" filter
+// matches. Mirrors the canonical profile_photo projection: media_albums(kind=profile,
+// visibility_status=visible) + an image media_asset (ready/approved) + a live album item.
+private fun DataSource.insertApprovedProfilePhoto(userId: UUID) {
+    connection.use { connection ->
+        val albumId = UUID.randomUUID()
+        val assetId = UUID.randomUUID()
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO media_assets (
+                    id, owner_user_id, media_type, storage_provider, storage_bucket,
+                    storage_object_key, content_type, byte_size, processing_status, moderation_status
+                )
+                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved')
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, assetId)
+                statement.setObject(2, userId)
+                statement.setString(3, "media/$assetId")
+                statement.executeUpdate()
+            }
+        connection
+            .prepareStatement(
+                "INSERT INTO media_albums (id, owner_user_id, kind, title, visibility_status) " +
+                    "VALUES (?, ?, 'profile', 'Profile', 'visible')",
+            ).use { statement ->
+                statement.setObject(1, albumId)
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+        connection
+            .prepareStatement(
+                "INSERT INTO media_album_items (album_id, media_asset_id, owner_user_id, sort_order) VALUES (?, ?, ?, 0)",
+            ).use { statement ->
+                statement.setObject(1, albumId)
+                statement.setObject(2, assetId)
+                statement.setObject(3, userId)
+                statement.executeUpdate()
+            }
     }
 }
 
