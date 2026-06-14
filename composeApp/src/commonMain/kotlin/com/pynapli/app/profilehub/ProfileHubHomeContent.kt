@@ -41,6 +41,7 @@ internal fun ProfileHubContent(
     onBack: () -> Unit,
     onOpenNotificationCenter: () -> Unit,
     onEditProfile: () -> Unit,
+    onPreviewProfile: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenActivityControls: () -> Unit,
     onOpenSafetyCenter: () -> Unit,
@@ -123,7 +124,8 @@ internal fun ProfileHubContent(
                 ProfileHubRow(
                     icon = Icons.Filled.Visibility,
                     label = "Preview profile",
-                    value = "Public view",
+                    value = "See your public view",
+                    onClick = onPreviewProfile,
                 )
             }
         }

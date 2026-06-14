@@ -51,6 +51,32 @@ class ProfileDetailStateHolderTest {
 
             assertEquals(listOf<Pair<String, String?>>("user-grid" to null), repository.flirtCalls)
         }
+
+    @Test
+    fun openOwnPreviewLoadsProfileInReadOnlyMode() =
+        runBlocking {
+            val repository = RecordingPublicProfileRepository()
+            val stateHolder = ProfileDetailStateHolder(repository)
+
+            stateHolder.openOwnPreview(userId = "me-1", displayName = "Seb", profilePhotoUrl = null)
+
+            val state = stateHolder.state.value
+            assertEquals(true, state.isOwnProfile)
+            assertEquals("me-1", state.profile?.userId)
+            assertEquals("Seb", state.selectedCard?.displayName)
+        }
+
+    @Test
+    fun normalOpenAfterOwnPreviewClearsOwnProfileFlag() =
+        runBlocking {
+            val repository = RecordingPublicProfileRepository()
+            val stateHolder = ProfileDetailStateHolder(repository)
+
+            stateHolder.openOwnPreview(userId = "me-1", displayName = "Seb", profilePhotoUrl = null)
+            stateHolder.open(sampleCard("user-2"))
+
+            assertEquals(false, stateHolder.state.value.isOwnProfile)
+        }
 }
 
 private fun sampleCard(userId: String): GridProfileCardUi =

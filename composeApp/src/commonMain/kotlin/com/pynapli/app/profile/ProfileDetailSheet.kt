@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -105,6 +106,7 @@ fun ProfileDetailSheet(
                 onHideClick = { showHideConfirm = true },
                 onBlockClick = { showBlockConfirm = true },
                 onReportClick = { showReportDialog = true },
+                isOwnProfile = state.isOwnProfile,
             )
 
             when {
@@ -135,37 +137,41 @@ fun ProfileDetailSheet(
                         cardLinkedPartner = card.linkedPartner,
                         onOpenLinkedPartner = onOpenLinkedPartner,
                     )
-                    when (actionMode) {
-                        ProfileDetailActionMode.Grid -> {
-                            ProfileActions(
-                                allowGridMessages = profile.allowGridMessages,
-                                allowFlirts = profile.allowFlirts,
-                                allowAlbumRequests = profile.allowAlbumRequests,
-                                privateAlbumAccessStatus = profile.privateAlbumAccessStatus,
-                                isSendingFlirt = state.isSendingFlirt,
-                                isRequestingAlbum = state.isRequestingAlbum,
-                                isLoadingPrivateAlbum = state.isLoadingPrivateAlbum,
-                                flirtFeedback = state.flirtFeedback,
-                                albumFeedback = state.albumFeedback,
-                                profileLinkAction = profileLinkAction,
-                                onMessage = onMessage,
-                                onSpark = onSpark,
-                                onRequestAlbum = onRequestAlbum,
-                                onViewPrivateAlbum = onViewPrivateAlbum,
-                                onInviteProfileLink = onInviteProfileLink,
-                            )
-                        }
+                    if (state.isOwnProfile) {
+                        OwnProfilePreviewNote()
+                    } else {
+                        when (actionMode) {
+                            ProfileDetailActionMode.Grid -> {
+                                ProfileActions(
+                                    allowGridMessages = profile.allowGridMessages,
+                                    allowFlirts = profile.allowFlirts,
+                                    allowAlbumRequests = profile.allowAlbumRequests,
+                                    privateAlbumAccessStatus = profile.privateAlbumAccessStatus,
+                                    isSendingFlirt = state.isSendingFlirt,
+                                    isRequestingAlbum = state.isRequestingAlbum,
+                                    isLoadingPrivateAlbum = state.isLoadingPrivateAlbum,
+                                    flirtFeedback = state.flirtFeedback,
+                                    albumFeedback = state.albumFeedback,
+                                    profileLinkAction = profileLinkAction,
+                                    onMessage = onMessage,
+                                    onSpark = onSpark,
+                                    onRequestAlbum = onRequestAlbum,
+                                    onViewPrivateAlbum = onViewPrivateAlbum,
+                                    onInviteProfileLink = onInviteProfileLink,
+                                )
+                            }
 
-                        ProfileDetailActionMode.SwipeUnmatched -> {
-                            SwipeProfileActions(
-                                isSubmitting = isSwipeSubmitting,
-                                onPass = onSwipePass,
-                                onLike = onSwipeLike,
-                            )
-                        }
+                            ProfileDetailActionMode.SwipeUnmatched -> {
+                                SwipeProfileActions(
+                                    isSubmitting = isSwipeSubmitting,
+                                    onPass = onSwipePass,
+                                    onLike = onSwipeLike,
+                                )
+                            }
 
-                        ProfileDetailActionMode.SwipeMatched -> {
-                            MatchedSwipeProfileActions(onMessage = onMessage)
+                            ProfileDetailActionMode.SwipeMatched -> {
+                                MatchedSwipeProfileActions(onMessage = onMessage)
+                            }
                         }
                     }
                     state.reportFeedback?.let { feedback ->
@@ -227,6 +233,29 @@ fun ProfileDetailSheet(
                 onReport(category, note)
             },
             onDismiss = { showReportDialog = false },
+        )
+    }
+}
+
+/** Read-only footer shown when a viewer previews their OWN public profile from the Hub. */
+@Composable
+private fun OwnProfilePreviewNote() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Visibility,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = "This is how your profile looks to others. Tap close when you're done.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
         )
     }
 }

@@ -46,6 +46,7 @@ fun ProfileHubScreen(
     onClearMessagesError: () -> Unit,
     onLogout: () -> Unit,
     onOpenStore: () -> Unit = {},
+    onPreviewProfile: () -> Unit = {},
     onSetDiscreetIcon: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -186,6 +187,7 @@ fun ProfileHubScreen(
             onBack = onBack,
             onOpenNotificationCenter = stateHolder::openNotificationCenter,
             onEditProfile = stateHolder::openEditor,
+            onPreviewProfile = onPreviewProfile,
             onOpenPrivacy = stateHolder::openPrivacySettings,
             onOpenActivityControls = stateHolder::openActivityControls,
             onOpenSafetyCenter = {

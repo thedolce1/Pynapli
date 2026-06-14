@@ -19,12 +19,14 @@ class ProfileDetailStateHolder(
     suspend fun open(
         card: GridProfileCardUi,
         flirtSource: String? = null,
+        isOwnProfile: Boolean = false,
     ) {
         _state.update {
             ProfileDetailUiState(
                 selectedCard = card,
                 isLoading = true,
                 flirtSource = flirtSource,
+                isOwnProfile = isOwnProfile,
             )
         }
 
@@ -76,6 +78,29 @@ class ProfileDetailStateHolder(
         openLinkedPartner(
             GridLinkedPartnerUi(userId = userId),
             flirtSource = PLAYING_TONIGHT_SOURCE,
+        )
+    }
+
+    /**
+     * Opens the viewer's OWN public profile in read-only preview mode (Hub "Preview profile" row),
+     * so they can see exactly what other users see. The sheet hides block/hide/report and all
+     * outbound actions.
+     */
+    suspend fun openOwnPreview(
+        userId: String,
+        displayName: String?,
+        profilePhotoUrl: String?,
+    ) {
+        open(
+            GridProfileCardUi(
+                id = userId,
+                displayName = displayName?.takeIf { it.isNotBlank() } ?: "Your profile",
+                thumbnailUrl = profilePhotoUrl,
+                online = false,
+                distanceLabel = null,
+                tone = GridCardTone.entries[userId.stableIndex(GridCardTone.entries.size)],
+            ),
+            isOwnProfile = true,
         )
     }
 

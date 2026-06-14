@@ -30,6 +30,7 @@ import com.pynapli.app.messages.MessagesScreen
 import com.pynapli.app.messages.MessagesStateHolder
 import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.onboarding.PhotoNudgeBanner
+import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilehub.ProfileHubScreen
 import com.pynapli.app.profilehub.ProfileHubStateHolder
@@ -91,6 +92,7 @@ internal fun ColumnScope.PynapliMainContent(
     val mediaAlbumsState by mediaAlbumsStateHolder.state.collectAsState()
     val profileLinksState by profileLinksStateHolder.state.collectAsState()
     val profileHubState by profileHubStateHolder.state.collectAsState()
+    val profileDetailState by profileDetailStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
 
     val profileImageUrl = mediaAlbumsState.primaryOwnerProfilePhotoUrl()
@@ -144,9 +146,37 @@ internal fun ColumnScope.PynapliMainContent(
                 onProfileSurface(ProfileSurface.None)
                 onOpenStore()
             },
+            onPreviewProfile = {
+                authState.session?.userId?.let { userId ->
+                    scope.launch {
+                        profileDetailStateHolder.openOwnPreview(
+                            userId = userId,
+                            displayName = profileHubState.me?.profile?.displayName,
+                            profilePhotoUrl = profileImageUrl,
+                        )
+                    }
+                }
+            },
             onSetDiscreetIcon = onSetDiscreetIcon,
             modifier = Modifier.weight(1f),
         )
+
+        // Own-profile preview ("Preview profile" row) opens the read-only public-profile peek over
+        // the hub. The peek hides every outbound action when isOwnProfile, so the callbacks are no-ops.
+        if (profileDetailState.isOwnProfile && profileDetailState.visible) {
+            ProfileDetailSheet(
+                state = profileDetailState,
+                onDismiss = profileDetailStateHolder::dismiss,
+                onMessage = {},
+                onSpark = {},
+                onRequestAlbum = {},
+                onViewPrivateAlbum = {},
+                onHide = {},
+                onBlock = {},
+                onReport = { _, _ -> },
+                distanceUnit = distanceUnit,
+            )
+        }
     } else if (profileSurface == ProfileSurface.MediaAlbums) {
         MediaAlbumsScreen(
             stateHolder = mediaAlbumsStateHolder,
