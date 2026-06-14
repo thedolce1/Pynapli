@@ -8,11 +8,10 @@ import com.pynapli.server.location.TravelLocationService
 import com.pynapli.server.location.TravelPlaceDatasetLoader
 import com.pynapli.server.location.TravelPlaceSearchService
 import com.pynapli.server.safety.RateLimitService
-import com.pynapli.server.subscriptions.DisabledPlayStorePurchaseVerifier
-import com.pynapli.server.subscriptions.GooglePlayStorePurchaseVerifier
 import com.pynapli.server.subscriptions.JdbcSubscriptionRepository
 import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.server.subscriptions.selectPlayStorePurchaseVerifier
 import java.time.Duration
 import javax.sql.DataSource
 
@@ -33,12 +32,7 @@ internal fun buildCommerceTravelDependencies(
         SubscriptionService(
             repository = JdbcSubscriptionRepository(dataSource),
             playStorePackageName = config.playStorePackageName,
-            playStorePurchaseVerifier =
-                if (config.playStoreVerificationEnabled) {
-                    GooglePlayStorePurchaseVerifier.fromConfig(config)
-                } else {
-                    DisabledPlayStorePurchaseVerifier
-                },
+            playStorePurchaseVerifier = selectPlayStorePurchaseVerifier(config),
             playStoreSyncStaleAfter = Duration.ofHours(config.playStoreSubscriptionSyncStaleAfterHours),
             playStoreSyncRenewalLookahead = Duration.ofHours(config.playStoreSubscriptionSyncRenewalLookaheadHours),
             rateLimitService = rateLimitService,

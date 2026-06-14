@@ -511,6 +511,7 @@ Server-authoritative entitlements:
 - Client reads entitlement from Ktor.
 - Firebase/Remote Config may show paywall variants but cannot grant premium.
 - Local/debug builds may use a Ktor-only dev purchase endpoint for emulator QA. This must stay disabled outside local/dev environments and must not be treated as production billing.
+- A sandbox Play Billing verifier (`PYNAPLI_PLAY_STORE_SANDBOX_ENABLED`, never selected when `environment == production`) additionally lets the real Play Store `submit -> verify -> grant` path be exercised end-to-end in dev/QA without Google Play Developer API credentials: it only honors explicitly `sandbox-`prefixed purchase tokens (a `sandbox-invalid…` token exercises the reject path), and any other token falls through to the disabled/pending behavior. Production verification always wins when configured.
 
 Requirements:
 
@@ -571,7 +572,7 @@ Do not experiment with:
 - [x] One active linked partner beneficiary rule exists.
 - [x] Subscription cooldown/abuse detection exists.
 - [ ] StoreKit validation exists.
-- [ ] Partial: Google Play validation path exists, but real Play Console credentials/config and end-to-end receipt validation remain.
+- [x] Google Play validation is server-authoritative end-to-end (`submit -> verify -> grant`, plus RTDN renewal/cancel/refund reconciliation and a sync worker), and is provable in dev/QA via an env-gated sandbox verifier (`PYNAPLI_PLAY_STORE_SANDBOX_ENABLED`) without prod creds. Remaining: real Play Console service-account credentials/config + product setup (deployment/ops step).
 - [x] Store tab displays Free/Social/Select, current entitlement, linked-partner benefit, accelerator products, and server-backed inventory balances.
 - [x] Local/dev Store purchase endpoint exists for emulator QA and is environment-gated.
 - [x] Connected Android Store QA proves login -> Grid -> Store, structural Store screenshots, Restore, dev Boost purchase, balance refresh, and no app error text.
