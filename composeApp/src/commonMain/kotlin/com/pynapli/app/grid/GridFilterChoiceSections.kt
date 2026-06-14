@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.shared.profile.ProfileTaxonomies
 
 @Composable
 internal fun DistanceSection(
@@ -239,5 +240,44 @@ internal fun WhoSection(
         SheetToggleChip(label = "Partnered", active = partnered) {
             onTogglesChanged(singles, linked, !partnered)
         }
+    }
+}
+
+@Composable
+internal fun GenderSection(
+    selected: Set<String>,
+    onChange: (Set<String>) -> Unit,
+) = IdentityChips(options = ProfileTaxonomies.genderOptions, selected = selected, onChange = onChange)
+
+@Composable
+internal fun OrientationSection(
+    selected: Set<String>,
+    onChange: (Set<String>) -> Unit,
+) = IdentityChips(options = ProfileTaxonomies.orientationOptions, selected = selected, onChange = onChange)
+
+/**
+ * Multi-select chips for a structured identity taxonomy (gender / orientation). Self-describe is a
+ * free-text profile value, not a structured filter option, so it is omitted (a self-describe profile
+ * never matches a structured filter — see PROFILE_FILTER_SYNC_SPEC). Selected keys feed the grid query.
+ */
+@Composable
+private fun IdentityChips(
+    options: List<ProfileTaxonomies.Option>,
+    selected: Set<String>,
+    onChange: (Set<String>) -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options
+            .filter { it.key != ProfileTaxonomies.SELF_DESCRIBE }
+            .forEach { option ->
+                val active = option.key in selected
+                SheetToggleChip(label = option.label, active = active) {
+                    onChange(if (active) selected - option.key else selected + option.key)
+                }
+            }
     }
 }

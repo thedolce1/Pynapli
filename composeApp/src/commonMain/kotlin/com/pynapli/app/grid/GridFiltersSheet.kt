@@ -113,6 +113,18 @@ internal fun GridFiltersSheet(
                 },
             )
 
+            SectionTitle("Gender")
+            GenderSection(
+                selected = draft.genders,
+                onChange = { draft = draft.copy(genders = it) },
+            )
+
+            SectionTitle("Orientation")
+            OrientationSection(
+                selected = draft.orientations,
+                onChange = { draft = draft.copy(orientations = it) },
+            )
+
             SectionTitle("Trust")
             TrustSection(
                 verified = draft.verified,
