@@ -56,6 +56,8 @@ class GridService(
                     logisticsTags = request.logisticsTags,
                     tonightAvailableOnly = request.tonightAvailableOnly,
                     intents = request.intents,
+                    genders = request.genders,
+                    orientations = request.orientations,
                 ) { _ -> GridException("INVALID_GRID_FILTER") }
             }
         profile("grid.lifestyleGate") { requireLifestyleFilterAccess(viewerUserId, filters) }

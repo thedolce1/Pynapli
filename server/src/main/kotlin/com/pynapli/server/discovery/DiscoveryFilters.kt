@@ -1,6 +1,7 @@
 package com.pynapli.server.discovery
 
 import com.pynapli.shared.profile.DiscoveryTagTaxonomies
+import com.pynapli.shared.profile.ProfileTaxonomies
 
 data class DiscoveryFilters(
     val minimumAge: Int? = null,
@@ -15,6 +16,11 @@ data class DiscoveryFilters(
     val logisticsTags: Set<String> = emptySet(),
     val tonightAvailableOnly: Boolean = false,
     val intents: Set<String> = emptySet(),
+    // Structured identity filters (PROFILE_FILTER_SYNC_SPEC: "orientation/gender compatibility" is
+    // bidirectional). Hard match against profiles.gender / profiles.orientation, like the other grid
+    // filters; self-describe profiles store a free-text key and are excluded from structured matching.
+    val genders: Set<String> = emptySet(),
+    val orientations: Set<String> = emptySet(),
     // FILTERS_SPEC L344-352: Verified offers three modes — "Verified only" (hard, via
     // verifiedOnly), "Verified preferred" (soft ranking weight), and "No preference".
     // This field carries the soft-ranking signal; Swipe uses it to boost verified
@@ -35,7 +41,9 @@ data class DiscoveryFilters(
                 lifestyleTags.isNotEmpty() ||
                 logisticsTags.isNotEmpty() ||
                 tonightAvailableOnly ||
-                intents.isNotEmpty()
+                intents.isNotEmpty() ||
+                genders.isNotEmpty() ||
+                orientations.isNotEmpty()
 
     // Basic intent, trust, who, distance, age, online, and tonight filters stay free.
     // Paid "advanced" status is reserved for high-specificity lifestyle/logistics controls.
@@ -58,6 +66,8 @@ fun discoveryFiltersFrom(
     logisticsTags: List<String> = emptyList(),
     tonightAvailableOnly: Boolean = false,
     intents: List<String> = emptyList(),
+    genders: List<String> = emptyList(),
+    orientations: List<String> = emptyList(),
     verifiedPreferred: Boolean = false,
     errorFactory: (String) -> RuntimeException,
 ): DiscoveryFilters {
@@ -125,6 +135,24 @@ fun discoveryFiltersFrom(
                 if (value !in ALLOWED_INTENTS) throw errorFactory("INVALID_DISCOVERY_FILTER")
             }.toSet()
 
+    if (genders.size > MAX_IDENTITY_FILTERS) throw errorFactory("INVALID_DISCOVERY_FILTER")
+    val genderValues =
+        genders
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .onEach { value ->
+                if (value !in FILTERABLE_GENDERS) throw errorFactory("INVALID_DISCOVERY_FILTER")
+            }.toSet()
+
+    if (orientations.size > MAX_IDENTITY_FILTERS) throw errorFactory("INVALID_DISCOVERY_FILTER")
+    val orientationValues =
+        orientations
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .onEach { value ->
+                if (value !in FILTERABLE_ORIENTATIONS) throw errorFactory("INVALID_DISCOVERY_FILTER")
+            }.toSet()
+
     return DiscoveryFilters(
         minimumAge = min,
         maximumAge = max,
@@ -138,6 +166,8 @@ fun discoveryFiltersFrom(
         logisticsTags = logistics,
         tonightAvailableOnly = tonightAvailableOnly,
         intents = intentValues,
+        genders = genderValues,
+        orientations = orientationValues,
         verifiedPreferred = verifiedPreferred,
     )
 }
@@ -162,3 +192,11 @@ private val ADVANCED_LOGISTICS_TAGS = ALLOWED_LOGISTICS_TAGS - "public_meet_firs
 private const val MAX_INTENT_FILTERS = 8
 
 private val ALLOWED_INTENTS = DiscoveryTagTaxonomies.intents
+
+private const val MAX_IDENTITY_FILTERS = 8
+
+// Self-describe is a free-text profile value, not a structured token, so it is not a filter
+// option (PROFILE_FILTER_SYNC_SPEC: self-describe profiles are excluded from structured filters).
+private val FILTERABLE_GENDERS = ProfileTaxonomies.genderKeys - ProfileTaxonomies.SELF_DESCRIBE
+
+private val FILTERABLE_ORIENTATIONS = ProfileTaxonomies.orientationKeys - ProfileTaxonomies.SELF_DESCRIBE

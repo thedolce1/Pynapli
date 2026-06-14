@@ -125,4 +125,8 @@ internal fun DiscoveryFilters.gridRankCacheKey(): String =
         append(tonightAvailableOnly)
         append(';')
         append(intents.sorted().joinToString("|"))
+        append(';')
+        append(genders.sorted().joinToString("|"))
+        append(';')
+        append(orientations.sorted().joinToString("|"))
     }
