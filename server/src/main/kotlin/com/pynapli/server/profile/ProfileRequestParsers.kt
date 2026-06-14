@@ -76,6 +76,12 @@ internal fun UpdateProfileRequestDto.toProfileUpdate(clock: Clock): ProfileUpdat
         throw ProfileException("INVALID_BIO")
     }
 
+    val neighborhoodProvided = neighborhood != null
+    val cleanNeighborhood = neighborhood?.trim()?.takeIf { it.isNotEmpty() }
+    if (cleanNeighborhood != null && cleanNeighborhood.length > ProfileTaxonomies.NEIGHBORHOOD_MAX_LENGTH) {
+        throw ProfileException("INVALID_NEIGHBORHOOD")
+    }
+
     return ProfileUpdate(
         displayName = trimmedName,
         birthdate = parsedBirthdate,
@@ -97,6 +103,8 @@ internal fun UpdateProfileRequestDto.toProfileUpdate(clock: Clock): ProfileUpdat
             ),
         bioProvided = bioProvided,
         bio = cleanBio,
+        neighborhoodProvided = neighborhoodProvided,
+        neighborhood = cleanNeighborhood,
         lifestyleTags = lifestyleTags.cleanTags(DiscoveryTagTaxonomies.lifestyleTags),
         logisticsTags = logisticsTags.cleanTags(DiscoveryTagTaxonomies.logisticsTags),
         intents = intents.cleanTags(DiscoveryTagTaxonomies.intents),

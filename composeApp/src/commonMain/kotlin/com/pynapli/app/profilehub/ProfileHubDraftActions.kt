@@ -22,6 +22,8 @@ internal class ProfileHubDraftActions(
 
     fun updateBio(value: String) = updateDraft { it.copy(bio = value) }
 
+    fun updateNeighborhood(value: String) = updateDraft { it.copy(neighborhood = value) }
+
     fun toggleLifestyleTag(value: String) = updateDraft { it.copy(lifestyleTags = it.lifestyleTags.toggled(value)) }
 
     fun toggleLogisticsTag(value: String) = updateDraft { it.copy(logisticsTags = it.logisticsTags.toggled(value)) }

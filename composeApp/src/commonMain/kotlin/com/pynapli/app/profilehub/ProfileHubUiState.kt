@@ -51,6 +51,9 @@ data class ProfileEditDraft(
     val displayName: String = "",
     val birthdate: String = "",
     val bio: String = "",
+    // User-declared neighborhood / area label ("" = unset). Shown in the profile peek
+    // meta row; self-declared, never derived from GPS.
+    val neighborhood: String = "",
     // Structured taxonomy key ("" = unset); the *Detail value only applies when the
     // key is self_describe (ProfileTaxonomies).
     val gender: String = "",

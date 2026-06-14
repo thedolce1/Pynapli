@@ -51,9 +51,21 @@ class ProfileHubDraftMappingTest {
         val request = testProfileDto().toDraft().toRequest()
 
         assertEquals("", request.bio)
+        assertEquals("", request.neighborhood)
         assertEquals(emptyList(), request.lifestyleTags)
         assertEquals(emptyList(), request.logisticsTags)
         assertEquals(emptyList(), request.intents)
+    }
+
+    @Test
+    fun neighborhoodRoundTripsAndValidatesLength() {
+        val draft = testProfileDto(neighborhood = "Mission").toDraft()
+        assertEquals("Mission", draft.neighborhood)
+        assertEquals("Mission", draft.toRequest().neighborhood)
+
+        val base = testProfileDto(displayName = "Alex").toDraft()
+        assertNull(base.copy(neighborhood = "Mission").validationError())
+        assertNotNull(base.copy(neighborhood = "x".repeat(51)).validationError())
     }
 
     @Test
@@ -100,6 +112,7 @@ private fun discoverySettingsDto(partnerVisibility: String): DiscoverySettingsDt
 private fun testProfileDto(
     displayName: String = "Alex",
     bio: String? = null,
+    neighborhood: String? = null,
     gender: String? = null,
     genderDetail: String? = null,
     orientation: String? = null,
@@ -111,6 +124,7 @@ private fun testProfileDto(
         userId = "user-1",
         displayName = displayName,
         bio = bio,
+        neighborhood = neighborhood,
         gender = gender,
         genderDetail = genderDetail,
         orientation = orientation,

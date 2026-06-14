@@ -104,6 +104,7 @@ class AccountLifecycleRepositoryIntegrationTest {
             )
             assertNull(dataSource.stringValue("SELECT display_name FROM profiles WHERE user_id = ?", userId))
             assertNull(dataSource.stringValue("SELECT bio FROM profiles WHERE user_id = ?", userId))
+            assertNull(dataSource.stringValue("SELECT neighborhood FROM profiles WHERE user_id = ?", userId))
             assertNull(dataSource.timestampValue("SELECT birthdate FROM profiles WHERE user_id = ?", userId))
             assertNull(dataSource.stringValue("SELECT gender_detail FROM profiles WHERE user_id = ?", userId))
             assertNull(dataSource.stringValue("SELECT orientation_detail FROM profiles WHERE user_id = ?", userId))
@@ -158,11 +159,11 @@ class AccountLifecycleRepositoryIntegrationTest {
                 .prepareStatement(
                     """
                     INSERT INTO profiles (
-                        user_id, display_name, bio, birthdate, gender, gender_detail, orientation, orientation_detail,
+                        user_id, display_name, bio, neighborhood, birthdate, gender, gender_detail, orientation, orientation_detail,
                         lifestyle_tags, logistics_tags, intents, moderation_status, visibility_status
                     )
                     VALUES (
-                        ?, ?, 'My bio', DATE '1990-01-01', 'self_describe', 'Genderfluid', 'queer', NULL,
+                        ?, ?, 'My bio', 'Mission', DATE '1990-01-01', 'self_describe', 'Genderfluid', 'queer', NULL,
                         ARRAY['enm']::text[], ARRAY['hosts']::text[], ARRAY['events']::text[], 'approved', 'visible'
                     )
                     """.trimIndent(),

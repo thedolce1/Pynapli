@@ -52,4 +52,8 @@ object ProfileTaxonomies {
 
     const val BIO_MAX_LENGTH = 500
     const val SELF_DESCRIBE_MAX_LENGTH = 40
+
+    // User-declared neighborhood / area label (e.g. "Mission", "Soho"). Short by design —
+    // it's a one-line meta tag in the peek, not free-form text.
+    const val NEIGHBORHOOD_MAX_LENGTH = 50
 }

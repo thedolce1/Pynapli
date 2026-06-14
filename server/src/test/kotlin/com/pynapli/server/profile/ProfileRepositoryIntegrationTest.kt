@@ -189,6 +189,8 @@ class ProfileRepositoryIntegrationTest {
                             profileCompletenessScore = 40,
                             bioProvided = true,
                             bio = "Hosting-friendly and social-first.",
+                            neighborhoodProvided = true,
+                            neighborhood = "Mission",
                             lifestyleTags = listOf("enm", "soft_swap"),
                             logisticsTags = listOf("hosts"),
                             intents = listOf("events"),
@@ -197,6 +199,8 @@ class ProfileRepositoryIntegrationTest {
 
             val profile = requireNotNull(updated).profile
             assertEquals("Hosting-friendly and social-first.", profile.bio)
+            assertEquals("Mission", profile.neighborhood)
+            assertEquals("Mission", requireNotNull(repository.getPublicProfile(userId, userId)).neighborhood)
             assertEquals("self_describe", profile.gender)
             assertEquals("Genderfluid", profile.genderDetail)
             assertEquals("queer", profile.orientation)
@@ -228,6 +232,7 @@ class ProfileRepositoryIntegrationTest {
                         ),
                 )
             assertEquals("Hosting-friendly and social-first.", requireNotNull(unchanged).profile.bio)
+            assertEquals("Mission", unchanged.profile.neighborhood)
             assertEquals(listOf("enm", "soft_swap"), unchanged.profile.lifestyleTags)
 
             // Provided-but-empty clears: bio to NULL, tags to NULL (the V36 opt-out
@@ -249,10 +254,13 @@ class ProfileRepositoryIntegrationTest {
                             profileCompletenessScore = 20,
                             bioProvided = true,
                             bio = null,
+                            neighborhoodProvided = true,
+                            neighborhood = null,
                             lifestyleTags = emptyList(),
                         ),
                 )
             assertNull(requireNotNull(cleared).profile.bio)
+            assertNull(cleared.profile.neighborhood)
             assertEquals(emptyList(), cleared.profile.lifestyleTags)
             assertEquals(true, dataSource.lifestyleTagsColumnIsNull(userId))
             assertEquals(false, dataSource.lifestyleOverlapMatches(userId, listOf("enm")))

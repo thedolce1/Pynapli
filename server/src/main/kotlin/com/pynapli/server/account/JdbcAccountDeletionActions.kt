@@ -188,6 +188,7 @@ internal class JdbcAccountDeletionActions(
                 UPDATE profiles
                 SET display_name = NULL,
                     bio = NULL,
+                    neighborhood = NULL,
                     birthdate = NULL,
                     gender = NULL,
                     gender_detail = NULL,

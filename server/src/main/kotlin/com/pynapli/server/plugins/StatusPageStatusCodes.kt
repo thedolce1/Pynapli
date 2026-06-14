@@ -21,6 +21,7 @@ internal fun profileStatusFor(code: String): HttpStatusCode =
         "INVALID_GENDER",
         "INVALID_ORIENTATION",
         "INVALID_BIO",
+        "INVALID_NEIGHBORHOOD",
         "INVALID_PROFILE_TAG",
         "BIO_REJECTED",
         "INVALID_PARTNER_VISIBILITY",
