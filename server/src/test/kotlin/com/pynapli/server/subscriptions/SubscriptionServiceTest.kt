@@ -361,6 +361,38 @@ class SubscriptionServiceTest {
         }
 
     @Test
+    fun sandboxVerifierGrantsEntitlementThroughRealSubmitPath() =
+        runBlocking {
+            // Proves the actual SandboxPlayStorePurchaseVerifier (not a fake) drives the real
+            // submit -> verify -> grant path end-to-end, which is the whole point of the sandbox:
+            // exercising Play Billing receipt validation without Google Play Developer API creds.
+            val user = uuid(45)
+            val repository = InMemorySubscriptionRepository()
+            val service =
+                SubscriptionService(
+                    repository = repository,
+                    clock = clock,
+                    playStorePurchaseVerifier = SandboxPlayStorePurchaseVerifier(clock = clock),
+                )
+
+            val response =
+                service.recordPlayStoreSubscriptionPurchase(
+                    userId = user,
+                    request =
+                        SubmitPlayStoreSubscriptionPurchaseRequestDto(
+                            productId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
+                            purchaseToken = "sandbox-select-00000000000000000045",
+                            packageName = "com.pynapli.app",
+                        ),
+                )
+
+            assertEquals(SubscriptionPurchaseSyncStatus.ACTIVE, response.status)
+            assertEquals(SubscriptionTier.SELECT, response.entitlement.tier)
+            assertEquals(EntitlementSource.OWN_SUBSCRIPTION, response.entitlement.source)
+            assertEquals("active", repository.verifiedPurchases.single().status)
+        }
+
+    @Test
     fun playStoreSyncRefreshesDueSubscriptionTokens() =
         runBlocking {
             val user = uuid(42)

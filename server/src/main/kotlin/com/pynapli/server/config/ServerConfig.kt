@@ -59,6 +59,10 @@ data class ServerConfig(
     val playStoreRtdnOidcAudience: String? = null,
     val playStoreRtdnOidcServiceAccountEmail: String? = null,
     val devStorePurchasesEnabled: Boolean = false,
+    // Sandbox Play Billing verification: when enabled (and not production), sandbox-prefixed purchase
+    // tokens are accepted by the real submit -> verify -> grant path WITHOUT Google creds, so end-to-end
+    // receipt validation is provable in dev/QA. Opt-in; never selected in production.
+    val playStoreSandboxEnabled: Boolean = false,
     // Pluggable age-verification provider. When ageVerificationProvider + redirect base URL are both
     // set, the server advertises a provider-hosted method alongside manual review and mints a redirect
     // session on start(). The provider confirms the outcome later via the verification callback. Real
@@ -281,6 +285,11 @@ data class ServerConfig(
                         .getenv("PYNAPLI_DEV_STORE_PURCHASES_ENABLED")
                         ?.toBooleanStrictOrNull()
                         ?: (environment == "local"),
+                playStoreSandboxEnabled =
+                    System
+                        .getenv("PYNAPLI_PLAY_STORE_SANDBOX_ENABLED")
+                        ?.toBooleanStrictOrNull()
+                        ?: false,
                 ageVerificationProvider =
                     System
                         .getenv("PYNAPLI_AGE_VERIFICATION_PROVIDER")
