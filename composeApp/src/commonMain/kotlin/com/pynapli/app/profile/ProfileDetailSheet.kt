@@ -99,115 +99,135 @@ fun ProfileDetailSheet(
                     // sheet that opened mid-load) otherwise render as a small partial sheet, while richer
                     // ones cover most of the screen. One height = one consistent feel everywhere.
                     .fillMaxHeight(0.94f)
-                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 18.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            ProfileHero(
-                displayName = displayName,
-                age = profile?.displayAge,
-                verified = profile?.verified == true,
-                // Prefer the server-hydrated presence on the fetched profile (accurate from any
-                // entry point, including Activity/Hub where the synthesized card has online=false);
-                // fall back to the card's flag while the profile is still loading.
-                online = profile?.online ?: card.online,
-                distanceLabel = distanceLabel,
-                photoUrls = profile?.photoUrls.orEmpty(),
-                profilePhotoUrl = profilePhotoUrl,
-                onDismiss = onDismiss,
-                onHideClick = { showHideConfirm = true },
-                onBlockClick = { showBlockConfirm = true },
-                onReportClick = { showReportDialog = true },
-                isOwnProfile = state.isOwnProfile,
-            )
+            // Scrollable content fills the space above the pinned action bar (weight 1f) so the
+            // action buttons always dock to the bottom edge; short profiles no longer leave the
+            // buttons floating mid-sheet with empty space beneath them (the #126 gap).
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                ProfileHero(
+                    displayName = displayName,
+                    age = profile?.displayAge,
+                    verified = profile?.verified == true,
+                    // Prefer the server-hydrated presence on the fetched profile (accurate from any
+                    // entry point, including Activity/Hub where the synthesized card has online=false);
+                    // fall back to the card's flag while the profile is still loading.
+                    online = profile?.online ?: card.online,
+                    distanceLabel = distanceLabel,
+                    photoUrls = profile?.photoUrls.orEmpty(),
+                    profilePhotoUrl = profilePhotoUrl,
+                    onDismiss = onDismiss,
+                    onHideClick = { showHideConfirm = true },
+                    onBlockClick = { showBlockConfirm = true },
+                    onReportClick = { showReportDialog = true },
+                    isOwnProfile = state.isOwnProfile,
+                )
 
-            when {
-                state.isLoading -> {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 20.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-
-                state.errorMessage != null -> {
-                    Text(
-                        text = state.errorMessage,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-
-                profile != null -> {
-                    ProfileFacts(profileState = state)
-                    LinkedPartnerSection(
-                        linkedPartner = profile.linkedPartner,
-                        cardLinkedPartner = card.linkedPartner,
-                        onOpenLinkedPartner = onOpenLinkedPartner,
-                    )
-                    if (state.isOwnProfile) {
-                        OwnProfilePreviewNote()
-                    } else {
-                        when (actionMode) {
-                            ProfileDetailActionMode.Grid -> {
-                                ProfileActions(
-                                    allowGridMessages = profile.allowGridMessages,
-                                    allowFlirts = profile.allowFlirts,
-                                    allowAlbumRequests = profile.allowAlbumRequests,
-                                    privateAlbumAccessStatus = profile.privateAlbumAccessStatus,
-                                    isSendingFlirt = state.isSendingFlirt,
-                                    isRequestingAlbum = state.isRequestingAlbum,
-                                    isLoadingPrivateAlbum = state.isLoadingPrivateAlbum,
-                                    flirtFeedback = state.flirtFeedback,
-                                    albumFeedback = state.albumFeedback,
-                                    profileLinkAction = profileLinkAction,
-                                    onMessage = onMessage,
-                                    onSpark = onSpark,
-                                    onRequestAlbum = onRequestAlbum,
-                                    onViewPrivateAlbum = onViewPrivateAlbum,
-                                    onInviteProfileLink = onInviteProfileLink,
-                                )
-                            }
-
-                            ProfileDetailActionMode.SwipeUnmatched -> {
-                                SwipeProfileActions(
-                                    isSubmitting = isSwipeSubmitting,
-                                    onPass = onSwipePass,
-                                    onLike = onSwipeLike,
-                                )
-                            }
-
-                            ProfileDetailActionMode.SwipeMatched -> {
-                                MatchedSwipeProfileActions(onMessage = onMessage)
-                            }
-                        }
-                    }
-                    state.reportFeedback?.let { feedback ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                when {
+                    state.isLoading -> {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 20.dp),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Text(
-                                text = feedback,
-                                color = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         }
                     }
-                    PrivateAlbumPreview(
-                        items = state.privateAlbumItems,
-                        isLoading = state.isLoadingPrivateAlbum,
-                    )
+
+                    state.errorMessage != null -> {
+                        Text(
+                            text = state.errorMessage,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+
+                    profile != null -> {
+                        ProfileFacts(profileState = state)
+                        LinkedPartnerSection(
+                            linkedPartner = profile.linkedPartner,
+                            cardLinkedPartner = card.linkedPartner,
+                            onOpenLinkedPartner = onOpenLinkedPartner,
+                        )
+                        if (state.isOwnProfile) {
+                            OwnProfilePreviewNote()
+                        }
+                        state.reportFeedback?.let { feedback ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Text(
+                                    text = feedback,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                        PrivateAlbumPreview(
+                            items = state.privateAlbumItems,
+                            isLoading = state.isLoadingPrivateAlbum,
+                        )
+                    }
+                }
+            }
+
+            // Pinned action bar: a loaded, non-own profile docks its primary actions to the
+            // bottom edge of the sheet so they're always reachable regardless of how much
+            // profile content there is — short profiles no longer float the buttons mid-sheet.
+            if (profile != null && !state.isOwnProfile) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    when (actionMode) {
+                        ProfileDetailActionMode.Grid -> {
+                            ProfileActions(
+                                allowGridMessages = profile.allowGridMessages,
+                                allowFlirts = profile.allowFlirts,
+                                allowAlbumRequests = profile.allowAlbumRequests,
+                                privateAlbumAccessStatus = profile.privateAlbumAccessStatus,
+                                isSendingFlirt = state.isSendingFlirt,
+                                isRequestingAlbum = state.isRequestingAlbum,
+                                isLoadingPrivateAlbum = state.isLoadingPrivateAlbum,
+                                flirtFeedback = state.flirtFeedback,
+                                albumFeedback = state.albumFeedback,
+                                profileLinkAction = profileLinkAction,
+                                onMessage = onMessage,
+                                onSpark = onSpark,
+                                onRequestAlbum = onRequestAlbum,
+                                onViewPrivateAlbum = onViewPrivateAlbum,
+                                onInviteProfileLink = onInviteProfileLink,
+                            )
+                        }
+
+                        ProfileDetailActionMode.SwipeUnmatched -> {
+                            SwipeProfileActions(
+                                isSubmitting = isSwipeSubmitting,
+                                onPass = onSwipePass,
+                                onLike = onSwipeLike,
+                            )
+                        }
+
+                        ProfileDetailActionMode.SwipeMatched -> {
+                            MatchedSwipeProfileActions(onMessage = onMessage)
+                        }
+                    }
                 }
             }
         }
