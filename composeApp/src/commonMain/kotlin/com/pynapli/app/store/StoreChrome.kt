@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionTier
@@ -54,13 +55,13 @@ internal fun StoreHeader(
                 Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .background(PynapliColors.SurfaceRaised),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Filled.ShoppingBag,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = PynapliColors.Accent,
                 modifier = Modifier.size(23.dp),
             )
         }
@@ -100,12 +101,12 @@ internal fun CurrentPlanRow(entitlement: SubscriptionEntitlementDto?) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
+                .clip(RoundedCornerShape(12.dp))
+                .background(PynapliColors.SurfaceRaised)
                 .border(
                     width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
-                    shape = RoundedCornerShape(8.dp),
+                    color = PynapliColors.Border,
+                    shape = RoundedCornerShape(12.dp),
                 ).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -134,7 +135,7 @@ internal fun CurrentPlanRow(entitlement: SubscriptionEntitlementDto?) {
         }
         Text(
             text = (entitlement?.tier ?: SubscriptionTier.FREE).tierLabel(),
-            color = MaterialTheme.colorScheme.primary,
+            color = PynapliColors.Accent,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
@@ -182,8 +183,8 @@ internal fun StoreMessageRow(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 2.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+                .clip(RoundedCornerShape(12.dp))
+                .background(PynapliColors.SurfaceRaised)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
