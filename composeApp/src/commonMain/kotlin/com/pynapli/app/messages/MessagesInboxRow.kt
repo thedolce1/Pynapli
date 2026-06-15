@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.conversation.titleFor
+import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliSemantic
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
 
@@ -255,8 +257,8 @@ private fun ThreadAvatar(online: Boolean) {
                         .align(Alignment.BottomEnd)
                         .size(12.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF13E58A))
-                        .border(1.dp, Color.Black, CircleShape),
+                        .background(PynapliSemantic.Online)
+                        .border(1.dp, PynapliColors.Black, CircleShape),
             )
         }
     }
