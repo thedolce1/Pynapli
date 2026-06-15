@@ -11,6 +11,9 @@ import com.pynapli.server.presence.PresenceRepository
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.presence.PresenceState
 import com.pynapli.server.safety.AccountRiskStateRecord
+import com.pynapli.server.safety.RateLimitCounter
+import com.pynapli.server.safety.RateLimitRepository
+import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
@@ -489,6 +492,34 @@ class ProfileServiceTest {
         }
 
     @Test
+    fun profileMutationsAreRejectedWhenRateLimited() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryProfileRepository(userId)
+            val service =
+                ProfileService(
+                    repository = repository,
+                    clock = clock,
+                    rateLimitService = denyingRateLimitService(),
+                )
+
+            // Both mutation endpoints share the PROFILE_UPDATE budget and reject before storage.
+            assertEquals(
+                "RATE_LIMITED",
+                assertFailsWith<ProfileException> {
+                    service.updateProfile(userId, UpdateProfileRequestDto(displayName = "Alex"))
+                }.code,
+            )
+            assertEquals(
+                "RATE_LIMITED",
+                assertFailsWith<ProfileException> {
+                    service.updateDiscoverySettings(userId, UpdateDiscoverySettingsRequestDto(gridVisible = false))
+                }.code,
+            )
+            assertEquals(0, repository.updateProfileCalls)
+        }
+
+    @Test
     fun omittedBioAndTagsLeaveStoredValuesUnchangedWhileEmptyClears() =
         runBlocking {
             val userId = UUID.randomUUID()
@@ -733,6 +764,17 @@ private class StaticPresenceRepository(
 
     override suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> = userIds.filterTo(mutableSetOf()) { it in onlineIds }
 }
+
+// Always over the limit: increment reports a count far above any policy cap, so check().allowed is false.
+private fun denyingRateLimitService(): RateLimitService =
+    RateLimitService(
+        object : RateLimitRepository {
+            override suspend fun increment(
+                key: String,
+                windowSeconds: Long,
+            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
+        },
+    )
 
 private fun restrictedRiskPolicy(tier: String = "quarantine"): RiskPolicyService =
     RiskPolicyService { userId ->
