@@ -4,6 +4,7 @@ import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.safety.AppCheckException
 import com.pynapli.server.safety.AppCheckVerifier
 import com.pynapli.server.safety.DisabledAppCheckVerifier
+import com.pynapli.server.safety.FirebaseAppCheckVerifier
 import com.pynapli.server.safety.HeaderPresenceAppCheckVerifier
 import io.ktor.http.HttpMethod
 import io.ktor.server.application.Application
@@ -62,8 +63,15 @@ fun Application.configureAppCheck(
 }
 
 /**
- * Picks the verifier for the current config. Real cryptographic verification (App Check JWT against
- * Google's public keys) is a creds-gated Phase H step; until then enforcement requires only that the
- * attestation header is present.
+ * Picks the verifier for the current config:
+ *  - enforcement off                    -> accept all (local/dev/test);
+ *  - enforced + project number set      -> cryptographic App Check JWT verification;
+ *  - enforced + no project number       -> header-presence only (staged rollout before the project
+ *                                          number / Android App Check client are in place).
  */
-fun selectAppCheckVerifier(config: ServerConfig): AppCheckVerifier = if (config.appCheckEnforced) HeaderPresenceAppCheckVerifier else DisabledAppCheckVerifier
+fun selectAppCheckVerifier(config: ServerConfig): AppCheckVerifier =
+    when {
+        !config.appCheckEnforced -> DisabledAppCheckVerifier
+        config.appCheckProjectNumber != null -> FirebaseAppCheckVerifier.forProject(config.appCheckProjectNumber)
+        else -> HeaderPresenceAppCheckVerifier
+    }

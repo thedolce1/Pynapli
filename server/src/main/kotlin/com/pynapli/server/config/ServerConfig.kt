@@ -77,9 +77,12 @@ data class ServerConfig(
     val adminApiToken: String? = null,
     // App Check boundary: when true, state-changing requests must carry a verified
     // `X-Firebase-AppCheck` header (attesting a genuine app instance). Default off so local/dev/test
-    // never require it; flip on in production only after the client attaches the token. Real
-    // cryptographic verification is a creds-gated Phase H step (see selectAppCheckVerifier).
+    // never require it; flip on in production only after the client attaches the token.
     val appCheckEnforced: Boolean = false,
+    // Firebase project NUMBER (e.g. "209241465883"). When set with enforcement on, App Check tokens
+    // are cryptographically verified (RS256 JWT vs Google's App Check JWKS, issuer/audience keyed to
+    // this number). When absent, enforcement falls back to requiring a non-blank header only.
+    val appCheckProjectNumber: String? = null,
     val supportEmail: String = "support@pynapli.com",
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
     val activityCursorSecret: String = "pynapli-local-dev-activity-cursor-secret",
@@ -330,6 +333,11 @@ data class ServerConfig(
                         .getenv("PYNAPLI_APP_CHECK_ENFORCED")
                         ?.toBooleanStrictOrNull()
                         ?: false,
+                appCheckProjectNumber =
+                    System
+                        .getenv("PYNAPLI_APP_CHECK_PROJECT_NUMBER")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() },
                 supportEmail =
                     System
                         .getenv("PYNAPLI_SUPPORT_EMAIL")
