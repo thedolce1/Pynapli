@@ -136,6 +136,39 @@ class AuthRepositoryTest {
         }
 
     @Test
+    fun forwardsDeviceIdIntoSignupAndLoginRequests() =
+        runBlocking {
+            val apiClient =
+                FakeApiClient(
+                    signupResult = AppResult.Success(testSession("a", "r")),
+                    loginResult = AppResult.Success(testSession("a", "r")),
+                )
+            val repository = AuthRepository(apiClient, InMemorySessionStore())
+
+            repository.signupEmail(
+                email = "maya@example.com",
+                password = "correct horse battery",
+                birthdate = "1990-01-01",
+                confirmedAdult = true,
+                acceptedTerms = true,
+                acceptedPrivacy = true,
+                platform = "android",
+                appVersion = "0.1.0",
+                deviceId = "install-abc",
+            )
+            assertEquals("install-abc", apiClient.lastSignupRequest?.deviceId)
+
+            repository.loginEmail(
+                email = "maya@example.com",
+                password = "correct horse battery",
+                platform = "android",
+                appVersion = "0.1.0",
+                deviceId = "install-abc",
+            )
+            assertEquals("install-abc", apiClient.lastLoginRequest?.deviceId)
+        }
+
+    @Test
     fun logoutClearsSessionEvenWhenRemoteLogoutFails() =
         runBlocking {
             val sessionStore = InMemorySessionStore()
@@ -225,12 +258,18 @@ private class FakeApiClient(
     var lastSignupRequest: EmailSignupRequestDto? = null
         private set
 
+    var lastLoginRequest: EmailLoginRequestDto? = null
+        private set
+
     override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> {
         lastSignupRequest = request
         return signupResult
     }
 
-    override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> = loginResult
+    override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> {
+        lastLoginRequest = request
+        return loginResult
+    }
 
     override suspend fun refreshSession(request: RefreshSessionRequestDto): AppResult<AuthSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
