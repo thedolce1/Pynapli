@@ -43,12 +43,14 @@ class AuthRepository(
         password: String,
         platform: String,
         appVersion: String,
+        deviceId: String? = null,
     ): AppResult<StoredSession> {
         val result =
             authApi.emailLogin(
                 EmailLoginRequestDto(
                     email = email,
                     password = password,
+                    deviceId = deviceId,
                     platform = platform,
                     appVersion = appVersion,
                 ),
@@ -65,6 +67,7 @@ class AuthRepository(
         acceptedPrivacy: Boolean,
         platform: String,
         appVersion: String,
+        deviceId: String? = null,
     ): AppResult<StoredSession> {
         val result =
             authApi.emailSignup(
@@ -75,6 +78,7 @@ class AuthRepository(
                     confirmedAdult = confirmedAdult,
                     acceptedTerms = acceptedTerms,
                     acceptedPrivacy = acceptedPrivacy,
+                    deviceId = deviceId,
                     platform = platform,
                     appVersion = appVersion,
                 ),

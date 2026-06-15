@@ -11,8 +11,13 @@ class AuthStateHolder(
     private val authRepository: AuthRepository,
     private val platform: String,
     private val appVersion: String,
+    // Stable per-install identifier (account-farm signal, TRUST_AND_SAFETY_SPEC). Hashed
+    // server-side before storage; blank when the platform graph supplies none.
+    private val deviceId: String = "",
     private val beforeLogout: suspend () -> Unit = {},
 ) {
+    private val deviceIdOrNull: String? get() = deviceId.takeIf { it.isNotBlank() }
+
     private val _state = MutableStateFlow(AuthUiState())
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
 
@@ -95,6 +100,7 @@ class AuthStateHolder(
                 acceptedPrivacy = acceptedPrivacy,
                 platform = platform,
                 appVersion = appVersion,
+                deviceId = deviceIdOrNull,
             )
         return when (result) {
             is AppResult.Success -> {
@@ -171,7 +177,7 @@ class AuthStateHolder(
         }
         val result =
             when (mode) {
-                AuthMode.SignIn -> authRepository.loginEmail(normalizedEmail, password, platform, appVersion)
+                AuthMode.SignIn -> authRepository.loginEmail(normalizedEmail, password, platform, appVersion, deviceIdOrNull)
                 AuthMode.CreateAccount ->
                     authRepository.signupEmail(
                         email = normalizedEmail,
@@ -182,6 +188,7 @@ class AuthStateHolder(
                         acceptedPrivacy = acceptedAgeAndTerms,
                         platform = platform,
                         appVersion = appVersion,
+                        deviceId = deviceIdOrNull,
                     )
             }
 

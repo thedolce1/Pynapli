@@ -122,6 +122,7 @@ class AndroidAppGraph(
             authRepository = authRepository,
             platform = "android",
             appVersion = "0.1.0",
+            deviceId = stableInstallId(appContext),
             beforeLogout = { pushRegistrationCoordinator.unregisterCurrentDevice() },
         )
 
