@@ -15,7 +15,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -33,6 +35,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.MessageType
 
@@ -198,12 +201,29 @@ private fun DayDivider(label: String) {
         horizontalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = label.uppercase(),
+            color = PynapliColors.TextTertiary,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
         )
     }
+}
+
+/**
+ * Read-receipt glyph on the viewer's own latest message: a single check once delivered,
+ * a double check tinted with the info accent once the recipient has read it (handoff style,
+ * replacing the previous "Sent" / "Read" text label). Message payloads keep moderation `status`
+ * separate from this delivery `deliveryStatus` (sent / received / read).
+ */
+@Composable
+private fun DeliveryReceipt(deliveryStatus: String) {
+    val read = deliveryStatus == "read"
+    Icon(
+        imageVector = if (read) Icons.Filled.DoneAll else Icons.Filled.Check,
+        contentDescription = if (read) "Read" else "Sent",
+        tint = if (read) PynapliColors.Info else PynapliColors.TextTertiary,
+        modifier = Modifier.size(15.dp),
+    )
 }
 
 @Composable
@@ -228,15 +248,22 @@ private fun MessageBubble(
         }
     val bubbleColor =
         when {
-            deleted -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)
-            mine -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.surfaceVariant
+            deleted -> PynapliColors.SurfacePressed
+            mine -> PynapliColors.Accent
+            else -> PynapliColors.SurfaceRaised
         }
     val textColor =
         when {
-            deleted -> MaterialTheme.colorScheme.onSurfaceVariant
-            mine -> MaterialTheme.colorScheme.onPrimary
-            else -> MaterialTheme.colorScheme.onSurface
+            deleted -> PynapliColors.TextTertiary
+            mine -> PynapliColors.TextInverse
+            else -> PynapliColors.TextPrimary
+        }
+    // Soft 16dp bubble with a small "tail" corner on the sender's side (handoff chat style).
+    val bubbleShape =
+        if (mine) {
+            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 4.dp, bottomStart = 16.dp)
+        } else {
+            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
         }
 
     Row(
@@ -266,9 +293,9 @@ private fun MessageBubble(
                     modifier =
                         Modifier
                             .widthIn(max = 312.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(bubbleShape)
                             .background(bubbleColor)
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                 )
             }
             Row(
@@ -283,16 +310,8 @@ private fun MessageBubble(
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
-                if (mine) {
-                    if (showDeliveryStatus) {
-                        message.deliveryStatus.deliveryLabel()?.let { label ->
-                            Text(
-                                text = label,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
-                    }
+                if (mine && showDeliveryStatus && !deleted) {
+                    DeliveryReceipt(deliveryStatus = message.deliveryStatus)
                 }
                 if (mine && !deleted) {
                     IconButton(

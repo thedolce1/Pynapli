@@ -62,13 +62,6 @@ private val monthNames =
         "DEC",
     )
 
-internal fun String.deliveryLabel(): String? =
-    when (this) {
-        "sent" -> "Sent"
-        "read" -> "Read"
-        else -> null
-    }
-
 internal fun List<TypingParticipantUi>.typingLabel(): String =
     when (size) {
         1 -> "${first().displayName} is typing"
