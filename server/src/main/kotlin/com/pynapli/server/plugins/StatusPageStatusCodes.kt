@@ -306,8 +306,10 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
         "REPORT_REVIEW_NOT_FOUND",
         "RISK_REVIEW_NOT_FOUND",
         "APPEAL_REVIEW_NOT_FOUND",
+        "USER_NOT_FOUND",
         -> HttpStatusCode.NotFound
         "INVALID_ID",
+        "INVALID_USER_ID",
         "INVALID_ADMIN_ACTOR",
         "MODERATION_REASON_REQUIRED",
         "MODERATION_REASON_TOO_LONG",
