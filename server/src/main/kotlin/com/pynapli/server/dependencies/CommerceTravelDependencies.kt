@@ -27,6 +27,7 @@ internal fun buildCommerceTravelDependencies(
     dataSource: DataSource,
     travelLocationRepository: TravelLocationRepository,
     rateLimitService: RateLimitService,
+    productMetrics: com.pynapli.server.metrics.ProductMetrics,
 ): CommerceTravelDependencies {
     val subscriptionService =
         SubscriptionService(
@@ -36,6 +37,7 @@ internal fun buildCommerceTravelDependencies(
             playStoreSyncStaleAfter = Duration.ofHours(config.playStoreSubscriptionSyncStaleAfterHours),
             playStoreSyncRenewalLookahead = Duration.ofHours(config.playStoreSubscriptionSyncRenewalLookaheadHours),
             rateLimitService = rateLimitService,
+            productMetrics = productMetrics,
         )
     val travelLocationService =
         TravelLocationService(

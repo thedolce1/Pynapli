@@ -16,6 +16,7 @@ internal class SubscriptionPlayStorePurchaseActions(
     private val playStorePurchaseVerifier: PlayStorePurchaseVerifier,
     private val purchaseApplier: PlayStoreSubscriptionPurchaseApplier,
     private val rateLimitService: RateLimitService?,
+    private val productMetrics: com.pynapli.server.metrics.ProductMetrics?,
     private val getEntitlement: suspend (UUID) -> SubscriptionEntitlementDto,
 ) {
     suspend fun recordPlayStoreSubscriptionPurchase(
@@ -61,6 +62,10 @@ internal class SubscriptionPlayStorePurchaseActions(
                     )
 
                 if (subscription.status in ACTIVE_PLAY_STORE_SUBSCRIPTION_STATUSES) {
+                    // Authoritative monetization KPI: a user-initiated purchase was verified and
+                    // granted an active entitlement. Recorded only on the submit path (not the
+                    // periodic re-sync/RTDN appliers) so it counts purchases, not re-verifications.
+                    productMetrics?.record(com.pynapli.server.metrics.ProductMetrics.PURCHASE_VERIFIED)
                     SubscriptionPurchaseSyncResponseDto(
                         status = SubscriptionPurchaseSyncStatus.ACTIVE,
                         entitlement = getEntitlement(userId),

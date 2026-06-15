@@ -190,6 +190,7 @@ class ServerDependencies(
                     dataSource = database.dataSource,
                     travelLocationRepository = core.travelLocationRepository,
                     rateLimitService = core.rateLimitService,
+                    productMetrics = core.productMetrics,
                 )
             val activityService =
                 ActivityService(
@@ -319,6 +320,7 @@ class ServerDependencies(
                     travelLocationRepository = core.travelLocationRepository,
                     activityService = activityService,
                     psyncBroadcaster = core.psyncBroadcaster,
+                    productMetrics = core.productMetrics,
                 )
             return ServerDependencies(
                 config = config,

@@ -30,6 +30,7 @@ class SwipeService(
     private val deckTokenCodec: SwipeDeckTokenCodec = SwipeDeckTokenCodec(),
     private val clock: Clock = Clock.systemUTC(),
     activityService: ActivityService? = null,
+    private val productMetrics: com.pynapli.server.metrics.ProductMetrics? = null,
 ) {
     private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver)
     private val sideEffects = SwipeActionSideEffects(activityService, notificationPublisher)
@@ -82,7 +83,12 @@ class SwipeService(
     suspend fun submitAction(
         viewerUserId: UUID,
         request: SwipeActionRequestDto,
-    ): SwipeActionResponseDto = submitAction.submitAction(viewerUserId, request)
+    ): SwipeActionResponseDto {
+        val response = submitAction.submitAction(viewerUserId, request)
+        // Authoritative match KPI (ProductMetrics): a mutual like just created a match.
+        if (response.match != null) productMetrics?.record(com.pynapli.server.metrics.ProductMetrics.MATCH_CREATED)
+        return response
+    }
 
     suspend fun rewind(viewerUserId: UUID): SwipeRewindResponseDto = rewindAction.rewind(viewerUserId)
 
