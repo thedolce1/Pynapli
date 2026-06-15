@@ -30,6 +30,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `AdminReportRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Requires admin actor/reason. |
 | `AdminRiskRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Requires admin actor/reason. |
 | `AdminMetricsRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. |
+| `ProductMetricsRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Counts-only KPI snapshot via `requireAdminActor`. |
 | `NotificationRoutes.kt` | User-authenticated | Preferences and device tokens are token-derived. |
 | `PresenceRoutes.kt` | User-authenticated | Heartbeat is token-derived. |
 | `PresenceStreamRoutes.kt` | User-authenticated | SSE stream authenticates bearer token and block-filters target updates. |

@@ -14,6 +14,7 @@ import com.pynapli.server.location.configureTravelLocationRoutes
 import com.pynapli.server.media.configureMediaRoutes
 import com.pynapli.server.messaging.configureMessageStreamRoutes
 import com.pynapli.server.messaging.configureMessagingRoutes
+import com.pynapli.server.metrics.configureProductMetricsRoutes
 import com.pynapli.server.moderation.configureAdminAppealRoutes
 import com.pynapli.server.moderation.configureAdminModerationRoutes
 import com.pynapli.server.moderation.configureAdminReportRoutes
@@ -79,6 +80,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAdminReportRoutes(dependencies.config, dependencies.adminReportService)
     configureAdminRiskRoutes(dependencies.config, dependencies.adminRiskService)
     configureAdminMetricsRoutes(dependencies.config, dependencies.notificationDispatchWorker)
+    configureProductMetricsRoutes(dependencies.config, dependencies.productMetrics)
     configureAgeVerificationAdminRoutes(dependencies.config, dependencies.ageVerificationService)
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)

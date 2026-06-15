@@ -29,6 +29,7 @@ import com.pynapli.server.media.MediaCleanupWorker
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.messaging.MessageBroadcaster
 import com.pynapli.server.messaging.MessagingService
+import com.pynapli.server.metrics.ProductMetrics
 import com.pynapli.server.moderation.AdminAppealService
 import com.pynapli.server.moderation.AdminReportService
 import com.pynapli.server.moderation.AdminRiskService
@@ -113,6 +114,7 @@ class ServerDependencies(
     val mediaCleanupWorker: MediaCleanupWorker?,
     val notificationService: NotificationService?,
     val notificationDispatchWorker: NotificationDispatchWorker?,
+    val productMetrics: ProductMetrics?,
     val blockService: BlockService?,
     val hiddenProfileService: HiddenProfileService?,
     val appealService: AppealService?,
@@ -300,6 +302,7 @@ class ServerDependencies(
                     subscriptionService = commerceTravel.subscriptionService,
                     activityService = activityService,
                     messageMediaGateway = media.messageMediaGateway,
+                    productMetrics = core.productMetrics,
                 )
             val swipe =
                 buildSwipeDependencies(
@@ -340,6 +343,7 @@ class ServerDependencies(
                 mediaCleanupWorker = mediaCleanupWorker,
                 notificationService = core.notificationService,
                 notificationDispatchWorker = core.notificationDispatchWorker,
+                productMetrics = core.productMetrics,
                 blockService = core.blockService,
                 hiddenProfileService = core.hiddenProfileService,
                 appealService = core.appealService,
@@ -404,6 +408,7 @@ class ServerDependencies(
                 mediaCleanupWorker = null,
                 notificationService = null,
                 notificationDispatchWorker = null,
+                productMetrics = null,
                 blockService = null,
                 hiddenProfileService = null,
                 appealService = null,

@@ -43,6 +43,7 @@ internal fun buildMessagingDependencies(
     subscriptionService: SubscriptionService,
     activityService: ActivityService,
     messageMediaGateway: com.pynapli.server.messaging.MessageMediaGateway,
+    productMetrics: com.pynapli.server.metrics.ProductMetrics,
 ): MessagingDependencies {
     val messagingService =
         MessagingService(
@@ -56,6 +57,7 @@ internal fun buildMessagingDependencies(
             subscriptionService = subscriptionService,
             activityService = activityService,
             messageMediaGateway = messageMediaGateway,
+            productMetrics = productMetrics,
         )
     val messageModerationService =
         MessageModerationService(
