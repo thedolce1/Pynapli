@@ -44,6 +44,10 @@ data class ServerConfig(
     val mediaCleanupIntervalMillis: Long = 60 * 60 * 1_000L,
     val firebaseServiceAccountPath: String? = null,
     val firebaseServiceAccountJson: String? = null,
+    // Optional explicit Firebase/GCP project id. When the server authenticates via Application
+    // Default Credentials (no service-account JSON — the keyless gcloud-ADC / Cloud Run path), the
+    // project id may not be inferable, so set it here (e.g. "pynapli") to route FCM reliably.
+    val firebaseProjectId: String? = null,
     val playStorePackageName: String = "com.pynapli.app",
     val playStoreVerificationEnabled: Boolean = false,
     val playStoreServiceAccountPath: String? = null,
@@ -204,6 +208,11 @@ data class ServerConfig(
                 firebaseServiceAccountJson =
                     System
                         .getenv("PYNAPLI_FIREBASE_SERVICE_ACCOUNT_JSON")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() },
+                firebaseProjectId =
+                    System
+                        .getenv("PYNAPLI_FIREBASE_PROJECT_ID")
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() },
                 playStorePackageName =

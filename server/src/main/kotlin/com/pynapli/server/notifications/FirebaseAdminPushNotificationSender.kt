@@ -101,28 +101,49 @@ class FirebaseAdminPushNotificationSender private constructor(
             )
 
         fun fromConfig(config: ServerConfig): FirebaseAdminPushNotificationSender {
-            val credentials =
-                config.firebaseServiceAccountJson?.let { json ->
-                    ByteArrayInputStream(json.toByteArray(StandardCharsets.UTF_8)).use(GoogleCredentials::fromStream)
-                } ?: config.firebaseServiceAccountPath?.let { path ->
-                    FileInputStream(path).use(GoogleCredentials::fromStream)
-                } ?: throw IllegalStateException(
-                    "Firebase push provider requires PYNAPLI_FIREBASE_SERVICE_ACCOUNT_PATH or PYNAPLI_FIREBASE_SERVICE_ACCOUNT_JSON.",
-                )
+            val credentials = resolveFirebaseCredentials(config)
+            val options =
+                FirebaseOptions
+                    .builder()
+                    .setCredentials(credentials)
+                    .apply { config.firebaseProjectId?.let(::setProjectId) }
+                    .build()
 
             val app =
                 FirebaseApp.getApps().firstOrNull { it.name == APP_NAME }
-                    ?: FirebaseApp.initializeApp(
-                        FirebaseOptions
-                            .builder()
-                            .setCredentials(credentials)
-                            .build(),
-                        APP_NAME,
-                    )
+                    ?: FirebaseApp.initializeApp(options, APP_NAME)
             return FirebaseAdminPushNotificationSender(app)
         }
     }
 }
+
+/**
+ * Which credential source the Firebase Admin SDK should use, in precedence order. An explicit
+ * service-account (inline JSON or a file path) wins; otherwise the server falls back to Application
+ * Default Credentials — the keyless path that picks up `gcloud auth application-default login`
+ * locally and the attached service account on Cloud Run. Kept pure so the precedence is unit-testable.
+ */
+internal enum class FirebaseCredentialSource { INLINE_JSON, FILE_PATH, APPLICATION_DEFAULT }
+
+internal fun firebaseCredentialSource(config: ServerConfig): FirebaseCredentialSource =
+    when {
+        config.firebaseServiceAccountJson != null -> FirebaseCredentialSource.INLINE_JSON
+        config.firebaseServiceAccountPath != null -> FirebaseCredentialSource.FILE_PATH
+        else -> FirebaseCredentialSource.APPLICATION_DEFAULT
+    }
+
+internal fun resolveFirebaseCredentials(
+    config: ServerConfig,
+    applicationDefault: () -> GoogleCredentials = { GoogleCredentials.getApplicationDefault() },
+): GoogleCredentials =
+    when (firebaseCredentialSource(config)) {
+        FirebaseCredentialSource.INLINE_JSON ->
+            ByteArrayInputStream(config.firebaseServiceAccountJson!!.toByteArray(StandardCharsets.UTF_8))
+                .use(GoogleCredentials::fromStream)
+        FirebaseCredentialSource.FILE_PATH ->
+            FileInputStream(config.firebaseServiceAccountPath!!).use(GoogleCredentials::fromStream)
+        FirebaseCredentialSource.APPLICATION_DEFAULT -> applicationDefault()
+    }
 
 /**
  * Platform-agnostic push-delivery decisions for a notification kind, resolved by [forKind] so the

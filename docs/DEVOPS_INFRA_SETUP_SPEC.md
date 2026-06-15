@@ -309,6 +309,26 @@ Rules:
 - Do not include private album URLs in Crashlytics.
 - Ktor decides notifications; FCM delivers.
 
+### FCM backend enablement (production)
+
+The server notification pipeline is **code-complete**: device registration (`POST /v1/notifications/devices`) → outbox enqueue on events (message, match, flirt, album request, partner/psync/tonight invites) → gated dispatch worker → FCM send, with quiet hours, per-category preferences, dead-token pruning, and privacy-safe delivery metrics. To turn it on in a deployed environment, set:
+
+| Env var | Value | Why |
+| --- | --- | --- |
+| `PYNAPLI_NOTIFICATION_PUSH_PROVIDER` | `firebase` | Selects the FCM sender (default `local` only logs). |
+| `PYNAPLI_NOTIFICATION_DISPATCH_ENABLED` | `true` | Starts the dispatch worker (defaults on only in `local`). |
+| `PYNAPLI_FIREBASE_PROJECT_ID` | `pynapli` | Routes FCM under the keyless ADC path. |
+
+Credentials — **no JSON key needed** (the GCP org policy blocks key creation; `resolveFirebaseCredentials` falls back to Application Default Credentials):
+
+- **Local:** `gcloud auth application-default login` then `gcloud auth application-default set-quota-project pynapli`.
+- **Cloud Run:** attach the service account on deploy (`--service-account firebase-adminsdk-fbsvc@pynapli.iam.gserviceaccount.com`); ADC comes from the metadata server.
+- Explicit `PYNAPLI_FIREBASE_SERVICE_ACCOUNT_JSON` / `_PATH` still override ADC if ever required.
+
+Client: `androidApp/google-services.json` (gitignored, package `com.pynapli.app`) drives FCM token registration.
+
+**Verify live:** register a device from the app, trigger an event to that user (e.g. a message), and confirm a `SENT` count in `GET /v1/admin/metrics/notifications` (admin-token gated).
+
 ## Google Cloud Setup
 
 Recommended services:
