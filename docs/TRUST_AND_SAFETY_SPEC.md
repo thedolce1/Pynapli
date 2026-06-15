@@ -671,7 +671,7 @@ Reject:
 - [x] Album request throttles exist.
 - [x] Swipe velocity detection exists.
 - [x] Profile view velocity detection exists.
-- [ ] Device/account-farm hash signals exist.
+- [ ] Partial: Device/account-farm hash signals — **server detection shipped** (A4 slice 1, 2026-06-15): durable `account_device_links` ledger (V78) keyed by a server-side SHA-256 of the client device id (raw id never stored, per "hash before storage"); `AuthService` signup records the device→account link and raises a `device.account_farm` risk event (+30) once one device hash is behind >=4 distinct accounts within 24h. Signal-only — never blocks signup; fails open. Covered by `AuthServiceTest` (threshold + no-device cases) and `DeviceFarmRepositoryIntegrationTest` (windowed distinct count, idempotent link). **Activates once the Android client sends a device hash (A4 slice 2).**
 - [x] Location spoofing signals exist: impossible-travel detection on device-fix location updates (>=100 km at >=1,000 km/h vs the previous gps/network fix; travel/manual sources excluded as legitimate jumps) publishes a +25 risk event with coarse facts only (distance/elapsed/speed, never coordinates). Signal-only: the location update always proceeds and risk-path failures never break it.
 - [x] Partner subscription abuse cooldown exists.
 - [x] Verification lowers risk where appropriate: a verified age-verification outcome (admin review or provider callback) publishes a -20 risk event; the account score stays floored at 0.

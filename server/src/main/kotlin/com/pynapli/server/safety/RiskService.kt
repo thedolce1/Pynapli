@@ -56,6 +56,19 @@ interface VerificationRiskSignalPublisher {
     suspend fun recordAgeVerificationPassed(userId: UUID)
 }
 
+interface DeviceRiskSignalPublisher {
+    /**
+     * A single device hash has created an unusual number of distinct accounts within the
+     * detection window (account-farm signal, TRUST_AND_SAFETY_SPEC). Coarse facts only — the
+     * device hash itself is never persisted into the risk event metadata.
+     */
+    suspend fun recordDeviceAccountFarm(
+        userId: UUID,
+        distinctAccountCount: Int,
+        windowHours: Long,
+    )
+}
+
 class RiskService(
     private val repository: RiskRepository,
 ) : ReportRiskSignalPublisher,
@@ -63,7 +76,8 @@ class RiskService(
     MessageReviewRiskSignalPublisher,
     MediaModerationRiskSignalPublisher,
     LocationRiskSignalPublisher,
-    VerificationRiskSignalPublisher {
+    VerificationRiskSignalPublisher,
+    DeviceRiskSignalPublisher {
     override suspend fun recordReportCreated(
         reportId: UUID,
         reporterUserId: UUID,
@@ -187,6 +201,26 @@ class RiskService(
         )
     }
 
+    override suspend fun recordDeviceAccountFarm(
+        userId: UUID,
+        distinctAccountCount: Int,
+        windowHours: Long,
+    ) {
+        repository.recordEvent(
+            userId = userId,
+            actorUserId = null,
+            source = SOURCE_DEVICE,
+            reason = "device.account_farm",
+            delta = DEVICE_ACCOUNT_FARM_DELTA,
+            metadataJson =
+                mapOf(
+                    // Coarse facts only — never the device hash itself.
+                    "accountCount" to distinctAccountCount.toString(),
+                    "windowHours" to windowHours.toString(),
+                ).toJsonObjectString(),
+        )
+    }
+
     companion object {
         const val SOURCE_REPORT = "report"
         const val SOURCE_RATE_LIMIT = "rate_limit"
@@ -194,8 +228,13 @@ class RiskService(
         const val SOURCE_MEDIA_MODERATION = "media_moderation"
         const val SOURCE_LOCATION = "location"
         const val SOURCE_VERIFICATION = "verification"
+        const val SOURCE_DEVICE = "device"
 
         const val IMPOSSIBLE_TRAVEL_DELTA = 25
+
+        // Account-farm signal: meaningful but not auto-quarantine on its own; it compounds with
+        // other signals toward review/quarantine.
+        const val DEVICE_ACCOUNT_FARM_DELTA = 30
 
         // Verification lowers risk (TRUST_AND_SAFETY_SPEC): the score floor stays
         // at 0 in the repository, so this can never go negative overall.

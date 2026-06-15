@@ -3,6 +3,7 @@ package com.pynapli.server.auth
 import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.auth.security.Sha256
 import com.pynapli.server.auth.security.normalizeEmail
+import com.pynapli.server.safety.DeviceRiskSignalPublisher
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.shared.network.dto.AuthSessionDto
@@ -18,9 +19,12 @@ class AuthService(
     accessSessionCacheTtl: Duration = Duration.ofSeconds(5),
     accessSessionCacheMaxSize: Int = 20_000,
     rateLimitService: RateLimitService? = null,
+    deviceFarmRepository: DeviceFarmRepository? = null,
+    deviceRiskSignalPublisher: DeviceRiskSignalPublisher? = null,
 ) {
     private val validator = AuthRequestValidator(clock)
     private val rateLimitGuard = AuthRateLimitGuard(rateLimitService)
+    private val deviceFarmGuard = DeviceFarmGuard(deviceFarmRepository, deviceRiskSignalPublisher, clock)
     private val sessionManager =
         AuthSessionManager(
             repository = repository,
@@ -67,6 +71,10 @@ class AuthService(
                 if (error.sqlState == "23505") throw AuthException("EMAIL_ALREADY_EXISTS")
                 throw error
             }
+
+        // Account-farm signal (TRUST_AND_SAFETY_SPEC): record the device->account link and raise a
+        // risk signal if this device is behind too many accounts. Signal-only — never blocks signup.
+        deviceFarmGuard.recordSignup(user.id, deviceId)
 
         return sessionManager.createSession(user, deviceId, platform, appVersion)
     }
