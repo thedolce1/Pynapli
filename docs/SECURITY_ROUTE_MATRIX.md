@@ -58,7 +58,8 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 - App Check boundary (`AppCheckPlugin`): when `PYNAPLI_APP_CHECK_ENFORCED=true`, state-changing requests (POST/PUT/PATCH/DELETE) must carry a verified `X-Firebase-AppCheck` header attesting a genuine app instance; reads and non-app origins (health, Play RTDN webhook, age-verification callback) are exempt. Off by default; cryptographic verification is a creds-gated Phase H step (`selectAppCheckVerifier`).
 - Idempotency: implemented for message send, swipe action IDs, notification outbox, Play RTDN event ingestion, and selected activity producers.
 - Secrets: service accounts, signing keys, admin token, webhook token, cursor secrets, and deck-token secrets are server config/env only.
-- Logging: request logs omit headers and query strings; admin-sensitive actions write audit rows where implemented.
+- Logging: request logs omit headers and query strings (`MonitoringPluginTest`); `SensitiveLoggingGuardTest` fails the build if any `logger.*` call references a sensitive field (secrets/tokens, message bodies, exact location, private media URLs, sensitive tags); admin-sensitive actions write audit rows where implemented.
+- Pagination/session tokens: grid, activity-feed, and swipe deck/card/cursor tokens are HMAC-signed (constant-time compare), viewer-bound, and scope/filter-bound; swipe tokens additionally carry generated/expiry windows. Contracts pinned by `DiscoveryCursorCodecTest`/`ActivityCursorCodecTest`/`SwipeDeckTokenCodecTest`.
 
 ## Remaining Hardening
 
