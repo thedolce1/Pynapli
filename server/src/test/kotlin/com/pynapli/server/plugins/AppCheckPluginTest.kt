@@ -2,6 +2,7 @@ package com.pynapli.server.plugins
 
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.safety.DisabledAppCheckVerifier
+import com.pynapli.server.safety.FirebaseAppCheckVerifier
 import com.pynapli.server.safety.HeaderPresenceAppCheckVerifier
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -54,9 +55,15 @@ class AppCheckPluginTest {
         }
 
     @Test
-    fun verifierSelectionFollowsTheEnforcementFlag() {
+    fun verifierSelectionFollowsTheEnforcementFlagAndProjectNumber() {
+        // Off -> accept all.
         assertTrue(selectAppCheckVerifier(testConfig(enforced = false)) === DisabledAppCheckVerifier)
+        // Enforced without a project number -> staged header-presence.
         assertTrue(selectAppCheckVerifier(testConfig(enforced = true)) === HeaderPresenceAppCheckVerifier)
+        // Enforced with a project number -> cryptographic verification.
+        assertTrue(
+            selectAppCheckVerifier(testConfig(enforced = true, projectNumber = "209241465883")) is FirebaseAppCheckVerifier,
+        )
     }
 
     @Test
@@ -105,7 +112,10 @@ class AppCheckPluginTest {
         }
     }
 
-    private fun testConfig(enforced: Boolean): ServerConfig =
+    private fun testConfig(
+        enforced: Boolean,
+        projectNumber: String? = null,
+    ): ServerConfig =
         ServerConfig(
             environment = "test",
             port = 8080,
@@ -114,5 +124,6 @@ class AppCheckPluginTest {
             databasePassword = "pynapli_dev_password",
             redisUrl = "redis://localhost:6379",
             appCheckEnforced = enforced,
+            appCheckProjectNumber = projectNumber,
         )
 }
