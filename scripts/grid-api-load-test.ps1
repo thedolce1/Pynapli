@@ -178,8 +178,10 @@ function New-LoadViewerSession {
         -Body @{
             displayName = "Grid Load $Index"
             birthdate = "1990-01-01"
-            gender = "open"
-            orientation = "open"
+            # Structured gender/orientation keys (ProfileTaxonomies) — the profile API rejects free
+            # text since the gender/orientation write path went structured (#118).
+            gender = if ($Index % 3 -eq 0) { "man" } elseif ($Index % 3 -eq 1) { "woman" } else { "non_binary" }
+            orientation = "bisexual"
             relationshipContext = if ($Index % 3 -eq 0) { "linked" } else { "single" }
             discoveryStyle = if ($Index % 4 -eq 0) { "together" } elseif ($Index % 4 -eq 1) { "solo" } elseif ($Index % 4 -eq 2) { "both" } else { "social" }
         }
