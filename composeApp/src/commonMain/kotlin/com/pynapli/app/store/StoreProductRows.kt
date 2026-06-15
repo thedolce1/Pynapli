@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
@@ -41,22 +42,13 @@ internal fun StoreTierRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(
-                    if (isCurrent) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
-                    },
+                    if (isCurrent) PynapliColors.Accent.copy(alpha = 0.12f) else PynapliColors.SurfaceRaised,
                 ).border(
                     width = 1.dp,
-                    color =
-                        if (isCurrent) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                        } else {
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                        },
-                    shape = RoundedCornerShape(8.dp),
+                    color = if (isCurrent) PynapliColors.Accent.copy(alpha = 0.55f) else PynapliColors.Border,
+                    shape = RoundedCornerShape(12.dp),
                 ).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -136,12 +128,12 @@ internal fun StoreProductRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
+                .clip(RoundedCornerShape(12.dp))
+                .background(PynapliColors.SurfaceRaised)
                 .border(
                     width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
-                    shape = RoundedCornerShape(8.dp),
+                    color = PynapliColors.Border,
+                    shape = RoundedCornerShape(12.dp),
                 ).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
