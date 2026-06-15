@@ -13,6 +13,7 @@ internal fun profileStatusFor(code: String): HttpStatusCode =
     when (code) {
         "PROFILE_NOT_FOUND" -> HttpStatusCode.NotFound
         "AGE_VERIFICATION_REQUIRED" -> HttpStatusCode.Forbidden
+        "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "INVALID_DISPLAY_NAME",
         "INVALID_BIRTHDATE",
         "AGE_RESTRICTED",

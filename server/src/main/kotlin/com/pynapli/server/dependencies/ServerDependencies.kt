@@ -234,6 +234,7 @@ class ServerDependencies(
                     blockRepository = core.blockRepository,
                     riskPolicyService = core.riskPolicyService,
                     presenceService = core.presenceService,
+                    rateLimitService = core.rateLimitService,
                     profileViewRecordScope = profileActivityScope,
                     profileViewRecordConcurrency = 4,
                 )

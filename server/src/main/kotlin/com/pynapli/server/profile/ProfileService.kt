@@ -5,6 +5,8 @@ import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.BlockRepository
+import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.PublicProfileDto
@@ -22,6 +24,7 @@ class ProfileService(
     private val blockRepository: BlockRepository? = null,
     private val riskPolicyService: RiskPolicyService? = null,
     private val presenceService: PresenceService? = null,
+    private val rateLimitService: RateLimitService? = null,
     private val bioScanner: ProfileBioScanner = AcceptAllProfileBioScanner,
     profileViewRecordScope: CoroutineScope? = null,
     profileViewRecordConcurrency: Int = 4,
@@ -68,6 +71,7 @@ class ProfileService(
         userId: UUID,
         request: UpdateProfileRequestDto,
     ): MeDto {
+        requireProfileMutationRateLimit(userId)
         val update = request.toProfileUpdate(clock)
 
         // PROFILE_SETTINGS_SPEC: high-sensitivity lifestyle terms are age-gated,
@@ -88,8 +92,17 @@ class ProfileService(
         userId: UUID,
         request: UpdateDiscoverySettingsRequestDto,
     ): MeDto {
+        requireProfileMutationRateLimit(userId)
         val update = request.toDiscoverySettingsUpdate()
         return repository.updateDiscoverySettings(userId, update)?.toDto() ?: throw ProfileException("PROFILE_NOT_FOUND")
+    }
+
+    // D2 hardening: profile/settings writes run validation + the bio scanner, so cap their velocity.
+    // updateProfile and updateDiscoverySettings share one PROFILE_UPDATE budget.
+    private suspend fun requireProfileMutationRateLimit(userId: UUID) {
+        if (rateLimitService?.check(userId, RateLimitedAction.PROFILE_UPDATE)?.allowed == false) {
+            throw ProfileException("RATE_LIMITED")
+        }
     }
 }
 

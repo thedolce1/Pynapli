@@ -91,6 +91,9 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.BOOST_ACTIVATE, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
                 // PSYNC_SPEC PS-4: nudge cooldown — one nudge per minute per user (≈one live session).
                 RateLimitPolicy(action = RateLimitedAction.PSYNC_NUDGE, limit = 1, windowSeconds = NUDGE_COOLDOWN_SECONDS),
+                // Profile/settings edits run validation + the bio scanner on every call; generous
+                // for legitimate editing, but caps scripted spam of the write/scan path.
+                RateLimitPolicy(action = RateLimitedAction.PROFILE_UPDATE, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
             ).associateBy { it.action }
 
         private const val ONE_HOUR_SECONDS = 3_600L
@@ -115,6 +118,7 @@ object RateLimitedAction {
     const val STORE_PURCHASE = "store_purchase"
     const val BOOST_ACTIVATE = "boost_activate"
     const val PSYNC_NUDGE = "psync_nudge"
+    const val PROFILE_UPDATE = "profile_update"
 }
 
 data class RateLimitDecision(
