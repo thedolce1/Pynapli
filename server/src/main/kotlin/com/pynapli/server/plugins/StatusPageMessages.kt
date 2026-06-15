@@ -172,6 +172,8 @@ internal fun userSafeMessage(code: String): String =
         "ADMIN_UNAUTHENTICATED" -> "Admin authentication is required."
         "ADMIN_FORBIDDEN" -> "Admin access was denied."
         "INVALID_ADMIN_ACTOR" -> "Admin actor is required."
+        "USER_NOT_FOUND" -> "User was not found."
+        "INVALID_USER_ID" -> "User id is not valid."
         "MODERATION_REASON_REQUIRED" -> "Moderation reason is required."
         "MODERATION_REASON_TOO_LONG" -> "Moderation reason is too long."
         "INVALID_REVIEW_LIMIT" -> "Review queue limit is not valid."

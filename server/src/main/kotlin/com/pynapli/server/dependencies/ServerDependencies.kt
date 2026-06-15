@@ -9,6 +9,8 @@ import com.pynapli.server.activity.ActivityRetentionWorker
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.activity.JdbcActivityRetentionRepository
+import com.pynapli.server.admin.AdminUserLookupService
+import com.pynapli.server.admin.JdbcAdminUserLookupRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.config.ServerConfig
@@ -98,6 +100,7 @@ class ServerDependencies(
     val authService: AuthService?,
     val profileService: ProfileService?,
     val profileLinkService: ProfileLinkService?,
+    val adminUserLookupService: AdminUserLookupService?,
     val locationService: LocationService?,
     val travelLocationService: TravelLocationService?,
     val travelPlaceSearchService: TravelPlaceSearchService?,
@@ -246,6 +249,13 @@ class ServerDependencies(
                     notificationPublisher = core.notificationService,
                     riskPolicyService = core.riskPolicyService,
                 )
+            val adminUserLookupService =
+                AdminUserLookupService(
+                    profileRepository = JdbcProfileRepository(database.dataSource),
+                    repository = JdbcAdminUserLookupRepository(database.dataSource),
+                    entitlementLookup = { userId -> commerceTravel.subscriptionService.getEntitlement(userId) },
+                    partnerLinkLookup = { userId -> profileLinkService.getSummary(userId) },
+                )
             val grid =
                 buildGridDependencies(
                     config = config,
@@ -330,6 +340,7 @@ class ServerDependencies(
                 authService = core.authService,
                 profileService = profileService,
                 profileLinkService = profileLinkService,
+                adminUserLookupService = adminUserLookupService,
                 locationService = core.locationService,
                 travelLocationService = commerceTravel.travelLocationService,
                 travelPlaceSearchService = commerceTravel.travelPlaceSearchService,
@@ -395,6 +406,7 @@ class ServerDependencies(
                 authService = null,
                 profileService = null,
                 profileLinkService = null,
+                adminUserLookupService = null,
                 locationService = null,
                 travelLocationService = null,
                 travelPlaceSearchService = null,
