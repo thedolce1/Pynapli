@@ -5,6 +5,7 @@ import com.pynapli.server.account.JdbcAccountLifecycleRepository
 import com.pynapli.server.activity.ActivityBroadcaster
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
+import com.pynapli.server.auth.JdbcDeviceFarmRepository
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.location.JdbcLocationRepository
 import com.pynapli.server.location.JdbcTravelLocationRepository
@@ -116,6 +117,8 @@ internal fun buildCoreDependencies(
         AuthService(
             repository = JdbcAuthRepository(database.dataSource),
             rateLimitService = rateLimitService,
+            deviceFarmRepository = JdbcDeviceFarmRepository(database.dataSource),
+            deviceRiskSignalPublisher = riskService,
         )
     val reportService =
         ReportService(

@@ -226,6 +226,48 @@ class AuthServiceTest {
 
             assertEquals("RATE_LIMITED", error.code)
         }
+
+    @Test
+    fun signupRaisesAccountFarmSignalOnceTooManyAccountsShareADevice() =
+        runBlocking {
+            val ledger = InMemoryDeviceFarmRepository()
+            val publisher = RecordingDeviceRiskSignalPublisher()
+            val service =
+                AuthService(
+                    InMemoryAuthRepository(),
+                    deviceFarmRepository = ledger,
+                    deviceRiskSignalPublisher = publisher,
+                )
+
+            // First three accounts on the same device stay under the threshold (4).
+            signup(service, email = "farm1@example.com", deviceId = "farm-device")
+            signup(service, email = "farm2@example.com", deviceId = "farm-device")
+            signup(service, email = "farm3@example.com", deviceId = "farm-device")
+            assertEquals(0, publisher.signals.size)
+
+            // The fourth account from the same device crosses the threshold and raises the signal.
+            signup(service, email = "farm4@example.com", deviceId = "farm-device")
+            assertEquals(1, publisher.signals.size)
+            assertEquals(4, publisher.signals.single().distinctAccountCount)
+            assertEquals(24L, publisher.signals.single().windowHours)
+        }
+
+    @Test
+    fun signupWithoutDeviceIdNeverRaisesAFarmSignal() =
+        runBlocking {
+            val ledger = InMemoryDeviceFarmRepository()
+            val publisher = RecordingDeviceRiskSignalPublisher()
+            val service =
+                AuthService(
+                    InMemoryAuthRepository(),
+                    deviceFarmRepository = ledger,
+                    deviceRiskSignalPublisher = publisher,
+                )
+
+            repeat(6) { index -> signup(service, email = "nodevice$index@example.com", deviceId = null) }
+
+            assertEquals(0, publisher.signals.size)
+        }
 }
 
 private suspend fun signup(
@@ -364,6 +406,54 @@ private data class SignupProfile(
     val termsAccepted: Boolean,
     val privacyAccepted: Boolean,
 )
+
+private class InMemoryDeviceFarmRepository : DeviceFarmRepository {
+    private data class Link(
+        val deviceHash: String,
+        val userId: UUID,
+        val createdAt: Instant,
+    )
+
+    private val links = mutableListOf<Link>()
+
+    override suspend fun linkDeviceToAccount(
+        deviceHash: String,
+        userId: UUID,
+        occurredAt: Instant,
+    ) {
+        if (links.none { it.deviceHash == deviceHash && it.userId == userId }) {
+            links += Link(deviceHash, userId, occurredAt)
+        }
+    }
+
+    override suspend fun countDistinctAccountsForDevice(
+        deviceHash: String,
+        since: Instant,
+    ): Int =
+        links
+            .filter { it.deviceHash == deviceHash && !it.createdAt.isBefore(since) }
+            .map { it.userId }
+            .distinct()
+            .size
+}
+
+private data class RecordedDeviceFarmSignal(
+    val userId: UUID,
+    val distinctAccountCount: Int,
+    val windowHours: Long,
+)
+
+private class RecordingDeviceRiskSignalPublisher : com.pynapli.server.safety.DeviceRiskSignalPublisher {
+    val signals = mutableListOf<RecordedDeviceFarmSignal>()
+
+    override suspend fun recordDeviceAccountFarm(
+        userId: UUID,
+        distinctAccountCount: Int,
+        windowHours: Long,
+    ) {
+        signals += RecordedDeviceFarmSignal(userId, distinctAccountCount, windowHours)
+    }
+}
 
 private fun denyingRateLimitService(): RateLimitService =
     RateLimitService(
