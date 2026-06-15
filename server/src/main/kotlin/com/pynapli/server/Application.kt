@@ -21,10 +21,12 @@ import com.pynapli.server.moderation.configureAdminReportRoutes
 import com.pynapli.server.moderation.configureAdminRiskRoutes
 import com.pynapli.server.notifications.configureAdminMetricsRoutes
 import com.pynapli.server.notifications.configureNotificationRoutes
+import com.pynapli.server.plugins.configureAppCheck
 import com.pynapli.server.plugins.configureHTTP
 import com.pynapli.server.plugins.configureMonitoring
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
+import com.pynapli.server.plugins.selectAppCheckVerifier
 import com.pynapli.server.presence.configurePresenceRoutes
 import com.pynapli.server.presence.configurePresenceStreamRoutes
 import com.pynapli.server.profile.configureProfileRoutes
@@ -74,6 +76,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureStatusPages()
     configureMonitoring()
     configureHTTP()
+    configureAppCheck(dependencies.config.appCheckEnforced, selectAppCheckVerifier(dependencies.config))
     configureHealthRoutes(dependencies)
     configureAdminAppealRoutes(dependencies.config, dependencies.adminAppealService)
     configureAdminModerationRoutes(dependencies.config, dependencies.messageModerationService)

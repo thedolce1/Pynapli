@@ -168,6 +168,7 @@ internal fun userSafeMessage(code: String): String =
         "APPEAL_NOT_FOUND" -> "Appeal was not found."
         "RATE_LIMITED" -> "Too many actions. Try again later."
         "RISK_RESTRICTED" -> "This action is unavailable right now."
+        "APP_CHECK_REQUIRED" -> "App verification failed. Please update the app and try again."
         "ADMIN_UNAUTHENTICATED" -> "Admin authentication is required."
         "ADMIN_FORBIDDEN" -> "Admin access was denied."
         "INVALID_ADMIN_ACTOR" -> "Admin actor is required."
