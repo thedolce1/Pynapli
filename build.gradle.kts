@@ -10,6 +10,7 @@ plugins {
     alias(libs.plugins.ktor) apply false
     alias(libs.plugins.sqldelight) apply false
     alias(libs.plugins.google.services) apply false
+    alias(libs.plugins.firebase.crashlytics) apply false
     alias(libs.plugins.spotless) apply false
 }
 

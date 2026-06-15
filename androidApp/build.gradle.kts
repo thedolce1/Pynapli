@@ -4,8 +4,11 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// Firebase plugins only activate when the (gitignored) google-services.json is present, so CI and
+// contributors without Firebase config still build. Crashlytics requires the google-services plugin.
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
 
 android {
@@ -34,6 +37,7 @@ kotlin {
         implementation(libs.androidx.activity.compose)
         implementation(platform(libs.firebase.bom))
         implementation(libs.firebase.messaging)
+        implementation(libs.firebase.crashlytics)
         implementation(libs.play.billing)
     }
 }
