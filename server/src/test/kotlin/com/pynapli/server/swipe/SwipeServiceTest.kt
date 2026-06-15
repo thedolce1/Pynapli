@@ -92,6 +92,25 @@ class SwipeServiceTest {
         }
 
     @Test
+    fun mutualLikeRecordsMatchProductMetric() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000000a0")
+            val target = UUID.fromString("00000000-0000-0000-0000-0000000000a1")
+            val metrics =
+                com.pynapli.server.metrics
+                    .ProductMetrics()
+            val service = SwipeService(InMemorySwipeRepository(), productMetrics = metrics)
+
+            // A like with no reciprocation does not create a match -> no metric.
+            service.submitAction(viewer, swipeActionRequest(viewer, target, SwipeAction.LIKE))
+            assertEquals(0, metrics.countFor(com.pynapli.server.metrics.ProductMetrics.MATCH_CREATED))
+
+            // The reciprocating like creates the match -> exactly one metric.
+            service.submitAction(target, swipeActionRequest(target, viewer, SwipeAction.LIKE))
+            assertEquals(1, metrics.countFor(com.pynapli.server.metrics.ProductMetrics.MATCH_CREATED))
+        }
+
+    @Test
     fun likeRecordsLikesYouActivityOnce() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000012")

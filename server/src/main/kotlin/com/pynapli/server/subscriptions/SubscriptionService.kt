@@ -22,6 +22,7 @@ class SubscriptionService(
     entitlementCacheTtl: Duration = Duration.ofSeconds(5),
     entitlementCacheMaxSize: Int = 10_000,
     private val rateLimitService: RateLimitService? = null,
+    private val productMetrics: com.pynapli.server.metrics.ProductMetrics? = null,
 ) {
     private val entitlementCache =
         SubscriptionEntitlementCache(
@@ -70,6 +71,7 @@ class SubscriptionService(
             playStorePurchaseVerifier = playStorePurchaseVerifier,
             purchaseApplier = playStorePurchaseApplier,
             rateLimitService = rateLimitService,
+            productMetrics = productMetrics,
             getEntitlement = ::getEntitlement,
         )
     private val playStoreSyncActions =

@@ -323,6 +323,9 @@ class SubscriptionServiceTest {
         runBlocking {
             val user = uuid(41)
             val repository = InMemorySubscriptionRepository()
+            val metrics =
+                com.pynapli.server.metrics
+                    .ProductMetrics()
             val service =
                 SubscriptionService(
                     repository = repository,
@@ -341,6 +344,7 @@ class SubscriptionServiceTest {
                                 ),
                             ),
                         ),
+                    productMetrics = metrics,
                 )
 
             val response =
@@ -358,6 +362,8 @@ class SubscriptionServiceTest {
             assertEquals(SubscriptionTier.SELECT, response.entitlement.tier)
             assertEquals(EntitlementSource.OWN_SUBSCRIPTION, response.entitlement.source)
             assertEquals("active", repository.verifiedPurchases.single().status)
+            // Authoritative monetization KPI recorded on the user-initiated verified purchase.
+            assertEquals(1, metrics.countFor(com.pynapli.server.metrics.ProductMetrics.PURCHASE_VERIFIED))
         }
 
     @Test

@@ -49,6 +49,7 @@ internal fun buildSwipeDependencies(
     travelLocationRepository: TravelLocationRepository,
     activityService: ActivityService,
     psyncBroadcaster: PsyncBroadcaster,
+    productMetrics: com.pynapli.server.metrics.ProductMetrics,
 ): SwipeDependencies {
     val swipeRepository = JdbcSwipeRepository(dataSource)
     val swipeService =
@@ -64,6 +65,7 @@ internal fun buildSwipeDependencies(
             travelLocationRepository = travelLocationRepository,
             deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret),
             activityService = activityService,
+            productMetrics = productMetrics,
         )
     val psyncSessionService =
         PsyncSessionService(

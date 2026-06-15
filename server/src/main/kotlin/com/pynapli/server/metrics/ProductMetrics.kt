@@ -37,6 +37,8 @@ class ProductMetrics {
         const val SIGNUP = "signup"
         const val LOGIN = "login"
         const val MESSAGE_SENT = "message_sent"
+        const val MATCH_CREATED = "match_created"
+        const val PURCHASE_VERIFIED = "purchase_verified"
 
         // Guards against an unexpected high-cardinality or unsafe label sneaking into a metric key.
         private val SAFE_LABEL = Regex("""[a-z0-9_]{1,40}""")
