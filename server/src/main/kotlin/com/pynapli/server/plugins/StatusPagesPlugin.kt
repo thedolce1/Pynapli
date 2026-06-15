@@ -16,6 +16,7 @@ import com.pynapli.server.profile.ProfileException
 import com.pynapli.server.profile.TonightAvailabilityException
 import com.pynapli.server.profilelink.ProfileLinkException
 import com.pynapli.server.psync.PsyncException
+import com.pynapli.server.safety.AppCheckException
 import com.pynapli.server.safety.SafetyException
 import com.pynapli.server.subscriptions.SubscriptionException
 import com.pynapli.server.swipe.SavedSwipeFilterException
@@ -221,6 +222,19 @@ fun Application.configureStatusPages() {
         exception<MediaException> { call, cause ->
             call.respond(
                 status = mediaStatusFor(cause.code),
+                message =
+                    ApiErrorDto(
+                        code = cause.code,
+                        message = userSafeMessage(cause.code),
+                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                    ),
+            )
+        }
+
+        exception<AppCheckException> { call, cause ->
+            // Transport-level attestation failure: the request is not from a trusted app instance.
+            call.respond(
+                status = HttpStatusCode.Forbidden,
                 message =
                     ApiErrorDto(
                         code = cause.code,

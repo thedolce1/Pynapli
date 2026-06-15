@@ -71,6 +71,11 @@ data class ServerConfig(
     val ageVerificationProviderLabel: String = "Identity provider",
     val ageVerificationProviderRedirectBaseUrl: String? = null,
     val adminApiToken: String? = null,
+    // App Check boundary: when true, state-changing requests must carry a verified
+    // `X-Firebase-AppCheck` header (attesting a genuine app instance). Default off so local/dev/test
+    // never require it; flip on in production only after the client attaches the token. Real
+    // cryptographic verification is a creds-gated Phase H step (see selectAppCheckVerifier).
+    val appCheckEnforced: Boolean = false,
     val supportEmail: String = "support@pynapli.com",
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
     val activityCursorSecret: String = "pynapli-local-dev-activity-cursor-secret",
@@ -311,6 +316,11 @@ data class ServerConfig(
                         .getenv("PYNAPLI_ADMIN_API_TOKEN")
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() },
+                appCheckEnforced =
+                    System
+                        .getenv("PYNAPLI_APP_CHECK_ENFORCED")
+                        ?.toBooleanStrictOrNull()
+                        ?: false,
                 supportEmail =
                     System
                         .getenv("PYNAPLI_SUPPORT_EMAIL")
