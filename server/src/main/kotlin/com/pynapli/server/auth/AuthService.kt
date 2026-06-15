@@ -3,6 +3,7 @@ package com.pynapli.server.auth
 import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.auth.security.Sha256
 import com.pynapli.server.auth.security.normalizeEmail
+import com.pynapli.server.metrics.ProductMetrics
 import com.pynapli.server.safety.DeviceRiskSignalPublisher
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
@@ -21,6 +22,7 @@ class AuthService(
     rateLimitService: RateLimitService? = null,
     deviceFarmRepository: DeviceFarmRepository? = null,
     deviceRiskSignalPublisher: DeviceRiskSignalPublisher? = null,
+    private val productMetrics: ProductMetrics? = null,
 ) {
     private val validator = AuthRequestValidator(clock)
     private val rateLimitGuard = AuthRateLimitGuard(rateLimitService)
@@ -76,7 +78,9 @@ class AuthService(
         // risk signal if this device is behind too many accounts. Signal-only — never blocks signup.
         deviceFarmGuard.recordSignup(user.id, deviceId)
 
-        return sessionManager.createSession(user, deviceId, platform, appVersion)
+        val session = sessionManager.createSession(user, deviceId, platform, appVersion)
+        productMetrics?.record(ProductMetrics.SIGNUP)
+        return session
     }
 
     suspend fun loginEmail(
@@ -95,7 +99,9 @@ class AuthService(
         if (identity.userStatus != "active") throw AuthException("ACCOUNT_NOT_ACTIVE")
         if (!passwordHasher.verify(password, identity.passwordHash)) throw AuthException("INVALID_CREDENTIALS")
 
-        return sessionManager.createSession(UserRecord(identity.userId, identity.userStatus), deviceId, platform, appVersion)
+        val session = sessionManager.createSession(UserRecord(identity.userId, identity.userStatus), deviceId, platform, appVersion)
+        productMetrics?.record(ProductMetrics.LOGIN)
+        return session
     }
 
     suspend fun refresh(refreshToken: String): AuthSessionDto {

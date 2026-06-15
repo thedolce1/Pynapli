@@ -12,6 +12,7 @@ import com.pynapli.server.location.JdbcTravelLocationRepository
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationRepository
 import com.pynapli.server.messaging.MessageBroadcaster
+import com.pynapli.server.metrics.ProductMetrics
 import com.pynapli.server.moderation.AdminAppealService
 import com.pynapli.server.moderation.JdbcAdminAppealRepository
 import com.pynapli.server.notifications.FirebaseAdminPushNotificationSender
@@ -59,6 +60,7 @@ internal class CoreDependencies(
     val riskPolicyService: RiskPolicyService,
     val locationService: LocationService,
     val rateLimitService: RateLimitService,
+    val productMetrics: ProductMetrics,
     val authService: AuthService,
     val reportService: ReportService,
     val appealService: AppealService,
@@ -113,12 +115,14 @@ internal fun buildCoreDependencies(
             repository = RedisRateLimitRepository(redisCache),
             riskSignalPublisher = riskService,
         )
+    val productMetrics = ProductMetrics()
     val authService =
         AuthService(
             repository = JdbcAuthRepository(database.dataSource),
             rateLimitService = rateLimitService,
             deviceFarmRepository = JdbcDeviceFarmRepository(database.dataSource),
             deviceRiskSignalPublisher = riskService,
+            productMetrics = productMetrics,
         )
     val reportService =
         ReportService(
@@ -170,6 +174,7 @@ internal fun buildCoreDependencies(
         riskPolicyService = riskPolicyService,
         locationService = locationService,
         rateLimitService = rateLimitService,
+        productMetrics = productMetrics,
         authService = authService,
         reportService = reportService,
         appealService = appealService,

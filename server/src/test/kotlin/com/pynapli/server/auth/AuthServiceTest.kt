@@ -253,6 +253,21 @@ class AuthServiceTest {
         }
 
     @Test
+    fun signupAndLoginRecordAuthoritativeProductMetrics() =
+        runBlocking {
+            val metrics =
+                com.pynapli.server.metrics
+                    .ProductMetrics()
+            val service = AuthService(InMemoryAuthRepository(), productMetrics = metrics)
+
+            signup(service, email = "kpi@example.com", password = "correct horse battery")
+            service.loginEmail("kpi@example.com", "correct horse battery", null, null, null)
+
+            assertEquals(1, metrics.countFor(com.pynapli.server.metrics.ProductMetrics.SIGNUP))
+            assertEquals(1, metrics.countFor(com.pynapli.server.metrics.ProductMetrics.LOGIN))
+        }
+
+    @Test
     fun signupWithoutDeviceIdNeverRaisesAFarmSignal() =
         runBlocking {
             val ledger = InMemoryDeviceFarmRepository()

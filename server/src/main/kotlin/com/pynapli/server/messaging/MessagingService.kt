@@ -1,6 +1,7 @@
 package com.pynapli.server.messaging
 
 import com.pynapli.server.activity.ActivityService
+import com.pynapli.server.metrics.ProductMetrics
 import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.MessageReviewRiskSignalPublisher
@@ -31,6 +32,7 @@ class MessagingService(
     clock: Clock = Clock.systemUTC(),
     activityService: ActivityService? = null,
     messageMediaGateway: MessageMediaGateway? = null,
+    private val productMetrics: ProductMetrics? = null,
 ) {
     private val featureAccess = MessagingFeatureAccess(subscriptionService)
     private val dtoMapper = MessagingDtoMapper(featureAccess, messageMediaGateway)
@@ -102,7 +104,9 @@ class MessagingService(
         request: SendMessageRequestDto,
     ): MessageDto {
         val conversationId = conversationIdText.toMessagingUuidOrThrow()
-        return messageActions.sendText(userId, conversationId, request)
+        val message = messageActions.sendText(userId, conversationId, request)
+        productMetrics?.record(ProductMetrics.MESSAGE_SENT)
+        return message
     }
 
     suspend fun createMessageMediaUploadSlot(
@@ -116,7 +120,9 @@ class MessagingService(
         request: com.pynapli.shared.network.dto.SendMediaMessageRequestDto,
     ): MessageDto {
         val conversationId = conversationIdText.toMessagingUuidOrThrow()
-        return messageActions.sendMedia(userId, conversationId, request)
+        val message = messageActions.sendMedia(userId, conversationId, request)
+        productMetrics?.record(ProductMetrics.MESSAGE_SENT)
+        return message
     }
 
     suspend fun revealMessageMedia(
