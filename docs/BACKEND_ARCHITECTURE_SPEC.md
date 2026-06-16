@@ -478,6 +478,18 @@ Ktor can verify App Check tokens on sensitive endpoints.
 
 Do not treat App Check as complete bot protection.
 
+Implementation note (2026-06-16):
+
+- Server boundary exists in `AppCheckPlugin`: when `PYNAPLI_APP_CHECK_ENFORCED=true`,
+  state-changing HTTP requests require `X-Firebase-AppCheck`.
+- With `PYNAPLI_APP_CHECK_PROJECT_NUMBER` set, tokens are cryptographically verified against
+  Firebase App Check JWKS for the configured project number.
+- Android client wiring exists: debug builds use Firebase App Check debug provider, release builds
+  use Play Integrity, and the shared Ktor client attaches a non-blank App Check token as
+  `X-Firebase-AppCheck` when Firebase can provide one.
+- Remaining ops: register Android App Check in Firebase, allowlist debug tokens for emulator/dev
+  builds, set the production project number on Ktor, then enable enforcement after staged QA.
+
 ## Database Model Sketch
 
 Core tables:
@@ -797,7 +809,7 @@ Keep sensitive payloads out of logs.
 ## Implementation Checklist
 
 - [ ] Partial: Ktor is authoritative for implemented product rules; grid/swipe cursor/session hardening and production safety gaps remain.
-- [ ] Partial: Firebase role is limited to FCM in the current code path, but production App Check/Analytics/Crashlytics boundaries are not complete.
+- [ ] Partial: Firebase role is limited to support infrastructure. FCM is server-routed through Ktor, Crashlytics is Android-wired, and App Check has server verification plus Android token attachment. Remaining Firebase work: production App Check console rollout/real-device validation, privacy-safe Analytics event wiring, and Crashlytics redaction validation.
 - [x] PostgreSQL/PostGIS selected for location.
 - [x] Redis selected for presence/cache/rate limits.
 - [ ] Partial: object-storage-style upload contracts, GCS V4 signed upload/download URLs, and CDN signed delivery exist; production bucket/CDN provisioning validation remains.

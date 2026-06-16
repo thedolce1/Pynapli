@@ -329,6 +329,31 @@ Client: `androidApp/google-services.json` (gitignored, package `com.pynapli.app`
 
 **Verify live:** register a device from the app, trigger an event to that user (e.g. a message), and confirm a `SENT` count in `GET /v1/admin/metrics/notifications` (admin-token gated).
 
+### App Check enablement
+
+The App Check code path is now built on both sides:
+
+- Android debug builds install Firebase App Check's debug provider.
+- Android release builds install Firebase App Check's Play Integrity provider.
+- The shared Ktor client attaches `X-Firebase-AppCheck` when Firebase returns a non-blank token.
+- Ktor verifies the token when `PYNAPLI_APP_CHECK_ENFORCED=true`; with
+  `PYNAPLI_APP_CHECK_PROJECT_NUMBER` set, verification is cryptographic against Google's App Check
+  JWKS for that Firebase project number.
+
+Founder/ops steps before turning enforcement on:
+
+- Register the Android app (`com.pynapli.app`) for App Check in Firebase.
+- For emulator/dev QA, copy the debug token from logcat and allowlist it in Firebase App Check.
+- For production/staging Ktor, set:
+
+| Env var | Value | Why |
+| --- | --- | --- |
+| `PYNAPLI_APP_CHECK_ENFORCED` | `true` | Requires attested app traffic for state-changing API requests. |
+| `PYNAPLI_APP_CHECK_PROJECT_NUMBER` | Firebase project number, not project id | Binds JWT issuer/audience checks to the correct Firebase project. |
+
+Rollout rule: validate App Check on dev/staging first, then production. App Check reduces non-genuine
+client traffic but does not replace auth, object ownership checks, rate limits, or abuse scoring.
+
 ## Google Cloud Setup
 
 Recommended services:
@@ -475,6 +500,7 @@ If `pynapli` is unavailable as a GitHub org, fallback options:
 - [ ] Email aliases reserved.
 - [ ] Partial: GCP billing/project setup started; final production naming/cost controls are not confirmed.
 - [ ] Partial: Firebase project setup started; final dev/staging/prod names are not confirmed.
+- [x] Android App Check client code path exists for debug and release builds.
 - [ ] Apple Developer account exists.
 - [ ] Google Play Console exists.
 - [x] Docker Desktop installed.

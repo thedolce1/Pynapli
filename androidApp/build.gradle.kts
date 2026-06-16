@@ -38,6 +38,12 @@ kotlin {
         implementation(platform(libs.firebase.bom))
         implementation(libs.firebase.messaging)
         implementation(libs.firebase.crashlytics)
+        implementation(libs.firebase.appcheck)
         implementation(libs.play.billing)
     }
+}
+
+dependencies {
+    debugImplementation(libs.firebase.appcheck.debug)
+    releaseImplementation(libs.firebase.appcheck.playintegrity)
 }

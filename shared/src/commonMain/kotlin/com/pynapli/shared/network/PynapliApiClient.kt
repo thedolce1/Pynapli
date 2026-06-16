@@ -6,6 +6,8 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ApiErrorDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
@@ -56,13 +58,60 @@ class KtorPynapliApiClient(
     LocationApi by KtorLocationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     TonightApi by KtorTonightApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     PsyncApi by KtorPsyncApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    PresenceApi by KtorPresenceApi(KtorApiSupport(httpClient, config, json, accessTokenProvider))
+    PresenceApi by KtorPresenceApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    constructor(
+        config: PynapliConfig,
+        accessTokenProvider: AccessTokenProvider,
+        appCheckTokenProvider: AppCheckTokenProvider,
+        json: Json = PynapliJson,
+    ) : this(
+        config = config,
+        accessTokenProvider = accessTokenProvider,
+        httpClient = createPynapliHttpClient(json = json, appCheckTokenProvider = appCheckTokenProvider),
+        json = json,
+    )
+}
 
-fun createPynapliHttpClient(json: Json = PynapliJson): HttpClient =
+fun createPynapliHttpClient(
+    json: Json = PynapliJson,
+    appCheckTokenProvider: AppCheckTokenProvider = NoAppCheckTokenProvider,
+): HttpClient =
     HttpClient {
-        expectSuccess = false
-        install(ContentNegotiation) {
-            json(json)
+        configurePynapliHttpClient(json, appCheckTokenProvider)
+    }
+
+internal fun createPynapliHttpClient(
+    engine: HttpClientEngine,
+    json: Json = PynapliJson,
+    appCheckTokenProvider: AppCheckTokenProvider = NoAppCheckTokenProvider,
+): HttpClient =
+    HttpClient(engine) {
+        configurePynapliHttpClient(json, appCheckTokenProvider)
+    }
+
+private fun io.ktor.client.HttpClientConfig<*>.configurePynapliHttpClient(
+    json: Json,
+    appCheckTokenProvider: AppCheckTokenProvider,
+) {
+    expectSuccess = false
+    install(ContentNegotiation) {
+        json(json)
+    }
+    install(AppCheckHeaderPlugin) {
+        tokenProvider = appCheckTokenProvider
+    }
+}
+
+private class AppCheckHeaderPluginConfig {
+    var tokenProvider: AppCheckTokenProvider = NoAppCheckTokenProvider
+}
+
+private val AppCheckHeaderPlugin =
+    createClientPlugin("PynapliAppCheckHeader", ::AppCheckHeaderPluginConfig) {
+        val tokenProvider = pluginConfig.tokenProvider
+        onRequest { request, _ ->
+            val token = tokenProvider.appCheckToken()?.trim()?.takeIf { it.isNotEmpty() } ?: return@onRequest
+            request.headers.append(APP_CHECK_HEADER, token)
         }
     }
 

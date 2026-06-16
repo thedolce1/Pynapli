@@ -98,6 +98,37 @@ class KtorPynapliApiClientTest {
         }
 
     @Test
+    fun configuredAppCheckProviderAddsAttestationHeader() =
+        runBlocking {
+            var appCheckHeader: String? = null
+            val httpClient =
+                createPynapliHttpClient(
+                    engine =
+                        MockEngine { request ->
+                            appCheckHeader = request.headers[APP_CHECK_HEADER]
+                            respond(
+                                content =
+                                    """
+                                    {
+                                      "items": [],
+                                      "nextCursor": null
+                                    }
+                                    """.trimIndent(),
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                            )
+                        },
+                    appCheckTokenProvider = StaticAppCheckTokenProvider("app-check-token"),
+                )
+            val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider("test-token"), httpClient)
+
+            val result = api.queryGrid(GridQueryRequestDto(limit = 1))
+
+            assertIs<AppResult.Success<*>>(result)
+            assertEquals("app-check-token", appCheckHeader)
+        }
+
+    @Test
     fun queryGridRequiresAccessToken() =
         runBlocking {
             val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider(null), testHttpClient())

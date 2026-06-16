@@ -8,6 +8,7 @@ import android.os.Build
 import com.pynapli.app.activity.ActivityRealtimeCoordinator
 import com.pynapli.app.activity.ActivityStateHolder
 import com.pynapli.app.activity.ApiActivityFeedRepository
+import com.pynapli.app.appcheck.AndroidFirebaseAppCheckTokenProvider
 import com.pynapli.app.appsettings.ApiNotificationPreferencesGateway
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.appsettings.LocalAppSettingsRepository
@@ -80,6 +81,7 @@ class AndroidAppGraph(
         KtorPynapliApiClient(
             config = PynapliConfigs.LocalAndroidEmulator,
             accessTokenProvider = sessionStore,
+            appCheckTokenProvider = AndroidFirebaseAppCheckTokenProvider(appContext),
         )
     private val authRepository =
         AuthRepository(
