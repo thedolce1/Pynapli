@@ -254,6 +254,11 @@ Later:
   integration tests self-manage Postgres/Redis via Testcontainers (Docker is present on
   `ubuntu-latest`), so no GitHub service containers are needed. Uploads test reports (always) and
   the debug APK (on success) as artifacts.
+- **Docker Smoke (Cloud Run image)** — builds `:server:installDist`, builds
+  `infra/server.Dockerfile`, starts PostgreSQL/PostGIS and Redis with Docker Compose, runs the API
+  container on the same Docker network, and requires both `/health` and `/health/deep` to return
+  `200`. This proves the Cloud Run image boots against real dependencies, not just that the server
+  compiles.
 
 ### Branch protection (apply once, founder action)
 
@@ -266,6 +271,7 @@ gh api -X PUT repos/thedolce1/Pynapli/branches/main/protection \
   -f 'required_status_checks[strict]=true' \
   -f 'required_status_checks[contexts][]=Format (Spotless)' \
   -f 'required_status_checks[contexts][]=Verify (tests + assemble)' \
+  -f 'required_status_checks[contexts][]=Docker Smoke (Cloud Run image)' \
   -f 'enforce_admins=true' \
   -f 'required_pull_request_reviews[required_approving_review_count]=1' \
   -f 'restrictions=' \
