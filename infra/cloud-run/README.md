@@ -84,6 +84,24 @@ PYNAPLI_DATABASE_CLOUD_SQL_REFRESH_STRATEGY=lazy
 The Cloud Run service account needs the Cloud SQL Client role and Secret Manager access to the
 database password secret.
 
+## Required Runtime Secrets
+
+Create these in Secret Manager before deploying staging/prod. Values must be strong and unique per
+environment:
+
+```text
+pynapli-staging-db-password
+pynapli-staging-media-signer-json
+pynapli-staging-admin-api-token
+pynapli-staging-discovery-cursor-secret
+pynapli-staging-activity-cursor-secret
+pynapli-staging-swipe-deck-token-secret
+```
+
+The media signer JSON is required by the current GCS V4 upload/download signing implementation. A
+future improvement can replace this with IAMCredentials `signBlob`, but the current code correctly
+fails fast unless signing credentials are present.
+
 ## Memorystore Redis
 
 For staging, create Memorystore in the same region and VPC. Cloud Run reaches Memorystore through a
@@ -111,6 +129,12 @@ Example staging deploy:
   -DatabaseName pynapli_staging `
   -DatabaseUser pynapli `
   -DatabasePasswordSecret pynapli-staging-db-password `
+  -MediaStorageBucket pynapli-staging-media `
+  -MediaGcsSigningServiceAccountJsonSecret pynapli-staging-media-signer-json `
+  -AdminApiTokenSecret pynapli-staging-admin-api-token `
+  -DiscoveryCursorSecretName pynapli-staging-discovery-cursor-secret `
+  -ActivityCursorSecretName pynapli-staging-activity-cursor-secret `
+  -SwipeDeckTokenSecretName pynapli-staging-swipe-deck-token-secret `
   -RedisUrl redis://MEMORYSTORE_PRIVATE_IP:6379 `
   -VpcConnector pynapli-staging-connector `
   -ServiceAccount pynapli-api@PROJECT_ID.iam.gserviceaccount.com

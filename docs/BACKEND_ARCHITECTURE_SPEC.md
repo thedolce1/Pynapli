@@ -772,6 +772,12 @@ Defaults are intentionally conservative for local development: max pool 10, min 
 Cloud SQL connector settings are staging/production-only. Local development should continue using
 the direct Docker Compose PostgreSQL URL.
 
+Startup validation runs before the server opens database/Redis connections. Local/test/dev keep
+developer defaults; `staging`, `prod`, and `production` fail fast if they still use local DB/Redis,
+local media storage, default cursor/deck secrets, missing cryptographic App Check settings, missing
+admin runtime token, missing Firebase project id for FCM, missing GCS media signing credentials, or
+dev-only store/media toggles.
+
 When API profiling is enabled and the request includes `X-Pynapli-Profile: true`, Grid/profile/presence responses include timing headers for route, service, DB, Redis, and Hikari pool snapshots. Keep this local/staging-only until a production observability system replaces it.
 
 Client-side structured concurrency does not mean server handlers should fan out unbounded JDBC work. On the Ktor side:

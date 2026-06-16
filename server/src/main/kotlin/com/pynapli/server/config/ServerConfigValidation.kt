@@ -1,0 +1,288 @@
+package com.pynapli.server.config
+
+data class ServerConfigIssue(
+    val code: String,
+    val message: String,
+)
+
+class ServerConfigException(
+    val issues: List<ServerConfigIssue>,
+) : IllegalStateException(
+        "Invalid Pynapli server configuration: ${issues.joinToString { it.code }}",
+    )
+
+data class ServerStartupSummary(
+    val environment: String,
+    val port: Int,
+    val mediaStorageProvider: String,
+    val notificationPushProvider: String,
+    val appCheckEnforced: Boolean,
+    val cloudSqlConfigured: Boolean,
+    val redisConfigured: Boolean,
+)
+
+fun ServerConfig.validateForStartup() {
+    val issues = startupValidationIssues()
+    if (issues.isNotEmpty()) {
+        throw ServerConfigException(issues)
+    }
+}
+
+fun ServerConfig.startupSummary(): ServerStartupSummary =
+    ServerStartupSummary(
+        environment = environment,
+        port = port,
+        mediaStorageProvider = mediaStorageProvider,
+        notificationPushProvider = notificationPushProvider,
+        appCheckEnforced = appCheckEnforced,
+        cloudSqlConfigured = !databaseCloudSqlInstance.isNullOrBlank(),
+        redisConfigured = redisUrl.isNotBlank(),
+    )
+
+internal fun ServerConfig.startupValidationIssues(): List<ServerConfigIssue> =
+    buildList {
+        validateCommonSettings(this@startupValidationIssues)
+        validateProductionLikeSettings(this@startupValidationIssues)
+        validateProductionOnlySettings(this@startupValidationIssues)
+    }
+
+private fun MutableList<ServerConfigIssue>.validateCommonSettings(config: ServerConfig) {
+    require(
+        condition = config.port in 1..65_535,
+        code = "INVALID_PORT",
+        message = "PYNAPLI_SERVER_PORT/PORT must be between 1 and 65535.",
+    )
+    require(
+        condition = config.mediaStorageProvider.lowercase() in MEDIA_STORAGE_PROVIDERS,
+        code = "INVALID_MEDIA_STORAGE_PROVIDER",
+        message = "PYNAPLI_MEDIA_STORAGE_PROVIDER must be local or gcs.",
+    )
+    require(
+        condition = config.mediaModerationProvider.lowercase() in MEDIA_MODERATION_PROVIDERS,
+        code = "INVALID_MEDIA_MODERATION_PROVIDER",
+        message = "PYNAPLI_MEDIA_MODERATION_PROVIDER must be manual or cloud_vision.",
+    )
+    require(
+        condition = config.mediaDeliveryProvider.lowercase() in MEDIA_DELIVERY_PROVIDERS,
+        code = "INVALID_MEDIA_DELIVERY_PROVIDER",
+        message = "PYNAPLI_MEDIA_DELIVERY_PROVIDER must be signed_gcs or cdn.",
+    )
+    require(
+        condition = config.notificationPushProvider.lowercase() in NOTIFICATION_PUSH_PROVIDERS,
+        code = "INVALID_NOTIFICATION_PUSH_PROVIDER",
+        message = "PYNAPLI_NOTIFICATION_PUSH_PROVIDER must be local, firebase, or fcm.",
+    )
+    if (config.mediaDeliveryProvider.equals("cdn", ignoreCase = true)) {
+        requireNonBlank(
+            value = config.mediaCdnBaseUrl,
+            code = "MEDIA_CDN_BASE_URL_REQUIRED",
+            message = "CDN media delivery requires PYNAPLI_MEDIA_CDN_BASE_URL.",
+        )
+        requireNonBlank(
+            value = config.mediaCdnSigningKeyName,
+            code = "MEDIA_CDN_KEY_NAME_REQUIRED",
+            message = "CDN media delivery requires PYNAPLI_MEDIA_CDN_SIGNING_KEY_NAME.",
+        )
+        requireNonBlank(
+            value = config.mediaCdnSigningKeyBase64Url,
+            code = "MEDIA_CDN_SIGNING_KEY_REQUIRED",
+            message = "CDN media delivery requires PYNAPLI_MEDIA_CDN_SIGNING_KEY_BASE64URL.",
+        )
+    }
+    if (config.playStoreRtdnEnabled) {
+        require(
+            condition =
+                !config.playStoreRtdnWebhookToken.isNullOrBlank() ||
+                    (
+                        !config.playStoreRtdnOidcAudience.isNullOrBlank() &&
+                            !config.playStoreRtdnOidcServiceAccountEmail.isNullOrBlank()
+                    ),
+            code = "PLAY_STORE_RTDN_AUTH_REQUIRED",
+            message = "Play RTDN requires a webhook token or OIDC audience plus service-account email.",
+        )
+    }
+}
+
+private fun MutableList<ServerConfigIssue>.validateProductionLikeSettings(config: ServerConfig) {
+    if (!config.isProductionLikeEnvironment()) return
+
+    require(
+        condition = !config.databaseUrl.isLocalPostgresUrl(),
+        code = "DATABASE_URL_NOT_PRODUCTION_SAFE",
+        message = "Production-like environments must not use the local Docker PostgreSQL URL.",
+    )
+    require(
+        condition = config.databasePassword.isProductionSecretValue(),
+        code = "DATABASE_PASSWORD_NOT_PRODUCTION_SAFE",
+        message = "Production-like environments must set a non-default database password.",
+    )
+    require(
+        condition = !config.redisUrl.isLocalRedisUrl(),
+        code = "REDIS_URL_NOT_PRODUCTION_SAFE",
+        message = "Production-like environments must not use the local Docker Redis URL.",
+    )
+    require(
+        condition = config.appCheckEnforced,
+        code = "APP_CHECK_ENFORCEMENT_REQUIRED",
+        message = "Production-like environments must enable Firebase App Check enforcement.",
+    )
+    require(
+        condition = config.appCheckProjectNumber?.all(Char::isDigit) == true,
+        code = "APP_CHECK_PROJECT_NUMBER_REQUIRED",
+        message = "Production-like App Check enforcement requires the Firebase project number.",
+    )
+    require(
+        condition = config.mediaStorageProvider.equals("gcs", ignoreCase = true),
+        code = "GCS_MEDIA_STORAGE_REQUIRED",
+        message = "Production-like environments must use GCS media storage.",
+    )
+    require(
+        condition = config.mediaStorageBucket.isProductionBucketName(),
+        code = "MEDIA_BUCKET_NOT_PRODUCTION_SAFE",
+        message = "Production-like environments must set a real GCS media bucket.",
+    )
+    require(
+        condition = !config.mediaDevAutoApproveUploads,
+        code = "MEDIA_DEV_AUTO_APPROVE_FORBIDDEN",
+        message = "Production-like environments must not auto-approve media uploads.",
+    )
+    if (config.mediaStorageProvider.equals("gcs", ignoreCase = true) ||
+        config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true)
+    ) {
+        require(
+            condition = config.hasMediaSigningCredentials(),
+            code = "MEDIA_SIGNING_CREDENTIALS_REQUIRED",
+            message = "GCS media storage or Cloud Vision moderation requires signing credentials.",
+        )
+    }
+    require(
+        condition =
+            config.notificationPushProvider.equals("firebase", ignoreCase = true) ||
+                config.notificationPushProvider.equals("fcm", ignoreCase = true),
+        code = "FIREBASE_PUSH_PROVIDER_REQUIRED",
+        message = "Production-like environments must send pushes through Firebase/FCM.",
+    )
+    requireNonBlank(
+        value = config.firebaseProjectId,
+        code = "FIREBASE_PROJECT_ID_REQUIRED",
+        message = "Production-like Firebase/FCM requires PYNAPLI_FIREBASE_PROJECT_ID.",
+    )
+    require(
+        condition = config.adminApiToken.isStrongRuntimeSecret(),
+        code = "ADMIN_API_TOKEN_REQUIRED",
+        message = "Production-like admin routes require a strong PYNAPLI_ADMIN_API_TOKEN.",
+    )
+    require(
+        condition = !config.devStorePurchasesEnabled,
+        code = "DEV_STORE_PURCHASES_FORBIDDEN",
+        message = "Production-like environments must not enable dev store purchases.",
+    )
+    require(
+        condition =
+            config.discoveryCursorSecret.isStrongRuntimeSecret() &&
+                config.activityCursorSecret.isStrongRuntimeSecret() &&
+                config.swipeDeckTokenSecret.isStrongRuntimeSecret(),
+        code = "RUNTIME_CURSOR_SECRETS_REQUIRED",
+        message = "Production-like cursor/deck secrets must be explicit, strong values.",
+    )
+    require(
+        condition =
+            setOf(
+                config.discoveryCursorSecret,
+                config.activityCursorSecret,
+                config.swipeDeckTokenSecret,
+            ).size == 3,
+        code = "RUNTIME_CURSOR_SECRETS_MUST_DIFFER",
+        message = "Discovery, Activity, and Swipe deck secrets must be different values.",
+    )
+    require(
+        condition = !config.apiProfilingEnabled || config.apiProfilingHeaderRequired,
+        code = "API_PROFILING_HEADER_REQUIRED",
+        message = "API profiling may be enabled only when gated by X-Pynapli-Profile.",
+    )
+}
+
+private fun MutableList<ServerConfigIssue>.validateProductionOnlySettings(config: ServerConfig) {
+    if (!config.isProductionEnvironment()) return
+
+    require(
+        condition = !config.playStoreSandboxEnabled,
+        code = "PLAY_STORE_SANDBOX_FORBIDDEN",
+        message = "Production must not enable sandbox Play Billing verification.",
+    )
+}
+
+private fun MutableList<ServerConfigIssue>.require(
+    condition: Boolean,
+    code: String,
+    message: String,
+) {
+    if (!condition) add(ServerConfigIssue(code, message))
+}
+
+private fun MutableList<ServerConfigIssue>.requireNonBlank(
+    value: String?,
+    code: String,
+    message: String,
+) {
+    require(!value.isNullOrBlank(), code, message)
+}
+
+private fun ServerConfig.isProductionLikeEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_LIKE_ENVIRONMENTS
+
+private fun ServerConfig.isProductionEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_ENVIRONMENTS
+
+private fun String.isLocalPostgresUrl(): Boolean {
+    val normalized = lowercase()
+    return normalized == "jdbc:postgresql://localhost:5432/pynapli_dev" ||
+        normalized == "jdbc:postgresql://127.0.0.1:5432/pynapli_dev" ||
+        normalized == "jdbc:postgresql://host.docker.internal:5432/pynapli_dev" ||
+        normalized.contains("localhost") ||
+        normalized.contains("127.0.0.1") ||
+        normalized.contains("host.docker.internal") ||
+        normalized.contains("pynapli_dev") ||
+        normalized.contains("pynapli_test")
+}
+
+private fun String.isLocalRedisUrl(): Boolean {
+    val normalized = lowercase()
+    return normalized == "redis://localhost:6379" ||
+        normalized == "redis://127.0.0.1:6379" ||
+        normalized == "redis://host.docker.internal:6379" ||
+        normalized.contains("localhost") ||
+        normalized.contains("127.0.0.1") ||
+        normalized.contains("host.docker.internal")
+}
+
+private fun String.isProductionSecretValue(): Boolean = isStrongRuntimeSecret() && this != LOCAL_DATABASE_PASSWORD
+
+private fun String?.isStrongRuntimeSecret(): Boolean =
+    !isNullOrBlank() &&
+        length >= MINIMUM_RUNTIME_SECRET_LENGTH &&
+        !contains("local-dev", ignoreCase = true) &&
+        !contains("test-", ignoreCase = true) &&
+        !contains("dev_", ignoreCase = true) &&
+        !contains("replace-with", ignoreCase = true)
+
+private fun String.isProductionBucketName(): Boolean =
+    isNotBlank() &&
+        this != LOCAL_MEDIA_BUCKET &&
+        !contains("local", ignoreCase = true) &&
+        !contains("dev", ignoreCase = true)
+
+private fun ServerConfig.hasMediaSigningCredentials(): Boolean =
+    !mediaGcsSigningServiceAccountJson.isNullOrBlank() ||
+        !mediaGcsSigningServiceAccountPath.isNullOrBlank() ||
+        !firebaseServiceAccountJson.isNullOrBlank() ||
+        !firebaseServiceAccountPath.isNullOrBlank()
+
+private const val LOCAL_DATABASE_PASSWORD = "pynapli_dev_password"
+private const val LOCAL_MEDIA_BUCKET = "pynapli-local-media"
+private const val MINIMUM_RUNTIME_SECRET_LENGTH = 32
+
+private val PRODUCTION_LIKE_ENVIRONMENTS = setOf("staging", "prod", "production")
+private val PRODUCTION_ENVIRONMENTS = setOf("prod", "production")
+private val MEDIA_STORAGE_PROVIDERS = setOf("local", "gcs")
+private val MEDIA_MODERATION_PROVIDERS = setOf("manual", "cloud_vision")
+private val MEDIA_DELIVERY_PROVIDERS = setOf("signed_gcs", "cdn")
+private val NOTIFICATION_PUSH_PROVIDERS = setOf("local", "firebase", "fcm")

@@ -299,6 +299,11 @@ API now has a Cloud Run-ready runtime image at `infra/server.Dockerfile`, plus r
 Deployment notes live in `infra/cloud-run/README.md`. Production remains blocked until final
 project naming, billing alerts, secrets, backups, and branch protections are confirmed.
 
+Startup validation now fails fast for `staging`, `prod`, and `production` when local defaults or
+unsafe toggles are present. Production-like environments must provide non-local Postgres/Redis,
+cryptographic App Check config, GCS media storage and signing credentials, Firebase/FCM project
+config, strong admin/cursor/deck secrets, and no dev-only purchase or media auto-approval paths.
+
 ## Firebase Setup
 
 Use Firebase for:

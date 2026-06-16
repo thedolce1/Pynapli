@@ -14,6 +14,8 @@ import com.pynapli.server.admin.JdbcAdminUserLookupRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.config.startupSummary
+import com.pynapli.server.config.validateForStartup
 import com.pynapli.server.grid.GridService
 import com.pynapli.server.grid.JdbcGridViewerTrustRepository
 import com.pynapli.server.grid.SavedGridFilterService
@@ -91,6 +93,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import org.slf4j.LoggerFactory
 import java.time.Duration
 
 class ServerDependencies(
@@ -165,7 +168,21 @@ class ServerDependencies(
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(ServerDependencies::class.java)
+
         fun fromEnvironment(config: ServerConfig = ServerConfig.fromEnvironment()): ServerDependencies {
+            config.validateForStartup()
+            val startupSummary = config.startupSummary()
+            logger.info(
+                "Pynapli API startup: environment={} port={} mediaProvider={} pushProvider={} appCheck={} cloudSql={} redis={}",
+                startupSummary.environment,
+                startupSummary.port,
+                startupSummary.mediaStorageProvider,
+                startupSummary.notificationPushProvider,
+                startupSummary.appCheckEnforced,
+                startupSummary.cloudSqlConfigured,
+                startupSummary.redisConfigured,
+            )
             val database = Database(config)
             val redisCache = RedisCache(config.redisUrl)
             val requestProfilerFactory =
