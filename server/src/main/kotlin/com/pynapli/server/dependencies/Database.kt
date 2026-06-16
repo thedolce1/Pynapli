@@ -12,22 +12,7 @@ class Database(
 ) : AutoCloseable {
     val dataSource: DataSource =
         HikariDataSource(
-            HikariConfig().apply {
-                jdbcUrl = config.databaseUrl
-                username = config.databaseUser
-                password = config.databasePassword
-                maximumPoolSize = config.databaseMaximumPoolSize
-                minimumIdle = config.databaseMinimumIdle.coerceAtMost(config.databaseMaximumPoolSize)
-                connectionTimeout = config.databaseConnectionTimeoutMillis
-                validationTimeout = 3_000
-                poolName = "pynapli-postgres"
-                // pgjdbc batched-insert rewrite. Bundles consecutive
-                // `INSERT INTO t VALUES (?, ...)` calls in a JDBC batch into a single
-                // multi-row `INSERT INTO t VALUES (?, ...), (?, ...), (?, ...)` round
-                // trip. Big win for the swipe deck card insert path (32 rows per
-                // deck page). Docs: https://jdbc.postgresql.org/documentation/use/
-                addDataSourceProperty("reWriteBatchedInserts", "true")
-            },
+            hikariConfigFor(config),
         )
 
     init {
@@ -56,3 +41,30 @@ class Database(
         (dataSource as HikariDataSource).close()
     }
 }
+
+internal fun hikariConfigFor(config: ServerConfig): HikariConfig =
+    HikariConfig().apply {
+        jdbcUrl = config.databaseUrl
+        username = config.databaseUser
+        password = config.databasePassword
+        maximumPoolSize = config.databaseMaximumPoolSize
+        minimumIdle = config.databaseMinimumIdle.coerceAtMost(config.databaseMaximumPoolSize)
+        connectionTimeout = config.databaseConnectionTimeoutMillis
+        validationTimeout = 3_000
+        poolName = "pynapli-postgres"
+        // pgjdbc batched-insert rewrite. Bundles consecutive
+        // `INSERT INTO t VALUES (?, ...)` calls in a JDBC batch into a single
+        // multi-row `INSERT INTO t VALUES (?, ...), (?, ...), (?, ...)` round
+        // trip. Big win for the swipe deck card insert path (32 rows per
+        // deck page). Docs: https://jdbc.postgresql.org/documentation/use/
+        addDataSourceProperty("reWriteBatchedInserts", "true")
+
+        config.databaseCloudSqlInstance?.let { instance ->
+            addDataSourceProperty("socketFactory", "com.google.cloud.sql.postgres.SocketFactory")
+            addDataSourceProperty("cloudSqlInstance", instance)
+            addDataSourceProperty("cloudSqlRefreshStrategy", config.databaseCloudSqlRefreshStrategy)
+            config.databaseCloudSqlUnixSocketPath?.let { socketPath ->
+                addDataSourceProperty("unixSocketPath", socketPath)
+            }
+        }
+    }

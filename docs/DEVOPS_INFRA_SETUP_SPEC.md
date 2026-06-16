@@ -285,6 +285,20 @@ Initial `docker-compose.yml` should include:
 
 Do not containerize mobile builds early unless CI needs it.
 
+### Current state (2026-06-16)
+
+Local dependencies remain in `docker-compose.yml` (`postgres` with PostGIS and `redis`). The Ktor
+API now has a Cloud Run-ready runtime image at `infra/server.Dockerfile`, plus repeatable scripts:
+
+- `scripts/docker-server-build.ps1` — runs `:server:installDist` and builds the `pynapli-api` image.
+- `scripts/docker-server-run.ps1` — runs the image locally against Docker Compose dependencies.
+- `scripts/gcp-server-image-push.ps1` — builds/tags/pushes to Artifact Registry.
+- `scripts/gcp-cloud-run-deploy.ps1` — deploys the pushed image to Cloud Run with explicit project,
+  region, Cloud SQL, Redis, App Check, and Secret Manager parameters.
+
+Deployment notes live in `infra/cloud-run/README.md`. Production remains blocked until final
+project naming, billing alerts, secrets, backups, and branch protections are confirmed.
+
 ## Firebase Setup
 
 Use Firebase for:
@@ -504,6 +518,7 @@ If `pynapli` is unavailable as a GitHub org, fallback options:
 - [ ] Apple Developer account exists.
 - [ ] Google Play Console exists.
 - [x] Docker Desktop installed.
+- [x] Cloud Run-ready Ktor runtime Dockerfile and build/deploy scripts exist.
 - [x] GitHub CLI installed.
 - [x] No secrets committed.
 - [ ] Cost alerts planned before cloud deploy.

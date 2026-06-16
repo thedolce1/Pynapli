@@ -5,6 +5,22 @@ plugins {
     application
 }
 
+kotlin {
+    jvmToolchain(17)
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+java {
+    toolchain {
+        languageVersion.set(
+            org.gradle.jvm.toolchain.JavaLanguageVersion
+                .of(17),
+        )
+    }
+}
+
 application {
     mainClass.set("com.pynapli.server.ApplicationKt")
 }
@@ -22,6 +38,7 @@ dependencies {
     implementation(libs.ktor.server.auth)
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.cloud.sql.postgres.socket.factory)
     implementation(libs.postgres)
     implementation(libs.hikari)
     implementation(libs.flyway.core)

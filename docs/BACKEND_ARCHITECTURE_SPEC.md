@@ -759,12 +759,18 @@ Current local Ktor database pool configuration is environment-driven:
 PYNAPLI_DATABASE_MAX_POOL_SIZE
 PYNAPLI_DATABASE_MIN_IDLE
 PYNAPLI_DATABASE_CONNECTION_TIMEOUT_MS
+PYNAPLI_DATABASE_CLOUD_SQL_INSTANCE
+PYNAPLI_DATABASE_CLOUD_SQL_UNIX_SOCKET_PATH
+PYNAPLI_DATABASE_CLOUD_SQL_REFRESH_STRATEGY
 PYNAPLI_API_PROFILING_ENABLED
 PYNAPLI_API_PROFILING_HEADER_REQUIRED
 PYNAPLI_API_PROFILING_SLOW_SPAN_MS
 ```
 
 Defaults are intentionally conservative for local development: max pool 10, min idle 1, connection timeout 5000ms, API profiling off. Load-test runs can increase the pool and enable profiling, but pool tuning is not a substitute for query and endpoint optimization.
+
+Cloud SQL connector settings are staging/production-only. Local development should continue using
+the direct Docker Compose PostgreSQL URL.
 
 When API profiling is enabled and the request includes `X-Pynapli-Profile: true`, Grid/profile/presence responses include timing headers for route, service, DB, Redis, and Hikari pool snapshots. Keep this local/staging-only until a production observability system replaces it.
 

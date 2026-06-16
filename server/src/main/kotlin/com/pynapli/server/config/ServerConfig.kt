@@ -9,6 +9,9 @@ data class ServerConfig(
     val databaseMaximumPoolSize: Int = 60,
     val databaseMinimumIdle: Int = 1,
     val databaseConnectionTimeoutMillis: Long = 5_000L,
+    val databaseCloudSqlInstance: String? = null,
+    val databaseCloudSqlUnixSocketPath: String? = null,
+    val databaseCloudSqlRefreshStrategy: String = "lazy",
     val apiProfilingEnabled: Boolean = false,
     val apiProfilingHeaderRequired: Boolean = true,
     val apiProfilingSlowSpanThresholdMillis: Double = 250.0,
@@ -90,8 +93,9 @@ data class ServerConfig(
 ) {
     companion object {
         fun fromEnvironment(): ServerConfig {
-            val environment = System.getenv("PYNAPLI_ENV") ?: "local"
-            val port = System.getenv("PYNAPLI_SERVER_PORT")?.toIntOrNull() ?: 8080
+            val environmentVariables = System.getenv()
+            val environment = environmentVariables["PYNAPLI_ENV"] ?: "local"
+            val port = serverPortFromEnvironment(environmentVariables)
             val mediaStorageProvider = System.getenv("PYNAPLI_MEDIA_STORAGE_PROVIDER") ?: "local"
             val defaultUploadBaseUrl =
                 if (mediaStorageProvider.equals("local", ignoreCase = true)) {
@@ -124,6 +128,22 @@ data class ServerConfig(
                         ?.toLongOrNull()
                         ?.coerceIn(1_000L, 60_000L)
                         ?: 5_000L,
+                databaseCloudSqlInstance =
+                    System
+                        .getenv("PYNAPLI_DATABASE_CLOUD_SQL_INSTANCE")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() },
+                databaseCloudSqlUnixSocketPath =
+                    System
+                        .getenv("PYNAPLI_DATABASE_CLOUD_SQL_UNIX_SOCKET_PATH")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() },
+                databaseCloudSqlRefreshStrategy =
+                    System
+                        .getenv("PYNAPLI_DATABASE_CLOUD_SQL_REFRESH_STRATEGY")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: "lazy",
                 apiProfilingEnabled =
                     System.getenv("PYNAPLI_API_PROFILING_ENABLED")?.toBooleanStrictOrNull()
                         ?: false,
@@ -366,3 +386,8 @@ data class ServerConfig(
         }
     }
 }
+
+internal fun serverPortFromEnvironment(environmentVariables: Map<String, String>): Int =
+    environmentVariables["PYNAPLI_SERVER_PORT"]?.toIntOrNull()
+        ?: environmentVariables["PORT"]?.toIntOrNull()
+        ?: 8080

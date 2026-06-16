@@ -529,6 +529,7 @@ Use:
 - Ktor Server.
 - Kotlinx Serialization.
 - PostgreSQL JDBC.
+- Cloud SQL PostgreSQL socket factory for Cloud Run/Cloud SQL deployments.
 - HikariCP.
 - Flyway.
 - Lettuce for Redis.
