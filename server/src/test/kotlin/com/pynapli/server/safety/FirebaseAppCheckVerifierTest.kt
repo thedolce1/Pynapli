@@ -16,7 +16,11 @@ class FirebaseAppCheckVerifierTest {
     fun rejectsNullOrBlankWithoutInvokingTheVerifier() =
         runBlocking {
             var invoked = false
-            val verifier = FirebaseAppCheckVerifier { invoked = true }
+            val verifier =
+                FirebaseAppCheckVerifier {
+                    invoked = true
+                    validClaims()
+                }
             assertFalse(verifier.verify(null))
             assertFalse(verifier.verify("   "))
             assertFalse(invoked)
@@ -25,7 +29,7 @@ class FirebaseAppCheckVerifierTest {
     @Test
     fun acceptsWhenTheTokenVerifierSucceeds() =
         runBlocking {
-            val verifier = FirebaseAppCheckVerifier { /* no throw = valid */ }
+            val verifier = FirebaseAppCheckVerifier { validClaims() }
             assertTrue(verifier.verify("a-real-looking-token"))
         }
 
@@ -37,8 +41,48 @@ class FirebaseAppCheckVerifierTest {
         }
 
     @Test
+    fun rejectsWhenAudienceDoesNotContainTheProject() =
+        runBlocking {
+            val verifier =
+                FirebaseAppCheckVerifier {
+                    validClaims(audiences = listOf("projects/other"))
+                }
+
+            assertFalse(verifier.verify("wrong-project-token"))
+        }
+
+    @Test
+    fun rejectsWhenSubjectIsMissing() =
+        runBlocking {
+            val verifier = FirebaseAppCheckVerifier { validClaims(subject = "   ") }
+
+            assertFalse(verifier.verify("missing-subject-token"))
+        }
+
+    @Test
+    fun acceptsWhenAudienceContainsTheProject() =
+        runBlocking {
+            val verifier =
+                FirebaseAppCheckVerifier {
+                    validClaims(audiences = listOf("other", "projects/209241465883"))
+                }
+
+            assertTrue(verifier.verify("list-audience-token"))
+        }
+
+    @Test
     fun forProjectBuildsAVerifierWithoutTouchingTheNetwork() {
         // Construction is lazy — certs are only fetched on verify(), so this does no I/O.
         assertNotNull(FirebaseAppCheckVerifier.forProject("209241465883"))
     }
+
+    private fun validClaims(
+        audiences: List<String> = listOf("projects/209241465883"),
+        subject: String? = "1:209241465883:android:5ef3d6abdcd4dde6c084be",
+    ): VerifiedAppCheckClaims =
+        VerifiedAppCheckClaims(
+            audiences = audiences,
+            subject = subject,
+            expectedAudience = "projects/209241465883",
+        )
 }

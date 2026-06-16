@@ -1,5 +1,6 @@
 package com.pynapli.server.safety
 
+import com.google.api.client.json.webtoken.JsonWebSignature
 import com.google.auth.oauth2.TokenVerifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,14 +17,14 @@ import org.slf4j.LoggerFactory
  * [forProject] to build the production verifier for a Firebase project number.
  */
 class FirebaseAppCheckVerifier(
-    private val verifyToken: (String) -> Unit,
+    private val verifyToken: (String) -> VerifiedAppCheckClaims,
 ) : AppCheckVerifier {
     override suspend fun verify(token: String?): Boolean {
         if (token.isNullOrBlank()) return false
         return withContext(Dispatchers.IO) {
-            runCatching { verifyToken(token) }
+            runCatching { verifyToken(token).isValidAppCheckToken() }
                 .onFailure { error -> logger.debug("App Check token rejected: {}", error.javaClass.simpleName) }
-                .isSuccess
+                .getOrDefault(false)
         }
     }
 
@@ -36,17 +37,41 @@ class FirebaseAppCheckVerifier(
         /**
          * Builds a verifier for [projectNumber] (the numeric Firebase project number, e.g.
          * "209241465883"): issuer `https://firebaseappcheck.googleapis.com/<number>`, audience
-         * `projects/<number>`, keys from the App Check JWKS endpoint.
+         * containing `projects/<number>`, non-empty subject, keys from the App Check JWKS endpoint.
+         *
+         * Google auth's [TokenVerifier] compares `aud` by equality when configured on the builder,
+         * but Firebase App Check follows the JWT spec and can return `aud` as a list. Let
+         * [TokenVerifier] handle signature / issuer / expiry, then validate App Check-specific
+         * claims explicitly.
          */
         fun forProject(projectNumber: String): FirebaseAppCheckVerifier {
+            val expectedAudience = "projects/$projectNumber"
             val tokenVerifier =
                 TokenVerifier
                     .newBuilder()
                     .setIssuer("$ISSUER_PREFIX$projectNumber")
-                    .setAudience("projects/$projectNumber")
                     .setCertificatesLocation(JWKS_URL)
                     .build()
-            return FirebaseAppCheckVerifier { token -> tokenVerifier.verify(token) }
+            return FirebaseAppCheckVerifier { token ->
+                tokenVerifier
+                    .verify(token)
+                    .toVerifiedAppCheckClaims(expectedAudience)
+            }
         }
     }
 }
+
+data class VerifiedAppCheckClaims(
+    val audiences: List<String>,
+    val subject: String?,
+    val expectedAudience: String,
+)
+
+internal fun JsonWebSignature.toVerifiedAppCheckClaims(expectedAudience: String): VerifiedAppCheckClaims =
+    VerifiedAppCheckClaims(
+        audiences = payload.audienceAsList,
+        subject = payload.subject,
+        expectedAudience = expectedAudience,
+    )
+
+internal fun VerifiedAppCheckClaims.isValidAppCheckToken(): Boolean = expectedAudience in audiences && !subject.isNullOrBlank()
