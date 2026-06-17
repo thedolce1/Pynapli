@@ -513,6 +513,7 @@ Current bootstrap implementation:
 - `/v1/admin/reports` uses the same server-only admin gate for report triage.
 - `/v1/admin/appeals` uses the same server-only admin gate for appeal review.
 - `/v1/admin/risk` uses the same server-only admin gate for account risk review.
+- `/v1/admin/partner-links/{userId}` uses the same server-only admin gate for read-only partner-link review.
 - Admin calls require `X-Admin-Token`, `X-Admin-Id`, and a reason header/body depending on the action.
 - Listing held messages writes an `admin_audit_log` row because message body review is sensitive.
 - Held message actions support release and remove, and both write audit rows.
@@ -556,7 +557,7 @@ Track:
 - [x] Appeals queue exists.
 - [x] Appeals review actions are audit logged.
 - [ ] Subscription support view exists.
-- [ ] Partner link review exists.
+- [x] Partner link review exists. (`GET /v1/admin/partner-links/{userId}` — read-only current/past link metadata, partner visibility, recent unlink count, and report context. Requires `X-Admin-Reason` and writes a `partner_link_review` audit row; excludes private media/message bodies/exact location and does not expose force-unlink/benefit-disable actions.)
 - [ ] Partial: held-message sensitive queue requires a reason; broader sensitive reveal reason flow is not complete.
 - [x] Held-message sensitive queue view requires reason.
 - [ ] Partial: admin routes are under `/v1/admin`; production API separation, roles, and MFA remain.
