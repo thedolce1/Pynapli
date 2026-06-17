@@ -22,6 +22,17 @@ android {
         versionCode = 1
         versionName = "0.1.0"
     }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
+    }
 }
 
 kotlin {
@@ -35,6 +46,7 @@ kotlin {
         implementation(projects.composeApp)
         implementation(projects.shared)
         implementation(libs.androidx.activity.compose)
+        implementation(libs.androidx.fragment)
         implementation(platform(libs.firebase.bom))
         implementation(libs.firebase.messaging)
         implementation(libs.firebase.crashlytics)

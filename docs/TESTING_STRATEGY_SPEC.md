@@ -65,7 +65,7 @@ Current Grid coverage:
 
 - `GridScreenVisualRegressionTest` renders the real shared Compose `GridScreen` in a fixed mobile viewport with the dark Pynapli theme.
 - The test captures pixels and checks for the intended visual signature: subdued dark surface, dense card grid, readable text/icons, online indicators, linked-partner/accent color, and filter-sheet surface after opening filters.
-- This is a fast shared-UI guardrail that runs in `:composeApp:desktopTest`, so it is included in `scripts/verify.ps1`.
+- This is a fast shared-UI guardrail that runs in `:composeApp:desktopTest`, so it is included in `scripts/verify-android.ps1` and `scripts/verify-full.ps1`.
 - `scripts/android-grid-qa.ps1` runs the installed Android debug app against local Ktor on a connected emulator/device. It seeds dev data, optionally builds/installs the APK, logs in through dev login, captures screenshots, verifies the Grid loads, opens the filter sheet, toggles the Online quick filter, opens a profile, and asserts closing the profile returns to the same visible Grid card sequence.
 - `scripts/android-grid-qa-goldens.json` defines connected Android structural golden assertions: required/forbidden UI text, minimum visible Grid-card counts, and screenshot visual signatures for Grid, filter sheet, empty filtered state, profile detail, and return-to-grid.
 - `scripts/android-grid-denied-location-qa.ps1` runs the installed Android app with the dev viewer's server-side location removed, exercises the Android location permission denial prompt, verifies the no-location and denied-permission UI states, confirms no Grid cards leak into the denied state, captures screenshots/XML, and restores the dev location afterward.
@@ -90,7 +90,7 @@ Current Activity backend coverage:
 - `SwipeServiceTest` covers Likes You Activity creation and duplicate retry suppression, plus two-sided match Activity generation.
 - `MessagingServiceTest` covers partner chat invite Activity generation alongside the existing invite notification.
 - `KtorPynapliApiClientTest` covers the shared client contract for `GET /v1/activity/summary` and `POST /v1/activity/seen`.
-- Latest local proof on 2026-05-20: targeted Activity seen/summary service, repository, shared client, and Compose state tests passed; full `scripts/verify.ps1` passed.
+- Latest local proof on 2026-05-20: targeted Activity seen/summary service, repository, shared client, and Compose state tests passed; full `scripts/verify-full.ps1` passed.
 
 Current Messaging coverage:
 
@@ -346,7 +346,7 @@ Run this after Android location or lifecycle changes:
 .\scripts\android-location-policy-check.ps1 -RunUnitTests
 ```
 
-The script is also part of `scripts/verify.ps1` without `-RunUnitTests`. It protects the Grid battery policy by rejecting background location permission, foreground location service declarations, continuous location updates, or missing one-shot cancellation on app stop. The optional unit-test flag also runs `LocationStateHolderTest`, which covers the 250m no-submit threshold, 250m-1km quiet refresh, and 1km+ normal refresh.
+The script is also part of `scripts/verify-android.ps1` and `scripts/verify-full.ps1` without `-RunUnitTests`. It protects the Grid battery policy by rejecting background location permission, foreground location service declarations, continuous location updates, or missing one-shot cancellation on app stop. The optional unit-test flag also runs `LocationStateHolderTest`, which covers the 250m no-submit threshold, 250m-1km quiet refresh, and 1km+ normal refresh.
 
 ## Android Battery/Location Profile QA
 

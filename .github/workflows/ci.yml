@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, develop]
   pull_request:
@@ -47,9 +48,10 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          name: pynapli-debug-preview-apk
           path: androidApp/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
+          retention-days: 14
 
   docker-smoke:
     name: Docker Smoke (Cloud Run image)

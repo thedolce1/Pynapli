@@ -26,7 +26,9 @@ Build / test (Gradle wrapper):
 .\gradlew.bat :androidApp:assembleDebug               # Android debug APK
 .\gradlew.bat :server:run                             # run Ktor server on :8080
 .\gradlew.bat :shared:jvmTest --tests "FullyQualifiedTestClass.testName"   # single test
-.\scripts\verify.ps1                                  # tooling check + docker up + jvmTest + server:test + assembleDebug
+.\scripts\verify-fast.ps1                             # tooling check + docker up + Spotless + shared JVM + server tests
+.\scripts\verify-android.ps1                          # Android policy check + shared/Compose host tests + debug APK
+.\scripts\verify-full.ps1                             # full local gate; verify.ps1 is a compatibility alias
 ```
 
 Server tests use JUnit Platform (Kotest runner), so `--tests` filters apply.
@@ -128,7 +130,7 @@ Everything else in `FRONTEND_DESIGN_DIRECTION_SPEC.md` / `DESIGN_AND_NAVIGATION_
 
 ### Slice workflow (how this work ships)
 
-One feature branch + PR per slice, CI-gated. Each slice: implement (server stays the product authority) → targeted module tests → full `scripts/verify.ps1` → emulator QA for UI slices (`scripts/android-*-qa.ps1` — match the surface, e.g. `android-grid-qa.ps1`, `android-swipe-qa.ps1`, `android-tonight-qa.ps1` for Playing Tonight) → push → CI → merge. Update `docs/IMPLEMENTATION_AUDIT.md` rows + relevant `*_SPEC.md` checklists per shipped slice. Pause for review only at **phase boundaries**. Never run `gradlew` (incl. `--stop`) while a `verify.ps1` gate is running — it disrupts the daemon.
+One feature branch + PR per slice, CI-gated. Each slice: implement (server stays the product authority) → targeted module tests → `scripts/verify-fast.ps1` for backend/shared-only slices or `scripts/verify-full.ps1` when Android/Compose code is touched → emulator QA for UI slices (`scripts/android-*-qa.ps1` — match the surface, e.g. `android-grid-qa.ps1`, `android-swipe-qa.ps1`, `android-tonight-qa.ps1` for Playing Tonight) → push → CI → merge. Update `docs/IMPLEMENTATION_AUDIT.md` rows + relevant `*_SPEC.md` checklists per shipped slice. Pause for review only at **phase boundaries**. Never run `gradlew` (incl. `--stop`) while a verify gate is running — it disrupts the daemon.
 
 ### Agent "engineering team" model
 

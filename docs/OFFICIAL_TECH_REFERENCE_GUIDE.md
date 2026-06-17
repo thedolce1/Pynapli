@@ -98,7 +98,7 @@ Use these for version compatibility:
 Current decision (2026-05-31):
 
 - **Spotless `8.6.0` + ktlint `1.7.1`** is the Kotlin format gate (`spotlessCheck`), wired into
-  `scripts/verify.ps1` and CI, enforced on **all** Kotlin files. The codebase was formatted to
+  `scripts/verify-fast.ps1`/`scripts/verify-full.ps1` and CI, enforced on **all** Kotlin files. The codebase was formatted to
   `ktlint_official` in one pass (recorded in `.git-blame-ignore-revs`), so the earlier
   `ratchetFrom` incremental mode was removed. ktlint is configured by the root `.editorconfig`.
   The non-auto-fixable, stylistic ktlint rules (`max-line-length`, `property-naming`,

@@ -19,7 +19,7 @@ surface. Ship one feature branch + PR per slice, CI-gated, per the slice workflo
   QA) and the Compose-for-Web/Wasm **PWA companion** — both come *after* Android is production-grade.
   iOS-only spec checkboxes are intentionally not counted as Android blockers.
 - **Two execution tracks run in parallel:**
-  - **🟢 Codeable** — engineering an agent can implement + locally `verify.ps1`-gate now.
+  - **🟢 Codeable** — engineering an agent can implement + locally `verify-fast.ps1` or `verify-full.ps1` gate now.
   - **🔵 Founder-ops** — external accounts, cloud/billing provisioning, real-device QA, legal sign-off.
     These *gate release* but rarely block writing the code (we build against mocks/sandboxes, then flip).
 
