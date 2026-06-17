@@ -58,7 +58,6 @@ import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SqlDelightSessionStore
-import com.pynapli.shared.core.config.PynapliConfigs
 import com.pynapli.shared.network.KtorMediaByteUploader
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.buildAndroidActivityStreamClient
@@ -77,9 +76,10 @@ class AndroidAppGraph(
     private val appContext = context.applicationContext
     private val database = AndroidPynapliDatabaseFactory(context.applicationContext).createDatabase()
     private val sessionStore = SqlDelightSessionStore(database)
+    private val pynapliConfig = AndroidRuntimeConfig.pynapliConfig
     private val apiClient =
         KtorPynapliApiClient(
-            config = PynapliConfigs.LocalAndroidEmulator,
+            config = pynapliConfig,
             accessTokenProvider = sessionStore,
             appCheckTokenProvider = AndroidFirebaseAppCheckTokenProvider(appContext),
         )
@@ -194,7 +194,7 @@ class AndroidAppGraph(
     // Realtime convenience channel for an open Psync session (refetch on partner-side changes).
     val psyncStreamClient =
         buildAndroidPsyncStreamClient(
-            websocketBaseUrl = PynapliConfigs.LocalAndroidEmulator.websocketBaseUrl,
+            websocketBaseUrl = pynapliConfig.websocketBaseUrl,
             tokenProvider = sessionStore,
         )
 
@@ -202,7 +202,7 @@ class AndroidAppGraph(
         GridPresenceStreamCoordinator(
             client =
                 buildAndroidPresenceStreamClient(
-                    websocketBaseUrl = PynapliConfigs.LocalAndroidEmulator.websocketBaseUrl,
+                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
                     tokenProvider = sessionStore,
                 ),
             gridStateHolder = gridStateHolder,
@@ -232,7 +232,7 @@ class AndroidAppGraph(
         ActivityRealtimeCoordinator(
             client =
                 buildAndroidActivityStreamClient(
-                    websocketBaseUrl = PynapliConfigs.LocalAndroidEmulator.websocketBaseUrl,
+                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
                     tokenProvider = sessionStore,
                 ),
             activityStateHolder = activityStateHolder,
@@ -242,7 +242,7 @@ class AndroidAppGraph(
         MessagesRealtimeCoordinator(
             client =
                 buildAndroidMessageStreamClient(
-                    websocketBaseUrl = PynapliConfigs.LocalAndroidEmulator.websocketBaseUrl,
+                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
                     tokenProvider = sessionStore,
                 ),
             messagesStateHolder = messagesStateHolder,

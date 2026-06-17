@@ -35,12 +35,7 @@ internal class KtorApiSupport(
                     setBody(request)
                 }.toAppResult<Response>(json)
         }.getOrElse { error ->
-            AppResult.Failure(
-                AppError(
-                    code = "NETWORK_ERROR",
-                    message = error.message ?: "Network request failed.",
-                ),
-            )
+            error.toNetworkFailure()
         }
 
     suspend fun <T> authenticated(call: suspend (String) -> AppResult<T>): AppResult<T> {
@@ -54,13 +49,24 @@ internal class KtorApiSupport(
             )
         }
 
-        return runCatching { call(token) }.getOrElse { error ->
-            AppResult.Failure(
-                AppError(
-                    code = "NETWORK_ERROR",
-                    message = error.message ?: "Network request failed.",
-                ),
-            )
-        }
+        return runCatching { call(token) }.getOrElse { error -> error.toNetworkFailure() }
     }
+}
+
+private fun Throwable.toNetworkFailure(): AppResult.Failure {
+    val rawMessage = message.orEmpty()
+    val timedOut =
+        rawMessage.contains("timeout", ignoreCase = true) ||
+            rawMessage.contains("timed out", ignoreCase = true)
+    return AppResult.Failure(
+        AppError(
+            code = if (timedOut) "NETWORK_TIMEOUT" else "NETWORK_ERROR",
+            message =
+                if (timedOut) {
+                    "Pynapli server did not respond. Check that the backend is running and this APK points to a reachable server."
+                } else {
+                    "Cannot reach Pynapli server. Check that the backend is running and this APK points to a reachable server."
+                },
+        ),
+    )
 }

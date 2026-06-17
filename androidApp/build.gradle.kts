@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.multiplatform)
@@ -11,6 +13,21 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.firebase.crashlytics")
 }
 
+val localProperties =
+    Properties().also { properties ->
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use { input -> properties.load(input) }
+        }
+    }
+
+fun stringProperty(
+    name: String,
+    fallback: String,
+): String = providers.gradleProperty(name).orNull ?: localProperties.getProperty(name) ?: fallback
+
+fun buildConfigString(value: String): String = "\"${value.trim().replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
 android {
     namespace = "com.pynapli.app"
     compileSdk = 36
@@ -23,8 +40,34 @@ android {
         versionName = "0.1.0"
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
+        debug {
+            buildConfigField(
+                "String",
+                "PYNAPLI_API_BASE_URL",
+                buildConfigString(stringProperty("pynapli.android.apiBaseUrl", "http://10.0.2.2:8080")),
+            )
+            buildConfigField(
+                "String",
+                "PYNAPLI_WEBSOCKET_BASE_URL",
+                buildConfigString(stringProperty("pynapli.android.websocketBaseUrl", "ws://10.0.2.2:8080")),
+            )
+        }
         release {
+            buildConfigField(
+                "String",
+                "PYNAPLI_API_BASE_URL",
+                buildConfigString(stringProperty("pynapli.android.releaseApiBaseUrl", "https://api.pynapli.com")),
+            )
+            buildConfigField(
+                "String",
+                "PYNAPLI_WEBSOCKET_BASE_URL",
+                buildConfigString(stringProperty("pynapli.android.releaseWebsocketBaseUrl", "wss://api.pynapli.com")),
+            )
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

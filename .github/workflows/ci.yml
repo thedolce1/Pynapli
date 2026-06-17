@@ -2,6 +2,15 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      android_api_base_url:
+        description: 'Debug APK API base URL (use http://10.0.2.2:8080 for emulator, http://<LAN-IP>:8080 or https://<staging-host> for real devices)'
+        required: false
+        default: 'http://10.0.2.2:8080'
+      android_websocket_base_url:
+        description: 'Debug APK WebSocket base URL matching the API host'
+        required: false
+        default: 'ws://10.0.2.2:8080'
   push:
     branches: [main, develop]
   pull_request:
@@ -36,7 +45,20 @@ jobs:
       - name: Run verification gate
         # Server integration tests self-manage Postgres/Redis via Testcontainers (Docker is
         # available on ubuntu-latest), so no service containers are required here.
-        run: ./gradlew :shared:jvmTest :shared:testAndroidHostTest :server:test :composeApp:testAndroidHostTest :composeApp:desktopTest :androidApp:assembleDebug --no-configuration-cache
+        env:
+          ANDROID_API_BASE_URL: ${{ github.event.inputs.android_api_base_url || 'http://10.0.2.2:8080' }}
+          ANDROID_WEBSOCKET_BASE_URL: ${{ github.event.inputs.android_websocket_base_url || 'ws://10.0.2.2:8080' }}
+        run: >
+          ./gradlew
+          :shared:jvmTest
+          :shared:testAndroidHostTest
+          :server:test
+          :composeApp:testAndroidHostTest
+          :composeApp:desktopTest
+          :androidApp:assembleDebug
+          -Ppynapli.android.apiBaseUrl="$ANDROID_API_BASE_URL"
+          -Ppynapli.android.websocketBaseUrl="$ANDROID_WEBSOCKET_BASE_URL"
+          --no-configuration-cache
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

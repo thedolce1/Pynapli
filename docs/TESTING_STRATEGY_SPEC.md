@@ -216,6 +216,16 @@ For a true-cold Swipe proof, restart Ktor before running `-ColdCache`; the flag 
 
 ## Connected Android Grid QA
 
+### Debug APK backend targeting
+
+Android debug builds default to the emulator backend address: `http://10.0.2.2:8080` / `ws://10.0.2.2:8080`. That address is **emulator-only**. A physical Samsung/Android device must use a phone-reachable backend URL:
+
+- Same Wi-Fi local backend: build with `'-Ppynapli.android.apiBaseUrl=http://<PC-LAN-IP>:8080' '-Ppynapli.android.websocketBaseUrl=ws://<PC-LAN-IP>:8080'`, then confirm the phone can open `http://<PC-LAN-IP>:8080/health`.
+- Local Android Studio builds can put those same keys in gitignored `local.properties`.
+- GitHub Actions preview APKs can be rebuilt from **Run workflow** with `android_api_base_url` and `android_websocket_base_url` inputs. Use this for a tunnel/staging URL or a temporary LAN-IP build.
+
+The shared Ktor client has explicit timeouts, so unreachable backend URLs should return a visible auth/network error instead of leaving login or signup spinning indefinitely.
+
 Run this before and after meaningful Grid/profile/filter UI or API-contract changes:
 
 ```powershell
