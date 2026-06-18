@@ -56,6 +56,7 @@ internal fun GridScreenContent(
             profileImageUrl = profileImageUrl,
             onProfileIconClick = onProfileIconClick,
             onOpenTonight = onOpenTonight,
+            onOpenFilters = { sheetVisible = true },
         )
         QuickFilterRow(
             filters = state.filters,

@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -34,6 +35,9 @@ fun PynapliSocialTopRail(
     onActionClick: () -> Unit,
     actionContentDescription: String,
     modifier: Modifier = Modifier,
+    segments: List<String> = DefaultTopRailSegments,
+    selectedSegmentIndex: Int = 0,
+    actionIcon: ImageVector = Icons.Filled.Tune,
 ) {
     Row(
         modifier =
@@ -67,24 +71,28 @@ fun PynapliSocialTopRail(
             )
         }
 
-        Surface(
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
-            border =
-                androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.62f),
-                ),
-        ) {
-            Row(
-                modifier = Modifier.padding(3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+        if (segments.isEmpty()) {
+            Box(modifier = Modifier.weight(1f))
+        } else {
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+                border =
+                    androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.62f),
+                    ),
             ) {
-                TopRailSegment(label = "Discover", selected = true)
-                TopRailSegment(label = "Linked", selected = false)
-                TopRailSegment(label = "Tonight", selected = false)
+                Row(
+                    modifier = Modifier.padding(3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    segments.forEachIndexed { index, label ->
+                        TopRailSegment(label = label, selected = index == selectedSegmentIndex)
+                    }
+                }
             }
         }
 
@@ -98,7 +106,7 @@ fun PynapliSocialTopRail(
                     .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.62f), RoundedCornerShape(12.dp)),
         ) {
             Icon(
-                imageVector = Icons.Filled.Tune,
+                imageVector = actionIcon,
                 contentDescription = actionContentDescription,
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(19.dp),
@@ -106,6 +114,8 @@ fun PynapliSocialTopRail(
         }
     }
 }
+
+private val DefaultTopRailSegments = listOf("Discover", "Linked", "Tonight")
 
 @Composable
 private fun TopRailSegment(

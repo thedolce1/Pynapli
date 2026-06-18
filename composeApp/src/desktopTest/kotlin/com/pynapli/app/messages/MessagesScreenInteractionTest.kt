@@ -25,6 +25,32 @@ import kotlin.test.assertEquals
 class MessagesScreenInteractionTest {
     @OptIn(ExperimentalTestApi::class)
     @Test
+    fun messagesHeaderDoesNotShowGlobalDiscoverySegments() =
+        runComposeUiTest {
+            val repository = StaticMessagesRepository(emptyList())
+            val stateHolder = MessagesStateHolder(repository)
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        MessagesScreen(
+                            viewerUserId = "viewer",
+                            onThreadSelected = {},
+                            stateHolder = stateHolder,
+                        )
+                    }
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000) { repository.listCount == 1 }
+            onNodeWithText("Messages").assertExists()
+            onNodeWithText("Discover").assertDoesNotExist()
+            onNodeWithText("Linked").assertDoesNotExist()
+            onNodeWithText("Tonight").assertDoesNotExist()
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
     fun messagesRowApprovesThirdPartyPartnerInvite() =
         runComposeUiTest {
             val repository = ThirdPartyInviteMessagesRepository()

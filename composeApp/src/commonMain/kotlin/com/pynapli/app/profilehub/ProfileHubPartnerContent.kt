@@ -44,6 +44,7 @@ internal fun PartnerManagementContent(
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasCurrentPartner = profileLinksState.current != null
     Column(
         modifier =
             modifier
@@ -127,31 +128,35 @@ internal fun PartnerManagementContent(
                 }
             }
 
-            item {
-                ProfileHubSection("Partner visibility") {
-                    Text(
-                        text = "Who can see that you have a linked partner.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    )
-                    partnerVisibilityOptions.forEach { (value, label) ->
-                        DiscoveryStyleRow(
-                            label = label,
-                            value = value,
-                            selected = state.privacyDraft.partnerVisibility == value,
-                            onSelected = onPartnerVisibilityChanged,
+            if (hasCurrentPartner) {
+                item {
+                    ProfileHubSection("Partner visibility") {
+                        Text(
+                            text = "Who can see that you have a linked partner.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         )
+                        partnerVisibilityOptions.forEach { (value, label) ->
+                            DiscoveryStyleRow(
+                                label = label,
+                                value = value,
+                                selected = state.privacyDraft.partnerVisibility == value,
+                                onSelected = onPartnerVisibilityChanged,
+                            )
+                        }
                     }
                 }
             }
         }
 
-        ProfileHubSaveButton(
-            label = "Save partner settings",
-            isSaving = state.isSaving,
-            onSave = onSave,
-        )
+        if (hasCurrentPartner) {
+            ProfileHubSaveButton(
+                label = "Save partner settings",
+                isSaving = state.isSaving,
+                onSave = onSave,
+            )
+        }
     }
 }
 

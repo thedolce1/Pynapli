@@ -44,6 +44,7 @@ internal fun GridHeader(
     profileImageUrl: String?,
     onProfileIconClick: () -> Unit,
     onOpenTonight: () -> Unit = {},
+    onOpenFilters: () -> Unit = {},
 ) {
     Row(
         modifier =
@@ -131,12 +132,13 @@ internal fun GridHeader(
         }
 
         IconButton(
-            onClick = {},
+            onClick = onOpenFilters,
             modifier =
                 Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .testTag(GridFilterTags.HEADER_OPEN_SHEET),
         ) {
             Icon(
                 imageVector = Icons.Filled.FilterList,

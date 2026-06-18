@@ -38,7 +38,8 @@ internal fun ProfileSummary(
     privatePhotoCount: Int,
 ) {
     val profile = state.me?.profile
-    val userId = state.me?.user?.userId
+    val subtitle = profile?.summarySubtitle(state.isLoading)
+    val hasLinkedPartner = !linkedPartnerLabel.isNullOrBlank()
     Column(
         modifier =
             Modifier
@@ -67,13 +68,15 @@ internal fun ProfileSummary(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = userId?.let { "Member ${it.take(8)}" } ?: if (state.isLoading) "Loading" else "Signed in",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             StatusPill(text = planBadgeLabel(state))
         }
@@ -92,12 +95,27 @@ internal fun ProfileSummary(
                 value = privatePhotoCount.toString(),
                 modifier = Modifier.weight(1f),
             )
-            SummaryMetric(
-                label = "Partner",
-                value = linkedPartnerLabel?.take(9) ?: "None",
-                modifier = Modifier.weight(1f),
-            )
+            if (hasLinkedPartner) {
+                SummaryMetric(
+                    label = "Partner",
+                    value = linkedPartnerLabel.take(9),
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
+    }
+}
+
+private fun com.pynapli.shared.network.dto.ProfileDto.summarySubtitle(isLoading: Boolean): String? {
+    val parts =
+        listOfNotNull(
+            displayAge?.let { "$it" },
+            neighborhood?.takeIf { it.isNotBlank() },
+        )
+    return when {
+        parts.isNotEmpty() -> parts.joinToString(" - ")
+        isLoading -> "Loading"
+        else -> null
     }
 }
 

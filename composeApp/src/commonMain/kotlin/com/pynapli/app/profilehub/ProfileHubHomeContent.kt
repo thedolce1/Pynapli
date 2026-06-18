@@ -56,6 +56,12 @@ internal fun ProfileHubContent(
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasPartnerSurface =
+        profileLinksState.current != null ||
+            profileLinksState.incomingInvites.isNotEmpty() ||
+            profileLinksState.outgoingInvites.isNotEmpty() ||
+            partnerChatInviteCount > 0
+
     LazyColumn(
         modifier =
             modifier
@@ -130,19 +136,23 @@ internal fun ProfileHubContent(
             }
         }
 
-        item {
-            ProfileHubSection("Partner") {
-                ProfileHubRow(
-                    icon = Icons.Filled.People,
-                    label = "Linked partner",
-                    value = profileLinksState.current?.displayLabel ?: pendingPartnerStatus(profileLinksState),
-                    onClick = onOpenPartner,
-                )
-                ProfileHubRow(
-                    icon = Icons.Filled.ChatBubble,
-                    label = "Partner chat invites",
-                    value = partnerChatInviteSummary(partnerChatInviteCount),
-                )
+        if (hasPartnerSurface) {
+            item {
+                ProfileHubSection("Partner") {
+                    ProfileHubRow(
+                        icon = Icons.Filled.People,
+                        label = "Linked partner",
+                        value = profileLinksState.current?.displayLabel ?: pendingPartnerStatus(profileLinksState),
+                        onClick = onOpenPartner,
+                    )
+                    if (profileLinksState.current != null || partnerChatInviteCount > 0) {
+                        ProfileHubRow(
+                            icon = Icons.Filled.ChatBubble,
+                            label = "Partner chat invites",
+                            value = partnerChatInviteSummary(partnerChatInviteCount),
+                        )
+                    }
+                }
             }
         }
 
@@ -170,12 +180,14 @@ internal fun ProfileHubContent(
                     value = currentPlanSummary(state),
                     onClick = onOpenStore,
                 )
-                ProfileHubRow(
-                    icon = Icons.Filled.People,
-                    label = "Linked partner benefit",
-                    value = linkedPartnerBenefitSummary(state, profileLinksState),
-                    onClick = onOpenStore,
-                )
+                if (profileLinksState.current != null) {
+                    ProfileHubRow(
+                        icon = Icons.Filled.People,
+                        label = "Linked partner benefit",
+                        value = linkedPartnerBenefitSummary(state, profileLinksState),
+                        onClick = onOpenStore,
+                    )
+                }
             }
         }
 

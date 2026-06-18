@@ -121,6 +121,7 @@ internal fun QuickFilterRow(
 internal object GridFilterTags {
     const val QUICK_ROW: String = "grid-quick-filter-row"
     const val OPEN_SHEET: String = "grid-filters-open"
+    const val HEADER_OPEN_SHEET: String = "grid-header-filters-open"
     const val SHEET: String = "grid-filters-sheet"
     const val APPLY: String = "grid-filters-apply"
     const val CLEAR_ALL: String = "grid-filters-clear-all"

@@ -69,6 +69,42 @@ class GridScreenScrollPreservationTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
+    fun headerFilterButtonOpensFiltersSheet() =
+        runComposeUiTest {
+            val cards =
+                (0 until 12).map { index ->
+                    GridProfileCardUi(
+                        id = "card-$index",
+                        displayName = "User $index",
+                        online = index % 2 == 0,
+                        distanceLabel = "${index + 1} km",
+                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
+                        distanceMeters = (index + 1) * 100,
+                    )
+                }
+            val gridStateHolder = GridStateHolder(StaticGridFeedRepository(cards))
+            val profileDetailStateHolder = ProfileDetailStateHolder(SamplePublicProfileRepository())
+
+            setContent {
+                GridScreen(
+                    stateHolder = gridStateHolder,
+                    profileDetailStateHolder = profileDetailStateHolder,
+                )
+            }
+            waitUntil(timeoutMillis = 5_000) {
+                gridStateHolder.state.value.cards
+                    .isNotEmpty()
+            }
+            waitForIdle()
+
+            onNodeWithTag(GridFilterTags.HEADER_OPEN_SHEET).performClick()
+            waitForIdle()
+
+            onNodeWithTag(GridFilterTags.SHEET).assertExists()
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
     fun filterChangeWithSameFeedKeepsScrollPosition() =
         runComposeUiTest {
             val cards =

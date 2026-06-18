@@ -20,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.pynapli.app.design.PynapliSocialTopRail
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,11 +114,6 @@ fun ConversationScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .testTag(ConversationTestTags.fullScreen),
     ) {
-        PynapliSocialTopRail(
-            onProfileClick = onProfileIconClick,
-            onActionClick = {},
-            actionContentDescription = "Message options",
-        )
         FullScreenConversationHeader(
             state = state,
             onBack = onBack,
