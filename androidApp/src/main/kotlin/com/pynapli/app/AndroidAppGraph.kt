@@ -302,4 +302,6 @@ class AndroidAppGraph(
             email = "dev@pynapli.local",
             password = "PynapliDevPass123!",
         )
+
+    val testerDiagnosticLabel: String? = AndroidRuntimeConfig.testerDiagnosticLabel
 }

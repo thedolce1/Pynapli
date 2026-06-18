@@ -79,6 +79,7 @@ fun PynapliApp(
     onPickConversationPhoto: () -> Unit = {},
     onSetDiscreetIcon: (Boolean) -> Unit = {},
     devLoginCredentials: DevLoginCredentials? = null,
+    testerDiagnosticLabel: String? = null,
 ) {
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
 
@@ -172,6 +173,7 @@ fun PynapliApp(
                 onDisplayNameChanged = onboardingStateHolder::updateDisplayName,
                 onPickPhoto = { onPickMediaForAlbum(MediaAlbumKindUi.Profile) },
                 onFinishProfile = { scope.launch { onboardingStateHolder.finishProfile() } },
+                testerDiagnosticLabel = testerDiagnosticLabel,
             )
             // Composed after the stepper so the crop step draws above it; the main
             // shell hosts its own copy because this branch returns early.
@@ -198,6 +200,7 @@ fun PynapliApp(
                     onboardingStateHolder?.let { holder ->
                         { holder.startCreateAccount() }
                     },
+                testerDiagnosticLabel = testerDiagnosticLabel,
             )
             return@PynapliTheme
         }

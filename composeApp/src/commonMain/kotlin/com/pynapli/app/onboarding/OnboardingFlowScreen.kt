@@ -77,6 +77,7 @@ fun OnboardingFlowScreen(
     onDisplayNameChanged: (String) -> Unit,
     onPickPhoto: () -> Unit,
     onFinishProfile: () -> Unit,
+    testerDiagnosticLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -98,6 +99,16 @@ fun OnboardingFlowScreen(
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.SemiBold,
         )
+        testerDiagnosticLabel?.let { label ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = label,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Spacer(modifier = Modifier.height(12.dp))
         if (state.step != OnboardingStep.UnderageStop) {
             StepProgressDots(step = state.step)

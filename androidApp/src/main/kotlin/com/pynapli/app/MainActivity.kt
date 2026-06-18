@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
                 onPickConversationPhoto = ::pickConversationPhoto,
                 onSetDiscreetIcon = ::applyLauncherIcon,
                 devLoginCredentials = appGraph.devLoginCredentials.takeIf { isDebuggable() },
+                testerDiagnosticLabel = appGraph.testerDiagnosticLabel,
             )
         }
         handleNotificationDeepLink(intent)

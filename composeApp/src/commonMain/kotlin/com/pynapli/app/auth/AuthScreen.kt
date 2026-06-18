@@ -43,6 +43,7 @@ fun AuthScreen(
     // When provided, "Create account" leaves this screen for the onboarding stepper
     // instead of switching to the legacy inline signup form.
     onStartCreateAccount: (() -> Unit)? = null,
+    testerDiagnosticLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -69,6 +70,16 @@ fun AuthScreen(
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Medium,
         )
+        testerDiagnosticLabel?.let { label ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = label,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         Spacer(modifier = Modifier.height(28.dp))
 

@@ -11,6 +11,14 @@ internal object AndroidRuntimeConfig {
             websocketBaseUrl = BuildConfig.PYNAPLI_WEBSOCKET_BASE_URL.trim(),
         )
 
+    val testerDiagnosticLabel: String?
+        get() =
+            if (pynapliConfig.environment == PynapliEnvironment.Prod) {
+                null
+            } else {
+                "Env: ${pynapliConfig.environment.name} | API: ${pynapliConfig.apiBaseUrl}"
+            }
+
     private fun String.toPynapliEnvironment(): PynapliEnvironment =
         PynapliEnvironment.entries.firstOrNull { candidate -> candidate.name.equals(this.trim(), ignoreCase = true) }
             ?: PynapliEnvironment.Local
