@@ -1,0 +1,173 @@
+name: Deploy Staging API
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: 'GCP project id for staging'
+        required: true
+        default: 'pynapli'
+      region:
+        description: 'GCP region'
+        required: true
+        default: 'us-central1'
+      service_name:
+        description: 'Cloud Run service name'
+        required: true
+        default: 'pynapli-api-staging'
+      repository:
+        description: 'Artifact Registry Docker repository'
+        required: true
+        default: 'pynapli'
+      firebase_project_id:
+        description: 'Firebase/GCP project id used by FCM'
+        required: true
+        default: 'pynapli'
+      app_check_project_number:
+        description: 'Firebase project number for cryptographic App Check verification'
+        required: true
+        default: '209241465883'
+      cloud_sql_instance:
+        description: 'Cloud SQL connection name: project:region:instance'
+        required: true
+      database_name:
+        description: 'Cloud SQL database name'
+        required: true
+        default: 'pynapli_staging'
+      database_user:
+        description: 'Cloud SQL database user'
+        required: true
+        default: 'pynapli'
+      redis_url:
+        description: 'Memorystore Redis URL, e.g. redis://10.0.0.3:6379'
+        required: true
+      media_storage_bucket:
+        description: 'GCS bucket for signed media storage'
+        required: true
+        default: 'pynapli-staging-media'
+      service_account:
+        description: 'Cloud Run service account email'
+        required: false
+        default: 'firebase-adminsdk-fbsvc@pynapli.iam.gserviceaccount.com'
+      vpc_connector:
+        description: 'Serverless VPC Access connector name, if Redis uses private IP'
+        required: false
+        default: ''
+      max_instances:
+        description: 'Cloud Run max instances for staging'
+        required: true
+        default: '5'
+      require_iam:
+        description: 'Require IAM to invoke Cloud Run. Usually false for mobile staging APIs.'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build, Push, Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Check Google Cloud auth secrets
+        env:
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_CI_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GCP_WORKLOAD_IDENTITY_PROVIDER" ] || [ -z "$GCP_CI_SERVICE_ACCOUNT" ]; then
+            echo "::error::Set GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_CI_SERVICE_ACCOUNT repository secrets before deploying staging."
+            exit 1
+          fi
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_CI_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Build and push Cloud Run image
+        shell: pwsh
+        run: |
+          ./scripts/gcp-server-image-push.ps1 `
+            -ProjectId '${{ inputs.project_id }}' `
+            -Region '${{ inputs.region }}' `
+            -Repository '${{ inputs.repository }}' `
+            -ImageName 'pynapli-api' `
+            -CreateRepository
+
+      - name: Deploy Cloud Run staging API
+        shell: pwsh
+        run: |
+          $deployArgs = @{
+            ProjectId = '${{ inputs.project_id }}'
+            Region = '${{ inputs.region }}'
+            ServiceName = '${{ inputs.service_name }}'
+            Repository = '${{ inputs.repository }}'
+            ImageName = 'pynapli-api'
+            Environment = 'staging'
+            FirebaseProjectId = '${{ inputs.firebase_project_id }}'
+            AppCheckProjectNumber = '${{ inputs.app_check_project_number }}'
+            CloudSqlInstance = '${{ inputs.cloud_sql_instance }}'
+            DatabaseName = '${{ inputs.database_name }}'
+            DatabaseUser = '${{ inputs.database_user }}'
+            DatabasePasswordSecret = 'pynapli-staging-db-password'
+            MediaStorageBucket = '${{ inputs.media_storage_bucket }}'
+            MediaGcsSigningServiceAccountJsonSecret = 'pynapli-staging-media-signer-json'
+            AdminApiTokenSecret = 'pynapli-staging-admin-api-token'
+            DiscoveryCursorSecretName = 'pynapli-staging-discovery-cursor-secret'
+            ActivityCursorSecretName = 'pynapli-staging-activity-cursor-secret'
+            SwipeDeckTokenSecretName = 'pynapli-staging-swipe-deck-token-secret'
+            RedisUrl = '${{ inputs.redis_url }}'
+            MaxInstances = [int]'${{ inputs.max_instances }}'
+          }
+
+          if ('${{ inputs.service_account }}'.Trim()) {
+            $deployArgs.ServiceAccount = '${{ inputs.service_account }}'
+          }
+          if ('${{ inputs.vpc_connector }}'.Trim()) {
+            $deployArgs.VpcConnector = '${{ inputs.vpc_connector }}'
+          }
+          if ('${{ inputs.require_iam }}' -eq 'true') {
+            $deployArgs.RequireIam = $true
+          }
+
+          ./scripts/gcp-cloud-run-deploy.ps1 @deployArgs
+
+      - id: service-url
+        name: Resolve and smoke-test service URL
+        shell: pwsh
+        run: |
+          $url = (& gcloud run services describe '${{ inputs.service_name }}' `
+            --project '${{ inputs.project_id }}' `
+            --region '${{ inputs.region }}' `
+            --format 'value(status.url)').Trim()
+          if (-not $url) {
+            throw "Cloud Run service URL was empty."
+          }
+
+          "service_url=$url" >> $env:GITHUB_OUTPUT
+          Write-Host "Cloud Run URL: $url"
+
+          Invoke-WebRequest -UseBasicParsing -Uri "$url/health" -TimeoutSec 30 | Out-Null
+          Invoke-WebRequest -UseBasicParsing -Uri "$url/health/deep" -TimeoutSec 30 | Out-Null
+
+      - name: Deployment summary
+        run: |
+          echo "### Staging API deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "URL: ${{ steps.service-url.outputs.service_url }}" >> "$GITHUB_STEP_SUMMARY"

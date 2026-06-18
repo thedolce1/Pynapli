@@ -12,13 +12,14 @@ Push-Location $repoRoot
 try {
     if (-not $SkipGradle) {
         Write-Host "Building Ktor server distribution..."
-        & .\gradlew.bat :server:installDist --no-configuration-cache --console=plain
+        $gradle = if ([System.IO.Path]::DirectorySeparatorChar -eq "\") { ".\gradlew.bat" } else { "./gradlew" }
+        & $gradle :server:installDist --no-configuration-cache --console=plain
         if ($LASTEXITCODE -ne 0) {
             throw "Gradle :server:installDist failed with exit code $LASTEXITCODE."
         }
     }
 
-    $serverDistribution = Join-Path $repoRoot "server\build\install\server"
+    $serverDistribution = Join-Path (Join-Path (Join-Path (Join-Path $repoRoot "server") "build") "install") "server"
     if (-not (Test-Path $serverDistribution)) {
         throw "Missing $serverDistribution. Run without -SkipGradle or run .\gradlew.bat :server:installDist first."
     }

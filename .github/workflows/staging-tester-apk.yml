@@ -1,0 +1,136 @@
+name: Staging Tester APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'Staging API base URL'
+        required: true
+        default: 'https://api-staging.pynapli.com'
+      websocket_base_url:
+        description: 'Staging WebSocket base URL'
+        required: true
+        default: 'wss://api-staging.pynapli.com'
+      firebase_project_id:
+        description: 'Firebase project id'
+        required: true
+        default: 'pynapli'
+      distribute_to_firebase:
+        description: 'Upload to Firebase App Distribution'
+        type: boolean
+        required: true
+        default: true
+      firebase_groups:
+        description: 'Firebase App Distribution tester groups'
+        required: true
+        default: 'founders'
+      release_notes:
+        description: 'Release notes shown to testers'
+        required: true
+        default: 'Pynapli staging tester build.'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build Staging APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Write Firebase Android config
+        env:
+          ANDROID_GOOGLE_SERVICES_JSON_B64: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ANDROID_GOOGLE_SERVICES_JSON_B64" ]; then
+            echo "::error::Set ANDROID_GOOGLE_SERVICES_JSON_B64 to base64(androidApp/google-services.json) before building tester APKs."
+            exit 1
+          fi
+          printf '%s' "$ANDROID_GOOGLE_SERVICES_JSON_B64" | base64 --decode > androidApp/google-services.json
+
+      - name: Build staging APK
+        run: >
+          ./gradlew
+          :shared:jvmTest
+          :androidApp:assembleStaging
+          -Ppynapli.android.stagingApiBaseUrl="${{ inputs.api_base_url }}"
+          -Ppynapli.android.stagingWebsocketBaseUrl="${{ inputs.websocket_base_url }}"
+          --no-configuration-cache
+          --console=plain
+
+      - name: Upload staging APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pynapli-staging-tester-apk
+          path: androidApp/build/outputs/apk/staging/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Check Firebase distribution secrets
+        if: ${{ inputs.distribute_to_firebase == true }}
+        env:
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_CI_SERVICE_ACCOUNT: ${{ secrets.GCP_CI_SERVICE_ACCOUNT }}
+          FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GCP_WORKLOAD_IDENTITY_PROVIDER" ] || [ -z "$GCP_CI_SERVICE_ACCOUNT" ]; then
+            echo "::error::Set GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_CI_SERVICE_ACCOUNT repository secrets before Firebase distribution."
+            exit 1
+          fi
+          if [ -z "$FIREBASE_ANDROID_APP_ID" ]; then
+            echo "::error::Set FIREBASE_ANDROID_APP_ID to the Firebase Android App ID before Firebase distribution."
+            exit 1
+          fi
+
+      - id: auth
+        if: ${{ inputs.distribute_to_firebase == true }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_CI_SERVICE_ACCOUNT }}
+
+      - uses: actions/setup-node@v4
+        if: ${{ inputs.distribute_to_firebase == true }}
+        with:
+          node-version: 22
+
+      - name: Install Firebase CLI
+        if: ${{ inputs.distribute_to_firebase == true }}
+        run: npm install --global firebase-tools
+
+      - name: Distribute to Firebase App Distribution
+        if: ${{ inputs.distribute_to_firebase == true }}
+        env:
+          FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+          FIREBASE_PROJECT_ID: ${{ inputs.firebase_project_id }}
+          FIREBASE_GROUPS: ${{ inputs.firebase_groups }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -euo pipefail
+          APK_PATH="$(ls -t androidApp/build/outputs/apk/staging/*.apk | head -n 1)"
+          firebase appdistribution:distribute "$APK_PATH" \
+            --project "$FIREBASE_PROJECT_ID" \
+            --app "$FIREBASE_ANDROID_APP_ID" \
+            --groups "$FIREBASE_GROUPS" \
+            --release-notes "$RELEASE_NOTES"
+
+      - name: Tester APK summary
+        run: |
+          echo "### Staging tester APK" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "API: ${{ inputs.api_base_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "WebSocket: ${{ inputs.websocket_base_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifact: pynapli-staging-tester-apk" >> "$GITHUB_STEP_SUMMARY"

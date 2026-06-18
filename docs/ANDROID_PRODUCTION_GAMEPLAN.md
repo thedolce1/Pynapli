@@ -125,7 +125,7 @@ reporting. This phase is the hard gate to submission and is mostly codeable.
 
 | Slice | Track | What | Spec |
 |------|-------|------|------|
-| H1 | 🔵🟢 | **Cloud finalization** — confirm `pynapli-dev/staging/prod` GCP+Firebase projects, billing/cost alerts; **deploy pipeline** (build → migrate → deploy server) to staging then prod. | DEVOPS_INFRA |
+| H1 | 🔵🟢 | **Cloud finalization** — confirm `pynapli-dev/staging/prod` GCP+Firebase projects, billing/cost alerts; **deploy pipeline** (build → migrate → deploy server) to staging then prod. Staging tester lane now exists (`staging` Android build type, Cloud Run deploy workflow, Firebase-enabled tester APK workflow, local staging APK script); remaining work is provisioning GitHub/GCP/Firebase secrets and running it against live staging. | DEVOPS_INFRA |
 | H2 | 🔵 | **Real-device QA matrix** — mid-range Android + older supported device: grid battery/location profile, Playing Tonight battery + push delivery, low-network paths, notification delivery. Harnesses exist; need a physical device. | TESTING |
 | H3 | 🔵🟢 | **Store submission** — Play Console listing, app-store-safe screenshots + copy, **Data Safety form**, content rating, signing/release track (internal → closed → production). | DEVOPS, MODERATION, LAUNCH_STRATEGY |
 

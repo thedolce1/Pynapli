@@ -301,9 +301,13 @@ API now has a Cloud Run-ready runtime image at `infra/server.Dockerfile`, plus r
 - `scripts/gcp-server-image-push.ps1` — builds/tags/pushes to Artifact Registry.
 - `scripts/gcp-cloud-run-deploy.ps1` — deploys the pushed image to Cloud Run with explicit project,
   region, Cloud SQL, Redis, App Check, and Secret Manager parameters.
+- `.github/workflows/staging-backend.yml` — manual staging deploy lane for Cloud Run.
+- `.github/workflows/staging-tester-apk.yml` — manual Firebase-enabled staging APK lane with optional Firebase App Distribution upload.
+- `scripts/android-staging-apk.ps1` — local staging APK builder for already deployed staging APIs.
 
-Deployment notes live in `infra/cloud-run/README.md`. Production remains blocked until final
-project naming, billing alerts, secrets, backups, and branch protections are confirmed.
+Deployment notes live in `infra/cloud-run/README.md`; tester-lane details live in
+`docs/STAGING_TESTER_LANE.md`. Production remains blocked until final project naming, billing alerts,
+secrets, backups, and branch protections are confirmed.
 
 Startup validation now fails fast for `staging`, `prod`, and `production` when local defaults or
 unsafe toggles are present. Production-like environments must provide non-local Postgres/Redis,

@@ -48,6 +48,11 @@ android {
         debug {
             buildConfigField(
                 "String",
+                "PYNAPLI_ENVIRONMENT",
+                buildConfigString("local"),
+            )
+            buildConfigField(
+                "String",
                 "PYNAPLI_API_BASE_URL",
                 buildConfigString(stringProperty("pynapli.android.apiBaseUrl", "http://10.0.2.2:8080")),
             )
@@ -57,7 +62,33 @@ android {
                 buildConfigString(stringProperty("pynapli.android.websocketBaseUrl", "ws://10.0.2.2:8080")),
             )
         }
+        create("staging") {
+            initWith(getByName("debug"))
+            matchingFallbacks += listOf("debug")
+            isDebuggable = false
+            versionNameSuffix = "-staging"
+            buildConfigField(
+                "String",
+                "PYNAPLI_ENVIRONMENT",
+                buildConfigString("staging"),
+            )
+            buildConfigField(
+                "String",
+                "PYNAPLI_API_BASE_URL",
+                buildConfigString(stringProperty("pynapli.android.stagingApiBaseUrl", "https://api-staging.pynapli.com")),
+            )
+            buildConfigField(
+                "String",
+                "PYNAPLI_WEBSOCKET_BASE_URL",
+                buildConfigString(stringProperty("pynapli.android.stagingWebsocketBaseUrl", "wss://api-staging.pynapli.com")),
+            )
+        }
         release {
+            buildConfigField(
+                "String",
+                "PYNAPLI_ENVIRONMENT",
+                buildConfigString("prod"),
+            )
             buildConfigField(
                 "String",
                 "PYNAPLI_API_BASE_URL",
@@ -100,5 +131,6 @@ kotlin {
 
 dependencies {
     debugImplementation(libs.firebase.appcheck.debug)
+    add("stagingImplementation", libs.firebase.appcheck.debug)
     releaseImplementation(libs.firebase.appcheck.playintegrity)
 }
