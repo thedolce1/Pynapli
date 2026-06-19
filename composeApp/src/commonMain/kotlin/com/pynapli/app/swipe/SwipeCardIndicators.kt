@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliColors
 
 @Composable
 internal fun SwipeTagChip(label: String) {
@@ -86,7 +87,7 @@ internal fun SwipeOnlineDot(modifier: Modifier = Modifier) {
                 .testTag(SwipeTestTags.ONLINE_DOT)
                 .size(10.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF13E58A))
+                .background(PynapliColors.Success)
                 .border(1.dp, Color(0xFF050505), CircleShape),
     )
 }

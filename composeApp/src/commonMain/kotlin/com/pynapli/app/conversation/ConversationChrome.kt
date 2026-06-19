@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 
@@ -169,7 +170,7 @@ private fun ConversationAvatar(
                         .align(Alignment.BottomEnd)
                         .size(13.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF13E58A))
+                        .background(PynapliColors.Success)
                         .border(2.dp, MaterialTheme.colorScheme.background, CircleShape),
             )
         }

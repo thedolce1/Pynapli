@@ -39,6 +39,25 @@ object PynapliColors {
 }
 
 /**
+ * Light-mode surface set. The dark [PynapliColors] palette is the handoff-canonical default
+ * (Pynapli is dark-first); this is the secondary light variant, named here so the Material light
+ * `ColorScheme` derives from tokens instead of inline literals. Brand-fixed semantics (accent,
+ * online, danger…) come from [PynapliColors]/[PynapliSemantic] in both themes.
+ */
+object PynapliColorsLight {
+    val Primary = Color(0xFF6E4B00)
+    val OnPrimary = Color(0xFFFFFFFF)
+    val Background = Color(0xFFF8F6F1)
+    val OnBackground = Color(0xFF171510)
+    val Surface = Color(0xFFFFFFFF)
+    val OnSurface = Color(0xFF171510)
+    val SurfaceVariant = Color(0xFFEAE4D8)
+    val OnSurfaceVariant = Color(0xFF5C564D)
+    val Outline = Color(0xFFD1C8B8)
+    val OnError = Color(0xFFFFFFFF)
+}
+
+/**
  * Semantic aliases over [PynapliColors] so call sites express intent (online/verified/premium)
  * rather than a raw palette name. Mirrors docs/DESIGN_TOKENS.md.
  */

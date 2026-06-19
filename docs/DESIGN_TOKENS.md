@@ -60,7 +60,9 @@ object PynapliColors {
 }
 ```
 
-Light mode can exist, but dark mode should be the default product feel.
+Light mode can exist, but dark mode should be the default product feel. Light surface values are named in `PynapliColorsLight` (dark `PynapliColors` stays the handoff-canonical default).
+
+**Single source of truth:** the Material `ColorScheme` (`PynapliTheme.kt`) is *derived from* these token objects — it must not re-hardcode hexes. Editing a token therefore updates every `MaterialTheme.colorScheme` call site. Feature code routes brand-fixed values through `PynapliColors`/`PynapliSemantic` and reads theme-driven values via `MaterialTheme.colorScheme`; do not introduce raw hex literals that duplicate a token value (e.g. the online green is `PynapliColors.Success`, never an inline `0xFF…`).
 
 ## Semantic Tokens
 

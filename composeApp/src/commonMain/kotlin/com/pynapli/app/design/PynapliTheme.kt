@@ -7,38 +7,43 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
+// Both schemes derive from the token objects so PynapliColors is the single source of truth:
+// editing a token updates the Material scheme (and every MaterialTheme.colorScheme call site)
+// without re-hardcoding hexes. `onError` is set explicitly so destructive buttons render light
+// text on the danger red rather than Material's default dark maroon.
 private val PynapliDarkColors: ColorScheme =
     darkColorScheme(
-        primary = Color(0xFFFFC928),
-        onPrimary = Color(0xFF0A0A0C),
-        background = Color(0xFF0B0B0E),
-        onBackground = Color(0xFFF5F2EC),
-        surface = Color(0xFF121216),
-        onSurface = Color(0xFFF5F2EC),
-        surfaceVariant = Color(0xFF16161C),
-        onSurfaceVariant = Color(0xFFA8A29A),
-        outline = Color(0xFF23232C),
-        error = Color(0xFFFF4D5E),
+        primary = PynapliColors.Accent,
+        onPrimary = PynapliColors.TextInverse,
+        background = PynapliColors.Black,
+        onBackground = PynapliColors.TextPrimary,
+        surface = PynapliColors.Surface,
+        onSurface = PynapliColors.TextPrimary,
+        surfaceVariant = PynapliColors.SurfaceRaised,
+        onSurfaceVariant = PynapliColors.TextSecondary,
+        outline = PynapliColors.Border,
+        error = PynapliColors.Danger,
+        onError = PynapliColors.TextPrimary,
     )
 
 private val PynapliLightColors: ColorScheme =
     lightColorScheme(
-        primary = Color(0xFF6E4B00),
-        onPrimary = Color(0xFFFFFFFF),
-        background = Color(0xFFF8F6F1),
-        onBackground = Color(0xFF171510),
-        surface = Color(0xFFFFFFFF),
-        onSurface = Color(0xFF171510),
-        surfaceVariant = Color(0xFFEAE4D8),
-        onSurfaceVariant = Color(0xFF5C564D),
-        outline = Color(0xFFD1C8B8),
-        error = Color(0xFFB00020),
+        primary = PynapliColorsLight.Primary,
+        onPrimary = PynapliColorsLight.OnPrimary,
+        background = PynapliColorsLight.Background,
+        onBackground = PynapliColorsLight.OnBackground,
+        surface = PynapliColorsLight.Surface,
+        onSurface = PynapliColorsLight.OnSurface,
+        surfaceVariant = PynapliColorsLight.SurfaceVariant,
+        onSurfaceVariant = PynapliColorsLight.OnSurfaceVariant,
+        outline = PynapliColorsLight.Outline,
+        error = PynapliColors.Danger,
+        onError = PynapliColorsLight.OnError,
     )
 
 private val PynapliTypography =

@@ -226,6 +226,6 @@ private fun LinkedPartnerTone?.badgeColor(): Color =
         LinkedPartnerTone.Gold -> Color(0xFFC39A49)
         LinkedPartnerTone.Pink -> Color(0xFFE85D75)
         LinkedPartnerTone.Teal -> Color(0xFF4DB6AC)
-        LinkedPartnerTone.Sun -> Color(0xFFFFC928)
+        LinkedPartnerTone.Sun -> PynapliColors.Accent
         null -> Color(0xFFC39A49)
     }

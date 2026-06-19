@@ -66,7 +66,7 @@ fun PynapliSocialTopRail(
                         .align(Alignment.BottomEnd)
                         .size(11.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF13E58A))
+                        .background(PynapliColors.Success)
                         .border(1.dp, MaterialTheme.colorScheme.background, CircleShape),
             )
         }

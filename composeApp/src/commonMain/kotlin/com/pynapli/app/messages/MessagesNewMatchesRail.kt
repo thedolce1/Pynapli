@@ -125,7 +125,7 @@ private fun NewMatchAvatar(
                             .align(Alignment.BottomEnd)
                             .size(15.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF18D77A))
+                            .background(PynapliColors.Success)
                             .border(2.dp, MaterialTheme.colorScheme.background, CircleShape),
                 )
             }
