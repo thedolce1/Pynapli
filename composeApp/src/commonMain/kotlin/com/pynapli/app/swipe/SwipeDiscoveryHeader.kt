@@ -22,11 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
+import com.pynapli.app.design.PynapliScreenHeader
 
 internal object SwipeHeaderTags {
     const val OPEN_PSYNC = "swipe_open_psync"
@@ -43,52 +43,49 @@ internal fun SwipeHeader(
     // Slim single-row header: the bottom nav already labels this tab "Swipe", so the tall
     // title/subtitle/icon block is dropped to give the card deck the maximum vertical space.
     // Psync / Travel / Filters stay as compact text actions; Travel surfaces the active city.
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Style,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
-        )
-        Text(
-            text = "Swipe",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f),
-        )
-        onOpenPsync?.let { openPsync ->
-            TextButton(
-                onClick = openPsync,
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                modifier = Modifier.testTag(SwipeHeaderTags.OPEN_PSYNC),
-            ) {
-                Text(text = "Psync", maxLines = 1, style = MaterialTheme.typography.labelLarge)
-            }
-        }
-        TextButton(
-            onClick = onOpenTravel,
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-            modifier = Modifier.testTag(TravelModeTags.OPEN_SHEET),
-        ) {
-            Text(text = travelCityName ?: "Travel", maxLines = 1, style = MaterialTheme.typography.labelLarge)
-        }
-        TextButton(
-            onClick = onOpenFilters,
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-            modifier = Modifier.testTag(SwipeFilterTags.OPEN_SHEET),
-        ) {
-            Text(
-                text = if (activeFilterCount > 0) "Filters ($activeFilterCount)" else "Filters",
-                maxLines = 1,
-                style = MaterialTheme.typography.labelLarge,
+    // insets = false: the Swipe content column already applies the status-bar inset + padding,
+    // so the shared header contributes only the slot layout (leading icon, title, text actions).
+    PynapliScreenHeader(
+        insets = false,
+        leading = {
+            Icon(
+                imageVector = Icons.Filled.Style,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
             )
-        }
-    }
+        },
+        title = "Swipe",
+        actions = {
+            onOpenPsync?.let { openPsync ->
+                TextButton(
+                    onClick = openPsync,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.testTag(SwipeHeaderTags.OPEN_PSYNC),
+                ) {
+                    Text(text = "Psync", maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+            TextButton(
+                onClick = onOpenTravel,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.testTag(TravelModeTags.OPEN_SHEET),
+            ) {
+                Text(text = travelCityName ?: "Travel", maxLines = 1, style = MaterialTheme.typography.labelLarge)
+            }
+            TextButton(
+                onClick = onOpenFilters,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.testTag(SwipeFilterTags.OPEN_SHEET),
+            ) {
+                Text(
+                    text = if (activeFilterCount > 0) "Filters ($activeFilterCount)" else "Filters",
+                    maxLines = 1,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+        },
+    )
 }
 
 @Composable

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliHeaderTokens
+import com.pynapli.app.design.PynapliScreenHeader
 import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionTier
@@ -41,57 +42,43 @@ internal fun StoreHeader(
     restoreEnabled: Boolean,
     onRestorePurchases: () -> Unit,
 ) {
-    Row(
+    PynapliScreenHeader(
+        leading = { StoreIconBadge() },
+        title = "Store",
+        subtitle = entitlement?.source.sourceLabel(),
+        actions = {
+            OutlinedButton(
+                onClick = onRestorePurchases,
+                enabled = restoreEnabled,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(17.dp),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(if (isRestoringPurchases) "Restoring" else "Restore")
+            }
+        },
+    )
+}
+
+@Composable
+private fun StoreIconBadge() {
+    Box(
         modifier =
             Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .size(PynapliHeaderTokens.AvatarSize)
+                .clip(CircleShape)
+                .background(PynapliColors.SurfaceRaised),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(PynapliColors.SurfaceRaised),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.ShoppingBag,
-                contentDescription = null,
-                tint = PynapliColors.Accent,
-                modifier = Modifier.size(23.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Store",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = entitlement?.source.sourceLabel(),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        OutlinedButton(
-            onClick = onRestorePurchases,
-            enabled = restoreEnabled,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Refresh,
-                contentDescription = null,
-                modifier = Modifier.size(17.dp),
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(if (isRestoringPurchases) "Restoring" else "Restore")
-        }
+        Icon(
+            imageVector = Icons.Filled.ShoppingBag,
+            contentDescription = null,
+            tint = PynapliColors.Accent,
+            modifier = Modifier.size(23.dp),
+        )
     }
 }
 

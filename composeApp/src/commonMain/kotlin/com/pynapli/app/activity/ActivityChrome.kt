@@ -11,16 +11,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -32,7 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliPill
+import com.pynapli.app.design.PynapliScreenHeader
 
 @Composable
 internal fun ActivityGateRow(
@@ -146,38 +145,17 @@ internal fun ActivityHeader(
     loading: Boolean,
     onRefresh: () -> Unit,
 ) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = "Activity",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f),
-        )
-        IconButton(
-            onClick = onRefresh,
-            enabled = !loading,
-            modifier =
-                Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Refresh,
+    PynapliScreenHeader(
+        title = "Activity",
+        actions = {
+            PynapliHeaderActionButton(
+                icon = Icons.Filled.Refresh,
                 contentDescription = "Refresh activity",
-                tint = MaterialTheme.colorScheme.onSurface,
+                onClick = onRefresh,
+                enabled = !loading,
             )
-        }
-    }
+        },
+    )
 }
 
 @Composable

@@ -27,7 +27,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.pynapli.app.design.PynapliSocialTopRail
+import com.pynapli.app.design.PynapliHeaderActionButton
+import com.pynapli.app.design.PynapliHeaderAvatar
+import com.pynapli.app.design.PynapliScreenHeader
 import com.pynapli.shared.network.dto.ConversationDto
 import kotlinx.coroutines.launch
 
@@ -197,38 +199,23 @@ private fun MessagesTopArea(
     onProfileIconClick: () -> Unit,
     onRefresh: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        PynapliSocialTopRail(
-            onProfileClick = onProfileIconClick,
-            onActionClick = onRefresh,
-            actionContentDescription = "Refresh messages",
-            segments = emptyList(),
-            actionIcon = Icons.Filled.Refresh,
-        )
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = "Messages",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
+    PynapliScreenHeader(
+        leading = {
+            PynapliHeaderAvatar(
+                onClick = onProfileIconClick,
+                online = true,
             )
-            Text(
-                text = "$conversationCount conversations - $unreadCount unread",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        },
+        title = "Messages",
+        subtitle = "$conversationCount conversations · $unreadCount unread",
+        actions = {
+            PynapliHeaderActionButton(
+                icon = Icons.Filled.Refresh,
+                contentDescription = "Refresh messages",
+                onClick = onRefresh,
             )
-        }
-    }
+        },
+    )
 }
 
 internal object MessagesTestTags {

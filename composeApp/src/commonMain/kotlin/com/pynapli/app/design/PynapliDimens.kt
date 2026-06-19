@@ -24,6 +24,21 @@ object PynapliLayout {
     val MinTouchTarget = 48.dp
 }
 
+/**
+ * Screen-header tokens. Every top-of-screen header (Grid, Swipe, Activity, Messages, Store)
+ * is built from the `PynapliScreenHeader` scaffold (design/PynapliScreenHeader.kt) so insets,
+ * padding, avatar size, and action-button treatment match across surfaces. One canonical frame;
+ * each surface fills the leading/center/action slots with its own content.
+ */
+object PynapliHeaderTokens {
+    val HorizontalPadding = 16.dp // aligns header edges with PynapliLayout.ScreenPadding
+    val VerticalPadding = 10.dp
+    val ItemSpacing = 12.dp
+    val AvatarSize = 42.dp
+    val ActionButtonSize = 44.dp
+    val ActionIconSize = 20.dp
+}
+
 /** Corner radii. Repeated cards stay at or below [Card]; sheets may use [Sheet]. */
 object PynapliShape {
     val None = 0.dp

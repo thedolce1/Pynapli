@@ -194,6 +194,7 @@ Deep links:
 - [ ] Message bubble supports media reveal.
 - [x] Bottom nav uses five locked tabs.
 - [x] Avatar opens settings hub.
+- [x] Unified screen-header system (`design/PynapliScreenHeader.kt`) applies the Left-avatar / Center-context / Right-action structure across Grid, Swipe, Activity, Messages, and Store via shared `PynapliHeaderAvatar` / `PynapliHeaderActionButton` slots and `PynapliHeaderTokens` (replaces the per-surface hand-rolled headers and the old `PynapliSocialTopRail`).
 - [ ] Partial: per-tab state is retained in current Compose state holders, but full navigation regression coverage is missing.
 - [ ] Deep links respect auth/stale state.
 - [ ] Accessibility pass for touch targets and text overflow.
