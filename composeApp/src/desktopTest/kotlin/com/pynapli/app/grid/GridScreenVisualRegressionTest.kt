@@ -118,7 +118,10 @@ private fun ImageBitmap.assertGridVisualSignature(label: String) {
     assertTrue(signature.darkRatio + signature.sheetSurfaceRatio > 0.52f, "$label should remain predominantly dark/subdued: $signature")
     assertTrue(signature.midToneRatio > 0.25f, "$label should contain visible Grid card tone blocks: $signature")
     assertTrue(signature.brightRatio > 0.006f, "$label should contain legible light text/icons: $signature")
-    assertTrue(signature.onlineGreenPixels > 8, "$label should render online indicators: $signature")
+    // Threshold lowered 8 -> 4 (Grid handoff refinement): the per-tile online dot shrank from 8dp
+    // to a compact, photo-first 7dp, so fewer green pixels register at this sample step. >4 still
+    // asserts presence dots render across the online cards.
+    assertTrue(signature.onlineGreenPixels > 4, "$label should render online indicators: $signature")
     // Gold threshold lowered 5 -> 2 on 2026-06-01 (slice 1.2): the quick-filter row moved from
     // solid-gold AssistChips to restrained PynapliPills (accent border + small leading icon, no
     // gold fill) per FRONTEND_DESIGN_DIRECTION_SPEC ("gold should be a premium accent, not the

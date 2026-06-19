@@ -23,19 +23,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.GridTileTokens
 import com.pynapli.app.design.OnlineDot
 import com.pynapli.app.design.PhotoBottomScrim
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPlaceholderGradients
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.distance.formatDistanceForUnit
+
+// Subtle drop shadow so the compact white captions stay legible directly on photos.
+private val OnPhotoCaptionStyle =
+    TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.55f), offset = Offset(0f, 1f), blurRadius = 3f))
 
 @Composable
 internal fun GridProfileTile(
@@ -55,6 +64,7 @@ internal fun GridProfileTile(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
+                .clip(PynapliShape.SmallShape)
                 .clickable(onClick = onClick)
                 .background(card.tone.backgroundBrush()),
     ) {
@@ -97,19 +107,20 @@ internal fun GridProfileTile(
                 Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .padding(7.dp),
+                    .padding(horizontal = 6.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (card.online) {
-                OnlineDot(size = 8.dp)
+                OnlineDot(size = 7.dp)
             }
 
             Text(
                 text = card.displayName,
                 color = PynapliColors.TextPrimary,
-                style = MaterialTheme.typography.bodyMedium,
+                fontSize = GridTileTokens.NameTextSize,
                 fontWeight = FontWeight.SemiBold,
+                style = OnPhotoCaptionStyle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
@@ -121,7 +132,7 @@ internal fun GridProfileTile(
                 Text(
                     text = "Visiting",
                     color = Color.White,
-                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = GridTileTokens.MetaTextSize,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     modifier =
@@ -136,8 +147,9 @@ internal fun GridProfileTile(
             distanceLabel?.let { distance ->
                 Text(
                     text = distance,
-                    color = PynapliColors.TextSecondary,
-                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.78f),
+                    fontSize = GridTileTokens.MetaTextSize,
+                    style = OnPhotoCaptionStyle,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
                 )

@@ -92,8 +92,8 @@ object PynapliMotion {
 object GridTileTokens {
     const val ASPECT_RATIO = 1f
     val Gap = 2.dp
-    val NameTextSize = 15.sp
-    val MetaTextSize = 12.sp
+    val NameTextSize = 12.5.sp // compact, photo-first caption (handoff Grid)
+    val MetaTextSize = 10.sp
     val OnlineDotSize = 10.dp
     val PartnerIconSize = 22.dp
     val BottomGradientHeight = 44.dp
