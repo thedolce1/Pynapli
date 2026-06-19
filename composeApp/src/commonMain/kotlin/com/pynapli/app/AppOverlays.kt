@@ -12,7 +12,8 @@ import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.conversation.ConversationSheet
 import com.pynapli.app.conversation.ConversationStateHolder
-import com.pynapli.app.messages.MessageProfilePeekSheet
+import com.pynapli.app.grid.profileLinkActionFor
+import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
 import com.pynapli.app.psync.PsyncSessionScreen
@@ -103,7 +104,10 @@ internal fun PynapliOverlays(
     }
 
     if (selectedTab == PynapliTab.Messages && profileDetailState.visible) {
-        MessageProfilePeekSheet(
+        // Unified profile peek: Messages now shows the exact same ProfileDetailSheet as
+        // Grid/Swipe/Activity (one profile experience app-wide), gaining block/report/hide and
+        // the shared sheet chrome. "Message" simply closes the peek to return to the open thread.
+        ProfileDetailSheet(
             state = profileDetailState,
             onDismiss = profileDetailStateHolder::dismiss,
             onMessage = profileDetailStateHolder::dismiss,
@@ -112,6 +116,32 @@ internal fun PynapliOverlays(
             },
             onRequestAlbum = {
                 scope.launch { profileDetailStateHolder.requestAlbumAccess() }
+            },
+            onViewPrivateAlbum = {
+                scope.launch { profileDetailStateHolder.loadPrivateAlbum() }
+            },
+            onHide = {
+                scope.launch { profileDetailStateHolder.hideProfile() }
+            },
+            onBlock = { reason ->
+                scope.launch { profileDetailStateHolder.blockUser(reason) }
+            },
+            onReport = { category, note ->
+                scope.launch { profileDetailStateHolder.submitReport(category, note) }
+            },
+            profileLinkAction =
+                profileLinksState.profileLinkActionFor(
+                    targetUserId = profileDetailState.profile?.userId ?: profileDetailState.selectedCard?.id,
+                    viewerUserId = authState.session?.userId,
+                ),
+            onInviteProfileLink = {
+                val targetUserId = profileDetailState.profile?.userId ?: profileDetailState.selectedCard?.id
+                if (targetUserId != null) {
+                    scope.launch { profileLinksStateHolder.createInvitation(targetUserId) }
+                }
+            },
+            onOpenLinkedPartner = { partner ->
+                scope.launch { profileDetailStateHolder.openLinkedPartner(partner) }
             },
             distanceUnit = appSettingsState.settings.distanceUnit,
         )

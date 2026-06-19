@@ -50,6 +50,19 @@ object PynapliType {
     val Micro = 11.sp
 }
 
+/**
+ * Bottom-sheet layout tokens. Every modal sheet consumes these via the `PynapliBottomSheet`
+ * scaffold (design/PynapliSheet.kt) so padding, section rhythm, and tall-sheet height match
+ * across Grid filters, Swipe filters, Travel, Start Tonight, Conversation, and the profile peek.
+ */
+object PynapliSheetTokens {
+    val ContentHorizontalPadding = 20.dp
+    val ContentTopPadding = 12.dp
+    val ContentBottomPadding = 32.dp
+    val SectionSpacing = 16.dp // canonical inter-section rhythm inside a sheet body
+    const val TALL_HEIGHT_FRACTION = 0.94f // profile peek + conversation cover most of the screen
+}
+
 /** Animation durations in milliseconds (docs/DESIGN_TOKENS.md). */
 object PynapliMotion {
     const val FAST = 120

@@ -10,7 +10,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliConfirmDialog
 import com.pynapli.shared.network.dto.ReportCategory
 
 @Composable
@@ -33,39 +33,16 @@ internal fun BlockConfirmDialog(
     onConfirm: (reason: String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Block $displayName?") },
-        text = {
-            Text(
-                "They will not see you in the grid or messages, " +
-                    "and any open conversation will be hidden.",
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(null) },
-                enabled = !isBlocking,
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
-                    ),
-            ) {
-                if (isBlocking) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.onError,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(16.dp),
-                    )
-                } else {
-                    Text("Block")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isBlocking) { Text("Cancel") }
-        },
+    PynapliConfirmDialog(
+        title = "Block $displayName?",
+        body =
+            "They will not see you in the grid or messages, " +
+                "and any open conversation will be hidden.",
+        confirmLabel = "Block",
+        destructive = true,
+        isBusy = isBlocking,
+        onConfirm = { onConfirm(null) },
+        onDismiss = onDismiss,
     )
 }
 
@@ -76,34 +53,15 @@ internal fun HideProfileConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Hide $displayName?") },
-        text = {
-            Text(
-                "They will stop appearing in your Grid and Swipe deck. " +
-                    "You can unhide them from Safety Center.",
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                enabled = !isHiding,
-            ) {
-                if (isHiding) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(16.dp),
-                    )
-                } else {
-                    Text("Hide")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isHiding) { Text("Cancel") }
-        },
+    PynapliConfirmDialog(
+        title = "Hide $displayName?",
+        body =
+            "They will stop appearing in your Grid and Swipe deck. " +
+                "You can unhide them from Safety Center.",
+        confirmLabel = "Hide",
+        isBusy = isHiding,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
     )
 }
 

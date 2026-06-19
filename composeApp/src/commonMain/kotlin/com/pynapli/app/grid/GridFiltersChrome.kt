@@ -15,14 +15,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliPill
+import com.pynapli.app.design.PynapliSectionTitle
 
 @Composable
 internal fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
+    PynapliSectionTitle(text)
 }
 
 @Composable

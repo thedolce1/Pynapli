@@ -4,22 +4,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliBottomSheet
+import com.pynapli.app.design.PynapliSheetScaffold
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.settings.AppSettings
@@ -46,7 +42,6 @@ data class ProfileLinkActionState(
     val errorMessage: String? = null,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileDetailSheet(
     state: ProfileDetailUiState,
@@ -78,157 +73,137 @@ fun ProfileDetailSheet(
             distanceUnit = distanceUnit,
         )
     val profilePhotoUrl = profile?.profilePhotoUrl ?: card.thumbnailUrl
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBlockConfirm by remember { mutableStateOf(false) }
     var showHideConfirm by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.background,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+    PynapliBottomSheet(
+        onDismiss = onDismiss,
         modifier = modifier,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    // Present every profile peek (Grid, Swipe, Activity, hub preview) at a consistent
-                    // near-full height instead of letting the sheet wrap content — short profiles (or a
-                    // sheet that opened mid-load) otherwise render as a small partial sheet, while richer
-                    // ones cover most of the screen. One height = one consistent feel everywhere.
-                    .fillMaxHeight(0.94f)
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
-        ) {
-            // Scrollable content fills the space above the pinned action bar (weight 1f) so the
-            // action buttons always dock to the bottom edge; short profiles no longer leave the
-            // buttons floating mid-sheet with empty space beneath them (the #126 gap).
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                ProfileHero(
-                    displayName = displayName,
-                    age = profile?.displayAge,
-                    verified = profile?.verified == true,
-                    // Prefer the server-hydrated presence on the fetched profile (accurate from any
-                    // entry point, including Activity/Hub where the synthesized card has online=false);
-                    // fall back to the card's flag while the profile is still loading.
-                    online = profile?.online ?: card.online,
-                    distanceLabel = distanceLabel,
-                    neighborhood = profile?.neighborhood,
-                    photoUrls = profile?.photoUrls.orEmpty(),
-                    profilePhotoUrl = profilePhotoUrl,
-                    onDismiss = onDismiss,
-                    onHideClick = { showHideConfirm = true },
-                    onBlockClick = { showBlockConfirm = true },
-                    onReportClick = { showReportDialog = true },
-                    isOwnProfile = state.isOwnProfile,
-                )
-
-                when {
-                    state.isLoading -> {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 20.dp),
-                            contentAlignment = Alignment.Center,
+        // Present every profile peek (Grid, Swipe, Activity, Messages, hub preview) at one
+        // consistent near-full height with primary actions pinned to the bottom edge, so short
+        // profiles (or a sheet that opened mid-load) feel the same as rich ones and the buttons
+        // never float mid-sheet (the #126 gap). One scaffold = one profile experience everywhere.
+        PynapliSheetScaffold(
+            footer =
+                if (profile != null && !state.isOwnProfile) {
+                    {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
+                            when (actionMode) {
+                                ProfileDetailActionMode.Grid -> {
+                                    ProfileActions(
+                                        allowGridMessages = profile.allowGridMessages,
+                                        allowFlirts = profile.allowFlirts,
+                                        allowAlbumRequests = profile.allowAlbumRequests,
+                                        privateAlbumAccessStatus = profile.privateAlbumAccessStatus,
+                                        isSendingFlirt = state.isSendingFlirt,
+                                        isRequestingAlbum = state.isRequestingAlbum,
+                                        isLoadingPrivateAlbum = state.isLoadingPrivateAlbum,
+                                        flirtFeedback = state.flirtFeedback,
+                                        albumFeedback = state.albumFeedback,
+                                        profileLinkAction = profileLinkAction,
+                                        onMessage = onMessage,
+                                        onSpark = onSpark,
+                                        onRequestAlbum = onRequestAlbum,
+                                        onViewPrivateAlbum = onViewPrivateAlbum,
+                                        onInviteProfileLink = onInviteProfileLink,
+                                    )
+                                }
 
-                    state.errorMessage != null -> {
-                        Text(
-                            text = state.errorMessage,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
+                                ProfileDetailActionMode.SwipeUnmatched -> {
+                                    SwipeProfileActions(
+                                        isSubmitting = isSwipeSubmitting,
+                                        onPass = onSwipePass,
+                                        onLike = onSwipeLike,
+                                    )
+                                }
 
-                    profile != null -> {
-                        ProfileFacts(profileState = state)
-                        LinkedPartnerSection(
-                            linkedPartner = profile.linkedPartner,
-                            cardLinkedPartner = card.linkedPartner,
-                            onOpenLinkedPartner = onOpenLinkedPartner,
-                        )
-                        if (state.isOwnProfile) {
-                            OwnProfilePreviewNote()
-                        }
-                        state.reportFeedback?.let { feedback ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Text(
-                                    text = feedback,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
+                                ProfileDetailActionMode.SwipeMatched -> {
+                                    MatchedSwipeProfileActions(onMessage = onMessage)
+                                }
                             }
                         }
-                        PrivateAlbumPreview(
-                            items = state.privateAlbumItems,
-                            isLoading = state.isLoadingPrivateAlbum,
-                        )
+                    }
+                } else {
+                    null
+                },
+        ) {
+            ProfileHero(
+                displayName = displayName,
+                age = profile?.displayAge,
+                verified = profile?.verified == true,
+                // Prefer the server-hydrated presence on the fetched profile (accurate from any
+                // entry point, including Activity/Hub where the synthesized card has online=false);
+                // fall back to the card's flag while the profile is still loading.
+                online = profile?.online ?: card.online,
+                distanceLabel = distanceLabel,
+                neighborhood = profile?.neighborhood,
+                photoUrls = profile?.photoUrls.orEmpty(),
+                profilePhotoUrl = profilePhotoUrl,
+                onDismiss = onDismiss,
+                onHideClick = { showHideConfirm = true },
+                onBlockClick = { showBlockConfirm = true },
+                onReportClick = { showReportDialog = true },
+                isOwnProfile = state.isOwnProfile,
+            )
+
+            when {
+                state.isLoading -> {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 20.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
                 }
-            }
 
-            // Pinned action bar: a loaded, non-own profile docks its primary actions to the
-            // bottom edge of the sheet so they're always reachable regardless of how much
-            // profile content there is — short profiles no longer float the buttons mid-sheet.
-            if (profile != null && !state.isOwnProfile) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    when (actionMode) {
-                        ProfileDetailActionMode.Grid -> {
-                            ProfileActions(
-                                allowGridMessages = profile.allowGridMessages,
-                                allowFlirts = profile.allowFlirts,
-                                allowAlbumRequests = profile.allowAlbumRequests,
-                                privateAlbumAccessStatus = profile.privateAlbumAccessStatus,
-                                isSendingFlirt = state.isSendingFlirt,
-                                isRequestingAlbum = state.isRequestingAlbum,
-                                isLoadingPrivateAlbum = state.isLoadingPrivateAlbum,
-                                flirtFeedback = state.flirtFeedback,
-                                albumFeedback = state.albumFeedback,
-                                profileLinkAction = profileLinkAction,
-                                onMessage = onMessage,
-                                onSpark = onSpark,
-                                onRequestAlbum = onRequestAlbum,
-                                onViewPrivateAlbum = onViewPrivateAlbum,
-                                onInviteProfileLink = onInviteProfileLink,
+                state.errorMessage != null -> {
+                    Text(
+                        text = state.errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                profile != null -> {
+                    ProfileFacts(profileState = state)
+                    LinkedPartnerSection(
+                        linkedPartner = profile.linkedPartner,
+                        cardLinkedPartner = card.linkedPartner,
+                        onOpenLinkedPartner = onOpenLinkedPartner,
+                    )
+                    if (state.isOwnProfile) {
+                        OwnProfilePreviewNote()
+                    }
+                    state.reportFeedback?.let { feedback ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp),
                             )
-                        }
-
-                        ProfileDetailActionMode.SwipeUnmatched -> {
-                            SwipeProfileActions(
-                                isSubmitting = isSwipeSubmitting,
-                                onPass = onSwipePass,
-                                onLike = onSwipeLike,
+                            Text(
+                                text = feedback,
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.bodySmall,
                             )
-                        }
-
-                        ProfileDetailActionMode.SwipeMatched -> {
-                            MatchedSwipeProfileActions(onMessage = onMessage)
                         }
                     }
+                    PrivateAlbumPreview(
+                        items = state.privateAlbumItems,
+                        isLoading = state.isLoadingPrivateAlbum,
+                    )
                 }
             }
         }

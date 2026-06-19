@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Place
@@ -18,15 +16,12 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -35,7 +30,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliBottomSheet
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliSectionIntro
+import com.pynapli.app.design.PynapliSheetActionRow
+import com.pynapli.app.design.PynapliSheetColumn
+import com.pynapli.app.design.PynapliSheetTitle
 import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.location.TravelLocationUiState
 import com.pynapli.shared.network.dto.TravelPlaceDto
@@ -51,7 +51,6 @@ import kotlinx.coroutines.delay
  * instead of the picker — the server returns `ENTITLEMENT_REQUIRED` and the sheet
  * folds the picker to the paywall copy.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TravelModeSheet(
     state: TravelLocationUiState,
@@ -63,8 +62,6 @@ internal fun TravelModeSheet(
     onOpenStore: () -> Unit,
     onOpenAgeVerification: () -> Unit = {},
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
     // Debounced type-ahead: re-query when the user pauses typing.
     LaunchedEffect(state.searchQuery) {
         if (state.searchQuery.trim().length >= TravelLocationStateHolder.MIN_SEARCH_QUERY_LENGTH) {
@@ -73,31 +70,16 @@ internal fun TravelModeSheet(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
+    PynapliBottomSheet(
+        onDismiss = onDismiss,
         modifier = Modifier.testTag(TravelModeTags.SHEET),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 12.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(
-                text = "Travel mode",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
+        PynapliSheetColumn {
+            PynapliSheetTitle(text = "Travel mode")
+            PynapliSectionIntro(
                 text =
                     "Type a city or ZIP/postal code and your deck shows people there. " +
                         "One location at a time. Clear it to go back to local.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             if (state.ageVerificationRequired) {
@@ -159,22 +141,19 @@ internal fun TravelModeSheet(
                 }
             }
 
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            PynapliSheetActionRow(
+                start =
+                    if (state.isActive && !state.entitlementRequired && !state.ageVerificationRequired) {
+                        {
+                            TextButton(
+                                onClick = onClear,
+                                modifier = Modifier.testTag(TravelModeTags.CLEAR),
+                            ) { Text(text = "Clear travel mode") }
+                        }
+                    } else {
+                        null
+                    },
             ) {
-                if (state.isActive && !state.entitlementRequired && !state.ageVerificationRequired) {
-                    TextButton(
-                        onClick = onClear,
-                        modifier = Modifier.testTag(TravelModeTags.CLEAR),
-                    ) { Text(text = "Clear travel mode") }
-                }
-                androidx.compose.foundation.layout
-                    .Spacer(modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = onDismiss) { Text(text = "Close") }
             }
         }

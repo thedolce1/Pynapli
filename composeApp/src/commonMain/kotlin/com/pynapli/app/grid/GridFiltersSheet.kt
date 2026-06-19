@@ -1,19 +1,9 @@
 package com.pynapli.app.grid
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,9 +11,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliBottomSheet
+import com.pynapli.app.design.PynapliSheetActionRow
+import com.pynapli.app.design.PynapliSheetColumn
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun GridFiltersSheet(
     initial: GridFilters,
@@ -39,7 +30,6 @@ internal fun GridFiltersSheet(
     onSetTonightAvailable: () -> Unit = {},
     onClearTonightAvailable: () -> Unit = {},
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val initialDraft =
         remember(initial, lifestyleFiltersAllowed) {
             initial.withLifestyleAccess(lifestyleFiltersAllowed)
@@ -48,20 +38,11 @@ internal fun GridFiltersSheet(
     var saveName by remember { mutableStateOf("") }
     var glossaryVisible by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
+    PynapliBottomSheet(
+        onDismiss = onDismiss,
         modifier = Modifier.testTag(GridFilterTags.SHEET),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 12.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
+        PynapliSheetColumn {
             if (savedState.items.isNotEmpty() || savedState.entitlementRequired) {
                 SectionTitle("Saved")
                 SavedFiltersSection(
@@ -185,20 +166,16 @@ internal fun GridFiltersSheet(
                 )
             }
 
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            PynapliSheetActionRow(
+                start = {
+                    TextButton(
+                        onClick = onClearAll,
+                        modifier = Modifier.testTag(GridFilterTags.CLEAR_ALL),
+                    ) { Text(text = "Clear all") }
+                },
             ) {
-                TextButton(
-                    onClick = onClearAll,
-                    modifier = Modifier.testTag(GridFilterTags.CLEAR_ALL),
-                ) { Text(text = "Clear all") }
-                Box(modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = onDismiss) { Text(text = "Cancel") }
-                androidx.compose.material3.Button(
+                Button(
                     onClick = { onApply(draft.withLifestyleAccess(lifestyleFiltersAllowed)) },
                     modifier = Modifier.testTag(GridFilterTags.APPLY),
                 ) { Text(text = "Apply") }

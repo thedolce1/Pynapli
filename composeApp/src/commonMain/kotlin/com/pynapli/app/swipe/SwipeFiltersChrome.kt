@@ -25,23 +25,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
+import com.pynapli.app.design.PynapliSectionIntro
+import com.pynapli.app.design.PynapliSectionTitle
 
 @Composable
 internal fun SectionIntro(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    PynapliSectionIntro(text)
 }
 
 @Composable
 internal fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
+    PynapliSectionTitle(text)
 }
 
 @Composable

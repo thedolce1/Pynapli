@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.OnlineDot
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -426,12 +427,12 @@ private fun TonightSheet(
             modifier
                 .fillMaxWidth()
                 .fillMaxHeight(targetFraction)
-                .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                .clip(PynapliShape.SheetShape)
                 .background(PynapliColors.Surface)
                 .border(
                     width = 1.dp,
                     color = PynapliColors.Border,
-                    shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+                    shape = PynapliShape.SheetShape,
                 ),
     ) {
         // Drag handle: drag up/down cycles snap points.
