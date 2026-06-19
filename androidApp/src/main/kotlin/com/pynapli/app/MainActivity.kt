@@ -19,12 +19,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.mutableStateOf
 import com.pynapli.app.location.DeviceLocation
 import com.pynapli.app.location.GridLocationRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.PickedMediaForUpload
 import com.pynapli.app.notifications.PynapliNotificationDeepLinks
 import com.pynapli.shared.settings.AppSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -32,12 +34,18 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
-    private val appGraph by lazy {
-        AndroidAppGraph(applicationContext)
-    }
+    // The DI graph (SQLDelight open + 5 Ktor clients + ~25 state holders) is built off the main
+    // thread in onCreate so it no longer blocks the first frame; until it is ready a cheap boot
+    // splash draws immediately, which lets the system (icon) splash dismiss right away. Stays null
+    // until ready; [appGraphState] drives the composition swap, [appGraph] is the activity-side ref.
+    private var appGraph: AndroidAppGraph? = null
+    private val appGraphState = mutableStateOf<AndroidAppGraph?>(null)
     private val activityScope = MainScope()
+    private var isStarted = false
+    private var pendingDeepLinkIntent: Intent? = null
     private var pendingLocationSignal: CancellationSignal? = null
     private var presenceStreamJob: Job? = null
     private var activityStreamJob: Job? = null
@@ -51,7 +59,7 @@ class MainActivity : ComponentActivity() {
             if (permissions.values.any { granted -> granted }) {
                 submitCurrentLocation()
             } else {
-                appGraph.locationStateHolder.markPermissionDenied()
+                appGraph?.locationStateHolder?.markPermissionDenied()
             }
         }
     private val mediaPickerLauncher =
@@ -71,68 +79,98 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        appGraph.attachBillingActivity(this)
-        startPushRegistrationSync()
-        startNotificationPermissionPromptSync()
-        setContent {
-            PynapliApp(
-                authStateHolder = appGraph.authStateHolder,
-                appSettingsStateHolder = appGraph.appSettingsStateHolder,
-                gridStateHolder = appGraph.gridStateHolder,
-                profileDetailStateHolder = appGraph.profileDetailStateHolder,
-                conversationStateHolder = appGraph.conversationStateHolder,
-                messagesStateHolder = appGraph.messagesStateHolder,
-                activityStateHolder = appGraph.activityStateHolder,
-                locationStateHolder = appGraph.locationStateHolder,
-                mediaAlbumsStateHolder = appGraph.mediaAlbumsStateHolder,
-                profileHubStateHolder = appGraph.profileHubStateHolder,
-                profileLinksStateHolder = appGraph.profileLinksStateHolder,
-                swipeStateHolder = appGraph.swipeStateHolder,
-                storeStateHolder = appGraph.storeStateHolder,
-                savedGridFilterStateHolder = appGraph.savedGridFilterStateHolder,
-                savedSwipeFilterStateHolder = appGraph.savedSwipeFilterStateHolder,
-                travelLocationStateHolder = appGraph.travelLocationStateHolder,
-                tonightAvailabilityStateHolder = appGraph.tonightAvailabilityStateHolder,
-                playingTonightStateHolder = appGraph.playingTonightStateHolder,
-                psyncRepository = appGraph.psyncRepository,
-                psyncStreamClient = appGraph.psyncStreamClient,
-                deepLinkStateHolder = appGraph.deepLinkStateHolder,
-                onboardingStateHolder = appGraph.onboardingStateHolder,
-                onUseCurrentLocation = ::requestCurrentLocation,
-                onPickMediaForAlbum = ::pickMediaForAlbum,
-                onPickConversationPhoto = ::pickConversationPhoto,
-                onSetDiscreetIcon = ::applyLauncherIcon,
-                devLoginCredentials = appGraph.devLoginCredentials.takeIf { isDebuggable() },
-                testerDiagnosticLabel = appGraph.testerDiagnosticLabel,
-            )
+        // Build the DI graph off the main thread so onCreate doesn't block the first frame on
+        // SQLDelight open + Ktor client creation + ~25 state holders. The boot splash shows until
+        // the graph is ready, then the real app swaps in; any cold-launch deep link is replayed.
+        pendingDeepLinkIntent = intent
+        activityScope.launch {
+            val graph = withContext(Dispatchers.Default) { AndroidAppGraph(applicationContext) }
+            onAppGraphReady(graph)
         }
-        handleNotificationDeepLink(intent)
+        setContent {
+            when (val graph = appGraphState.value) {
+                null -> PynapliBootSplash()
+                else ->
+                    PynapliApp(
+                        authStateHolder = graph.authStateHolder,
+                        appSettingsStateHolder = graph.appSettingsStateHolder,
+                        gridStateHolder = graph.gridStateHolder,
+                        profileDetailStateHolder = graph.profileDetailStateHolder,
+                        conversationStateHolder = graph.conversationStateHolder,
+                        messagesStateHolder = graph.messagesStateHolder,
+                        activityStateHolder = graph.activityStateHolder,
+                        locationStateHolder = graph.locationStateHolder,
+                        mediaAlbumsStateHolder = graph.mediaAlbumsStateHolder,
+                        profileHubStateHolder = graph.profileHubStateHolder,
+                        profileLinksStateHolder = graph.profileLinksStateHolder,
+                        swipeStateHolder = graph.swipeStateHolder,
+                        storeStateHolder = graph.storeStateHolder,
+                        savedGridFilterStateHolder = graph.savedGridFilterStateHolder,
+                        savedSwipeFilterStateHolder = graph.savedSwipeFilterStateHolder,
+                        travelLocationStateHolder = graph.travelLocationStateHolder,
+                        tonightAvailabilityStateHolder = graph.tonightAvailabilityStateHolder,
+                        playingTonightStateHolder = graph.playingTonightStateHolder,
+                        psyncRepository = graph.psyncRepository,
+                        psyncStreamClient = graph.psyncStreamClient,
+                        deepLinkStateHolder = graph.deepLinkStateHolder,
+                        onboardingStateHolder = graph.onboardingStateHolder,
+                        onUseCurrentLocation = ::requestCurrentLocation,
+                        onPickMediaForAlbum = ::pickMediaForAlbum,
+                        onPickConversationPhoto = ::pickConversationPhoto,
+                        onSetDiscreetIcon = ::applyLauncherIcon,
+                        devLoginCredentials = graph.devLoginCredentials.takeIf { isDebuggable() },
+                        testerDiagnosticLabel = graph.testerDiagnosticLabel,
+                    )
+            }
+        }
+    }
+
+    private fun onAppGraphReady(graph: AndroidAppGraph) {
+        appGraph = graph
+        graph.attachBillingActivity(this)
+        startPushRegistrationSync(graph)
+        startNotificationPermissionPromptSync(graph)
+        pendingDeepLinkIntent?.let { handleNotificationDeepLink(it, graph) }
+        pendingDeepLinkIntent = null
+        if (isStarted) startRealtimeStreams(graph)
+        // Swap the boot splash for the real app last, once the graph's collaborators are wired.
+        appGraphState.value = graph
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleNotificationDeepLink(intent)
+        val graph = appGraph
+        if (graph != null) {
+            handleNotificationDeepLink(intent, graph)
+        } else {
+            pendingDeepLinkIntent = intent
+        }
     }
 
     override fun onStart() {
         super.onStart()
+        isStarted = true
+        appGraph?.let { startRealtimeStreams(it) }
+    }
+
+    private fun startRealtimeStreams(graph: AndroidAppGraph) {
         if (presenceStreamJob?.isActive != true) {
             presenceStreamJob =
                 activityScope.launch {
-                    runCatching { appGraph.gridPresenceStreamCoordinator.run() }
+                    runCatching { graph.gridPresenceStreamCoordinator.run() }
                 }
         }
         if (activityStreamJob?.isActive != true) {
             activityStreamJob =
                 activityScope.launch {
-                    runCatching { appGraph.activityRealtimeCoordinator.run() }
+                    runCatching { graph.activityRealtimeCoordinator.run() }
                 }
         }
         if (messageStreamJob?.isActive != true) {
             messageStreamJob =
                 activityScope.launch {
-                    runCatching { appGraph.messagesRealtimeCoordinator.run() }
+                    runCatching { graph.messagesRealtimeCoordinator.run() }
                 }
         }
     }
@@ -152,16 +190,16 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         pendingLocationSignal?.cancel()
         pendingLocationSignal = null
-        appGraph.detachBillingActivity(this)
+        appGraph?.detachBillingActivity(this)
         activityScope.cancel()
         super.onDestroy()
     }
 
-    private fun startPushRegistrationSync() {
+    private fun startPushRegistrationSync(graph: AndroidAppGraph) {
         activityScope.launch {
             combine(
-                appGraph.authStateHolder.state,
-                appGraph.appSettingsStateHolder.state,
+                graph.authStateHolder.state,
+                graph.appSettingsStateHolder.state,
             ) { authState, appSettingsState ->
                 PushRegistrationSyncInput(
                     userId = authState.session?.userId,
@@ -169,7 +207,7 @@ class MainActivity : ComponentActivity() {
                 )
             }.distinctUntilChanged()
                 .collectLatest { input ->
-                    appGraph.pushRegistrationCoordinator.syncAuthenticatedDevice(
+                    graph.pushRegistrationCoordinator.syncAuthenticatedDevice(
                         userId = input.userId,
                         settings = input.settings,
                     )
@@ -177,11 +215,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startNotificationPermissionPromptSync() {
+    private fun startNotificationPermissionPromptSync(graph: AndroidAppGraph) {
         activityScope.launch {
             combine(
-                appGraph.authStateHolder.state,
-                appGraph.appSettingsStateHolder.state,
+                graph.authStateHolder.state,
+                graph.appSettingsStateHolder.state,
             ) { authState, appSettingsState ->
                 authState.authenticated && appSettingsState.settings.pushNotificationsEnabled()
             }.distinctUntilChanged()
@@ -204,26 +242,30 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun syncPushRegistrationNow() {
-        val authState = appGraph.authStateHolder.state.value
-        val settings = appGraph.appSettingsStateHolder.state.value.settings
-        appGraph.pushRegistrationCoordinator.syncAuthenticatedDevice(
+        val graph = appGraph ?: return
+        val authState = graph.authStateHolder.state.value
+        val settings = graph.appSettingsStateHolder.state.value.settings
+        graph.pushRegistrationCoordinator.syncAuthenticatedDevice(
             userId = authState.session?.userId,
             settings = settings,
         )
     }
 
-    private fun handleNotificationDeepLink(intent: Intent?) {
+    private fun handleNotificationDeepLink(
+        intent: Intent?,
+        graph: AndroidAppGraph,
+    ) {
         if (intent == null) return
         when (PynapliNotificationDeepLinks.targetFromIntent(intent)) {
             AppDeepLinkStateHolder.TARGET_ACTIVITY -> {
-                appGraph.deepLinkStateHolder.openActivity(
+                graph.deepLinkStateHolder.openActivity(
                     tab = PynapliNotificationDeepLinks.activityTabFromIntent(intent),
                     eventId = PynapliNotificationDeepLinks.activityEventIdFromIntent(intent),
                 )
             }
 
             AppDeepLinkStateHolder.TARGET_MESSAGES -> {
-                appGraph.deepLinkStateHolder.openMessages(
+                graph.deepLinkStateHolder.openMessages(
                     conversationId = PynapliNotificationDeepLinks.conversationIdFromIntent(intent),
                 )
             }
@@ -270,6 +312,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handlePickedMedia(uri: Uri?) {
+        val graph = appGraph ?: return
         val sendToConversation = pendingConversationPhoto
         val kind = pendingMediaAlbumKind
         pendingConversationPhoto = false
@@ -279,12 +322,12 @@ class MainActivity : ComponentActivity() {
         activityScope.launch {
             val pickedMedia = readPickedImage(uri)
             when {
-                pickedMedia == null -> appGraph.mediaAlbumsStateHolder.showError("Could not read the selected image.")
+                pickedMedia == null -> graph.mediaAlbumsStateHolder.showError("Could not read the selected image.")
                 // Chat photo: upload + send as a per-recipient consent-tap media message.
-                sendToConversation -> appGraph.conversationStateHolder.sendPhoto(pickedMedia)
+                sendToConversation -> graph.conversationStateHolder.sendPhoto(pickedMedia)
                 // Profile photos pause at the shared square-crop step; private album
                 // media uploads as picked.
-                kind != null -> appGraph.mediaAlbumsStateHolder.stagePickedMedia(kind, pickedMedia)
+                kind != null -> graph.mediaAlbumsStateHolder.stagePickedMedia(kind, pickedMedia)
             }
         }
     }
@@ -293,7 +336,7 @@ class MainActivity : ComponentActivity() {
         if (hasLocationPermission()) {
             submitCurrentLocation()
         } else {
-            appGraph.locationStateHolder.beginUpdate()
+            appGraph?.locationStateHolder?.beginUpdate()
             locationPermissionLauncher.launch(
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -311,17 +354,18 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     private fun submitCurrentLocation() {
+        val locationStateHolder = appGraph?.locationStateHolder ?: return
         if (!hasLocationPermission()) {
-            appGraph.locationStateHolder.markPermissionDenied()
+            locationStateHolder.markPermissionDenied()
             return
         }
 
-        appGraph.locationStateHolder.beginUpdate()
+        locationStateHolder.beginUpdate()
         val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val providers = locationManager.enabledLocationProviders()
 
         if (providers.isEmpty()) {
-            appGraph.locationStateHolder.markUnavailable()
+            locationStateHolder.markUnavailable()
             return
         }
 
@@ -345,7 +389,7 @@ class MainActivity : ComponentActivity() {
                     pendingLocationSignal = null
                 }
                 if (currentLocation == null) {
-                    appGraph.locationStateHolder.markUnavailable()
+                    locationStateHolder.markUnavailable()
                 } else {
                     submitDeviceLocation(currentLocation)
                 }
@@ -353,13 +397,14 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        appGraph.locationStateHolder.markUnavailable()
+        locationStateHolder.markUnavailable()
     }
 
     private fun submitDeviceLocation(currentLocation: Location) {
+        val graph = appGraph ?: return
         activityScope.launch {
             val result =
-                appGraph.locationStateHolder.submitLocation(
+                graph.locationStateHolder.submitLocation(
                     DeviceLocation(
                         latitude = currentLocation.latitude,
                         longitude = currentLocation.longitude,
@@ -368,8 +413,8 @@ class MainActivity : ComponentActivity() {
                 )
             when (result.gridRefresh) {
                 GridLocationRefresh.None -> Unit
-                GridLocationRefresh.QuietRefresh -> appGraph.gridStateHolder.load(quiet = true)
-                GridLocationRefresh.Refresh -> appGraph.gridStateHolder.load()
+                GridLocationRefresh.QuietRefresh -> graph.gridStateHolder.load(quiet = true)
+                GridLocationRefresh.Refresh -> graph.gridStateHolder.load()
             }
         }
     }
