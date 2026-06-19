@@ -8,9 +8,15 @@ interface MediaAssetUrlResolver {
 }
 
 class LocalMediaAssetUrlResolver(
-    private val uploadBaseUrl: String,
+    private val fallbackBaseUrl: String,
 ) : MediaAssetUrlResolver {
-    override fun publicContentUrl(mediaAssetId: UUID): String = "${uploadBaseUrl.trimEnd('/')}/v1/media/uploads/local/$mediaAssetId"
+    // Prefer the per-request host (set by configureRequestMediaBaseUrl) so the emulator, a physical
+    // device, and localhost each get a media URL they can actually reach; fall back to the static
+    // configured base outside a request (background jobs / tests).
+    override fun publicContentUrl(mediaAssetId: UUID): String {
+        val base = (requestMediaBaseUrl.get() ?: fallbackBaseUrl).trimEnd('/')
+        return "$base/v1/media/uploads/local/$mediaAssetId"
+    }
 }
 
 /**

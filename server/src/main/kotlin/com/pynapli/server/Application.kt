@@ -14,6 +14,7 @@ import com.pynapli.server.grid.configureSavedGridFilterRoutes
 import com.pynapli.server.location.configureLocationRoutes
 import com.pynapli.server.location.configureTravelLocationRoutes
 import com.pynapli.server.media.configureMediaRoutes
+import com.pynapli.server.media.configureRequestMediaBaseUrl
 import com.pynapli.server.messaging.configureMessageStreamRoutes
 import com.pynapli.server.messaging.configureMessagingRoutes
 import com.pynapli.server.metrics.configureProductMetricsRoutes
@@ -78,6 +79,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureStatusPages()
     configureMonitoring()
     configureHTTP()
+    configureRequestMediaBaseUrl()
     configureAppCheck(dependencies.config.appCheckEnforced, selectAppCheckVerifier(dependencies.config))
     configureHealthRoutes(dependencies)
     configureAdminAppealRoutes(dependencies.config, dependencies.adminAppealService)
