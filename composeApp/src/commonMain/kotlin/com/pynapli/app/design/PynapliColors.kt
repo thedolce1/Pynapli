@@ -35,6 +35,7 @@ object PynapliColors {
     val Border = Color(0xFF23232C)
     val BorderSoft = Color(0xFF1B1B22) // hairline dividers / sticky-bar underlines
     val OverlayScrim = Color(0x99000000)
+    val OverlayScrimSoft = Color(0x55000000) // mid stop for photo legibility gradients
     val PhotoGradientBottom = Color(0xCC000000)
 }
 

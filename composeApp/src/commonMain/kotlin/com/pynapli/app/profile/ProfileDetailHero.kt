@@ -42,6 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliSemantic
 import com.pynapli.app.design.VerifiedBadge
 
@@ -73,11 +75,7 @@ internal fun ProfileHero(
                 .fillMaxWidth()
                 .height(380.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(
-                    Brush.linearGradient(
-                        listOf(Color(0xFF2B2622), Color(0xFF6D5D4F), Color(0xFF1C1B1A)),
-                    ),
-                ),
+                .background(PynapliPlaceholderGradients.profileHero),
     ) {
         if (photos.isNotEmpty()) {
             HorizontalPager(
@@ -100,7 +98,7 @@ internal fun ProfileHero(
                     .matchParentSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Transparent, Color(0x55000000), Color(0xCC000000)),
+                            listOf(Color.Transparent, PynapliColors.OverlayScrimSoft, PynapliColors.PhotoGradientBottom),
                         ),
                     ),
         )
@@ -151,7 +149,7 @@ internal fun ProfileHero(
                     Modifier
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(Color(0x99000000)),
+                        .background(PynapliColors.OverlayScrim),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
@@ -272,7 +270,7 @@ private fun ProfileOverflowMenu(
                 Modifier
                     .size(42.dp)
                     .clip(CircleShape)
-                    .background(Color(0x99000000)),
+                    .background(PynapliColors.OverlayScrim),
         ) {
             Icon(
                 imageVector = Icons.Filled.MoreVert,

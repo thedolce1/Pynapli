@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PhotoBottomScrim
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.network.dto.ActivityEventDto
 
@@ -238,7 +239,7 @@ private fun ActivityTileDismiss(
             modifier
                 .size(28.dp)
                 .clip(CircleShape)
-                .background(Color(0x99000000))
+                .background(PynapliColors.OverlayScrim)
                 .clickable(enabled = !pendingDismiss, onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
@@ -267,11 +268,8 @@ private fun ActivityLockedTile(onClick: () -> Unit) {
                 .fillMaxWidth()
                 .aspectRatio(0.82f)
                 .clip(RoundedCornerShape(12.dp))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF1A1A20), Color(0xFF26262E)),
-                    ),
-                ).border(1.dp, PynapliColors.BorderSoft, RoundedCornerShape(12.dp))
+                .background(PynapliPlaceholderGradients.neutralTile)
+                .border(1.dp, PynapliColors.BorderSoft, RoundedCornerShape(12.dp))
                 .clickable(onClick = onClick)
                 .testTag(ActivityFomoTags.LOCKED_TILE),
         contentAlignment = Alignment.Center,
@@ -329,16 +327,5 @@ private fun ActivityUnlockBanner(
     }
 }
 
-private fun tileBackgroundBrush(seed: String): Brush {
-    val palettes =
-        listOf(
-            listOf(Color(0xFF2A2A2A), Color(0xFF7D5B3F)),
-            listOf(Color(0xFF263238), Color(0xFF607D8B)),
-            listOf(Color(0xFF1E1B1B), Color(0xFFB85C38)),
-            listOf(Color(0xFF252525), Color(0xFF455A40)),
-            listOf(Color(0xFF2B2622), Color(0xFF9A6B38)),
-            listOf(Color(0xFF202124), Color(0xFF6B7280)),
-        )
-    val index = seed.fold(0) { total, char -> total + char.code }.mod(palettes.size)
-    return Brush.linearGradient(palettes[index])
-}
+// Reuses the first six shared card tones; mod 6 preserves the prior per-seed assignment.
+private fun tileBackgroundBrush(seed: String): Brush = PynapliPlaceholderGradients.cardTones[PynapliPlaceholderGradients.stableIndex(seed, 6)]

@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliPlaceholderGradients
 
 internal fun LazyGridScope.albumSection(
     kind: MediaAlbumKindUi,
@@ -429,14 +430,6 @@ private fun EmptyAlbumRow(kind: MediaAlbumKindUi) {
 }
 
 private fun String.tone(): Brush {
-    val tones =
-        listOf(
-            Brush.linearGradient(listOf(Color(0xFF2A2622), Color(0xFFB08A44))),
-            Brush.linearGradient(listOf(Color(0xFF17211E), Color(0xFF486C5D))),
-            Brush.linearGradient(listOf(Color(0xFF251D22), Color(0xFF854D62))),
-            Brush.linearGradient(listOf(Color(0xFF191F24), Color(0xFF53616D))),
-            Brush.linearGradient(listOf(Color(0xFF20201E), Color(0xFF72634F))),
-        )
-    val index = fold(0) { total, char -> total + char.code }.mod(tones.size)
-    return tones[index]
+    val tones = PynapliPlaceholderGradients.swipeDeckTones
+    return tones[fold(0) { total, char -> total + char.code }.mod(tones.size)]
 }

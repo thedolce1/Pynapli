@@ -34,6 +34,7 @@ import coil3.compose.AsyncImage
 import com.pynapli.app.design.OnlineDot
 import com.pynapli.app.design.PhotoBottomScrim
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.shared.distance.formatDistanceForUnit
 
 @Composable
@@ -158,7 +159,7 @@ private fun TonightIndicator(modifier: Modifier = Modifier) {
             modifier
                 .size(18.dp)
                 .clip(CircleShape)
-                .background(Color(0xCC0B0B0E))
+                .background(PynapliColors.Black.copy(alpha = 0.8f))
                 .border(1.dp, PynapliColors.Accent, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
@@ -204,21 +205,8 @@ private fun LinkedPartnerBadge(
     }
 }
 
-private fun GridCardTone.backgroundBrush(): Brush =
-    when (this) {
-        GridCardTone.Warm -> Brush.linearGradient(listOf(Color(0xFF2A2A2A), Color(0xFF7D5B3F)))
-        GridCardTone.Slate -> Brush.linearGradient(listOf(Color(0xFF263238), Color(0xFF607D8B)))
-        GridCardTone.Rust -> Brush.linearGradient(listOf(Color(0xFF1E1B1B), Color(0xFFB85C38)))
-        GridCardTone.DeepGreen -> Brush.linearGradient(listOf(Color(0xFF252525), Color(0xFF455A40)))
-        GridCardTone.Bronze -> Brush.linearGradient(listOf(Color(0xFF2B2622), Color(0xFF9A6B38)))
-        GridCardTone.Graphite -> Brush.linearGradient(listOf(Color(0xFF202124), Color(0xFF6B7280)))
-        GridCardTone.Teal -> Brush.linearGradient(listOf(Color(0xFF171717), Color(0xFF355C5B)))
-        GridCardTone.Rose -> Brush.linearGradient(listOf(Color(0xFF2E2524), Color(0xFF884C5E)))
-        GridCardTone.Cocoa -> Brush.linearGradient(listOf(Color(0xFF1C1B1A), Color(0xFF6D5D4F)))
-        GridCardTone.Moss -> Brush.linearGradient(listOf(Color(0xFF1F2421), Color(0xFF526E48)))
-        GridCardTone.Stone -> Brush.linearGradient(listOf(Color(0xFF212121), Color(0xFF7B6257)))
-        GridCardTone.Midnight -> Brush.linearGradient(listOf(Color(0xFF1A202C), Color(0xFF57606A)))
-    }
+// Order mirrors GridCardTone (and PynapliPlaceholderGradients.cardTones) by ordinal.
+private fun GridCardTone.backgroundBrush(): Brush = PynapliPlaceholderGradients.cardTones[ordinal]
 
 private fun LinkedPartnerTone?.badgeColor(): Color =
     when (this) {

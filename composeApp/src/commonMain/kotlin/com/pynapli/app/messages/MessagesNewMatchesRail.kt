@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.conversation.titleFor
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.shared.network.dto.ConversationDto
 
 internal object NewMatchesRailTags {
@@ -149,16 +150,8 @@ private fun String.initials(): String =
         .joinToString("") { it.first().uppercase() }
         .ifBlank { "?" }
 
+// Reuses shared card tones (Warm, Slate, Rust, DeepGreen, Bronze, Rose) by ordinal.
 private fun avatarBrush(seed: String): Brush {
-    val palettes =
-        listOf(
-            listOf(Color(0xFF2A2A2A), Color(0xFF7D5B3F)),
-            listOf(Color(0xFF263238), Color(0xFF607D8B)),
-            listOf(Color(0xFF1E1B1B), Color(0xFFB85C38)),
-            listOf(Color(0xFF252525), Color(0xFF455A40)),
-            listOf(Color(0xFF2B2622), Color(0xFF9A6B38)),
-            listOf(Color(0xFF2E2524), Color(0xFF884C5E)),
-        )
-    val index = seed.fold(0) { total, char -> total + char.code }.mod(palettes.size)
-    return Brush.linearGradient(palettes[index])
+    val tones = listOf(0, 1, 2, 3, 4, 7).map { PynapliPlaceholderGradients.cardTones[it] }
+    return tones[seed.fold(0) { total, char -> total + char.code }.mod(tones.size)]
 }
