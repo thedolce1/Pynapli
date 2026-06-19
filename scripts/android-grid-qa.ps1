@@ -235,6 +235,25 @@ function Tap-Text {
     Write-Host "[tap] '$Text' at $($bounds.CenterX),$($bounds.CenterY)"
 }
 
+function Scroll-SheetToText {
+    param(
+        [string]$Text,
+        [int]$MaxSwipes = 6
+    )
+
+    for ($attempt = 0; $attempt -le $MaxSwipes; $attempt++) {
+        $xml = Dump-Ui "sheet_scroll"
+        if ($null -ne (Find-NodeByText $xml $Text)) {
+            return $xml
+        }
+        # Swipe up within the sheet content (clear of the top drag handle) to reveal lower sections.
+        Invoke-Adb @("shell", "input", "swipe", "540", "1700", "540", "760", "350") | Out-Null
+        Start-Sleep -Milliseconds 600
+    }
+
+    throw "Could not scroll the filter sheet to reveal '$Text'."
+}
+
 function Get-FirstGridCardNode {
     param([xml]$Xml)
 
@@ -617,9 +636,16 @@ $filterSheetXml = Dump-Ui "03_filters_sheet" -Keep
 Assert-NoAppErrorText $filterSheetXml "Filter sheet"
 Assert-TextPresent $filterSheetXml "Presence" "Filter sheet"
 Assert-TextPresent $filterSheetXml "Trust" "Filter sheet"
-Assert-TextPresent $filterSheetXml "Intent" "Filter sheet"
 $filterSheetShot = Save-Screen "03_filters_sheet"
 $filterSheetSignature = Assert-GoldenStage "filtersSheet" $filterSheetXml $filterSheetShot
+
+# The profile-filter coherence work inserted Who/Gender/Orientation sections, so Intent and its
+# chips now render below the fold at sheet open. Scroll the sheet to verify they still render.
+$filterSheetLowerXml = Scroll-SheetToText "Intent"
+Assert-NoAppErrorText $filterSheetLowerXml "Filter sheet (lower)"
+Assert-TextPresent $filterSheetLowerXml "Intent" "Filter sheet (lower)"
+Assert-TextPresent $filterSheetLowerXml "Together" "Filter sheet (lower)"
+Save-Screen "03b_filters_sheet_lower" | Out-Null
 
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_BACK") | Out-Null
 Wait-ForAnyText @($firstCardText, "Filters") | Out-Null

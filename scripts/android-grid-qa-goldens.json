@@ -39,8 +39,9 @@
         "Age",
         "Presence",
         "Who",
+        "Gender",
+        "Orientation",
         "Trust",
-        "Intent",
         "Online now",
         "Available tonight",
         "Singles",
@@ -48,8 +49,7 @@
         "Partnered",
         "Verified",
         "Face photo",
-        "Age verified",
-        "Together"
+        "Age verified"
       ],
       "forbiddenTexts": [
         "Illegal input",
@@ -61,7 +61,7 @@
         "minHeight": 1280,
         "minDarkRatio": 0.55,
         "maxBrightRatio": 0.16,
-        "minNonBlackRatio": 0.20,
+        "minNonBlackRatio": 0.04,
         "minAccentYellowRatio": 0.004,
         "minColorBucketCount": 8
       }
