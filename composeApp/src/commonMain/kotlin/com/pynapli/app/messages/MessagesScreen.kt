@@ -38,6 +38,7 @@ fun MessagesScreen(
     viewerUserId: String?,
     onThreadSelected: (ConversationDto) -> Unit,
     onProfileIconClick: () -> Unit = {},
+    profileImageUrl: String? = null,
     modifier: Modifier = Modifier,
     stateHolder: MessagesStateHolder = rememberMessagesStateHolder(),
 ) {
@@ -53,6 +54,7 @@ fun MessagesScreen(
         viewerUserId = viewerUserId,
         onThreadSelected = onThreadSelected,
         onProfileIconClick = onProfileIconClick,
+        profileImageUrl = profileImageUrl,
         onRefresh = { scope.launch { stateHolder.load() } },
         onAcceptPartnerInvite = { conversationId ->
             scope.launch { stateHolder.acceptPartnerInvite(conversationId) }
@@ -78,6 +80,7 @@ private fun MessagesScreenContent(
     viewerUserId: String?,
     onThreadSelected: (ConversationDto) -> Unit,
     onProfileIconClick: () -> Unit,
+    profileImageUrl: String?,
     onRefresh: () -> Unit,
     onAcceptPartnerInvite: (String) -> Unit,
     onDeclinePartnerInvite: (String) -> Unit,
@@ -93,6 +96,7 @@ private fun MessagesScreenContent(
             conversationCount = state.conversations.size,
             unreadCount = state.unreadCount,
             onProfileIconClick = onProfileIconClick,
+            profileImageUrl = profileImageUrl,
             onRefresh = onRefresh,
         )
 
@@ -197,12 +201,14 @@ private fun MessagesTopArea(
     conversationCount: Int,
     unreadCount: Int,
     onProfileIconClick: () -> Unit,
+    profileImageUrl: String?,
     onRefresh: () -> Unit,
 ) {
     PynapliScreenHeader(
         leading = {
             PynapliHeaderAvatar(
                 onClick = onProfileIconClick,
+                imageUrl = profileImageUrl,
                 online = true,
             )
         },

@@ -266,6 +266,7 @@ internal fun ColumnScope.PynapliMainContent(
                         modifier = Modifier.weight(1f),
                         stateHolder = messagesStateHolder,
                         viewerUserId = authState.session?.userId,
+                        profileImageUrl = profileImageUrl,
                         onProfileIconClick = { onProfileSurface(ProfileSurface.Hub) },
                         onThreadSelected = { conversation ->
                             messagesStateHolder.markConversationReadLocal(conversation.conversationId)
