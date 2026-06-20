@@ -23,11 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
 
 @Composable
 internal fun ProfileHubMessageBand(
@@ -40,10 +40,10 @@ internal fun ProfileHubMessageBand(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
-                .background(if (isError) Color(0xFF351317) else Color(0xFF172A1F))
+                .background(if (isError) PynapliColors.DangerContainer else PynapliColors.SuccessContainer)
                 .border(
                     width = 1.dp,
-                    color = if (isError) MaterialTheme.colorScheme.error else Color(0xFF275C3B),
+                    color = if (isError) MaterialTheme.colorScheme.error else PynapliColors.SuccessBorder,
                     shape = RoundedCornerShape(8.dp),
                 ).clickable(onClick = onDismiss)
                 .padding(horizontal = 12.dp, vertical = 10.dp),

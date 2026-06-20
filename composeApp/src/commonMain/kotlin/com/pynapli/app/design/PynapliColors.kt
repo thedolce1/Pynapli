@@ -43,6 +43,21 @@ object PynapliColors {
     val OverlayScrim = Color(0x99000000)
     val OverlayScrimSoft = Color(0x55000000) // mid stop for photo legibility gradients
     val PhotoGradientBottom = Color(0xCC000000)
+
+    // Inline banner/container tints: muted dark fills + readable borders for success/error message
+    // bands (e.g. the Profile-hub message band) that must sit on the dark surface without using the
+    // raw, retina-searing semantic red/green at full strength.
+    val DangerContainer = Color(0xFF351317)
+    val SuccessContainer = Color(0xFF172A1F)
+    val SuccessBorder = Color(0xFF275C3B)
+
+    // Linked-partner ring tones — a small categorical palette so a partner reads as a distinct
+    // person on a card without competing with the brand accent. Mapped per LinkedPartnerTone
+    // (GridCard); the Sun tone reuses [Accent].
+    val PartnerViolet = Color(0xFF8B5CF6)
+    val PartnerGold = Color(0xFFC39A49)
+    val PartnerPink = Color(0xFFE85D75)
+    val PartnerTeal = Color(0xFF4DB6AC)
 }
 
 /**

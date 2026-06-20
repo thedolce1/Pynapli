@@ -60,6 +60,17 @@ object PynapliColors {
     val BorderSoft = Color(0xFF1B1B22)  // hairline dividers / sticky-bar underlines
     val OverlayScrim = Color(0x99000000)
     val PhotoGradientBottom = Color(0xCC000000)
+
+    // Inline success/error banner tints (muted dark fill + readable border on the dark surface).
+    val DangerContainer = Color(0xFF351317)
+    val SuccessContainer = Color(0xFF172A1F)
+    val SuccessBorder = Color(0xFF275C3B)
+
+    // Linked-partner ring tones (categorical; the Sun tone reuses Accent).
+    val PartnerViolet = Color(0xFF8B5CF6)
+    val PartnerGold = Color(0xFFC39A49)
+    val PartnerPink = Color(0xFFE85D75)
+    val PartnerTeal = Color(0xFF4DB6AC)
 }
 ```
 

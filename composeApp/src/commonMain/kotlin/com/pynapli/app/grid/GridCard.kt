@@ -222,10 +222,10 @@ private fun GridCardTone.backgroundBrush(): Brush = PynapliPlaceholderGradients.
 
 private fun LinkedPartnerTone?.badgeColor(): Color =
     when (this) {
-        LinkedPartnerTone.Violet -> Color(0xFF8B5CF6)
-        LinkedPartnerTone.Gold -> Color(0xFFC39A49)
-        LinkedPartnerTone.Pink -> Color(0xFFE85D75)
-        LinkedPartnerTone.Teal -> Color(0xFF4DB6AC)
+        LinkedPartnerTone.Violet -> PynapliColors.PartnerViolet
+        LinkedPartnerTone.Gold -> PynapliColors.PartnerGold
+        LinkedPartnerTone.Pink -> PynapliColors.PartnerPink
+        LinkedPartnerTone.Teal -> PynapliColors.PartnerTeal
         LinkedPartnerTone.Sun -> PynapliColors.Accent
-        null -> Color(0xFFC39A49)
+        null -> PynapliColors.PartnerGold
     }
