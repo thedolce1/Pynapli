@@ -139,7 +139,7 @@ internal fun GridProfileTile(
                         Modifier
                             .testTag(GridCardTags.visitingTag(card.id))
                             .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xCC4E342E))
+                            .background(PynapliColors.WarmBrown.copy(alpha = 0.8f))
                             .padding(horizontal = 5.dp, vertical = 1.dp),
                 )
             }

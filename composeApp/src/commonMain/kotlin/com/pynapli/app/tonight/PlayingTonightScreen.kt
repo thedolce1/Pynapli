@@ -158,12 +158,12 @@ private fun ZoneMap(
 ) {
     val accent = PynapliColors.Accent
     val online = PynapliColors.Success
-    Canvas(modifier = modifier.background(Color(0xFF0C0C10))) {
+    Canvas(modifier = modifier.background(PynapliColors.Black)) {
         val w = size.width
         val h = size.height
 
         // Faint street grid for texture.
-        val gridColor = Color(0xFF1B1B22)
+        val gridColor = PynapliColors.BorderSoft
         val step = 48f
         var x = 0f
         while (x < w) {
@@ -259,7 +259,7 @@ private fun ZoneMap(
                 Modifier
                     .padding(12.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xA60B0B0E))
+                    .background(PynapliColors.Black.copy(alpha = 0.65f))
                     .padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }
@@ -304,7 +304,7 @@ private fun TonightTopFloater(
                 Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(Color(0xCC15151B))
+                    .background(PynapliColors.SurfaceRaised.copy(alpha = 0.8f))
                     .border(1.dp, PynapliColors.Border, CircleShape)
                     .clickable(onClick = onBack)
                     .testTag(PlayingTonightTags.BACK),
@@ -375,7 +375,7 @@ private fun FloaterCard(
         modifier =
             modifier
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xEB15151B))
+                .background(PynapliColors.SurfaceRaised.copy(alpha = 0.92f))
                 .border(
                     1.dp,
                     if (leadingDashed) PynapliColors.Border else PynapliColors.Accent.copy(alpha = 0.35f),

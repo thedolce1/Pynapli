@@ -58,6 +58,10 @@ object PynapliColors {
     val PartnerGold = Color(0xFFC39A49)
     val PartnerPink = Color(0xFFE85D75)
     val PartnerTeal = Color(0xFF4DB6AC)
+
+    // Decorative warm brown: the "Visiting" travel pill backdrop (Grid + Swipe) and warm avatar
+    // gradients — a quiet "context, not a tier" tone rather than a loud badge color.
+    val WarmBrown = Color(0xFF4E342E)
 }
 
 /**

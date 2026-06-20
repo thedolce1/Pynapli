@@ -71,6 +71,9 @@ object PynapliColors {
     val PartnerGold = Color(0xFFC39A49)
     val PartnerPink = Color(0xFFE85D75)
     val PartnerTeal = Color(0xFF4DB6AC)
+
+    // Decorative warm brown: the "Visiting" travel pill + warm avatar gradients.
+    val WarmBrown = Color(0xFF4E342E)
 }
 ```
 

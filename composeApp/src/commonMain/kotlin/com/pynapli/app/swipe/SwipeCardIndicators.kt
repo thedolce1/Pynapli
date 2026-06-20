@@ -119,7 +119,7 @@ internal fun SwipeVisitingPill(modifier: Modifier = Modifier) {
             modifier
                 .testTag(SwipeTestTags.VISITING_PILL)
                 .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xCC4E342E))
+                .background(PynapliColors.WarmBrown.copy(alpha = 0.8f))
                 .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
