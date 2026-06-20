@@ -216,43 +216,81 @@ class MediaAlbumsStateHolder(
         }
     }
 
-    suspend fun moveMedia(
+    /**
+     * Live, local-only reorder applied while the user drags a tile: moves [fromAssetId] to the
+     * slot currently held by [toAssetId]. No network — the optimistic order is committed once on
+     * drop via [commitReorder], so a drag across several slots is a single server write.
+     */
+    fun previewReorder(
         kind: MediaAlbumKindUi,
-        assetId: String,
-        direction: MediaMoveDirection,
+        fromAssetId: String,
+        toAssetId: String,
     ) {
-        val items = state.value.itemsFor(kind)
-        // The server validates the reorder request against the exact active set, so
-        // hold off while any item in this album is still mid delete/reorder.
-        if (items.any { it.mediaAssetId in state.value.busyAssetIds }) return
+        if (fromAssetId == toAssetId) return
+        _state.update { existing ->
+            val items = existing.itemsFor(kind)
+            val fromIndex = items.indexOfFirst { it.mediaAssetId == fromAssetId }
+            val toIndex = items.indexOfFirst { it.mediaAssetId == toAssetId }
+            if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex) {
+                existing
+            } else {
+                existing.withItems(kind, items.toMutableList().apply { add(toIndex, removeAt(fromIndex)) })
+            }
+        }
+    }
 
-        val fromIndex = items.indexOfFirst { it.mediaAssetId == assetId }
-        if (fromIndex < 0) return
-        val toIndex = if (direction == MediaMoveDirection.Up) fromIndex - 1 else fromIndex + 1
-        if (toIndex !in items.indices) return
-
-        val reordered = items.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+    /**
+     * Persists the album's current local order (set by [previewReorder] / [setAsMain]) and adopts
+     * the canonical server listing. On failure the optimistic order may diverge from the server,
+     * so we reload the album to restore the truth and surface the error.
+     */
+    suspend fun commitReorder(kind: MediaAlbumKindUi) {
+        if (kind in state.value.reorderingKinds) return
+        val orderedAssetIds = state.value.itemsFor(kind).map { it.mediaAssetId }
+        if (orderedAssetIds.isEmpty()) return
 
         _state.update { existing ->
-            existing.copy(busyAssetIds = existing.busyAssetIds + assetId, errorMessage = null)
+            existing.copy(reorderingKinds = existing.reorderingKinds + kind, errorMessage = null)
         }
 
-        when (val result = repository.reorderAlbum(kind, reordered.map { it.mediaAssetId })) {
+        when (val result = repository.reorderAlbum(kind, orderedAssetIds)) {
             is AppResult.Success ->
                 _state.update { existing ->
                     existing
                         .withItems(kind, result.value)
-                        .copy(busyAssetIds = existing.busyAssetIds - assetId)
+                        .copy(reorderingKinds = existing.reorderingKinds - kind)
                 }
 
-            is AppResult.Failure ->
+            is AppResult.Failure -> {
+                val restore = repository.loadAlbum(kind)
                 _state.update { existing ->
-                    existing.copy(
-                        busyAssetIds = existing.busyAssetIds - assetId,
-                        errorMessage = result.error.message,
-                    )
+                    val cleared =
+                        existing.copy(
+                            reorderingKinds = existing.reorderingKinds - kind,
+                            errorMessage = result.error.message,
+                        )
+                    if (restore is AppResult.Success) cleared.withItems(kind, restore.value) else cleared
                 }
+            }
         }
+    }
+
+    /**
+     * Promotes a profile photo to the primary (index 0) slot. The accessible, one-tap path to the
+     * most common reorder — and the only album action that has product meaning beyond order
+     * (index 0 is the photo shown on the grid/swipe card).
+     */
+    suspend fun setAsMain(assetId: String) {
+        val kind = MediaAlbumKindUi.Profile
+        if (kind in state.value.reorderingKinds) return
+        val items = state.value.itemsFor(kind)
+        val fromIndex = items.indexOfFirst { it.mediaAssetId == assetId }
+        if (fromIndex <= 0) return // already main, or not found
+
+        _state.update { existing ->
+            existing.withItems(kind, items.toMutableList().apply { add(0, removeAt(fromIndex)) })
+        }
+        commitReorder(kind)
     }
 
     fun showError(message: String) {

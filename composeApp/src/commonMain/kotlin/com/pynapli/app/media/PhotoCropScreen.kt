@@ -83,7 +83,7 @@ internal fun PhotoCropScreen(
     onUsePhoto: (PickedMediaForUpload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val imageBitmap = remember(media) { decodePickedImageBitmap(media.bytes) }
+    val imageBitmap = remember(media) { decodePickedImageBitmap(media.bytes, DECODE_MAX_SIDE) }
 
     if (imageBitmap == null) {
         // Undecodable bytes skip the crop and upload as picked — the square is a UX

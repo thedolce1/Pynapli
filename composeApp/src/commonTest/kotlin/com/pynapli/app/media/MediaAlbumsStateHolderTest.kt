@@ -117,7 +117,7 @@ class MediaAlbumsStateHolderTest {
         }
 
     @Test
-    fun moveLaterSubmitsExactOrderAndAdoptsServerResponse() =
+    fun previewReorderThenCommitSubmitsCurrentOrderAndAdoptsServerResponse() =
         runBlocking {
             val items =
                 listOf(
@@ -129,26 +129,35 @@ class MediaAlbumsStateHolderTest {
             val stateHolder = MediaAlbumsStateHolder(repository)
             stateHolder.load()
 
-            stateHolder.moveMedia(MediaAlbumKindUi.Profile, "asset-a", MediaMoveDirection.Down)
+            // Drag "asset-a" onto "asset-c"'s slot: optimistic order becomes b, c, a — no network yet.
+            stateHolder.previewReorder(MediaAlbumKindUi.Profile, "asset-a", "asset-c")
+            assertTrue(repository.reorderRequests.isEmpty())
+            assertEquals(
+                listOf("asset-b", "asset-c", "asset-a"),
+                stateHolder.state.value.profileItems
+                    .map { it.mediaAssetId },
+            )
+
+            stateHolder.commitReorder(MediaAlbumKindUi.Profile)
 
             val request = repository.reorderRequests.single()
             assertEquals(MediaAlbumKindUi.Profile, request.first)
-            assertEquals(listOf("asset-b", "asset-a", "asset-c"), request.second)
+            assertEquals(listOf("asset-b", "asset-c", "asset-a"), request.second)
             // The fake echoes the canonical server-sorted listing; the state must adopt it.
             assertEquals(
-                listOf("asset-b", "asset-a", "asset-c"),
+                listOf("asset-b", "asset-c", "asset-a"),
                 stateHolder.state.value.profileItems
                     .map { it.mediaAssetId },
             )
             assertTrue(
-                stateHolder.state.value.busyAssetIds
+                stateHolder.state.value.reorderingKinds
                     .isEmpty(),
             )
             assertNull(stateHolder.state.value.errorMessage)
         }
 
     @Test
-    fun moveAtAlbumEdgeIsNoOp() =
+    fun previewReorderOntoSameAssetLeavesOrderUnchanged() =
         runBlocking {
             val items =
                 listOf(
@@ -159,10 +168,8 @@ class MediaAlbumsStateHolderTest {
             val stateHolder = MediaAlbumsStateHolder(repository)
             stateHolder.load()
 
-            stateHolder.moveMedia(MediaAlbumKindUi.Profile, "asset-a", MediaMoveDirection.Up)
-            stateHolder.moveMedia(MediaAlbumKindUi.Profile, "asset-b", MediaMoveDirection.Down)
+            stateHolder.previewReorder(MediaAlbumKindUi.Profile, "asset-a", "asset-a")
 
-            assertTrue(repository.reorderRequests.isEmpty())
             assertEquals(
                 listOf("asset-a", "asset-b"),
                 stateHolder.state.value.profileItems
@@ -171,12 +178,13 @@ class MediaAlbumsStateHolderTest {
         }
 
     @Test
-    fun moveFailureKeepsOrderAndSurfacesError() =
+    fun commitReorderFailureRestoresServerOrderAndSurfacesError() =
         runBlocking {
             val items =
                 listOf(
                     testMediaItem(MediaAlbumKindUi.Profile, "asset-a", 0),
                     testMediaItem(MediaAlbumKindUi.Profile, "asset-b", 1),
+                    testMediaItem(MediaAlbumKindUi.Profile, "asset-c", 2),
                 )
             val repository =
                 FakeMediaAlbumsRepository(profileItems = items).apply {
@@ -185,18 +193,72 @@ class MediaAlbumsStateHolderTest {
             val stateHolder = MediaAlbumsStateHolder(repository)
             stateHolder.load()
 
-            stateHolder.moveMedia(MediaAlbumKindUi.Profile, "asset-a", MediaMoveDirection.Down)
+            stateHolder.previewReorder(MediaAlbumKindUi.Profile, "asset-c", "asset-a")
+            assertEquals(
+                listOf("asset-c", "asset-a", "asset-b"),
+                stateHolder.state.value.profileItems
+                    .map { it.mediaAssetId },
+            )
 
+            stateHolder.commitReorder(MediaAlbumKindUi.Profile)
+
+            // The failed commit reloads the album, restoring the canonical server order.
+            assertEquals(
+                listOf("asset-a", "asset-b", "asset-c"),
+                stateHolder.state.value.profileItems
+                    .map { it.mediaAssetId },
+            )
+            assertTrue(
+                stateHolder.state.value.reorderingKinds
+                    .isEmpty(),
+            )
+            assertEquals("Order mismatch.", stateHolder.state.value.errorMessage)
+        }
+
+    @Test
+    fun setAsMainMovesPhotoToFrontAndPersists() =
+        runBlocking {
+            val items =
+                listOf(
+                    testMediaItem(MediaAlbumKindUi.Profile, "asset-a", 0),
+                    testMediaItem(MediaAlbumKindUi.Profile, "asset-b", 1),
+                    testMediaItem(MediaAlbumKindUi.Profile, "asset-c", 2),
+                )
+            val repository = FakeMediaAlbumsRepository(profileItems = items)
+            val stateHolder = MediaAlbumsStateHolder(repository)
+            stateHolder.load()
+
+            stateHolder.setAsMain("asset-c")
+
+            assertEquals(listOf("asset-c", "asset-a", "asset-b"), repository.reorderRequests.single().second)
+            assertEquals(
+                listOf("asset-c", "asset-a", "asset-b"),
+                stateHolder.state.value.profileItems
+                    .map { it.mediaAssetId },
+            )
+            assertNull(stateHolder.state.value.errorMessage)
+        }
+
+    @Test
+    fun setAsMainOnCurrentPrimaryIsNoOp() =
+        runBlocking {
+            val items =
+                listOf(
+                    testMediaItem(MediaAlbumKindUi.Profile, "asset-a", 0),
+                    testMediaItem(MediaAlbumKindUi.Profile, "asset-b", 1),
+                )
+            val repository = FakeMediaAlbumsRepository(profileItems = items)
+            val stateHolder = MediaAlbumsStateHolder(repository)
+            stateHolder.load()
+
+            stateHolder.setAsMain("asset-a")
+
+            assertTrue(repository.reorderRequests.isEmpty())
             assertEquals(
                 listOf("asset-a", "asset-b"),
                 stateHolder.state.value.profileItems
                     .map { it.mediaAssetId },
             )
-            assertTrue(
-                stateHolder.state.value.busyAssetIds
-                    .isEmpty(),
-            )
-            assertEquals("Order mismatch.", stateHolder.state.value.errorMessage)
         }
 
     @Test

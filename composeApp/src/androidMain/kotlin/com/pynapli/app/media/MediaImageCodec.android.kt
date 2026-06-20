@@ -13,19 +13,50 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 
-internal actual fun decodePickedImageBitmap(bytes: ByteArray): ImageBitmap? =
+internal actual fun decodePickedImageBitmap(
+    bytes: ByteArray,
+    maxSide: Int,
+): ImageBitmap? =
     runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             // ImageDecoder applies EXIF orientation itself. Software allocation is
             // required: the cropped square is drawn onto a software ImageBitmap, and
-            // hardware bitmaps cannot be read back by that canvas.
-            ImageDecoder.decodeBitmap(ImageDecoder.createSource(ByteBuffer.wrap(bytes))) { decoder, _, _ ->
+            // hardware bitmaps cannot be read back by that canvas. setTargetSampleSize
+            // samples on decode so the full-resolution bitmap is never allocated.
+            ImageDecoder.decodeBitmap(ImageDecoder.createSource(ByteBuffer.wrap(bytes))) { decoder, info, _ ->
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                val sampleSize = sampleSizeForMaxSide(info.size.width, info.size.height, maxSide)
+                if (sampleSize > 1) decoder.setTargetSampleSize(sampleSize)
             }
         } else {
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.uprightByExif(bytes)
+            // API 23–27: a bounds-only pass reads the dimensions, then the real decode
+            // samples down with inSampleSize — again never allocating the full bitmap.
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            val decodeOptions =
+                BitmapFactory.Options().apply {
+                    inSampleSize = sampleSizeForMaxSide(bounds.outWidth, bounds.outHeight, maxSide)
+                }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)?.uprightByExif(bytes)
         }?.asImageBitmap()
     }.getOrNull()
+
+/**
+ * Smallest power-of-two sample size (BitmapFactory only honours powers of two) that brings the
+ * longest edge to at most [maxSide]. Returns 1 for unknown/zero bounds.
+ */
+private fun sampleSizeForMaxSide(
+    width: Int,
+    height: Int,
+    maxSide: Int,
+): Int {
+    if (width <= 0 || height <= 0 || maxSide <= 0) return 1
+    var sampleSize = 1
+    while (maxOf(width, height) / sampleSize > maxSide) {
+        sampleSize *= 2
+    }
+    return sampleSize
+}
 
 internal actual fun encodeCroppedJpegBytes(
     bitmap: ImageBitmap,

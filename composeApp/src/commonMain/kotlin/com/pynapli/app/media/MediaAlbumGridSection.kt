@@ -19,14 +19,13 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,13 +53,14 @@ internal fun LazyGridScope.albumSection(
     capCountLabel: String,
     busyAssetIds: Set<String>,
     canRetryUpload: Boolean,
+    reorderState: AlbumReorderState,
     onAdd: () -> Unit,
     onRetryUpload: () -> Unit,
     onRequestDelete: (MediaAlbumItemUi) -> Unit,
-    onMove: (MediaAlbumItemUi, MediaMoveDirection) -> Unit,
+    onSetAsMain: (MediaAlbumItemUi) -> Unit,
 ) {
     item(span = { GridItemSpan(maxLineSpan) }) {
-        AlbumSectionHeader(kind = kind)
+        AlbumSectionHeader(kind = kind, reorderable = items.size > 1)
     }
 
     if (canRetryUpload && !isUploading) {
@@ -69,7 +69,7 @@ internal fun LazyGridScope.albumSection(
         }
     }
 
-    item {
+    item(key = "album-add:${kind.apiValue}") {
         AddMediaTile(
             kind = kind,
             isUploading = isUploading,
@@ -81,17 +81,21 @@ internal fun LazyGridScope.albumSection(
 
     itemsIndexed(
         items = items,
-        key = { _, item -> item.mediaAssetId },
+        key = { _, item -> albumPhotoKey(kind, item.mediaAssetId) },
     ) { index, item ->
+        val key = albumPhotoKey(kind, item.mediaAssetId)
+        val isPrimary = kind == MediaAlbumKindUi.Profile && index == 0
+        val isDragging = reorderState.draggingKey == key
         MediaTile(
             item = item,
-            isPrimary = kind == MediaAlbumKindUi.Profile && index == 0,
+            isPrimary = isPrimary,
             isBusy = item.mediaAssetId in busyAssetIds,
-            canMoveEarlier = index > 0,
-            canMoveLater = index < items.lastIndex,
-            onMoveEarlier = { onMove(item, MediaMoveDirection.Up) },
-            onMoveLater = { onMove(item, MediaMoveDirection.Down) },
             onDelete = { onRequestDelete(item) },
+            onSetAsMain = if (kind == MediaAlbumKindUi.Profile && !isPrimary) ({ onSetAsMain(item) }) else null,
+            modifier =
+                Modifier
+                    .then(if (isDragging) Modifier else Modifier.animateItem())
+                    .albumDraggedTile(reorderState, key),
         )
     }
 
@@ -126,27 +130,46 @@ internal fun LoadingAlbumRow() {
 }
 
 @Composable
-private fun AlbumSectionHeader(kind: MediaAlbumKindUi) {
-    Row(
+private fun AlbumSectionHeader(
+    kind: MediaAlbumKindUi,
+    reorderable: Boolean,
+) {
+    Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(top = 12.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Icon(
-            imageVector = if (kind == MediaAlbumKindUi.Private) Icons.Filled.Lock else Icons.Filled.PhotoLibrary,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp),
-        )
-        Text(
-            text = kind.title,
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = if (kind == MediaAlbumKindUi.Private) Icons.Filled.Lock else Icons.Filled.PhotoLibrary,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = kind.title,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        if (reorderable) {
+            Text(
+                text =
+                    if (kind == MediaAlbumKindUi.Profile) {
+                        "Hold a photo to reorder · tap ★ to make it your main"
+                    } else {
+                        "Hold a photo to reorder"
+                    },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
     }
 }
 
@@ -256,16 +279,14 @@ private fun MediaTile(
     item: MediaAlbumItemUi,
     isPrimary: Boolean,
     isBusy: Boolean,
-    canMoveEarlier: Boolean,
-    canMoveLater: Boolean,
-    onMoveEarlier: () -> Unit,
-    onMoveLater: () -> Unit,
     onDelete: () -> Unit,
+    onSetAsMain: (() -> Unit)?,
+    modifier: Modifier = Modifier,
 ) {
     val tone = item.mediaAssetId.tone()
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(8.dp))
@@ -369,18 +390,11 @@ private fun MediaTile(
                         .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (canMoveEarlier) {
+                if (onSetAsMain != null) {
                     TileActionButton(
-                        icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                        contentDescription = "Move earlier",
-                        onClick = onMoveEarlier,
-                    )
-                }
-                if (canMoveLater) {
-                    TileActionButton(
-                        icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = "Move later",
-                        onClick = onMoveLater,
+                        icon = Icons.Filled.Star,
+                        contentDescription = "Set as main photo",
+                        onClick = onSetAsMain,
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))

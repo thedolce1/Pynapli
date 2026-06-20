@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,8 +57,14 @@ fun MediaAlbumsScreen(
             scope.launch { stateHolder.retryUpload(kind) }
         },
         onRequestDelete = { item -> pendingDelete = item },
-        onMove = { item, direction ->
-            scope.launch { stateHolder.moveMedia(item.albumKind, item.mediaAssetId, direction) }
+        onPreviewReorder = { kind, fromAssetId, toAssetId ->
+            stateHolder.previewReorder(kind, fromAssetId, toAssetId)
+        },
+        onCommitReorder = { kind ->
+            scope.launch { stateHolder.commitReorder(kind) }
+        },
+        onSetAsMain = { item ->
+            scope.launch { stateHolder.setAsMain(item.mediaAssetId) }
         },
         onRevokeGrant = { granteeUserId ->
             scope.launch { stateHolder.revokeGrant(granteeUserId) }
@@ -129,7 +136,9 @@ private fun MediaAlbumsContent(
     onAddPrivate: () -> Unit,
     onRetryUpload: (MediaAlbumKindUi) -> Unit,
     onRequestDelete: (MediaAlbumItemUi) -> Unit,
-    onMove: (MediaAlbumItemUi, MediaMoveDirection) -> Unit,
+    onPreviewReorder: (MediaAlbumKindUi, String, String) -> Unit,
+    onCommitReorder: (MediaAlbumKindUi) -> Unit,
+    onSetAsMain: (MediaAlbumItemUi) -> Unit,
     onRevokeGrant: (String) -> Unit,
     onAcceptProfileLink: (String) -> Unit,
     onDeclineProfileLink: (String) -> Unit,
@@ -138,12 +147,21 @@ private fun MediaAlbumsContent(
     onClearProfileLinkMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val gridState = rememberLazyGridState()
+    val reorderState =
+        rememberAlbumReorderState(
+            gridState = gridState,
+            onMove = onPreviewReorder,
+            onDrop = onCommitReorder,
+        )
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
+        state = gridState,
         modifier =
             modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background)
+                .albumReorderable(reorderState),
         contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 18.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -183,10 +201,11 @@ private fun MediaAlbumsContent(
             capCountLabel = state.capCountLabel(MediaAlbumKindUi.Profile),
             busyAssetIds = state.busyAssetIds,
             canRetryUpload = MediaAlbumKindUi.Profile in state.retryableUploadKinds,
+            reorderState = reorderState,
             onAdd = onAddProfile,
             onRetryUpload = { onRetryUpload(MediaAlbumKindUi.Profile) },
             onRequestDelete = onRequestDelete,
-            onMove = onMove,
+            onSetAsMain = onSetAsMain,
         )
 
         albumSection(
@@ -197,10 +216,11 @@ private fun MediaAlbumsContent(
             capCountLabel = state.capCountLabel(MediaAlbumKindUi.Private),
             busyAssetIds = state.busyAssetIds,
             canRetryUpload = MediaAlbumKindUi.Private in state.retryableUploadKinds,
+            reorderState = reorderState,
             onAdd = onAddPrivate,
             onRetryUpload = { onRetryUpload(MediaAlbumKindUi.Private) },
             onRequestDelete = onRequestDelete,
-            onMove = onMove,
+            onSetAsMain = onSetAsMain,
         )
 
         privateGrantsSection(

@@ -540,6 +540,28 @@ function Get-ProfileAlbumAssetIds {
     return @($album.Body.items | ForEach-Object { $_.mediaAsset.mediaAssetId })
 }
 
+function Wait-ForProfileAlbumOrder {
+    # The UI mutation (reorder/delete) is optimistic and commits asynchronously; on a loaded
+    # emulator the server write can land a few seconds after the tap. Poll the canonical order
+    # until it matches (still asserting the exact expected order, just tolerating slow devices).
+    param(
+        [string]$AccessToken,
+        [string[]]$Expected,
+        [string]$Action,
+        [int]$TimeoutSeconds = 15
+    )
+
+    $expectedJoined = $Expected -join ","
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $actual = Get-ProfileAlbumAssetIds $AccessToken
+        if (($actual -join ",") -eq $expectedJoined) { return $actual }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    throw "Server album order after $Action was $($actual -join ', '); expected $($Expected -join ', ')."
+}
+
 function New-QaPhotoBytes {
     param([int]$Index)
 
@@ -817,24 +839,24 @@ Start-App
 Complete-LoginIfNeeded
 Open-MediaAlbums
 
-# Stage 1: album management surface with 3 photos, cap affordance, Main badge.
+# Stage 1: album management surface with 3 photos, cap affordance, Main badge, and the
+# new reorder affordances (long-press hint + per-tile Set as main / Delete actions).
 $initialXml = Capture-MediaStage "albumsInitial" "01_albums_initial"
 Assert-TextPresent $initialXml "3 of 6" "Initial albums"
 Assert-TextPresent $initialXml "Main" "Initial albums"
-Assert-TextPresent $initialXml "Move later" "Initial albums"
+Assert-TextPresent $initialXml "Hold a photo to reorder" "Initial albums"
+Assert-TextPresent $initialXml "Set as main photo" "Initial albums"
 Assert-TextPresent $initialXml "Delete photo" "Initial albums"
 
-# Stage 2: move the primary photo one slot later; the server order is canonical.
-$node = Find-NodeByExactText $initialXml "Move later"
-if ($null -eq $node) { throw "No 'Move later' affordance found on the initial albums screen." }
-Tap-Node $node "Move later (first tile)"
-Start-Sleep -Milliseconds 1800
+# Stage 2: promote the second photo to primary via the Set as main affordance; the server
+# order is canonical. Drag-to-reorder is the primary gesture, but a long-press drag is not
+# deterministic through `adb input`, so QA drives the accessible one-tap path to the same write.
+$node = Find-NodeByExactText $initialXml "Set as main photo"
+if ($null -eq $node) { throw "No 'Set as main photo' affordance found on the initial albums screen." }
+Tap-Node $node "Set as main photo (second tile)"
 
 $expectedAfterMove = @($initialAssetIds[1], $initialAssetIds[0]) + @($initialAssetIds | Select-Object -Skip 2)
-$orderAfterMove = Get-ProfileAlbumAssetIds $session.accessToken
-if (($orderAfterMove -join ",") -ne ($expectedAfterMove -join ",")) {
-    throw "Server album order after move was $($orderAfterMove -join ', '); expected $($expectedAfterMove -join ', ')."
-}
+$orderAfterMove = Wait-ForProfileAlbumOrder -AccessToken $session.accessToken -Expected $expectedAfterMove -Action "Set as main"
 Write-Host "[ok] Server confirmed the reorder: $($orderAfterMove -join ', ')"
 $reorderedXml = Capture-MediaStage "albumsReordered" "02_albums_reordered"
 Assert-TextPresent $reorderedXml "Main" "Reordered albums"
@@ -848,13 +870,9 @@ $confirmXml = Capture-MediaStage "deleteConfirm" "03_delete_confirm"
 Assert-TextPresent $confirmXml "It will be removed from your profile." "Delete confirm dialog"
 
 Tap-ExactText "Delete"
-Start-Sleep -Milliseconds 1800
 
-$orderAfterDelete = Get-ProfileAlbumAssetIds $session.accessToken
 $expectedAfterDelete = @($expectedAfterMove | Select-Object -Skip 1)
-if (($orderAfterDelete -join ",") -ne ($expectedAfterDelete -join ",")) {
-    throw "Server album order after delete was $($orderAfterDelete -join ', '); expected $($expectedAfterDelete -join ', ')."
-}
+$orderAfterDelete = Wait-ForProfileAlbumOrder -AccessToken $session.accessToken -Expected $expectedAfterDelete -Action "delete"
 Write-Host "[ok] Server confirmed the delete: $($orderAfterDelete.Count) photos remain"
 $afterDeleteXml = Capture-MediaStage "albumsAfterDelete" "04_albums_after_delete"
 Assert-TextPresent $afterDeleteXml "2 of 6" "Albums after delete"

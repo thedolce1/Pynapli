@@ -25,8 +25,11 @@ data class MediaAlbumsUiState(
     val privateItems: List<MediaAlbumItemUi> = emptyList(),
     val privateGrants: List<MediaPrivateGrantUi> = emptyList(),
     val revokingGranteeIds: Set<String> = emptySet(),
-    // Per-item busy tracking for delete/reorder, mirroring the revokingGranteeIds pattern.
+    // Per-item busy tracking for delete, mirroring the revokingGranteeIds pattern.
     val busyAssetIds: Set<String> = emptySet(),
+    // Albums whose new order is being persisted after a drag/set-as-main; gates starting a
+    // fresh drag without flashing a per-tile spinner the way busyAssetIds would.
+    val reorderingKinds: Set<MediaAlbumKindUi> = emptySet(),
     // Album kinds whose last upload failed with the picked media retained for retryUpload().
     val retryableUploadKinds: Set<MediaAlbumKindUi> = emptySet(),
     // A freshly picked profile photo awaiting the square crop step (profile album only,
@@ -54,6 +57,9 @@ data class MediaAlbumsUiState(
             MediaAlbumKindUi.Profile -> isUploadingProfile
             MediaAlbumKindUi.Private -> isUploadingPrivate
         }
+
+    /** True while the album can accept a drag: not loading, uploading, or mid reorder-commit. */
+    fun canReorder(kind: MediaAlbumKindUi): Boolean = !isLoading && !isUploading(kind) && kind !in reorderingKinds && itemsFor(kind).size > 1
 
     internal fun withItems(
         kind: MediaAlbumKindUi,
@@ -127,12 +133,6 @@ enum class MediaAlbumKindUi(
 ) {
     Profile("profile", "Profile photos"),
     Private("private", "Private album"),
-}
-
-/** Direction for one-step reordering of an album item. */
-enum class MediaMoveDirection {
-    Up,
-    Down,
 }
 
 class PickedMediaForUpload(
