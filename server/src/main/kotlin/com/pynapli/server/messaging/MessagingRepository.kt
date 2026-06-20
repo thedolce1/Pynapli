@@ -143,6 +143,8 @@ data class ConversationParticipantRecord(
     val status: String = "active",
     val invitedByUserId: UUID? = null,
     val messageExpirySeconds: Int? = null,
+    // Public primary profile-photo asset (resolved to a URL in the DTO mapper); null when none.
+    val profilePhotoMediaAssetId: UUID? = null,
 )
 
 data class ConversationDetailRecord(

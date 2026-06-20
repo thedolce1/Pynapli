@@ -76,6 +76,9 @@ data class ConversationParticipantDto(
     val online: Boolean = false,
     val status: String = ConversationParticipantStatus.ACTIVE,
     val invitedByUserId: String? = null,
+    // The participant's public primary profile photo (same projection as their grid/profile card);
+    // null when they have no approved profile photo. Never a private-album asset.
+    val photoUrl: String? = null,
 )
 
 @Serializable

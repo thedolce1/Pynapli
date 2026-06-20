@@ -140,6 +140,8 @@ internal fun Connection.loadConversation(
                         status = rs.getString("invitation_status"),
                         invitedByUserId = rs.getObject("invited_by_user_id", UUID::class.java),
                         messageExpirySeconds = rs.getInt("message_expiry_seconds").takeUnless { rs.wasNull() },
+                        profilePhotoMediaAssetId =
+                            rs.getObject("profile_photo_media_asset_id", UUID::class.java),
                     ),
                 )
             }
@@ -177,7 +179,8 @@ private val CONVERSATION_QUERY =
            cp.invitation_status,
            cp.invited_by_user_id,
            cp.message_expiry_seconds,
-           COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name
+           COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+           profile_photo.media_asset_id AS profile_photo_media_asset_id
     FROM conversations c
     JOIN conversation_participants viewer_cp
       ON viewer_cp.conversation_id = c.id
@@ -190,6 +193,29 @@ private val CONVERSATION_QUERY =
      AND cp.invitation_status IN ('active', 'invited')
     JOIN users u ON u.id = cp.user_id
     JOIN profiles p ON p.user_id = u.id
+    -- Public primary profile photo: same projection as the grid/profile thumbnail, so a chat
+    -- avatar shows exactly the photo that participant already exposes on their card (approved,
+    -- visible profile-album image), never a private-album asset.
+    LEFT JOIN LATERAL (
+        SELECT mai.media_asset_id
+        FROM media_albums ma
+        JOIN media_album_items mai
+          ON mai.album_id = ma.id
+         AND mai.removed_at IS NULL
+        JOIN media_assets m
+          ON m.id = mai.media_asset_id
+         AND m.owner_user_id = ma.owner_user_id
+         AND m.deleted_at IS NULL
+        WHERE ma.owner_user_id = cp.user_id
+          AND ma.kind = 'profile'
+          AND ma.visibility_status = 'visible'
+          AND ma.deleted_at IS NULL
+          AND m.media_type = 'image'
+          AND m.processing_status = 'ready'
+          AND m.moderation_status = 'approved'
+        ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
+        LIMIT 1
+    ) profile_photo ON true
     WHERE c.id = ?
     ORDER BY cp.joined_at ASC, cp.user_id ASC
     """.trimIndent()

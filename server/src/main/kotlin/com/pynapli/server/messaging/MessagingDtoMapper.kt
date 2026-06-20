@@ -106,6 +106,9 @@ internal class MessagingDtoMapper(
             online = online,
             status = status,
             invitedByUserId = invitedByUserId?.toString(),
+            // The gateway's contentUrl is the public-asset URL resolver (publicContentUrl); the photo
+            // asset is the participant's already-public profile photo, so no per-recipient reveal gate.
+            photoUrl = profilePhotoMediaAssetId?.let { messageMediaGateway?.contentUrl(it) },
         )
 
     private suspend fun String.visibleDeliveryStatus(

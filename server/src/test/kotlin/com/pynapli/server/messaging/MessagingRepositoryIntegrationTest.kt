@@ -95,6 +95,39 @@ class MessagingRepositoryIntegrationTest {
         }
 
     @Test
+    fun conversationParticipantsCarryPublicProfilePhotoAssetWhenPresent() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008f1")
+            val target = UUID.fromString("00000000-0000-0000-0000-0000000008f2")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.insertMatch(viewer, target)
+            // Only the target has a public profile photo; the viewer has none.
+            val targetPhotoAssetId = dataSource.insertApprovedProfilePhoto(target)
+            val repository = JdbcMessagingRepository(dataSource)
+
+            val created =
+                assertNotNull(
+                    repository.getOrCreateDirectConversation(
+                        viewerUserId = viewer,
+                        targetUserId = target,
+                        origin = "swipe",
+                    ),
+                )
+            val detail =
+                assertNotNull(
+                    repository.getConversationDetail(viewer, created.conversationId, limit = 10),
+                )
+
+            val participants = detail.conversation.participants
+            assertEquals(
+                targetPhotoAssetId,
+                participants.single { it.userId == target }.profilePhotoMediaAssetId,
+            )
+            assertNull(participants.single { it.userId == viewer }.profilePhotoMediaAssetId)
+        }
+
+    @Test
     fun concurrentDuplicateConversationCreateReplaysTheExistingConversation() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000841")
@@ -715,6 +748,49 @@ class MessagingRepositoryIntegrationTest {
                     statement.executeUpdate()
                 }
         }
+    }
+
+    // Seeds one approved, visible public (profile-album) photo and returns the asset id. Mirrors the
+    // canonical profile_photo projection the conversation query reuses for participant avatars.
+    private fun DataSource.insertApprovedProfilePhoto(ownerUserId: UUID): UUID {
+        val albumId = UUID.randomUUID()
+        val assetId = UUID.randomUUID()
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO media_assets (
+                        id, owner_user_id, media_type, storage_provider, storage_bucket,
+                        storage_object_key, content_type, byte_size, processing_status, moderation_status
+                    )
+                    VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved')
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, assetId)
+                    statement.setObject(2, ownerUserId)
+                    statement.setString(3, "media/$assetId")
+                    statement.executeUpdate()
+                }
+            connection
+                .prepareStatement(
+                    "INSERT INTO media_albums (id, owner_user_id, kind, title, visibility_status) " +
+                        "VALUES (?, ?, 'profile', 'Profile', 'visible')",
+                ).use { statement ->
+                    statement.setObject(1, albumId)
+                    statement.setObject(2, ownerUserId)
+                    statement.executeUpdate()
+                }
+            connection
+                .prepareStatement(
+                    "INSERT INTO media_album_items (album_id, media_asset_id, owner_user_id, sort_order) VALUES (?, ?, ?, 0)",
+                ).use { statement ->
+                    statement.setObject(1, albumId)
+                    statement.setObject(2, assetId)
+                    statement.setObject(3, ownerUserId)
+                    statement.executeUpdate()
+                }
+        }
+        return assetId
     }
 
     private fun DataSource.ageUserMessages(
