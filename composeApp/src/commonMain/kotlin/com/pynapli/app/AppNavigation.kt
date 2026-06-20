@@ -1,12 +1,6 @@
 package com.pynapli.app
 
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -17,18 +11,19 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliTabIcon
+import com.pynapli.app.design.PynapliTabIcons
 
 internal enum class PynapliTab(
     val label: String,
-    val icon: ImageVector,
+    val icons: PynapliTabIcon,
 ) {
-    Grid("Grid", Icons.Filled.GridView),
-    Swipe("Swipe", Icons.Filled.Style),
-    Activity("Activity", Icons.Filled.LocalFireDepartment),
-    Messages("Messages", Icons.Filled.ChatBubble),
-    Store("Store", Icons.Filled.ShoppingBag),
+    Grid("Grid", PynapliTabIcons.Grid),
+    Swipe("Swipe", PynapliTabIcons.Swipe),
+    Activity("Activity", PynapliTabIcons.Activity),
+    Messages("Messages", PynapliTabIcons.Messages),
+    Store("Store", PynapliTabIcons.Store),
 }
 
 @Composable
@@ -51,9 +46,10 @@ internal fun PynapliBottomNavigation(
                     tab == PynapliTab.Activity ||
                     tab == PynapliTab.Messages ||
                     tab == PynapliTab.Store
+            val isSelected = selectedTab == tab
             NavigationBarItem(
                 enabled = enabled,
-                selected = selectedTab == tab,
+                selected = isSelected,
                 onClick = { if (enabled) onTabSelected(tab) },
                 icon = {
                     val badgeCount =
@@ -62,6 +58,7 @@ internal fun PynapliBottomNavigation(
                             PynapliTab.Activity -> activityBadgeCount
                             else -> 0
                         }
+                    val iconVector = if (isSelected) tab.icons.selected else tab.icons.unselected
                     if (badgeCount > 0) {
                         BadgedBox(
                             badge = {
@@ -71,13 +68,13 @@ internal fun PynapliBottomNavigation(
                             },
                         ) {
                             Icon(
-                                imageVector = tab.icon,
+                                imageVector = iconVector,
                                 contentDescription = tab.label,
                             )
                         }
                     } else {
                         Icon(
-                            imageVector = tab.icon,
+                            imageVector = iconVector,
                             contentDescription = tab.label,
                         )
                     }
