@@ -43,14 +43,12 @@
       "requiredTexts": [
         "These shape who shows up in your deck.",
         "Who",
+        "Gender",
+        "Orientation",
         "Age",
         "Distance",
         "Intent",
-        "Style",
-        "Looking for",
-        "Dating",
-        "Chat first",
-        "Events"
+        "Style"
       ],
       "forbiddenTexts": [
         "Illegal input",
@@ -62,7 +60,7 @@
         "minHeight": 1280,
         "minDarkRatio": 0.45,
         "maxBrightRatio": 0.20,
-        "minNonBlackRatio": 0.18,
+        "minNonBlackRatio": 0.04,
         "minAccentYellowRatio": 0.001,
         "minColorBucketCount": 8
       }

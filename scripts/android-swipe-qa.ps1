@@ -342,6 +342,25 @@ function Wait-ForNoText {
     throw "Timed out waiting for '$Text' to disappear. Visible text: $visible"
 }
 
+function Scroll-SheetToText {
+    param(
+        [string]$Text,
+        [int]$MaxSwipes = 6
+    )
+
+    for ($attempt = 0; $attempt -le $MaxSwipes; $attempt++) {
+        $xml = Dump-Ui "sheet_scroll"
+        if ($null -ne (Find-NodeByText $xml $Text)) {
+            return $xml
+        }
+        # Swipe up within the sheet content (clear of the top drag handle) to reveal lower sections.
+        Invoke-Adb @("shell", "input", "swipe", "540", "1700", "540", "760", "350") | Out-Null
+        Start-Sleep -Milliseconds 600
+    }
+
+    throw "Could not scroll the filter sheet to reveal '$Text'."
+}
+
 function Tap-Text {
     param(
         [string]$Text,
@@ -929,6 +948,13 @@ $filtersXml = Dump-Ui "04_swipe_filters_sheet" -Keep
 Assert-NoAppErrorText $filtersXml "Swipe filters sheet"
 $script:Screenshots.filtersSheet = Save-Screen "04_swipe_filters_sheet"
 $script:VisualSignatures.filtersSheet = Assert-GoldenStage "filtersSheet" $filtersXml $script:Screenshots.filtersSheet
+# The profile<->filter coherence Gender/Orientation sections made the sheet taller, pushing the
+# Intent "Looking for" subsection below the fold at open (same shape as the Grid QA fix in 44eb9fb).
+# The golden's requiredTexts only cover the top-of-sheet sections; scroll down and assert the Intent
+# subsection renders so the lower half stays covered.
+$filterSheetLowerXml = Scroll-SheetToText "Looking for"
+Assert-NoAppErrorText $filterSheetLowerXml "Swipe filters sheet (lower)"
+Assert-TextPresent $filterSheetLowerXml "Looking for" "Swipe filters sheet (lower)"
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_BACK") | Out-Null
 Wait-ForAnyText @("For You", "Like") 20 | Out-Null
 
