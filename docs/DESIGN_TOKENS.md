@@ -46,6 +46,9 @@ object PynapliColors {
     val TextTertiary = Color(0xFF6B6660)
     val TextInverse = Color(0xFF0A0A0C)
 
+    val OnPhotoPrimary = Color(0xFFEAE6DE)   // warm near-white text over photos (swipe/hero/FOMO)
+    val OnPhotoSecondary = Color(0xFFCCC7BE) // dimmer warm meta text over photos
+
     val Accent = Color(0xFFFFC928)      // restrained pineapple gold (founder-locked)
     val AccentDark = Color(0xFFB88700)
     val Success = Color(0xFF18D77A)     // online dot

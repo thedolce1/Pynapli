@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.network.dto.SwipeCardDto
 
 @Composable
@@ -138,7 +139,7 @@ internal fun BoxScope.SwipeCardFooter(
             card.displayAge?.let { age ->
                 Text(
                     text = "$age",
-                    color = Color(0xFFEDEDED),
+                    color = PynapliColors.OnPhotoPrimary,
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -146,14 +147,14 @@ internal fun BoxScope.SwipeCardFooter(
         distanceLabel?.let { distance ->
             Text(
                 text = distance,
-                color = Color(0xFFCFCFCF),
+                color = PynapliColors.OnPhotoSecondary,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
         card.shortBio?.takeIf { it.isNotBlank() }?.let { bio ->
             Text(
                 text = bio,
-                color = Color(0xFFEDEDED),
+                color = PynapliColors.OnPhotoPrimary,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

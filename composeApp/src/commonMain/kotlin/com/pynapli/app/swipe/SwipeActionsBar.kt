@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
 
 @Composable
 internal fun SwipeActions(
@@ -59,8 +60,8 @@ internal fun SwipeActions(
             testTag = SwipeTestTags.PASS_ACTION,
             icon = Icons.Filled.Close,
             contentDescription = "Pass",
-            background = Color(0x33EE6650),
-            iconTint = Color(0xFFE85A4A),
+            background = PynapliColors.Danger.copy(alpha = 0.20f),
+            iconTint = PynapliColors.Danger,
             onClick = onPass,
         )
         SwipeActionButton(
@@ -79,8 +80,8 @@ internal fun SwipeActions(
             testTag = SwipeTestTags.PINEAPPLE_LIKE_ACTION,
             icon = Icons.Filled.Star,
             contentDescription = "Pineapple Like",
-            background = Color(0x33F2B84B),
-            iconTint = Color(0xFFF2B84B),
+            background = PynapliColors.Accent.copy(alpha = 0.20f),
+            iconTint = PynapliColors.Accent,
             onClick = onPineappleLike,
         )
         SwipeActionButton(
@@ -89,8 +90,8 @@ internal fun SwipeActions(
             testTag = SwipeTestTags.LIKE_ACTION,
             icon = Icons.Filled.Favorite,
             contentDescription = "Like",
-            background = Color(0x331FBF7B),
-            iconTint = Color(0xFF1FBF7B),
+            background = PynapliColors.Success.copy(alpha = 0.20f),
+            iconTint = PynapliColors.Success,
             onClick = onLike,
         )
     }

@@ -201,7 +201,7 @@ private fun ActivityFomoTile(
             )
             Text(
                 text = item.activityText(),
-                color = Color(0xFFE6E1D8),
+                color = PynapliColors.OnPhotoPrimary,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -209,7 +209,7 @@ private fun ActivityFomoTile(
             distanceLabel?.let { distance ->
                 Text(
                     text = distance,
-                    color = Color(0xFFCFC9BF),
+                    color = PynapliColors.OnPhotoSecondary,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
                 )

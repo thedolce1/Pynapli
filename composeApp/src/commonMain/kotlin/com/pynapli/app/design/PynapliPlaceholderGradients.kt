@@ -44,6 +44,14 @@ object PynapliPlaceholderGradients {
     val profileHero: Brush =
         Brush.linearGradient(listOf(Color(0xFF2B2622), Color(0xFF6D5D4F), Color(0xFF1C1B1A)))
 
+    /**
+     * Messaging avatar placeholder (inbox rows + the conversation header) shown before a thread
+     * photo loads. One source so the inbox and the open conversation render the same tone — these
+     * two surfaces previously copy-pasted the identical indigo→green pair.
+     */
+    val messagingAvatar: Brush =
+        Brush.linearGradient(listOf(Color(0xFF202031), Color(0xFF193831)))
+
     /** Neutral locked/empty tile backdrop (e.g. gated Activity FOMO tiles). */
     val neutralTile: Brush =
         Brush.verticalGradient(listOf(Color(0xFF1A1A20), Color(0xFF26262E)))

@@ -25,6 +25,12 @@ object PynapliColors {
     val TextTertiary = Color(0xFF6B6660)
     val TextInverse = Color(0xFF0A0A0C) // dark glyph on the gold accent
 
+    // Text laid over photos (swipe card, profile hero, FOMO tiles). Slightly dimmed from
+    // [TextPrimary] so it doesn't glare against bright images; one warm pair instead of the
+    // per-surface near-whites (#EDEDED/#E5E5E5/#E6E1D8 …) that previously drifted apart.
+    val OnPhotoPrimary = Color(0xFFEAE6DE)
+    val OnPhotoSecondary = Color(0xFFCCC7BE)
+
     val Accent = Color(0xFFFFC928) // restrained pineapple gold (founder-locked)
     val AccentDark = Color(0xFFB88700)
     val Success = Color(0xFF18D77A) // online dot

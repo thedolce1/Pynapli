@@ -31,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -40,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
@@ -142,7 +142,7 @@ internal fun SwipeCard(
             Modifier
         }
 
-    val decisionColor = if (offset.value.x >= 0f) Color(0xFF1FBF7B) else Color(0xFFE85A4A)
+    val decisionColor = if (offset.value.x >= 0f) PynapliColors.Success else PynapliColors.Danger
     val decisionLabel = if (offset.value.x >= 0f) "Like" else "Pass"
     val decisionAlpha = (offset.value.x.absoluteValue / threshold).coerceIn(0f, 1f)
     val distanceLabel =

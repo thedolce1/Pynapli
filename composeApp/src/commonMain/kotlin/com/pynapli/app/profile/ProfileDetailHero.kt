@@ -219,7 +219,7 @@ internal fun ProfileHero(
                         }
                         Text(
                             text = it,
-                            color = Color(0xFFE5E5E5),
+                            color = PynapliColors.OnPhotoPrimary,
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
                         )
@@ -233,7 +233,7 @@ internal fun ProfileHero(
                         }
                         Text(
                             text = hood,
-                            color = Color(0xFFE5E5E5),
+                            color = PynapliColors.OnPhotoPrimary,
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -251,7 +251,7 @@ internal fun ProfileHero(
 private fun MetaDivider() {
     Text(
         text = "·",
-        color = Color(0xFFE5E5E5),
+        color = PynapliColors.OnPhotoPrimary,
         style = MaterialTheme.typography.bodyMedium,
     )
 }

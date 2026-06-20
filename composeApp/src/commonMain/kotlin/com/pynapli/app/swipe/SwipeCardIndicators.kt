@@ -97,7 +97,7 @@ internal fun SwipeVerifiedBadge(modifier: Modifier = Modifier) {
     Icon(
         imageVector = Icons.Filled.CheckCircle,
         contentDescription = "Verified",
-        tint = Color(0xFF52A8FF),
+        tint = PynapliColors.Info,
         modifier =
             modifier
                 .testTag(SwipeTestTags.VERIFIED_BADGE)

@@ -27,13 +27,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 
@@ -149,11 +148,8 @@ private fun ConversationAvatar(
                     .size(46.dp)
                     .clip(CircleShape)
                     .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color(0xFF202031), Color(0xFF193831)),
-                        ),
-                    ).border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                    .background(PynapliPlaceholderGradients.messagingAvatar)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(
