@@ -33,25 +33,52 @@ internal fun StoreTierRow(
     pendingPurchaseProductId: String?,
     isRestoringPurchases: Boolean,
     onPurchaseTier: (SubscriptionTierDto) -> Unit,
+    isHero: Boolean = false,
 ) {
     val isCurrent = tier.tier == currentTier
     val isFree = tier.tier == SubscriptionTier.FREE
+    // Hero (flagship) emphasis only matters as an upsell — drop it once the viewer is on the plan.
+    val showHero = isHero && !isCurrent
     val purchaseInFlight = pendingPurchaseTier != null || pendingPurchaseProductId != null || isRestoringPurchases
     val isPurchasing = pendingPurchaseTier == tier.tier
+    val background =
+        when {
+            isCurrent -> PynapliColors.Accent.copy(alpha = 0.12f)
+            showHero -> PynapliColors.Accent.copy(alpha = 0.06f)
+            else -> PynapliColors.SurfaceRaised
+        }
+    val borderColor =
+        when {
+            isCurrent -> PynapliColors.Accent.copy(alpha = 0.55f)
+            showHero -> PynapliColors.Accent.copy(alpha = 0.40f)
+            else -> PynapliColors.Border
+        }
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(
-                    if (isCurrent) PynapliColors.Accent.copy(alpha = 0.12f) else PynapliColors.SurfaceRaised,
-                ).border(
-                    width = 1.dp,
-                    color = if (isCurrent) PynapliColors.Accent.copy(alpha = 0.55f) else PynapliColors.Border,
+                .background(background)
+                .border(
+                    width = if (showHero) 1.5.dp else 1.dp,
+                    color = borderColor,
                     shape = RoundedCornerShape(12.dp),
                 ).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (showHero) {
+            Text(
+                text = "Recommended",
+                color = PynapliColors.Accent,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(100))
+                        .background(PynapliColors.Accent.copy(alpha = 0.16f))
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
+            )
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,

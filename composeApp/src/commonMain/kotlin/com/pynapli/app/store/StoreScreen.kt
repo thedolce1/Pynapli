@@ -58,6 +58,12 @@ private fun StoreScreenContent(
     onRestorePurchases: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The flagship paid plan (highest monthly price) gets the "Recommended" hero emphasis.
+    val heroTier =
+        state.tiers
+            .filter { it.monthlyPriceUsdCents > 0 }
+            .maxByOrNull { it.monthlyPriceUsdCents }
+            ?.tier
     Column(
         modifier =
             modifier
@@ -133,6 +139,7 @@ private fun StoreScreenContent(
                         StoreTierRow(
                             tier = tier,
                             currentTier = state.currentTier,
+                            isHero = tier.tier == heroTier,
                             pendingPurchaseTier = state.pendingPurchaseTier,
                             pendingPurchaseProductId = state.pendingPurchaseProductId,
                             isRestoringPurchases = state.isRestoringPurchases,
