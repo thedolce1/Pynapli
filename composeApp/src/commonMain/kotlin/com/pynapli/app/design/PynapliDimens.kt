@@ -108,6 +108,9 @@ object PynapliMotion {
 
     /** Gentle spring for scale/enter accents — a touch of life without an overshooting bounce. */
     fun gentleSpringFloat(): FiniteAnimationSpec<Float> = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+
+    /** Lightly-bouncy spring for "pop" accents — badge appears / count increments. */
+    fun popSpringFloat(): FiniteAnimationSpec<Float> = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
 }
 
 /** Grid-tile-specific tokens (docs/DESIGN_TOKENS.md). Tiles are photo-first: no chips/tags. */

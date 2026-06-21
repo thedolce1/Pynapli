@@ -80,4 +80,6 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   inbox** lists (same `pynapliEntrance` helper; `ConversationRow`/`ActivityRow` gained a modifier
   param). Consistent reveal language now across Grid / Activity / Messages. verify-full green;
   Messages settles correctly on-device.
-- Next: loading→content crossfade, animated unread/action badges, sheet spring; then Phase 2.
+- 2026-06-21 — Phase 1c: animated bottom-nav badge — `popSpringFloat` token + an Animatable
+  scale "pop" when a tab's badge appears or its count increments (Messages unread / Activity).
+- Next: loading→content crossfade, sheet-spring check; then Phase 2.

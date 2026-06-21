@@ -1,5 +1,6 @@
 package com.pynapli.app
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -10,8 +11,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliTabIcon
 import com.pynapli.app.design.PynapliTabIcons
 
@@ -60,9 +65,21 @@ internal fun PynapliBottomNavigation(
                         }
                     val iconVector = if (isSelected) tab.icons.selected else tab.icons.unselected
                     if (badgeCount > 0) {
+                        // Pop the badge when it appears or its count increments.
+                        val badgePop = remember { Animatable(1f) }
+                        LaunchedEffect(badgeCount) {
+                            badgePop.snapTo(1.3f)
+                            badgePop.animateTo(targetValue = 1f, animationSpec = PynapliMotion.popSpringFloat())
+                        }
                         BadgedBox(
                             badge = {
-                                Badge {
+                                Badge(
+                                    modifier =
+                                        Modifier.graphicsLayer {
+                                            scaleX = badgePop.value
+                                            scaleY = badgePop.value
+                                        },
+                                ) {
                                     Text(text = badgeCount.toBadgeText())
                                 }
                             },
