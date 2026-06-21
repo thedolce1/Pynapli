@@ -1,17 +1,6 @@
 {
-  "description": "Connected Android Activity QA golden assertions. These are structural text and coarse screenshot checks because emulator density, clock, and seeded media can vary. Per-tab minNonBlackRatio for the five content tabs was lowered 0.04 -> 0.025 on 2026-06-01 (slice 1.4): the tab row moved from a solid-gold selected AssistChip to a restrained PynapliPill (outline + faint fill), reducing non-black fill on these sparse tabs. Content rows are unchanged; the dense activityInitial floor (0.18) is unaffected.",
+  "description": "Connected Android Activity QA golden assertions. These are structural text and coarse screenshot checks because emulator density, clock, and seeded media can vary. Reconciled 2026-06-21 to the #98 four-tab structure (Flirts/Views/Matches render as a 2-up FOMO photo grid showing actor name + activity text; Requests stays a list with album-review/invite CTAs). The stale activityInitial/likesTab/albumsTab/invitesTab stages were removed and viewsTab/requestsTab added; matchesTab dropped the list-only 'Message' CTA text. Per-tab minNonBlackRatio stays 0.025 for the sparse content tabs.",
   "stages": {
-    "activityInitial": {
-      "requiredTexts": ["Activity", "All", "Views", "Flirts", "Likes", "Matches", "Albums", "New"],
-      "forbiddenTexts": ["Request failed", "Illegal input", "Exception"],
-      "image": {
-        "minWidth": 320,
-        "minHeight": 600,
-        "minNonBlackRatio": 0.18,
-        "maxBrightRatio": 0.32,
-        "minColorBucketCount": 12
-      }
-    },
     "flirtsTab": {
       "requiredTexts": ["Flirts", "Alex", "sent a Spark"],
       "forbiddenTexts": ["No flirts yet.", "Request failed", "Exception"],
@@ -23,9 +12,9 @@
         "minColorBucketCount": 10
       }
     },
-    "likesTab": {
-      "requiredTexts": ["Likes", "Nico", "liked you"],
-      "forbiddenTexts": ["No likes yet.", "Request failed", "Exception"],
+    "viewsTab": {
+      "requiredTexts": ["Views", "Maya", "viewed you"],
+      "forbiddenTexts": ["No views yet.", "Request failed", "Exception"],
       "image": {
         "minWidth": 320,
         "minHeight": 600,
@@ -35,7 +24,7 @@
       }
     },
     "matchesTab": {
-      "requiredTexts": ["Matches", "Jules", "matched with you", "Message"],
+      "requiredTexts": ["Matches", "Jules", "matched with you"],
       "forbiddenTexts": ["No matches yet.", "Request failed", "Exception"],
       "image": {
         "minWidth": 320,
@@ -45,20 +34,9 @@
         "minColorBucketCount": 10
       }
     },
-    "albumsTab": {
-      "requiredTexts": ["Albums", "Rae", "requested album access", "Review"],
-      "forbiddenTexts": ["No album requests yet.", "Request failed", "Exception"],
-      "image": {
-        "minWidth": 320,
-        "minHeight": 600,
-        "minNonBlackRatio": 0.025,
-        "maxBrightRatio": 0.32,
-        "minColorBucketCount": 10
-      }
-    },
-    "invitesTab": {
-      "requiredTexts": ["Invites", "Noa", "sent a chat invite", "Open invite"],
-      "forbiddenTexts": ["No invites yet.", "Request failed", "Exception"],
+    "requestsTab": {
+      "requiredTexts": ["Requests", "Rae", "requested album access", "Review"],
+      "forbiddenTexts": ["No requests yet.", "Request failed", "Exception"],
       "image": {
         "minWidth": 320,
         "minHeight": 600,
