@@ -22,7 +22,11 @@ object PynapliColors {
     // Text (handoff: warm off-white scale).
     val TextPrimary = Color(0xFFF5F2EC)
     val TextSecondary = Color(0xFFA8A29A)
-    val TextTertiary = Color(0xFF6B6660)
+
+    // Tertiary lifted from the handoff's #6B6660 (~3.4:1 on the #0B0B0E background, which fails
+    // WCAG AA for normal text) to #8A847C (~5:1, passes AA) — a deliberate a11y deviation from the
+    // handoff so the dimmest meta text stays legible. Same warm hue, one step lighter.
+    val TextTertiary = Color(0xFF8A847C)
     val TextInverse = Color(0xFF0A0A0C) // dark glyph on the gold accent
 
     // Text laid over photos (swipe card, profile hero, FOMO tiles). Slightly dimmed from

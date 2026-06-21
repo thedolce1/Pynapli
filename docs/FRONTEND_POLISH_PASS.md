@@ -149,5 +149,16 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   screen's header) and the Activity dismiss controls (FOMO tile 28dp, list-row 36dp), reserving a
   ≥48dp touch target while keeping the founder-locked compact visuals unchanged. verify-full green;
   grid/swipe/activity/messages QA green (headers tap correctly through the expanded targets).
-- Next (Phase 3): 3e — font-scale 1.3–2.0× pass (no clipped/overflowing text on the core surfaces)
-  and an on-photo/tertiary-text contrast check; then close Phase 3 at the boundary.
+- 2026-06-21 — Phase 3e: **contrast + font-scale — Phase 3 complete.** Contrast: lifted the dimmest
+  text token `TextTertiary` from the handoff's `#6B6660` (~3.4:1 on `#0B0B0E`, fails WCAG AA normal)
+  to `#8A847C` (~5:1, passes AA) — a deliberate, founder-approved a11y deviation from the handoff
+  (same warm hue, one step lighter). Font-scale: verified all four core surfaces on-device at 2.0×
+  (`settings put system font_scale 2.0`) — Grid names ellipsize, Activity FOMO tiles / Messages rows
+  grow to fit, the Swipe footer + action bar hold, no clipping or overflow; the only effect is
+  bottom-nav labels wrapping, which is standard Material `NavigationBar` behavior at extreme scale, so
+  no code fix was needed (screenshots in `artifacts/a11y-fontscale/`). verify-full green; grid/swipe/
+  activity/messages QA green.
+- **Phase 3 (accessibility) done — pausing at the phase boundary.** Every compound item reads as one
+  TalkBack node with state descriptions, all interactive controls meet a ≥48dp touch target, the
+  dimmest text meets WCAG AA, and the core surfaces survive 2.0× font scale. Next phase to resume at:
+  Phase 4 (surface-by-surface refinement) or Phase 5 (web/iOS parity).
