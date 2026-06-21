@@ -72,4 +72,9 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   `Color(0x…)` literals and aligned on-photo text to `OnPhotoPrimary` across Swipe card, Grid card,
   Activity, and the private-album preview. (Tonight's 3 zone-map literals deferred to its Phase 4
   surface slice.) verify-full green; Swipe/Grid/auth eyeballed on-device.
-- Next: Phase 1 — motion system.
+- 2026-06-21 — **Phase 1 (motion) started.** 1a: extended `PynapliMotion` with easing + stagger +
+  `standardTween`/`gentleSpringFloat`, added the `Modifier.pynapliEntrance` staggered-reveal helper,
+  applied a low-end-safe staggered first-load reveal to the Grid, and a scale+fade enter to the
+  swipe match overlay. verify-full green; grid settles correctly on-device.
+- Next: more Phase 1 — staggered reveals on Activity/Messages, loading→content crossfade, animated
+  badges/counts, sheet spring.

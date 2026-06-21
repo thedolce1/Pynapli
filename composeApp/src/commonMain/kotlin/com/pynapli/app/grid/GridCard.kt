@@ -51,6 +51,7 @@ internal fun GridProfileTile(
     card: GridProfileCardUi,
     distanceUnit: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val distanceLabel =
         formatDistanceForUnit(
@@ -61,7 +62,7 @@ internal fun GridProfileTile(
 
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(PynapliShape.SmallShape)

@@ -1,5 +1,6 @@
 package com.pynapli.app.swipe
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,13 +14,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliMotion
 import com.pynapli.shared.network.dto.MatchDto
 
 @Composable
@@ -29,10 +37,19 @@ internal fun MatchOverlay(
     onDismiss: () -> Unit,
     onMessage: () -> Unit,
 ) {
+    // Enter once when the overlay appears: the scrim fades in and the card settles up to full size.
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    val progress by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = PynapliMotion.gentleSpringFloat(),
+        label = "matchOverlayEnter",
+    )
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
+                .graphicsLayer { alpha = progress }
                 .background(PynapliColors.ModalScrim),
         contentAlignment = Alignment.Center,
     ) {
@@ -40,7 +57,11 @@ internal fun MatchOverlay(
             modifier =
                 Modifier
                     .padding(32.dp)
-                    .clip(RoundedCornerShape(24.dp))
+                    .graphicsLayer {
+                        val scale = 0.9f + 0.1f * progress
+                        scaleX = scale
+                        scaleY = scale
+                    }.clip(RoundedCornerShape(24.dp))
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

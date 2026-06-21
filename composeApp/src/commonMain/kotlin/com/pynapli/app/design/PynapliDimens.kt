@@ -1,5 +1,11 @@
 package com.pynapli.app.design
 
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,6 +92,22 @@ object PynapliMotion {
     const val GRID_PLACEMENT = 220
     const val SWIPE_FLY_OUT = 240
     const val SWIPE_SPRING_BACK = 260
+
+    // Calm ease-in-out for entrances/exits (decelerate into place).
+    val StandardEasing: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+    // Staggered list/grid reveal tuning.
+    const val StaggerStepMillis = 35
+    const val MaxStaggerItems = 9
+
+    /** Standard tween for the given value type (e.g. Float). */
+    fun <T> standardTween(
+        durationMillis: Int = STANDARD,
+        delayMillis: Int = 0,
+    ): FiniteAnimationSpec<T> = tween(durationMillis = durationMillis, delayMillis = delayMillis, easing = StandardEasing)
+
+    /** Gentle spring for scale/enter accents — a touch of life without an overshooting bounce. */
+    fun gentleSpringFloat(): FiniteAnimationSpec<Float> = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
 }
 
 /** Grid-tile-specific tokens (docs/DESIGN_TOKENS.md). Tiles are photo-first: no chips/tags. */

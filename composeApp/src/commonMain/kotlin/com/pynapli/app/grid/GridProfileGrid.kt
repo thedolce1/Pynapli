@@ -10,20 +10,23 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
+import com.pynapli.app.design.pynapliEntrance
 
 @Composable
 internal fun ProfileGrid(
@@ -73,6 +76,11 @@ internal fun ProfileGrid(
         }
     }
 
+    // First-load reveal: tiles fade + lift in (staggered). Flips true once per grid entry; tiles
+    // scrolled in or paginated after that appear instantly (see pynapliEntrance).
+    var revealed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { revealed = true }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         state = gridState,
@@ -81,15 +89,16 @@ internal fun ProfileGrid(
         horizontalArrangement = Arrangement.spacedBy(1.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
-        items(
+        itemsIndexed(
             items = cards,
-            key = { card -> card.id },
-            contentType = { "grid-card" },
-        ) { card ->
+            key = { _, card -> card.id },
+            contentType = { _, _ -> "grid-card" },
+        ) { index, card ->
             GridProfileTile(
                 card = card,
                 distanceUnit = distanceUnit,
                 onClick = { onProfileSelected(card) },
+                modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
             )
         }
 
