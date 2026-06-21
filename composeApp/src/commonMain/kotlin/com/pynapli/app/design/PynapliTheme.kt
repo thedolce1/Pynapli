@@ -46,43 +46,48 @@ private val PynapliLightColors: ColorScheme =
         onError = PynapliColorsLight.OnError,
     )
 
+// Complete, deliberate Pynapli type scale. Every Material role is defined here (not just body/label)
+// so titles/headlines/displays stop inheriting raw Material3 defaults — a compact, dark-first rhythm
+// with one font family routed through a single place, ready for a brand-font swap later.
+private val PynapliFont = FontFamily.SansSerif
+
 private val PynapliTypography =
     Typography(
+        // Display — hero moments (onboarding, the photo-less swipe initial).
+        displayLarge =
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.Bold, fontSize = 44.sp, lineHeight = 50.sp),
+        displayMedium =
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.Bold, fontSize = 36.sp, lineHeight = 42.sp),
+        displaySmall =
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.Bold, fontSize = 30.sp, lineHeight = 36.sp),
+        // Headline — prominent on-surface/on-photo emphasis (match overlay, swipe name).
+        headlineLarge =
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.SemiBold, fontSize = 28.sp, lineHeight = 34.sp),
+        headlineMedium =
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 30.sp),
+        headlineSmall =
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp),
+        // Title — screen headers and section headers.
+        titleLarge =
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp),
+        titleMedium =
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, lineHeight = 22.sp),
+        titleSmall =
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 19.sp),
+        // Body — running text.
         bodyLarge =
-            TextStyle(
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Medium,
-                fontSize = 17.sp,
-                lineHeight = 22.sp,
-            ),
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.Medium, fontSize = 17.sp, lineHeight = 22.sp),
         bodyMedium =
-            TextStyle(
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Normal,
-                fontSize = 15.sp,
-                lineHeight = 19.sp,
-            ),
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 19.sp),
+        bodySmall =
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 17.sp),
+        // Label — chips, captions, buttons.
         labelLarge =
-            TextStyle(
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                lineHeight = 18.sp,
-            ),
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 18.sp),
         labelMedium =
-            TextStyle(
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Medium,
-                fontSize = 12.sp,
-                lineHeight = 15.sp,
-            ),
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 15.sp),
         labelSmall =
-            TextStyle(
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Medium,
-                fontSize = 11.sp,
-                lineHeight = 13.sp,
-            ),
+            TextStyle(fontFamily = PynapliFont, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 13.sp),
     )
 
 @Composable
