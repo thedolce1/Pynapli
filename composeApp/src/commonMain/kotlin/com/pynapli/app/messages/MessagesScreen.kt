@@ -3,7 +3,6 @@ package com.pynapli.app.messages
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,12 +22,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliErrorState
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliHeaderAvatar
 import com.pynapli.app.design.PynapliListSkeleton
@@ -121,19 +120,12 @@ private fun MessagesScreenContent(
                 MessagesPhase.Loading -> PynapliListSkeleton(modifier = Modifier.fillMaxSize())
 
                 MessagesPhase.Error ->
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 28.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = state.errorMessage.orEmpty(),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
+                    PynapliErrorState(
+                        title = "Couldn't load messages",
+                        message = state.errorMessage,
+                        onRetry = onRefresh,
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
                 MessagesPhase.Empty -> EmptyMessagesState(modifier = Modifier.fillMaxSize())
 

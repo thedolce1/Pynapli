@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Style
@@ -21,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliErrorState
 
 @Composable
 internal fun EmptyDeck(
@@ -101,35 +101,12 @@ internal fun SwipeError(
     message: String,
     onRetry: () -> Unit,
 ) {
-    // Friendlier full-deck failure state: a clear icon + reassuring title and a prominent
-    // Retry, rather than a bare red server string. The underlying message is kept as the
-    // secondary line for context.
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Filled.CloudOff,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-            modifier = Modifier.size(56.dp),
-        )
-        Text(
-            text = "Couldn't load your deck",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = message.ifBlank { "Check your connection and try again." },
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-        )
-        Button(onClick = onRetry) {
-            Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
-            Spacer(Modifier.size(6.dp))
-            Text("Retry")
-        }
-    }
+    // Friendlier full-deck failure state via the shared error block (icon + title + message +
+    // Retry), so the swipe deck fails like the rest of the app rather than showing a bare server
+    // string. The outer Box (SwipeScreenContent) centers it.
+    PynapliErrorState(
+        title = "Couldn't load your deck",
+        message = message.ifBlank { "Check your connection and try again." },
+        onRetry = onRetry,
+    )
 }

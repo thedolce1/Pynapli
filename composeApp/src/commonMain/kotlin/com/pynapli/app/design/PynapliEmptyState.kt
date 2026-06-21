@@ -4,9 +4,13 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -26,10 +30,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
- * Canonical empty-state block: a tinted icon disc, a title, an optional subtitle, and an optional
- * CTA. Replaces the per-surface hand-rolled empties (plain centered text on Activity, a bespoke
- * column on Messages, …) so "nothing here" reads consistently across the app. Fades and lifts in
- * gently via [PynapliMotion].
+ * Canonical "designed states": a tinted icon disc, a title, an optional subtitle, and an optional
+ * CTA, sharing one [PynapliStatusBlock] layout so "nothing here" ([PynapliEmptyState]) and "that
+ * failed" ([PynapliErrorState]) read as siblings across the app instead of per-surface hand-rolled
+ * columns / bare error text. Both fade and lift in gently via [PynapliMotion].
  */
 @Composable
 fun PynapliEmptyState(
@@ -40,12 +44,63 @@ fun PynapliEmptyState(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
+    PynapliStatusBlock(icon = icon, title = title, modifier = modifier, subtitle = subtitle) {
+        if (actionLabel != null && onAction != null) {
+            Button(
+                onClick = onAction,
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                Text(text = actionLabel)
+            }
+        }
+    }
+}
+
+/**
+ * Canonical failure state: same block as [PynapliEmptyState] but with an error icon and a Retry CTA.
+ * Use it for full-surface load failures (Grid / Swipe / Activity / Messages) so retry affordances are
+ * consistent rather than a bare red server string.
+ */
+@Composable
+fun PynapliErrorState(
+    title: String,
+    modifier: Modifier = Modifier,
+    message: String? = null,
+    icon: ImageVector = Icons.Filled.CloudOff,
+    retryLabel: String = "Retry",
+    onRetry: (() -> Unit)? = null,
+) {
+    PynapliStatusBlock(icon = icon, title = title, modifier = modifier, subtitle = message) {
+        if (onRetry != null) {
+            Button(
+                onClick = onRetry,
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(text = retryLabel, modifier = Modifier.padding(start = 6.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PynapliStatusBlock(
+    icon: ImageVector,
+    title: String,
+    modifier: Modifier,
+    subtitle: String?,
+    action: @Composable ColumnScope.() -> Unit,
+) {
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     val progress by animateFloatAsState(
         targetValue = if (shown) 1f else 0f,
         animationSpec = PynapliMotion.standardTween(durationMillis = PynapliMotion.SLOW),
-        label = "emptyStateEnter",
+        label = "statusBlockEnter",
     )
 
     Box(
@@ -91,14 +146,7 @@ fun PynapliEmptyState(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
-            if (actionLabel != null && onAction != null) {
-                Button(
-                    onClick = onAction,
-                    modifier = Modifier.padding(top = 16.dp),
-                ) {
-                    Text(text = actionLabel)
-                }
-            }
+            action()
         }
     }
 }

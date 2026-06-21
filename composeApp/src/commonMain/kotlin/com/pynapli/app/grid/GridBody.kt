@@ -5,13 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliEmptyState
+import com.pynapli.app.design.PynapliErrorState
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.location.LocationUiState
 
@@ -96,43 +94,12 @@ internal fun GridBody(
             }
 
             GridPhase.Error -> {
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.CloudOff,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(36.dp),
-                    )
-                    Text(
-                        text = "Couldn't load nearby profiles",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
-                    state.errorMessage?.let { message ->
-                        Text(
-                            text = message,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
-                    Button(
-                        onClick = onRetry,
-                        modifier = Modifier.padding(top = 16.dp),
-                    ) {
-                        Text(text = "Retry")
-                    }
-                }
+                PynapliErrorState(
+                    title = "Couldn't load nearby profiles",
+                    message = state.errorMessage,
+                    onRetry = onRetry,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
 
             GridPhase.EmptyFiltered -> {

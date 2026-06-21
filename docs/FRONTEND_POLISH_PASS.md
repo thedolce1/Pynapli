@@ -109,5 +109,14 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   to the #98 four-tab FOMO structure (added `viewsTab`/`requestsTab`, dropped the list-only `Message`
   text from `matchesTab`, removed dead stages) — activity QA had been red on main since #98.
   verify-full green; activity-QA + messages-QA green.
-- Next: 2c — one shared error+retry primitive (unify Grid error + Swipe `SwipeError` + scattered
-  inline errors); then close out Phase 2 and pause at the phase boundary.
+- 2026-06-21 — **Phase 2c: shared error+retry primitive — Phase 2 complete.** Added `PynapliErrorState`
+  (tinted icon disc + title + message + Retry, sharing one private `PynapliStatusBlock` layout with
+  `PynapliEmptyState` so empty and error states read as siblings). Routed every full-surface load
+  failure through it: Grid error, Swipe `SwipeError`, Messages error, Activity error — replacing the
+  hand-rolled columns and bare red server strings with a consistent retry affordance. verify-full
+  green; grid/swipe/activity/messages QA green.
+- **Phase 2 done — pausing at the phase boundary.** Designed states now: shared empty primitive,
+  content-shaped skeleton loaders, loading→content crossfades, and a unified error+retry block across
+  the core surfaces. Next phase (3, accessibility) is the boundary to resume at: TalkBack labels,
+  semantic card grouping + state descriptions, ≥48dp touch targets, font-scale 1.3–2.0× safety,
+  on-photo/tertiary contrast.
