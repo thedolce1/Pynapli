@@ -140,7 +140,7 @@ internal fun PhotoCropScreen(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "Shown as a square on your profile.",
+                text = "Photos are cropped to a square.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )

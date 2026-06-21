@@ -325,8 +325,7 @@ class MainActivity : ComponentActivity() {
                 pickedMedia == null -> graph.mediaAlbumsStateHolder.showError("Could not read the selected image.")
                 // Chat photo: upload + send as a per-recipient consent-tap media message.
                 sendToConversation -> graph.conversationStateHolder.sendPhoto(pickedMedia)
-                // Profile photos pause at the shared square-crop step; private album
-                // media uploads as picked.
+                // Profile and private album photos both pause at the shared square-crop step.
                 kind != null -> graph.mediaAlbumsStateHolder.stagePickedMedia(kind, pickedMedia)
             }
         }

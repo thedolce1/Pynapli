@@ -116,12 +116,27 @@ function Dump-Ui {
                 throw "Unable to pull Android UI hierarchy."
             }
 
+            $parsed = $null
             try {
-                return [xml](Get-Content -Raw -Path $local)
+                $parsed = [xml](Get-Content -Raw -Path $local)
             } catch {
                 if ($attempt -eq 12) {
                     throw "Unable to parse Android UI hierarchy at $local"
                 }
+            }
+
+            if ($null -ne $parsed) {
+                # Heavy host load can pop the system "isn't responding" ANR over the app mid-render.
+                # Tap "Wait" and re-dump so callers never see the ANR frame instead of the real screen.
+                if ($null -ne (Find-NodeByText $parsed "responding")) {
+                    $waitNode = Find-NodeByExactText $parsed "Wait"
+                    if ($null -ne $waitNode) {
+                        Tap-Node $waitNode "Wait (ANR)"
+                        Start-Sleep -Milliseconds 1200
+                        continue
+                    }
+                }
+                return $parsed
             }
         }
 

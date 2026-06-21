@@ -32,9 +32,11 @@ data class MediaAlbumsUiState(
     val reorderingKinds: Set<MediaAlbumKindUi> = emptySet(),
     // Album kinds whose last upload failed with the picked media retained for retryUpload().
     val retryableUploadKinds: Set<MediaAlbumKindUi> = emptySet(),
-    // A freshly picked profile photo awaiting the square crop step (profile album only,
-    // per the founder default); the crop overlay renders while this is non-null.
+    // A freshly picked photo awaiting the square crop step; the crop overlay renders while this is
+    // non-null. [pendingCropKind] records which album it will land in so profile and private photos
+    // get the same square treatment.
     val pendingCropMedia: PickedMediaForUpload? = null,
+    val pendingCropKind: MediaAlbumKindUi = MediaAlbumKindUi.Profile,
     val isLoading: Boolean = false,
     val isUploadingProfile: Boolean = false,
     val isUploadingPrivate: Boolean = false,

@@ -314,24 +314,23 @@ class MediaAlbumsStateHolderTest {
             stateHolder.stagePickedMedia(MediaAlbumKindUi.Profile, media)
 
             assertSame(media, stateHolder.state.value.pendingCropMedia)
+            assertEquals(MediaAlbumKindUi.Profile, stateHolder.state.value.pendingCropKind)
             assertTrue(repository.uploadRequests.isEmpty())
         }
 
     @Test
-    fun stagedPrivatePickUploadsImmediatelyWithoutCrop() =
+    fun stagedPrivatePickPausesAtCropWithoutUploading() =
         runBlocking {
-            val repository =
-                FakeMediaAlbumsRepository().apply {
-                    uploadResults += AppResult.Success(testMediaItem(MediaAlbumKindUi.Private, "asset-new", 0))
-                }
+            val repository = FakeMediaAlbumsRepository()
             val stateHolder = MediaAlbumsStateHolder(repository)
             val media = testPickedMedia()
 
+            // Private photos now get the same square-crop step as profile photos.
             stateHolder.stagePickedMedia(MediaAlbumKindUi.Private, media)
 
-            assertNull(stateHolder.state.value.pendingCropMedia)
-            assertSame(media, repository.uploadRequests.single().second)
-            assertEquals(MediaAlbumKindUi.Private, repository.uploadRequests.single().first)
+            assertSame(media, stateHolder.state.value.pendingCropMedia)
+            assertEquals(MediaAlbumKindUi.Private, stateHolder.state.value.pendingCropKind)
+            assertTrue(repository.uploadRequests.isEmpty())
         }
 
     @Test
@@ -350,6 +349,24 @@ class MediaAlbumsStateHolderTest {
             assertNull(stateHolder.state.value.pendingCropMedia)
             assertSame(cropped, repository.uploadRequests.single().second)
             assertEquals(MediaAlbumKindUi.Profile, repository.uploadRequests.single().first)
+        }
+
+    @Test
+    fun confirmPendingCropUploadsToTheStagedPrivateAlbum() =
+        runBlocking {
+            val repository =
+                FakeMediaAlbumsRepository().apply {
+                    uploadResults += AppResult.Success(testMediaItem(MediaAlbumKindUi.Private, "asset-new", 0))
+                }
+            val stateHolder = MediaAlbumsStateHolder(repository)
+            stateHolder.stagePickedMedia(MediaAlbumKindUi.Private, testPickedMedia())
+            val cropped = testPickedMedia()
+
+            stateHolder.confirmPendingCrop(cropped)
+
+            assertNull(stateHolder.state.value.pendingCropMedia)
+            assertSame(cropped, repository.uploadRequests.single().second)
+            assertEquals(MediaAlbumKindUi.Private, repository.uploadRequests.single().first)
         }
 
     @Test
