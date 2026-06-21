@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.media.MediaAlbumItemUi
 
 @Composable
@@ -81,7 +82,7 @@ private fun PrivateAlbumTile(item: MediaAlbumItemUi) {
                 .size(96.dp)
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF2B2622))
+                .background(PynapliColors.WarmPlaceholderDark)
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
     ) {
         if (item.mediaUrl != null && item.mediaType == "image") {

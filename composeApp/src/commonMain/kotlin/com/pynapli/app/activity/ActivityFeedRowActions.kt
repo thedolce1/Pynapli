@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.network.dto.ActivityEventDto
 
 @Composable
@@ -160,7 +161,7 @@ internal fun ActivityAvatar(photoUrl: String?) {
                 .clip(CircleShape)
                 .background(
                     Brush.linearGradient(
-                        listOf(Color(0xFF2B2622), Color(0xFF6D5D4F)),
+                        listOf(PynapliColors.WarmPlaceholderDark, PynapliColors.WarmPlaceholderLight),
                     ),
                 ).border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
         contentAlignment = Alignment.Center,

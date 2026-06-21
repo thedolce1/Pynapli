@@ -67,4 +67,9 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
 
 ## Progress
 
-- 2026-06-21 — Phase 0a (type scale) in progress.
+- 2026-06-21 — **Phase 0 complete.** 0a: full type scale in `PynapliTypography`. 0b: token sweep —
+  added on-photo overlay + scrim + warm-placeholder groups to `PynapliColors`; replaced residual
+  `Color(0x…)` literals and aligned on-photo text to `OnPhotoPrimary` across Swipe card, Grid card,
+  Activity, and the private-album preview. (Tonight's 3 zone-map literals deferred to its Phase 4
+  surface slice.) verify-full green; Swipe/Grid/auth eyeballed on-device.
+- Next: Phase 1 — motion system.

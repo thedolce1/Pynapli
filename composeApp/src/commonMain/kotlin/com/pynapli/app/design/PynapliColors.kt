@@ -43,6 +43,18 @@ object PynapliColors {
     val OverlayScrim = Color(0x99000000)
     val OverlayScrimSoft = Color(0x55000000) // mid stop for photo legibility gradients
     val PhotoGradientBottom = Color(0xCC000000)
+    val PhotoScrimStrong = Color(0xE6000000) // stronger bottom stop under the swipe-card footer text
+    val ModalScrim = Color(0xCC000000) // full-screen dialog/overlay backdrop (e.g. the match overlay)
+
+    // Translucent neutrals layered over photos (swipe/grid cards): chip fills/strokes, carousel
+    // indicators, and the linked-partner badge fill/stroke. Named here so on-photo overlays stay
+    // consistent and feature screens don't hardcode ARGB literals. On-photo *text/icons* use
+    // [OnPhotoPrimary]/[OnPhotoSecondary]; these are the chrome behind them.
+    val OnPhotoChipFill = Color(0x33FFFFFF)
+    val OnPhotoChipStroke = Color(0x66FFFFFF)
+    val OnPhotoStroke = Color(0xCCFFFFFF) // bright hairline: active carousel dot, badge ring
+    val OnPhotoIndicatorInactive = Color(0x40FFFFFF)
+    val OnPhotoBadgeFill = Color(0xCC1B1B1B) // dark translucent disc behind on-photo badges
 
     // Inline banner/container tints: muted dark fills + readable borders for success/error message
     // bands (e.g. the Profile-hub message band) that must sit on the dark surface without using the
@@ -62,6 +74,10 @@ object PynapliColors {
     // Decorative warm brown: the "Visiting" travel pill backdrop (Grid + Swipe) and warm avatar
     // gradients — a quiet "context, not a tier" tone rather than a loud badge color.
     val WarmBrown = Color(0xFF4E342E)
+
+    // Warm-dark placeholder fill/gradient for avatars and private-album tiles before media loads.
+    val WarmPlaceholderDark = Color(0xFF2B2622)
+    val WarmPlaceholderLight = Color(0xFF6D5D4F)
 }
 
 /**

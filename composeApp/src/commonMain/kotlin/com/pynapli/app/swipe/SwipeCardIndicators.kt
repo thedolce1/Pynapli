@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -38,13 +37,13 @@ internal fun SwipeTagChip(label: String) {
         modifier =
             Modifier
                 .clip(RoundedCornerShape(50))
-                .background(Color(0x33FFFFFF))
-                .border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(50))
+                .background(PynapliColors.OnPhotoChipFill)
+                .border(1.dp, PynapliColors.OnPhotoChipStroke, RoundedCornerShape(50))
                 .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
         Text(
             text = label,
-            color = Color.White,
+            color = PynapliColors.OnPhotoPrimary,
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -73,7 +72,7 @@ internal fun PhotoCarouselIndicators(
                         .weight(1f)
                         .height(3.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(if (active) Color(0xCCFFFFFF) else Color(0x40FFFFFF)),
+                        .background(if (active) PynapliColors.OnPhotoStroke else PynapliColors.OnPhotoIndicatorInactive),
             )
         }
     }
@@ -88,7 +87,7 @@ internal fun SwipeOnlineDot(modifier: Modifier = Modifier) {
                 .size(10.dp)
                 .clip(CircleShape)
                 .background(PynapliColors.Success)
-                .border(1.dp, Color(0xFF050505), CircleShape),
+                .border(1.dp, PynapliColors.Black, CircleShape),
     )
 }
 
@@ -112,7 +111,7 @@ internal fun SwipeVisitingPill(modifier: Modifier = Modifier) {
     // hard badge so it reads as context, not a tier signal.
     Text(
         text = "Visiting",
-        color = Color.White,
+        color = PynapliColors.OnPhotoPrimary,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
         modifier =
@@ -145,8 +144,8 @@ internal fun SwipeLinkedPartnerBadge(
     Box(
         modifier =
             tappableModifier
-                .background(Color(0xCC1B1B1B))
-                .border(1.dp, Color(0xCCFFFFFF), CircleShape),
+                .background(PynapliColors.OnPhotoBadgeFill)
+                .border(1.dp, PynapliColors.OnPhotoStroke, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         if (thumbnailUrl != null) {
@@ -160,7 +159,7 @@ internal fun SwipeLinkedPartnerBadge(
             Icon(
                 imageVector = Icons.Filled.Person,
                 contentDescription = "Linked partner",
-                tint = Color.White,
+                tint = PynapliColors.OnPhotoPrimary,
                 modifier = Modifier.size(19.dp),
             )
         }

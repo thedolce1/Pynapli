@@ -16,10 +16,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.network.dto.MatchDto
 
 @Composable
@@ -33,7 +33,7 @@ internal fun MatchOverlay(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(Color(0xCC000000)),
+                .background(PynapliColors.ModalScrim),
         contentAlignment = Alignment.Center,
     ) {
         Column(

@@ -131,7 +131,7 @@ internal fun GridProfileTile(
                 // not physically local. Same wording + tone as the Swipe pill.
                 Text(
                     text = "Visiting",
-                    color = Color.White,
+                    color = PynapliColors.OnPhotoPrimary,
                     fontSize = GridTileTokens.MetaTextSize,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -147,7 +147,7 @@ internal fun GridProfileTile(
             distanceLabel?.let { distance ->
                 Text(
                     text = distance,
-                    color = Color.White.copy(alpha = 0.78f),
+                    color = PynapliColors.OnPhotoSecondary,
                     fontSize = GridTileTokens.MetaTextSize,
                     style = OnPhotoCaptionStyle,
                     maxLines = 1,
@@ -195,8 +195,8 @@ private fun LinkedPartnerBadge(
             modifier
                 .size(26.dp)
                 .clip(CircleShape)
-                .background(if (thumbnailUrl == null) color else Color(0xCC111111))
-                .border(1.dp, Color(0xD9FFFFFF), CircleShape),
+                .background(if (thumbnailUrl == null) color else PynapliColors.OnPhotoBadgeFill)
+                .border(1.dp, PynapliColors.OnPhotoStroke, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         if (thumbnailUrl != null) {
@@ -210,7 +210,7 @@ private fun LinkedPartnerBadge(
             Icon(
                 imageVector = Icons.Filled.Person,
                 contentDescription = "Linked partner",
-                tint = Color.White,
+                tint = PynapliColors.OnPhotoPrimary,
                 modifier = Modifier.size(15.dp),
             )
         }

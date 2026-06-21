@@ -93,7 +93,7 @@ private fun SwipeCardPhotoFallback(displayName: String) {
     ) {
         Text(
             text = initials,
-            color = Color.White.copy(alpha = 0.55f),
+            color = PynapliColors.OnPhotoPrimary.copy(alpha = 0.55f),
             style = MaterialTheme.typography.displayLarge,
             fontWeight = FontWeight.SemiBold,
         )
@@ -112,7 +112,7 @@ internal fun BoxScope.SwipeCardFooter(
                 .fillMaxWidth()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color.Transparent, Color(0xE6000000)),
+                        listOf(Color.Transparent, PynapliColors.PhotoScrimStrong),
                     ),
                 ).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -123,7 +123,7 @@ internal fun BoxScope.SwipeCardFooter(
             }
             Text(
                 text = card.displayName,
-                color = Color.White,
+                color = PynapliColors.OnPhotoPrimary,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
