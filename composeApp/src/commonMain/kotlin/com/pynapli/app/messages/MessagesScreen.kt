@@ -1,5 +1,6 @@
 package com.pynapli.app.messages
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliHeaderAvatar
+import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliScreenHeader
 import com.pynapli.app.design.pynapliEntrance
 import com.pynapli.shared.network.dto.ConversationDto
@@ -103,97 +105,106 @@ private fun MessagesScreenContent(
             onRefresh = onRefresh,
         )
 
-        when {
-            state.isLoading && state.conversations.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
+        val phase =
+            when {
+                state.isLoading && state.conversations.isEmpty() -> MessagesPhase.Loading
+                state.errorMessage != null && state.conversations.isEmpty() -> MessagesPhase.Error
+                state.conversations.isEmpty() -> MessagesPhase.Empty
+                else -> MessagesPhase.Content
             }
-
-            state.errorMessage != null && state.conversations.isEmpty() -> {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 28.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = state.errorMessage,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-
-            state.conversations.isEmpty() -> {
-                EmptyMessagesState(modifier = Modifier.fillMaxSize())
-            }
-
-            else -> {
-                // New matches (swipe conversations with no messages yet) ride a Tinder-style rail
-                // at the top; they are kept out of the conversation list until someone says hi.
-                val conversationGroups =
-                    remember(state.conversations) {
-                        state.conversations.partition { conversation -> conversation.isNewMatch() }
+        Crossfade(
+            targetState = phase,
+            animationSpec = PynapliMotion.standardTween(),
+            label = "messagesPhase",
+        ) { current ->
+            when (current) {
+                MessagesPhase.Loading ->
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
-                val newMatches = conversationGroups.first
-                val listConversations = conversationGroups.second
-                var revealed by remember { mutableStateOf(false) }
-                LaunchedEffect(Unit) { revealed = true }
-                LazyColumn(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .testTag(MessagesTestTags.LIST),
-                ) {
-                    if (newMatches.isNotEmpty()) {
-                        item(
-                            key = "new-matches-rail",
-                            contentType = "new-matches-rail",
-                        ) {
-                            MessagesNewMatchesRail(
-                                matches = newMatches,
+
+                MessagesPhase.Error ->
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 28.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = state.errorMessage.orEmpty(),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+
+                MessagesPhase.Empty -> EmptyMessagesState(modifier = Modifier.fillMaxSize())
+
+                MessagesPhase.Content -> {
+                    // New matches (swipe conversations with no messages yet) ride a Tinder-style rail
+                    // at the top; they are kept out of the conversation list until someone says hi.
+                    val conversationGroups =
+                        remember(state.conversations) {
+                            state.conversations.partition { conversation -> conversation.isNewMatch() }
+                        }
+                    val newMatches = conversationGroups.first
+                    val listConversations = conversationGroups.second
+                    var revealed by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) { revealed = true }
+                    LazyColumn(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .testTag(MessagesTestTags.LIST),
+                    ) {
+                        if (newMatches.isNotEmpty()) {
+                            item(
+                                key = "new-matches-rail",
+                                contentType = "new-matches-rail",
+                            ) {
+                                MessagesNewMatchesRail(
+                                    matches = newMatches,
+                                    viewerUserId = viewerUserId,
+                                    onMatchSelected = onThreadSelected,
+                                    modifier = Modifier.padding(bottom = 6.dp),
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                            }
+                        }
+                        itemsIndexed(
+                            items = listConversations,
+                            key = { _, conversation -> conversation.conversationId },
+                            contentType = { _, _ -> "conversation-row" },
+                        ) { index, conversation ->
+                            ConversationRow(
+                                conversation = conversation,
                                 viewerUserId = viewerUserId,
-                                onMatchSelected = onThreadSelected,
-                                modifier = Modifier.padding(bottom = 6.dp),
+                                isMutatingInvite = conversation.conversationId in state.mutatingPartnerInviteConversationIds,
+                                onClick = { onThreadSelected(conversation) },
+                                onAcceptPartnerInvite = { onAcceptPartnerInvite(conversation.conversationId) },
+                                onDeclinePartnerInvite = { onDeclinePartnerInvite(conversation.conversationId) },
+                                modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
                             )
                             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                         }
-                    }
-                    itemsIndexed(
-                        items = listConversations,
-                        key = { _, conversation -> conversation.conversationId },
-                        contentType = { _, _ -> "conversation-row" },
-                    ) { index, conversation ->
-                        ConversationRow(
-                            conversation = conversation,
-                            viewerUserId = viewerUserId,
-                            isMutatingInvite = conversation.conversationId in state.mutatingPartnerInviteConversationIds,
-                            onClick = { onThreadSelected(conversation) },
-                            onAcceptPartnerInvite = { onAcceptPartnerInvite(conversation.conversationId) },
-                            onDeclinePartnerInvite = { onDeclinePartnerInvite(conversation.conversationId) },
-                            modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
-                    }
-                    if (listConversations.isEmpty() && newMatches.isNotEmpty()) {
-                        item(
-                            key = "new-matches-only-hint",
-                            contentType = "new-matches-only-hint",
-                        ) {
-                            Text(
-                                text = "Say hi to your new matches to start a conversation.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 28.dp, vertical = 24.dp),
-                            )
+                        if (listConversations.isEmpty() && newMatches.isNotEmpty()) {
+                            item(
+                                key = "new-matches-only-hint",
+                                contentType = "new-matches-only-hint",
+                            ) {
+                                Text(
+                                    text = "Say hi to your new matches to start a conversation.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 28.dp, vertical = 24.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -229,6 +240,8 @@ private fun MessagesTopArea(
         },
     )
 }
+
+private enum class MessagesPhase { Loading, Error, Empty, Content }
 
 internal object MessagesTestTags {
     const val LIST = "messages-list"

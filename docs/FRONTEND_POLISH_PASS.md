@@ -82,4 +82,9 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   Messages settles correctly on-device.
 - 2026-06-21 — Phase 1c: animated bottom-nav badge — `popSpringFloat` token + an Animatable
   scale "pop" when a tab's badge appears or its count increments (Messages unread / Activity).
-- Next: loading→content crossfade, sheet-spring check; then Phase 2.
+- 2026-06-21 — Phase 1d: loading→content crossfade — wrapped the Messages state machine
+  (loading/error/empty/content) in a `Crossfade` so the spinner dissolves as the inbox arrives
+  (it coexists with the staggered reveal: spinner fades out, rows stagger in). Pattern is
+  extendable to Grid/Activity/Store. verify-full green; Messages renders correctly on-device.
+- Next: extend the crossfade pattern to the other surfaces, sheet-spring check; then Phase 2
+  (designed empty/skeleton/error states).
