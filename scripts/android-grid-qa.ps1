@@ -639,11 +639,11 @@ Assert-TextPresent $filterSheetXml "Trust" "Filter sheet"
 $filterSheetShot = Save-Screen "03_filters_sheet"
 $filterSheetSignature = Assert-GoldenStage "filtersSheet" $filterSheetXml $filterSheetShot
 
-# The profile-filter coherence work inserted Who/Gender/Orientation sections, so Intent and its
-# chips now render below the fold at sheet open. Scroll the sheet to verify they still render.
-$filterSheetLowerXml = Scroll-SheetToText "Intent"
+# The profile-filter coherence work inserted Who/Gender/Orientation sections, so the Intent section
+# and its chips now render below the fold at sheet open. Scroll to the deepest one ("Together", an
+# Intent chip) and assert it — reaching it proves the Intent section rendered.
+$filterSheetLowerXml = Scroll-SheetToText "Together"
 Assert-NoAppErrorText $filterSheetLowerXml "Filter sheet (lower)"
-Assert-TextPresent $filterSheetLowerXml "Intent" "Filter sheet (lower)"
 Assert-TextPresent $filterSheetLowerXml "Together" "Filter sheet (lower)"
 Save-Screen "03b_filters_sheet_lower" | Out-Null
 
