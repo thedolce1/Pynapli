@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -163,7 +165,10 @@ private fun ActivityFomoTile(
                 .clip(RoundedCornerShape(12.dp))
                 .background(tileBackgroundBrush(item.actorUserId))
                 .border(if (focused) 2.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
-                .clickable(onClick = onTileClick)
+                .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onTileClick)
+                // One item per tile (actor + activity + distance); the dismiss button stays its own
+                // focusable control.
+                .semantics(mergeDescendants = true) {}
                 .testTag(ActivityFomoTags.tile(item.eventId)),
     ) {
         item.actorPhotoUrl?.let { url ->

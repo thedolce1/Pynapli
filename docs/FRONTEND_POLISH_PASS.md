@@ -129,6 +129,13 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   content-desc-aware QA matchers working). verify-full green; grid-QA green (card discovery + tap-open
   intact through the merged node). All four core QA scripts are content-desc-aware, so the pattern
   extends safely.
-- Next (Phase 3): 3b — apply the same single-node grouping + state descriptions to the Swipe card,
-  Activity rows/FOMO tiles, and Messages conversation rows; 3c — ≥48dp touch targets (grid/FOMO tile
-  dismiss buttons ~28dp); 3d — font-scale 1.3–2.0× pass and on-photo/tertiary contrast check.
+- 2026-06-21 — Phase 3b: **inbox + activity items read as single nodes.** Messages `ConversationRow`
+  (role Button + "Open conversation" label, unread badge announces "N unread" via
+  `clearAndSetSemantics`, the avatar online dot announces "Online"), Activity FOMO tiles (role Button +
+  "Open profile" label), and the Activity list row (grouped for reading) all use
+  `semantics(mergeDescendants = true)` so each reads as one item while nested controls (accept/decline,
+  review/invite, dismiss) stay their own focusable buttons. verify-full green; activity-QA + messages-QA
+  green (golden text + tab nav + row taps intact through the merged nodes).
+- Next (Phase 3): 3c — the Swipe card + action-bar a11y audit (single-node card description, button
+  labels); 3d — ≥48dp touch targets (grid/FOMO dismiss ~28dp); 3e — font-scale 1.3–2.0× pass and
+  on-photo/tertiary contrast check.

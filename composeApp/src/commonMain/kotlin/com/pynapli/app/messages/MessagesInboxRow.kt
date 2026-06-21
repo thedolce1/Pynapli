@@ -30,6 +30,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,7 +81,10 @@ internal fun ConversationRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .clickable(onClickLabel = "Open conversation", role = Role.Button, onClick = onClick)
+                // Read the whole row as one item (name + unread + preview), leaving the nested
+                // accept/decline invite buttons as their own focusable controls.
+                .semantics(mergeDescendants = true) {}
                 .testTag(MessagesTestTags.row(conversation.conversationId))
                 .padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -217,7 +224,9 @@ private fun UnreadBadge(count: Int) {
             Modifier
                 .size(22.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
+                .background(MaterialTheme.colorScheme.primary)
+                // Announce the count plainly ("3 unread") rather than the visual "9+" glyph.
+                .clearAndSetSemantics { contentDescription = "$count unread" },
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -271,7 +280,8 @@ private fun ThreadAvatar(
                         .size(12.dp)
                         .clip(CircleShape)
                         .background(PynapliSemantic.Online)
-                        .border(1.dp, PynapliColors.Black, CircleShape),
+                        .border(1.dp, PynapliColors.Black, CircleShape)
+                        .semantics { contentDescription = "Online" },
             )
         }
     }
