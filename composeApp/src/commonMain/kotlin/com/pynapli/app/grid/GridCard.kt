@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,7 +68,10 @@ internal fun GridProfileTile(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(PynapliShape.SmallShape)
-                .clickable(onClick = onClick)
+                .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onClick)
+                // Group the tile so a screen reader announces it as one item (name + presence +
+                // visiting + distance + partner/tonight badges) instead of several fragments.
+                .semantics(mergeDescendants = true) {}
                 .background(card.tone.backgroundBrush()),
     ) {
         card.thumbnailUrl?.let { thumbnailUrl ->
@@ -113,7 +118,7 @@ internal fun GridProfileTile(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (card.online) {
-                OnlineDot(size = 7.dp)
+                OnlineDot(size = 7.dp, contentDescription = "Online")
             }
 
             Text(

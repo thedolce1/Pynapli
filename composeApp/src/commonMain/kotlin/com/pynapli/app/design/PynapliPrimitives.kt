@@ -23,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -33,12 +35,17 @@ import androidx.compose.ui.unit.dp
  * (per docs/DESIGN_TOKENS.md: "Components consume tokens. Feature screens should not hardcode").
  */
 
-/** Online presence dot: semantic green with a ring (default the app background) so it reads on photos. */
+/**
+ * Online presence dot: semantic green with a ring (default the app background) so it reads on photos.
+ * The dot is purely visual, so pass [contentDescription] (e.g. "Online") when the dot is the only
+ * thing conveying presence inside a merged card, so a screen reader announces it.
+ */
 @Composable
 fun OnlineDot(
     modifier: Modifier = Modifier,
     size: Dp = GridTileTokens.OnlineDotSize,
     ringColor: Color = PynapliColors.Black,
+    contentDescription: String? = null,
 ) {
     Box(
         modifier =
@@ -46,7 +53,14 @@ fun OnlineDot(
                 .size(size)
                 .clip(CircleShape)
                 .background(PynapliSemantic.Online)
-                .border(1.dp, ringColor, CircleShape),
+                .border(1.dp, ringColor, CircleShape)
+                .then(
+                    if (contentDescription != null) {
+                        Modifier.semantics { this.contentDescription = contentDescription }
+                    } else {
+                        Modifier
+                    },
+                ),
     )
 }
 

@@ -120,3 +120,15 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   the core surfaces. Next phase (3, accessibility) is the boundary to resume at: TalkBack labels,
   semantic card grouping + state descriptions, ≥48dp touch targets, font-scale 1.3–2.0× safety,
   on-photo/tertiary contrast.
+- 2026-06-21 — **Phase 3 (accessibility) started.** 3a: the dense Grid tile now reads as a single
+  TalkBack item — `semantics(mergeDescendants = true)` groups the photo + name + presence + visiting
+  + distance + partner/tonight badges into one node, with `role = Role.Button` and an "Open profile"
+  click label; `OnlineDot` gained an optional `contentDescription` so the otherwise-silent presence
+  dot announces "Online" inside the merged card. Chose `mergeDescendants` over `clearAndSetSemantics`
+  so child text + testTags survive in the unmerged tree (keeps `GridCardTonightIndicatorTest` and the
+  content-desc-aware QA matchers working). verify-full green; grid-QA green (card discovery + tap-open
+  intact through the merged node). All four core QA scripts are content-desc-aware, so the pattern
+  extends safely.
+- Next (Phase 3): 3b — apply the same single-node grouping + state descriptions to the Swipe card,
+  Activity rows/FOMO tiles, and Messages conversation rows; 3c — ≥48dp touch targets (grid/FOMO tile
+  dismiss buttons ~28dp); 3d — font-scale 1.3–2.0× pass and on-photo/tertiary contrast check.
