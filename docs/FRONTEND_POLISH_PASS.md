@@ -144,5 +144,10 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   green; swipe-QA green (golden text + drag/gesture flow intact through the merged footer). **The
   "every card reads as one node + state descriptions" item is done across all four core surfaces
   (Grid / Swipe / Activity / Messages).**
-- Next (Phase 3): 3d — ≥48dp touch targets (grid/FOMO dismiss ~28dp, any sub-48dp icon buttons);
-  3e — font-scale 1.3–2.0× pass and on-photo/tertiary contrast check.
+- 2026-06-21 — Phase 3d: **≥48dp touch targets.** Applied `minimumInteractiveComponentSize()` to the
+  shared header primitives (`PynapliHeaderAvatar` 42dp, `PynapliHeaderActionButton` 44dp — every
+  screen's header) and the Activity dismiss controls (FOMO tile 28dp, list-row 36dp), reserving a
+  ≥48dp touch target while keeping the founder-locked compact visuals unchanged. verify-full green;
+  grid/swipe/activity/messages QA green (headers tap correctly through the expanded targets).
+- Next (Phase 3): 3e — font-scale 1.3–2.0× pass (no clipped/overflowing text on the core surfaces)
+  and an on-photo/tertiary-text contrast check; then close Phase 3 at the boundary.

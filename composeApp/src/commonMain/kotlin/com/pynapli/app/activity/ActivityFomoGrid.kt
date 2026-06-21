@@ -28,6 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -242,6 +243,8 @@ private fun ActivityTileDismiss(
     Box(
         modifier =
             modifier
+                // Compact 28dp visual, >=48dp touch target.
+                .minimumInteractiveComponentSize()
                 .size(28.dp)
                 .clip(CircleShape)
                 .background(PynapliColors.OverlayScrim)

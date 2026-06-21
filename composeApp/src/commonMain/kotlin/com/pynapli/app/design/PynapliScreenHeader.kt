@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -140,6 +141,8 @@ fun PynapliHeaderAvatar(
     Box(
         modifier =
             modifier
+                // Keep the compact 42dp visual but reserve a >=48dp touch target for a11y.
+                .minimumInteractiveComponentSize()
                 .size(PynapliHeaderTokens.AvatarSize)
                 .clip(CircleShape)
                 .background(AvatarPlaceholderBrush)
@@ -187,6 +190,8 @@ fun PynapliHeaderActionButton(
         enabled = enabled,
         modifier =
             modifier
+                // Keep the compact 44dp visual but reserve a >=48dp touch target for a11y.
+                .minimumInteractiveComponentSize()
                 .size(PynapliHeaderTokens.ActionButtonSize)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
