@@ -89,5 +89,17 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
 - 2026-06-21 — **Phase 2 (designed states) started.** 2a: added a shared `PynapliEmptyState`
   primitive (tinted icon disc + title + optional subtitle + optional CTA, gentle entrance) and
   refactored the Messages and Activity empties onto it. Copy preserved (QA-safe). verify-full green.
-- Next: extend `PynapliEmptyState` to Grid/Swipe/Albums empties; then skeleton/shimmer loaders and a
-  unified error+retry primitive (2b/2c); plus extend the loading→content crossfade to more surfaces.
+- 2026-06-21 — Phase 2b: **skeleton loaders + Grid empty unification.** Added a shimmer primitive
+  (`PynapliSkeleton`: `rememberPynapliShimmerBrush` + `PynapliSkeletonBlock`; one cheap infinite
+  float, token-only colors, low-end-safe) and a `GridLoadingSkeleton` that mirrors `ProfileGrid`
+  (3-col square shimmer tiles), replacing the Grid's bare loading spinner. Routed the Grid
+  filters-empty onto `PynapliEmptyState` (copy preserved) and wrapped the whole `GridBody` state
+  machine in a loading→content `Crossfade` (extends the Messages 1d pattern; phase stays `Content`
+  across profile open/close so grid scroll restoration is untouched). Audited the remaining empties:
+  Swipe's `EmptyDeck`/`SwipeError` are already designed (icon + title + subtitle + dual actions —
+  converting would lose the two-button logic, so left as-is); album/grants "nothing here" lines are
+  inline notes, not full-screen empties (left inline). verify-full green; grid-QA green (60 cards,
+  filters).
+- Next: 2b cont. — extend the skeleton loaders to Activity/Messages first-load (reuse
+  `PynapliSkeletonBlock` in list-row shape); 2c — one shared error+retry primitive (unify Grid
+  error + Swipe `SwipeError` + scattered inline errors).

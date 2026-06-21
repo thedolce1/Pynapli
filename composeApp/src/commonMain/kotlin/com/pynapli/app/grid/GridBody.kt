@@ -1,27 +1,38 @@
 package com.pynapli.app.grid
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliEmptyState
+import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.location.LocationUiState
+
+private enum class GridPhase { Loading, LocationRequired, Error, EmptyFiltered, Content }
+
+private fun gridPhase(state: GridUiState): GridPhase =
+    when {
+        state.isRefreshing && state.cards.isEmpty() -> GridPhase.Loading
+        state.errorCode == "LOCATION_REQUIRED" && state.cards.isEmpty() -> GridPhase.LocationRequired
+        state.errorMessage != null && state.cards.isEmpty() -> GridPhase.Error
+        state.cards.isEmpty() && state.filters.isAnyActive -> GridPhase.EmptyFiltered
+        else -> GridPhase.Content
+    }
 
 @Composable
 internal fun GridBody(
@@ -36,130 +47,117 @@ internal fun GridBody(
     onClearFilters: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    when {
-        state.isRefreshing && state.cards.isEmpty() -> {
-            Box(
-                modifier = modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+    // Loading dissolves into the arriving content rather than snapping; the skeleton fades out while
+    // the grid fades + staggers in (see ProfileGrid). Phase is stable across profile open/close (cards
+    // stay present → Content), so the crossfade never disrupts grid scroll restoration.
+    Crossfade(
+        targetState = gridPhase(state),
+        animationSpec = PynapliMotion.standardTween(),
+        label = "gridPhase",
+        modifier = modifier,
+    ) { phase ->
+        when (phase) {
+            GridPhase.Loading -> {
+                GridLoadingSkeleton(modifier = Modifier.fillMaxSize())
             }
-        }
 
-        state.errorCode == "LOCATION_REQUIRED" && state.cards.isEmpty() -> {
-            Column(
-                modifier =
-                    modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 28.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = "Use current location to load nearby profiles.",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                )
-                Button(
-                    onClick = onUseCurrentLocation,
-                    enabled = !locationState.isUpdating,
-                    modifier = Modifier.padding(top = 14.dp),
+            GridPhase.LocationRequired -> {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 28.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(text = if (locationState.isUpdating) "Updating..." else "Use current location")
-                }
-                locationState.errorMessage?.let { message ->
                     Text(
-                        text = message,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
+                        text = "Use current location to load nearby profiles.",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyLarge,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 10.dp),
                     )
+                    Button(
+                        onClick = onUseCurrentLocation,
+                        enabled = !locationState.isUpdating,
+                        modifier = Modifier.padding(top = 14.dp),
+                    ) {
+                        Text(text = if (locationState.isUpdating) "Updating..." else "Use current location")
+                    }
+                    locationState.errorMessage?.let { message ->
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                    }
                 }
             }
-        }
 
-        state.errorMessage != null && state.cards.isEmpty() -> {
-            Column(
-                modifier =
-                    modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.CloudOff,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(36.dp),
-                )
-                Text(
-                    text = "Couldn't load nearby profiles",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-                Text(
-                    text = state.errorMessage,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-                Button(
-                    onClick = onRetry,
-                    modifier = Modifier.padding(top = 16.dp),
+            GridPhase.Error -> {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(text = "Retry")
+                    Icon(
+                        imageVector = Icons.Filled.CloudOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(36.dp),
+                    )
+                    Text(
+                        text = "Couldn't load nearby profiles",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                    state.errorMessage?.let { message ->
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                    Button(
+                        onClick = onRetry,
+                        modifier = Modifier.padding(top = 16.dp),
+                    ) {
+                        Text(text = "Retry")
+                    }
                 }
             }
-        }
 
-        state.cards.isEmpty() && state.filters.isAnyActive -> {
-            Column(
-                modifier =
-                    modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 28.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = "No one matches these filters right now.",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
+            GridPhase.EmptyFiltered -> {
+                PynapliEmptyState(
+                    icon = Icons.Filled.SearchOff,
+                    title = "No one matches these filters right now.",
+                    subtitle = "Try widening distance or clearing one filter.",
+                    actionLabel = "Clear filters",
+                    onAction = onClearFilters,
+                    modifier = Modifier.fillMaxSize(),
                 )
-                Text(
-                    text = "Try widening distance or clearing one filter.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                OutlinedButton(
-                    onClick = onClearFilters,
-                    modifier = Modifier.padding(top = 16.dp),
-                ) {
-                    Text(text = "Clear filters")
-                }
             }
-        }
 
-        else -> {
-            ProfileGrid(
-                cards = state.cards,
-                distanceUnit = distanceUnit,
-                gridState = gridState,
-                onProfileSelected = onProfileSelected,
-                onLoadMore = onLoadMore,
-                canLoadMore = state.nextCursor != null,
-                isLoadingMore = state.isLoadingMore,
-                modifier = modifier,
-            )
+            GridPhase.Content -> {
+                ProfileGrid(
+                    cards = state.cards,
+                    distanceUnit = distanceUnit,
+                    gridState = gridState,
+                    onProfileSelected = onProfileSelected,
+                    onLoadMore = onLoadMore,
+                    canLoadMore = state.nextCursor != null,
+                    isLoadingMore = state.isLoadingMore,
+                    modifier = Modifier,
+                )
+            }
         }
     }
 }
