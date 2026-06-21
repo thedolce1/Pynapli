@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.conversation.titleFor
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliSemantic
 import com.pynapli.shared.network.dto.ConversationDto
@@ -278,37 +279,10 @@ private fun ThreadAvatar(
 
 @Composable
 internal fun EmptyMessagesState(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(horizontal = 28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(58.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.ChatBubble,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp),
-            )
-        }
-        Text(
-            text = "No messages yet.",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 14.dp),
-        )
-        Text(
-            text = "Start from the grid.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-    }
+    PynapliEmptyState(
+        icon = Icons.Filled.ChatBubble,
+        title = "No messages yet.",
+        subtitle = "Start from the grid.",
+        modifier = modifier,
+    )
 }

@@ -86,5 +86,8 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   (loading/error/empty/content) in a `Crossfade` so the spinner dissolves as the inbox arrives
   (it coexists with the staggered reveal: spinner fades out, rows stagger in). Pattern is
   extendable to Grid/Activity/Store. verify-full green; Messages renders correctly on-device.
-- Next: extend the crossfade pattern to the other surfaces, sheet-spring check; then Phase 2
-  (designed empty/skeleton/error states).
+- 2026-06-21 — **Phase 2 (designed states) started.** 2a: added a shared `PynapliEmptyState`
+  primitive (tinted icon disc + title + optional subtitle + optional CTA, gentle entrance) and
+  refactored the Messages and Activity empties onto it. Copy preserved (QA-safe). verify-full green.
+- Next: extend `PynapliEmptyState` to Grid/Swipe/Albums empties; then skeleton/shimmer loaders and a
+  unified error+retry primitive (2b/2c); plus extend the loading→content crossfade to more surfaces.

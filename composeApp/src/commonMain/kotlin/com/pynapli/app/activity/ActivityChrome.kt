@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -29,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliScreenHeader
@@ -194,16 +196,11 @@ internal fun EmptyActivityState(
     label: String,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier.padding(horizontal = 28.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
+    PynapliEmptyState(
+        icon = Icons.Filled.Notifications,
+        title = label,
+        modifier = modifier,
+    )
 }
 
 internal fun ActivityTabUi.emptyLabel(): String =
