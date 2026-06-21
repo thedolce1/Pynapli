@@ -8,10 +8,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -22,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliConfirmDialog
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
 import com.pynapli.app.profilelink.ProfileLinksUiState
 import kotlinx.coroutines.launch
@@ -84,8 +82,16 @@ fun MediaAlbumsScreen(
     )
 
     pendingDelete?.let { item ->
-        DeleteMediaDialog(
-            item = item,
+        PynapliConfirmDialog(
+            title = "Delete this photo?",
+            body =
+                if (item.albumKind == MediaAlbumKindUi.Private) {
+                    "It will be removed from your private album for everyone you've shared it with."
+                } else {
+                    "It will be removed from your profile."
+                },
+            confirmLabel = "Delete",
+            destructive = true,
             onConfirm = {
                 pendingDelete = null
                 scope.launch { stateHolder.deleteMedia(item.albumKind, item.mediaAssetId) }
@@ -93,38 +99,6 @@ fun MediaAlbumsScreen(
             onDismiss = { pendingDelete = null },
         )
     }
-}
-
-@Composable
-private fun DeleteMediaDialog(
-    item: MediaAlbumItemUi,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = "Delete this photo?") },
-        text = {
-            Text(
-                text =
-                    if (item.albumKind == MediaAlbumKindUi.Private) {
-                        "It will be removed from your private album for everyone you've shared it with."
-                    } else {
-                        "It will be removed from your profile."
-                    },
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(text = "Delete", color = MaterialTheme.colorScheme.error)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = "Cancel")
-            }
-        },
-    )
 }
 
 @Composable

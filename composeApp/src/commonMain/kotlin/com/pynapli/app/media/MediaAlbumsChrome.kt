@@ -25,53 +25,29 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliHeaderActionButton
+import com.pynapli.app.design.PynapliScreenHeader
 
 @Composable
 internal fun MediaAlbumsHeader(onBack: () -> Unit) {
-    Row(
+    // insets = false: the header is a spanned item inside the album grid, which already supplies the
+    // horizontal inset via its contentPadding; this wrapper only adds the status-bar + vertical pad.
+    PynapliScreenHeader(
         modifier =
             Modifier
-                .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(top = 8.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        IconButton(
-            onClick = onBack,
-            modifier =
-                Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+        insets = false,
+        leading = {
+            PynapliHeaderActionButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.onSurface,
+                onClick = onBack,
             )
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = "Profile",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = "Linked profile and media",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+        },
+        title = "Profile",
+        subtitle = "Linked profile and media",
+    )
 }
 
 @Composable

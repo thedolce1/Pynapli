@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.appsettings.AppSettingsStateHolder
+import com.pynapli.app.design.PynapliConfirmDialog
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.app.messages.MessagesUiState
 import com.pynapli.app.profilelink.ProfileLinksUiState
@@ -82,6 +83,9 @@ fun ProfileHubScreen(
             onToggleLogisticsTag = stateHolder::toggleLogisticsTag,
             onToggleIntent = stateHolder::toggleIntent,
             onSave = { scope.launch { stateHolder.saveDraft() } },
+            onDismissError = stateHolder::clearMessage,
+            onManagePhotos = onOpenAlbums,
+            profilePhotos = mediaState.profileItems,
             modifier = modifier,
         )
     } else if (state.privacyVisible) {
@@ -224,25 +228,15 @@ fun ProfileHubScreen(
     }
 
     if (showLogoutConfirm) {
-        AlertDialog(
-            onDismissRequest = { showLogoutConfirm = false },
-            title = { Text("Log out?") },
-            text = { Text("Your account stays active.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showLogoutConfirm = false
-                        onLogout()
-                    },
-                ) {
-                    Text("Log out")
-                }
+        PynapliConfirmDialog(
+            title = "Log out?",
+            body = "Your account stays active.",
+            confirmLabel = "Log out",
+            onConfirm = {
+                showLogoutConfirm = false
+                onLogout()
             },
-            dismissButton = {
-                TextButton(onClick = { showLogoutConfirm = false }) {
-                    Text("Cancel")
-                }
-            },
+            onDismiss = { showLogoutConfirm = false },
         )
     }
 
