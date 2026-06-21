@@ -100,6 +100,14 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   converting would lose the two-button logic, so left as-is); album/grants "nothing here" lines are
   inline notes, not full-screen empties (left inline). verify-full green; grid-QA green (60 cards,
   filters).
-- Next: 2b cont. — extend the skeleton loaders to Activity/Messages first-load (reuse
-  `PynapliSkeletonBlock` in list-row shape); 2c — one shared error+retry primitive (unify Grid
-  error + Swipe `SwipeError` + scattered inline errors).
+- 2026-06-21 — Phase 2b cont.: **skeleton loaders on Activity + Messages.** Generalized the grid
+  skeleton into reusable `PynapliGridSkeleton(columns, rows, aspect, shape, gap, padding)` +
+  `PynapliListSkeleton` (avatar + two text lines) in the design layer; `GridLoadingSkeleton` now
+  delegates to it. Messages first-load shows a list skeleton; Activity first-load is tab-aware (a
+  2-up grid skeleton for the FOMO tabs, a list skeleton for Requests), both inside the existing
+  Crossfade so they dissolve into content. Reconciled the long-stale `android-activity-qa-goldens.json`
+  to the #98 four-tab FOMO structure (added `viewsTab`/`requestsTab`, dropped the list-only `Message`
+  text from `matchesTab`, removed dead stages) — activity QA had been red on main since #98.
+  verify-full green; activity-QA + messages-QA green.
+- Next: 2c — one shared error+retry primitive (unify Grid error + Swipe `SwipeError` + scattered
+  inline errors); then close out Phase 2 and pause at the phase boundary.

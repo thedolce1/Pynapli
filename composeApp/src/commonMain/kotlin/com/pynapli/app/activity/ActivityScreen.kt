@@ -4,12 +4,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,6 +24,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliGridSkeleton
+import com.pynapli.app.design.PynapliListSkeleton
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.pynapliEntrance
 import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.settings.AppSettings
@@ -125,11 +128,20 @@ private fun ActivityScreenContent(
 
         when {
             state.isLoading && state.items.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                // Match the loading shape to the selected tab: FOMO tabs render a 2-up grid, the
+                // Requests tab renders a list, so the skeleton dissolves into the real content.
+                if (state.selectedTab.isFomoGridTab()) {
+                    PynapliGridSkeleton(
+                        columns = 2,
+                        rows = 3,
+                        modifier = Modifier.fillMaxSize(),
+                        tileAspectRatio = 0.82f,
+                        tileShape = PynapliShape.CardShape,
+                        gap = 10.dp,
+                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp),
+                    )
+                } else {
+                    PynapliListSkeleton(modifier = Modifier.fillMaxSize())
                 }
             }
 

@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliHeaderAvatar
+import com.pynapli.app.design.PynapliListSkeleton
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliScreenHeader
 import com.pynapli.app.design.pynapliEntrance
@@ -118,13 +118,7 @@ private fun MessagesScreenContent(
             label = "messagesPhase",
         ) { current ->
             when (current) {
-                MessagesPhase.Loading ->
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    }
+                MessagesPhase.Loading -> PynapliListSkeleton(modifier = Modifier.fillMaxSize())
 
                 MessagesPhase.Error ->
                     Box(
