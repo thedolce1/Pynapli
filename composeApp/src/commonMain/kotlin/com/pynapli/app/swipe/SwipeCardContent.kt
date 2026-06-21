@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -114,7 +115,10 @@ internal fun BoxScope.SwipeCardFooter(
                     Brush.verticalGradient(
                         listOf(Color.Transparent, PynapliColors.PhotoScrimStrong),
                     ),
-                ).padding(20.dp),
+                ).padding(20.dp)
+                // Read the card's identity (name + presence + verified + visiting + age + distance +
+                // bio + tags) as one item; the action bar buttons are the accessible actions.
+                .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -136,6 +136,13 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   `semantics(mergeDescendants = true)` so each reads as one item while nested controls (accept/decline,
   review/invite, dismiss) stay their own focusable buttons. verify-full green; activity-QA + messages-QA
   green (golden text + tab nav + row taps intact through the merged nodes).
-- Next (Phase 3): 3c — the Swipe card + action-bar a11y audit (single-node card description, button
-  labels); 3d — ≥48dp touch targets (grid/FOMO dismiss ~28dp); 3e — font-scale 1.3–2.0× pass and
-  on-photo/tertiary contrast check.
+- 2026-06-21 — Phase 3c: **Swipe card identity reads as one node.** The card footer
+  (`semantics(mergeDescendants = true)`) now reads as a single item (name + presence + verified +
+  visiting + age + distance + bio + tags); `SwipeOnlineDot` announces "Online". Audited the action
+  bar — Rewind/Pass/Intro Note/Pineapple Like/Like already carry `contentDescription`s and the
+  verified badge says "Verified", so the accessible swipe actions were already complete. verify-full
+  green; swipe-QA green (golden text + drag/gesture flow intact through the merged footer). **The
+  "every card reads as one node + state descriptions" item is done across all four core surfaces
+  (Grid / Swipe / Activity / Messages).**
+- Next (Phase 3): 3d — ≥48dp touch targets (grid/FOMO dismiss ~28dp, any sub-48dp icon buttons);
+  3e — font-scale 1.3–2.0× pass and on-photo/tertiary contrast check.
