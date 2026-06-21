@@ -551,6 +551,54 @@ function Invoke-DevSql {
     return ($output | Out-String).Trim()
 }
 
+# Partner stage fixture: the shared seed only pairs maya/alex and jules/rae, so the dev viewer has no
+# linked partner. Link the viewer to Nico (an unpaired seeded account) for the duration of this run
+# and unlink it at the end, leaving the shared dev environment with the viewer single by default.
+$script:QaPartnerEmail = "nico@pynapli.local"
+
+function Set-DevViewerPartnerLink {
+    # Must run before the app launches so the Profile hub loads the link on first render.
+    $viewerHash = Get-Sha256Base64Url $ViewerEmail
+    $partnerHash = Get-Sha256Base64Url $script:QaPartnerEmail
+    $sql = @"
+UPDATE user_profile_links SET status = 'unlinked', unlinked_at = now(), updated_at = now()
+WHERE status = 'active' AND unlinked_at IS NULL
+  AND (user_id IN (SELECT id FROM users WHERE email_hash IN ('$viewerHash', '$partnerHash'))
+       OR linked_user_id IN (SELECT id FROM users WHERE email_hash IN ('$viewerHash', '$partnerHash')));
+
+INSERT INTO user_profile_links (id, user_id, linked_user_id, status, accepted_at, unlinked_at)
+SELECT '00000000-0000-0000-0000-0000000002f1'::uuid, v.id, p.id, 'active', now(), NULL::timestamptz
+FROM (SELECT id FROM users WHERE email_hash = '$viewerHash') v,
+     (SELECT id FROM users WHERE email_hash = '$partnerHash') p
+UNION ALL
+SELECT '00000000-0000-0000-0000-0000000002f2'::uuid, p.id, v.id, 'active', now(), NULL::timestamptz
+FROM (SELECT id FROM users WHERE email_hash = '$viewerHash') v,
+     (SELECT id FROM users WHERE email_hash = '$partnerHash') p
+ON CONFLICT (user_id, linked_user_id) DO UPDATE
+SET status = 'active',
+    accepted_at = COALESCE(user_profile_links.accepted_at, now()),
+    unlinked_at = NULL,
+    updated_at = now();
+"@
+    Invoke-DevSql $sql | Out-Null
+    Write-Host "[ok] Linked the dev viewer to $($script:QaPartnerEmail) for the partner stage"
+}
+
+function Clear-DevViewerPartnerLink {
+    $viewerHash = Get-Sha256Base64Url $ViewerEmail
+    $partnerHash = Get-Sha256Base64Url $script:QaPartnerEmail
+    $sql = @"
+UPDATE user_profile_links SET status = 'unlinked', unlinked_at = now(), updated_at = now()
+WHERE status = 'active' AND unlinked_at IS NULL
+  AND ((user_id IN (SELECT id FROM users WHERE email_hash = '$viewerHash')
+        AND linked_user_id IN (SELECT id FROM users WHERE email_hash = '$partnerHash'))
+    OR (user_id IN (SELECT id FROM users WHERE email_hash = '$partnerHash')
+        AND linked_user_id IN (SELECT id FROM users WHERE email_hash = '$viewerHash')));
+"@
+    Invoke-DevSql $sql | Out-Null
+    Write-Host "[ok] Unlinked the dev viewer partner (shared seed left viewer single)"
+}
+
 function Reset-DevProfileForEdit {
     # Clean, age-verified slate so chip-selection assertions are deterministic and the
     # age-gated Lifestyle chips render (age verification is exercised separately by
@@ -572,6 +620,7 @@ WHERE user_id = (SELECT id FROM users WHERE email_hash = '$viewerHash');
     Invoke-DevSql $sql | Out-Null
     # Reset partner visibility to the default so the selector starts at a known state.
     Invoke-DevSql "UPDATE discovery_settings SET partner_visibility = 'public' WHERE user_id = (SELECT id FROM users WHERE email_hash = '$viewerHash');" | Out-Null
+    Set-DevViewerPartnerLink
     Write-Host "[ok] Reset + age-verified dev profile for a clean edit slate"
 }
 
@@ -767,6 +816,9 @@ if ($partnerVisibility -ne "matches_only") {
     throw "Partner visibility did not persist: got '$partnerVisibility', expected matches_only."
 }
 Write-Host "[ok] Server confirmed partner visibility = matches_only"
+
+# Restore the shared dev environment: the viewer is single by default outside this QA.
+Clear-DevViewerPartnerLink
 
 Write-Summary @{
     baseUrl = $BaseUrl
