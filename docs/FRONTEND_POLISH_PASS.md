@@ -76,5 +76,8 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   `standardTween`/`gentleSpringFloat`, added the `Modifier.pynapliEntrance` staggered-reveal helper,
   applied a low-end-safe staggered first-load reveal to the Grid, and a scale+fade enter to the
   swipe match overlay. verify-full green; grid settles correctly on-device.
-- Next: more Phase 1 — staggered reveals on Activity/Messages, loading→content crossfade, animated
-  badges/counts, sheet spring.
+- 2026-06-21 — Phase 1b: extended the staggered reveal to the **Activity feed** and **Messages
+  inbox** lists (same `pynapliEntrance` helper; `ConversationRow`/`ActivityRow` gained a modifier
+  param). Consistent reveal language now across Grid / Activity / Messages. verify-full green;
+  Messages settles correctly on-device.
+- Next: loading→content crossfade, animated unread/action badges, sheet spring; then Phase 2.

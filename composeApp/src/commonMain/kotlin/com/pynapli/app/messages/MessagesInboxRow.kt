@@ -49,6 +49,7 @@ internal fun ConversationRow(
     onAcceptPartnerInvite: () -> Unit,
     onDeclinePartnerInvite: () -> Unit,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val title = conversation.titleFor(viewerUserId)
     val otherParticipant =
@@ -73,7 +74,7 @@ internal fun ConversationRow(
 
     Row(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
                 .testTag(MessagesTestTags.row(conversation.conversationId))

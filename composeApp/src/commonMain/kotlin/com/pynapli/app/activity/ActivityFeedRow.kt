@@ -45,6 +45,7 @@ internal fun ActivityRow(
     onOpenMatch: (ActivityEventDto) -> Unit,
     onOpenPartnerChatInvite: (String) -> Unit,
     onDismissEvent: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val distanceLabel =
         formatDistanceForUnit(
@@ -56,7 +57,7 @@ internal fun ActivityRow(
 
     Row(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .background(
                     if (focused) {

@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -19,8 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -30,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliHeaderAvatar
 import com.pynapli.app.design.PynapliScreenHeader
+import com.pynapli.app.design.pynapliEntrance
 import com.pynapli.shared.network.dto.ConversationDto
 import kotlinx.coroutines.launch
 
@@ -139,6 +142,8 @@ private fun MessagesScreenContent(
                     }
                 val newMatches = conversationGroups.first
                 val listConversations = conversationGroups.second
+                var revealed by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { revealed = true }
                 LazyColumn(
                     modifier =
                         Modifier
@@ -159,11 +164,11 @@ private fun MessagesScreenContent(
                             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                         }
                     }
-                    items(
+                    itemsIndexed(
                         items = listConversations,
-                        key = { conversation -> conversation.conversationId },
-                        contentType = { "conversation-row" },
-                    ) { conversation ->
+                        key = { _, conversation -> conversation.conversationId },
+                        contentType = { _, _ -> "conversation-row" },
+                    ) { index, conversation ->
                         ConversationRow(
                             conversation = conversation,
                             viewerUserId = viewerUserId,
@@ -171,6 +176,7 @@ private fun MessagesScreenContent(
                             onClick = { onThreadSelected(conversation) },
                             onAcceptPartnerInvite = { onAcceptPartnerInvite(conversation.conversationId) },
                             onDeclinePartnerInvite = { onDeclinePartnerInvite(conversation.conversationId) },
+                            modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                     }
