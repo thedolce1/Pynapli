@@ -125,7 +125,22 @@ function Dump-Ui {
             }
 
             try {
-                return [xml](Get-Content -Raw -Path $local)
+                $parsed = [xml](Get-Content -Raw -Path $local)
+                # Heavy host load can pop the system "isn't responding" ANR over the app mid-render.
+                # Tap "Wait" and re-dump so callers never see the ANR frame instead of the real screen.
+                $anrNode = $parsed.SelectNodes("//node[contains(@text,'responding') or contains(@content-desc,'responding')]") | Select-Object -First 1
+                if ($null -ne $anrNode) {
+                    $waitNode = $parsed.SelectNodes("//node[@text='Wait' or @content-desc='Wait']") | Select-Object -First 1
+                    if ($null -ne $waitNode -and $waitNode.GetAttribute("bounds") -match "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
+                        $tapX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
+                        $tapY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
+                        & $script:Adb -s $script:DeviceId shell input tap $tapX $tapY 2>$null | Out-Null
+                        Write-Host "[tap] 'Wait (ANR)' at $tapX,$tapY"
+                        Start-Sleep -Milliseconds 1200
+                        continue
+                    }
+                }
+                return $parsed
             } catch {
                 if ($attempt -eq 12) {
                     throw "Unable to parse Android UI hierarchy at $local"
