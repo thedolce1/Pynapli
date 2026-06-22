@@ -63,6 +63,9 @@ internal fun GridScreenContent(
             onToggled = onQuickFilterToggled,
             onOpenSheet = { sheetVisible = true },
         )
+        if (state.cards.isNotEmpty()) {
+            GridContextStrip(cards = state.cards, distanceUnit = distanceUnit)
+        }
         state.paywallMessage?.let { message ->
             GridPaywallRow(
                 message = message,

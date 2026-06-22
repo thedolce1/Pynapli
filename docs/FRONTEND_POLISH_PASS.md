@@ -162,3 +162,12 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   TalkBack node with state descriptions, all interactive controls meet a ≥48dp touch target, the
   dimmest text meets WCAG AA, and the core surfaces survive 2.0× font scale. Next phase to resume at:
   Phase 4 (surface-by-surface refinement) or Phase 5 (web/iOS parity).
+- 2026-06-22 — **Phase 4 (surface-by-surface) started — Grid.** Grid was already heavily
+  handoff-aligned (dense tiles, token-clean, a11y'd, goldens that deliberately lock its accent), so
+  the one concrete gap vs the handoff `Grid.jsx` was the **density/context strip** under the
+  quick-filter row — added `GridContextStrip` (`{count}` bold + `NEARBY` + the loaded cards' distance
+  range, all restrained tertiary meta), shown only when cards are present. The handoff's bottom
+  "Playing Tonight" inline banner was left to the Tonight surface slice (overlaps the active Playing
+  Tonight initiative). verify-full green; grid-QA green.
+- Next (Phase 4): Swipe → Activity → Messages → Store → Profile/Albums → Onboarding → Tonight (incl.
+  its deferred zone-map color literals) → Psync, one slice each.
