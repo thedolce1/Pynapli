@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.SwipeCardTokens
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
@@ -194,9 +195,9 @@ internal fun SwipeCard(
                 }.testTag(if (isTop) SwipeTestTags.TOP_CARD else "${SwipeTestTags.CARD_PREFIX}${card.userId}")
                 .then(dragModifier)
                 .then(tapZoneModifier)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(SwipeCardTokens.Shape)
                 .background(tone)
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(8.dp)),
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), SwipeCardTokens.Shape),
     ) {
         SwipeCardPhotos(
             isTop = isTop,

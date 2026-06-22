@@ -169,5 +169,12 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   range, all restrained tertiary meta), shown only when cards are present. The handoff's bottom
   "Playing Tonight" inline banner was left to the Tonight surface slice (overlaps the active Playing
   Tonight initiative). verify-full green; grid-QA green.
-- Next (Phase 4): Swipe → Activity → Messages → Store → Profile/Albums → Onboarding → Tonight (incl.
-  its deferred zone-map color literals) → Psync, one slice each.
+- 2026-06-22 — Phase 4 (Swipe). Diffed against handoff `Swipe.jsx`: the hero card used
+  `RoundedCornerShape(8.dp)` (hardcoded) but the design north-star + handoff specify **16** — fixed by
+  bumping the previously-unused `SwipeCardTokens.Radius` 8→16, adding `SwipeCardTokens.Shape`, and
+  routing the card's clip + border through it (north-star compliance + token cleanup). Also
+  de-emphasized the age beside the name (OnPhotoSecondary + Normal weight) to match the handoff's
+  bold-name / light-age hierarchy. (Handoff's `distance · hood · Online` meta needs `neighborhood` on
+  `SwipeCardDto` — a server change, deferred.) verify-full green; swipe-QA green.
+- Next (Phase 4): Activity → Messages → Store → Profile/Albums → Onboarding → Tonight (incl. its
+  deferred zone-map color literals) → Psync, one slice each.

@@ -126,7 +126,10 @@ object GridTileTokens {
 
 /** Swipe-card-specific tokens (docs/DESIGN_TOKENS.md). */
 object SwipeCardTokens {
-    val Radius = 8.dp
+    // Swipe card radius is 16 per the design north-star ("swipe card 16") — the hero card reads as a
+    // distinct rounded card, softer than the dense grid tiles (~4) and chrome cards (12/8).
+    val Radius = 16.dp
+    val Shape = RoundedCornerShape(Radius)
     const val PHOTO_ASPECT_RATIO = 0.78f
     const val STACK_SCALE_STEP = 0.035f
     const val DRAG_THRESHOLD_FRACTION = 0.28f

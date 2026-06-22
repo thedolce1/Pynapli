@@ -141,10 +141,12 @@ internal fun BoxScope.SwipeCardFooter(
                 SwipeVisitingPill()
             }
             card.displayAge?.let { age ->
+                // De-emphasized next to the name (handoff: lighter, dimmer age beside the bold name).
                 Text(
                     text = "$age",
-                    color = PynapliColors.OnPhotoPrimary,
+                    color = PynapliColors.OnPhotoSecondary,
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Normal,
                 )
             }
         }
