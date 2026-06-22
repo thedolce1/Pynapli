@@ -37,7 +37,7 @@ class ProfileHubSummaryTest {
             }
 
             onNodeWithText("Sebastien").assertExists()
-            onNodeWithText("39 - King West").assertExists()
+            onNodeWithText("39 · King West").assertExists()
             onNodeWithText("Member owner-use").assertDoesNotExist()
             onNodeWithText("Partner").assertDoesNotExist()
         }

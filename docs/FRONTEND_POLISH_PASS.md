@@ -203,5 +203,13 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   palette — the dimmed counterpart to the gold accent). No venue markers added (the current abstract,
   privacy-first map is a deliberate simplification; venues overlap the Playing Tonight feature
   initiative). verify-full green; tonight-QA green. The Tonight package is now token-clean.
-- Next (Phase 4): remaining surfaces — Profile/Albums → Onboarding → Psync, one slice each. Then
-  Phase 5 (web/Wasm + iOS parity).
+- 2026-06-22 — Phase 4 (Profile/Albums) — **light pass; already polished.** Audited the Profile Hub,
+  Edit Profile, and Media Albums surfaces: they're already token-clean (zero `Color(0x…)` literals),
+  internally consistent (an 8dp card system), and the shared `ProfileDetailSheet` peek is
+  handoff-complete (#126/#127/#133/#135/#136); the album section already carries its `N of M` count.
+  The one genuine cohesion nit found + fixed: the Profile Hub summary subtitle joined `age`/
+  `neighborhood` with `" - "` instead of the app-wide `" · "` middot meta convention (Grid/Swipe/peek).
+  Deliberately did **not** bump the hub's 8dp cards to the north-star 12 (the hub is an internally
+  consistent 8dp sub-system; changing one card would break that, changing all is out of scope/risky).
+  verify-full green.
+- Next (Phase 4): Onboarding → Psync, one slice each. Then Phase 5 (web/Wasm + iOS parity).

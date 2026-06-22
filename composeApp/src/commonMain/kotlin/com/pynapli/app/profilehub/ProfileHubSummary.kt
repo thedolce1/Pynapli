@@ -113,7 +113,8 @@ private fun com.pynapli.shared.network.dto.ProfileDto.summarySubtitle(isLoading:
             neighborhood?.takeIf { it.isNotBlank() },
         )
     return when {
-        parts.isNotEmpty() -> parts.joinToString(" - ")
+        // Middot separator, matching the app-wide meta convention (Grid/Swipe/peek "distance · hood").
+        parts.isNotEmpty() -> parts.joinToString(" · ")
         isLoading -> "Loading"
         else -> null
     }
