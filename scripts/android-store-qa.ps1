@@ -677,7 +677,10 @@ Wait-ForAnyText @("Store refreshed.") 45 | Out-Null
 $restoreXml = Capture-StoreStage "restoreRefreshed" "04_restore_refreshed"
 Assert-TextPresent $restoreXml "Store refreshed." "Store restore"
 
-Scroll-UntilAnyText @("Boosts & extras") | Out-Null
+# Scroll to the last product so the whole Boosts & extras section is on-screen — the per-product
+# "Balance: N" line sits at the bottom of each row, so anchoring on the section title alone can leave
+# it clipped once the list grows (e.g. the linked-partner benefit card above the products).
+Scroll-UntilAnyText @("Intro Notes") | Out-Null
 $productsXml = Capture-StoreStage "productsVisible" "05_products_visible"
 Assert-TextPresent $productsXml "Pineapple Likes" "Store products"
 Assert-TextPresent $productsXml "Intro Notes" "Store products"
@@ -688,11 +691,11 @@ $purchasedXml = Capture-StoreStage "boostPurchased" "06_boost_purchased"
 Assert-TextPresent $purchasedXml "Boost added." "Boost purchase"
 Assert-TextPresent $purchasedXml "Balance: 1" "Boost purchase"
 
-Scroll-UntilAnyText @('5 for $3.99') | Out-Null
+Scroll-UntilAnyText @("Balance: 0") | Out-Null
 $otherProductsXml = Capture-StoreStage "otherProductsVisible" "07_other_products_visible"
 Assert-TextPresent $otherProductsXml "Pineapple Likes" "Other Store products"
 
-Scroll-UntilAnyText @('3 for $2.99') | Out-Null
+Scroll-UntilAnyText @("140 characters max") | Out-Null
 $introProductXml = Capture-StoreStage "introProductVisible" "08_intro_product_visible"
 Assert-TextPresent $introProductXml "Intro Notes" "Intro Note Store product"
 Assert-TextPresent $introProductXml '3 for $2.99' "Intro Note Store product"
