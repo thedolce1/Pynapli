@@ -281,7 +281,8 @@ function Get-GridCardSnapshot {
         "Swipe",
         "Activity",
         "Messages",
-        "Store"
+        "Store",
+        "NEARBY"
     )
 
     $candidates = @(
@@ -294,6 +295,11 @@ function Get-GridCardSnapshot {
             continue
         }
         if ($text -match "^\s*(<=|≤)?\s*\d+(\.\d+)?\s*(m|km)\s*$") {
+            continue
+        }
+        # Skip the density/context-strip count (a bare integer like "60"); card names are never
+        # purely numeric.
+        if ($text -match "^\s*\d+\s*$") {
             continue
         }
 
