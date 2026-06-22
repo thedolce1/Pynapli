@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.Icon
@@ -205,6 +206,56 @@ internal fun StoreFeatureRow(label: String) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/**
+ * Linked-partner benefit callout (handoff `StoreScreen`): a dedicated explainer for the core Pynapli
+ * differentiator — one paid tier covers an active linked partner — rather than only surfacing it as a
+ * single perk line. Accent link-icon disc + headline + subtext, on the shared raised-card treatment.
+ */
+@Composable
+internal fun StoreLinkedPartnerBenefitRow() {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(PynapliColors.SurfaceRaised)
+                .border(1.dp, PynapliColors.Border, RoundedCornerShape(12.dp))
+                .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(PynapliColors.Accent.copy(alpha = 0.10f))
+                    .border(1.dp, PynapliColors.Accent.copy(alpha = 0.22f), RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Link,
+                contentDescription = null,
+                tint = PynapliColors.Accent,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "One subscription · two people",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "Your paid tier extends to your active linked partner. Independent accounts always.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
 }
 

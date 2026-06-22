@@ -188,5 +188,12 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   unread"); (2) completed the Phase 3 a11y coverage the New Matches rail had missed — each rail avatar
   now reads as one labeled item (role Button + "Open conversation", online dot announces "Online",
   decorative initials glyph suppressed from semantics). verify-full green; messages-QA green.
-- Next (Phase 4): Store → Profile/Albums → Onboarding → Tonight (incl. its deferred zone-map color
-  literals) → Psync, one slice each.
+- 2026-06-22 — Phase 4 (Store) — **core loop complete.** Store was already token-clean (#138 cards +
+  flagship "Recommended" hero), so the one handoff `StoreScreen` element it lacked was the dedicated
+  **linked-partner benefit callout** ("One subscription · two people" — the core Pynapli
+  differentiator), previously surfaced only as a perk line. Added `StoreLinkedPartnerBenefitRow`
+  (accent link-icon disc + headline + subtext on the shared raised-card treatment) as the final Store
+  item. verify-full green; store-QA green. **All five core-loop surfaces (Grid / Swipe / Activity /
+  Messages / Store) are now Phase 2 + 3 + 4 complete.**
+- Next (Phase 4): the differentiators + remaining surfaces — Profile/Albums → Onboarding → Tonight
+  (incl. its deferred zone-map color literals) → Psync, one slice each.

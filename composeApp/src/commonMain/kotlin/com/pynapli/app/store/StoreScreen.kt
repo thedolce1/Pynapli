@@ -147,6 +147,12 @@ private fun StoreScreenContent(
                         )
                     }
 
+                    // Subscription benefit note sits with the tiers (handoff order), above the
+                    // one-time Boosts & extras.
+                    item(key = "linked-partner-benefit") {
+                        StoreLinkedPartnerBenefitRow()
+                    }
+
                     if (state.premiumProducts.isNotEmpty()) {
                         item(key = "products-title") {
                             StoreSectionTitle(
