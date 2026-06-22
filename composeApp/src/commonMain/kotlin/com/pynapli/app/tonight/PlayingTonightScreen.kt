@@ -124,7 +124,7 @@ fun PlayingTonightScreen(
                         .align(Alignment.TopCenter)
                         .padding(top = 72.dp, start = 12.dp, end = 12.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xF2201216))
+                        .background(PynapliColors.TonightMapScrim)
                         .border(1.dp, PynapliColors.Warning.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
                         .clickable { stateHolder.clearError() }
                         .testTag(PlayingTonightTags.ERROR)
@@ -227,11 +227,11 @@ private fun ZoneMap(
         placed.forEach { item ->
             val p = project(item.zoneKey!!, item.sessionId.hashCode())
             drawCircle(
-                color = (if (item.online) accent else Color(0xFF7B91AA)).copy(alpha = 0.4f),
+                color = (if (item.online) accent else PynapliColors.Offline).copy(alpha = 0.4f),
                 radius = 11f,
                 center = p,
             )
-            drawCircle(color = if (item.online) accent else Color(0xFF8A8A93), radius = 5.5f, center = p)
+            drawCircle(color = if (item.online) accent else PynapliColors.Offline, radius = 5.5f, center = p)
             if (item.online) {
                 drawCircle(color = online, radius = 2.2f, center = Offset(p.x + 4.5f, p.y - 4.5f))
             }

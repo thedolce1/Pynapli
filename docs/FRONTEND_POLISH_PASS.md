@@ -195,5 +195,13 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   (accent link-icon disc + headline + subtext on the shared raised-card treatment) as the final Store
   item. verify-full green; store-QA green. **All five core-loop surfaces (Grid / Swipe / Activity /
   Messages / Store) are now Phase 2 + 3 + 4 complete.**
-- Next (Phase 4): the differentiators + remaining surfaces — Profile/Albums → Onboarding → Tonight
-  (incl. its deferred zone-map color literals) → Psync, one slice each.
+- 2026-06-22 — Phase 4 (Tonight). Closed the **deferred Phase 0b token cleanup**: the Playing
+  Tonight zone map's 3 residual `Color(0x…)` literals now route through tokens — a new
+  `PynapliColors.TonightMapScrim` (warm scrim behind the map error toast) and a new warm
+  `PynapliColors.Offline` / `PynapliSemantic.Offline` that unifies the two cool slate/grey offline
+  dot+halo literals into one warm muted grey (matching the handoff's warm-grey offline and the warm
+  palette — the dimmed counterpart to the gold accent). No venue markers added (the current abstract,
+  privacy-first map is a deliberate simplification; venues overlap the Playing Tonight feature
+  initiative). verify-full green; tonight-QA green. The Tonight package is now token-clean.
+- Next (Phase 4): remaining surfaces — Profile/Albums → Onboarding → Psync, one slice each. Then
+  Phase 5 (web/Wasm + iOS parity).

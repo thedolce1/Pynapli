@@ -82,6 +82,14 @@ object PynapliColors {
     // Warm-dark placeholder fill/gradient for avatars and private-album tiles before media loads.
     val WarmPlaceholderDark = Color(0xFF2B2622)
     val WarmPlaceholderLight = Color(0xFF6D5D4F)
+
+    // Playing Tonight privacy-first zone map: a warm near-opaque scrim behind the map error toast.
+    val TonightMapScrim = Color(0xF2201216)
+
+    // Offline presence — a warm muted grey (the dimmed counterpart to the gold accent / green online
+    // dot). Replaces the cool slate/grey literals that clashed with the warm palette on the Tonight
+    // map dots + halos; aliased as [PynapliSemantic.Offline].
+    val Offline = Color(0xFF8A8580)
 }
 
 /**
@@ -109,6 +117,7 @@ object PynapliColorsLight {
  */
 object PynapliSemantic {
     val Online = PynapliColors.Success
+    val Offline = PynapliColors.Offline
     val Verified = PynapliColors.Info
     val Premium = PynapliColors.Accent
     val Risk = PynapliColors.Warning
