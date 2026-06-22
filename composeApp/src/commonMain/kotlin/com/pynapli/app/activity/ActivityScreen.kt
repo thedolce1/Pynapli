@@ -118,6 +118,12 @@ private fun ActivityScreenContent(
             selectedTab = state.selectedTab,
             onTabSelected = onTabSelected,
         )
+        if (state.items.isNotEmpty()) {
+            ActivityContextStrip(
+                label = state.selectedTab.label,
+                count = state.visibleItems.size + state.gatedCount,
+            )
+        }
         ActivityInlineMessage(
             message = state.actionFeedback ?: state.errorMessage?.takeIf { state.items.isNotEmpty() },
             isError = state.actionFeedback == null && state.errorMessage != null,

@@ -176,5 +176,11 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   de-emphasized the age beside the name (OnPhotoSecondary + Normal weight) to match the handoff's
   bold-name / light-age hierarchy. (Handoff's `distance · hood · Online` meta needs `neighborhood` on
   `SwipeCardDto` — a server change, deferred.) verify-full green; swipe-QA green.
-- Next (Phase 4): Activity → Messages → Store → Profile/Albums → Onboarding → Tonight (incl. its
-  deferred zone-map color literals) → Psync, one slice each.
+- 2026-06-22 — Phase 4 (Activity). Activity was founder-restructured to 4 tabs (#98) after the
+  handoff, so it's structurally past the handoff's 3-tab `Other.jsx`; the one carry-over worth keeping
+  is the handoff's per-tab `GridSectionHeader` (count + label). Added `ActivityContextStrip` — a
+  restrained `{revealed+gated} {TAB LABEL}` count under the tab row, styled to match the Grid's
+  `GridContextStrip` for cross-surface cohesion and to reinforce the FOMO model (high total, most
+  gated). Shown only when the tab has items. verify-full green; activity-QA green.
+- Next (Phase 4): Messages → Store → Profile/Albums → Onboarding → Tonight (incl. its deferred
+  zone-map color literals) → Psync, one slice each.

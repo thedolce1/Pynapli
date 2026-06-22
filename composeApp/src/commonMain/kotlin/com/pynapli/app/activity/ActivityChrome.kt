@@ -30,6 +30,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliPill
@@ -139,6 +141,40 @@ internal fun ActivityTabRow(
                 )
             }
         }
+    }
+}
+
+/**
+ * Count context strip under the Activity tabs (handoff `Other.jsx` GridSectionHeader): a bold total
+ * for the selected tab + the tab label, reinforcing the FOMO model (e.g. "9 VIEWS" with most gated).
+ * Restrained meta styled to match the Grid's `GridContextStrip` for cross-surface cohesion.
+ */
+@Composable
+internal fun ActivityContextStrip(
+    label: String,
+    count: Int,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = count.toString(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = label.uppercase(),
+            color = PynapliColors.TextTertiary,
+            style = MaterialTheme.typography.labelSmall,
+            letterSpacing = 0.4.sp,
+        )
     }
 }
 
