@@ -24,6 +24,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,7 +102,12 @@ private fun NewMatchAvatar(
 ) {
     val brush = remember(seed) { avatarBrush(seed) }
     Column(
-        modifier = modifier.width(68.dp).clickable(onClick = onClick),
+        modifier =
+            modifier
+                .width(68.dp)
+                .clickable(onClickLabel = "Open conversation", role = Role.Button, onClick = onClick)
+                // Read each match as one item (name + online); the avatar glyph is decorative.
+                .semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -117,6 +126,7 @@ private fun NewMatchAvatar(
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clearAndSetSemantics {},
                 )
             }
             if (online) {
@@ -127,7 +137,8 @@ private fun NewMatchAvatar(
                             .size(15.dp)
                             .clip(CircleShape)
                             .background(PynapliColors.Success)
-                            .border(2.dp, MaterialTheme.colorScheme.background, CircleShape),
+                            .border(2.dp, MaterialTheme.colorScheme.background, CircleShape)
+                            .semantics { contentDescription = "Online" },
                 )
             }
         }

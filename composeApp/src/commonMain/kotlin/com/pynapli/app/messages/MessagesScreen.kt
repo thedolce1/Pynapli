@@ -207,6 +207,10 @@ private fun MessagesTopArea(
     profileImageUrl: String?,
     onRefresh: () -> Unit,
 ) {
+    // Pluralized, and the unread clause is dropped at zero so the subtitle stays clean ("inbox zero").
+    val conversationsPart = if (conversationCount == 1) "1 conversation" else "$conversationCount conversations"
+    val subtitleText =
+        if (unreadCount > 0) "$conversationsPart · $unreadCount unread" else conversationsPart
     PynapliScreenHeader(
         leading = {
             PynapliHeaderAvatar(
@@ -216,7 +220,7 @@ private fun MessagesTopArea(
             )
         },
         title = "Messages",
-        subtitle = "$conversationCount conversations · $unreadCount unread",
+        subtitle = subtitleText,
         actions = {
             PynapliHeaderActionButton(
                 icon = Icons.Filled.Refresh,

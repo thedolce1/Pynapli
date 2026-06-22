@@ -182,5 +182,11 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   restrained `{revealed+gated} {TAB LABEL}` count under the tab row, styled to match the Grid's
   `GridContextStrip` for cross-surface cohesion and to reinforce the FOMO model (high total, most
   gated). Shown only when the tab has items. verify-full green; activity-QA green.
-- Next (Phase 4): Messages → Store → Profile/Albums → Onboarding → Tonight (incl. its deferred
-  zone-map color literals) → Psync, one slice each.
+- 2026-06-22 — Phase 4 (Messages). Messages was already heavily polished (bubbles #137, avatars,
+  new-matches rail #101, Phase 2/3), so this was a tight polish pass: (1) the header subtitle is now
+  pluralized and drops the unread clause at zero ("6 conversations" rather than "6 conversations · 0
+  unread"); (2) completed the Phase 3 a11y coverage the New Matches rail had missed — each rail avatar
+  now reads as one labeled item (role Button + "Open conversation", online dot announces "Online",
+  decorative initials glyph suppressed from semantics). verify-full green; messages-QA green.
+- Next (Phase 4): Store → Profile/Albums → Onboarding → Tonight (incl. its deferred zone-map color
+  literals) → Psync, one slice each.
