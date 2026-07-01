@@ -1,5 +1,6 @@
 package com.pynapli.server.moderation
 
+import com.pynapli.server.admin.requireAdminMfa
 import com.pynapli.server.admin.requireSeniorAdmin
 import com.pynapli.server.config.ServerConfig
 import io.ktor.server.application.Application
@@ -53,6 +54,7 @@ fun Application.configureAdminAppealRoutes(
             post("/{appealId}/decide") {
                 val actor = call.requireAdminActor(adminApiToken)
                 requireSeniorAdmin(config, actor.actorId)
+                call.requireAdminMfa(config, actor.actorId)
                 val appealId = call.parameters["appealId"] ?: throw ModerationException("INVALID_ID")
                 val request =
                     call.receiveNullable<AdminAppealDecisionRequestDto>()

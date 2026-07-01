@@ -303,6 +303,7 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
         "ADMIN_UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
         "ADMIN_FORBIDDEN",
         "ADMIN_ROLE_REQUIRED",
+        "ADMIN_MFA_REQUIRED",
         -> HttpStatusCode.Forbidden
         "MESSAGE_REVIEW_NOT_FOUND",
         "REPORT_REVIEW_NOT_FOUND",

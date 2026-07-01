@@ -82,6 +82,10 @@ data class ServerConfig(
     // is off and every authenticated admin is treated as senior (pre-roles behavior). When set, an
     // unmapped actor defaults to operator (least privilege) and sensitive actions require senior.
     val adminRoles: Map<String, String> = emptyMap(),
+    // Step-up MFA for sensitive admin actions. When enforced, those endpoints require a valid TOTP
+    // code (X-Admin-MFA) for the actor's base32 secret. Off by default (local/dev/test unaffected).
+    val adminMfaEnforced: Boolean = false,
+    val adminMfaSecrets: Map<String, String> = emptyMap(),
     // App Check boundary: when true, state-changing requests must carry a verified
     // `X-Firebase-AppCheck` header (attesting a genuine app instance). Default off so local/dev/test
     // never require it; flip on in production only after the client attaches the token.
@@ -363,6 +367,24 @@ data class ServerConfig(
                                 val id = parts[0].trim()
                                 val role = parts[1].trim().lowercase()
                                 if (id.isEmpty() || role.isEmpty()) null else id to role
+                            }
+                        }.toMap(),
+                adminMfaEnforced =
+                    System
+                        .getenv("PYNAPLI_ADMIN_MFA_ENFORCED")
+                        ?.toBooleanStrictOrNull()
+                        ?: false,
+                adminMfaSecrets =
+                    (System.getenv("PYNAPLI_ADMIN_MFA_SECRETS") ?: "")
+                        .split(",")
+                        .mapNotNull { entry ->
+                            val parts = entry.split(":", limit = 2)
+                            if (parts.size != 2) {
+                                null
+                            } else {
+                                val id = parts[0].trim()
+                                val secret = parts[1].trim()
+                                if (id.isEmpty() || secret.isEmpty()) null else id to secret
                             }
                         }.toMap(),
                 appCheckEnforced =

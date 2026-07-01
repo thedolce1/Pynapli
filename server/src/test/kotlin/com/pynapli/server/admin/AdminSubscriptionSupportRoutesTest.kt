@@ -17,6 +17,7 @@ import kotlin.test.assertTrue
 
 class AdminSubscriptionSupportRoutesTest {
     private val userId = UUID.fromString("00000000-0000-0000-0000-000000000801")
+    private val mfaSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 
     @Test
     fun viewRequiresAdminToken() =
@@ -168,6 +169,52 @@ class AdminSubscriptionSupportRoutesTest {
             assertEquals(HttpStatusCode.OK, response.status)
         }
 
+    @Test
+    fun stepUpMfaIsRequiredWhenEnforced() =
+        testApplication {
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureAdminSubscriptionSupportRoutes(
+                    config = testConfig(adminMfaEnforced = true, adminMfaSecrets = mapOf("ops-1" to mfaSecret)),
+                    service = service(),
+                )
+            }
+
+            val response =
+                client.get("/v1/admin/subscriptions/support/$userId") {
+                    header("X-Admin-Token", "test-admin-token")
+                    header("X-Admin-Id", "ops-1")
+                    header("X-Admin-Reason", "billing")
+                    // no X-Admin-MFA header
+                }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+        }
+
+    @Test
+    fun validStepUpMfaCodeIsAccepted() =
+        testApplication {
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureAdminSubscriptionSupportRoutes(
+                    config = testConfig(adminMfaEnforced = true, adminMfaSecrets = mapOf("ops-1" to mfaSecret)),
+                    service = service(),
+                )
+            }
+
+            val response =
+                client.get("/v1/admin/subscriptions/support/$userId") {
+                    header("X-Admin-Token", "test-admin-token")
+                    header("X-Admin-Id", "ops-1")
+                    header("X-Admin-Reason", "billing")
+                    header("X-Admin-MFA", AdminTotp.generate(mfaSecret, Instant.now().epochSecond))
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+        }
+
     private fun service(): AdminSubscriptionSupportService =
         AdminSubscriptionSupportService(
             repository = RouteSubscriptionSupportRepository(storedFacts = facts()),
@@ -206,6 +253,8 @@ class AdminSubscriptionSupportRoutesTest {
     private fun testConfig(
         adminToken: String? = "test-admin-token",
         adminRoles: Map<String, String> = emptyMap(),
+        adminMfaEnforced: Boolean = false,
+        adminMfaSecrets: Map<String, String> = emptyMap(),
     ): ServerConfig =
         ServerConfig(
             environment = "test",
@@ -216,6 +265,8 @@ class AdminSubscriptionSupportRoutesTest {
             redisUrl = "redis://localhost:6379",
             adminApiToken = adminToken,
             adminRoles = adminRoles,
+            adminMfaEnforced = adminMfaEnforced,
+            adminMfaSecrets = adminMfaSecrets,
         )
 }
 

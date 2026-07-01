@@ -29,6 +29,7 @@ fun Application.configureAdminPartnerLinkReviewRoutes(
             get("/{userId}") {
                 val actor = call.requireAdminActor(adminApiToken)
                 requireSeniorAdmin(config, actor.actorId)
+                call.requireAdminMfa(config, actor.actorId)
                 val reason = call.requiredAdminReason()
                 val userId =
                     call.parameters["userId"]
