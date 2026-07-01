@@ -63,6 +63,13 @@ class GridStateHolderTest {
         }
 
     @Test
+    fun activeTodayFilterSerializesAndRoundTrips() {
+        val request = GridFilters(activeToday = true).toGridQueryRequest(cursor = null)
+        assertEquals(true, request.activeTodayOnly)
+        assertEquals(true, GridFilters.fromGridQueryRequest(request).activeToday)
+    }
+
+    @Test
     fun applyingLogisticsTagsSerializesToCanonicalTokens() =
         runBlocking {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))

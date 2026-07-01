@@ -15,6 +15,10 @@ data class DiscoveryFilters(
     val lifestyleTags: Set<String> = emptySet(),
     val logisticsTags: Set<String> = emptySet(),
     val tonightAvailableOnly: Boolean = false,
+    // Grid-only Presence filter (FILTERS_SPEC "Active today"): only surface profiles whose owner has
+    // been active in the last 24h (a non-revoked session seen within the window). Swipe ignores it,
+    // the way Grid ignores verifiedPreferred. A hard existence gate.
+    val activeTodayOnly: Boolean = false,
     // FILTERS_SPEC L377 "Has photos": only surface profiles that have at least one approved,
     // visible public (profile-album) photo. Opt-in quality filter — default shows everyone,
     // including photo-less profiles. A hard existence gate, like verifiedOnly.
@@ -45,6 +49,7 @@ data class DiscoveryFilters(
                 lifestyleTags.isNotEmpty() ||
                 logisticsTags.isNotEmpty() ||
                 tonightAvailableOnly ||
+                activeTodayOnly ||
                 withPhotosOnly ||
                 intents.isNotEmpty() ||
                 genders.isNotEmpty() ||
@@ -70,6 +75,7 @@ fun discoveryFiltersFrom(
     lifestyleTags: List<String> = emptyList(),
     logisticsTags: List<String> = emptyList(),
     tonightAvailableOnly: Boolean = false,
+    activeTodayOnly: Boolean = false,
     withPhotosOnly: Boolean = false,
     intents: List<String> = emptyList(),
     genders: List<String> = emptyList(),
@@ -171,6 +177,7 @@ fun discoveryFiltersFrom(
         lifestyleTags = tags,
         logisticsTags = logistics,
         tonightAvailableOnly = tonightAvailableOnly,
+        activeTodayOnly = activeTodayOnly,
         withPhotosOnly = withPhotosOnly,
         intents = intentValues,
         genders = genderValues,

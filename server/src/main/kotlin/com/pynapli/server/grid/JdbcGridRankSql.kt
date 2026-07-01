@@ -166,6 +166,19 @@ internal fun Connection.queryGridRank(
                         AND has_photo_m.moderation_status = 'approved'
                   )
               )
+              -- FILTERS_SPEC "Active today" (Grid Presence): profiles whose owner has a non-revoked
+              -- session seen in the last 24h. "Online now" is Redis-live; "active today" is the
+              -- durable session-activity signal, so it lives in SQL as a hard existence gate.
+              AND (
+                  ?::boolean = false
+                  OR EXISTS (
+                      SELECT 1
+                      FROM user_sessions active_today_us
+                      WHERE active_today_us.user_id = u.id
+                        AND active_today_us.revoked_at IS NULL
+                        AND active_today_us.last_seen_at > now() - interval '24 hours'
+                  )
+              )
               -- Per-viewer self/block exclusion ONLY when userSpecificViewerId is
               -- set (uncached path). On the cached path these are applied in Kotlin
               -- (self) or post-repository in GridService (block).
@@ -262,23 +275,25 @@ internal fun Connection.queryGridRank(
         statement.setArray(30, orientations)
         // FILTERS_SPEC "Has photos" gate.
         statement.setBoolean(31, filters.withPhotosOnly)
+        // FILTERS_SPEC "Active today" gate.
+        statement.setBoolean(32, filters.activeTodayOnly)
         // per-viewer block exclusion (self path).
-        statement.setNullableUuid(32, userSpecificViewerId)
         statement.setNullableUuid(33, userSpecificViewerId)
         statement.setNullableUuid(34, userSpecificViewerId)
+        statement.setNullableUuid(35, userSpecificViewerId)
         // linkedOnly filter (?::boolean IS NULL / true / false).
-        statement.setObject(35, filters.linkedOnly)
         statement.setObject(36, filters.linkedOnly)
         statement.setObject(37, filters.linkedOnly)
+        statement.setObject(38, filters.linkedOnly)
         // Keyset cursor predicate (no-op when cursor is null).
-        statement.setBoolean(38, cursor != null)
-        statement.setObject(39, cursor?.boostBucket)
+        statement.setBoolean(39, cursor != null)
         statement.setObject(40, cursor?.boostBucket)
-        statement.setObject(41, cursor?.distanceBucketMeters)
-        statement.setObject(42, cursor?.boostBucket)
-        statement.setObject(43, cursor?.distanceBucketMeters)
-        statement.setObject(44, cursor?.userId)
-        statement.setInt(45, limit)
+        statement.setObject(41, cursor?.boostBucket)
+        statement.setObject(42, cursor?.distanceBucketMeters)
+        statement.setObject(43, cursor?.boostBucket)
+        statement.setObject(44, cursor?.distanceBucketMeters)
+        statement.setObject(45, cursor?.userId)
+        statement.setInt(46, limit)
         statement.executeQuery().use { rs ->
             buildList {
                 while (rs.next()) {

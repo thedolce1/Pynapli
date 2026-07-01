@@ -73,11 +73,18 @@ internal fun AgeSection(
 internal fun PresenceSection(
     online: Boolean,
     tonightAvailable: Boolean,
+    activeToday: Boolean,
     onOnlineToggle: () -> Unit,
     onTonightToggle: () -> Unit,
+    onActiveTodayToggle: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         SheetToggleChip(label = "Online now", active = online, onClick = onOnlineToggle)
+        SheetToggleChip(label = "Active today", active = activeToday, onClick = onActiveTodayToggle)
         SheetToggleChip(label = "Available tonight", active = tonightAvailable, onClick = onTonightToggle)
     }
 }

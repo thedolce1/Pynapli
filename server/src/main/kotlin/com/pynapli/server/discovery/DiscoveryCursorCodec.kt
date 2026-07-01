@@ -126,8 +126,17 @@ class DiscoveryCursorCodec(
                     append("|logisticsTags=")
                     append(filters.logisticsTags.sorted().joinToString(","))
                     append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
+                    append("|activeTodayOnly=").append(filters.activeTodayOnly)
+                    append("|withPhotosOnly=").append(filters.withPhotosOnly)
                     append("|intents=")
                     append(filters.intents.sorted().joinToString(","))
+                    // withPhotosOnly / genders / orientations were previously omitted here: a cursor
+                    // is only valid within its full filter scope, so every hard filter must be hashed
+                    // or a cursor could carry across a filter change and misalign pagination.
+                    append("|genders=")
+                    append(filters.genders.sorted().joinToString(","))
+                    append("|orientations=")
+                    append(filters.orientations.sorted().joinToString(","))
                 }
             return sha256Base64Url(normalized)
         }

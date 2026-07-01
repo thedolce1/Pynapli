@@ -1054,6 +1054,37 @@ class GridAndSwipeRepositoryIntegrationTest :
             }
         }
 
+        "grid query with activeTodayOnly excludes profiles with no recent session" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000c01")
+                val activeTarget = UUID.fromString("00000000-0000-0000-0000-000000000c02")
+                val staleTarget = UUID.fromString("00000000-0000-0000-0000-000000000c03")
+                val noSessionTarget = UUID.fromString("00000000-0000-0000-0000-000000000c04")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(activeTarget, "Ada", age = 35, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(staleTarget, "Stan", age = 33, longitude = -122.0838, latitude = 37.4228)
+                dataSource.insertDiscoverableUser(noSessionTarget, "Nora", age = 31, longitude = -122.0839, latitude = 37.4229)
+                val now = java.time.Instant.now()
+                dataSource.insertSession(activeTarget, lastSeenAt = now.minusSeconds(3_600)) // active ~1h ago
+                dataSource.insertSession(staleTarget, lastSeenAt = now.minusSeconds(3L * 86_400)) // last seen 3 days ago
+                // A recently-seen but REVOKED session must not count as active.
+                dataSource.insertSession(activeTarget, lastSeenAt = now, revoked = true)
+                // noSessionTarget has no session row at all.
+
+                val repository = JdbcGridRepository(dataSource)
+                val activeToday =
+                    repository
+                        .queryNearby(
+                            viewerUserId = viewer,
+                            radiusMeters = 100_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(activeTodayOnly = true),
+                        ).cards
+
+                assertEquals(listOf(activeTarget), activeToday.map { it.userId })
+            }
+        }
+
         "grid query with verifiedOnly excludes unverified profiles" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000a01")
@@ -2107,6 +2138,35 @@ private fun DataSource.insertActiveProfileLink(
                 statement.setObject(1, UUID.randomUUID())
                 statement.setObject(2, userId)
                 statement.setObject(3, linkedUserId)
+                statement.executeUpdate()
+            }
+    }
+}
+
+private fun DataSource.insertSession(
+    userId: UUID,
+    lastSeenAt: java.time.Instant,
+    revoked: Boolean = false,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO user_sessions (
+                    id, user_id, access_token_hash, refresh_token_hash,
+                    access_expires_at, refresh_expires_at, last_seen_at, revoked_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, userId)
+                statement.setString(3, "access-${UUID.randomUUID()}")
+                statement.setString(4, "refresh-${UUID.randomUUID()}")
+                statement.setTimestamp(5, java.sql.Timestamp.from(lastSeenAt.plusSeconds(3_600)))
+                statement.setTimestamp(6, java.sql.Timestamp.from(lastSeenAt.plusSeconds(86_400)))
+                statement.setTimestamp(7, java.sql.Timestamp.from(lastSeenAt))
+                statement.setTimestamp(8, revoked.takeIf { it }?.let { java.sql.Timestamp.from(lastSeenAt) })
                 statement.executeUpdate()
             }
     }

@@ -75,8 +75,10 @@ internal fun GridFiltersSheet(
             PresenceSection(
                 online = draft.online,
                 tonightAvailable = draft.tonightAvailable,
+                activeToday = draft.activeToday,
                 onOnlineToggle = { draft = draft.copy(online = !draft.online) },
                 onTonightToggle = { draft = draft.copy(tonightAvailable = !draft.tonightAvailable) },
+                onActiveTodayToggle = { draft = draft.copy(activeToday = !draft.activeToday) },
             )
             TonightAvailabilityRow(
                 state = tonightState,
