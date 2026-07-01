@@ -541,7 +541,7 @@ Track:
 
 - [ ] Admin roles and permissions exist.
 - [ ] MFA required.
-- [ ] Partial: implemented admin queue actions are audit logged, but general audit middleware is missing.
+- [x] Admin actions are audit logged two ways: sensitive queue handlers write rich reason/target rows, and a general audit middleware (`AdminAuditPlugin`) records every successful admin mutation (2xx POST/PUT/PATCH/DELETE under `/v1/admin`, keyed on `X-Admin-Id`) as an `admin_request` row so nothing slips through.
 - [x] User lookup exists. (`GET /v1/admin/users/{userId}` — consolidated view: status, profile summary, verification, subscription tier/source, linked-partner state, risk tier/score + recent reasons, report/block counts, active session/device counts, recent moderation actions. Requires `X-Admin-Reason` and writes a `user_lookup` audit row; excludes album media/message bodies/exact location/raw verification by default.)
 - [ ] Partial: reports, appeals, risk, and held-message queues exist, and a unified backlog dashboard (`GET /v1/admin/dashboard` — counts-only across all four queues + risk tiers, admin-token gated like the metrics routes) now surfaces "what needs attention" at a glance. The full operator console (web UI, roles/MFA, audit middleware, API separation) remains — tracked as E2.
 - [x] Reports queue exists.

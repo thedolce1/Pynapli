@@ -26,6 +26,7 @@ import com.pynapli.server.moderation.configureAdminReportRoutes
 import com.pynapli.server.moderation.configureAdminRiskRoutes
 import com.pynapli.server.notifications.configureAdminMetricsRoutes
 import com.pynapli.server.notifications.configureNotificationRoutes
+import com.pynapli.server.plugins.configureAdminAudit
 import com.pynapli.server.plugins.configureAppCheck
 import com.pynapli.server.plugins.configureHTTP
 import com.pynapli.server.plugins.configureMonitoring
@@ -83,6 +84,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureHTTP()
     configureRequestMediaBaseUrl()
     configureAppCheck(dependencies.config.appCheckEnforced, selectAppCheckVerifier(dependencies.config))
+    configureAdminAudit(dependencies.adminRequestAuditRecorder)
     configureHealthRoutes(dependencies)
     configureAdminAppealRoutes(dependencies.config, dependencies.adminAppealService)
     configureAdminModerationRoutes(dependencies.config, dependencies.messageModerationService)

@@ -11,10 +11,12 @@ import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.activity.JdbcActivityRetentionRepository
 import com.pynapli.server.admin.AdminDashboardService
 import com.pynapli.server.admin.AdminPartnerLinkReviewService
+import com.pynapli.server.admin.AdminRequestAuditRecorder
 import com.pynapli.server.admin.AdminSubscriptionSupportService
 import com.pynapli.server.admin.AdminUserLookupService
 import com.pynapli.server.admin.JdbcAdminDashboardRepository
 import com.pynapli.server.admin.JdbcAdminPartnerLinkReviewRepository
+import com.pynapli.server.admin.JdbcAdminRequestAuditRecorder
 import com.pynapli.server.admin.JdbcAdminSubscriptionSupportRepository
 import com.pynapli.server.admin.JdbcAdminUserLookupRepository
 import com.pynapli.server.auth.AuthService
@@ -113,6 +115,7 @@ class ServerDependencies(
     val adminPartnerLinkReviewService: AdminPartnerLinkReviewService?,
     val adminSubscriptionSupportService: AdminSubscriptionSupportService?,
     val adminDashboardService: AdminDashboardService?,
+    val adminRequestAuditRecorder: AdminRequestAuditRecorder?,
     val locationService: LocationService?,
     val travelLocationService: TravelLocationService?,
     val travelPlaceSearchService: TravelPlaceSearchService?,
@@ -295,6 +298,8 @@ class ServerDependencies(
                 AdminDashboardService(
                     repository = JdbcAdminDashboardRepository(database.dataSource),
                 )
+            val adminRequestAuditRecorder =
+                config.adminApiToken?.let { JdbcAdminRequestAuditRecorder(database.dataSource) }
             val grid =
                 buildGridDependencies(
                     config = config,
@@ -383,6 +388,7 @@ class ServerDependencies(
                 adminPartnerLinkReviewService = adminPartnerLinkReviewService,
                 adminSubscriptionSupportService = adminSubscriptionSupportService,
                 adminDashboardService = adminDashboardService,
+                adminRequestAuditRecorder = adminRequestAuditRecorder,
                 locationService = core.locationService,
                 travelLocationService = commerceTravel.travelLocationService,
                 travelPlaceSearchService = commerceTravel.travelPlaceSearchService,
@@ -452,6 +458,7 @@ class ServerDependencies(
                 adminPartnerLinkReviewService = null,
                 adminSubscriptionSupportService = null,
                 adminDashboardService = null,
+                adminRequestAuditRecorder = null,
                 locationService = null,
                 travelLocationService = null,
                 travelPlaceSearchService = null,

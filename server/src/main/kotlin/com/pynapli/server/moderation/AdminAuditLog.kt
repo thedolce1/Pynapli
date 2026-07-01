@@ -9,7 +9,7 @@ internal fun Connection.insertAdminAuditLog(
     action: String,
     targetType: String,
     targetId: UUID?,
-    reason: String,
+    reason: String?,
     metadataJson: String,
 ) {
     prepareStatement(
