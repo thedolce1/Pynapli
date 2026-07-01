@@ -212,4 +212,15 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   Deliberately did **not** bump the hub's 8dp cards to the north-star 12 (the hub is an internally
   consistent 8dp sub-system; changing one card would break that, changing all is out of scope/risky).
   verify-full green.
-- Next (Phase 4): Onboarding → Psync, one slice each. Then Phase 5 (web/Wasm + iOS parity).
+- 2026-07-01 — **Phase 4 (Psync).** Psync was the last surface still on raw `fontSize`/`FontWeight`
+  literals, and carried a broken in-flight edit (`MaterialTheme.typography.bodySmall` with no
+  `MaterialTheme` import — the tree didn't compile). Fixed the build and routed every Psync `Text`
+  through the `PynapliTypography` roles (headlineSmall for phase/recap titles, titleLarge for the
+  screen-header + deck-card name, titleSmall for the recap section label, bodyMedium for body/rows,
+  bodySmall for progress + error banner, labelLarge for buttons, labelMedium for the filter summary);
+  only the decorative emoji action glyph (✕/🍍/♥) keeps an explicit size. No structural or testTag
+  changes, so `PsyncSessionScreenTest` stays green. Gate: spotlessCheck + shared jvm/androidHost +
+  composeApp androidHost/desktop tests + `:androidApp:assembleDebug` all green (server suite untouched
+  — UI-only change, Docker down). No `android-psync-qa.ps1` exists; the desktop screen test is the
+  guard. Psync is now on the type scale like the rest of the app.
+- Next (Phase 4): **Onboarding** — the final surface. Then Phase 5 (web/Wasm + iOS parity).

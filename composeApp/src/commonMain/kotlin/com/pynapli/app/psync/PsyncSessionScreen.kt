@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -157,7 +158,7 @@ private fun ActivePhase(
     Text(
         text = "$actedCount of ${state.deck.size} reviewed",
         color = PynapliColors.TextSecondary,
-        fontSize = 13.sp,
+        style = MaterialTheme.typography.bodySmall,
         modifier = Modifier.testTag(PsyncSessionTags.PROGRESS),
     )
     Spacer(Modifier.height(12.dp))
@@ -218,8 +219,7 @@ private fun DeckCard(card: PsyncDeckCardUi) {
             Text(
                 text = card.displayName,
                 color = PynapliColors.TextPrimary,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.testTag(PsyncSessionTags.CARD_NAME),
             )
         }
@@ -233,10 +233,10 @@ private fun RecapPhase(
 ) {
     val recap = state.recap
     Column(modifier = Modifier.fillMaxWidth().testTag(PsyncSessionTags.RECAP)) {
-        Text("Psync recap", color = PynapliColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("Psync recap", color = PynapliColors.TextPrimary, style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
         if (recap == null) {
-            Text("Your recap is on the way.", color = PynapliColors.TextSecondary)
+            Text("Your recap is on the way.", color = PynapliColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
         } else {
             RecapRow("Profiles reviewed", recap.profilesReviewed)
             RecapRow("Both liked", recap.bothLikedCount)
@@ -244,18 +244,19 @@ private fun RecapPhase(
             RecapRow("Your solo matches", recap.soloMatchCount)
             if (recap.togetherMatches.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
-                Text("Together matches", color = PynapliColors.TextSecondary, fontSize = 13.sp)
+                Text("Together matches", color = PynapliColors.TextSecondary, style = MaterialTheme.typography.titleSmall)
                 recap.togetherMatches.forEach { match ->
                     Text(
                         text = match.displayName ?: "Pynapli User",
                         color = PynapliColors.TextPrimary,
+                        style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 }
             }
             if (recap.filtersSummary.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
-                Text(recap.filtersSummary, color = PynapliColors.TextSecondary, fontSize = 12.sp)
+                Text(recap.filtersSummary, color = PynapliColors.TextSecondary, style = MaterialTheme.typography.labelMedium)
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -272,8 +273,13 @@ private fun RecapRow(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, color = PynapliColors.TextSecondary)
-        Text("$value", color = PynapliColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+        Text(label, color = PynapliColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "$value",
+            color = PynapliColors.TextPrimary,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
@@ -288,9 +294,9 @@ private fun StatusPhase(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(40.dp))
-        Text(title, color = PynapliColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = PynapliColors.TextPrimary, style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(10.dp))
-        Text(body, color = PynapliColors.TextSecondary, fontSize = 14.sp)
+        Text(body, color = PynapliColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(24.dp))
         actions()
     }
@@ -314,7 +320,7 @@ private fun PsyncHeader(
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PynapliColors.TextPrimary)
         }
         Spacer(Modifier.size(12.dp))
-        Text(title, color = PynapliColors.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = PynapliColors.TextPrimary, style = MaterialTheme.typography.titleLarge)
     }
 }
 
@@ -328,7 +334,7 @@ private fun ErrorBanner(message: String) {
                 .background(PynapliColors.Danger.copy(alpha = 0.12f))
                 .padding(12.dp),
     ) {
-        Text(message, color = PynapliColors.Danger, fontSize = 13.sp)
+        Text(message, color = PynapliColors.Danger, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -348,7 +354,7 @@ private fun PrimaryButton(
                 .padding(vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = PynapliColors.Black, fontWeight = FontWeight.SemiBold)
+        Text(label, color = PynapliColors.Black, style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -368,7 +374,7 @@ private fun SecondaryButton(
                 .padding(vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = PynapliColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+        Text(label, color = PynapliColors.TextPrimary, style = MaterialTheme.typography.labelLarge)
     }
 }
 
