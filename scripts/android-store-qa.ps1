@@ -677,10 +677,11 @@ Wait-ForAnyText @("Store refreshed.") 45 | Out-Null
 $restoreXml = Capture-StoreStage "restoreRefreshed" "04_restore_refreshed"
 Assert-TextPresent $restoreXml "Store refreshed." "Store restore"
 
-# Scroll to the last product so the whole Boosts & extras section is on-screen — the per-product
-# "Balance: N" line sits at the bottom of each row, so anchoring on the section title alone can leave
-# it clipped once the list grows (e.g. the linked-partner benefit card above the products).
-Scroll-UntilAnyText @("Intro Notes") | Out-Null
+# Scroll to the last product so the whole Boosts & extras section is on-screen. Anchor on the Intro
+# Notes product's UNIQUE "3 for $2.99" price line, not the plain "Intro Notes" name: the Select plan
+# now advertises "Intro Notes" as an included feature, so anchoring on the name stopped the scroll at
+# the Select card before ever reaching the accelerators. More scroll headroom for the longer list.
+Scroll-UntilAnyText @('3 for $2.99') 8 | Out-Null
 $productsXml = Capture-StoreStage "productsVisible" "05_products_visible"
 Assert-TextPresent $productsXml "Pineapple Likes" "Store products"
 Assert-TextPresent $productsXml "Intro Notes" "Store products"
