@@ -105,9 +105,21 @@ class GridService(
             )
         }
 
+        // Online-only pages under-fill because presence is filtered AFTER the SQL (presence lives in
+        // Redis, not the DB): a page of `limit` ranked candidates can lose most rows to the online
+        // filter. Over-fetch a bounded larger candidate window when onlineOnly so the page still fills
+        // to `limit`; the cursor is rebuilt from the last KEPT card below. Default (non-online) queries
+        // fetch exactly `limit`, unchanged.
+        val fetchLimit =
+            if (request.onlineOnly) {
+                (limit * ONLINE_OVERFETCH_MULTIPLIER).coerceAtMost(MAX_ONLINE_FETCH)
+            } else {
+                limit
+            }
+
         val initial =
             profile("grid.repository") {
-                repository.queryNearby(viewerUserId, radiusMeters, limit, filters, cursor)
+                repository.queryNearby(viewerUserId, radiusMeters, fetchLimit, filters, cursor)
             }
         if (!initial.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
 
@@ -121,7 +133,7 @@ class GridService(
         val result =
             if (widened) {
                 profile("grid.repositoryWiden") {
-                    repository.queryNearby(viewerUserId, MAX_RADIUS_METERS, limit, filters, cursor = null)
+                    repository.queryNearby(viewerUserId, MAX_RADIUS_METERS, fetchLimit, filters, cursor = null)
                 }
             } else {
                 initial
@@ -174,11 +186,21 @@ class GridService(
                     discoverableCards
                 }
             }
-        val dtoCards = profile("grid.dto") { filteredCards.map { it.toDto(onlineUserIds) } }
+        // Over-fetch reconciliation: return exactly the requested page and rebuild the cursor from the
+        // last KEPT card. When more matches remain in the fetched window, the next page resumes after
+        // the last kept card; otherwise it resumes past the fetched window (the repository anchor).
+        val pageCards = filteredCards.take(limit)
+        val moreInFetchedWindow = filteredCards.size > limit
+        val dtoCards = profile("grid.dto") { pageCards.map { it.toDto(onlineUserIds) } }
         val seenCount = (cursor?.seenCount ?: 0) + dtoCards.size
         // A widened fallback page is edge-fill only: do not hand back a cursor scoped to the
         // max radius, since the next request still carries the viewer's narrow radius.
-        val effectiveNextAnchor = if (widened) null else result.nextCursorAnchor
+        val effectiveNextAnchor =
+            when {
+                widened -> null
+                moreInFetchedWindow -> pageCards.lastOrNull()?.toCursorAnchor()
+                else -> result.nextCursorAnchor
+            }
         val resultLimitReached =
             effectiveNextAnchor != null &&
                 policy.gridResultDepthLimit != Int.MAX_VALUE &&
@@ -247,6 +269,11 @@ class GridService(
         private const val MIN_RADIUS_METERS = 1_000
         private const val MAX_RADIUS_METERS = 100_000
         private const val MAX_LIMIT = 120
+
+        // Online-only over-fetch: presence is filtered after SQL, so fetch this many times the page
+        // size (bounded) to fill the page from the online subset without unbounded DB work.
+        private const val ONLINE_OVERFETCH_MULTIPLIER = 4
+        private const val MAX_ONLINE_FETCH = 240
     }
 }
 

@@ -241,6 +241,11 @@ Rules:
 On Grid:
 
 - Filters should be applied server-side.
+- `Online now` is a hard filter applied after the SQL rank (presence lives in Redis, not the DB). To
+  avoid under-filled online-only pages, the grid over-fetches a bounded larger candidate window when
+  `onlineOnly` is set and rebuilds the keyset cursor from the last kept card, so an online-only page
+  still fills to the requested size while pagination stays correct (`GridService`,
+  `GridServiceTest.queryGridOverFetchesToFillOnlineOnlyPage`).
 - Existing cards should remain visible while new filtered results load.
 - The client should diff old vs new results and animate only necessary changes.
 - Do not blank the grid on filter changes.

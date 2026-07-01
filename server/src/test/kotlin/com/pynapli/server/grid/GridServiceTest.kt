@@ -26,6 +26,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GridServiceTest {
     @Test
@@ -350,6 +351,39 @@ class GridServiceTest {
             assertEquals(listOf(onlineTarget.toString()), response.items.map { it.userId })
             assertEquals(false, response.adSupported)
             assertEquals(false, response.advancedFiltersApplied)
+        }
+
+    @Test
+    fun queryGridOverFetchesToFillOnlineOnlyPage() =
+        runBlocking {
+            val viewerId = UUID.randomUUID()
+            val repository = LimitAwareGridRepository(totalCards = 100)
+            // Every 4th candidate is online (25%). Filling a 10-card online page therefore needs
+            // ~40 candidates — far more than an un-over-fetched page of 10 would surface (~3 online).
+            val onlineIds =
+                (0 until 100 step 4)
+                    .map { UUID.nameUUIDFromBytes("grid-limit-card-$it".toByteArray()) }
+                    .toSet()
+            val service =
+                GridService(
+                    repository = repository,
+                    presenceService = PresenceService(StaticPresenceRepository(onlineIds)),
+                    subscriptionService = paidSubscriptionService(viewerId, SubscriptionTier.SOCIAL),
+                )
+
+            val response = service.queryGrid(viewerId, GridQueryRequestDto(onlineOnly = true, limit = 10))
+
+            // The page fills to the requested size; without over-fetch it would have been ~3.
+            assertEquals(10, response.items.size)
+            // Every returned card is online.
+            assertEquals(
+                emptyList(),
+                response.items.map { UUID.fromString(it.userId) }.filterNot { it in onlineIds },
+            )
+            // The repository was asked for more than the page size (the over-fetch).
+            assertTrue(repository.receivedLimits.first() > 10)
+            // Pagination still advances (a next cursor is issued for the remaining online candidates).
+            assertTrue(response.nextCursor != null)
         }
 
     @Test
