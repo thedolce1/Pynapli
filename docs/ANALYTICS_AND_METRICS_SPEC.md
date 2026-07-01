@@ -423,15 +423,23 @@ Every event definition should include:
 
 ## Implementation Checklist
 
-- [ ] Analytics event registry exists.
-- [ ] Sensitive data rules documented in code.
-- [ ] Firebase events are low-sensitivity only.
-- [ ] Server product events exist for authoritative metrics.
-- [ ] Purchase metrics come from validated server state.
-- [ ] Crash logs redact sensitive data.
-- [ ] Exact location never sent to analytics.
-- [ ] Message text never sent to analytics.
-- [ ] Experiment flags cannot bypass server limits.
+> Status (2026-07-01): the **server**-side authoritative metrics are done (F1 `ProductMetrics`).
+> A **client**-side analytics layer (Firebase Analytics event logging) is **not wired yet** — there
+> are zero `logEvent`/`FirebaseAnalytics` call sites — so the client-event items below (registry,
+> low-sensitivity guarantee, no location/message text) are **vacuously satisfied and deferred** until
+> a client analytics layer is actually added; building an event registry now would be dead code. When
+> client analytics lands, route every event through a `:shared` registry that forbids sensitive params
+> and add a guard test (mirroring the server `SensitiveLoggingGuardTest`).
+
+- [ ] Analytics event registry exists. *(Deferred — no client analytics layer yet.)*
+- [ ] Sensitive data rules documented in code. *(Deferred — with the client analytics layer.)*
+- [ ] Firebase events are low-sensitivity only. *(Vacuously true — no events sent yet.)*
+- [x] Server product events exist for authoritative metrics. (F1 `ProductMetrics`: signup/login, message_sent, match_created, purchase_verified.)
+- [x] Purchase metrics come from validated server state. (F1: `purchase_verified` recorded only on the user-initiated Verified+active branch, from server-validated purchases.)
+- [ ] Crash logs redact sensitive data. *(Crashlytics wired; redaction tuning pending real crash payloads.)*
+- [ ] Exact location never sent to analytics. *(Vacuously true — no client analytics.)*
+- [ ] Message text never sent to analytics. *(Vacuously true — no client analytics.)*
+- [ ] Experiment flags cannot bypass server limits. *(No experiment/remote-config layer wired; limits stay server-enforced.)*
 
 ## Do Not Implement
 
