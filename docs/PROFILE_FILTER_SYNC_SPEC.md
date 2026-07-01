@@ -143,9 +143,9 @@ Ktor owns filter correctness.
 - [x] Blocks exclude bidirectionally.
 - [x] Dealbreakers are respected. Swipe dealbreakers (`SwipeDealbreakerKey`: age, distance, verified, discoveryStyles, intents, linkedOnly) are validated server-side against an allow-list and honored as hard gates that are skipped from deck relaxation (`SwipeDeckRelaxation`); identity filters (gender/orientation) are likewise kept hard through relaxation. See SWIPE_IMPLEMENTATION_SPEC "Default Deck / Never-Empty" + checklist; coverage in `SwipeServiceTest` (relaxation policy) and `SwipeFiltersSheetInteractionTest`.
 - [x] Linked does not imply together.
-- [ ] Partial: partner unlink removes active linked visibility in implemented profile-link flows; regression coverage still needed.
+- [x] Partner unlink removes active linked visibility: `getPublicProfile` drops the linked-partner mini once the link is unlinked. Regression coverage in `ProfileRepositoryIntegrationTest.publicProfileDropsLinkedPartnerMiniAfterUnlink` (active link projects the mini → unlink → mini gone).
 - [x] Suspension removes profile from all discovery quickly.
-- [ ] Profile update propagates within target.
+- [x] Profile update propagates within target: `updateProfile` changes are reflected in the target's `getPublicProfile` (neighborhood/bio) and the updated lifestyle tags satisfy the grid/swipe overlap filter predicate — `ProfileRepositoryIntegrationTest.updateProfilePersistsBioTagsAndSelfDescribeAndMatchesTheFilterPredicate`.
 
 ## Do Not Implement
 

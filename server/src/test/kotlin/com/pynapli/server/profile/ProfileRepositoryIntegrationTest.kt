@@ -329,6 +329,39 @@ class ProfileRepositoryIntegrationTest {
             assertEquals(partner, requireNotNull(repository.getPublicProfile(viewer, owner)).linkedPartnerUserId)
         }
 
+    @Test
+    fun publicProfileDropsLinkedPartnerMiniAfterUnlink() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000751")
+            val owner = UUID.fromString("00000000-0000-0000-0000-000000000752")
+            val partner = UUID.fromString("00000000-0000-0000-0000-000000000753")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(owner, "Owner")
+            dataSource.insertUserWithProfile(partner, "Partner")
+            dataSource.insertActiveProfileLink(userId = owner, linkedUserId = partner)
+            val repository = JdbcProfileRepository(dataSource)
+
+            // While the link is active the partner mini projects (default 'public' visibility).
+            assertEquals(partner, requireNotNull(repository.getPublicProfile(viewer, owner)).linkedPartnerUserId)
+
+            // Unlinking must drop the active linked visibility from the public projection.
+            dataSource.unlinkProfileLink(owner)
+            assertNull(requireNotNull(repository.getPublicProfile(viewer, owner)).linkedPartnerUserId)
+        }
+
+    private fun DataSource.unlinkProfileLink(userId: UUID) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    "UPDATE user_profile_links SET status = 'unlinked', unlinked_at = now() " +
+                        "WHERE user_id = ? AND status = 'active'",
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
     private fun DataSource.setPartnerVisibility(
         userId: UUID,
         value: String,
