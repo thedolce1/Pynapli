@@ -543,7 +543,7 @@ Track:
 - [ ] MFA required.
 - [ ] Partial: implemented admin queue actions are audit logged, but general audit middleware is missing.
 - [x] User lookup exists. (`GET /v1/admin/users/{userId}` — consolidated view: status, profile summary, verification, subscription tier/source, linked-partner state, risk tier/score + recent reasons, report/block counts, active session/device counts, recent moderation actions. Requires `X-Admin-Reason` and writes a `user_lookup` audit row; excludes album media/message bodies/exact location/raw verification by default.)
-- [ ] Partial: reports, appeals, risk, and held-message queues exist; unified moderation console is not complete.
+- [ ] Partial: reports, appeals, risk, and held-message queues exist, and a unified backlog dashboard (`GET /v1/admin/dashboard` — counts-only across all four queues + risk tiers, admin-token gated like the metrics routes) now surfaces "what needs attention" at a glance. The full operator console (web UI, roles/MFA, audit middleware, API separation) remains — tracked as E2.
 - [x] Reports queue exists.
 - [x] Reports triage actions exist.
 - [x] Reports triage actions are audit logged.

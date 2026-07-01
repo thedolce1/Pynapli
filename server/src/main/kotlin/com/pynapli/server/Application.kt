@@ -3,6 +3,7 @@ package com.pynapli.server
 import com.pynapli.server.account.configureAccountLifecycleRoutes
 import com.pynapli.server.activity.configureActivityRoutes
 import com.pynapli.server.activity.configureActivityStreamRoutes
+import com.pynapli.server.admin.configureAdminDashboardRoutes
 import com.pynapli.server.admin.configureAdminPartnerLinkReviewRoutes
 import com.pynapli.server.admin.configureAdminSubscriptionSupportRoutes
 import com.pynapli.server.admin.configureAdminUserLookupRoutes
@@ -92,6 +93,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAdminUserLookupRoutes(dependencies.config, dependencies.adminUserLookupService)
     configureAdminPartnerLinkReviewRoutes(dependencies.config, dependencies.adminPartnerLinkReviewService)
     configureAdminSubscriptionSupportRoutes(dependencies.config, dependencies.adminSubscriptionSupportService)
+    configureAdminDashboardRoutes(dependencies.config, dependencies.adminDashboardService)
     configureAgeVerificationAdminRoutes(dependencies.config, dependencies.ageVerificationService)
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)

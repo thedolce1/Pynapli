@@ -9,9 +9,11 @@ import com.pynapli.server.activity.ActivityRetentionWorker
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.activity.JdbcActivityRetentionRepository
+import com.pynapli.server.admin.AdminDashboardService
 import com.pynapli.server.admin.AdminPartnerLinkReviewService
 import com.pynapli.server.admin.AdminSubscriptionSupportService
 import com.pynapli.server.admin.AdminUserLookupService
+import com.pynapli.server.admin.JdbcAdminDashboardRepository
 import com.pynapli.server.admin.JdbcAdminPartnerLinkReviewRepository
 import com.pynapli.server.admin.JdbcAdminSubscriptionSupportRepository
 import com.pynapli.server.admin.JdbcAdminUserLookupRepository
@@ -110,6 +112,7 @@ class ServerDependencies(
     val adminUserLookupService: AdminUserLookupService?,
     val adminPartnerLinkReviewService: AdminPartnerLinkReviewService?,
     val adminSubscriptionSupportService: AdminSubscriptionSupportService?,
+    val adminDashboardService: AdminDashboardService?,
     val locationService: LocationService?,
     val travelLocationService: TravelLocationService?,
     val travelPlaceSearchService: TravelPlaceSearchService?,
@@ -288,6 +291,10 @@ class ServerDependencies(
                     repository = JdbcAdminSubscriptionSupportRepository(database.dataSource),
                     entitlementLookup = { userId -> commerceTravel.subscriptionService.getEntitlement(userId) },
                 )
+            val adminDashboardService =
+                AdminDashboardService(
+                    repository = JdbcAdminDashboardRepository(database.dataSource),
+                )
             val grid =
                 buildGridDependencies(
                     config = config,
@@ -375,6 +382,7 @@ class ServerDependencies(
                 adminUserLookupService = adminUserLookupService,
                 adminPartnerLinkReviewService = adminPartnerLinkReviewService,
                 adminSubscriptionSupportService = adminSubscriptionSupportService,
+                adminDashboardService = adminDashboardService,
                 locationService = core.locationService,
                 travelLocationService = commerceTravel.travelLocationService,
                 travelPlaceSearchService = commerceTravel.travelPlaceSearchService,
@@ -443,6 +451,7 @@ class ServerDependencies(
                 adminUserLookupService = null,
                 adminPartnerLinkReviewService = null,
                 adminSubscriptionSupportService = null,
+                adminDashboardService = null,
                 locationService = null,
                 travelLocationService = null,
                 travelPlaceSearchService = null,
