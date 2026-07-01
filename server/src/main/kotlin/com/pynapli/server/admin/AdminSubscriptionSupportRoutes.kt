@@ -29,6 +29,7 @@ fun Application.configureAdminSubscriptionSupportRoutes(
         route("/v1/admin/subscriptions/support") {
             get("/{userId}") {
                 val actor = call.requireAdminActor(adminApiToken)
+                requireSeniorAdmin(config, actor.actorId)
                 val reason = call.requiredAdminReason()
                 val userId =
                     call.parameters["userId"]

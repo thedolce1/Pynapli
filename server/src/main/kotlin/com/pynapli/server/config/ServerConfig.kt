@@ -78,6 +78,10 @@ data class ServerConfig(
     val ageVerificationProviderLabel: String = "Identity provider",
     val ageVerificationProviderRedirectBaseUrl: String? = null,
     val adminApiToken: String? = null,
+    // Optional admin role map (PYNAPLI_ADMIN_ROLES = "id:role,id:role"). When empty, role enforcement
+    // is off and every authenticated admin is treated as senior (pre-roles behavior). When set, an
+    // unmapped actor defaults to operator (least privilege) and sensitive actions require senior.
+    val adminRoles: Map<String, String> = emptyMap(),
     // App Check boundary: when true, state-changing requests must carry a verified
     // `X-Firebase-AppCheck` header (attesting a genuine app instance). Default off so local/dev/test
     // never require it; flip on in production only after the client attaches the token.
@@ -348,6 +352,19 @@ data class ServerConfig(
                         .getenv("PYNAPLI_ADMIN_API_TOKEN")
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() },
+                adminRoles =
+                    (System.getenv("PYNAPLI_ADMIN_ROLES") ?: "")
+                        .split(",")
+                        .mapNotNull { entry ->
+                            val parts = entry.split(":", limit = 2)
+                            if (parts.size != 2) {
+                                null
+                            } else {
+                                val id = parts[0].trim()
+                                val role = parts[1].trim().lowercase()
+                                if (id.isEmpty() || role.isEmpty()) null else id to role
+                            }
+                        }.toMap(),
                 appCheckEnforced =
                     System
                         .getenv("PYNAPLI_APP_CHECK_ENFORCED")

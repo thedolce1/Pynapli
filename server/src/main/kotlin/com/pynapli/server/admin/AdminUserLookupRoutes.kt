@@ -29,6 +29,7 @@ fun Application.configureAdminUserLookupRoutes(
         route("/v1/admin/users") {
             get("/{userId}") {
                 val actor = call.requireAdminActor(adminApiToken)
+                requireSeniorAdmin(config, actor.actorId)
                 val reason = call.requiredAdminReason()
                 val userId =
                     call.parameters["userId"]

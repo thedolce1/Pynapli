@@ -124,6 +124,50 @@ class AdminSubscriptionSupportRoutesTest {
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
+    @Test
+    fun operatorIsForbiddenWhenRolesConfigured() =
+        testApplication {
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureAdminSubscriptionSupportRoutes(
+                    config = testConfig(adminRoles = mapOf("ops-1" to "operator")),
+                    service = service(),
+                )
+            }
+
+            val response =
+                client.get("/v1/admin/subscriptions/support/$userId") {
+                    header("X-Admin-Token", "test-admin-token")
+                    header("X-Admin-Id", "ops-1")
+                    header("X-Admin-Reason", "billing")
+                }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+        }
+
+    @Test
+    fun seniorIsAllowedWhenRolesConfigured() =
+        testApplication {
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureAdminSubscriptionSupportRoutes(
+                    config = testConfig(adminRoles = mapOf("boss" to "senior")),
+                    service = service(),
+                )
+            }
+
+            val response =
+                client.get("/v1/admin/subscriptions/support/$userId") {
+                    header("X-Admin-Token", "test-admin-token")
+                    header("X-Admin-Id", "boss")
+                    header("X-Admin-Reason", "billing")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+        }
+
     private fun service(): AdminSubscriptionSupportService =
         AdminSubscriptionSupportService(
             repository = RouteSubscriptionSupportRepository(storedFacts = facts()),
@@ -159,7 +203,10 @@ class AdminSubscriptionSupportRoutesTest {
             linkedPartnerIncluded = true,
         )
 
-    private fun testConfig(adminToken: String? = "test-admin-token"): ServerConfig =
+    private fun testConfig(
+        adminToken: String? = "test-admin-token",
+        adminRoles: Map<String, String> = emptyMap(),
+    ): ServerConfig =
         ServerConfig(
             environment = "test",
             port = 8080,
@@ -168,6 +215,7 @@ class AdminSubscriptionSupportRoutesTest {
             databasePassword = "pynapli_dev_password",
             redisUrl = "redis://localhost:6379",
             adminApiToken = adminToken,
+            adminRoles = adminRoles,
         )
 }
 

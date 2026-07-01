@@ -301,7 +301,9 @@ internal fun subscriptionStatusFor(code: String): HttpStatusCode =
 internal fun moderationStatusFor(code: String): HttpStatusCode =
     when (code) {
         "ADMIN_UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
-        "ADMIN_FORBIDDEN" -> HttpStatusCode.Forbidden
+        "ADMIN_FORBIDDEN",
+        "ADMIN_ROLE_REQUIRED",
+        -> HttpStatusCode.Forbidden
         "MESSAGE_REVIEW_NOT_FOUND",
         "REPORT_REVIEW_NOT_FOUND",
         "RISK_REVIEW_NOT_FOUND",

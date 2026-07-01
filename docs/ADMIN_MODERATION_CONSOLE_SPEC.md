@@ -539,7 +539,7 @@ Track:
 
 ## Implementation Checklist
 
-- [ ] Admin roles and permissions exist.
+- [x] Admin roles exist (two-tier operator/senior via `PYNAPLI_ADMIN_ROLES` = `id:role,...`): sensitive actions — PII reveals (user lookup / subscription support / partner-link review), entitlement grant/revoke, appeal decisions, and reported-media removal — require the senior role via `requireSeniorAdmin` (403 for operators/unmapped actors). No-op when unconfigured (every admin treated as senior, backward compatible). Because the actor id is self-declared over the shared token, the real second factor for these actions is the step-up MFA gate (E2c).
 - [ ] MFA required.
 - [x] Admin actions are audit logged two ways: sensitive queue handlers write rich reason/target rows, and a general audit middleware (`AdminAuditPlugin`) records every successful admin mutation (2xx POST/PUT/PATCH/DELETE under `/v1/admin`, keyed on `X-Admin-Id`) as an `admin_request` row so nothing slips through.
 - [x] User lookup exists. (`GET /v1/admin/users/{userId}` — consolidated view: status, profile summary, verification, subscription tier/source, linked-partner state, risk tier/score + recent reasons, report/block counts, active session/device counts, recent moderation actions. Requires `X-Admin-Reason` and writes a `user_lookup` audit row; excludes album media/message bodies/exact location/raw verification by default.)

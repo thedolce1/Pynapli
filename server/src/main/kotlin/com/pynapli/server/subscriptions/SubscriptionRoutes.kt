@@ -1,6 +1,7 @@
 package com.pynapli.server.subscriptions
 
 import com.google.auth.oauth2.TokenVerifier
+import com.pynapli.server.admin.requireSeniorAdmin
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.config.ServerConfig
@@ -84,6 +85,7 @@ fun Application.configureSubscriptionAdminRoutes(
 
         post("/v1/admin/subscriptions/entitlements") {
             val actorId = call.requireSubscriptionAdminActor(adminApiToken)
+            requireSeniorAdmin(config, actorId)
             val reason = call.requiredSubscriptionAdminReason()
             val request = call.receive<AdminEntitlementGrantRequestDto>()
             call.respond(
@@ -102,6 +104,7 @@ fun Application.configureSubscriptionAdminRoutes(
 
         post("/v1/admin/subscriptions/entitlements/{entitlementId}/revoke") {
             val actorId = call.requireSubscriptionAdminActor(adminApiToken)
+            requireSeniorAdmin(config, actorId)
             val reason = call.requiredSubscriptionAdminReason()
             val entitlementId = call.parameters["entitlementId"] ?: throw SubscriptionException("ENTITLEMENT_NOT_FOUND")
             call.respond(
