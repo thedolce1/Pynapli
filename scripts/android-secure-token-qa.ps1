@@ -230,14 +230,16 @@ function Find-NodeByExactText {
 }
 
 function Dismiss-NotificationPromptIfPresent {
-    # The OS POST_NOTIFICATIONS prompt can appear once the session authenticates
-    # (Android 13+). Exact match only: the dialog title also contains "Allow".
-    for ($attempt = 1; $attempt -le 3; $attempt++) {
+    # The OS POST_NOTIFICATIONS prompt (Android 13+) appears only AFTER the session
+    # authenticates, which lags the login tap by a network round-trip. Poll for it (don't
+    # bail on the first miss) so we catch it whenever it appears; tap Allow and return, or
+    # give up after the window if it never shows. Exact match: the dialog title also has "Allow".
+    for ($attempt = 1; $attempt -le 10; $attempt++) {
         Start-Sleep -Milliseconds 1500
         $xml = Dump-Ui "notification_prompt_check"
         $allowButton = Find-NodeByExactText $xml "Allow"
         if ($null -eq $allowButton) {
-            return
+            continue
         }
         $bounds = $allowButton.GetAttribute("bounds")
         if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
@@ -247,6 +249,7 @@ function Dismiss-NotificationPromptIfPresent {
         $centerY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
         Invoke-Adb @("shell", "input", "tap", "$centerX", "$centerY") | Out-Null
         Write-Host "[note] OS notification prompt allowed (tap at $centerX,$centerY)."
+        return
     }
 }
 
