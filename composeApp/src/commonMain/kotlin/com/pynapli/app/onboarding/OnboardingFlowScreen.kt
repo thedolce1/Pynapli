@@ -1,5 +1,7 @@
 package com.pynapli.app.onboarding
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.shared.core.config.LegalLinks
@@ -505,18 +508,31 @@ private fun StepProgressDots(step: OnboardingStep) {
     val currentIndex = progressSteps.indexOf(step).coerceAtLeast(0)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         progressSteps.forEachIndexed { index, _ ->
+            // Reached steps fill with the accent; the current step stretches into a short
+            // pill so "you are here" reads at a glance. Both animate through the shared
+            // motion tokens, giving the stepper the same restrained life as the core loop.
+            val reached = index <= currentIndex
+            val color by animateColorAsState(
+                targetValue =
+                    if (reached) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    },
+                animationSpec = PynapliMotion.standardTween(),
+                label = "stepDotColor",
+            )
+            val width by animateDpAsState(
+                targetValue = if (index == currentIndex) 22.dp else 8.dp,
+                animationSpec = PynapliMotion.standardTween(),
+                label = "stepDotWidth",
+            )
             Box(
                 modifier =
                     Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (index <= currentIndex) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.outline
-                            },
-                        ),
+                        .size(width = width, height = 8.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(color),
             )
         }
     }

@@ -223,4 +223,16 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   composeApp androidHost/desktop tests + `:androidApp:assembleDebug` all green (server suite untouched
   — UI-only change, Docker down). No `android-psync-qa.ps1` exists; the desktop screen test is the
   guard. Psync is now on the type scale like the rest of the app.
-- Next (Phase 4): **Onboarding** — the final surface. Then Phase 5 (web/Wasm + iOS parity).
+- 2026-07-01 — **Phase 4 (Onboarding) — Phase 4 complete.** Onboarding was already token-clean and
+  fully on the `PynapliTypography` scale, so the genuine gap was **motion parity**: the DOB→Policies→
+  Account→Location→Profile stepper hard-cut and its progress dots snapped, while the core loop got
+  entrance/crossfade motion back in Phase 1. Animated `StepProgressDots` through the shared motion
+  tokens — reached steps fill with the accent and the current step stretches into a short pill
+  ("you are here"), both via `animateColorAsState`/`animateDpAsState` + `PynapliMotion.standardTween()`.
+  Kept the step-content structure untouched (no `Crossfade` wrap) to leave the heavily-QA'd signup
+  funnel stable — a deliberate, low-risk scope like Swipe's `EmptyDeck`. `verify-full`-equivalent gate
+  green (spotless + shared + composeApp host/desktop + assembleDebug; server suite untouched, UI-only);
+  no onboarding screen Compose test exists, script-based `android-onboarding-qa.ps1` is the guard.
+- **Phase 4 (surface-by-surface) is now complete across every surface** — Grid, Swipe, Activity,
+  Messages, Store, Profile/Albums, Tonight, Psync, Onboarding. Next: **Phase 5** (web/Wasm + iOS
+  parity), deferred until after Android ships to testers.
