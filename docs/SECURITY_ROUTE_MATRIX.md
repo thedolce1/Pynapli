@@ -33,6 +33,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `ProductMetricsRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Counts-only KPI snapshot via `requireAdminActor`. |
 | `AdminUserLookupRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Consolidated user lookup via `requireAdminActor`; additionally requires `X-Admin-Reason` and writes a `user_lookup` audit row. |
 | `AdminPartnerLinkReviewRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Partner-link review via `requireAdminActor`; additionally requires `X-Admin-Reason` and writes a `partner_link_review` audit row. |
+| `AdminSubscriptionSupportRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Read-only subscription support view via `requireAdminActor`; additionally requires `X-Admin-Reason` and writes a `subscription_support_view` audit row. Excludes raw purchase tokens/order ids. |
 | `NotificationRoutes.kt` | User-authenticated | Preferences and device tokens are token-derived. |
 | `PresenceRoutes.kt` | User-authenticated | Heartbeat is token-derived. |
 | `PresenceStreamRoutes.kt` | User-authenticated | SSE stream authenticates bearer token and block-filters target updates. |

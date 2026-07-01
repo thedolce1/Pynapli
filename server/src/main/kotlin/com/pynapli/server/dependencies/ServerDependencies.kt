@@ -10,8 +10,10 @@ import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.activity.JdbcActivityRetentionRepository
 import com.pynapli.server.admin.AdminPartnerLinkReviewService
+import com.pynapli.server.admin.AdminSubscriptionSupportService
 import com.pynapli.server.admin.AdminUserLookupService
 import com.pynapli.server.admin.JdbcAdminPartnerLinkReviewRepository
+import com.pynapli.server.admin.JdbcAdminSubscriptionSupportRepository
 import com.pynapli.server.admin.JdbcAdminUserLookupRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
@@ -107,6 +109,7 @@ class ServerDependencies(
     val profileLinkService: ProfileLinkService?,
     val adminUserLookupService: AdminUserLookupService?,
     val adminPartnerLinkReviewService: AdminPartnerLinkReviewService?,
+    val adminSubscriptionSupportService: AdminSubscriptionSupportService?,
     val locationService: LocationService?,
     val travelLocationService: TravelLocationService?,
     val travelPlaceSearchService: TravelPlaceSearchService?,
@@ -280,6 +283,11 @@ class ServerDependencies(
                 AdminPartnerLinkReviewService(
                     repository = JdbcAdminPartnerLinkReviewRepository(database.dataSource),
                 )
+            val adminSubscriptionSupportService =
+                AdminSubscriptionSupportService(
+                    repository = JdbcAdminSubscriptionSupportRepository(database.dataSource),
+                    entitlementLookup = { userId -> commerceTravel.subscriptionService.getEntitlement(userId) },
+                )
             val grid =
                 buildGridDependencies(
                     config = config,
@@ -366,6 +374,7 @@ class ServerDependencies(
                 profileLinkService = profileLinkService,
                 adminUserLookupService = adminUserLookupService,
                 adminPartnerLinkReviewService = adminPartnerLinkReviewService,
+                adminSubscriptionSupportService = adminSubscriptionSupportService,
                 locationService = core.locationService,
                 travelLocationService = commerceTravel.travelLocationService,
                 travelPlaceSearchService = commerceTravel.travelPlaceSearchService,
@@ -433,6 +442,7 @@ class ServerDependencies(
                 profileLinkService = null,
                 adminUserLookupService = null,
                 adminPartnerLinkReviewService = null,
+                adminSubscriptionSupportService = null,
                 locationService = null,
                 travelLocationService = null,
                 travelPlaceSearchService = null,

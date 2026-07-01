@@ -556,7 +556,7 @@ Track:
 - [ ] Partial: appeal API workflow exists; full senior-moderator separation, roles, MFA, and appeal UI are not complete.
 - [x] Appeals queue exists.
 - [x] Appeals review actions are audit logged.
-- [ ] Subscription support view exists.
+- [x] Subscription support view exists. (`GET /v1/admin/subscriptions/support/{userId}` — read-only consolidated view: resolved entitlement (tier/source/linked-partner benefit), owned store-subscription records (platform/tier/status/product/period/verification timestamps), and linked-partner benefits granted + received. Requires `X-Admin-Reason` and writes a `subscription_support_view` audit row; excludes raw purchase tokens/order ids. Distinct from the entitlement CRUD under `/v1/admin/subscriptions/...`.)
 - [x] Partner link review exists. (`GET /v1/admin/partner-links/{userId}` — read-only current/past link metadata, partner visibility, recent unlink count, and report context. Requires `X-Admin-Reason` and writes a `partner_link_review` audit row; excludes private media/message bodies/exact location and does not expose force-unlink/benefit-disable actions.)
 - [ ] Partial: held-message sensitive queue requires a reason; broader sensitive reveal reason flow is not complete.
 - [x] Held-message sensitive queue view requires reason.
