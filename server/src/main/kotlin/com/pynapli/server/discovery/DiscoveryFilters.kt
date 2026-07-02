@@ -19,6 +19,11 @@ data class DiscoveryFilters(
     // been active in the last 24h (a non-revoked session seen within the window). Swipe ignores it,
     // the way Grid ignores verifiedPreferred. A hard existence gate.
     val activeTodayOnly: Boolean = false,
+    // Grid-only Presence filters (FILTERS_SPEC "Recently joined" / "Traveling here"). recentlyJoined =
+    // the account was created within the last week; travelingHere = the candidate is near the viewer via
+    // an active travel/passport location (the card's "visiting" state). Hard gates; Swipe ignores them.
+    val recentlyJoinedOnly: Boolean = false,
+    val travelingHereOnly: Boolean = false,
     // FILTERS_SPEC L377 "Has photos": only surface profiles that have at least one approved,
     // visible public (profile-album) photo. Opt-in quality filter — default shows everyone,
     // including photo-less profiles. A hard existence gate, like verifiedOnly.
@@ -50,6 +55,8 @@ data class DiscoveryFilters(
                 logisticsTags.isNotEmpty() ||
                 tonightAvailableOnly ||
                 activeTodayOnly ||
+                recentlyJoinedOnly ||
+                travelingHereOnly ||
                 withPhotosOnly ||
                 intents.isNotEmpty() ||
                 genders.isNotEmpty() ||
@@ -76,6 +83,8 @@ fun discoveryFiltersFrom(
     logisticsTags: List<String> = emptyList(),
     tonightAvailableOnly: Boolean = false,
     activeTodayOnly: Boolean = false,
+    recentlyJoinedOnly: Boolean = false,
+    travelingHereOnly: Boolean = false,
     withPhotosOnly: Boolean = false,
     intents: List<String> = emptyList(),
     genders: List<String> = emptyList(),
@@ -178,6 +187,8 @@ fun discoveryFiltersFrom(
         logisticsTags = logistics,
         tonightAvailableOnly = tonightAvailableOnly,
         activeTodayOnly = activeTodayOnly,
+        recentlyJoinedOnly = recentlyJoinedOnly,
+        travelingHereOnly = travelingHereOnly,
         withPhotosOnly = withPhotosOnly,
         intents = intentValues,
         genders = genderValues,

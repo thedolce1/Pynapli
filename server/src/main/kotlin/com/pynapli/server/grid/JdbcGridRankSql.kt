@@ -179,6 +179,11 @@ internal fun Connection.queryGridRank(
                         AND active_today_us.last_seen_at > now() - interval '24 hours'
                   )
               )
+              -- FILTERS_SPEC "Recently joined" (Grid Presence): account created within the last week.
+              AND (?::boolean = false OR u.created_at > now() - interval '7 days')
+              -- FILTERS_SPEC "Traveling here" (Grid Presence): the candidate is near the viewer via an
+              -- active travel/passport location (the card's "visiting" state), not their home GPS.
+              AND (?::boolean = false OR target_travel.id IS NOT NULL)
               -- Per-viewer self/block exclusion ONLY when userSpecificViewerId is
               -- set (uncached path). On the cached path these are applied in Kotlin
               -- (self) or post-repository in GridService (block).
@@ -277,23 +282,26 @@ internal fun Connection.queryGridRank(
         statement.setBoolean(31, filters.withPhotosOnly)
         // FILTERS_SPEC "Active today" gate.
         statement.setBoolean(32, filters.activeTodayOnly)
+        // FILTERS_SPEC "Recently joined" / "Traveling here" gates.
+        statement.setBoolean(33, filters.recentlyJoinedOnly)
+        statement.setBoolean(34, filters.travelingHereOnly)
         // per-viewer block exclusion (self path).
-        statement.setNullableUuid(33, userSpecificViewerId)
-        statement.setNullableUuid(34, userSpecificViewerId)
         statement.setNullableUuid(35, userSpecificViewerId)
+        statement.setNullableUuid(36, userSpecificViewerId)
+        statement.setNullableUuid(37, userSpecificViewerId)
         // linkedOnly filter (?::boolean IS NULL / true / false).
-        statement.setObject(36, filters.linkedOnly)
-        statement.setObject(37, filters.linkedOnly)
         statement.setObject(38, filters.linkedOnly)
+        statement.setObject(39, filters.linkedOnly)
+        statement.setObject(40, filters.linkedOnly)
         // Keyset cursor predicate (no-op when cursor is null).
-        statement.setBoolean(39, cursor != null)
-        statement.setObject(40, cursor?.boostBucket)
-        statement.setObject(41, cursor?.boostBucket)
-        statement.setObject(42, cursor?.distanceBucketMeters)
+        statement.setBoolean(41, cursor != null)
+        statement.setObject(42, cursor?.boostBucket)
         statement.setObject(43, cursor?.boostBucket)
         statement.setObject(44, cursor?.distanceBucketMeters)
-        statement.setObject(45, cursor?.userId)
-        statement.setInt(46, limit)
+        statement.setObject(45, cursor?.boostBucket)
+        statement.setObject(46, cursor?.distanceBucketMeters)
+        statement.setObject(47, cursor?.userId)
+        statement.setInt(48, limit)
         statement.executeQuery().use { rs ->
             buildList {
                 while (rs.next()) {

@@ -47,6 +47,9 @@ data class GridFilters(
     val tonightAvailable: Boolean = false,
     // FILTERS_SPEC "Active today" (Presence, grid-only): owner active in the last 24h.
     val activeToday: Boolean = false,
+    // FILTERS_SPEC "Recently joined" / "Traveling here" (Presence, grid-only).
+    val recentlyJoined: Boolean = false,
+    val travelingHere: Boolean = false,
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
     val maximumAge: Int? = null,
@@ -70,6 +73,8 @@ data class GridFilters(
             if (withPhotos) count += 1
             if (tonightAvailable) count += 1
             if (activeToday) count += 1
+            if (recentlyJoined) count += 1
+            if (travelingHere) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
             return count
@@ -105,6 +110,8 @@ data class GridFilters(
             logisticsTags = logisticsTags.map { it.serverValue },
             tonightAvailableOnly = tonightAvailable,
             activeTodayOnly = activeToday,
+            recentlyJoinedOnly = recentlyJoined,
+            travelingHereOnly = travelingHere,
             withPhotosOnly = withPhotos,
             intents = intents.map { it.serverValue },
             genders = genders.toList(),
@@ -152,6 +159,8 @@ data class GridFilters(
                 withPhotos = request.withPhotosOnly,
                 tonightAvailable = request.tonightAvailableOnly,
                 activeToday = request.activeTodayOnly,
+                recentlyJoined = request.recentlyJoinedOnly,
+                travelingHere = request.travelingHereOnly,
                 radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
                 minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
                 maximumAge = request.maximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),

@@ -56,6 +56,8 @@ class GridService(
                     logisticsTags = request.logisticsTags,
                     tonightAvailableOnly = request.tonightAvailableOnly,
                     activeTodayOnly = request.activeTodayOnly,
+                    recentlyJoinedOnly = request.recentlyJoinedOnly,
+                    travelingHereOnly = request.travelingHereOnly,
                     withPhotosOnly = request.withPhotosOnly,
                     intents = request.intents,
                     genders = request.genders,

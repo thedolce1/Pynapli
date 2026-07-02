@@ -127,6 +127,8 @@ class DiscoveryCursorCodec(
                     append(filters.logisticsTags.sorted().joinToString(","))
                     append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
                     append("|activeTodayOnly=").append(filters.activeTodayOnly)
+                    append("|recentlyJoinedOnly=").append(filters.recentlyJoinedOnly)
+                    append("|travelingHereOnly=").append(filters.travelingHereOnly)
                     append("|withPhotosOnly=").append(filters.withPhotosOnly)
                     append("|intents=")
                     append(filters.intents.sorted().joinToString(","))

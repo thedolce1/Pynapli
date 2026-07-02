@@ -1054,6 +1054,58 @@ class GridAndSwipeRepositoryIntegrationTest :
             }
         }
 
+        "grid query with recentlyJoinedOnly excludes older accounts" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000d01")
+                val freshTarget = UUID.fromString("00000000-0000-0000-0000-000000000d02")
+                val staleTarget = UUID.fromString("00000000-0000-0000-0000-000000000d03")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(freshTarget, "Fern", age = 30, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(staleTarget, "Otto", age = 41, longitude = -122.0838, latitude = 37.4228)
+                // Accounts are created "now" by default; push the stale one past the 7-day window.
+                dataSource.setUserCreatedDaysAgo(staleTarget, days = 30)
+
+                val repository = JdbcGridRepository(dataSource)
+                val recentlyJoined =
+                    repository
+                        .queryNearby(
+                            viewerUserId = viewer,
+                            radiusMeters = 100_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(recentlyJoinedOnly = true),
+                        ).cards
+
+                assertEquals(listOf(freshTarget), recentlyJoined.map { it.userId })
+            }
+        }
+
+        "grid query with travelingHereOnly returns only travel-mode visitors" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000d11")
+                val visitor = UUID.fromString("00000000-0000-0000-0000-000000000d12")
+                val localResident = UUID.fromString("00000000-0000-0000-0000-000000000d13")
+                // Viewer + a local resident both physically in SF.
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.4194, latitude = 37.7749)
+                dataSource.insertDiscoverableUser(localResident, "Sage", age = 32, longitude = -122.4180, latitude = 37.7740)
+                // Visitor lives in NYC (far) but is traveling to SF — their travel point sits by the viewer.
+                dataSource.insertDiscoverableUser(visitor, "Maya", age = 34, longitude = -74.0060, latitude = 40.7128)
+                dataSource.insertActiveTravelLocation(userId = visitor, city = "San Francisco", latitude = 37.7745, longitude = -122.4185)
+
+                val repository = JdbcGridRepository(dataSource)
+                val travelingHere =
+                    repository
+                        .queryNearby(
+                            viewerUserId = viewer,
+                            radiusMeters = 5_000,
+                            limit = 10,
+                            filters = DiscoveryFilters(travelingHereOnly = true),
+                        ).cards
+
+                assertEquals(listOf(visitor), travelingHere.map { it.userId })
+                assertEquals(true, travelingHere.single().visiting)
+            }
+        }
+
         "grid query with activeTodayOnly excludes profiles with no recent session" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000c01")
@@ -2167,6 +2219,21 @@ private fun DataSource.insertSession(
                 statement.setTimestamp(6, java.sql.Timestamp.from(lastSeenAt.plusSeconds(86_400)))
                 statement.setTimestamp(7, java.sql.Timestamp.from(lastSeenAt))
                 statement.setTimestamp(8, revoked.takeIf { it }?.let { java.sql.Timestamp.from(lastSeenAt) })
+                statement.executeUpdate()
+            }
+    }
+}
+
+private fun DataSource.setUserCreatedDaysAgo(
+    userId: UUID,
+    days: Int,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement("UPDATE users SET created_at = now() - make_interval(days => ?) WHERE id = ?")
+            .use { statement ->
+                statement.setInt(1, days)
+                statement.setObject(2, userId)
                 statement.executeUpdate()
             }
     }

@@ -74,9 +74,13 @@ internal fun PresenceSection(
     online: Boolean,
     tonightAvailable: Boolean,
     activeToday: Boolean,
+    recentlyJoined: Boolean,
+    travelingHere: Boolean,
     onOnlineToggle: () -> Unit,
     onTonightToggle: () -> Unit,
     onActiveTodayToggle: () -> Unit,
+    onRecentlyJoinedToggle: () -> Unit,
+    onTravelingHereToggle: () -> Unit,
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -85,6 +89,8 @@ internal fun PresenceSection(
     ) {
         SheetToggleChip(label = "Online now", active = online, onClick = onOnlineToggle)
         SheetToggleChip(label = "Active today", active = activeToday, onClick = onActiveTodayToggle)
+        SheetToggleChip(label = "Recently joined", active = recentlyJoined, onClick = onRecentlyJoinedToggle)
+        SheetToggleChip(label = "Traveling here", active = travelingHere, onClick = onTravelingHereToggle)
         SheetToggleChip(label = "Available tonight", active = tonightAvailable, onClick = onTonightToggle)
     }
 }

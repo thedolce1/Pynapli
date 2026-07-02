@@ -20,6 +20,8 @@ data class GridQueryRequestDto(
     val logisticsTags: List<String> = emptyList(),
     val tonightAvailableOnly: Boolean = false,
     val activeTodayOnly: Boolean = false,
+    val recentlyJoinedOnly: Boolean = false,
+    val travelingHereOnly: Boolean = false,
     val withPhotosOnly: Boolean = false,
     val intents: List<String> = emptyList(),
     val genders: List<String> = emptyList(),

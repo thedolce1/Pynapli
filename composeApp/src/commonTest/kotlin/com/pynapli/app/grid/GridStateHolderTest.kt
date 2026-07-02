@@ -70,6 +70,16 @@ class GridStateHolderTest {
     }
 
     @Test
+    fun recentlyJoinedAndTravelingHereFiltersSerializeAndRoundTrip() {
+        val request = GridFilters(recentlyJoined = true, travelingHere = true).toGridQueryRequest(cursor = null)
+        assertEquals(true, request.recentlyJoinedOnly)
+        assertEquals(true, request.travelingHereOnly)
+        val restored = GridFilters.fromGridQueryRequest(request)
+        assertEquals(true, restored.recentlyJoined)
+        assertEquals(true, restored.travelingHere)
+    }
+
+    @Test
     fun applyingLogisticsTagsSerializesToCanonicalTokens() =
         runBlocking {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
