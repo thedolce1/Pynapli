@@ -7,17 +7,13 @@ import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
 import com.pynapli.shared.network.dto.SubscriptionTier
-import com.zaxxer.hikari.HikariConfig
-import com.zaxxer.hikari.HikariDataSource
 import io.kotest.core.spec.style.StringSpec
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
-import org.flywaydb.core.Flyway
-import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.utility.DockerImageName
 import java.sql.Timestamp
 import java.time.Clock
 import java.time.Duration
@@ -33,45 +29,11 @@ import kotlin.test.assertTrue
 
 class TonightSessionServiceIntegrationTest :
     StringSpec({
-        val postgisImage =
-            DockerImageName
-                .parse("postgis/postgis:16-3.4")
-                .asCompatibleSubstituteFor("postgres")
-        val postgres =
-            PostgreSQLContainer<Nothing>(postgisImage).apply {
-                withDatabaseName("pynapli_tonight_test")
-                withUsername("pynapli")
-                withPassword("pynapli_test_password")
-            }
-        lateinit var dataSource: HikariDataSource
-
-        beforeSpec { postgres.start() }
-        afterSpec { postgres.stop() }
+        val dataSource = PynapliTestDatabase.dataSource
 
         beforeTest {
-            dataSource =
-                HikariDataSource(
-                    HikariConfig().apply {
-                        jdbcUrl = postgres.jdbcUrl
-                        username = postgres.username
-                        password = postgres.password
-                        maximumPoolSize = 8
-                        poolName = "pynapli-tonight-test"
-                    },
-                )
-            Flyway
-                .configure()
-                .dataSource(dataSource)
-                .locations("classpath:db/migration")
-                .cleanDisabled(false)
-                .load()
-                .also { flyway ->
-                    flyway.clean()
-                    flyway.migrate()
-                }
+            PynapliTestDatabase.reset()
         }
-
-        afterTest { dataSource.close() }
 
         fun paidService(
             clock: Clock = Clock.systemUTC(),

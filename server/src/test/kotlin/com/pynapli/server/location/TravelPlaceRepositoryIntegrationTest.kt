@@ -1,56 +1,19 @@
 package com.pynapli.server.location
 
-import com.zaxxer.hikari.HikariConfig
-import com.zaxxer.hikari.HikariDataSource
+import com.pynapli.server.testsupport.PynapliTestDatabase
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.runBlocking
-import org.flywaydb.core.Flyway
-import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.utility.DockerImageName
+import javax.sql.DataSource
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TravelPlaceRepositoryIntegrationTest :
     StringSpec({
-        val postgisImage =
-            DockerImageName
-                .parse("postgis/postgis:16-3.4")
-                .asCompatibleSubstituteFor("postgres")
-        val postgres =
-            PostgreSQLContainer<Nothing>(postgisImage).apply {
-                withDatabaseName("pynapli_travel_place_test")
-                withUsername("pynapli")
-                withPassword("pynapli_test_password")
-            }
-        lateinit var dataSource: HikariDataSource
-
-        beforeSpec { postgres.start() }
-        afterSpec { postgres.stop() }
+        val dataSource = PynapliTestDatabase.dataSource
 
         beforeTest {
-            dataSource =
-                HikariDataSource(
-                    HikariConfig().apply {
-                        jdbcUrl = postgres.jdbcUrl
-                        username = postgres.username
-                        password = postgres.password
-                        maximumPoolSize = 2
-                        poolName = "pynapli-travel-place-test"
-                    },
-                )
-            Flyway
-                .configure()
-                .dataSource(dataSource)
-                .locations("classpath:db/migration")
-                .cleanDisabled(false)
-                .load()
-                .also { flyway ->
-                    flyway.clean()
-                    flyway.migrate()
-                }
+            PynapliTestDatabase.reset()
         }
-
-        afterTest { dataSource.close() }
 
         fun fixtureRows(): Sequence<TravelPlaceRow> =
             sequenceOf(
