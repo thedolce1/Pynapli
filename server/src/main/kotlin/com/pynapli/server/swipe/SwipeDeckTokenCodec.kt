@@ -262,8 +262,18 @@ class SwipeDeckTokenCodec(
                     append("|logisticsTags=")
                     append(filters.logisticsTags.sorted().joinToString(","))
                     append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
+                    append("|withPhotosOnly=").append(filters.withPhotosOnly)
                     append("|intents=")
                     append(filters.intents.sorted().joinToString(","))
+                    // withPhotosOnly / genders / orientations / verifiedPreferred were previously
+                    // omitted: a deck token is only valid within its full filter scope, so every set-
+                    // or order-defining filter must be hashed, or a token could carry across a filter
+                    // change and replay a stale deck. (verifiedPreferred reorders the deck.)
+                    append("|genders=")
+                    append(filters.genders.sorted().joinToString(","))
+                    append("|orientations=")
+                    append(filters.orientations.sorted().joinToString(","))
+                    append("|verifiedPreferred=").append(filters.verifiedPreferred)
                 }
             return sha256Base64Url(normalized)
         }

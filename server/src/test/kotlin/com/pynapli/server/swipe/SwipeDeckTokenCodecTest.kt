@@ -7,6 +7,7 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
 
 /**
  * Pins the swipe deck-session / card / cursor token security contract directly on the codec.
@@ -42,6 +43,31 @@ class SwipeDeckTokenCodecTest {
         val validated = codec.validateAction(session.deckSessionId, card, viewer, target, now)
         assertEquals(session.sessionId, validated.sessionId)
         assertEquals(scopeHash, validated.scopeHash)
+    }
+
+    @Test
+    fun deckScopeHashDistinguishesEverySetOrOrderDefiningFilter() {
+        val base = DiscoveryFilters()
+        val baseHash = SwipeDeckTokenCodec.deckScopeHash(viewer, radiusMeters = 50_000, limit = 30, filters = base)
+        // Each variant changes the deck's candidate set or order, so each must yield a distinct scope
+        // hash — otherwise a deck token could carry across the change. The first four (genders,
+        // orientations, withPhotosOnly, verifiedPreferred) were previously omitted from the hash.
+        val variants =
+            listOf(
+                base.copy(genders = setOf("woman")),
+                base.copy(orientations = setOf("bisexual")),
+                base.copy(withPhotosOnly = true),
+                base.copy(verifiedPreferred = true),
+                base.copy(verifiedOnly = true),
+                base.copy(minimumAge = 25),
+                base.copy(intents = setOf("dating")),
+            )
+        variants.forEach { variant ->
+            assertNotEquals(
+                baseHash,
+                SwipeDeckTokenCodec.deckScopeHash(viewer, radiusMeters = 50_000, limit = 30, filters = variant),
+            )
+        }
     }
 
     @Test
