@@ -130,6 +130,7 @@ class DiscoveryCursorCodec(
                     append("|recentlyJoinedOnly=").append(filters.recentlyJoinedOnly)
                     append("|travelingHereOnly=").append(filters.travelingHereOnly)
                     append("|withPhotosOnly=").append(filters.withPhotosOnly)
+                    append("|hasPrivateAlbumOnly=").append(filters.hasPrivateAlbumOnly)
                     append("|intents=")
                     append(filters.intents.sorted().joinToString(","))
                     // withPhotosOnly / genders / orientations were previously omitted here: a cursor

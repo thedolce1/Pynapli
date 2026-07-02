@@ -28,6 +28,10 @@ data class DiscoveryFilters(
     // visible public (profile-album) photo. Opt-in quality filter — default shows everyone,
     // including photo-less profiles. A hard existence gate, like verifiedOnly.
     val withPhotosOnly: Boolean = false,
+    // FILTERS_SPEC "Has private album" (Media): only surface profiles that OWN a visible private album
+    // with at least one approved photo. A discovery signal only — it does NOT grant access (albums are
+    // still request/granted separately). Grid + Swipe, like withPhotosOnly. A hard existence gate.
+    val hasPrivateAlbumOnly: Boolean = false,
     val intents: Set<String> = emptySet(),
     // Structured identity filters (PROFILE_FILTER_SYNC_SPEC: "orientation/gender compatibility" is
     // bidirectional). Hard match against profiles.gender / profiles.orientation, like the other grid
@@ -58,6 +62,7 @@ data class DiscoveryFilters(
                 recentlyJoinedOnly ||
                 travelingHereOnly ||
                 withPhotosOnly ||
+                hasPrivateAlbumOnly ||
                 intents.isNotEmpty() ||
                 genders.isNotEmpty() ||
                 orientations.isNotEmpty()
@@ -86,6 +91,7 @@ fun discoveryFiltersFrom(
     recentlyJoinedOnly: Boolean = false,
     travelingHereOnly: Boolean = false,
     withPhotosOnly: Boolean = false,
+    hasPrivateAlbumOnly: Boolean = false,
     intents: List<String> = emptyList(),
     genders: List<String> = emptyList(),
     orientations: List<String> = emptyList(),
@@ -190,6 +196,7 @@ fun discoveryFiltersFrom(
         recentlyJoinedOnly = recentlyJoinedOnly,
         travelingHereOnly = travelingHereOnly,
         withPhotosOnly = withPhotosOnly,
+        hasPrivateAlbumOnly = hasPrivateAlbumOnly,
         intents = intentValues,
         genders = genderValues,
         orientations = orientationValues,

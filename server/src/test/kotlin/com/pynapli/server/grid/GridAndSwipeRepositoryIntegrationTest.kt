@@ -1054,6 +1054,33 @@ class GridAndSwipeRepositoryIntegrationTest :
             }
         }
 
+        "grid and swipe query with hasPrivateAlbumOnly excludes profiles without a private album" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000e01")
+                val withPrivate = UUID.fromString("00000000-0000-0000-0000-000000000e02")
+                val withoutPrivate = UUID.fromString("00000000-0000-0000-0000-000000000e03")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(withPrivate, "Priya", age = 30, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(withoutPrivate, "Pat", age = 33, longitude = -122.0838, latitude = 37.4228)
+                // withPrivate owns a private album with an approved photo; withoutPrivate only a profile album.
+                dataSource.insertApprovedPrivateAlbumPhoto(withPrivate)
+                dataSource.insertApprovedProfilePhoto(withoutPrivate)
+
+                val filters = DiscoveryFilters(hasPrivateAlbumOnly = true)
+                val grid =
+                    JdbcGridRepository(dataSource)
+                        .queryNearby(viewer, radiusMeters = 100_000, limit = 10, filters = filters)
+                        .cards
+                val swipe =
+                    JdbcSwipeRepository(dataSource)
+                        .queryDeck(viewer, radiusMeters = 100_000, limit = 10, filters = filters)
+                        .cards
+
+                assertEquals(listOf(withPrivate), grid.map { it.userId })
+                assertEquals(listOf(withPrivate), swipe.map { it.userId })
+            }
+        }
+
         "grid query with recentlyJoinedOnly excludes older accounts" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000d01")
@@ -2287,6 +2314,46 @@ private fun DataSource.insertApprovedProfilePhoto(userId: UUID) {
             .prepareStatement(
                 "INSERT INTO media_albums (id, owner_user_id, kind, title, visibility_status) " +
                     "VALUES (?, ?, 'profile', 'Profile', 'visible')",
+            ).use { statement ->
+                statement.setObject(1, albumId)
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+        connection
+            .prepareStatement(
+                "INSERT INTO media_album_items (album_id, media_asset_id, owner_user_id, sort_order) VALUES (?, ?, ?, 0)",
+            ).use { statement ->
+                statement.setObject(1, albumId)
+                statement.setObject(2, assetId)
+                statement.setObject(3, userId)
+                statement.executeUpdate()
+            }
+    }
+}
+
+private fun DataSource.insertApprovedPrivateAlbumPhoto(userId: UUID) {
+    connection.use { connection ->
+        val albumId = UUID.randomUUID()
+        val assetId = UUID.randomUUID()
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO media_assets (
+                    id, owner_user_id, media_type, storage_provider, storage_bucket,
+                    storage_object_key, content_type, byte_size, processing_status, moderation_status
+                )
+                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved')
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, assetId)
+                statement.setObject(2, userId)
+                statement.setString(3, "media/$assetId")
+                statement.executeUpdate()
+            }
+        connection
+            .prepareStatement(
+                "INSERT INTO media_albums (id, owner_user_id, kind, title, visibility_status) " +
+                    "VALUES (?, ?, 'private', 'Private', 'visible')",
             ).use { statement ->
                 statement.setObject(1, albumId)
                 statement.setObject(2, userId)

@@ -94,6 +94,29 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
                     AND has_photo_m.moderation_status = 'approved'
               )
           )
+          -- FILTERS_SPEC "Has private album" (Media): opt-in gate to owning a visible private album
+          -- with at least one approved photo. Discovery signal only — does not grant album access.
+          AND (
+              ?::boolean = false
+              OR EXISTS (
+                  SELECT 1
+                  FROM media_albums has_private_ma
+                  JOIN media_album_items has_private_mai
+                    ON has_private_mai.album_id = has_private_ma.id
+                   AND has_private_mai.removed_at IS NULL
+                  JOIN media_assets has_private_m
+                    ON has_private_m.id = has_private_mai.media_asset_id
+                   AND has_private_m.owner_user_id = has_private_ma.owner_user_id
+                   AND has_private_m.deleted_at IS NULL
+                  WHERE has_private_ma.owner_user_id = u.id
+                    AND has_private_ma.kind = 'private'
+                    AND has_private_ma.visibility_status = 'visible'
+                    AND has_private_ma.deleted_at IS NULL
+                    AND has_private_m.media_type = 'image'
+                    AND has_private_m.processing_status = 'ready'
+                    AND has_private_m.moderation_status = 'approved'
+              )
+          )
           AND (
               ?::uuid IS NULL
               OR NOT EXISTS (
@@ -151,11 +174,13 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
             statement.setArray(27, orientations)
             // $28: FILTERS_SPEC "Has photos" gate.
             statement.setBoolean(28, filters.withPhotosOnly)
-            statement.setNullableUuid(29, userSpecificViewerId)
+            // $29: FILTERS_SPEC "Has private album" gate.
+            statement.setBoolean(29, filters.hasPrivateAlbumOnly)
             statement.setNullableUuid(30, userSpecificViewerId)
-            statement.setBoolean(31, excludedTargetUserIds.isNotEmpty())
-            statement.setArray(32, excludedIds)
-            statement.setInt(33, limit)
+            statement.setNullableUuid(31, userSpecificViewerId)
+            statement.setBoolean(32, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(33, excludedIds)
+            statement.setInt(34, limit)
             statement.executeDeckRankRows()
         }.sortedByDescending { it.isBoosted }
 }
@@ -270,6 +295,29 @@ internal fun Connection.queryDeckRankForcedTargets(
                     AND has_photo_m.moderation_status = 'approved'
               )
           )
+          -- FILTERS_SPEC "Has private album" (Media): opt-in gate to owning a visible private album
+          -- with at least one approved photo. Discovery signal only — does not grant album access.
+          AND (
+              ?::boolean = false
+              OR EXISTS (
+                  SELECT 1
+                  FROM media_albums has_private_ma
+                  JOIN media_album_items has_private_mai
+                    ON has_private_mai.album_id = has_private_ma.id
+                   AND has_private_mai.removed_at IS NULL
+                  JOIN media_assets has_private_m
+                    ON has_private_m.id = has_private_mai.media_asset_id
+                   AND has_private_m.owner_user_id = has_private_ma.owner_user_id
+                   AND has_private_m.deleted_at IS NULL
+                  WHERE has_private_ma.owner_user_id = u.id
+                    AND has_private_ma.kind = 'private'
+                    AND has_private_ma.visibility_status = 'visible'
+                    AND has_private_ma.deleted_at IS NULL
+                    AND has_private_m.media_type = 'image'
+                    AND has_private_m.processing_status = 'ready'
+                    AND has_private_m.moderation_status = 'approved'
+              )
+          )
           AND (
               ?::uuid IS NULL
               OR NOT EXISTS (
@@ -328,11 +376,13 @@ internal fun Connection.queryDeckRankForcedTargets(
             statement.setArray(28, orientations)
             // $29: FILTERS_SPEC "Has photos" gate.
             statement.setBoolean(29, filters.withPhotosOnly)
-            statement.setNullableUuid(30, userSpecificViewerId)
+            // $30: FILTERS_SPEC "Has private album" gate.
+            statement.setBoolean(30, filters.hasPrivateAlbumOnly)
             statement.setNullableUuid(31, userSpecificViewerId)
-            statement.setBoolean(32, excludedTargetUserIds.isNotEmpty())
-            statement.setArray(33, excludedIds)
-            statement.setInt(34, limit)
+            statement.setNullableUuid(32, userSpecificViewerId)
+            statement.setBoolean(33, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(34, excludedIds)
+            statement.setInt(35, limit)
             statement.executeDeckRankRows()
         }.sortedByDescending { it.isBoosted }
 }

@@ -33,4 +33,14 @@ class SwipeFiltersTest {
         assertEquals(0, SwipeFilters().activeCount)
         assertEquals(1, SwipeFilters(withPhotos = true).activeCount)
     }
+
+    @Test
+    fun hasPrivateAlbumSerializesAndRoundTrips() {
+        val request = SwipeFilters(hasPrivateAlbum = true).toSwipeDeckRequest()
+        assertEquals(true, request.hasPrivateAlbumOnly)
+
+        val roundTripped = SwipeFilters.fromSwipeDeckRequest(request)
+        assertEquals(true, roundTripped.hasPrivateAlbum)
+        assertTrue(roundTripped.isAnyActive)
+    }
 }

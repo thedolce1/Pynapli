@@ -184,6 +184,29 @@ internal fun Connection.queryGridRank(
               -- FILTERS_SPEC "Traveling here" (Grid Presence): the candidate is near the viewer via an
               -- active travel/passport location (the card's "visiting" state), not their home GPS.
               AND (?::boolean = false OR target_travel.id IS NOT NULL)
+              -- FILTERS_SPEC "Has private album" (Media): opt-in gate to owning a visible private album
+              -- with at least one approved photo. Discovery signal only — does not grant album access.
+              AND (
+                  ?::boolean = false
+                  OR EXISTS (
+                      SELECT 1
+                      FROM media_albums has_private_ma
+                      JOIN media_album_items has_private_mai
+                        ON has_private_mai.album_id = has_private_ma.id
+                       AND has_private_mai.removed_at IS NULL
+                      JOIN media_assets has_private_m
+                        ON has_private_m.id = has_private_mai.media_asset_id
+                       AND has_private_m.owner_user_id = has_private_ma.owner_user_id
+                       AND has_private_m.deleted_at IS NULL
+                      WHERE has_private_ma.owner_user_id = u.id
+                        AND has_private_ma.kind = 'private'
+                        AND has_private_ma.visibility_status = 'visible'
+                        AND has_private_ma.deleted_at IS NULL
+                        AND has_private_m.media_type = 'image'
+                        AND has_private_m.processing_status = 'ready'
+                        AND has_private_m.moderation_status = 'approved'
+                  )
+              )
               -- Per-viewer self/block exclusion ONLY when userSpecificViewerId is
               -- set (uncached path). On the cached path these are applied in Kotlin
               -- (self) or post-repository in GridService (block).
@@ -285,23 +308,25 @@ internal fun Connection.queryGridRank(
         // FILTERS_SPEC "Recently joined" / "Traveling here" gates.
         statement.setBoolean(33, filters.recentlyJoinedOnly)
         statement.setBoolean(34, filters.travelingHereOnly)
+        // FILTERS_SPEC "Has private album" gate.
+        statement.setBoolean(35, filters.hasPrivateAlbumOnly)
         // per-viewer block exclusion (self path).
-        statement.setNullableUuid(35, userSpecificViewerId)
         statement.setNullableUuid(36, userSpecificViewerId)
         statement.setNullableUuid(37, userSpecificViewerId)
+        statement.setNullableUuid(38, userSpecificViewerId)
         // linkedOnly filter (?::boolean IS NULL / true / false).
-        statement.setObject(38, filters.linkedOnly)
         statement.setObject(39, filters.linkedOnly)
         statement.setObject(40, filters.linkedOnly)
+        statement.setObject(41, filters.linkedOnly)
         // Keyset cursor predicate (no-op when cursor is null).
-        statement.setBoolean(41, cursor != null)
-        statement.setObject(42, cursor?.boostBucket)
+        statement.setBoolean(42, cursor != null)
         statement.setObject(43, cursor?.boostBucket)
-        statement.setObject(44, cursor?.distanceBucketMeters)
-        statement.setObject(45, cursor?.boostBucket)
-        statement.setObject(46, cursor?.distanceBucketMeters)
-        statement.setObject(47, cursor?.userId)
-        statement.setInt(48, limit)
+        statement.setObject(44, cursor?.boostBucket)
+        statement.setObject(45, cursor?.distanceBucketMeters)
+        statement.setObject(46, cursor?.boostBucket)
+        statement.setObject(47, cursor?.distanceBucketMeters)
+        statement.setObject(48, cursor?.userId)
+        statement.setInt(49, limit)
         statement.executeQuery().use { rs ->
             buildList {
                 while (rs.next()) {

@@ -69,6 +69,8 @@ internal fun DiscoveryFilters.rankCacheKey(): String =
         append(';')
         append(withPhotosOnly)
         append(';')
+        append(hasPrivateAlbumOnly)
+        append(';')
         append(intents.sorted().joinToString("|"))
         append(';')
         // Identity filters are hard predicates in the deck SQL, so they MUST be part of the

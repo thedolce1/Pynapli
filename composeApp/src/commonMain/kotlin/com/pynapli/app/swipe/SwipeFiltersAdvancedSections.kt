@@ -29,7 +29,9 @@ internal fun SwipeAdvancedFilterControls(
     SectionTitle("Photos")
     PhotosSection(
         withPhotos = draft.withPhotos,
-        onToggle = { onDraftChange(draft.copy(withPhotos = !draft.withPhotos)) },
+        hasPrivateAlbum = draft.hasPrivateAlbum,
+        onWithPhotosToggle = { onDraftChange(draft.copy(withPhotos = !draft.withPhotos)) },
+        onHasPrivateAlbumToggle = { onDraftChange(draft.copy(hasPrivateAlbum = !draft.hasPrivateAlbum)) },
     )
     LifestyleTagsSection(
         selected = draft.lifestyleTags,

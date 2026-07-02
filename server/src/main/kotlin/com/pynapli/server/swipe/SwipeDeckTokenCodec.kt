@@ -263,6 +263,7 @@ class SwipeDeckTokenCodec(
                     append(filters.logisticsTags.sorted().joinToString(","))
                     append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
                     append("|withPhotosOnly=").append(filters.withPhotosOnly)
+                    append("|hasPrivateAlbumOnly=").append(filters.hasPrivateAlbumOnly)
                     append("|intents=")
                     append(filters.intents.sorted().joinToString(","))
                     // withPhotosOnly / genders / orientations / verifiedPreferred were previously

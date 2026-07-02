@@ -206,10 +206,17 @@ internal fun FacePhotoAndAgeVerifiedSection(
 @Composable
 internal fun PhotosSection(
     withPhotos: Boolean,
-    onToggle: () -> Unit,
+    hasPrivateAlbum: Boolean,
+    onWithPhotosToggle: () -> Unit,
+    onHasPrivateAlbumToggle: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SwipeSheetChip(label = "Has photos", active = withPhotos, onClick = onToggle)
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SwipeSheetChip(label = "Has photos", active = withPhotos, onClick = onWithPhotosToggle)
+        SwipeSheetChip(label = "Has private album", active = hasPrivateAlbum, onClick = onHasPrivateAlbumToggle)
     }
 }
 

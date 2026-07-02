@@ -166,6 +166,29 @@ internal fun Connection.queryDeckRank(
                     AND has_photo_m.moderation_status = 'approved'
               )
           )
+          -- FILTERS_SPEC "Has private album" (Media): opt-in gate to owning a visible private album
+          -- with at least one approved photo. Discovery signal only — does not grant album access.
+          AND (
+              ?::boolean = false
+              OR EXISTS (
+                  SELECT 1
+                  FROM media_albums has_private_ma
+                  JOIN media_album_items has_private_mai
+                    ON has_private_mai.album_id = has_private_ma.id
+                   AND has_private_mai.removed_at IS NULL
+                  JOIN media_assets has_private_m
+                    ON has_private_m.id = has_private_mai.media_asset_id
+                   AND has_private_m.owner_user_id = has_private_ma.owner_user_id
+                   AND has_private_m.deleted_at IS NULL
+                  WHERE has_private_ma.owner_user_id = u.id
+                    AND has_private_ma.kind = 'private'
+                    AND has_private_ma.visibility_status = 'visible'
+                    AND has_private_ma.deleted_at IS NULL
+                    AND has_private_m.media_type = 'image'
+                    AND has_private_m.processing_status = 'ready'
+                    AND has_private_m.moderation_status = 'approved'
+              )
+          )
           AND (
               ?::boolean IS NULL
               OR ?::boolean = EXISTS (
@@ -264,17 +287,19 @@ internal fun Connection.queryDeckRank(
             statement.setArray(27, orientations)
             // $28: FILTERS_SPEC "Has photos" gate.
             statement.setBoolean(28, filters.withPhotosOnly)
-            statement.setObject(29, filters.linkedOnly)
+            // $29: FILTERS_SPEC "Has private album" gate.
+            statement.setBoolean(29, filters.hasPrivateAlbumOnly)
             statement.setObject(30, filters.linkedOnly)
-            statement.setObject(31, viewerUserId)
+            statement.setObject(31, filters.linkedOnly)
             statement.setObject(32, viewerUserId)
-            statement.setNullableUuid(33, userSpecificViewerId)
+            statement.setObject(33, viewerUserId)
             statement.setNullableUuid(34, userSpecificViewerId)
-            statement.setBoolean(35, excludedTargetUserIds.isNotEmpty())
-            statement.setArray(36, excludedIds)
-            statement.setBoolean(37, forcedTargetUserIds.isNotEmpty())
-            statement.setArray(38, forcedIds)
-            statement.setInt(39, limit)
+            statement.setNullableUuid(35, userSpecificViewerId)
+            statement.setBoolean(36, excludedTargetUserIds.isNotEmpty())
+            statement.setArray(37, excludedIds)
+            statement.setBoolean(38, forcedTargetUserIds.isNotEmpty())
+            statement.setArray(39, forcedIds)
+            statement.setInt(40, limit)
             statement.executeDeckRankRows()
         }
 

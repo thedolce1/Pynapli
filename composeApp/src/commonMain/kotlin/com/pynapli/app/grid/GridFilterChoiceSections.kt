@@ -98,10 +98,17 @@ internal fun PresenceSection(
 @Composable
 internal fun PhotosSection(
     withPhotos: Boolean,
-    onToggle: () -> Unit,
+    hasPrivateAlbum: Boolean,
+    onWithPhotosToggle: () -> Unit,
+    onHasPrivateAlbumToggle: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SheetToggleChip(label = "Has photos", active = withPhotos, onClick = onToggle)
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SheetToggleChip(label = "Has photos", active = withPhotos, onClick = onWithPhotosToggle)
+        SheetToggleChip(label = "Has private album", active = hasPrivateAlbum, onClick = onHasPrivateAlbumToggle)
     }
 }
 

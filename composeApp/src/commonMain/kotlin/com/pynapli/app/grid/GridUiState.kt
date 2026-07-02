@@ -44,6 +44,8 @@ data class GridFilters(
     val orientations: Set<String> = emptySet(),
     // FILTERS_SPEC "Has photos": only show profiles with at least one approved public photo.
     val withPhotos: Boolean = false,
+    // FILTERS_SPEC "Has private album": only show profiles that own a visible private album.
+    val hasPrivateAlbum: Boolean = false,
     val tonightAvailable: Boolean = false,
     // FILTERS_SPEC "Active today" (Presence, grid-only): owner active in the last 24h.
     val activeToday: Boolean = false,
@@ -71,6 +73,7 @@ data class GridFilters(
             if (genders.isNotEmpty()) count += 1
             if (orientations.isNotEmpty()) count += 1
             if (withPhotos) count += 1
+            if (hasPrivateAlbum) count += 1
             if (tonightAvailable) count += 1
             if (activeToday) count += 1
             if (recentlyJoined) count += 1
@@ -113,6 +116,7 @@ data class GridFilters(
             recentlyJoinedOnly = recentlyJoined,
             travelingHereOnly = travelingHere,
             withPhotosOnly = withPhotos,
+            hasPrivateAlbumOnly = hasPrivateAlbum,
             intents = intents.map { it.serverValue },
             genders = genders.toList(),
             orientations = orientations.toList(),
@@ -157,6 +161,7 @@ data class GridFilters(
                 genders = request.genders.toSet(),
                 orientations = request.orientations.toSet(),
                 withPhotos = request.withPhotosOnly,
+                hasPrivateAlbum = request.hasPrivateAlbumOnly,
                 tonightAvailable = request.tonightAvailableOnly,
                 activeToday = request.activeTodayOnly,
                 recentlyJoined = request.recentlyJoinedOnly,

@@ -59,6 +59,7 @@ class GridService(
                     recentlyJoinedOnly = request.recentlyJoinedOnly,
                     travelingHereOnly = request.travelingHereOnly,
                     withPhotosOnly = request.withPhotosOnly,
+                    hasPrivateAlbumOnly = request.hasPrivateAlbumOnly,
                     intents = request.intents,
                     genders = request.genders,
                     orientations = request.orientations,

@@ -43,6 +43,7 @@ data class SwipeDeckRequestDto(
     val genders: List<String> = emptyList(),
     val orientations: List<String> = emptyList(),
     val withPhotosOnly: Boolean = false,
+    val hasPrivateAlbumOnly: Boolean = false,
     val dealbreakers: Set<String> = emptySet(),
     // FILTERS_SPEC L344-352 "Verified preferred (ranking weight)" — soft signal that
     // boosts verified targets in the deck ranking without filtering out unverified ones.

@@ -132,6 +132,8 @@ internal fun DiscoveryFilters.gridRankCacheKey(): String =
         append(';')
         append(withPhotosOnly)
         append(';')
+        append(hasPrivateAlbumOnly)
+        append(';')
         append(intents.sorted().joinToString("|"))
         append(';')
         append(genders.sorted().joinToString("|"))

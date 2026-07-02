@@ -43,6 +43,8 @@ data class SwipeFilters(
     val orientations: Set<String> = emptySet(),
     // FILTERS_SPEC "Has photos": only show profiles with at least one approved public photo.
     val withPhotos: Boolean = false,
+    // FILTERS_SPEC "Has private album": only show profiles that own a visible private album.
+    val hasPrivateAlbum: Boolean = false,
     val dealbreakers: Set<String> = emptySet(),
 ) {
     val activeCount: Int
@@ -64,6 +66,7 @@ data class SwipeFilters(
             if (genders.isNotEmpty()) count += 1
             if (orientations.isNotEmpty()) count += 1
             if (withPhotos) count += 1
+            if (hasPrivateAlbum) count += 1
             return count
         }
 
@@ -103,6 +106,7 @@ data class SwipeFilters(
             genders = genders.toList(),
             orientations = orientations.toList(),
             withPhotosOnly = withPhotos,
+            hasPrivateAlbumOnly = hasPrivateAlbum,
             dealbreakers = dealbreakers,
             verifiedPreferred = verifiedPreferred,
         )
@@ -160,6 +164,7 @@ data class SwipeFilters(
                 genders = request.genders.toSet(),
                 orientations = request.orientations.toSet(),
                 withPhotos = request.withPhotosOnly,
+                hasPrivateAlbum = request.hasPrivateAlbumOnly,
                 dealbreakers = dealbreakers,
             )
         }

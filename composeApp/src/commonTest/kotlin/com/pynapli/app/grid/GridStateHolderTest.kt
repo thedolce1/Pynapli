@@ -80,6 +80,13 @@ class GridStateHolderTest {
     }
 
     @Test
+    fun hasPrivateAlbumFilterSerializesAndRoundTrips() {
+        val request = GridFilters(hasPrivateAlbum = true).toGridQueryRequest(cursor = null)
+        assertEquals(true, request.hasPrivateAlbumOnly)
+        assertEquals(true, GridFilters.fromGridQueryRequest(request).hasPrivateAlbum)
+    }
+
+    @Test
     fun applyingLogisticsTagsSerializesToCanonicalTokens() =
         runBlocking {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))

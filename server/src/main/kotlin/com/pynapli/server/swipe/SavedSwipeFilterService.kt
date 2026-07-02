@@ -109,6 +109,7 @@ class SavedSwipeFilterService(
             lifestyleTags = payload.lifestyleTags,
             logisticsTags = payload.logisticsTags,
             withPhotosOnly = payload.withPhotosOnly,
+            hasPrivateAlbumOnly = payload.hasPrivateAlbumOnly,
             intents = payload.intents,
             genders = payload.genders,
             orientations = payload.orientations,

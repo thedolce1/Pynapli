@@ -23,6 +23,7 @@ data class GridQueryRequestDto(
     val recentlyJoinedOnly: Boolean = false,
     val travelingHereOnly: Boolean = false,
     val withPhotosOnly: Boolean = false,
+    val hasPrivateAlbumOnly: Boolean = false,
     val intents: List<String> = emptyList(),
     val genders: List<String> = emptyList(),
     val orientations: List<String> = emptyList(),

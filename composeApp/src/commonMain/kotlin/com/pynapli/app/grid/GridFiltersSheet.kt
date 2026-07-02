@@ -125,7 +125,9 @@ internal fun GridFiltersSheet(
             SectionTitle("Photos")
             PhotosSection(
                 withPhotos = draft.withPhotos,
-                onToggle = { draft = draft.copy(withPhotos = !draft.withPhotos) },
+                hasPrivateAlbum = draft.hasPrivateAlbum,
+                onWithPhotosToggle = { draft = draft.copy(withPhotos = !draft.withPhotos) },
+                onHasPrivateAlbumToggle = { draft = draft.copy(hasPrivateAlbum = !draft.hasPrivateAlbum) },
             )
 
             SectionTitle("Intent")
