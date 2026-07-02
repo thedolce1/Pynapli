@@ -1,53 +1,23 @@
 package com.pynapli.server.admin
 
-import com.zaxxer.hikari.HikariConfig
-import com.zaxxer.hikari.HikariDataSource
+import com.pynapli.server.testsupport.PynapliTestDatabase
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.flywaydb.core.Flyway
-import org.junit.After
-import org.junit.AfterClass
 import org.junit.Before
-import org.junit.BeforeClass
 import org.junit.Test
-import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.utility.DockerImageName
+import javax.sql.DataSource
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class JdbcAdminRequestAuditRecorderIntegrationTest {
-    private lateinit var dataSource: HikariDataSource
+    private val dataSource: DataSource = PynapliTestDatabase.dataSource
 
     @Before
-    fun setUp() {
-        dataSource =
-            HikariDataSource(
-                HikariConfig().apply {
-                    jdbcUrl = postgres.jdbcUrl
-                    username = postgres.username
-                    password = postgres.password
-                    maximumPoolSize = 2
-                    poolName = "pynapli-admin-request-audit-test"
-                },
-            )
-        Flyway
-            .configure()
-            .dataSource(dataSource)
-            .locations("classpath:db/migration")
-            .cleanDisabled(false)
-            .load()
-            .also { flyway ->
-                flyway.clean()
-                flyway.migrate()
-            }
-    }
-
-    @After
-    fun tearDown() {
-        dataSource.close()
+    fun reset() {
+        PynapliTestDatabase.reset()
     }
 
     @Test
@@ -69,31 +39,6 @@ class JdbcAdminRequestAuditRecorderIntegrationTest {
             assertEquals("/v1/admin/reports/x/resolve", metadata.getValue("path").jsonPrimitive.content)
             assertEquals(200, metadata.getValue("status").jsonPrimitive.int)
         }
-
-    companion object {
-        private val postgisImage =
-            DockerImageName
-                .parse("postgis/postgis:16-3.4")
-                .asCompatibleSubstituteFor("postgres")
-        private val postgres =
-            PostgreSQLContainer<Nothing>(postgisImage).apply {
-                withDatabaseName("pynapli_admin_request_audit_test")
-                withUsername("pynapli")
-                withPassword("pynapli_test_password")
-            }
-
-        @JvmStatic
-        @BeforeClass
-        fun startPostgres() {
-            postgres.start()
-        }
-
-        @JvmStatic
-        @AfterClass
-        fun stopPostgres() {
-            postgres.stop()
-        }
-    }
 }
 
 private data class AdminAuditRow(
@@ -104,7 +49,7 @@ private data class AdminAuditRow(
     val metadata: String,
 )
 
-private fun HikariDataSource.latestAdminRequestRow(): AdminAuditRow =
+private fun DataSource.latestAdminRequestRow(): AdminAuditRow =
     connection.use { connection ->
         connection
             .prepareStatement(

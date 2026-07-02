@@ -2,52 +2,22 @@ package com.pynapli.server.admin
 
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.security.PasswordHash
-import com.zaxxer.hikari.HikariConfig
-import com.zaxxer.hikari.HikariDataSource
+import com.pynapli.server.testsupport.PynapliTestDatabase
 import kotlinx.coroutines.runBlocking
-import org.flywaydb.core.Flyway
-import org.junit.After
-import org.junit.AfterClass
 import org.junit.Before
-import org.junit.BeforeClass
 import org.junit.Test
-import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.utility.DockerImageName
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
+import javax.sql.DataSource
 import kotlin.test.assertEquals
 
 class JdbcAdminDashboardRepositoryIntegrationTest {
-    private lateinit var dataSource: HikariDataSource
+    private val dataSource: DataSource = PynapliTestDatabase.dataSource
 
     @Before
-    fun setUp() {
-        dataSource =
-            HikariDataSource(
-                HikariConfig().apply {
-                    jdbcUrl = postgres.jdbcUrl
-                    username = postgres.username
-                    password = postgres.password
-                    maximumPoolSize = 2
-                    poolName = "pynapli-admin-dashboard-test"
-                },
-            )
-        Flyway
-            .configure()
-            .dataSource(dataSource)
-            .locations("classpath:db/migration")
-            .cleanDisabled(false)
-            .load()
-            .also { flyway ->
-                flyway.clean()
-                flyway.migrate()
-            }
-    }
-
-    @After
-    fun tearDown() {
-        dataSource.close()
+    fun reset() {
+        PynapliTestDatabase.reset()
     }
 
     @Test
@@ -101,34 +71,9 @@ class JdbcAdminDashboardRepositoryIntegrationTest {
         )
         return userId
     }
-
-    companion object {
-        private val postgisImage =
-            DockerImageName
-                .parse("postgis/postgis:16-3.4")
-                .asCompatibleSubstituteFor("postgres")
-        private val postgres =
-            PostgreSQLContainer<Nothing>(postgisImage).apply {
-                withDatabaseName("pynapli_admin_dashboard_test")
-                withUsername("pynapli")
-                withPassword("pynapli_test_password")
-            }
-
-        @JvmStatic
-        @BeforeClass
-        fun startPostgres() {
-            postgres.start()
-        }
-
-        @JvmStatic
-        @AfterClass
-        fun stopPostgres() {
-            postgres.stop()
-        }
-    }
 }
 
-private fun HikariDataSource.insertReport(
+private fun DataSource.insertReport(
     reporterUserId: UUID,
     reportedUserId: UUID,
     status: String,
@@ -153,7 +98,7 @@ private fun HikariDataSource.insertReport(
     }
 }
 
-private fun HikariDataSource.setRiskTier(
+private fun DataSource.setRiskTier(
     userId: UUID,
     tier: String,
 ) {
@@ -173,7 +118,7 @@ private fun HikariDataSource.setRiskTier(
     }
 }
 
-private fun HikariDataSource.insertAppeal(
+private fun DataSource.insertAppeal(
     userId: UUID,
     status: String,
 ) {
