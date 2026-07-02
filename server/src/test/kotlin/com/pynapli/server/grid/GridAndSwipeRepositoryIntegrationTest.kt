@@ -8,22 +8,17 @@ import com.pynapli.server.swipe.JdbcSwipeRepository
 import com.pynapli.server.swipe.SwipeException
 import com.pynapli.server.swipe.SwipeService
 import com.pynapli.server.swipe.canonicalPair
+import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
-import com.zaxxer.hikari.HikariConfig
-import com.zaxxer.hikari.HikariDataSource
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
-import org.flywaydb.core.Flyway
-import org.testcontainers.containers.GenericContainer
-import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.utility.DockerImageName
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -37,59 +32,13 @@ import kotlin.test.assertTrue
 
 class GridAndSwipeRepositoryIntegrationTest :
     StringSpec({
-        val postgisImage =
-            DockerImageName
-                .parse("postgis/postgis:16-3.4")
-                .asCompatibleSubstituteFor("postgres")
-        val postgres =
-            PostgreSQLContainer<Nothing>(postgisImage).apply {
-                withDatabaseName("pynapli_grid_swipe_test")
-                withUsername("pynapli")
-                withPassword("pynapli_test_password")
-            }
-        val redis =
-            GenericContainer<Nothing>(DockerImageName.parse("redis:7-alpine"))
-                .apply { withExposedPorts(6379) }
-        lateinit var dataSource: HikariDataSource
+        val dataSource = PynapliTestDatabase.dataSource
 
-        fun redisCache(): RedisCache = RedisCache("redis://${redis.host}:${redis.getMappedPort(6379)}")
-
-        beforeSpec {
-            postgres.start()
-            redis.start()
-        }
-
-        afterSpec {
-            postgres.stop()
-            redis.stop()
-        }
+        fun redisCache(): RedisCache = PynapliTestDatabase.redisCache()
 
         beforeTest {
-            dataSource =
-                HikariDataSource(
-                    HikariConfig().apply {
-                        jdbcUrl = postgres.jdbcUrl
-                        username = postgres.username
-                        password = postgres.password
-                        maximumPoolSize = 16
-                        poolName = "pynapli-grid-swipe-test"
-                    },
-                )
-
-            Flyway
-                .configure()
-                .dataSource(dataSource)
-                .locations("classpath:db/migration")
-                .cleanDisabled(false)
-                .load()
-                .also { flyway ->
-                    flyway.clean()
-                    flyway.migrate()
-                }
-        }
-
-        afterTest {
-            dataSource.close()
+            PynapliTestDatabase.reset()
+            PynapliTestDatabase.flushRedis()
         }
 
         "grid and swipe queries project linked partner display name" {
