@@ -1,0 +1,114 @@
+---
+import Base from './Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title: string;
+  updated?: string;
+}
+
+const { title, updated = 'Draft — not yet published' } = Astro.props;
+---
+
+<Base title={`${title} · Pynapli`} description={`${title} for Pynapli — a social lifestyle app for open-minded adults, 18+.`}>
+  <Header />
+  <main class="legal">
+    <div class="container">
+      <a class="back" href="/">← Back to pynapli.com</a>
+      <div class="draft" role="note">
+        <strong>Draft.</strong> This is placeholder structure so the page resolves. The final
+        {title} is to be provided by Pynapli / legal before public launch.
+      </div>
+      <h1>{title}</h1>
+      <p class="updated">Last updated: {updated}</p>
+      <article class="legal-body">
+        <slot />
+      </article>
+    </div>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .legal {
+    padding: clamp(40px, 6vw, 72px) 0 clamp(56px, 8vw, 96px);
+    position: relative;
+    z-index: 2;
+  }
+  .legal .container {
+    max-width: 760px;
+  }
+  .back {
+    display: inline-block;
+    color: var(--text-3);
+    font-size: 13.5px;
+    margin-bottom: 26px;
+    transition: color 0.2s ease;
+  }
+  .back:hover {
+    color: var(--gold);
+  }
+  .draft {
+    border: 1px solid rgba(255, 162, 58, 0.35);
+    background: rgba(255, 162, 58, 0.08);
+    color: var(--text-2);
+    font-size: 13.5px;
+    line-height: 1.55;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 30px;
+  }
+  .draft strong {
+    color: var(--warning, #ffa23a);
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5vw, 3.2rem);
+  }
+  .updated {
+    color: var(--text-3);
+    font-size: 13.5px;
+    margin-top: 12px;
+    margin-bottom: 34px;
+  }
+  .legal-body :global(.lede) {
+    color: var(--text);
+    font-size: 1.05rem;
+    line-height: 1.65;
+    margin-bottom: 30px;
+  }
+  .legal-body :global(h2) {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.5rem;
+    letter-spacing: -0.01em;
+    margin: 40px 0 12px;
+  }
+  .legal-body :global(h3) {
+    font-family: var(--font-text);
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin: 26px 0 8px;
+  }
+  .legal-body :global(p),
+  .legal-body :global(li) {
+    color: var(--text-2);
+    line-height: 1.7;
+    font-size: 15.5px;
+  }
+  .legal-body :global(p) {
+    margin: 0 0 14px;
+  }
+  .legal-body :global(ul) {
+    margin: 0 0 16px;
+    padding-left: 20px;
+  }
+  .legal-body :global(li) {
+    margin-bottom: 6px;
+  }
+  .legal-body :global(a) {
+    color: var(--gold);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+</style>
