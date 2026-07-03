@@ -1,0 +1,188 @@
+---
+// The wedge, made concrete: Pynapli vs the couple-account model. We compare a
+// category (apps that make couples share one profile), never named brands — same
+// voice as Difference.astro. Every Pynapli cell is spec-backed (autonomy, the
+// linked-partner benefit, Psync, Playing Tonight).
+const rows = [
+  { f: 'Your account', other: 'One shared profile', mine: 'Your own — never merged' },
+  { f: 'If you go premium', other: 'Two people, two bills', mine: 'Linked partner included' },
+  { f: 'Swiping', other: 'One profile swipes for both', mine: 'Psync — own phones, private picks' },
+  { f: 'Out tonight', other: 'A couple card, if that', mine: 'Playing Tonight — solo or together' },
+  { f: 'Chats & media', other: 'Shared inbox', mine: 'Separate — always yours' },
+];
+---
+
+<section class="compare" id="compare">
+  <div class="container">
+    <header class="lead reveal">
+      <p class="eyebrow">Side by side</p>
+      <h2>Not another <em>couple account.</em></h2>
+      <p class="sub">
+        Most apps built for couples make you share one profile, one inbox, one card. Pynapli keeps
+        every adult autonomous — and adds what those apps can’t.
+      </p>
+    </header>
+
+    <div class="ctable reveal">
+      <div class="crow chead">
+        <span class="cfeat"></span>
+        <span class="cother">Couple-account apps</span>
+        <span class="cmine">Pynapli</span>
+      </div>
+      {
+        rows.map((r) => (
+          <div class="crow">
+            <span class="cfeat">{r.f}</span>
+            <span class="cother" data-label="Couple-account apps">{r.other}</span>
+            <span class="cmine" data-label="Pynapli">
+              <span class="cmv">
+                <svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+                {r.mine}
+              </span>
+            </span>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .compare {
+    padding: clamp(56px, 8vw, 108px) 0;
+    position: relative;
+    z-index: 2;
+  }
+  .lead {
+    max-width: 40ch;
+    margin-bottom: clamp(32px, 5vw, 56px);
+  }
+  .lead h2 {
+    font-size: clamp(2rem, 4.4vw, 3.2rem);
+    margin-top: 14px;
+  }
+  .lead em {
+    font-style: italic;
+    color: var(--gold);
+  }
+  .lead .sub {
+    color: var(--text-2);
+    margin-top: 18px;
+    line-height: 1.6;
+  }
+
+  .ctable {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .crow {
+    display: grid;
+    grid-template-columns: 1.1fr 1.15fr 1.15fr;
+    align-items: center;
+  }
+  .crow > * {
+    padding: 16px clamp(14px, 2.4vw, 24px);
+  }
+  .crow:not(:last-child) > * {
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  /* header row */
+  .chead {
+    background: var(--surface);
+  }
+  .chead > * {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .chead .cother {
+    color: var(--text-3);
+  }
+  .chead .cmine {
+    color: var(--gold);
+  }
+
+  .cfeat {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .cother {
+    color: var(--text-3);
+    font-size: 14.5px;
+  }
+  /* highlighted Pynapli column */
+  .cmine {
+    display: flex;
+    align-items: center;
+    color: var(--text);
+    font-size: 14.5px;
+    font-weight: 500;
+    background: rgba(255, 201, 40, 0.05);
+  }
+  .cmv {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .ck {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--gold);
+  }
+
+  @media (max-width: 720px) {
+    .chead {
+      display: none;
+    }
+    .crow {
+      grid-template-columns: 1fr 1fr;
+      column-gap: 12px;
+      padding: 16px clamp(14px, 4vw, 20px);
+    }
+    .crow > * {
+      padding: 0;
+      border-bottom: 0 !important;
+    }
+    .crow:not(:last-child) {
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .cfeat {
+      grid-column: 1 / -1;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+    .cother::before,
+    .cmine::before {
+      content: attr(data-label);
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 6px;
+    }
+    .cmine {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 6px;
+      background: rgba(255, 201, 40, 0.06);
+      border: 1px solid rgba(255, 201, 40, 0.14);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .cmine::before {
+      color: var(--gold);
+    }
+    .cother {
+      padding: 12px 2px;
+    }
+  }
+</style>
