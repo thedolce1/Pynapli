@@ -1,0 +1,262 @@
+---
+// Signature feature spotlight (PLAYING_TONIGHT_SPEC): a short-lived availability
+// signal, solo or with a linked partner. Zone-based, never a couple account.
+// Presented as a spotlight — NOT a 4th pillar (the pillars are the tagline trilogy).
+---
+
+<section class="tonight" id="tonight">
+  <div class="container tgrid reveal">
+    <div class="tcopy">
+      <p class="eyebrow">Playing Tonight</p>
+      <h2>See who’s out <em>tonight.</em></h2>
+      <p>
+        Flip on a short-lived <strong>Playing Tonight</strong> signal — around two hours — when
+        you’re actually free. Go solo, or light it up together with your linked partner, then see
+        who else is open nearby. Who’s-around-tonight energy, shown by approximate zone — never your
+        exact spot.
+      </p>
+      <ul class="tfeat">
+        <li>Short-lived · ~2 hrs</li>
+        <li>Solo or together</li>
+        <li>Zone-only privacy</li>
+        <li>Never a couple account</li>
+      </ul>
+    </div>
+
+    <div class="tvis">
+      <div class="tmap" role="img" aria-label="Zone map showing people open nearby tonight, by approximate area rather than exact location">
+        <span class="tglow" aria-hidden="true"></span>
+        <span class="ring r3" aria-hidden="true"></span>
+        <span class="ring r2" aria-hidden="true"></span>
+        <span class="ring r1" aria-hidden="true"></span>
+        <span class="blob b1" aria-hidden="true"></span>
+        <span class="blob gold b2" aria-hidden="true"></span>
+        <span class="blob b3" aria-hidden="true"></span>
+        <span class="blob b4" aria-hidden="true"></span>
+        <span class="you" aria-hidden="true"></span>
+        <span class="tchip"><i aria-hidden="true"></i>18 open tonight</span>
+        <span class="tzone">Approx. zone · no exact pins</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .tonight {
+    padding: clamp(64px, 10vw, 132px) 0;
+    position: relative;
+    z-index: 2;
+    border-top: 1px solid var(--border-soft);
+  }
+  .tgrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(28px, 5vw, 80px);
+    align-items: center;
+  }
+  .tcopy h2 {
+    font-size: clamp(2rem, 4.6vw, 3.4rem);
+    margin-top: 16px;
+  }
+  .tcopy em {
+    font-style: italic;
+    color: var(--gold);
+  }
+  .tcopy p {
+    color: var(--text-2);
+    max-width: 46ch;
+    line-height: 1.6;
+    margin-top: 20px;
+  }
+  .tcopy p strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .tfeat {
+    list-style: none;
+    padding: 0;
+    margin: 26px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .tfeat li {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 6px 12px;
+  }
+
+  /* ---- Zone map ---- */
+  .tvis {
+    display: grid;
+    place-items: center;
+  }
+  .tmap {
+    position: relative;
+    width: min(460px, 100%);
+    aspect-ratio: 5 / 4;
+    border-radius: 20px;
+    overflow: hidden;
+    background: radial-gradient(125% 125% at 50% 38%, #181b2c 0%, #0d0e16 58%, #0a0a0d 100%);
+    border: 1px solid var(--border);
+    box-shadow: 0 30px 70px -34px rgba(0, 0, 0, 0.8);
+  }
+  .tglow {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 62%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 201, 40, 0.16), transparent 62%);
+    pointer-events: none;
+  }
+  .ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .ring.r1 {
+    width: 26%;
+  }
+  .ring.r2 {
+    width: 54%;
+  }
+  .ring.r3 {
+    width: 84%;
+    border-color: rgba(255, 255, 255, 0.04);
+  }
+  .you {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow:
+      0 0 0 4px rgba(255, 201, 40, 0.18),
+      0 0 16px 2px rgba(255, 201, 40, 0.5);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .you {
+      animation: tpulse 3s ease-in-out infinite;
+    }
+  }
+  @keyframes tpulse {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 4px rgba(255, 201, 40, 0.18),
+        0 0 16px 2px rgba(255, 201, 40, 0.5);
+    }
+    50% {
+      box-shadow:
+        0 0 0 9px rgba(255, 201, 40, 0.05),
+        0 0 24px 5px rgba(255, 201, 40, 0.6);
+    }
+  }
+  /* Availability shown as soft zone glows, not precise pins. */
+  .blob {
+    position: absolute;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(24, 215, 122, 0.5), rgba(24, 215, 122, 0) 68%);
+    filter: blur(2px);
+    transform: translate(-50%, -50%);
+  }
+  .blob::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--online);
+    box-shadow: 0 0 8px 1px rgba(24, 215, 122, 0.7);
+  }
+  /* one gold "together" zone hints at a linked-partner session */
+  .blob.gold {
+    background: radial-gradient(circle, rgba(255, 201, 40, 0.45), rgba(255, 201, 40, 0) 68%);
+  }
+  .blob.gold::after {
+    background: var(--gold);
+    box-shadow: 0 0 8px 1px rgba(255, 201, 40, 0.7);
+  }
+  .b1 {
+    left: 27%;
+    top: 32%;
+  }
+  .b2 {
+    left: 70%;
+    top: 28%;
+  }
+  .b3 {
+    left: 33%;
+    top: 71%;
+  }
+  .b4 {
+    left: 73%;
+    top: 67%;
+  }
+  .tchip {
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 12px;
+    border-radius: 100px;
+    background: color-mix(in srgb, var(--surface) 84%, transparent);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .tchip i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--online);
+    box-shadow: 0 0 0 3px rgba(24, 215, 122, 0.16);
+  }
+  .tzone {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+    color: var(--text-3);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 5px 10px;
+    background: rgba(0, 0, 0, 0.32);
+  }
+
+  @media (max-width: 820px) {
+    .tgrid {
+      grid-template-columns: 1fr;
+    }
+    .tvis {
+      order: -1;
+    }
+    .tcopy p {
+      max-width: none;
+    }
+  }
+</style>
