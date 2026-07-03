@@ -84,6 +84,9 @@ fun PynapliApp(
     onSetDiscreetIcon: (Boolean) -> Unit = {},
     devLoginCredentials: DevLoginCredentials? = null,
     testerDiagnosticLabel: String? = null,
+    // Browser URL sync (WEB_PWA_GAMEPLAN.md W1.2): the web shell mirrors the canonical
+    // route into the address bar; other platforms leave this null.
+    onNavigationRouteChanged: ((String) -> Unit)? = null,
 ) {
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
 
@@ -125,7 +128,37 @@ fun PynapliApp(
             onNotification = { activeNotification = it },
             onSelectTab = { selectedTab = it },
             onClearProfileSurface = { profileSurface = ProfileSurface.None },
+            onOpenProfileHub = { profileSurface = ProfileSurface.Hub },
         )
+
+        // Report the canonical route for the current navigation state. Composed before
+        // the early returns below so it fires for auth/onboarding states too; skipped
+        // while the session restore is settling so the address bar never flashes /login.
+        if (onNavigationRouteChanged != null && !authState.isCheckingSession) {
+            val onboardingActiveForRoute =
+                onboardingStateHolder
+                    ?.state
+                    ?.collectAsState()
+                    ?.value
+                    ?.active == true
+            val openConversationId =
+                if (conversationState.visible) {
+                    conversationState.detail
+                        ?.conversation
+                        ?.conversationId
+                } else {
+                    null
+                }
+            val route =
+                pynapliRouteFor(
+                    authenticated = authState.authenticated,
+                    onboardingActive = onboardingActiveForRoute,
+                    tab = selectedTab,
+                    profileSurface = profileSurface,
+                    conversationId = openConversationId,
+                )
+            LaunchedEffect(route) { onNavigationRouteChanged(route) }
+        }
 
         // Once the session is settled, re-enter an interrupted signup stepper and
         // decide this session's add-a-photo nudge (ONBOARDING_AUTH_SPEC).

@@ -40,6 +40,7 @@ internal fun PynapliAppEffects(
     onNotification: (InAppNotificationUi?) -> Unit,
     onSelectTab: (PynapliTab) -> Unit,
     onClearProfileSurface: () -> Unit,
+    onOpenProfileHub: () -> Unit,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -125,6 +126,14 @@ internal fun PynapliAppEffects(
                         )
                     }
                 }
+
+                AppDeepLinkStateHolder.TARGET_GRID -> onSelectTab(PynapliTab.Grid)
+
+                AppDeepLinkStateHolder.TARGET_SWIPE -> onSelectTab(PynapliTab.Swipe)
+
+                AppDeepLinkStateHolder.TARGET_STORE -> onSelectTab(PynapliTab.Store)
+
+                AppDeepLinkStateHolder.TARGET_PROFILE -> onOpenProfileHub()
             }
             holder.markHandled(command.commandId)
         }
