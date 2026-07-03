@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Pynapli is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyle app. Four Gradle modules: `:shared`, `:composeApp`, `:androidApp`, `:server`. The iOS shell lives in `iosApp/` (Xcode project, not a Gradle module).
+Pynapli is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyle app. Five Gradle modules: `:shared`, `:composeApp`, `:androidApp`, `:server`, `:webApp` (Compose-for-Web/Wasm PWA shell — see `docs/WEB_PWA_GAMEPLAN.md`). The iOS shell lives in `iosApp/` (Xcode project, not a Gradle module).
 
 The repo is in early scaffolding/MVP buildout. The `docs/*_SPEC.md` files are the canonical product and engineering specs (all specs and design docs live under `docs/`). Read the relevant spec before changing a feature area — they encode rules that are not yet expressed in code.
 
@@ -29,6 +29,8 @@ Build / test (Gradle wrapper):
 .\scripts\verify-fast.ps1                             # tooling check + docker up + Spotless + shared JVM + server tests
 .\scripts\verify-android.ps1                          # Android policy check + shared/Compose host tests + debug APK
 .\scripts\verify-full.ps1                             # full local gate; verify.ps1 is a compatibility alias
+.\scripts\verify-web.ps1                              # web gate: spotless + wasm compile (:shared/:composeApp/:webApp) + shared JVM tests
+.\gradlew.bat :webApp:wasmJsBrowserDevelopmentRun     # web PWA dev server on :8081 (Ktor API stays on :8080)
 ```
 
 Server tests use JUnit Platform (Kotest runner), so `--tests` filters apply.

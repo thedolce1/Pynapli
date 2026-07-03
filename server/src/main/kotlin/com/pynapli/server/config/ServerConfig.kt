@@ -94,6 +94,10 @@ data class ServerConfig(
     // are cryptographically verified (RS256 JWT vs Google's App Check JWKS, issuer/audience keyed to
     // this number). When absent, enforcement falls back to requiring a non-blank header only.
     val appCheckProjectNumber: String? = null,
+    // Browser origins allowed to call the API (the web PWA). Full `scheme://host[:port]`
+    // strings, comma-separated in PYNAPLI_CORS_ALLOWED_ORIGINS. Local default covers the
+    // wasm dev server; production sets https://app.pynapli.com explicitly.
+    val corsAllowedOrigins: List<String> = emptyList(),
     val supportEmail: String = "support@pynapli.com",
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
     val activityCursorSecret: String = "pynapli-local-dev-activity-cursor-secret",
@@ -397,6 +401,12 @@ data class ServerConfig(
                         .getenv("PYNAPLI_APP_CHECK_PROJECT_NUMBER")
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() },
+                corsAllowedOrigins =
+                    System
+                        .getenv("PYNAPLI_CORS_ALLOWED_ORIGINS")
+                        ?.split(",")
+                        ?.mapNotNull { origin -> origin.trim().takeIf { it.isNotEmpty() } }
+                        ?: if (environment == "local") listOf("http://localhost:8081") else emptyList(),
                 supportEmail =
                     System
                         .getenv("PYNAPLI_SUPPORT_EMAIL")

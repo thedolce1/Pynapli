@@ -81,7 +81,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureSerialization()
     configureStatusPages()
     configureMonitoring()
-    configureHTTP()
+    configureHTTP(dependencies.config.corsAllowedOrigins)
     configureRequestMediaBaseUrl()
     configureAppCheck(dependencies.config.appCheckEnforced, selectAppCheckVerifier(dependencies.config))
     configureAdminAudit(dependencies.adminRequestAuditRecorder)
