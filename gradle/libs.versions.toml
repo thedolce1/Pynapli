@@ -1,6 +1,9 @@
 [versions]
 kotlin = "2.3.21"
-composeMultiplatform = "1.10.3"
+# 1.10.3 -> 1.11.0 (stable, 2026-05): fixes wasm pointer handling — on 1.10.3 clicks inside
+# scrollable containers (grid tiles, filter pills, list rows) never fired on the web target;
+# 1.11.0's reworked web touch processing resolves it. Verified against the official release blog.
+composeMultiplatform = "1.11.0"
 agp = "9.2.1"
 ktor = "3.4.3"
 coroutines = "1.10.2"

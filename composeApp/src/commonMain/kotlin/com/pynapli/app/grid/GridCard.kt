@@ -1,8 +1,12 @@
 package com.pynapli.app.grid
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -20,6 +24,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -40,6 +47,7 @@ import com.pynapli.app.design.GridTileTokens
 import com.pynapli.app.design.OnlineDot
 import com.pynapli.app.design.PhotoBottomScrim
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.distance.formatDistanceForUnit
@@ -62,12 +70,23 @@ internal fun GridProfileTile(
             distanceUnit = distanceUnit,
         )
 
+    // Pointer hover (web/desktop): a quiet brighten so the cursor's target reads
+    // without zooming or repainting the photo. Touch devices never emit hover.
+    val hoverInteractions = remember { MutableInteractionSource() }
+    val hovered by hoverInteractions.collectIsHoveredAsState()
+    val hoverAlpha by animateFloatAsState(
+        targetValue = if (hovered) 1f else 0f,
+        animationSpec = PynapliMotion.standardTween(),
+        label = "gridTileHover",
+    )
+
     Box(
         modifier =
             modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(PynapliShape.SmallShape)
+                .hoverable(hoverInteractions)
                 .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onClick)
                 // Group the tile so a screen reader announces it as one item (name + presence +
                 // visiting + distance + partner/tonight badges) instead of several fragments.
@@ -80,6 +99,16 @@ internal fun GridProfileTile(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        if (hoverAlpha > 0f) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = hoverAlpha }
+                        .background(PynapliColors.OnPhotoHoverTint),
             )
         }
 

@@ -32,6 +32,27 @@ internal fun onWindowEvent(
 
 internal fun installPromptAvailable(): Boolean = js("window.__pynapliInstallPrompt != null")
 
+internal fun geolocationAvailable(): Boolean = js("'geolocation' in navigator")
+
+internal fun requestBrowserGeolocation(
+    onSuccess: (Double, Double, Double) -> Unit,
+    onPermissionDenied: () -> Unit,
+    onUnavailable: () -> Unit,
+): Unit =
+    js(
+        """{
+        navigator.geolocation.getCurrentPosition(
+            function (position) {
+                onSuccess(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
+            },
+            function (error) {
+                if (error.code === 1) { onPermissionDenied(); } else { onUnavailable(); }
+            },
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+        );
+    }""",
+    )
+
 internal fun showInstallPrompt(): Unit =
     js(
         """{

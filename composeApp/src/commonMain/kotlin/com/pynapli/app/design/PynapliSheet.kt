@@ -1,14 +1,23 @@
 package com.pynapli.app.design
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,14 +27,22 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 /*
  * The single bottom-sheet system every Pynapli modal consumes. Before this, each sheet
@@ -37,12 +54,28 @@ import androidx.compose.ui.unit.Dp
  */
 
 /**
- * Canonical modal bottom sheet: dark [PynapliColors.Black] container, [PynapliShape.SheetShape]
+ * How a sheet presents on Medium+ windows (WEB_PWA_GAMEPLAN.md W2.2/W2.3). Compact windows
+ * always get the bottom sheet; a full-width sheet on a desktop monitor reads as a stretched
+ * phone, so wide windows re-home the same content instead:
+ * - [CenteredDialog] — forms and pickers (filters, travel, tonight) become a centered card.
+ * - [SidePanel] — browsing companions (the profile peek) anchor to the right edge so the
+ *   surface behind stays visible, inspector-style.
+ */
+enum class PynapliWideSheetPresentation { CenteredDialog, SidePanel }
+
+/** The container a sheet body is actually mounted in; [PynapliSheetScaffold] adapts to it. */
+enum class PynapliSheetHost { BottomSheet, CenteredDialog, SidePanel }
+
+val LocalPynapliSheetHost = compositionLocalOf { PynapliSheetHost.BottomSheet }
+
+/**
+ * Canonical modal sheet: dark [PynapliColors.Black] container, [PynapliShape.SheetShape]
  * corners, default Material drag handle, always fully expanded. Callers pass [modifier] to keep
  * their `testTag`, and compose the body with [PynapliSheetColumn] (scrolling form) or
  * [PynapliSheetScaffold] (pinned footer). [containerColor] is overridable for the rare surface
  * that needs a lifted background. The experimental sheet state stays internal so call sites don't
- * have to opt in to the Material3 experimental API.
+ * have to opt in to the Material3 experimental API. On Medium+ windows the same content mounts
+ * per [widePresentation] instead of edge-to-edge (see [PynapliWideSheetPresentation]).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,18 +83,105 @@ fun PynapliBottomSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     containerColor: Color = PynapliColors.Black,
+    widePresentation: PynapliWideSheetPresentation = PynapliWideSheetPresentation.CenteredDialog,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    ModalBottomSheet(
+    val sizeClass = currentPynapliWindowSizeClass()
+    if (sizeClass == PynapliWindowSizeClass.Compact) {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = PynapliShape.SheetShape,
+            containerColor = containerColor,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            modifier = modifier,
+        ) {
+            val columnScope = this
+            CompositionLocalProvider(LocalPynapliSheetHost provides PynapliSheetHost.BottomSheet) {
+                columnScope.content()
+            }
+        }
+        return
+    }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        shape = PynapliShape.SheetShape,
-        containerColor = containerColor,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = modifier,
-        content = content,
-    )
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        val dismissInteractions = remember { MutableInteractionSource() }
+        val consumeInteractions = remember { MutableInteractionSource() }
+        when (widePresentation) {
+            PynapliWideSheetPresentation.CenteredDialog ->
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val maxCardHeight = maxHeight * WIDE_DIALOG_MAX_HEIGHT_FRACTION
+                    Box(
+                        modifier =
+                            Modifier
+                                .matchParentSize()
+                                .clickable(interactionSource = dismissInteractions, indication = null, onClick = onDismiss),
+                    )
+                    Surface(
+                        shape = PynapliShape.DialogShape,
+                        color = containerColor,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        border = BorderStroke(1.dp, PynapliColors.BorderSoft),
+                        modifier =
+                            modifier
+                                .widthIn(max = WideDialogMaxWidth)
+                                .heightIn(max = maxCardHeight)
+                                // Consume clicks so taps inside the card never reach the dismiss layer.
+                                .clickable(interactionSource = consumeInteractions, indication = null) {},
+                    ) {
+                        Column {
+                            CompositionLocalProvider(LocalPynapliSheetHost provides PynapliSheetHost.CenteredDialog) {
+                                content()
+                            }
+                        }
+                    }
+                }
+
+            PynapliWideSheetPresentation.SidePanel ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .matchParentSize()
+                                .clickable(interactionSource = dismissInteractions, indication = null, onClick = onDismiss),
+                    )
+                    Surface(
+                        color = containerColor,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        modifier =
+                            modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .width(SidePanelWidth)
+                                .clickable(interactionSource = consumeInteractions, indication = null) {},
+                    ) {
+                        Row {
+                            VerticalDivider(thickness = 1.dp, color = PynapliColors.BorderSoft)
+                            Column(modifier = Modifier.weight(1f)) {
+                                CompositionLocalProvider(LocalPynapliSheetHost provides PynapliSheetHost.SidePanel) {
+                                    content()
+                                }
+                            }
+                        }
+                    }
+                }
+        }
+    }
 }
+
+/** Widest a wide-window dialog card grows; forms read badly past this. */
+private val WideDialogMaxWidth = 560.dp
+
+/** Right-anchored inspector width for the profile peek on wide windows. */
+private val SidePanelWidth = 420.dp
+
+private const val WIDE_DIALOG_MAX_HEIGHT_FRACTION = 0.92f
 
 /**
  * Standard scrolling sheet body: full width, padded with the sheet content tokens, sections
@@ -107,11 +227,15 @@ fun PynapliSheetScaffold(
     footer: (@Composable ColumnScope.() -> Unit)? = null,
     body: @Composable ColumnScope.() -> Unit,
 ) {
+    // A side panel already fills the window edge-to-edge; the bottom-sheet height
+    // fraction would leave a dead strip at its foot, so the scaffold fills it fully.
+    val effectiveHeightFraction =
+        if (LocalPynapliSheetHost.current == PynapliSheetHost.SidePanel) 1f else heightFraction
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .fillMaxHeight(heightFraction)
+                .fillMaxHeight(effectiveHeightFraction)
                 .padding(horizontal = horizontalPadding, vertical = verticalPadding),
     ) {
         Column(

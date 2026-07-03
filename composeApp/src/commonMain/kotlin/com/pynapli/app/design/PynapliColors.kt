@@ -59,6 +59,7 @@ object PynapliColors {
     val OnPhotoStroke = Color(0xCCFFFFFF) // bright hairline: active carousel dot, badge ring
     val OnPhotoIndicatorInactive = Color(0x40FFFFFF)
     val OnPhotoBadgeFill = Color(0xCC1B1B1B) // dark translucent disc behind on-photo badges
+    val OnPhotoHoverTint = Color(0x0FFFFFFF) // pointer hover brighten on photo tiles (web/desktop)
 
     // Inline banner/container tints: muted dark fills + readable borders for success/error message
     // bands (e.g. the Profile-hub message band) that must sit on the dark surface without using the
