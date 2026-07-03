@@ -41,6 +41,23 @@ class AppDeepLinkStateHolder {
             )
     }
 
+    /** Simple tab/surface targets (browser URL routing, WEB_PWA_GAMEPLAN.md W1.2). */
+    fun openGrid() = openSimpleTarget(TARGET_GRID)
+
+    fun openSwipe() = openSimpleTarget(TARGET_SWIPE)
+
+    fun openStore() = openSimpleTarget(TARGET_STORE)
+
+    fun openProfile() = openSimpleTarget(TARGET_PROFILE)
+
+    private fun openSimpleTarget(target: String) {
+        _state.value =
+            AppDeepLinkCommand(
+                commandId = ++nextCommandId,
+                target = target,
+            )
+    }
+
     fun markHandled(commandId: Long) {
         _state.update { current -> if (current?.commandId == commandId) null else current }
     }
@@ -48,5 +65,9 @@ class AppDeepLinkStateHolder {
     companion object {
         const val TARGET_ACTIVITY = "activity"
         const val TARGET_MESSAGES = "messages"
+        const val TARGET_GRID = "grid"
+        const val TARGET_SWIPE = "swipe"
+        const val TARGET_STORE = "store"
+        const val TARGET_PROFILE = "profile"
     }
 }

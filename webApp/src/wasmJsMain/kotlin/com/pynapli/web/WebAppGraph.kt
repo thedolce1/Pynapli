@@ -1,5 +1,6 @@
 package com.pynapli.web
 
+import com.pynapli.app.AppDeepLinkStateHolder
 import com.pynapli.app.activity.ActivityStateHolder
 import com.pynapli.app.activity.ApiActivityFeedRepository
 import com.pynapli.app.appsettings.ApiNotificationPreferencesGateway
@@ -74,6 +75,8 @@ class WebAppGraph {
             apiClient = apiClient,
             sessionStore = sessionStore,
         )
+
+    val deepLinkStateHolder = AppDeepLinkStateHolder()
 
     val authStateHolder =
         AuthStateHolder(

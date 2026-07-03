@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0B0B0E">
     <title>Pynapli</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <style>
         html, body {
             margin: 0;
@@ -30,6 +34,24 @@
             text-transform: uppercase;
         }
     </style>
+    <script type="application/javascript">
+        // Captured pre-wasm so the app can offer its own restrained install
+        // affordance later (WEB_PWA_GAMEPLAN.md W1.4).
+        window.__pynapliInstallPrompt = null;
+        window.addEventListener('beforeinstallprompt', function (e) {
+            e.preventDefault();
+            window.__pynapliInstallPrompt = e;
+            window.dispatchEvent(new Event('pynapli-install-ready'));
+        });
+        // Dev iterates against the webpack server; caching there hides fresh
+        // bundles, so the shell worker only registers off-localhost.
+        if ('serviceWorker' in navigator &&
+            location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js');
+            });
+        }
+    </script>
     <script type="application/javascript" src="pynapli.js"></script>
 </head>
 <body>
