@@ -1,4 +1,6 @@
 ---
+import StoreBadges from './StoreBadges.astro';
+
 // Pre-launch waitlist (app isn't in stores yet). The form action is a placeholder the
 // founder swaps for their email service (Mailchimp / ConvertKit / a Cloud Function).
 ---
@@ -26,8 +28,7 @@
       </form>
       <p class="wl-note" id="wl-note">18+ only. No spam — just a heads-up at launch.</p>
       <div class="badges">
-        <span class="store-badge"><span><small>Coming soon</small><strong>App Store</strong></span></span>
-        <span class="store-badge"><span><small>Coming soon</small><strong>Google Play</strong></span></span>
+        <StoreBadges />
       </div>
     </div>
   </div>

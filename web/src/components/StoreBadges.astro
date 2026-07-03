@@ -1,0 +1,58 @@
+---
+// Pre-launch store badges (real Apple / Google Play glyphs, marked "coming soon").
+---
+
+<div class="store-badges">
+  <span class="sb">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path
+        d="M17.05 12.04c-.03-2.05 1.68-3.03 1.75-3.08-.95-1.4-2.44-1.59-2.97-1.61-1.27-.13-2.47.74-3.11.74-.64 0-1.63-.72-2.68-.7-1.38.02-2.65.8-3.36 2.03-1.43 2.49-.37 6.17 1.03 8.19.68.99 1.49 2.1 2.55 2.06 1.02-.04 1.41-.66 2.65-.66 1.24 0 1.59.66 2.68.64 1.11-.02 1.81-1 2.49-2 .78-1.15 1.11-2.26 1.13-2.32-.02-.01-2.17-.83-2.19-3.29zM15.1 6.13c.56-.68.94-1.63.84-2.57-.81.03-1.79.54-2.37 1.22-.52.6-.97 1.56-.85 2.48.9.07 1.82-.46 2.38-1.13z"
+      ></path>
+    </svg>
+    <span><small>Coming soon</small><strong>App Store</strong></span>
+  </span>
+  <span class="sb">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M5 3.4v17.2c0 .6.7 1 1.2.6l13.2-8.6c.5-.3.5-1 0-1.3L6.2 2.8C5.7 2.4 5 2.8 5 3.4z"></path>
+    </svg>
+    <span><small>Coming soon</small><strong>Google Play</strong></span>
+  </span>
+</div>
+
+<style>
+  .store-badges {
+    display: inline-flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .sb {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 15px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text-2);
+  }
+  .sb svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .sb small {
+    display: block;
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    line-height: 1.2;
+  }
+  .sb strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.15;
+  }
+</style>

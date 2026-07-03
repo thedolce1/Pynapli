@@ -13,7 +13,8 @@
   /* Text (warm off-white, not pure white) */
   --text: #f5f2ec;
   --text-2: #a8a29a;
-  --text-3: #6b6660;
+  /* Tertiary lifted to #8A847C for AA contrast on the public site (matches the app's a11y fix). */
+  --text-3: #8a847c;
 
   /* Accent + semantics (from the app; accent used sparingly) */
   --gold: #ffc928;
@@ -76,6 +77,13 @@ body::after {
 ::selection {
   background: var(--gold);
   color: #1a1400;
+}
+
+/* Visible keyboard focus (accessibility). */
+:where(a, button, input, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+  border-radius: 6px;
 }
 
 a {

@@ -1,4 +1,6 @@
 ---
+import StoreBadges from './StoreBadges.astro';
+
 // Live-rendered mini "grid" — the app's signature surface, built from the app tokens.
 const tiles = [
   { g: 'linear-gradient(150deg,#3a2a4d,#7a4a63)', online: true, dist: '0.3 mi', tag: 'new' },
@@ -20,15 +22,12 @@ const tiles = [
       <p class="kicker">Grid for now <i>·</i> Swipe for intent <i>·</i> Links for trust</p>
       <h1>Your city.<br />Your people.<br /><em>On your terms.</em></h1>
       <p class="sub">
-        A location-based social lifestyle app for open-minded adults — singles, couples, and
-        partnered people. Connect solo, together, or socially.
+        Open-minded adults, near you. A social lifestyle app where you discover and connect — solo,
+        as a couple, or partnered — on an account that’s always your own.
       </p>
       <div class="cta" id="waitlist">
         <a class="btn btn-gold" href="#waitlist">Get early access</a>
-        <div class="badges">
-          <span class="store-badge"><span><small>Coming soon</small><strong>App Store</strong></span></span>
-          <span class="store-badge"><span><small>Coming soon</small><strong>Google Play</strong></span></span>
-        </div>
+        <StoreBadges />
       </div>
       <p class="trust">
         <span class="live"></span> 18+ · Verified profiles · You control who sees you
