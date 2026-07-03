@@ -7,17 +7,23 @@ interface Props {
   title?: string;
   description?: string;
   image?: string;
+  /** Keep placeholder/utility pages (404, draft legal) out of the index. */
+  noindex?: boolean;
 }
 
 const {
   title = 'Pynapli — Grid for now. Swipe for intent. Links for trust.',
   description = 'A location-based social lifestyle app for open-minded adults — singles, couples, and partnered people. Connect solo, together, or socially. Strictly 18+.',
   image = '/og.png',
+  noindex = false,
 } = Astro.props;
 
 const site = Astro.site ?? new URL('https://pynapli.com');
 const canonical = new URL(Astro.url.pathname, site).href;
 const ogImage = new URL(image, site).href;
+const robots = noindex
+  ? 'noindex,follow'
+  : 'index,follow,max-image-preview:large';
 
 const orgLd = {
   '@context': 'https://schema.org',
@@ -45,7 +51,7 @@ const siteLd = {
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#0B0B0E" />
     <meta name="color-scheme" content="dark" />
-    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <meta name="robots" content={robots} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta property="og:site_name" content="Pynapli" />
@@ -53,9 +59,11 @@ const siteLd = {
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Pynapli — Grid for now. Swipe for intent. Links for trust." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />

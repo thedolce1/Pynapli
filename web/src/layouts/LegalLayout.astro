@@ -11,7 +11,11 @@ interface Props {
 const { title, updated = 'Draft — not yet published' } = Astro.props;
 ---
 
-<Base title={`${title} · Pynapli`} description={`${title} for Pynapli — a social lifestyle app for open-minded adults, 18+.`}>
+<Base
+  title={`${title} · Pynapli`}
+  description={`${title} for Pynapli — a social lifestyle app for open-minded adults, 18+.`}
+  noindex={true}
+>
   <Header />
   <main class="legal">
     <div class="container">
