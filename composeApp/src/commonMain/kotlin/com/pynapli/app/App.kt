@@ -3,6 +3,9 @@ package com.pynapli.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +29,8 @@ import com.pynapli.app.conversation.ConversationScreen
 import com.pynapli.app.conversation.ConversationSheet
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.design.PynapliTheme
+import com.pynapli.app.design.PynapliWindowSizeClass
+import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.grid.GridScreen
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.location.LocationStateHolder
@@ -225,64 +230,92 @@ fun PynapliApp(
             messagesStateHolder.refreshSilently()
         }
 
+        // Adaptive shell (WEB_PWA_GAMEPLAN.md): Compact keeps the proven phone layout
+        // untouched (bottom bar); Medium+ swaps it for a navigation rail so wide
+        // windows (web/desktop/tablet) never render a stretched phone chrome.
+        val windowSizeClass = currentPynapliWindowSizeClass()
+        val onNavTabSelected: (PynapliTab) -> Unit = { tab ->
+            if (selectedTab == PynapliTab.Messages && tab != PynapliTab.Messages && conversationState.visible) {
+                conversationActions.dismiss()
+            }
+            profileSurface = ProfileSurface.None
+            selectedTab = tab
+        }
+        val mainContent: @Composable ColumnScope.() -> Unit = {
+            PynapliMainContent(
+                profileSurface = profileSurface,
+                selectedTab = selectedTab,
+                gridStateHolder = gridStateHolder,
+                profileDetailStateHolder = profileDetailStateHolder,
+                conversationStateHolder = conversationStateHolder,
+                messagesStateHolder = messagesStateHolder,
+                activityStateHolder = activityStateHolder,
+                locationStateHolder = locationStateHolder,
+                mediaAlbumsStateHolder = mediaAlbumsStateHolder,
+                profileHubStateHolder = profileHubStateHolder,
+                profileLinksStateHolder = profileLinksStateHolder,
+                swipeStateHolder = swipeStateHolder,
+                storeStateHolder = storeStateHolder,
+                appSettingsStateHolder = appSettingsStateHolder,
+                authStateHolder = authStateHolder,
+                savedGridFilterStateHolder = savedGridFilterStateHolder,
+                savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
+                travelLocationStateHolder = travelLocationStateHolder,
+                tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
+                onboardingStateHolder = onboardingStateHolder,
+                conversationActions = conversationActions,
+                scope = scope,
+                onProfileSurface = { profileSurface = it },
+                onOpenStore = { selectedTab = PynapliTab.Store },
+                onOpenAgeVerification = {
+                    // Route a gated AGE_VERIFICATION_REQUIRED prompt into the existing
+                    // Profile-Hub age-verification flow: show the Hub surface and open its dialog.
+                    profileSurface = ProfileSurface.Hub
+                    profileHubStateHolder.openAgeVerification()
+                },
+                onOpenTonight = { tonightVisible = true },
+                onOpenPsync = psyncStateHolder?.let { { psyncVisible = true } },
+                onUseCurrentLocation = onUseCurrentLocation,
+                onPickMediaForAlbum = onPickMediaForAlbum,
+                onPickConversationPhoto = onPickConversationPhoto,
+                onSetDiscreetIcon = onSetDiscreetIcon,
+            )
+        }
+
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background),
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                PynapliMainContent(
-                    profileSurface = profileSurface,
-                    selectedTab = selectedTab,
-                    gridStateHolder = gridStateHolder,
-                    profileDetailStateHolder = profileDetailStateHolder,
-                    conversationStateHolder = conversationStateHolder,
-                    messagesStateHolder = messagesStateHolder,
-                    activityStateHolder = activityStateHolder,
-                    locationStateHolder = locationStateHolder,
-                    mediaAlbumsStateHolder = mediaAlbumsStateHolder,
-                    profileHubStateHolder = profileHubStateHolder,
-                    profileLinksStateHolder = profileLinksStateHolder,
-                    swipeStateHolder = swipeStateHolder,
-                    storeStateHolder = storeStateHolder,
-                    appSettingsStateHolder = appSettingsStateHolder,
-                    authStateHolder = authStateHolder,
-                    savedGridFilterStateHolder = savedGridFilterStateHolder,
-                    savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
-                    travelLocationStateHolder = travelLocationStateHolder,
-                    tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
-                    onboardingStateHolder = onboardingStateHolder,
-                    conversationActions = conversationActions,
-                    scope = scope,
-                    onProfileSurface = { profileSurface = it },
-                    onOpenStore = { selectedTab = PynapliTab.Store },
-                    onOpenAgeVerification = {
-                        // Route a gated AGE_VERIFICATION_REQUIRED prompt into the existing
-                        // Profile-Hub age-verification flow: show the Hub surface and open its dialog.
-                        profileSurface = ProfileSurface.Hub
-                        profileHubStateHolder.openAgeVerification()
-                    },
-                    onOpenTonight = { tonightVisible = true },
-                    onOpenPsync = psyncStateHolder?.let { { psyncVisible = true } },
-                    onUseCurrentLocation = onUseCurrentLocation,
-                    onPickMediaForAlbum = onPickMediaForAlbum,
-                    onPickConversationPhoto = onPickConversationPhoto,
-                    onSetDiscreetIcon = onSetDiscreetIcon,
-                )
+            if (windowSizeClass == PynapliWindowSizeClass.Compact) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    mainContent()
 
-                PynapliBottomNavigation(
-                    selectedTab = selectedTab,
-                    unreadMessages = messagesState.unreadCount,
-                    activityBadgeCount = activityState.activityBadgeCount,
-                    onTabSelected = {
-                        if (selectedTab == PynapliTab.Messages && it != PynapliTab.Messages && conversationState.visible) {
-                            conversationActions.dismiss()
-                        }
-                        profileSurface = ProfileSurface.None
-                        selectedTab = it
-                    },
-                )
+                    PynapliBottomNavigation(
+                        selectedTab = selectedTab,
+                        unreadMessages = messagesState.unreadCount,
+                        activityBadgeCount = activityState.activityBadgeCount,
+                        onTabSelected = onNavTabSelected,
+                    )
+                }
+            } else {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    PynapliNavigationRail(
+                        selectedTab = selectedTab,
+                        unreadMessages = messagesState.unreadCount,
+                        activityBadgeCount = activityState.activityBadgeCount,
+                        onTabSelected = onNavTabSelected,
+                    )
+                    Column(
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                    ) {
+                        mainContent()
+                    }
+                }
             }
 
             activeNotification?.let { notification ->
