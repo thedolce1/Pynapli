@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliBottomSheet
 import com.pynapli.app.design.PynapliSheetScaffold
+import com.pynapli.app.design.PynapliWideSheetPresentation
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.settings.AppSettings
@@ -80,6 +81,9 @@ fun ProfileDetailSheet(
     PynapliBottomSheet(
         onDismiss = onDismiss,
         modifier = modifier,
+        // Wide windows show the peek as a right-anchored inspector so the grid or
+        // conversation behind stays visible (WEB_PWA_GAMEPLAN.md W2.2).
+        widePresentation = PynapliWideSheetPresentation.SidePanel,
     ) {
         // Present every profile peek (Grid, Swipe, Activity, Messages, hub preview) at one
         // consistent near-full height with primary actions pinned to the bottom edge, so short

@@ -56,6 +56,7 @@ object PynapliShape {
     val SmallShape = RoundedCornerShape(Small)
     val CardShape = RoundedCornerShape(Card)
     val SheetShape = RoundedCornerShape(topStart = Sheet, topEnd = Sheet)
+    val DialogShape = RoundedCornerShape(Sheet) // wide-window sheet-as-dialog cards (all corners)
     val PillShape = RoundedCornerShape(Pill)
 }
 

@@ -125,13 +125,19 @@ Slice workflow unchanged: one feature branch per slice, local verify gate (`veri
 | W1.3 | ✅ (routing part) `/login` + `/signup` are addressable; a signed-out hard-load of `/signup` starts the DOB-first onboarding stepper (verified in Chrome), an authenticated visitor lands normally. Browser-geolocation for the location step ships with W2.3; marketing-site CTAs remain W6.1. |
 | W1.4 | ✅ Manifest (standalone, `#0B0B0E`, 192/512 + maskable icons generated from the brand mark), app-shell-only service worker (same-origin + shell-asset whitelist, navigate → cached-index offline fallback, **never** caches API/user data; registration skipped on localhost so dev bundles stay fresh), `beforeinstallprompt` captured pre-wasm + restrained in-app "Install Pynapli" pill (dismissal persists per browser). Pill verified live in Chrome. |
 
-### Phase W2 — Discovery: Grid + profile detail (🟢)
+### Phase W2 — Discovery: Grid + profile detail (🟢) — ✅ COMPLETE 2026-07-03
 
 | Slice | What |
 |------|------|
-| W2.1 | Grid per size class: responsive column count (denser on wide), hover states, scroll-position restoration on peek open/close (existing rule), pull-to-refresh equivalent (refresh affordance on desktop). |
-| W2.2 | Profile detail: bottom sheet (compact) / anchored side panel (expanded) reusing the shared `ProfileDetailSheet` content. |
-| W2.3 | Browser geolocation adapter + denied-location state + presence heartbeat via Page Visibility. Filters sheet → dialog on wide screens. |
+| W2.1 | ✅ The grid answers its OWN pane width via `BoxWithConstraints` (not the window — correct beside rails/panels): panes <600dp keep the locked 3-up phone grid byte-for-byte; wider panes use `Adaptive(168dp)` so width means MORE tiles at phone density (7 columns at 1008dp), never bigger tiles. Pointer hover = quiet `OnPhotoHoverTint` brighten (new token). Header gains a Refresh button on Medium+ (`grid-refresh` tag) since mouse wheels can't pull-to-refresh; pull-to-refresh stays. Scroll restoration untouched (phase stays Content across peek open/close). |
+| W2.2 | ✅ `PynapliBottomSheet` is now the adaptive host for EVERY modal: Compact keeps the bottom sheet; Medium+ mounts the same content per `PynapliWideSheetPresentation` — `CenteredDialog` (560dp max card, `DialogShape`, BorderSoft border) by default, `SidePanel` (420dp right-anchored inspector, full height, hairline divider) for the profile peek so the grid stays visible behind the scrim. `LocalPynapliSheetHost` lets `PynapliSheetScaffold` fill the panel fully. Browser-proven: peek inspector + scrim dismiss + filters-as-dialog. |
+| W2.3 | ✅ Browser geolocation: `WebLocationAdapter` mirrors `MainActivity.requestCurrentLocation` (one-shot fix on explicit action, `markPermissionDenied`/`markUnavailable` states, movement-thresholded grid refresh); browser permission prompt is native (manual founder QA — automation can't grant it). Presence note: **no client on any platform calls `heartbeatPresence()`** — presence is server-side; web inherits parity with zero code, so the planned Page Visibility heartbeat was dropped as unnecessary. |
+
+**W2 also forced a deliberate baseline bump: Compose Multiplatform 1.10.3 → 1.11.0 (stable).**
+On 1.10.3 the wasm target dropped every click inside a scrollable container (grid tiles, quick-filter
+pills, list rows) while non-scrollable targets worked — verified with two independent event-injection
+paths; 1.11.0's reworked web pointer processing fixes it (release-notes item). Full verify gate re-run
+on the bump.
 
 ### Phase W3 — Messages: the desktop win (🟢)
 

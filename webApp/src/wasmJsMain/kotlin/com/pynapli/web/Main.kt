@@ -20,11 +20,18 @@ fun main() {
     val graph = WebAppGraph()
     val router = WebUrlRouter(graph.deepLinkStateHolder)
     router.start()
+    val appScope = MainScope()
+    val locationAdapter =
+        WebLocationAdapter(
+            locationStateHolder = graph.locationStateHolder,
+            gridStateHolder = graph.gridStateHolder,
+            scope = appScope,
+        )
 
     // A direct /signup link starts the create-account stepper — but only once the
     // session restore settles signed-out; an authenticated visitor lands normally.
     if (router.initialPathWasSignup) {
-        MainScope().launch {
+        appScope.launch {
             val settled = graph.authStateHolder.state.first { !it.isCheckingSession }
             if (!settled.authenticated) {
                 graph.onboardingStateHolder.startCreateAccount()
@@ -34,7 +41,7 @@ fun main() {
 
     ComposeViewport(viewportContainerId = "pynapli-app") {
         Box(modifier = Modifier.fillMaxSize()) {
-            WebAppContent(graph, router)
+            WebAppContent(graph, router, locationAdapter)
             // Clears the compact bottom bar; on wide windows it sits in the corner.
             val compact = currentPynapliWindowSizeClass() == PynapliWindowSizeClass.Compact
             WebInstallAffordance(
@@ -51,6 +58,7 @@ fun main() {
 private fun WebAppContent(
     graph: WebAppGraph,
     router: WebUrlRouter,
+    locationAdapter: WebLocationAdapter,
 ) {
     PynapliApp(
         authStateHolder = graph.authStateHolder,
@@ -72,8 +80,7 @@ private fun WebAppContent(
         tonightAvailabilityStateHolder = graph.tonightAvailabilityStateHolder,
         deepLinkStateHolder = graph.deepLinkStateHolder,
         onboardingStateHolder = graph.onboardingStateHolder,
-        // W2.3 wires the browser Geolocation API; until then location is set via seed/dev tools.
-        onUseCurrentLocation = {},
+        onUseCurrentLocation = locationAdapter::requestCurrentLocation,
         devLoginCredentials = graph.devLoginCredentials,
         testerDiagnosticLabel = graph.testerDiagnosticLabel,
         onNavigationRouteChanged = router::onRouteChanged,

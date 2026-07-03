@@ -12,6 +12,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.pynapli.app.design.PynapliWindowSizeClass
+import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.shared.network.dto.SavedGridFilterDto
 
@@ -51,12 +53,14 @@ internal fun GridScreenContent(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
     ) {
+        val sizeClass = currentPynapliWindowSizeClass()
         GridHeader(
             locationLabel = state.locationLabel,
             profileImageUrl = profileImageUrl,
             onProfileIconClick = onProfileIconClick,
             onOpenTonight = onOpenTonight,
             onOpenFilters = { sheetVisible = true },
+            onRefresh = if (sizeClass == PynapliWindowSizeClass.Compact) null else onRefresh,
         )
         QuickFilterRow(
             filters = state.filters,

@@ -89,7 +89,7 @@ Versioned under `/v1/`: `auth/email/{signup,login}`, `auth/{refresh,logout}`, `m
 - **Use stable releases only.** No alpha/beta/RC/EAP/dev/preview versions without a written reason.
 - All external versions live in `gradle/libs.versions.toml`. Module build files reference catalog aliases — no inline version strings.
 - Internal deps use type-safe project accessors (`projects.shared`, `projects.composeApp`); `TYPESAFE_PROJECT_ACCESSORS` is enabled.
-- Current baseline: Kotlin 2.3.21, Compose Multiplatform 1.10.3, AGP 9.1.1, Ktor 3.4.3, Gradle 9.4.1, JDK 17, SQLDelight 2.3.2, Coil 3.4.0, Koin 4.2.1, Firebase BoM 34.12.0, Play Billing 8.3.0, Postgres JDBC 42.7.10, Flyway 12.4.0, Lettuce 7.5.1, Kotest 6.1.11.
+- Current baseline: Kotlin 2.3.21, Compose Multiplatform 1.11.0 (bumped from 1.10.3 on 2026-07-03: 1.10.3's wasm target dropped clicks inside scrollable containers — grid tiles, pills, list rows; 1.11.0's reworked web pointer processing fixes it), AGP 9.1.1, Ktor 3.4.3, Gradle 9.4.1, JDK 17, SQLDelight 2.3.2, Coil 3.4.0, Koin 4.2.1, Firebase BoM 34.12.0, Play Billing 8.3.0, Postgres JDBC 42.7.10, Flyway 12.4.0, Lettuce 7.5.1, Kotest 6.1.11.
 - Android `minSdk = 23` (driven by Firebase 34.x requirements, not Compose). iOS minimum is 13.
 - **Verify dependency / Gradle plugin / Compose API / Ktor API / Firebase / StoreKit / Play Billing suggestions against official docs before treating them as correct.** Official references win over AI memory or community posts on conflict.
 

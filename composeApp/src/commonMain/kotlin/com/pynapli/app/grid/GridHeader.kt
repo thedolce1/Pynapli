@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,6 +35,9 @@ internal fun GridHeader(
     onProfileIconClick: () -> Unit,
     onOpenTonight: () -> Unit = {},
     onOpenFilters: () -> Unit = {},
+    // Pointer-device refresh (WEB_PWA_GAMEPLAN.md W2.1): a mouse wheel can't pull to
+    // refresh, so wide windows surface an explicit button. Null (phones) hides it.
+    onRefresh: (() -> Unit)? = null,
 ) {
     PynapliScreenHeader(
         leading = {
@@ -45,6 +49,14 @@ internal fun GridHeader(
         },
         center = { GridLocationPill(locationLabel) },
         actions = {
+            onRefresh?.let { refresh ->
+                PynapliHeaderActionButton(
+                    icon = Icons.Filled.Refresh,
+                    contentDescription = "Refresh nearby profiles",
+                    onClick = refresh,
+                    modifier = Modifier.testTag("grid-refresh"),
+                )
+            }
             PynapliHeaderActionButton(
                 icon = Icons.Filled.DarkMode,
                 contentDescription = "Playing Tonight",
