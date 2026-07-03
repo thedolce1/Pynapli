@@ -1,0 +1,412 @@
+---
+// Live-rendered mini "grid" — the app's signature surface, built from the app tokens.
+const tiles = [
+  { g: 'linear-gradient(150deg,#3a2a4d,#7a4a63)', online: true, dist: '0.3 mi', tag: 'new' },
+  { g: 'linear-gradient(150deg,#22303f,#3f6d78)', online: false, dist: '0.5 mi' },
+  { g: 'linear-gradient(150deg,#4d3a2a,#8a6a3f)', online: true, dist: '0.6 mi', partner: 'M' },
+  { g: 'linear-gradient(150deg,#2a2a3f,#4a4a78)', online: false, dist: '0.8 mi' },
+  { g: 'linear-gradient(150deg,#3f2a2a,#785a4a)', online: true, dist: '1.1 mi' },
+  { g: 'linear-gradient(150deg,#2a3f38,#4a7863)', online: false, dist: '1.2 mi', partner: 'J' },
+  { g: 'linear-gradient(150deg,#3a2a3f,#6a4a78)', online: true, dist: '1.4 mi' },
+  { g: 'linear-gradient(150deg,#2f2f36,#55555f)', online: false, dist: '1.6 mi' },
+  { g: 'linear-gradient(150deg,#402a30,#7a4a55)', online: true, dist: '1.9 mi' },
+];
+---
+
+<section class="hero">
+  <div class="glow" aria-hidden="true"></div>
+  <div class="container grid">
+    <div class="copy">
+      <p class="kicker">Grid for now <i>·</i> Swipe for intent <i>·</i> Links for trust</p>
+      <h1>Your city.<br />Your people.<br /><em>On your terms.</em></h1>
+      <p class="sub">
+        A location-based social lifestyle app for open-minded adults — singles, couples, and
+        partnered people. Connect solo, together, or socially.
+      </p>
+      <div class="cta" id="waitlist">
+        <a class="btn btn-gold" href="#waitlist">Get early access</a>
+        <div class="badges">
+          <span class="store-badge"><span><small>Coming soon</small><strong>App Store</strong></span></span>
+          <span class="store-badge"><span><small>Coming soon</small><strong>Google Play</strong></span></span>
+        </div>
+      </div>
+      <p class="trust">
+        <span class="live"></span> 18+ · Verified profiles · You control who sees you
+      </p>
+    </div>
+
+    <div class="visual">
+      <div class="phone">
+        <div class="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="sb-right"><i></i><i></i><b></b></span>
+          </div>
+          <div class="appbar">
+            <span class="avatar"></span>
+            <span class="ctx">Discovery <em>· 2.0 mi</em></span>
+            <span class="filter"></span>
+          </div>
+          <div class="rowlabel"><b>Nearby</b><span>240+ online</span></div>
+          <div class="tiles">
+            {
+              tiles.map((t) => (
+                <div class="tile" style={`background:${t.g}`}>
+                  <span class="tgrain" />
+                  {t.partner && <span class="pc">{t.partner}</span>}
+                  {t.tag === 'new' && <span class="new">NEW</span>}
+                  <span class="scrim" />
+                  <span class="meta">
+                    {t.online && <span class="odot" />}
+                    {t.dist}
+                  </span>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero {
+    position: relative;
+    padding: clamp(48px, 8vw, 104px) 0 clamp(56px, 9vw, 120px);
+    overflow: hidden;
+  }
+  /* Warm gold glow — NOT the default purple AI blob. Low, off-center, behind the phone. */
+  .glow {
+    position: absolute;
+    top: 8%;
+    right: -6%;
+    width: 720px;
+    height: 720px;
+    max-width: 90vw;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 201, 40, 0.13), rgba(255, 201, 40, 0) 62%);
+    filter: blur(10px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .grid {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: clamp(28px, 4vw, 72px);
+    align-items: center;
+  }
+
+  /* ---- Copy ---- */
+  .kicker {
+    color: var(--gold);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin-bottom: 22px;
+  }
+  .kicker i {
+    color: var(--text-3);
+    font-style: normal;
+    margin: 0 4px;
+  }
+  h1 {
+    font-size: clamp(2.9rem, 7.2vw, 5.4rem);
+    line-height: 0.98;
+  }
+  h1 em {
+    font-style: italic;
+    color: var(--gold);
+  }
+  .sub {
+    color: var(--text-2);
+    font-size: clamp(1rem, 1.6vw, 1.2rem);
+    line-height: 1.55;
+    max-width: 30ch;
+    margin-top: 26px;
+  }
+  .cta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 34px;
+  }
+  .badges {
+    display: inline-flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .trust {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--text-3);
+    font-size: 13.5px;
+    margin-top: 26px;
+  }
+  .live {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--online);
+    box-shadow: 0 0 0 4px rgba(24, 215, 122, 0.16);
+  }
+
+  /* ---- Phone ---- */
+  .visual {
+    display: grid;
+    place-items: center;
+  }
+  .phone {
+    position: relative;
+    width: min(320px, 78vw);
+    aspect-ratio: 320 / 660;
+    border-radius: 46px;
+    padding: 10px;
+    background: linear-gradient(160deg, #202028, #0a0a0d 60%);
+    box-shadow:
+      0 2px 0 rgba(255, 255, 255, 0.05) inset,
+      0 40px 90px -30px rgba(0, 0, 0, 0.85),
+      0 0 0 1px rgba(255, 255, 255, 0.04);
+    animation: float 7s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .phone {
+      animation: none;
+    }
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0) rotate(-0.6deg);
+    }
+    50% {
+      transform: translateY(-12px) rotate(0.4deg);
+    }
+  }
+  .screen {
+    position: relative;
+    height: 100%;
+    border-radius: 37px;
+    background: var(--bg);
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+  }
+  /* dynamic-island pill */
+  .screen::before {
+    content: '';
+    position: absolute;
+    top: 9px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 78px;
+    height: 20px;
+    border-radius: 100px;
+    background: #000;
+    z-index: 5;
+  }
+  .statusbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .sb-right {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .sb-right i {
+    width: 15px;
+    height: 9px;
+    border-radius: 2px;
+    background: var(--text-2);
+  }
+  .sb-right b {
+    width: 20px;
+    height: 10px;
+    border-radius: 3px;
+    border: 1px solid var(--text-2);
+  }
+  .appbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px 10px;
+  }
+  .avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(140deg, #6a4a78, #b98a4a);
+    box-shadow: 0 0 0 1.5px var(--border);
+  }
+  .ctx {
+    flex: 1;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .ctx em {
+    color: var(--text-3);
+    font-weight: 500;
+    font-style: normal;
+  }
+  .filter {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+  .filter::before,
+  .filter::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--gold);
+  }
+  .filter::before {
+    top: 9px;
+  }
+  .filter::after {
+    top: 15px;
+    background: var(--text-3);
+  }
+  .rowlabel {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 2px 14px 8px;
+  }
+  .rowlabel b {
+    font-size: 14px;
+    color: var(--text);
+  }
+  .rowlabel span {
+    font-size: 10.5px;
+    color: var(--text-3);
+  }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    padding: 0 8px 8px;
+  }
+  .tile {
+    position: relative;
+    aspect-ratio: 3 / 4;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+  .tgrain {
+    position: absolute;
+    inset: 0;
+    opacity: 0.1;
+    mix-blend-mode: overlay;
+    background-image:
+      radial-gradient(rgba(255, 255, 255, 0.6) 1px, transparent 1px),
+      radial-gradient(rgba(0, 0, 0, 0.6) 1px, transparent 1px);
+    background-size: 3px 3px, 3px 3px;
+    background-position: 0 0, 1.5px 1.5px;
+  }
+  .scrim {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 55%;
+    background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.6));
+  }
+  .meta {
+    position: absolute;
+    left: 5px;
+    bottom: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 8.5px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .odot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--online);
+    box-shadow: 0 0 0 1.4px rgba(0, 0, 0, 0.4);
+  }
+  .pc {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 15px;
+    height: 15px;
+    border-radius: 4px;
+    background: linear-gradient(140deg, #4a7863, #2a3f38);
+    display: grid;
+    place-items: center;
+    font-size: 7px;
+    font-weight: 700;
+    color: #fff;
+    box-shadow: 0 0 0 1px var(--bg);
+    z-index: 2;
+  }
+  .pc::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    width: 5px;
+    height: 5px;
+    border-radius: 1.5px;
+    background: var(--gold);
+    box-shadow: 0 0 0 1px var(--bg);
+  }
+  .new {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: #1a1400;
+    background: var(--gold);
+    padding: 2px 4px;
+    border-radius: 4px;
+    z-index: 2;
+  }
+
+  @media (max-width: 900px) {
+    .grid {
+      grid-template-columns: 1fr;
+      text-align: center;
+    }
+    .sub {
+      margin-inline: auto;
+    }
+    .cta,
+    .kicker {
+      justify-content: center;
+    }
+    .cta {
+      justify-content: center;
+    }
+    .visual {
+      order: -1;
+      margin-bottom: 8px;
+    }
+  }
+</style>

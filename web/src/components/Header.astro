@@ -1,0 +1,80 @@
+---
+---
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="brand" href="/" aria-label="Pynapli home">
+      <span class="mark" aria-hidden="true">P</span>
+      <span class="word">Pynapli</span>
+    </a>
+    <nav class="actions">
+      <span class="age" title="Strictly 18 and over">18+</span>
+      <a class="btn btn-gold sm" href="#waitlist">Get early access</a>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--bg) 76%, transparent);
+    backdrop-filter: saturate(140%) blur(14px);
+    -webkit-backdrop-filter: saturate(140%) blur(14px);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .bar {
+    height: 66px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 11px;
+  }
+  .mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--gold);
+    color: #1a1400;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 20px;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+    box-shadow: 0 4px 16px -6px rgba(255, 201, 40, 0.6);
+  }
+  .word {
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+  }
+  .actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .age {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text-2);
+    border: 1px solid var(--border);
+    padding: 5px 9px;
+    border-radius: 100px;
+  }
+  .btn.sm {
+    padding: 10px 18px;
+    font-size: 14px;
+  }
+  @media (max-width: 560px) {
+    .word {
+      display: none;
+    }
+  }
+</style>

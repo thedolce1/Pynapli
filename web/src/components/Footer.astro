@@ -1,0 +1,138 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a class="brand" href="/" aria-label="Pynapli home">
+          <span class="mark" aria-hidden="true">P</span>
+          <span class="word">Pynapli</span>
+        </a>
+        <p class="tag">Grid for now. Swipe for intent. Links for trust.</p>
+      </div>
+      <nav class="foot-cols">
+        <div>
+          <h4>Explore</h4>
+          <a href="#how">How it works</a>
+          <a href="#safety">Safety</a>
+          <a href="#waitlist">Early access</a>
+        </div>
+        <div>
+          <h4>Legal</h4>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+          <a href="/guidelines">Community Guidelines</a>
+          <a href="/safety">Safety Center</a>
+        </div>
+        <div>
+          <h4>Contact</h4>
+          <a href="mailto:support@pynapli.com">support@pynapli.com</a>
+        </div>
+      </nav>
+    </div>
+
+    <hr class="hairline" />
+
+    <div class="foot-bottom">
+      <p>© {year} Pynapli · A social lifestyle app for open-minded adults · Strictly 18+</p>
+      <p class="safe">
+        Pynapli is not an escort or sex-services platform. How adults choose to connect is their own
+        decision, within our safety rules and platform policies.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    background: var(--surface);
+    border-top: 1px solid var(--border-soft);
+    padding: clamp(48px, 6vw, 80px) 0 40px;
+    position: relative;
+    z-index: 2;
+  }
+  .foot-top {
+    display: grid;
+    grid-template-columns: 1.2fr 2fr;
+    gap: clamp(32px, 5vw, 72px);
+    margin-bottom: 40px;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 11px;
+  }
+  .mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--gold);
+    color: #1a1400;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 20px;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+  }
+  .word {
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+  }
+  .tag {
+    color: var(--text-3);
+    font-size: 14px;
+    margin-top: 16px;
+    max-width: 26ch;
+  }
+  .foot-cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .foot-cols h4 {
+    font-family: var(--font-text);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin: 0 0 14px;
+  }
+  .foot-cols a {
+    display: block;
+    color: var(--text-2);
+    font-size: 14.5px;
+    padding: 5px 0;
+    transition: color 0.2s ease;
+  }
+  .foot-cols a:hover {
+    color: var(--gold);
+  }
+  .foot-bottom {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 26px;
+  }
+  .foot-bottom p {
+    color: var(--text-3);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .safe {
+    max-width: 68ch;
+  }
+  @media (max-width: 720px) {
+    .foot-top {
+      grid-template-columns: 1fr;
+      gap: 34px;
+    }
+    .foot-cols {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>
