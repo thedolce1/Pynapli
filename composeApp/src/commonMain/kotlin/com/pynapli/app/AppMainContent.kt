@@ -97,6 +97,8 @@ internal fun ColumnScope.PynapliMainContent(
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit,
     onPickConversationPhoto: () -> Unit,
     onSetDiscreetIcon: (Boolean) -> Unit,
+    storePurchasesAvailable: Boolean = true,
+    discreetIconSupported: Boolean = true,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val locationState by locationStateHolder.state.collectAsState()
@@ -171,6 +173,7 @@ internal fun ColumnScope.PynapliMainContent(
                 }
             },
             onSetDiscreetIcon = onSetDiscreetIcon,
+            discreetIconSupported = discreetIconSupported,
             modifier = Modifier.weight(1f),
         )
 
@@ -387,6 +390,7 @@ internal fun ColumnScope.PynapliMainContent(
                 StoreScreen(
                     modifier = Modifier.weight(1f),
                     stateHolder = storeStateHolder,
+                    purchasesAvailable = storePurchasesAvailable,
                 )
         }
     }

@@ -82,6 +82,10 @@ fun PynapliApp(
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
     onPickConversationPhoto: () -> Unit = {},
     onSetDiscreetIcon: (Boolean) -> Unit = {},
+    // Platform capabilities (WEB_PWA_GAMEPLAN.md W5): web is read-only in the Store
+    // (founder-locked) and has no launcher icon to disguise.
+    storePurchasesAvailable: Boolean = true,
+    discreetIconSupported: Boolean = true,
     devLoginCredentials: DevLoginCredentials? = null,
     testerDiagnosticLabel: String? = null,
     // Browser URL sync (WEB_PWA_GAMEPLAN.md W1.2): the web shell mirrors the canonical
@@ -312,6 +316,8 @@ fun PynapliApp(
                 onPickMediaForAlbum = onPickMediaForAlbum,
                 onPickConversationPhoto = onPickConversationPhoto,
                 onSetDiscreetIcon = onSetDiscreetIcon,
+                storePurchasesAvailable = storePurchasesAvailable,
+                discreetIconSupported = discreetIconSupported,
             )
         }
 

@@ -30,6 +30,8 @@ import kotlinx.coroutines.launch
 fun StoreScreen(
     stateHolder: StoreStateHolder = rememberStoreStateHolder(),
     modifier: Modifier = Modifier,
+    // Web is read-only (founder-locked): catalog + balances visible, no purchase controls.
+    purchasesAvailable: Boolean = true,
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -44,6 +46,7 @@ fun StoreScreen(
         onPurchaseProduct = { product -> scope.launch { stateHolder.purchaseProduct(product) } },
         onRestorePurchases = { scope.launch { stateHolder.restorePurchases() } },
         modifier = modifier,
+        purchasesAvailable = purchasesAvailable,
     )
 }
 
@@ -57,6 +60,7 @@ private fun StoreScreenContent(
     onPurchaseProduct: (PremiumProductDto) -> Unit,
     onRestorePurchases: () -> Unit,
     modifier: Modifier = Modifier,
+    purchasesAvailable: Boolean = true,
 ) {
     // The flagship paid plan (highest monthly price) gets the "Recommended" hero emphasis.
     val heroTier =
@@ -80,6 +84,7 @@ private fun StoreScreenContent(
                     state.pendingPurchaseTier == null &&
                     state.pendingPurchaseProductId == null,
             onRestorePurchases = onRestorePurchases,
+            showRestore = purchasesAvailable,
         )
         StoreMessageRow(
             message = state.purchaseMessage,
@@ -125,6 +130,12 @@ private fun StoreScreenContent(
                         CurrentPlanRow(entitlement = state.entitlement)
                     }
 
+                    if (!purchasesAvailable) {
+                        item(key = "manage-on-mobile") {
+                            StoreManageOnMobileRow()
+                        }
+                    }
+
                     item(key = "tiers-title") {
                         StoreSectionTitle(
                             title = "Plans",
@@ -144,6 +155,7 @@ private fun StoreScreenContent(
                             pendingPurchaseProductId = state.pendingPurchaseProductId,
                             isRestoringPurchases = state.isRestoringPurchases,
                             onPurchaseTier = onPurchaseTier,
+                            purchasesAvailable = purchasesAvailable,
                         )
                     }
 
@@ -173,6 +185,7 @@ private fun StoreScreenContent(
                             pendingPurchaseTier = state.pendingPurchaseTier,
                             isRestoringPurchases = state.isRestoringPurchases,
                             onPurchaseProduct = onPurchaseProduct,
+                            purchasesAvailable = purchasesAvailable,
                         )
                     }
                 }

@@ -154,13 +154,13 @@ on the bump.
 | W4.1 | ✅ Pane-based centered stage (same `BoxWithConstraints` philosophy as the Grid): panes ≥600dp center the whole Swipe surface — header, pills, deck, action bar — at a 520dp max width instead of stretching one hero card across a monitor; phone-width panes are untouched. A restrained keyboard-hints row (icon glyphs + labels in `TextTertiary` — the bundled font has no arrow characters) sits under the action bar on wide panes only. Browser-proven. |
 | W4.2 | ✅ Arrow keys drive the deck on wide panes: ← pass, → like, ↑ pineapple via `onPreviewKeyEvent` on the focused stage (focus requested whenever the wide stage appears), routed through the same callbacks as the action buttons so card fly-out animation, queueing, and the match overlay all behave identically; gated by the buttons' own enabled logic (`hasMore`, queue not full, not submitting). Pointer drag + match overlay + rewind already worked (existing `SwipeCardStack` gestures run on wasm since the CMP 1.11 pointer fix). Filters-as-dialog shipped with W2's adaptive sheets. `SwipeStageKeyTest` pins wide-pane key actions + compact-pane inertness. Same real-keyboard manual QA note as the composer. |
 
-### Phase W5 — Activity, Profile/Settings, read-only Store (🟢)
+### Phase W5 — Activity, Profile/Settings, read-only Store (🟢) — ✅ COMPLETE 2026-07-03
 
 | Slice | What |
 |------|------|
-| W5.1 | Activity four tabs; FOMO grid columns scale with width; Requests list. |
-| W5.2 | Profile hub + edit + albums (file-picker upload through the existing crop → upload path) + app settings (web-appropriate: no discreet-icon toggle). |
-| W5.3 | Store read-only: current plan, linked-partner benefit, balances, "manage in the mobile app" guidance. No purchase buttons on web. |
+| W5.1 | ✅ The FOMO grid answers its pane width (`BoxWithConstraints`): <600dp keeps the locked 2-up layout; wider panes go `Adaptive(200dp)` so a desktop window shows more of the tease at the same tile scale. Four tabs + Requests list unchanged (they already worked on wasm). Browser-proven: three flirt tiles at proper scale. |
+| W5.2 | ✅ Albums/onboarding photo upload already worked via W3's `WebMediaPicker` (browser file input → crop → upload). The web-appropriate settings fix: the "Discreet app icon" toggle is Android-only (launcher aliases), so `discreetIconSupported` threads `PynapliApp → ProfileHubScreen → AppSettingsContent` and web passes false — no toggle that silently does nothing (iOS can reuse the same flag later). |
+| W5.3 | ✅ Read-only Store (founder-locked): `purchasesAvailable=false` on web hides the header Restore and every Choose/price buy button (product prices remain as plain text), and a new `StoreManageOnMobileRow` ("Purchases live in the mobile app · your plan and balances stay in sync here") sits right under the current plan — same accent-disc callout language as the linked-partner benefit row. Catalog, current plan, entitlement source, and balances all stay visible. Browser-proven: callout + no Restore + Included chip intact. Android untouched (defaults true). |
 
 ### Phase W6 — Polish, landing integration, launch QA (🟢 + 🔵)
 

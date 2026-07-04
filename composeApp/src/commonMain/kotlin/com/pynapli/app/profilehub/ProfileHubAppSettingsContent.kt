@@ -45,6 +45,9 @@ internal fun AppSettingsContent(
     onClearError: () -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
+    // Launcher-icon swapping is an Android capability; web/iOS hide the row rather
+    // than show a toggle that does nothing.
+    discreetIconSupported: Boolean = true,
 ) {
     Column(
         modifier =
@@ -103,14 +106,16 @@ internal fun AppSettingsContent(
                 }
             }
 
-            item {
-                ProfileHubSection("App") {
-                    PrivacyToggleRow(
-                        label = "Discreet app icon",
-                        value = if (state.draft.discreetIconEnabled) "On" else "Off",
-                        checked = state.draft.discreetIconEnabled,
-                        onCheckedChange = onDiscreetIconChanged,
-                    )
+            if (discreetIconSupported) {
+                item {
+                    ProfileHubSection("App") {
+                        PrivacyToggleRow(
+                            label = "Discreet app icon",
+                            value = if (state.draft.discreetIconEnabled) "On" else "Off",
+                            checked = state.draft.discreetIconEnabled,
+                            onCheckedChange = onDiscreetIconChanged,
+                        )
+                    }
                 }
             }
 

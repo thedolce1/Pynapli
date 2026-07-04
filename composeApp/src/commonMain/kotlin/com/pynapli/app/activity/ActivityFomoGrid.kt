@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -93,46 +94,63 @@ internal fun ActivityFomoGrid(
         if (index >= 0) gridState.animateScrollToItem(index)
     }
 
-    LazyVerticalGrid(
-        state = gridState,
-        columns = GridCells.Fixed(2),
-        modifier = modifier.fillMaxSize().testTag(ActivityFomoTags.GRID),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        items(
-            count = items.size,
-            key = { index -> items[index].eventId },
-        ) { index ->
-            val item = items[index]
-            ActivityFomoTile(
-                item = item,
-                focused = focusedEventId == item.eventId,
-                pendingDismiss = pendingDismissEventId == item.eventId,
-                distanceUnit = distanceUnit,
-                onTileClick = { onTileClick(item) },
-                onDismiss = { onDismissEvent(item.eventId) },
-            )
-        }
-        items(count = lockedTiles) {
-            ActivityLockedTile(onClick = onOpenStore)
-        }
-        if (gatedCount > 0) {
-            fullSpanItem(key = "fomo-unlock") {
-                ActivityUnlockBanner(gatedCount = gatedCount, onOpenStore = onOpenStore)
+    // Pane-width-adaptive like the discovery grid (WEB_PWA_GAMEPLAN.md W5.1): phone-width
+    // panes keep the locked 2-up FOMO layout; wider panes add columns at the same tile
+    // scale so a desktop window shows more of the tease, not two giant tiles.
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val columns =
+            if (maxWidth < WideFomoPaneMinWidth) {
+                GridCells.Fixed(2)
+            } else {
+                GridCells.Adaptive(minSize = WideFomoTileMinSize)
             }
-        }
-        if (nextCursor != null) {
-            fullSpanItem(key = "fomo-load-more") {
-                ActivityLoadMoreRow(loading = isLoadingMore, onLoadMore = onLoadMore)
+        LazyVerticalGrid(
+            state = gridState,
+            columns = columns,
+            modifier = Modifier.fillMaxSize().testTag(ActivityFomoTags.GRID),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(
+                count = items.size,
+                key = { index -> items[index].eventId },
+            ) { index ->
+                val item = items[index]
+                ActivityFomoTile(
+                    item = item,
+                    focused = focusedEventId == item.eventId,
+                    pendingDismiss = pendingDismissEventId == item.eventId,
+                    distanceUnit = distanceUnit,
+                    onTileClick = { onTileClick(item) },
+                    onDismiss = { onDismissEvent(item.eventId) },
+                )
             }
-        }
-        if (adSupported) {
-            fullSpanItem(key = "fomo-ad") { ActivityAdSlot() }
+            items(count = lockedTiles) {
+                ActivityLockedTile(onClick = onOpenStore)
+            }
+            if (gatedCount > 0) {
+                fullSpanItem(key = "fomo-unlock") {
+                    ActivityUnlockBanner(gatedCount = gatedCount, onOpenStore = onOpenStore)
+                }
+            }
+            if (nextCursor != null) {
+                fullSpanItem(key = "fomo-load-more") {
+                    ActivityLoadMoreRow(loading = isLoadingMore, onLoadMore = onLoadMore)
+                }
+            }
+            if (adSupported) {
+                fullSpanItem(key = "fomo-ad") { ActivityAdSlot() }
+            }
         }
     }
 }
+
+/** Panes narrower than this keep the locked 2-up FOMO grid. */
+private val WideFomoPaneMinWidth = 600.dp
+
+/** Minimum FOMO tile side on wide panes — close to the phone's 2-up tile scale. */
+private val WideFomoTileMinSize = 200.dp
 
 private fun androidx.compose.foundation.lazy.grid.LazyGridScope.fullSpanItem(
     key: String,
