@@ -12,8 +12,11 @@ interface Props {
 }
 
 const {
-  title = 'Pynapli — Grid for now. Swipe for intent. Links for trust.',
-  description = 'A location-based social lifestyle app for open-minded adults — singles, couples, and partnered people. Connect solo, together, or socially. Strictly 18+.',
+  // Title carries the searchable category ("social lifestyle app" is the approved
+  // positioning phrase people can actually find); the brand tagline lives in the
+  // hero + og:image alt where poetry belongs.
+  title = 'Pynapli — The social lifestyle app for open-minded singles & couples',
+  description = 'Privacy-first social lifestyle app for open-minded singles, couples & partnered people. Live grid + swipe discovery, partner linking — never a shared account. Free in your browser. 18+.',
   image = '/og.png',
   noindex = false,
 } = Astro.props;
@@ -38,6 +41,20 @@ const siteLd = {
   '@type': 'WebSite',
   name: 'Pynapli',
   url: 'https://pynapli.com',
+};
+// The product itself: the web app is live, free, and runs in the browser — this is
+// what app-intent queries should resolve to.
+const appLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Pynapli',
+  url: 'https://app.pynapli.com',
+  applicationCategory: 'SocialNetworkingApplication',
+  operatingSystem: 'Web',
+  isAccessibleForFree: true,
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  description:
+    'Privacy-first social lifestyle app for open-minded adults. Grid and swipe discovery, partner linking without shared accounts, Psync synchronized swiping, and Playing Tonight availability. 18+.',
 };
 ---
 
@@ -70,6 +87,7 @@ const siteLd = {
     <meta name="twitter:image" content={ogImage} />
     <script type="application/ld+json" set:html={JSON.stringify(orgLd)} />
     <script type="application/ld+json" set:html={JSON.stringify(siteLd)} />
+    <script type="application/ld+json" set:html={JSON.stringify(appLd)} />
   </head>
   <body>
     <slot />
