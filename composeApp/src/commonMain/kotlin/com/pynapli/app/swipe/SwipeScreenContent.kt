@@ -1,24 +1,46 @@
 package com.pynapli.app.swipe
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.ads.AdPlacement
 import com.pynapli.app.ads.AdPlacementPolicy
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.shared.network.dto.SwipeCardDto
 
 @Composable
@@ -45,87 +67,189 @@ internal fun SwipeScreenContent(
     onLike: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    // Desktop stage (WEB_PWA_GAMEPLAN.md W4): wide panes center the deck at a card-
+    // comfortable width instead of stretching one hero card across a monitor, and the
+    // keyboard drives it — ← pass, ↑ pineapple, → like. Phone-width panes unchanged.
+    BoxWithConstraints(
         modifier =
             modifier
                 .fillMaxSize()
                 .testTag(SwipeTestTags.ROOT)
-                .background(MaterialTheme.colorScheme.background)
-                .statusBarsPadding()
-                .padding(horizontal = 18.dp, vertical = 12.dp),
+                .background(MaterialTheme.colorScheme.background),
     ) {
-        SwipeHeader(
-            activeFilterCount = state.swipeFilters.activeCount,
-            travelCityName = travelCityName,
-            onOpenFilters = onOpenFilters,
-            onOpenTravel = onOpenTravel,
-            onOpenPsync = onOpenPsync,
-        )
-        Spacer(Modifier.height(10.dp))
-        SwipeFilterRow(
-            filters = state.filters,
-            onFilterSelected = onFilterSelected,
-        )
-        state.paywallMessage?.let { message ->
-            SwipePaywallRow(
-                message = message,
-                onOpenStore = onOpenStore,
-            )
+        val wideStage = maxWidth >= WideStageMinPaneWidth
+        val keyActionsEnabled = state.hasMore && !state.actionQueueFull && !state.isSubmitting
+        val stageFocus = remember { FocusRequester() }
+        // Keys need focus; grab it whenever the wide stage (re)appears so arrows work
+        // immediately. Compact never requests — the phone flow has no keyboard.
+        LaunchedEffect(wideStage) {
+            if (wideStage) runCatching { stageFocus.requestFocus() }
         }
-        if (AdPlacementPolicy.canShowAds(state.adSupported, AdPlacement.SwipeBetweenBatches)) {
-            SwipeAdSlot()
-        }
-        if (state.topPicksMode) {
-            // Make the curated mode legible on the deck itself (the chip alone is easy to miss)
-            // and set the expectation that the set is finite + refreshes daily.
-            Text(
-                text = "Today's Top Picks · refreshes daily",
-                color = com.pynapli.app.design.PynapliColors.Accent,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(top = 6.dp, start = 2.dp),
-            )
-        }
-        Spacer(Modifier.height(10.dp))
 
-        SwipeDeckArea(
-            state = state,
-            requestedAction = requestedAction,
-            distanceUnit = distanceUnit,
-            onRetryDeck = onRetryDeck,
-            onOpenFilters = onOpenFilters,
-            onBackToForYou = { onFilterSelected(SwipeFilterType.ForYou) },
-            onActionConsumed = onActionConsumed,
-            onOpenProfile = onOpenProfile,
-            onLinkedPartnerTap = onLinkedPartnerTap,
-            onSwiped = onSwiped,
+        Column(
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-        )
+                    .then(
+                        if (wideStage) {
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .widthIn(max = WideStageMaxWidth)
+                                .fillMaxHeight()
+                        } else {
+                            Modifier.fillMaxSize()
+                        },
+                    ).statusBarsPadding()
+                    .padding(horizontal = 18.dp, vertical = 12.dp)
+                    .focusRequester(stageFocus)
+                    .focusable()
+                    .onPreviewKeyEvent { event ->
+                        if (!wideStage || event.type != KeyEventType.KeyDown || !keyActionsEnabled) {
+                            return@onPreviewKeyEvent false
+                        }
+                        when (event.key) {
+                            Key.DirectionLeft -> {
+                                onPass()
+                                true
+                            }
 
-        Spacer(Modifier.height(16.dp))
-        if (state.errorMessage != null && state.cards.isNotEmpty()) {
-            SwipeInlineError(message = state.errorMessage)
-            Spacer(Modifier.height(8.dp))
-        }
-        if (state.pendingActionCount > 0) {
-            SwipePendingSync(
-                count = state.pendingActionCount,
-                onRetry = onRetryPendingActions,
+                            Key.DirectionRight -> {
+                                onLike()
+                                true
+                            }
+
+                            Key.DirectionUp -> {
+                                onPineappleLike()
+                                true
+                            }
+
+                            else -> false
+                        }
+                    },
+        ) {
+            SwipeHeader(
+                activeFilterCount = state.swipeFilters.activeCount,
+                travelCityName = travelCityName,
+                onOpenFilters = onOpenFilters,
+                onOpenTravel = onOpenTravel,
+                onOpenPsync = onOpenPsync,
             )
-            Spacer(Modifier.height(8.dp))
-        }
+            Spacer(Modifier.height(10.dp))
+            SwipeFilterRow(
+                filters = state.filters,
+                onFilterSelected = onFilterSelected,
+            )
+            state.paywallMessage?.let { message ->
+                SwipePaywallRow(
+                    message = message,
+                    onOpenStore = onOpenStore,
+                )
+            }
+            if (AdPlacementPolicy.canShowAds(state.adSupported, AdPlacement.SwipeBetweenBatches)) {
+                SwipeAdSlot()
+            }
+            if (state.topPicksMode) {
+                // Make the curated mode legible on the deck itself (the chip alone is easy to miss)
+                // and set the expectation that the set is finite + refreshes daily.
+                Text(
+                    text = "Today's Top Picks · refreshes daily",
+                    color = PynapliColors.Accent,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
 
-        SwipeActions(
-            actionEnabled = state.hasMore && !state.actionQueueFull,
-            rewindEnabled = !state.isSubmitting && !state.isRewinding,
-            isSubmitting = false,
-            onRewind = onRewind,
-            onPass = onPass,
-            onIntroNote = onIntroNote,
-            onPineappleLike = onPineappleLike,
-            onLike = onLike,
+            SwipeDeckArea(
+                state = state,
+                requestedAction = requestedAction,
+                distanceUnit = distanceUnit,
+                onRetryDeck = onRetryDeck,
+                onOpenFilters = onOpenFilters,
+                onBackToForYou = { onFilterSelected(SwipeFilterType.ForYou) },
+                onActionConsumed = onActionConsumed,
+                onOpenProfile = onOpenProfile,
+                onLinkedPartnerTap = onLinkedPartnerTap,
+                onSwiped = onSwiped,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+            )
+
+            Spacer(Modifier.height(16.dp))
+            if (state.errorMessage != null && state.cards.isNotEmpty()) {
+                SwipeInlineError(message = state.errorMessage)
+                Spacer(Modifier.height(8.dp))
+            }
+            if (state.pendingActionCount > 0) {
+                SwipePendingSync(
+                    count = state.pendingActionCount,
+                    onRetry = onRetryPendingActions,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            SwipeActions(
+                actionEnabled = state.hasMore && !state.actionQueueFull,
+                rewindEnabled = !state.isSubmitting && !state.isRewinding,
+                isSubmitting = false,
+                onRewind = onRewind,
+                onPass = onPass,
+                onIntroNote = onIntroNote,
+                onPineappleLike = onPineappleLike,
+                onLike = onLike,
+            )
+
+            if (wideStage) {
+                SwipeKeyboardHints(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Wide panes center the deck; a stretched hero card is the stretched-phone tell. */
+private val WideStageMaxWidth = 520.dp
+
+private val WideStageMinPaneWidth = 600.dp
+
+@Composable
+private fun SwipeKeyboardHints(modifier: Modifier = Modifier) {
+    // Icon glyphs, not arrow characters — the bundled font has no ←/↑/→.
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SwipeKeyHint(icon = Icons.AutoMirrored.Filled.ArrowBack, label = "Pass")
+        SwipeKeyHint(icon = Icons.Filled.ArrowUpward, label = "Pineapple")
+        SwipeKeyHint(icon = Icons.AutoMirrored.Filled.ArrowForward, label = "Like")
+    }
+}
+
+@Composable
+private fun SwipeKeyHint(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = PynapliColors.TextTertiary,
+            modifier = Modifier.size(12.dp),
+        )
+        Text(
+            text = label,
+            color = PynapliColors.TextTertiary,
+            style = MaterialTheme.typography.labelSmall,
         )
     }
 }

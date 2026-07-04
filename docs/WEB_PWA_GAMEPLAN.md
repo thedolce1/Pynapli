@@ -147,12 +147,12 @@ on the bump.
 | W3.2 | ✅ Realtime on web, same coordinators as Android. **Browsers can't set WebSocket headers**, so streams gained first-frame auth: client factories take `sendTokenAsFirstFrame` (web builders pass true; native header path unchanged), and the messages/presence/activity stream routes accept header OR one `StreamAuthFrameDto` frame within 5s (`awaitStreamToken` — never a URL param; query tokens would land in access logs). Coordinators start at page boot (clients idle on backoff until a token exists); tab wake (`visibilitychange`) refetches inbox + activity summary since HTTP stays canonical. Browser-proven: a message sent by another account landed in the open conversation + re-sorted the inbox with zero user action. Server tests: first-frame delivery + malformed-frame close. |
 | W3.3 | ✅ Composer: Enter sends / Shift+Enter newline / Esc closes (hardware-key path via `onPreviewKeyEvent`; soft keyboards commit through the IME so phones are unchanged; NumPad Enter included). Desktop tests pin the behavior (`ConversationComposerKeyTest`). Photo attach: `WebMediaPicker` (browser file input → one base64 hop → `PickedMediaForUpload`) wired for conversation photos AND album/onboarding photos (`onPickMediaForAlbum`), matching `handlePickedMedia` on Android. **Manual founder QA note:** CDP-injected key events didn't reach the wasm key handler in automation — confirm Enter-to-send once with a real keyboard; the send button works regardless, and the same handler is desktop-test-green. |
 
-### Phase W4 — Swipe: desktop-native deck (🟢)
+### Phase W4 — Swipe: desktop-native deck (🟢) — ✅ COMPLETE 2026-07-03
 
 | Slice | What |
 |------|------|
-| W4.1 | Centered deck stage per size class (compact = mobile parity; expanded = viewport-sized card + side action column + keyboard hints). |
-| W4.2 | Keyboard shortcuts ←/→/↑ + drag with pointer; match overlay; rewind. Filters dialog on wide. |
+| W4.1 | ✅ Pane-based centered stage (same `BoxWithConstraints` philosophy as the Grid): panes ≥600dp center the whole Swipe surface — header, pills, deck, action bar — at a 520dp max width instead of stretching one hero card across a monitor; phone-width panes are untouched. A restrained keyboard-hints row (icon glyphs + labels in `TextTertiary` — the bundled font has no arrow characters) sits under the action bar on wide panes only. Browser-proven. |
+| W4.2 | ✅ Arrow keys drive the deck on wide panes: ← pass, → like, ↑ pineapple via `onPreviewKeyEvent` on the focused stage (focus requested whenever the wide stage appears), routed through the same callbacks as the action buttons so card fly-out animation, queueing, and the match overlay all behave identically; gated by the buttons' own enabled logic (`hasMore`, queue not full, not submitting). Pointer drag + match overlay + rewind already worked (existing `SwipeCardStack` gestures run on wasm since the CMP 1.11 pointer fix). Filters-as-dialog shipped with W2's adaptive sheets. `SwipeStageKeyTest` pins wide-pane key actions + compact-pane inertness. Same real-keyboard manual QA note as the composer. |
 
 ### Phase W5 — Activity, Profile/Settings, read-only Store (🟢)
 
