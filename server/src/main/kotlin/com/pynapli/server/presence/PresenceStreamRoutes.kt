@@ -2,11 +2,11 @@ package com.pynapli.server.presence
 
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.realtime.awaitStreamToken
 import com.pynapli.server.realtime.installRealtimeWebSocketsIfNeeded
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import com.pynapli.shared.network.dto.PresenceStreamSubscribeDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.webSocket
@@ -42,12 +42,8 @@ fun Application.configurePresenceStreamRoutes(
 
     routing {
         webSocket("/v1/presence/stream") {
-            val token =
-                call.request.headers[HttpHeaders.Authorization]
-                    ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-                    ?.substringAfter("Bearer ")
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() }
+            // Header for native clients; first-frame auth for browsers (awaitStreamToken).
+            val token = awaitStreamToken()
             if (token == null) {
                 close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "UNAUTHENTICATED"))
                 return@webSocket

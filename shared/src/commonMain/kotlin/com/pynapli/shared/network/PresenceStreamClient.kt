@@ -121,6 +121,9 @@ class KtorPresenceStreamSessionFactory(
     private val httpClient: HttpClient,
     private val streamUrl: String,
     private val sessionScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    // Browsers cannot set WebSocket headers, so the web client authenticates with one
+    // first frame instead (never the URL — query tokens would land in access logs).
+    private val sendTokenAsFirstFrame: Boolean = false,
 ) : PresenceStreamSessionFactory {
     override suspend fun connect(token: String): PresenceStreamSession {
         val outgoing = Channel<String>(capacity = Channel.BUFFERED)
@@ -131,8 +134,11 @@ class KtorPresenceStreamSessionFactory(
                 try {
                     httpClient.webSocket(
                         urlString = streamUrl,
-                        request = { header(HttpHeaders.Authorization, "Bearer $token") },
+                        request = { if (!sendTokenAsFirstFrame) header(HttpHeaders.Authorization, "Bearer $token") },
                     ) {
+                        if (sendTokenAsFirstFrame) {
+                            send(Frame.Text(streamAuthFrameJson(token)))
+                        }
                         ready.complete(Unit)
                         val sender =
                             launch {
@@ -187,12 +193,14 @@ fun buildPresenceStreamClient(
     websocketBaseUrl: String,
     tokenProvider: AccessTokenProvider,
     backoff: PresenceStreamBackoff = PresenceStreamBackoff(),
+    sendTokenAsFirstFrame: Boolean = false,
 ): PresenceStreamClient =
     PresenceStreamClient(
         sessionFactory =
             KtorPresenceStreamSessionFactory(
                 httpClient = websocketHttpClient,
                 streamUrl = websocketBaseUrl.trimEnd('/') + "/v1/presence/stream",
+                sendTokenAsFirstFrame = sendTokenAsFirstFrame,
             ),
         tokenProvider = tokenProvider,
         backoff = backoff,

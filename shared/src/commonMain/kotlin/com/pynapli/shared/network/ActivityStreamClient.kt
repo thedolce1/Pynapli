@@ -99,6 +99,9 @@ class KtorActivityStreamSessionFactory(
     private val httpClient: HttpClient,
     private val streamUrl: String,
     private val sessionScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    // Browsers cannot set WebSocket headers, so the web client authenticates with one
+    // first frame instead (never the URL — query tokens would land in access logs).
+    private val sendTokenAsFirstFrame: Boolean = false,
 ) : ActivityStreamSessionFactory {
     override suspend fun connect(token: String): ActivityStreamSession {
         val incoming = Channel<String>(capacity = Channel.BUFFERED)
@@ -108,8 +111,11 @@ class KtorActivityStreamSessionFactory(
                 try {
                     httpClient.webSocket(
                         urlString = streamUrl,
-                        request = { header(HttpHeaders.Authorization, "Bearer $token") },
+                        request = { if (!sendTokenAsFirstFrame) header(HttpHeaders.Authorization, "Bearer $token") },
                     ) {
+                        if (sendTokenAsFirstFrame) {
+                            send(Frame.Text(streamAuthFrameJson(token)))
+                        }
                         ready.complete(Unit)
                         for (frame in this.incoming) {
                             if (frame is Frame.Text) incoming.send(frame.readText())
@@ -144,12 +150,14 @@ fun buildActivityStreamClient(
     websocketBaseUrl: String,
     tokenProvider: AccessTokenProvider,
     backoff: ActivityStreamBackoff = ActivityStreamBackoff(),
+    sendTokenAsFirstFrame: Boolean = false,
 ): ActivityStreamClient =
     ActivityStreamClient(
         sessionFactory =
             KtorActivityStreamSessionFactory(
                 httpClient = websocketHttpClient,
                 streamUrl = websocketBaseUrl.trimEnd('/') + "/v1/activity/stream",
+                sendTokenAsFirstFrame = sendTokenAsFirstFrame,
             ),
         tokenProvider = tokenProvider,
         backoff = backoff,

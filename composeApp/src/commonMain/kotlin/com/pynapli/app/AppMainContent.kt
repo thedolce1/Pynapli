@@ -1,14 +1,19 @@
 package com.pynapli.app
 
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.pynapli.app.activity.ActivityScreen
 import com.pynapli.app.activity.ActivityStateHolder
 import com.pynapli.app.activity.toActivityProfileCardUi
@@ -16,6 +21,11 @@ import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.conversation.ConversationScreen
 import com.pynapli.app.conversation.ConversationStateHolder
+import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliEmptyState
+import com.pynapli.app.design.PynapliTabIcons
+import com.pynapli.app.design.PynapliWindowSizeClass
+import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.grid.GridScreen
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.SavedGridFilterStateHolder
@@ -43,6 +53,9 @@ import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.network.dto.MatchDto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+
+/** Fixed inbox width in the Expanded two-pane messenger; the conversation takes the rest. */
+private val MessagesInboxPaneWidth = 380.dp
 
 /**
  * The primary in-tab content of [PynapliApp] (extracted from the App.kt shell): the profile-surface
@@ -237,9 +250,27 @@ internal fun ColumnScope.PynapliMainContent(
             }
 
             PynapliTab.Messages -> {
-                if (conversationState.visible) {
+                val inboxPane: @Composable (Modifier) -> Unit = { paneModifier ->
+                    MessagesScreen(
+                        modifier = paneModifier,
+                        stateHolder = messagesStateHolder,
+                        viewerUserId = authState.session?.userId,
+                        profileImageUrl = profileImageUrl,
+                        onProfileIconClick = { onProfileSurface(ProfileSurface.Hub) },
+                        onThreadSelected = { conversation ->
+                            messagesStateHolder.markConversationReadLocal(conversation.conversationId)
+                            scope.launch {
+                                conversationStateHolder.openConversation(
+                                    conversation = conversation,
+                                    viewerUserId = authState.session?.userId,
+                                )
+                            }
+                        },
+                    )
+                }
+                val conversationPane: @Composable (Modifier) -> Unit = { paneModifier ->
                     ConversationScreen(
-                        modifier = Modifier.weight(1f),
+                        modifier = paneModifier,
                         state = conversationState,
                         onBack = conversationActions.dismiss,
                         onProfileIconClick = { onProfileSurface(ProfileSurface.Hub) },
@@ -261,23 +292,40 @@ internal fun ColumnScope.PynapliMainContent(
                         onRevealMedia = conversationActions.onRevealMedia,
                         onPickPhoto = onPickConversationPhoto,
                     )
+                }
+
+                if (currentPynapliWindowSizeClass() == PynapliWindowSizeClass.Expanded) {
+                    // Two-pane messenger (WEB_PWA_GAMEPLAN.md W3.1): the inbox (with its
+                    // New Matches rail) stays visible while a conversation is open.
+                    Row(modifier = Modifier.weight(1f)) {
+                        inboxPane(
+                            Modifier
+                                .width(MessagesInboxPaneWidth)
+                                .fillMaxHeight(),
+                        )
+                        VerticalDivider(thickness = 1.dp, color = PynapliColors.BorderSoft)
+                        if (conversationState.visible) {
+                            conversationPane(
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                            )
+                        } else {
+                            PynapliEmptyState(
+                                icon = PynapliTabIcons.Messages.unselected,
+                                title = "Your messages",
+                                subtitle = "Pick a conversation from the inbox to read it here.",
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight(),
+                            )
+                        }
+                    }
+                } else if (conversationState.visible) {
+                    conversationPane(Modifier.weight(1f))
                 } else {
-                    MessagesScreen(
-                        modifier = Modifier.weight(1f),
-                        stateHolder = messagesStateHolder,
-                        viewerUserId = authState.session?.userId,
-                        profileImageUrl = profileImageUrl,
-                        onProfileIconClick = { onProfileSurface(ProfileSurface.Hub) },
-                        onThreadSelected = { conversation ->
-                            messagesStateHolder.markConversationReadLocal(conversation.conversationId)
-                            scope.launch {
-                                conversationStateHolder.openConversation(
-                                    conversation = conversation,
-                                    viewerUserId = authState.session?.userId,
-                                )
-                            }
-                        },
-                    )
+                    inboxPane(Modifier.weight(1f))
                 }
             }
 

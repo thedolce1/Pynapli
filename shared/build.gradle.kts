@@ -21,7 +21,8 @@ kotlin {
         withHostTest {}
     }
 
-    iosX64()
+    // No iosX64: Compose Multiplatform 1.11 stopped publishing Intel-simulator artifacts;
+    // Apple Silicon simulators use iosSimulatorArm64 and the iOS phase is deferred anyway.
     iosArm64()
     iosSimulatorArm64()
 
