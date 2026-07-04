@@ -1,5 +1,5 @@
 ---
-import { APP_LOGIN_URL } from '../lib/appLinks';
+import { APP_LOGIN_URL, APP_SIGNUP_URL } from '../lib/appLinks';
 ---
 
 <header class="site-header">
@@ -11,7 +11,7 @@ import { APP_LOGIN_URL } from '../lib/appLinks';
     <nav class="actions">
       <span class="age" title="Strictly 18 and over">18+</span>
       <a class="login" href={APP_LOGIN_URL}>Log in</a>
-      <a class="btn btn-gold sm" href="/#waitlist">Get early access</a>
+      <a class="btn btn-gold sm" href={APP_SIGNUP_URL}>Create account</a>
     </nav>
   </div>
 </header>
