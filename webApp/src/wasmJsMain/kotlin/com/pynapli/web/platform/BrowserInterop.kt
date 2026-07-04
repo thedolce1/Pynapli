@@ -34,6 +34,45 @@ internal fun installPromptAvailable(): Boolean = js("window.__pynapliInstallProm
 
 internal fun geolocationAvailable(): Boolean = js("'geolocation' in navigator")
 
+internal fun onDocumentVisible(handler: () -> Unit): Unit =
+    js(
+        """{
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') { handler(); }
+        });
+    }""",
+    )
+
+/**
+ * Opens the browser image picker and reads the chosen file. Bytes cross the JS
+ * boundary as one base64 string (single interop call; a per-byte copy would take
+ * millions). Cancelling the OS dialog fires no callback — nothing is pending UI-side.
+ */
+internal fun openBrowserImagePicker(onPicked: (String, String) -> Unit): Unit =
+    js(
+        """{
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = function () {
+            var file = input.files && input.files[0];
+            if (!file) { return; }
+            var reader = new FileReader();
+            reader.onload = function () {
+                var bytes = new Uint8Array(reader.result);
+                var binary = '';
+                var chunk = 0x8000;
+                for (var i = 0; i < bytes.length; i += chunk) {
+                    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+                }
+                onPicked(btoa(binary), file.type || 'image/jpeg');
+            };
+            reader.readAsArrayBuffer(file);
+        };
+        input.click();
+    }""",
+    )
+
 internal fun requestBrowserGeolocation(
     onSuccess: (Double, Double, Double) -> Unit,
     onPermissionDenied: () -> Unit,

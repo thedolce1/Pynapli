@@ -1,6 +1,7 @@
 package com.pynapli.web
 
 import com.pynapli.app.AppDeepLinkStateHolder
+import com.pynapli.app.activity.ActivityRealtimeCoordinator
 import com.pynapli.app.activity.ActivityStateHolder
 import com.pynapli.app.activity.ApiActivityFeedRepository
 import com.pynapli.app.appsettings.ApiNotificationPreferencesGateway
@@ -14,6 +15,7 @@ import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.ApiGridFeedRepository
 import com.pynapli.app.grid.ApiSavedGridFilterRepository
 import com.pynapli.app.grid.ApiTonightAvailabilityRepository
+import com.pynapli.app.grid.GridPresenceStreamCoordinator
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.NoOpGridSnapshotStore
 import com.pynapli.app.grid.SavedGridFilterStateHolder
@@ -25,6 +27,7 @@ import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.media.ApiMediaAlbumsRepository
 import com.pynapli.app.media.MediaAlbumsStateHolder
 import com.pynapli.app.messages.ApiMessagesRepository
+import com.pynapli.app.messages.MessagesRealtimeCoordinator
 import com.pynapli.app.messages.MessagesStateHolder
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
@@ -47,6 +50,9 @@ import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.network.KtorMediaByteUploader
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
+import com.pynapli.shared.network.buildWebActivityStreamClient
+import com.pynapli.shared.network.buildWebMessageStreamClient
+import com.pynapli.shared.network.buildWebPresenceStreamClient
 import com.pynapli.web.auth.LocalStorageSessionStore
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.settings.LocalStorageAppSettingsStore
@@ -187,6 +193,40 @@ class WebAppGraph {
         StoreStateHolder(
             repository = ApiStoreRepository(apiClient),
             purchaseGateway = UnavailableStorePurchaseGateway(),
+        )
+
+    // Realtime convenience streams (WEB_PWA_GAMEPLAN.md W3.2), same coordinators as
+    // Android over first-frame-auth web sockets. The resilient clients idle with
+    // backoff until a session token exists, so these run for the whole page lifetime.
+    val gridPresenceStreamCoordinator =
+        GridPresenceStreamCoordinator(
+            client =
+                buildWebPresenceStreamClient(
+                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
+                    tokenProvider = sessionStore,
+                ),
+            gridStateHolder = gridStateHolder,
+        )
+
+    val activityRealtimeCoordinator =
+        ActivityRealtimeCoordinator(
+            client =
+                buildWebActivityStreamClient(
+                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
+                    tokenProvider = sessionStore,
+                ),
+            activityStateHolder = activityStateHolder,
+        )
+
+    val messagesRealtimeCoordinator =
+        MessagesRealtimeCoordinator(
+            client =
+                buildWebMessageStreamClient(
+                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
+                    tokenProvider = sessionStore,
+                ),
+            messagesStateHolder = messagesStateHolder,
+            conversationStateHolder = conversationStateHolder,
         )
 
     val devLoginCredentials: DevLoginCredentials? =

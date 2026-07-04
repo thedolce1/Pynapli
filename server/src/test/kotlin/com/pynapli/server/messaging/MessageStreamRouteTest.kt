@@ -90,6 +90,73 @@ class MessageStreamRouteTest {
         }
 
     @Test
+    fun firstFrameAuthDeliversDeltasToBrowserStyleClients() =
+        testApplication {
+            val viewerId = UUID.randomUUID()
+            val conversationId = UUID.randomUUID()
+            val viewerToken = "viewer-token"
+            val authService = singleSessionAuthService(viewerToken, viewerId)
+            val broadcaster = MessageBroadcaster()
+
+            application {
+                configureMessageStreamRoutes(
+                    authService = authService,
+                    broadcaster = broadcaster,
+                )
+            }
+
+            val client = createClient { install(ClientWebSockets) }
+
+            runBlocking {
+                // No Authorization header — browsers cannot set WebSocket headers.
+                client.webSocket("/v1/messages/stream") {
+                    send(Frame.Text("""{"type":"auth","token":"$viewerToken"}"""))
+                    delay(50)
+
+                    broadcaster.emit(
+                        MessageRealtimeDelta(
+                            recipientUserId = viewerId,
+                            type = MessageDeltaType.MESSAGE_CREATED,
+                            conversationId = conversationId,
+                            occurredAt = Instant.parse("2026-05-22T16:00:00Z"),
+                        ),
+                    )
+
+                    val frame = withTimeout(1_000) { incoming.receive() }
+                    val text = (frame as? Frame.Text)?.readText() ?: fail("Expected text frame")
+                    val delta = streamJson.decodeFromString(MessageDeltaDto.serializer(), text)
+                    assertEquals(MessageDeltaType.MESSAGE_CREATED, delta.type)
+                    assertEquals(conversationId.toString(), delta.conversationId)
+                }
+            }
+        }
+
+    @Test
+    fun malformedFirstFrameClosesTheSocketUnauthenticated() =
+        testApplication {
+            val viewerToken = "viewer-token"
+            val authService = singleSessionAuthService(viewerToken, UUID.randomUUID())
+            val broadcaster = MessageBroadcaster()
+
+            application {
+                configureMessageStreamRoutes(
+                    authService = authService,
+                    broadcaster = broadcaster,
+                )
+            }
+
+            val client = createClient { install(ClientWebSockets) }
+
+            runBlocking {
+                client.webSocket("/v1/messages/stream") {
+                    send(Frame.Text("""{"not":"an auth frame"}"""))
+                    val reason = withTimeout(2_000) { closeReason.await() }
+                    assertEquals("UNAUTHENTICATED", reason?.message)
+                }
+            }
+        }
+
+    @Test
     fun otherUsersMessageDeltaIsNotDelivered() =
         testApplication {
             val viewerId = UUID.randomUUID()

@@ -24,6 +24,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
@@ -77,6 +83,9 @@ internal fun Composer(
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit,
     onPickPhoto: () -> Unit,
+    // Hardware-keyboard close (web/desktop, WEB_PWA_GAMEPLAN.md W3.3): Esc in the
+    // composer closes the open conversation. Null where the container owns dismissal.
+    onEscape: (() -> Unit)? = null,
 ) {
     val showCharacterCount = draft.length >= MESSAGE_BODY_MAX_LENGTH - 200 || isOverLimit
     val helperText =
@@ -143,7 +152,30 @@ internal fun Composer(
                 enabled = !isSending,
                 isError = errorMessage != null || isOverLimit,
                 placeholder = { Text("Message") },
-                modifier = Modifier.weight(1f),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        // Hardware keyboards (web/desktop): Enter sends, Shift+Enter breaks the
+                        // line, Esc closes. Soft keyboards commit through the IME and never
+                        // reach this, so phone behavior is unchanged.
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when {
+                                (event.key == Key.Enter || event.key == Key.NumPadEnter) && !event.isShiftPressed -> {
+                                    if (canSend) onSend()
+                                    // Consumed either way so a bare Enter never inserts a
+                                    // stray newline into an empty/over-limit draft.
+                                    true
+                                }
+
+                                event.key == Key.Escape && onEscape != null -> {
+                                    onEscape()
+                                    true
+                                }
+
+                                else -> false
+                            }
+                        },
                 maxLines = 4,
             )
             IconButton(

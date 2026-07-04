@@ -131,6 +131,7 @@ fun ConversationScreen(
             showLeaveAction = false,
             showPartnerStatusFeedback = false,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            onEscape = onBack,
         )
     }
 }
@@ -154,6 +155,7 @@ private fun ColumnScope.ConversationContent(
     showLeaveAction: Boolean,
     showPartnerStatusFeedback: Boolean,
     modifier: Modifier = Modifier,
+    onEscape: (() -> Unit)? = null,
 ) {
     when {
         state.isOpening -> {
@@ -241,6 +243,7 @@ private fun ColumnScope.ConversationContent(
                         onDraftChanged = onDraftChanged,
                         onSend = onSend,
                         onPickPhoto = onPickPhoto,
+                        onEscape = onEscape,
                     )
                 }
             }

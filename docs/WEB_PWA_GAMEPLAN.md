@@ -139,13 +139,13 @@ pills, list rows) while non-scrollable targets worked — verified with two inde
 paths; 1.11.0's reworked web pointer processing fixes it (release-notes item). Full verify gate re-run
 on the bump.
 
-### Phase W3 — Messages: the desktop win (🟢)
+### Phase W3 — Messages: the desktop win (🟢) — ✅ COMPLETE 2026-07-03
 
 | Slice | What |
 |------|------|
-| W3.1 | Two-pane Messages on expanded (inbox left, conversation right; New Matches rail spans the inbox pane), single-pane compact. |
-| W3.2 | WebSocket deltas + canonical HTTP refetch (same coordinator pattern as Android) over the browser WebSocket. Reconnect-refetch on tab wake. |
-| W3.3 | Desktop input: Enter sends / Shift+Enter newline, Esc closes the open conversation, photo attach via file picker. |
+| W3.1 | ✅ Expanded windows get the two-pane messenger: 380dp inbox (New Matches rail included) + hairline divider + conversation pane, with a quiet `PynapliEmptyState` ("Your messages") when nothing is open. Compact/Medium keep the single-pane flow verbatim. Screen lambdas are single-sourced so the panes can't drift from the phone layout. Browser-proven: open-in-pane, inbox stays, thread URL deep link updates. |
+| W3.2 | ✅ Realtime on web, same coordinators as Android. **Browsers can't set WebSocket headers**, so streams gained first-frame auth: client factories take `sendTokenAsFirstFrame` (web builders pass true; native header path unchanged), and the messages/presence/activity stream routes accept header OR one `StreamAuthFrameDto` frame within 5s (`awaitStreamToken` — never a URL param; query tokens would land in access logs). Coordinators start at page boot (clients idle on backoff until a token exists); tab wake (`visibilitychange`) refetches inbox + activity summary since HTTP stays canonical. Browser-proven: a message sent by another account landed in the open conversation + re-sorted the inbox with zero user action. Server tests: first-frame delivery + malformed-frame close. |
+| W3.3 | ✅ Composer: Enter sends / Shift+Enter newline / Esc closes (hardware-key path via `onPreviewKeyEvent`; soft keyboards commit through the IME so phones are unchanged; NumPad Enter included). Desktop tests pin the behavior (`ConversationComposerKeyTest`). Photo attach: `WebMediaPicker` (browser file input → one base64 hop → `PickedMediaForUpload`) wired for conversation photos AND album/onboarding photos (`onPickMediaForAlbum`), matching `handlePickedMedia` on Android. **Manual founder QA note:** CDP-injected key events didn't reach the wasm key handler in automation — confirm Enter-to-send once with a real keyboard; the send button works regardless, and the same handler is desktop-test-green. |
 
 ### Phase W4 — Swipe: desktop-native deck (🟢)
 

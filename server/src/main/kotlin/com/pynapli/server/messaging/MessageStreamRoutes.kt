@@ -2,9 +2,9 @@ package com.pynapli.server.messaging
 
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.realtime.awaitStreamToken
 import com.pynapli.server.realtime.installRealtimeWebSocketsIfNeeded
 import com.pynapli.shared.network.dto.MessageDeltaDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.webSocket
@@ -35,12 +35,8 @@ fun Application.configureMessageStreamRoutes(
 
     routing {
         webSocket("/v1/messages/stream") {
-            val token =
-                call.request.headers[HttpHeaders.Authorization]
-                    ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-                    ?.substringAfter("Bearer ")
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() }
+            // Header for native clients; first-frame auth for browsers (awaitStreamToken).
+            val token = awaitStreamToken()
             if (token == null) {
                 close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "UNAUTHENTICATED"))
                 return@webSocket
