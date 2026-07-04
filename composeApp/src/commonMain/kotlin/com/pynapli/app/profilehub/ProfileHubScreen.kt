@@ -49,6 +49,7 @@ fun ProfileHubScreen(
     onOpenStore: () -> Unit = {},
     onPreviewProfile: () -> Unit = {},
     onSetDiscreetIcon: (Boolean) -> Unit = {},
+    discreetIconSupported: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val state by stateHolder.state.collectAsState()
@@ -154,6 +155,7 @@ fun ProfileHubScreen(
                 }
             },
             modifier = modifier,
+            discreetIconSupported = discreetIconSupported,
         )
     } else if (state.notificationCenterVisible) {
         NotificationCenterContent(

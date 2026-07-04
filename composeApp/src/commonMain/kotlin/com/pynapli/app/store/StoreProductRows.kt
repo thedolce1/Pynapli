@@ -34,6 +34,9 @@ internal fun StoreTierRow(
     isRestoringPurchases: Boolean,
     onPurchaseTier: (SubscriptionTierDto) -> Unit,
     isHero: Boolean = false,
+    // Web is read-only (founder-locked): plans stay visible, buy buttons don't render;
+    // StoreManageOnMobileRow explains where purchases live.
+    purchasesAvailable: Boolean = true,
 ) {
     val isCurrent = tier.tier == currentTier
     val isFree = tier.tier == SubscriptionTier.FREE
@@ -107,7 +110,7 @@ internal fun StoreTierRow(
                 OutlinedButton(onClick = {}, enabled = false) {
                     Text("Included")
                 }
-            } else {
+            } else if (purchasesAvailable) {
                 Button(
                     onClick = { onPurchaseTier(tier) },
                     enabled = !purchaseInFlight && tier.playStoreProductId != null,
@@ -148,6 +151,7 @@ internal fun StoreProductRow(
     pendingPurchaseTier: String?,
     isRestoringPurchases: Boolean,
     onPurchaseProduct: (PremiumProductDto) -> Unit,
+    purchasesAvailable: Boolean = true,
 ) {
     val purchaseInFlight = pendingPurchaseProductId != null || pendingPurchaseTier != null || isRestoringPurchases
     val isPurchasing = pendingPurchaseProductId == product.productId
@@ -193,16 +197,25 @@ internal fun StoreProductRow(
                     maxLines = 1,
                 )
             }
-            Button(
-                onClick = { onPurchaseProduct(product) },
-                enabled = !purchaseInFlight,
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
-            ) {
-                Text(if (isPurchasing) "Adding" else product.priceUsdCents.storePriceLabel(product.quantity))
+            if (purchasesAvailable) {
+                Button(
+                    onClick = { onPurchaseProduct(product) },
+                    enabled = !purchaseInFlight,
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                ) {
+                    Text(if (isPurchasing) "Adding" else product.priceUsdCents.storePriceLabel(product.quantity))
+                }
+            } else {
+                Text(
+                    text = product.priceUsdCents.storePriceLabel(product.quantity),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
 

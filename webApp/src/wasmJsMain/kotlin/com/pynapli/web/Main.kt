@@ -107,6 +107,9 @@ private fun WebAppContent(
         onUseCurrentLocation = locationAdapter::requestCurrentLocation,
         onPickMediaForAlbum = mediaPicker::pickForAlbum,
         onPickConversationPhoto = mediaPicker::pickConversationPhoto,
+        // Founder-locked web behavior: Store is read-only; browsers have no launcher icon.
+        storePurchasesAvailable = false,
+        discreetIconSupported = false,
         devLoginCredentials = graph.devLoginCredentials,
         testerDiagnosticLabel = graph.testerDiagnosticLabel,
         onNavigationRouteChanged = router::onRouteChanged,

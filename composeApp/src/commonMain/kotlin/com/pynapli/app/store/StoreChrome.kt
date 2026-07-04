@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -42,26 +43,79 @@ internal fun StoreHeader(
     isRestoringPurchases: Boolean,
     restoreEnabled: Boolean,
     onRestorePurchases: () -> Unit,
+    showRestore: Boolean = true,
 ) {
     PynapliScreenHeader(
         leading = { StoreIconBadge() },
         title = "Store",
         subtitle = entitlement?.source.sourceLabel(),
         actions = {
-            OutlinedButton(
-                onClick = onRestorePurchases,
-                enabled = restoreEnabled,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(17.dp),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(if (isRestoringPurchases) "Restoring" else "Restore")
+            if (showRestore) {
+                OutlinedButton(
+                    onClick = onRestorePurchases,
+                    enabled = restoreEnabled,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(if (isRestoringPurchases) "Restoring" else "Restore")
+                }
             }
         },
     )
+}
+
+/**
+ * Read-only Store explainer (WEB_PWA_GAMEPLAN.md W5.3, founder-locked): the web shows
+ * plans and balances but purchases live in the mobile app; entitlements are
+ * server-validated so they stay in sync everywhere automatically.
+ */
+@Composable
+internal fun StoreManageOnMobileRow() {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(PynapliColors.SurfaceRaised)
+                .border(1.dp, PynapliColors.Border, RoundedCornerShape(12.dp))
+                .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(PynapliColors.Accent.copy(alpha = 0.10f))
+                    .border(1.dp, PynapliColors.Accent.copy(alpha = 0.22f), RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Smartphone,
+                contentDescription = null,
+                tint = PynapliColors.Accent,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Purchases live in the mobile app",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "Your plan and balances stay in sync here. To upgrade or add boosts, open Pynapli on your phone.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
 }
 
 @Composable
