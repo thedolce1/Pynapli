@@ -1,5 +1,6 @@
 ---
 import StoreBadges from './StoreBadges.astro';
+import { APP_SIGNUP_URL } from '../lib/appLinks';
 
 // Live-rendered mini "grid" — the app's signature surface, built from the app tokens.
 const tiles = [
@@ -27,6 +28,7 @@ const tiles = [
       </p>
       <div class="cta">
         <a class="btn btn-gold" href="#waitlist">Get early access</a>
+        <a class="btn btn-ghost" href={APP_SIGNUP_URL}>Create account on the web</a>
         <StoreBadges />
       </div>
       <p class="trust">

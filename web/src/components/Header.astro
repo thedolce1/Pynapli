@@ -1,4 +1,5 @@
 ---
+import { APP_LOGIN_URL } from '../lib/appLinks';
 ---
 
 <header class="site-header">
@@ -9,6 +10,7 @@
     </a>
     <nav class="actions">
       <span class="age" title="Strictly 18 and over">18+</span>
+      <a class="login" href={APP_LOGIN_URL}>Log in</a>
       <a class="btn btn-gold sm" href="/#waitlist">Get early access</a>
     </nav>
   </div>
@@ -71,6 +73,16 @@
   .btn.sm {
     padding: 10px 18px;
     font-size: 14px;
+  }
+  .login {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-2);
+    padding: 8px 4px;
+    transition: color 0.15s ease;
+  }
+  .login:hover {
+    color: var(--text);
   }
   @media (max-width: 560px) {
     .word {

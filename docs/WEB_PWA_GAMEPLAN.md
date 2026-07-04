@@ -162,14 +162,17 @@ on the bump.
 | W5.2 | ✅ Albums/onboarding photo upload already worked via W3's `WebMediaPicker` (browser file input → crop → upload). The web-appropriate settings fix: the "Discreet app icon" toggle is Android-only (launcher aliases), so `discreetIconSupported` threads `PynapliApp → ProfileHubScreen → AppSettingsContent` and web passes false — no toggle that silently does nothing (iOS can reuse the same flag later). |
 | W5.3 | ✅ Read-only Store (founder-locked): `purchasesAvailable=false` on web hides the header Restore and every Choose/price buy button (product prices remain as plain text), and a new `StoreManageOnMobileRow` ("Purchases live in the mobile app · your plan and balances stay in sync here") sits right under the current plan — same accent-disc callout language as the linked-partner benefit row. Catalog, current plan, entitlement source, and balances all stay visible. Browser-proven: callout + no Restore + Included chip intact. Android untouched (defaults true). |
 
-### Phase W6 — Polish, landing integration, launch QA (🟢 + 🔵)
+### Phase W6 — Polish, landing integration, launch QA (🟢 + 🔵) — 🟢 codeable COMPLETE 2026-07-04
 
 | Slice | Track | What |
 |------|-------|------|
-| W6.1 | 🟢 | Marketing site: header + hero gain **Log in / Create account** → app.pynapli.com (waitlist CTA stays until founder flips positioning). |
-| W6.2 | 🟢 | Web error/empty/loading states audit (reuse PynapliEmptyState/ErrorState/Skeleton), bundle-size budget + `materialIconsExtended` size check, first-paint loading experience. |
-| W6.3 | 🟢 | Browser QA matrix: Chrome/Edge/Firefox/Safari (Wasm GC availability), desktop + tablet + phone viewports; keyboard-only pass; Lighthouse PWA/a11y pass. |
-| W6.4 | 🔵 | **Founder ops:** DNS `app.pynapli.com`, static hosting + deploy pipeline, prod CORS origin, TLS. (Same bucket as the pending pynapli.com deploy.) |
+| W6.1 | ✅ | Marketing site: header gains a quiet **Log in** link and the hero gains a ghost **"Create account on the web"** beside the primary waitlist CTA (positioning preserved per the founder call). Both route through one `web/src/lib/appLinks.ts` (`https://app.pynapli.com` — dead until W6.4 ships; site + app deploy together). Astro build green. |
+| W6.2 | ✅ | First production distribution built + verified booting (`wasmJsBrowserDistribution` → served statically → app runs from the optimized bundle). **Measured v1 baseline: ~5.5 MB gzipped initial download** (two wasm modules 3.3 MB + 2.1 MB gz + 101 KB js; 16 MB raw). Accepted for v1 (downloads once; SW caches the shell on the deployed origin). Follow-ups logged: migrate off the pinned-1.7.3 `materialIconsExtended` (known-large), watch CMP wasm size work. First-paint: the boot screen is now the pulsing brand mark (reduced-motion respected) instead of bare text. Error/empty/loading states already ride the shared polish-pass primitives on every surface. |
+| W6.3 | ✅→🔵 | Chrome (the automatable engine here) was driven end-to-end across W0–W5. `docs/WEB_BROWSER_QA_CHECKLIST.md` now carries the human half: the four automation-blind items (real-keyboard Enter/arrows, geolocation prompt, file picker) + Firefox/Safari/Edge smoke passes + Lighthouse on the deployed origin. WasmGC baseline documented (Chrome/Edge 119+, Firefox 120+, Safari 18.2+). |
+| W6.4 | 🔵 | **Founder ops (the remaining gate to real users):** DNS `app.pynapli.com`, static hosting for `webApp/build/dist/wasmJs/productionExecutable` (SPA rewrite: serve `index.html` for unknown paths), deployed API + `PYNAPLI_CORS_ALLOWED_ORIGINS=https://app.pynapli.com`, TLS. Same bucket as the pending pynapli.com deploy. |
+
+**v1 status: every codeable slice W0–W6.3 is COMPLETE.** Definition-of-done items that
+remain are exactly the W6.4 ops list plus the human checklist above.
 
 ### Deferred (explicitly post-v1)
 
