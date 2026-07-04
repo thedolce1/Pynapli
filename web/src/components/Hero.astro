@@ -1,6 +1,6 @@
 ---
 import StoreBadges from './StoreBadges.astro';
-import { APP_SIGNUP_URL } from '../lib/appLinks';
+import { APP_LOGIN_URL, APP_SIGNUP_URL } from '../lib/appLinks';
 
 // Live-rendered mini "grid" — the app's signature surface, built from the app tokens.
 const tiles = [
@@ -27,10 +27,14 @@ const tiles = [
         as a couple, or partnered — on an account that’s always your own.
       </p>
       <div class="cta">
-        <a class="btn btn-gold" href="#waitlist">Get early access</a>
-        <a class="btn btn-ghost" href={APP_SIGNUP_URL}>Create account on the web</a>
+        <a class="btn btn-gold" href={APP_SIGNUP_URL}>Create your account</a>
+        <a class="btn btn-ghost" href={APP_LOGIN_URL}>Log in</a>
         <StoreBadges />
       </div>
+      <p class="avail">
+        Free to join · Runs in your browser — installable on desktop &amp; Android
+        · <a href="#waitlist">Get notified when the apps land</a>
+      </p>
       <p class="trust">
         <span class="live"></span> 18+ · Verified profiles · You control who sees you
       </p>
@@ -140,13 +144,26 @@ const tiles = [
     gap: 10px;
     flex-wrap: wrap;
   }
+  .avail {
+    color: var(--text-3);
+    font-size: 13.5px;
+    margin: 14px 0 0;
+  }
+  .avail a {
+    color: var(--text-2);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .avail a:hover {
+    color: var(--text);
+  }
   .trust {
     display: inline-flex;
     align-items: center;
     gap: 9px;
     color: var(--text-3);
     font-size: 13.5px;
-    margin-top: 26px;
+    margin-top: 14px;
   }
   .live {
     width: 8px;
