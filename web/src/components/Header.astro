@@ -8,6 +8,13 @@ import { APP_LOGIN_URL, APP_SIGNUP_URL } from '../lib/appLinks';
       <span class="mark" aria-hidden="true">P</span>
       <span class="word">Pynapli</span>
     </a>
+    <nav class="sections" aria-label="Sections">
+      <a href="/#how">How it works</a>
+      <a href="/psync">Psync</a>
+      <a href="/#tonight">Playing Tonight</a>
+      <a href="/#safety">Safety</a>
+      <a href="/#faq">FAQ</a>
+    </nav>
     <nav class="actions">
       <span class="age" title="Strictly 18 and over">18+</span>
       <a class="login" href={APP_LOGIN_URL}>Log in</a>
@@ -83,6 +90,26 @@ import { APP_LOGIN_URL, APP_SIGNUP_URL } from '../lib/appLinks';
   }
   .login:hover {
     color: var(--text);
+  }
+  .sections {
+    display: inline-flex;
+    align-items: center;
+    gap: 26px;
+  }
+  .sections a {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-2);
+    transition: color 0.15s ease;
+  }
+  .sections a:hover {
+    color: var(--text);
+  }
+  /* Phones keep the minimal brand + CTA header; sections stay reachable via scroll + footer. */
+  @media (max-width: 940px) {
+    .sections {
+      display: none;
+    }
   }
   @media (max-width: 560px) {
     .word {
