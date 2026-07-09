@@ -2,6 +2,7 @@ package com.pynapli.web
 
 import com.pynapli.shared.core.config.PynapliConfig
 import com.pynapli.shared.core.config.PynapliEnvironment
+import com.pynapli.web.platform.apiBaseOverride
 import com.pynapli.web.platform.windowLocationHostname
 
 internal object WebRuntimeConfig {
@@ -16,12 +17,20 @@ internal object WebRuntimeConfig {
                     websocketBaseUrl = "ws://localhost:8080",
                 )
             } else {
-                // Production API origin is a founder ops decision (W6.4); placeholder until
-                // the server is deployed. The web app is only reachable locally before then.
+                // Production API origin is set at deploy time via window.__PYNAPLI_API_BASE__ in
+                // index.html (no Wasm rebuild needed), falling back to the api.pynapli.com
+                // convention. The WebSocket base is derived by swapping http(s) -> ws(s).
+                val apiBaseUrl =
+                    apiBaseOverride()?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() }
+                        ?: "https://api.pynapli.com"
+                val websocketBaseUrl =
+                    apiBaseUrl
+                        .replaceFirst("https://", "wss://")
+                        .replaceFirst("http://", "ws://")
                 PynapliConfig(
                     environment = PynapliEnvironment.Prod,
-                    apiBaseUrl = "https://api.pynapli.com",
-                    websocketBaseUrl = "wss://api.pynapli.com",
+                    apiBaseUrl = apiBaseUrl,
+                    websocketBaseUrl = websocketBaseUrl,
                 )
             }
         }

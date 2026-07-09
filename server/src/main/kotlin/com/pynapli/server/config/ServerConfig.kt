@@ -96,7 +96,8 @@ data class ServerConfig(
     val appCheckProjectNumber: String? = null,
     // Browser origins allowed to call the API (the web PWA). Full `scheme://host[:port]`
     // strings, comma-separated in PYNAPLI_CORS_ALLOWED_ORIGINS. Local default covers the
-    // wasm dev server; production sets https://app.pynapli.com explicitly.
+    // wasm dev server; every non-local environment defaults to https://app.pynapli.com so a
+    // deploy that forgets the env var still admits the PWA (override to add/replace origins).
     val corsAllowedOrigins: List<String> = emptyList(),
     val supportEmail: String = "support@pynapli.com",
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
@@ -402,11 +403,7 @@ data class ServerConfig(
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() },
                 corsAllowedOrigins =
-                    System
-                        .getenv("PYNAPLI_CORS_ALLOWED_ORIGINS")
-                        ?.split(",")
-                        ?.mapNotNull { origin -> origin.trim().takeIf { it.isNotEmpty() } }
-                        ?: if (environment == "local") listOf("http://localhost:8081") else emptyList(),
+                    corsAllowedOriginsFromEnvironment(environmentVariables, environment),
                 supportEmail =
                     System
                         .getenv("PYNAPLI_SUPPORT_EMAIL")
@@ -440,3 +437,22 @@ internal fun serverPortFromEnvironment(environmentVariables: Map<String, String>
     environmentVariables["PYNAPLI_SERVER_PORT"]?.toIntOrNull()
         ?: environmentVariables["PORT"]?.toIntOrNull()
         ?: 8080
+
+// Browser origins allowed to call the API (the web PWA at app.pynapli.com). Explicit
+// PYNAPLI_CORS_ALLOWED_ORIGINS (comma-separated) wins; otherwise local serves the wasm dev
+// server and every other environment defaults to the production PWA origin so a deploy that
+// forgets the env var still admits the app instead of silently blocking every browser request.
+internal fun corsAllowedOriginsFromEnvironment(
+    environmentVariables: Map<String, String>,
+    environment: String,
+): List<String> {
+    val explicit =
+        environmentVariables["PYNAPLI_CORS_ALLOWED_ORIGINS"]
+            ?.split(",")
+            ?.mapNotNull { origin -> origin.trim().takeIf { it.isNotEmpty() } }
+    return when {
+        explicit != null -> explicit
+        environment == "local" -> listOf("http://localhost:8081")
+        else -> listOf("https://app.pynapli.com")
+    }
+}

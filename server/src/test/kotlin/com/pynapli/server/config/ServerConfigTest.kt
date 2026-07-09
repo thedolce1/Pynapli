@@ -36,4 +36,37 @@ class ServerConfigTest {
 
         assertEquals(8080, port)
     }
+
+    @Test
+    fun corsOriginsUseExplicitEnvValueWhenSet() {
+        val origins =
+            corsAllowedOriginsFromEnvironment(
+                mapOf("PYNAPLI_CORS_ALLOWED_ORIGINS" to " https://app.pynapli.com , https://staging.pynapli.com "),
+                "prod",
+            )
+
+        assertEquals(listOf("https://app.pynapli.com", "https://staging.pynapli.com"), origins)
+    }
+
+    @Test
+    fun corsOriginsDefaultToWasmDevServerLocally() {
+        val origins = corsAllowedOriginsFromEnvironment(emptyMap(), "local")
+
+        assertEquals(listOf("http://localhost:8081"), origins)
+    }
+
+    @Test
+    fun corsOriginsDefaultToProductionPwaOriginWhenUnsetOffLocal() {
+        val origins = corsAllowedOriginsFromEnvironment(emptyMap(), "prod")
+
+        assertEquals(listOf("https://app.pynapli.com"), origins)
+    }
+
+    @Test
+    fun corsOriginsHonorAnExplicitEmptyOverride() {
+        val origins =
+            corsAllowedOriginsFromEnvironment(mapOf("PYNAPLI_CORS_ALLOWED_ORIGINS" to " , "), "prod")
+
+        assertEquals(emptyList<String>(), origins)
+    }
 }

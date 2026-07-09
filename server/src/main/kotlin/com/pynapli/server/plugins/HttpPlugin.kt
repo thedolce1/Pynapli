@@ -21,6 +21,9 @@ fun Application.configureHTTP(allowedOrigins: List<String> = emptyList()) {
         allowMethod(HttpMethod.Delete)
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
+        // The shared client attaches this on attested requests; browsers need it allowlisted
+        // for the CORS preflight or the whole request is rejected.
+        allowHeader(APP_CHECK_HEADER)
         allowedOrigins.forEach { origin ->
             val scheme = origin.substringBefore("://", missingDelimiterValue = "")
             val host = origin.substringAfter("://", missingDelimiterValue = "")

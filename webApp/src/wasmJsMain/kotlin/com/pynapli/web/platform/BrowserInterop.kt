@@ -17,6 +17,9 @@ private fun localStorageRemoveItem(key: String): Unit = js("window.localStorage.
 
 internal fun windowLocationHostname(): String = js("window.location.hostname")
 
+// Optional prod API origin injected by index.html at deploy time (no Wasm rebuild). Empty/unset -> null.
+internal fun apiBaseOverride(): String? = js("window.__PYNAPLI_API_BASE__ || null")
+
 internal fun windowLocationPathname(): String = js("window.location.pathname")
 
 internal fun historyPushState(path: String): Unit = js("window.history.pushState(null, '', path)")

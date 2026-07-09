@@ -58,6 +58,11 @@
         }
     </style>
     <script type="application/javascript">
+        // Production API origin, set here at deploy time so it needs no Wasm rebuild. Leave null
+        // to use the api.pynapli.com default baked into the client, or set the deployed API, e.g.
+        //   window.__PYNAPLI_API_BASE__ = 'https://api.pynapli.com';
+        window.__PYNAPLI_API_BASE__ = null;
+
         // Captured pre-wasm so the app can offer its own restrained install
         // affordance later (WEB_PWA_GAMEPLAN.md W1.4).
         window.__pynapliInstallPrompt = null;
