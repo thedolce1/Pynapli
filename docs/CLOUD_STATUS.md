@@ -94,9 +94,11 @@ each depends on the one before:
    Details: [../infra/cloud-run/README.md](../infra/cloud-run/README.md).
 3. **Deploy the Ktor API** to Cloud Run (workflow **Deploy Staging API** or `scripts/gcp-cloud-run-deploy.ps1`),
    ideally reachable at **`api.pynapli.com`** (that's the URL the PWA expects — see step 4).
-4. **Point the PWA at the real API** — `webApp/.../WebRuntimeConfig.kt` currently hardcodes the prod
-   API as the placeholder `https://api.pynapli.com`. Confirm/change it to the deployed URL, and add
-   `PYNAPLI_CORS_ALLOWED_ORIGINS=https://app.pynapli.com` to the API. *(Codeable — can be done any time.)*
+4. **Point the PWA at the API** *(wired 2026-07-09 — now a one-liner)* — set
+   `window.__PYNAPLI_API_BASE__` in `webApp/.../index.html` to the deployed API URL (leave `null` to
+   use the `https://api.pynapli.com` default; no Wasm rebuild needed). The API's CORS now defaults
+   non-local environments to `https://app.pynapli.com` automatically — set
+   `PYNAPLI_CORS_ALLOWED_ORIGINS` only to add/replace origins.
 5. **Deploy the PWA** — build `webApp/build/dist/wasmJs/productionExecutable`, host it at
    `app.pynapli.com` (SPA rewrite: serve `index.html` for unknown paths). Can share the same Firebase
    project as a second Hosting site (multi-site target).
