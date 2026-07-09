@@ -80,6 +80,33 @@ Then Firebase console → Hosting → add custom domain `pynapli.com`. See [../w
 **Before any production resource:** billing alerts, backups, branch protection, rollback plan
 (hard rule — `infra/cloud-run/README.md` §Current Rule).
 
+## Go-live sequence (decided 2026-07-09)
+
+**Founder decision:** do **not** deploy anything public piecemeal. Launch the whole funnel
+together so it works on day one — a live marketing site whose "Create account" button reaches a
+working app beats a brochure with dead CTAs. Deploy order is **backend → PWA → site**, because
+each depends on the one before:
+
+1. **Resolve project naming** (blocking decision, founder) — `pynapli` vs a `-dev`/`-staging`/`-prod`
+   split. Everything below targets whatever id you pick.
+2. **Provision GCP** (founder ops) — enable APIs, create Cloud SQL (Postgres+PostGIS) + `pynapli_staging`
+   DB, Memorystore Redis, Artifact Registry, the 6 Secret Manager secrets, and the GCS media bucket.
+   Details: [../infra/cloud-run/README.md](../infra/cloud-run/README.md).
+3. **Deploy the Ktor API** to Cloud Run (workflow **Deploy Staging API** or `scripts/gcp-cloud-run-deploy.ps1`),
+   ideally reachable at **`api.pynapli.com`** (that's the URL the PWA expects — see step 4).
+4. **Point the PWA at the real API** — `webApp/.../WebRuntimeConfig.kt` currently hardcodes the prod
+   API as the placeholder `https://api.pynapli.com`. Confirm/change it to the deployed URL, and add
+   `PYNAPLI_CORS_ALLOWED_ORIGINS=https://app.pynapli.com` to the API. *(Codeable — can be done any time.)*
+5. **Deploy the PWA** — build `webApp/build/dist/wasmJs/productionExecutable`, host it at
+   `app.pynapli.com` (SPA rewrite: serve `index.html` for unknown paths). Can share the same Firebase
+   project as a second Hosting site (multi-site target).
+6. **Deploy the marketing site** — `pynapli.com` (`web/dist`, already configured in `firebase.json`;
+   see [../web/HOSTING.md](../web/HOSTING.md)). Its CTAs now reach a working app.
+
+**Also before public launch (independent of the above):** finalize real Privacy/Terms copy (currently
+DRAFT/noindex), and decide the waitlist form's fate (wire it to an email service or remove it — it's
+currently a no-op). Optional codeable prep while the ops work happens: any of step 4.
+
 ## How to verify live state yourself
 
 - Firebase: https://console.firebase.google.com/project/pynapli — check Hosting, App Check, Cloud Messaging.
