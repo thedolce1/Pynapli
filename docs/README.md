@@ -79,6 +79,7 @@ Runbooks and current cloud state. See also `../web/HOSTING.md` for the pynapli.c
 | --- | --- |
 | [DEVOPS_INFRA_SETUP_SPEC.md](DEVOPS_INFRA_SETUP_SPEC.md) | Local/CI/cloud infra, Firebase & GCP setup plan, secrets, environments. |
 | [CLOUD_STATUS.md](CLOUD_STATUS.md) | One-page Firebase/GCP snapshot — what's live vs. coded-but-not-provisioned. |
+| [GCP_PROVISIONING_CHECKLIST.md](GCP_PROVISIONING_CHECKLIST.md) | Step-by-step runbook to stand up the backend on GCP, then PWA + site. |
 | [STAGING_TESTER_LANE.md](STAGING_TESTER_LANE.md) | Firebase-enabled staging APK → Cloud Run staging API lane. |
 | [WEB_BROWSER_QA_CHECKLIST.md](WEB_BROWSER_QA_CHECKLIST.md) | Manual browser QA checklist for the Wasm PWA. |
 | [THIRD_PARTY_DATA.md](THIRD_PARTY_DATA.md) | Bundled datasets, licenses, and attribution obligations (e.g. GeoNames CC BY 4.0). |
