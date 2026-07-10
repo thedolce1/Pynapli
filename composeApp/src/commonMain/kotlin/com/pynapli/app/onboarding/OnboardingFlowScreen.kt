@@ -5,10 +5,8 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -46,6 +44,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliContentWidth
+import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.media.MediaAlbumsUiState
@@ -83,11 +83,11 @@ fun OnboardingFlowScreen(
     testerDiagnosticLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+    PynapliMaxWidthColumn(
+        maxWidth = PynapliContentWidth.Form,
+        modifier = modifier,
+        columnModifier =
+            Modifier
                 .statusBarsPadding()
                 // Keep focused fields above the soft keyboard: the Profile step's
                 // display-name field sits low enough to be covered otherwise.

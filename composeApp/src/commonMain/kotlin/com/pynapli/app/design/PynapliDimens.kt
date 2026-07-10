@@ -31,6 +31,22 @@ object PynapliLayout {
 }
 
 /**
+ * Upper bounds that keep single-column surfaces (auth, onboarding, store, activity, profile hub,
+ * media albums, conversations) reading as an intentional centered column on wide windows instead
+ * of a phone layout stretched edge-to-edge. Consumed via `PynapliMaxWidthColumn` /
+ * `PynapliMaxWidthContainer` (design/PynapliWindowSize.kt) as `widthIn(max = …)`, so on phones —
+ * where the window is narrower than the bound — they are no-ops and the dense Compact layout is
+ * byte-for-byte unchanged. The Grid stays deliberately edge-to-edge (density is its identity) and
+ * Swipe carries its own centered deck stage, so those are excluded on purpose.
+ */
+object PynapliContentWidth {
+    val Form = 440.dp // auth + onboarding + narrow single-purpose forms
+    val Conversation = 720.dp // a readable chat column (bubbles + composer) in a wide Messages pane
+    val Feed = 760.dp // single-column card lists (Store plans, profile hub, media albums)
+    val WideFeed = 900.dp // multi-column card grids (Activity FOMO)
+}
+
+/**
  * Screen-header tokens. Every top-of-screen header (Grid, Swipe, Activity, Messages, Store)
  * is built from the `PynapliScreenHeader` scaffold (design/PynapliScreenHeader.kt) so insets,
  * padding, avatar size, and action-button treatment match across surfaces. One canonical frame;

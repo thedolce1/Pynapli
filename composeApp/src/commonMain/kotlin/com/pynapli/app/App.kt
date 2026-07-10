@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import com.pynapli.app.activity.ActivityScreen
 import com.pynapli.app.activity.ActivityStateHolder
 import com.pynapli.app.appsettings.AppSettingsStateHolder
@@ -173,15 +174,18 @@ fun PynapliApp(
         }
 
         if (authState.isCheckingSession) {
-            Column(
+            Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = "Pynapli",
                     color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
             return@PynapliTheme

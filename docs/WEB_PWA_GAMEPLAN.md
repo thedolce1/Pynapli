@@ -1,6 +1,6 @@
 # Web PWA Companion Gameplan
 
-Last updated: 2026-07-03
+Last updated: 2026-07-09
 
 ## Purpose
 
@@ -173,6 +173,20 @@ on the bump.
 
 **v1 status: every codeable slice W0–W6.3 is COMPLETE.** Definition-of-done items that
 remain are exactly the W6.4 ops list plus the human checklist above.
+
+### Phase W7 — "Not a stretched phone app" hardening pass (🟢) — ✅ COMPLETE 2026-07-09
+
+A full sweep for the founder's defining requirement (no horizontal-stretch layouts on any wide
+surface), closing the gaps the phase work left in single-column surfaces, and one real deep-link
+bug found while verifying. Verified in Chrome at Compact (390), Medium (800), and Expanded (1440),
+plus `verify-web` + `:composeApp:desktopTest` green.
+
+| Slice | What |
+|------|------|
+| W7.1 | Generalized the max-width primitive: `PynapliMaxWidthColumn` gained a `columnModifier` (so scroll/inset/padding act *within* the cap — for forms), and a new `PynapliContentWidth.Conversation = 720dp` token. All caps are no-ops below their width, so Compact is byte-for-byte unchanged. |
+| W7.2 | Capped/centered every remaining single-column surface that had been stretching edge-to-edge on wide windows: **Auth** + **Onboarding** (`Form` 440, replacing the hand-rolled centering), **Conversation** (`Conversation` 720 — a readable chat column in the wide two-pane Messages instead of bubbles + composer stretched across the pane), **Profile Hub** and **Media Albums** (`Feed` 760, via `Modifier.align(CenterHorizontally).widthIn(max)` at their `ColumnScope` call sites — no wrapper/reindent). Activity (`WideFeed` 900) + Store (`Feed` 760) picked up the generalized primitive. |
+| W7.3 | **Deep-link boot fix:** `index.html` loaded `pynapli.js` via a *relative* src, so any multi-segment deep link (e.g. `/messages/{threadId}`) resolved it to `/messages/pynapli.js` → 404 and the app never booted on refresh. Made the script src absolute (`/pynapli.js`), matching the already-absolute manifest/icon hrefs. Single-segment routes worked by luck before; nested routes now boot too. |
+| W7.4 | Centered the `isCheckingSession` restore splash (was a bare top-left "Pynapli"); now a centered brand mark for the brief session-restore frame. |
 
 ### Deferred (explicitly post-v1)
 

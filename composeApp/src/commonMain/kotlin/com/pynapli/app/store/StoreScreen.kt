@@ -1,9 +1,7 @@
 package com.pynapli.app.store
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -22,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliContentWidth
+import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubscriptionTierDto
 import kotlinx.coroutines.launch
@@ -68,11 +68,9 @@ private fun StoreScreenContent(
             .filter { it.monthlyPriceUsdCents > 0 }
             .maxByOrNull { it.monthlyPriceUsdCents }
             ?.tier
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+    PynapliMaxWidthColumn(
+        maxWidth = PynapliContentWidth.Feed,
+        modifier = modifier,
     ) {
         StoreHeader(
             entitlement = state.entitlement,
