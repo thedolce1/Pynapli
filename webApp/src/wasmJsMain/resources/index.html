@@ -80,7 +80,9 @@
             });
         }
     </script>
-    <script type="application/javascript" src="pynapli.js"></script>
+    <!-- Absolute so the loader resolves at the origin root on multi-segment deep links
+         (e.g. /messages/{id}); a relative src resolves to /messages/pynapli.js → 404. -->
+    <script type="application/javascript" src="/pynapli.js"></script>
 </head>
 <body>
 <div id="pynapli-boot" aria-label="Pynapli is loading">

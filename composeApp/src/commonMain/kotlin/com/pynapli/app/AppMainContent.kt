@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.activity.ActivityScreen
@@ -22,6 +24,7 @@ import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.conversation.ConversationScreen
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliTabIcons
 import com.pynapli.app.design.PynapliWindowSizeClass
@@ -174,7 +177,13 @@ internal fun ColumnScope.PynapliMainContent(
             },
             onSetDiscreetIcon = onSetDiscreetIcon,
             discreetIconSupported = discreetIconSupported,
-            modifier = Modifier.weight(1f),
+            // Cap + center the settings column on wide windows so it reads as an
+            // intentional column instead of stretching edge-to-edge (WEB_PWA_GAMEPLAN).
+            modifier =
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .widthIn(max = PynapliContentWidth.Feed)
+                    .weight(1f),
         )
 
         // Own-profile preview ("Preview profile" row) opens the read-only public-profile peek over
@@ -199,7 +208,13 @@ internal fun ColumnScope.PynapliMainContent(
             profileLinksStateHolder = profileLinksStateHolder,
             onBack = { onProfileSurface(ProfileSurface.Hub) },
             onPickMedia = onPickMediaForAlbum,
-            modifier = Modifier.weight(1f),
+            // Cap + center the album grid on wide windows so photo tiles keep a sane
+            // size instead of three tiles stretched across a monitor (WEB_PWA_GAMEPLAN).
+            modifier =
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .widthIn(max = PynapliContentWidth.Feed)
+                    .weight(1f),
         )
     } else {
         when (selectedTab) {

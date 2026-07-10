@@ -1,11 +1,9 @@
 package com.pynapli.app.conversation
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -18,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliBottomSheet
+import com.pynapli.app.design.PynapliContentWidth
+import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 
 @Composable
@@ -100,12 +100,10 @@ fun ConversationScreen(
     onPickPhoto: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .testTag(ConversationTestTags.fullScreen),
+    PynapliMaxWidthColumn(
+        maxWidth = PynapliContentWidth.Conversation,
+        modifier = modifier,
+        columnModifier = Modifier.testTag(ConversationTestTags.fullScreen),
     ) {
         FullScreenConversationHeader(
             state = state,
