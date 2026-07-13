@@ -42,4 +42,49 @@ class LocalMediaAssetUrlResolverTest {
             resolver.publicContentUrl(assetId),
         )
     }
+
+    @Test
+    fun mediaBaseUrlKeepsDirectConnectionHostAndPort() {
+        assertEquals(
+            "http://10.0.2.2:8080",
+            mediaBaseUrl(originScheme = "http", hostHeaderHost = "10.0.2.2", hostHeaderPort = 8080),
+        )
+    }
+
+    @Test
+    fun mediaBaseUrlHonorsForwardedProtoBehindTlsProxy() {
+        // cloudflared / Cloud Run terminate TLS and forward plain HTTP: the URL must stay https
+        // (Android refuses cleartext) and must not carry the backend port.
+        assertEquals(
+            "https://demo.trycloudflare.com",
+            mediaBaseUrl(
+                originScheme = "http",
+                hostHeaderHost = "demo.trycloudflare.com",
+                hostHeaderPort = 80,
+                forwardedProto = "https",
+            ),
+        )
+    }
+
+    @Test
+    fun mediaBaseUrlHonorsForwardedHostWithExplicitPort() {
+        assertEquals(
+            "https://api.example.com:8443",
+            mediaBaseUrl(
+                originScheme = "http",
+                hostHeaderHost = "backend.internal",
+                hostHeaderPort = 8080,
+                forwardedProto = "https, http",
+                forwardedHost = "api.example.com:8443, backend.internal",
+            ),
+        )
+    }
+
+    @Test
+    fun mediaBaseUrlOmitsDefaultPortForScheme() {
+        assertEquals(
+            "http://localhost",
+            mediaBaseUrl(originScheme = "http", hostHeaderHost = "localhost", hostHeaderPort = 80),
+        )
+    }
 }
