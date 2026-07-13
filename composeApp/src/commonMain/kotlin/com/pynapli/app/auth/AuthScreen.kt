@@ -19,15 +19,21 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
+import com.pynapli.app.design.PynapliPasswordVisibilityToggle
 
 @Composable
 fun AuthScreen(
@@ -95,13 +101,17 @@ fun AuthScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        var passwordVisible by rememberSaveable { mutableStateOf(false) }
         OutlinedTextField(
             value = state.password,
             onValueChange = onPasswordChanged,
             label = { Text("Password") },
             singleLine = true,
             enabled = !state.isSubmitting,
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                PynapliPasswordVisibilityToggle(visible = passwordVisible) { passwordVisible = !passwordVisible }
+            },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             colors = authTextFieldColors(),
             modifier = Modifier.fillMaxWidth(),
