@@ -34,14 +34,20 @@ try {
     }
 
     $apk =
-        Get-ChildItem -Path (Join-Path (Join-Path (Join-Path (Join-Path (Join-Path $repoRoot "androidApp") "build") "outputs") "apk") "staging") -Filter "*.apk" |
+        Get-ChildItem -Path (Join-Path (Join-Path (Join-Path (Join-Path (Join-Path $repoRoot "androidApp") "build") "outputs") "apk") "staging") -Filter "androidApp-staging.apk" |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
     if ($null -eq $apk) {
         throw "Staging APK build completed, but no APK was found under androidApp\build\outputs\apk\staging."
     }
 
+    # Friendly-named copy so the file is findable among similarly named downloads
+    # (founder request 2026-07-13) — this is the one to share with testers.
+    $testerApk = Join-Path $apk.DirectoryName "pynapli-dev-tester.apk"
+    Copy-Item $apk.FullName $testerApk -Force
+
     Write-Host "Staging APK: $($apk.FullName)"
+    Write-Host "Tester copy: $testerApk"
 } finally {
     Pop-Location
 }
