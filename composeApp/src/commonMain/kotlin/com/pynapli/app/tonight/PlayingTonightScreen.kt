@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -301,6 +302,12 @@ private fun TonightTopFloater(
         Box(
             modifier =
                 Modifier
+                    // Keeps the compact 40dp disc (it floats over the map, so it stays visually
+                    // light) while reserving the >=48dp touch target PynapliLayout.MinTouchTarget
+                    // requires — the guarantee PynapliHeaderActionButton encodes and that this
+                    // map-specific button lost by being hand-rolled. Translucent on purpose, so it
+                    // cannot simply reuse that primitive.
+                    .minimumInteractiveComponentSize()
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(PynapliColors.SurfaceRaised.copy(alpha = 0.8f))
