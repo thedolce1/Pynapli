@@ -95,9 +95,17 @@ class GcsV4MediaUploadSigner(
     }
 }
 
+/**
+ * Local dev upload signer. Like [LocalMediaAssetUrlResolver], it prefers the per-request host
+ * (set by `configureRequestMediaBaseUrl`) over the static [fallbackBaseUrl], so the PUT target is a
+ * host the *client* can actually reach: the emulator gets `10.0.2.2`, a physical device on the LAN
+ * gets the LAN IP, and a device behind the demo tunnel gets the tunnel origin. Without this, a
+ * tester on a real phone received the emulator loopback URL and every photo upload failed while the
+ * download URLs (already request-derived) looked fine.
+ */
 class LocalDevMediaUploadSigner(
     private val storageBucket: String,
-    private val uploadBaseUrl: String,
+    private val fallbackBaseUrl: String,
     private val ttl: Duration = Duration.ofMinutes(10),
     private val clock: Clock = Clock.systemUTC(),
 ) : MediaUploadSigner {
@@ -108,11 +116,12 @@ class LocalDevMediaUploadSigner(
         contentType: String,
     ): MediaUploadDestination {
         val objectKey = "local/users/$ownerUserId/$albumKind/$mediaAssetId.${contentType.fileExtension()}"
+        val base = (requestMediaBaseUrl.get() ?: fallbackBaseUrl).trimEnd('/')
         return MediaUploadDestination(
             storageProvider = "local",
             storageBucket = storageBucket,
             storageObjectKey = objectKey,
-            uploadUrl = "${uploadBaseUrl.trimEnd('/')}/v1/media/uploads/local/$mediaAssetId",
+            uploadUrl = "$base/v1/media/uploads/local/$mediaAssetId",
             uploadMethod = "PUT",
             uploadHeaders = mapOf("Content-Type" to contentType),
             expiresAt = clock.instant().plus(ttl),

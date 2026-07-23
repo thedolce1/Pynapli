@@ -216,6 +216,10 @@ fun PynapliSheetColumn(
  * of how much content there is. Defaults to [PynapliSheetTokens.TALL_HEIGHT_FRACTION] so short and
  * rich profiles open at the same consistent height. Horizontal padding follows the sheet token;
  * [verticalPadding] trims the top/bottom so a hero photo sits close to the sheet edge.
+ *
+ * [bodyBottomPadding] is applied *inside* the scroll region so it counts as content: the last
+ * element always clears the pinned footer instead of being sliced off at its edge, and a body that
+ * only just overflows gets real scroll travel rather than a few pixels that rubber-band back.
  */
 @Composable
 fun PynapliSheetScaffold(
@@ -224,6 +228,7 @@ fun PynapliSheetScaffold(
     horizontalPadding: Dp = PynapliSheetTokens.ContentHorizontalPadding,
     verticalPadding: Dp = PynapliSpacing.sm,
     bodySpacing: Dp = PynapliSheetTokens.SectionSpacing,
+    bodyBottomPadding: Dp = PynapliSheetTokens.ScaffoldBodyBottomPadding,
     footer: (@Composable ColumnScope.() -> Unit)? = null,
     body: @Composable ColumnScope.() -> Unit,
 ) {
@@ -243,7 +248,10 @@ fun PynapliSheetScaffold(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    // Inside the scroll modifier on purpose — this padding is scrollable content,
+                    // not a gap carved out of the viewport.
+                    .padding(bottom = bodyBottomPadding),
             verticalArrangement = Arrangement.spacedBy(bodySpacing),
             content = body,
         )

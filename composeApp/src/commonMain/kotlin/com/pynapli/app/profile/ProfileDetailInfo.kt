@@ -52,7 +52,9 @@ internal fun ProfileFacts(profileState: ProfileDetailUiState) {
                 profile.gender?.let { add(selfDescribableLabel(it, profile.genderDetail)) }
                 profile.orientation?.let { add(selfDescribableLabel(it, profile.orientationDetail)) }
                 if (profile.linkedPartner != null || card.linkedPartner != null) add("Linked")
-            }
+                // A "linked" relationship context and an actual linked partner both surface the
+                // same label; show it once.
+            }.distinct()
         }
     val tagChips =
         remember(profile) {

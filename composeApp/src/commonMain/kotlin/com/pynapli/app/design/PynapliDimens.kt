@@ -98,6 +98,14 @@ object PynapliSheetTokens {
     val ContentTopPadding = 12.dp
     val ContentBottomPadding = 32.dp
     val SectionSpacing = 16.dp // canonical inter-section rhythm inside a sheet body
+
+    /**
+     * Breathing room below the last element of a [PynapliSheetScaffold] body, *inside* the scroll
+     * region. Without it the content ends flush against the pinned footer: the last card is sliced
+     * off at the footer edge, and a body that only just overflows gets a few pixels of scroll travel
+     * that rubber-bands straight back — the profile peek "bounce".
+     */
+    val ScaffoldBodyBottomPadding = 20.dp
     const val TALL_HEIGHT_FRACTION = 0.94f // profile peek + conversation cover most of the screen
 }
 

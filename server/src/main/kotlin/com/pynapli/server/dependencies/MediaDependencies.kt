@@ -128,7 +128,7 @@ internal fun buildMediaDependencies(
             "local" ->
                 LocalDevMediaUploadSigner(
                     storageBucket = config.mediaStorageBucket,
-                    uploadBaseUrl = config.mediaUploadBaseUrl,
+                    fallbackBaseUrl = config.mediaUploadBaseUrl,
                 )
 
             "gcs" ->

@@ -18,7 +18,7 @@ class LocalMediaUploadTest {
         val signer =
             LocalDevMediaUploadSigner(
                 storageBucket = "pynapli-local-media",
-                uploadBaseUrl = "http://10.0.2.2:8080",
+                fallbackBaseUrl = "http://10.0.2.2:8080",
                 clock = fixedClock,
             )
 
