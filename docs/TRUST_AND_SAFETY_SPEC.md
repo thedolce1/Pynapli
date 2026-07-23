@@ -672,7 +672,7 @@ Reject:
 - [ ] Location spoofing signals exist.
 - [x] Partner subscription abuse cooldown exists.
 - [ ] Verification lowers risk where appropriate.
-- [ ] Appeal/support review flow exists.
+- [x] Appeal/support review flow exists (server-side: user submit/list appeals, admin pending queue + approve/deny resolve; approving an account appeal restores via risk tier `clean`; 30-day window + duplicate-pending guard + not-appealable hook). Client UI deferred (A3b).
 - [x] Moderator dashboard requirements are tracked.
 - [ ] False-positive metrics exist.
 - [x] Severe hard-ban triggers exist.

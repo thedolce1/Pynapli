@@ -278,6 +278,27 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
         else -> HttpStatusCode.BadRequest
     }
 
+internal fun appealStatusFor(code: String): HttpStatusCode =
+    when (code) {
+        "APPEAL_NOT_FOUND" -> HttpStatusCode.NotFound
+        "APPEAL_NOT_ALLOWED" -> HttpStatusCode.Forbidden
+        "APPEAL_ALREADY_EXISTS",
+        "APPEAL_NOT_PENDING",
+        -> HttpStatusCode.Conflict
+        "INVALID_APPEAL_SUBJECT",
+        "INVALID_APPEAL_ID",
+        "INVALID_APPEAL_CURSOR",
+        "APPEAL_REASON_REQUIRED",
+        "APPEAL_REASON_TOO_LONG",
+        "APPEAL_WINDOW_EXPIRED",
+        "INVALID_ADMIN_ACTOR",
+        "INVALID_REVIEW_LIMIT",
+        "MODERATION_REASON_REQUIRED",
+        "MODERATION_REASON_TOO_LONG",
+        -> HttpStatusCode.BadRequest
+        else -> HttpStatusCode.BadRequest
+    }
+
 internal fun verificationStatusFor(code: String): HttpStatusCode =
     when (code) {
         "PROFILE_NOT_FOUND",

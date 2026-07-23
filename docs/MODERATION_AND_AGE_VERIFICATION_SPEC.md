@@ -192,7 +192,7 @@ Avoid:
 - [x] Report categories implemented.
 - [ ] Partial: reports/risk/message review queues and actions exist; full moderator console is not complete.
 - [ ] CSAM/severe escalation policy.
-- [ ] Appeals flow.
+- [ ] Partial: server-side appeals flow exists (submit `POST /v1/appeals`, list `GET /v1/appeals`, admin queue `GET /v1/admin/appeals` + `POST /v1/admin/appeals/{id}/resolve`; 30-day window, duplicate-pending guard, not-appealable hook, approve-restores-account via risk `clean`). Client appeal-submission UI deferred (A3b).
 - [ ] Public community guidelines URL.
 - [ ] App-store-safe screenshots and copy.
 

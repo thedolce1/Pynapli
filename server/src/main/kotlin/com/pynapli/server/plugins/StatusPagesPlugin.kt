@@ -2,6 +2,7 @@ package com.pynapli.server.plugins
 
 import com.pynapli.server.account.AccountLifecycleException
 import com.pynapli.server.activity.ActivityException
+import com.pynapli.server.appeals.AppealException
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.authStatusFor
 import com.pynapli.server.grid.GridException
@@ -53,6 +54,18 @@ fun Application.configureStatusPages() {
         exception<AccountLifecycleException> { call, cause ->
             call.respond(
                 status = accountLifecycleStatusFor(cause.code),
+                message =
+                    ApiErrorDto(
+                        code = cause.code,
+                        message = userSafeMessage(cause.code),
+                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                    ),
+            )
+        }
+
+        exception<AppealException> { call, cause ->
+            call.respond(
+                status = appealStatusFor(cause.code),
                 message =
                     ApiErrorDto(
                         code = cause.code,

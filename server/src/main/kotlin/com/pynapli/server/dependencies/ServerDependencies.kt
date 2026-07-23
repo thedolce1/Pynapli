@@ -9,6 +9,8 @@ import com.pynapli.server.activity.ActivityRetentionWorker
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.activity.JdbcActivityRetentionRepository
+import com.pynapli.server.appeals.AppealService
+import com.pynapli.server.appeals.JdbcAppealRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.config.ServerConfig
@@ -128,6 +130,7 @@ class ServerDependencies(
     val psyncSessionService: PsyncSessionService?,
     val ageVerificationService: AgeVerificationService?,
     val accountLifecycleService: AccountLifecycleService?,
+    val appealService: AppealService?,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
     private val profileActivityScope: CoroutineScope? = null,
     private val probes: List<DependencyProbe>,
@@ -381,6 +384,13 @@ class ServerDependencies(
                     activityService = activityService,
                     psyncBroadcaster = psyncBroadcaster,
                 )
+            val appealRepository = JdbcAppealRepository(database.dataSource)
+            val appealService =
+                AppealService(
+                    repository = appealRepository,
+                    eligibilityRepository = appealRepository,
+                    adminRiskService = messaging.adminRiskService,
+                )
             return ServerDependencies(
                 config = config,
                 database = database,
@@ -426,6 +436,7 @@ class ServerDependencies(
                 psyncSessionService = swipe.psyncSessionService,
                 ageVerificationService = ageVerificationService,
                 accountLifecycleService = accountLifecycleService,
+                appealService = appealService,
                 requestProfilerFactory = requestProfilerFactory,
                 profileActivityScope = profileActivityScope,
                 probes = listOf(postgres, redis),
@@ -487,6 +498,7 @@ class ServerDependencies(
                 psyncSessionService = null,
                 ageVerificationService = null,
                 accountLifecycleService = null,
+                appealService = null,
                 requestProfilerFactory = RequestProfilerFactory.disabled(),
                 probes = emptyList(),
             )
