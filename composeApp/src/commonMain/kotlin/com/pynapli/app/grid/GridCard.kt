@@ -51,9 +51,13 @@ import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.distance.formatDistanceForUnit
 
-// Subtle drop shadow so the compact white captions stay legible directly on photos.
+// Pure black on purpose: a shadow is an occlusion effect, not a palette value, so it does not
+// follow the warm neutrals the way on-photo text does.
+private val OnPhotoCaptionShadow = Color.Black.copy(alpha = 0.55f) // token-guard:allow
+
+// Subtle drop shadow so the compact captions stay legible directly on photos.
 private val OnPhotoCaptionStyle =
-    TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.55f), offset = Offset(0f, 1f), blurRadius = 3f))
+    TextStyle(shadow = Shadow(color = OnPhotoCaptionShadow, offset = Offset(0f, 1f), blurRadius = 3f))
 
 @Composable
 internal fun GridProfileTile(

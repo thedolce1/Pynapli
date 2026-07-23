@@ -137,6 +137,8 @@ The visual target is the Claude design handoff at `C:\Users\Smaye\Downloads\Pyna
 
 **Accent = pineapple-gold `#FFC928`** (founder-locked 2026-05-31; matches the handoff default and the Messages/Tonight Map specs). Keep accent routed through a single token (`PynapliColors.Accent`) so any future swap is one edit, and follow the spec's caution to use gold as a premium/highlight accent rather than flooding it across the UI.
 
+Radii and colors in `:composeApp` feature code **must** be tokens, not literals — `scripts/check-compose-tokens.ps1` (in `verify-full` / `verify-android`) fails the gate on a raw `RoundedCornerShape(N.dp)`, `Color(0x…)`, or bare `Color.White`/`Color.Black`. Pick a `PynapliShape` token by the element's *role*: `SmallShape` grid tiles/indicators, `PhotoShape` photo and thumbnail corners, `CardShape` cards/banners/rows/inputs, `SheetShape` sheets, `PillShape` chips. For the rare value that genuinely is not a palette/shape decision (e.g. a pure-black drop shadow), add a `token-guard:allow` comment on that line or the one above. Spacing is deliberately **not** guarded — `PynapliSpacing` is 8dp-based but ~700 call sites use 6/10/12/14/18dp, so a rule would fail on day one; settle the intended scale before adding one.
+
 Everything else in `FRONTEND_DESIGN_DIRECTION_SPEC.md` / `DESIGN_AND_NAVIGATION_SPEC.md` still holds (dark-first, dense Grid, restrained, no decorative blobs). When restyling, move tokens toward the handoff and update visual-regression goldens deliberately.
 
 ### Slice workflow (how this work ships)

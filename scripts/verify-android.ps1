@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 .\scripts\check-local-tooling.ps1
 .\scripts\android-location-policy-check.ps1
+.\scripts\check-compose-tokens.ps1
 
 $fallbackJavaHome = "C:\Program Files\Android\Android Studio\jbr"
 if (!$env:JAVA_HOME -and (Test-Path (Join-Path $fallbackJavaHome "bin\java.exe"))) {
