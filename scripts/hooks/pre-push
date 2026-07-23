@@ -8,8 +8,12 @@
 #
 # It picks the same gate CLAUDE.md prescribes by hand, based on what the push actually touches:
 #   composeApp / androidApp / iosApp -> verify-full.ps1  (Compose or Android code)
-#   webApp                           -> verify-web.ps1   (Wasm PWA only)
 #   anything else                    -> verify-fast.ps1  (backend / shared only)
+#
+# ...and *additionally* runs verify-web.ps1 whenever a module that compiles to Wasm is touched
+# (shared, composeApp, webApp). This is not redundant: verify-full contains no wasm compile at all,
+# so a change to shared/ or composeApp/ can pass the Android gate and still break the web build.
+# Both gates run; the push is blocked if either fails.
 #
 # Escape hatches:
 #   git push --no-verify        skip the gate entirely (use when you know why)
@@ -67,17 +71,23 @@ if [ -z "$(printf '%s' "$changed_paths" | tr -d '[:space:]')" ]; then
     exit 0
 fi
 
+# The platform gate: Android/Compose code gets the full gate, everything else the fast one.
 case "$changed_paths" in
-    *composeApp/*|*androidApp/*|*iosApp/*) gate="verify-full.ps1"; reason="Compose/Android code touched" ;;
-    *webApp/*)                             gate="verify-web.ps1";  reason="web PWA code touched" ;;
-    *)                                     gate="verify-fast.ps1"; reason="backend/shared only" ;;
+    *composeApp/*|*androidApp/*|*iosApp/*) gates="verify-full.ps1"; reason="Compose/Android code touched" ;;
+    *)                                    gates="verify-fast.ps1"; reason="backend/shared only" ;;
 esac
 
-echo "pre-push: running scripts/$gate ($reason)."
+# The web gate, for any module that compiles to Wasm. verify-full has no wasm compile, so this is
+# additive rather than an alternative.
+case "$changed_paths" in
+    *shared/*|*composeApp/*|*webApp/*) gates="$gates verify-web.ps1"; reason="$reason + Wasm module touched" ;;
+esac
+
+echo "pre-push: running$(for g in $gates; do printf ' scripts/%s' "$g"; done) ($reason)."
 echo "pre-push: skip with 'git push --no-verify' if you know why."
 
 if [ -n "$PYNAPLI_HOOK_DRY_RUN" ]; then
-    echo "pre-push: DRY RUN — would run scripts/$gate"
+    echo "pre-push: DRY RUN — would run:$(for g in $gates; do printf ' scripts/%s' "$g"; done)"
     exit 0
 fi
 
@@ -88,16 +98,17 @@ if command -v pwsh >/dev/null 2>&1; then
 elif command -v powershell >/dev/null 2>&1; then
     shell="powershell"
 else
-    echo "pre-push: WARNING — no PowerShell found, cannot run scripts/$gate. Push allowed unverified."
+    echo "pre-push: WARNING — no PowerShell found, cannot run the gate. Push allowed unverified."
     exit 0
 fi
 
-if "$shell" -NoProfile -ExecutionPolicy Bypass -File "scripts/$gate"; then
+for gate in $gates; do
+    if ! "$shell" -NoProfile -ExecutionPolicy Bypass -File "scripts/$gate"; then
+        echo ""
+        echo "pre-push: $gate FAILED — push aborted."
+        echo "pre-push: fix the failure, or re-run with 'git push --no-verify' to override."
+        exit 1
+    fi
     echo "pre-push: $gate passed."
-    exit 0
-else
-    echo ""
-    echo "pre-push: $gate FAILED — push aborted."
-    echo "pre-push: fix the failure, or re-run with 'git push --no-verify' to override."
-    exit 1
-fi
+done
+exit 0
