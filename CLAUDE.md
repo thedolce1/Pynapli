@@ -35,6 +35,15 @@ Build / test (Gradle wrapper):
 
 Server tests use JUnit Platform (Kotest runner), so `--tests` filters apply.
 
+A `pre-push` hook runs the matching verify gate automatically (`composeApp`/`androidApp`/`iosApp` →
+`verify-full`, `webApp` → `verify-web`, otherwise `verify-fast`). It lives in `scripts/hooks/` so it
+is version controlled, but `core.hooksPath` is *local* config — enable it once per clone:
+
+```powershell
+git config core.hooksPath scripts/hooks     # one-time, per clone
+git push --no-verify                        # escape hatch when you know why
+```
+
 Local dev seed (server must be running):
 
 ```powershell

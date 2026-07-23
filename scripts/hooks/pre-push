@@ -1,0 +1,103 @@
+#!/bin/sh
+#
+# Pynapli pre-push gate.
+#
+# CI (GitHub Actions) is the intended gate, but while Actions billing is suspended the local
+# verify scripts are the only thing standing between a regression and main — and they only run
+# if someone remembers. This hook removes the remembering.
+#
+# It picks the same gate CLAUDE.md prescribes by hand, based on what the push actually touches:
+#   composeApp / androidApp / iosApp -> verify-full.ps1  (Compose or Android code)
+#   webApp                           -> verify-web.ps1   (Wasm PWA only)
+#   anything else                    -> verify-fast.ps1  (backend / shared only)
+#
+# Escape hatches:
+#   git push --no-verify        skip the gate entirely (use when you know why)
+#   PYNAPLI_HOOK_DRY_RUN=1      print the chosen gate and exit without running it
+#
+# Installed via `git config core.hooksPath scripts/hooks` so it is version controlled and
+# survives a fresh clone, unlike a hook dropped in .git/hooks.
+
+set -e
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+if [ -n "$PYNAPLI_SKIP_PREPUSH" ]; then
+    echo "pre-push: skipped (PYNAPLI_SKIP_PREPUSH set)."
+    exit 0
+fi
+
+zero=$(git hash-object --stdin </dev/null | tr '[0-9a-f]' '0')
+
+# Collect every path this push would publish. Reads the ref updates git feeds us on stdin.
+changed_paths=""
+saw_ref=0
+while read -r local_ref local_oid remote_ref remote_oid; do
+    [ -z "$local_oid" ] && continue
+    # Branch deletion: nothing to verify.
+    [ "$local_oid" = "$zero" ] && continue
+    saw_ref=1
+
+    if [ "$remote_oid" = "$zero" ]; then
+        # New branch on the remote: the slice's content is what it adds over main.
+        base=$(git merge-base origin/main "$local_oid" 2>/dev/null || echo "")
+        if [ -z "$base" ]; then
+            # Cannot establish a range — fall back to the strictest gate rather than guess.
+            changed_paths="composeApp/UNKNOWN"
+            break
+        fi
+        range="$base..$local_oid"
+    else
+        range="$remote_oid..$local_oid"
+    fi
+
+    paths=$(git diff --name-only "$range" 2>/dev/null || echo "composeApp/UNKNOWN")
+    changed_paths="$changed_paths
+$paths"
+done
+
+if [ "$saw_ref" = "0" ]; then
+    echo "pre-push: nothing to verify."
+    exit 0
+fi
+
+if [ -z "$(printf '%s' "$changed_paths" | tr -d '[:space:]')" ]; then
+    echo "pre-push: no file changes in this push, skipping the gate."
+    exit 0
+fi
+
+case "$changed_paths" in
+    *composeApp/*|*androidApp/*|*iosApp/*) gate="verify-full.ps1"; reason="Compose/Android code touched" ;;
+    *webApp/*)                             gate="verify-web.ps1";  reason="web PWA code touched" ;;
+    *)                                     gate="verify-fast.ps1"; reason="backend/shared only" ;;
+esac
+
+echo "pre-push: running scripts/$gate ($reason)."
+echo "pre-push: skip with 'git push --no-verify' if you know why."
+
+if [ -n "$PYNAPLI_HOOK_DRY_RUN" ]; then
+    echo "pre-push: DRY RUN — would run scripts/$gate"
+    exit 0
+fi
+
+# Prefer PowerShell 7; fall back to Windows PowerShell. If neither exists (non-Windows checkout),
+# warn rather than block — the verify scripts are Windows-only by design.
+if command -v pwsh >/dev/null 2>&1; then
+    shell="pwsh"
+elif command -v powershell >/dev/null 2>&1; then
+    shell="powershell"
+else
+    echo "pre-push: WARNING — no PowerShell found, cannot run scripts/$gate. Push allowed unverified."
+    exit 0
+fi
+
+if "$shell" -NoProfile -ExecutionPolicy Bypass -File "scripts/$gate"; then
+    echo "pre-push: $gate passed."
+    exit 0
+else
+    echo ""
+    echo "pre-push: $gate FAILED — push aborted."
+    echo "pre-push: fix the failure, or re-run with 'git push --no-verify' to override."
+    exit 1
+fi
