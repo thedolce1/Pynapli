@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
@@ -48,6 +47,7 @@ import coil3.compose.AsyncImage
 import com.pynapli.app.design.PhotoBottomScrim
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPlaceholderGradients
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.network.dto.ActivityEventDto
 
@@ -181,9 +181,9 @@ private fun ActivityFomoTile(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.82f)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(tileBackgroundBrush(item.actorUserId))
-                .border(if (focused) 2.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
+                .border(if (focused) 2.dp else 1.dp, borderColor, PynapliShape.CardShape)
                 .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onTileClick)
                 // One item per tile (actor + activity + distance); the dismiss button stays its own
                 // focusable control.
@@ -217,7 +217,7 @@ private fun ActivityFomoTile(
         ) {
             Text(
                 text = item.actorDisplayName,
-                color = Color.White,
+                color = PynapliColors.OnPhotoPrimary,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -271,7 +271,7 @@ private fun ActivityTileDismiss(
     ) {
         if (pendingDismiss) {
             CircularProgressIndicator(
-                color = Color.White,
+                color = PynapliColors.OnPhotoPrimary,
                 strokeWidth = 2.dp,
                 modifier = Modifier.size(14.dp),
             )
@@ -279,7 +279,7 @@ private fun ActivityTileDismiss(
             Icon(
                 imageVector = Icons.Filled.Close,
                 contentDescription = "Dismiss activity",
-                tint = Color.White,
+                tint = PynapliColors.OnPhotoPrimary,
                 modifier = Modifier.size(15.dp),
             )
         }
@@ -293,9 +293,9 @@ private fun ActivityLockedTile(onClick: () -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.82f)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(PynapliPlaceholderGradients.neutralTile)
-                .border(1.dp, PynapliColors.BorderSoft, RoundedCornerShape(12.dp))
+                .border(1.dp, PynapliColors.BorderSoft, PynapliShape.CardShape)
                 .clickable(onClick = onClick)
                 .testTag(ActivityFomoTags.LOCKED_TILE),
         contentAlignment = Alignment.Center,
@@ -328,9 +328,9 @@ private fun ActivityUnlockBanner(
             Modifier
                 .fillMaxWidth()
                 .padding(top = 6.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(PynapliColors.Accent.copy(alpha = 0.12f))
-                .border(1.dp, PynapliColors.Accent.copy(alpha = 0.40f), RoundedCornerShape(12.dp))
+                .border(1.dp, PynapliColors.Accent.copy(alpha = 0.40f), PynapliShape.CardShape)
                 .clickable(onClick = onOpenStore)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

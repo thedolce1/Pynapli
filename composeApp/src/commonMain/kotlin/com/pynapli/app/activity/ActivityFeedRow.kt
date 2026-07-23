@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.network.dto.ActivityEventDto
 
@@ -183,7 +183,7 @@ private fun ViaPlayingTonightChip() {
         modifier =
             Modifier
                 .padding(top = 4.dp)
-                .clip(RoundedCornerShape(100.dp))
+                .clip(PynapliShape.PillShape)
                 .background(PynapliColors.Accent.copy(alpha = 0.12f))
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .testTag(VIA_PLAYING_TONIGHT_TEST_TAG),

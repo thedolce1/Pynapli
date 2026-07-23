@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +26,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.media.MediaAlbumItemUi
 
 @Composable
@@ -81,9 +81,9 @@ private fun PrivateAlbumTile(item: MediaAlbumItemUi) {
             Modifier
                 .size(96.dp)
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.PhotoShape)
                 .background(PynapliColors.WarmPlaceholderDark)
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
+                .border(1.dp, MaterialTheme.colorScheme.outline, PynapliShape.PhotoShape),
     ) {
         if (item.mediaUrl != null && item.mediaType == "image") {
             AsyncImage(
@@ -96,7 +96,7 @@ private fun PrivateAlbumTile(item: MediaAlbumItemUi) {
             Icon(
                 imageVector = Icons.Filled.PhotoLibrary,
                 contentDescription = null,
-                tint = Color.White,
+                tint = PynapliColors.OnPhotoPrimary,
                 modifier =
                     Modifier
                         .align(Alignment.Center)

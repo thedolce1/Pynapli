@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Person
@@ -173,7 +172,7 @@ internal fun GridProfileTile(
                     modifier =
                         Modifier
                             .testTag(GridCardTags.visitingTag(card.id))
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(PynapliShape.PillShape)
                             .background(PynapliColors.WarmBrown.copy(alpha = 0.8f))
                             .padding(horizontal = 5.dp, vertical = 1.dp),
                 )

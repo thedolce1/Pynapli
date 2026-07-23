@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -26,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.activity.ActivityTabUi
 import com.pynapli.app.conversation.titleFor
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.settings.AppSettings
@@ -58,7 +58,7 @@ internal fun InAppNotificationBanner(
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .clickable(onClick = onClick)
                 .padding(12.dp),

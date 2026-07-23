@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -34,6 +33,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.SwipeCardTokens
 import kotlinx.coroutines.launch
 
 /** Stable test tags for the Psync session surface (PS-5c). */
@@ -196,9 +197,9 @@ private fun DeckCard(card: PsyncDeckCardUi) {
             Modifier
                 .fillMaxWidth()
                 .height(360.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(SwipeCardTokens.Shape)
                 .background(PynapliColors.SurfaceRaised)
-                .border(1.dp, PynapliColors.Border, RoundedCornerShape(16.dp)),
+                .border(1.dp, PynapliColors.Border, SwipeCardTokens.Shape),
     ) {
         // PS-5c renders the bounded deck snapshot; the rich swipe-card carousel comes later.
         Box(modifier = Modifier.fillMaxSize()) {
@@ -330,7 +331,7 @@ private fun ErrorBanner(message: String) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(PynapliColors.Danger.copy(alpha = 0.12f))
                 .padding(12.dp),
     ) {
@@ -348,7 +349,7 @@ private fun PrimaryButton(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(100))
+                .clip(PynapliShape.PillShape)
                 .background(PynapliColors.Accent)
                 .clickableTag(tag, onClick)
                 .padding(vertical = 14.dp),
@@ -368,8 +369,8 @@ private fun SecondaryButton(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(100))
-                .border(1.dp, PynapliColors.Border, RoundedCornerShape(100))
+                .clip(PynapliShape.PillShape)
+                .border(1.dp, PynapliColors.Border, PynapliShape.PillShape)
                 .clickableTag(tag, onClick)
                 .padding(vertical = 14.dp),
         contentAlignment = Alignment.Center,

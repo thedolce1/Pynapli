@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Link
@@ -33,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliHeaderTokens
 import com.pynapli.app.design.PynapliScreenHeader
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionTier
@@ -79,9 +79,9 @@ internal fun StoreManageOnMobileRow() {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(PynapliColors.SurfaceRaised)
-                .border(1.dp, PynapliColors.Border, RoundedCornerShape(12.dp))
+                .border(1.dp, PynapliColors.Border, PynapliShape.CardShape)
                 .padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
@@ -90,9 +90,9 @@ internal fun StoreManageOnMobileRow() {
             modifier =
                 Modifier
                     .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(PynapliShape.CardShape)
                     .background(PynapliColors.Accent.copy(alpha = 0.10f))
-                    .border(1.dp, PynapliColors.Accent.copy(alpha = 0.22f), RoundedCornerShape(8.dp)),
+                    .border(1.dp, PynapliColors.Accent.copy(alpha = 0.22f), PynapliShape.CardShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -143,12 +143,12 @@ internal fun CurrentPlanRow(entitlement: SubscriptionEntitlementDto?) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(PynapliColors.SurfaceRaised)
                 .border(
                     width = 1.dp,
                     color = PynapliColors.Border,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = PynapliShape.CardShape,
                 ).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -225,7 +225,7 @@ internal fun StoreMessageRow(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 2.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(PynapliColors.SurfaceRaised)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         contentAlignment = Alignment.CenterStart,
@@ -274,9 +274,9 @@ internal fun StoreLinkedPartnerBenefitRow() {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(PynapliColors.SurfaceRaised)
-                .border(1.dp, PynapliColors.Border, RoundedCornerShape(12.dp))
+                .border(1.dp, PynapliColors.Border, PynapliShape.CardShape)
                 .padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
@@ -285,9 +285,9 @@ internal fun StoreLinkedPartnerBenefitRow() {
             modifier =
                 Modifier
                     .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(PynapliShape.CardShape)
                     .background(PynapliColors.Accent.copy(alpha = 0.10f))
-                    .border(1.dp, PynapliColors.Accent.copy(alpha = 0.22f), RoundedCornerShape(8.dp)),
+                    .border(1.dp, PynapliColors.Accent.copy(alpha = 0.22f), PynapliShape.CardShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

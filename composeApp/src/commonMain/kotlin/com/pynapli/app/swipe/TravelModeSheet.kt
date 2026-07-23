@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Place
@@ -33,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliBottomSheet
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliSectionIntro
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.PynapliSheetActionRow
 import com.pynapli.app.design.PynapliSheetColumn
 import com.pynapli.app.design.PynapliSheetTitle
@@ -169,7 +169,7 @@ private fun TravelPlaceRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .clickable(onClick = onPick)
                 .padding(horizontal = 8.dp, vertical = 10.dp)
                 .testTag(TravelModeTags.placeTag(place.displayName)),
@@ -198,7 +198,7 @@ private fun TravelPaywallBanner(onSubscribe: () -> Unit) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .testTag(TravelModeTags.PAYWALL),
@@ -237,7 +237,7 @@ private fun TravelVerificationBanner(onVerify: () -> Unit) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .testTag(TravelModeTags.VERIFICATION),

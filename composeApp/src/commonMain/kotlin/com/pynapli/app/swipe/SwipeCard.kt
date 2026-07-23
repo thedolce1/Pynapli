@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.SwipeCardTokens
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.network.dto.SwipeAction
@@ -233,7 +233,7 @@ internal fun SwipeCard(
                         .align(if (offset.value.x >= 0f) Alignment.TopStart else Alignment.TopEnd)
                         .padding(22.dp)
                         .graphicsLayer { alpha = decisionAlpha }
-                        .border(2.dp, decisionColor, RoundedCornerShape(8.dp))
+                        .border(2.dp, decisionColor, PynapliShape.CardShape)
                         .padding(horizontal = 14.dp, vertical = 8.dp),
             )
         }

@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +39,7 @@ import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliBottomSheet
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliSectionTitle
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.PynapliSheetColumn
 import com.pynapli.app.design.PynapliSheetTitle
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
@@ -166,12 +166,12 @@ internal fun StartTonightSheetBody(
                         modifier =
                             Modifier
                                 .size(64.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(PynapliShape.CardShape)
                                 .background(PynapliColors.SurfaceRaised)
                                 .border(
                                     width = if (selected) 2.dp else 1.dp,
                                     color = if (selected) PynapliColors.Accent else PynapliColors.Border,
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = PynapliShape.CardShape,
                                 ).clickable { selectedPhotoId = if (selected) null else option.assetId }
                                 .testTag(StartTonightTags.photo(option.assetId)),
                     ) {
@@ -180,7 +180,7 @@ internal fun StartTonightSheetBody(
                                 model = url,
                                 contentDescription = "Session photo option",
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
+                                modifier = Modifier.fillMaxSize().clip(PynapliShape.CardShape),
                             )
                         }
                     }

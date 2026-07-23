@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.MessageType
 
@@ -131,7 +132,7 @@ private fun MessageMedia(
             Modifier
                 .widthIn(max = 240.dp)
                 .size(width = 240.dp, height = 240.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .then(if (url == null) Modifier.clickable(enabled = !isRevealing) { onRevealMedia(message.messageId) } else Modifier),
         contentAlignment = Alignment.Center,
@@ -183,7 +184,7 @@ private fun SystemNotice(text: String) {
             style = MaterialTheme.typography.labelMedium,
             modifier =
                 Modifier
-                    .clip(RoundedCornerShape(100.dp))
+                    .clip(PynapliShape.PillShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                     .padding(horizontal = 12.dp, vertical = 6.dp),
         )
@@ -258,12 +259,23 @@ private fun MessageBubble(
             mine -> PynapliColors.TextInverse
             else -> PynapliColors.TextPrimary
         }
-    // Soft 16dp bubble with a small "tail" corner on the sender's side (handoff chat style).
+    // Sheet-radius bubble with a small "tail" corner on the sender's side (handoff chat style).
+    // Both radii come from the shape scale so bubbles track it if the scale ever moves.
     val bubbleShape =
         if (mine) {
-            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 4.dp, bottomStart = 16.dp)
+            RoundedCornerShape(
+                topStart = PynapliShape.Sheet,
+                topEnd = PynapliShape.Sheet,
+                bottomEnd = PynapliShape.Small,
+                bottomStart = PynapliShape.Sheet,
+            )
         } else {
-            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
+            RoundedCornerShape(
+                topStart = PynapliShape.Sheet,
+                topEnd = PynapliShape.Sheet,
+                bottomEnd = PynapliShape.Sheet,
+                bottomStart = PynapliShape.Small,
+            )
         }
 
     Row(

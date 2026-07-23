@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -41,6 +40,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliPill
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleTag
 import com.pynapli.app.grid.LogisticsTag
@@ -345,7 +345,7 @@ private fun BirthdateField(
             modifier =
                 Modifier
                     .matchParentSize()
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(PynapliShape.SmallShape)
                     .clickable { showPicker = true },
         )
     }
@@ -435,9 +435,9 @@ private fun PhotoThumbnail(
         modifier =
             Modifier
                 .size(64.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
+                .border(1.dp, MaterialTheme.colorScheme.outline, PynapliShape.CardShape),
     ) {
         if (item.isOwnerVisibleImage) {
             AsyncImage(
@@ -456,7 +456,7 @@ private fun PhotoThumbnail(
                     Modifier
                         .align(Alignment.TopStart)
                         .padding(3.dp)
-                        .clip(RoundedCornerShape(100.dp))
+                        .clip(PynapliShape.PillShape)
                         .background(MaterialTheme.colorScheme.primary)
                         .padding(horizontal = 6.dp, vertical = 1.dp),
             )

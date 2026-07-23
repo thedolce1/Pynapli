@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -164,7 +163,7 @@ private fun SkeletonListRow(brush: Brush) {
         ) {
             PynapliSkeletonBlock(
                 brush = brush,
-                shape = RoundedCornerShape(4.dp),
+                shape = PynapliShape.SmallShape,
                 modifier =
                     Modifier
                         .fillMaxWidth(0.5f)
@@ -172,7 +171,7 @@ private fun SkeletonListRow(brush: Brush) {
             )
             PynapliSkeletonBlock(
                 brush = brush,
-                shape = RoundedCornerShape(4.dp),
+                shape = PynapliShape.SmallShape,
                 modifier =
                     Modifier
                         .fillMaxWidth(0.72f)

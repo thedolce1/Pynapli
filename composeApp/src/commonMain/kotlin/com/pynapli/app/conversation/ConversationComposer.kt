@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Image
@@ -32,6 +31,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
 
 @Composable
@@ -42,7 +42,7 @@ internal fun TypingIndicator(participants: List<TypingParticipantUi>) {
             Modifier
                 .fillMaxWidth()
                 .testTag(ConversationTestTags.typingIndicator),
-        shape = RoundedCornerShape(8.dp),
+        shape = PynapliShape.CardShape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
     ) {
         Row(

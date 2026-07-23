@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -123,9 +122,9 @@ fun PlayingTonightScreen(
                     Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = 72.dp, start = 12.dp, end = 12.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(PynapliShape.CardShape)
                         .background(PynapliColors.TonightMapScrim)
-                        .border(1.dp, PynapliColors.Warning.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .border(1.dp, PynapliColors.Warning.copy(alpha = 0.5f), PynapliShape.CardShape)
                         .clickable { stateHolder.clearError() }
                         .testTag(PlayingTonightTags.ERROR)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -238,9 +237,9 @@ private fun ZoneMap(
         }
 
         // "You" reference marker at center.
-        drawCircle(color = Color.White, radius = 5f, center = Offset(w / 2f, h / 2f))
+        drawCircle(color = PynapliColors.TextPrimary, radius = 5f, center = Offset(w / 2f, h / 2f))
         drawCircle(
-            color = Color.White.copy(alpha = 0.35f),
+            color = PynapliColors.TextPrimary.copy(alpha = 0.35f),
             radius = 12f,
             center = Offset(w / 2f, h / 2f),
             style =
@@ -258,7 +257,7 @@ private fun ZoneMap(
             modifier =
                 Modifier
                     .padding(12.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(PynapliShape.CardShape)
                     .background(PynapliColors.Black.copy(alpha = 0.65f))
                     .padding(horizontal = 8.dp, vertical = 4.dp),
         )
@@ -374,12 +373,12 @@ private fun FloaterCard(
     Row(
         modifier =
             modifier
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(PynapliColors.SurfaceRaised.copy(alpha = 0.92f))
                 .border(
                     1.dp,
                     if (leadingDashed) PynapliColors.Border else PynapliColors.Accent.copy(alpha = 0.35f),
-                    RoundedCornerShape(12.dp),
+                    PynapliShape.CardShape,
                 ).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -401,9 +400,9 @@ private fun PillButton(
         fontWeight = FontWeight.SemiBold,
         modifier =
             modifier
-                .clip(RoundedCornerShape(100))
+                .clip(PynapliShape.PillShape)
                 .background(if (filled) PynapliColors.Accent else PynapliColors.Surface)
-                .border(1.dp, if (filled) PynapliColors.Accent else PynapliColors.Border, RoundedCornerShape(100))
+                .border(1.dp, if (filled) PynapliColors.Accent else PynapliColors.Border, PynapliShape.PillShape)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
     )
@@ -453,7 +452,7 @@ private fun TonightSheet(
                     Modifier
                         .width(36.dp)
                         .height(4.dp)
-                        .clip(RoundedCornerShape(100))
+                        .clip(PynapliShape.PillShape)
                         .background(PynapliColors.Border),
             )
         }
@@ -471,7 +470,7 @@ private fun TonightSheet(
                 fontWeight = FontWeight.SemiBold,
                 modifier =
                     Modifier
-                        .clip(RoundedCornerShape(100))
+                        .clip(PynapliShape.PillShape)
                         .background(PynapliColors.SurfaceRaised)
                         .padding(horizontal = 8.dp, vertical = 2.dp),
             )
@@ -533,9 +532,9 @@ private fun IntentPill(
         fontWeight = FontWeight.SemiBold,
         modifier =
             Modifier
-                .clip(RoundedCornerShape(100))
+                .clip(PynapliShape.PillShape)
                 .background(if (active) PynapliColors.Accent else PynapliColors.SurfaceRaised)
-                .border(1.dp, if (active) PynapliColors.Accent else PynapliColors.Border, RoundedCornerShape(100))
+                .border(1.dp, if (active) PynapliColors.Accent else PynapliColors.Border, PynapliShape.PillShape)
                 .clickable(onClick = onClick)
                 .testTag(PlayingTonightTags.intentPill(label))
                 .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -562,7 +561,7 @@ private fun TonightSessionRow(
                 modifier =
                     Modifier
                         .size(44.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(PynapliShape.CardShape)
                         .background(PynapliColors.SurfaceRaised),
             ) {
                 // Prefer the (approved) session photo when attached; fall back to the profile thumbnail.
@@ -579,9 +578,9 @@ private fun TonightSessionRow(
                         Modifier
                             .align(Alignment.BottomEnd)
                             .size(20.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(PynapliShape.SmallShape)
                             .background(PynapliColors.Surface)
-                            .border(1.5.dp, PynapliColors.Accent, RoundedCornerShape(6.dp)),
+                            .border(1.5.dp, PynapliColors.Accent, PynapliShape.SmallShape),
                 ) {
                     partner.thumbnailUrl?.let {
                         AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -612,9 +611,9 @@ private fun TonightSessionRow(
             modifier =
                 Modifier
                     .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(PynapliShape.CardShape)
                     .background(PynapliColors.SurfaceRaised)
-                    .border(1.dp, PynapliColors.Border, RoundedCornerShape(8.dp))
+                    .border(1.dp, PynapliColors.Border, PynapliShape.CardShape)
                     .clickable { onMessage(item.userId) }
                     .testTag(PlayingTonightTags.message(item.sessionId)),
             contentAlignment = Alignment.Center,
@@ -644,9 +643,9 @@ private fun IntentBadge(
         fontWeight = FontWeight.SemiBold,
         modifier =
             Modifier
-                .clip(RoundedCornerShape(100))
+                .clip(PynapliShape.PillShape)
                 .background(color.copy(alpha = 0.12f))
-                .border(1.dp, color.copy(alpha = 0.30f), RoundedCornerShape(100))
+                .border(1.dp, color.copy(alpha = 0.30f), PynapliShape.PillShape)
                 .padding(horizontal = 7.dp, vertical = 2.dp),
     )
 }
@@ -659,9 +658,9 @@ private fun HostModePill(hostMode: String) {
         style = MaterialTheme.typography.labelSmall,
         modifier =
             Modifier
-                .clip(RoundedCornerShape(100))
+                .clip(PynapliShape.PillShape)
                 .background(PynapliColors.Surface)
-                .border(1.dp, PynapliColors.Border, RoundedCornerShape(100))
+                .border(1.dp, PynapliColors.Border, PynapliShape.PillShape)
                 .padding(horizontal = 7.dp, vertical = 2.dp),
     )
 }

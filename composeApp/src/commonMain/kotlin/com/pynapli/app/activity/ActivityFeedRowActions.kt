@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
@@ -29,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.network.dto.ActivityEventDto
 
 @Composable
@@ -41,7 +41,7 @@ internal fun ActivityNewPill() {
         maxLines = 1,
         modifier =
             Modifier
-                .clip(RoundedCornerShape(6.dp))
+                .clip(PynapliShape.PillShape)
                 .background(MaterialTheme.colorScheme.primary)
                 .padding(horizontal = 6.dp, vertical = 2.dp),
     )

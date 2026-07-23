@@ -123,7 +123,7 @@ private fun NewMatchAvatar(
             ) {
                 Text(
                     text = name.initials(),
-                    color = Color.White,
+                    color = PynapliColors.OnPhotoPrimary,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.clearAndSetSemantics {},

@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
@@ -43,7 +42,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPlaceholderGradients
+import com.pynapli.app.design.PynapliShape
 
 internal fun LazyGridScope.albumSection(
     kind: MediaAlbumKindUi,
@@ -208,9 +209,9 @@ private fun AddMediaTile(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.PhotoShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outline, PynapliShape.PhotoShape)
                 .clickable(enabled = !isUploading && canAdd, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -289,9 +290,9 @@ private fun MediaTile(
             modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.PhotoShape)
                 .background(tone)
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
+                .border(1.dp, MaterialTheme.colorScheme.outline, PynapliShape.PhotoShape),
     ) {
         if (item.isOwnerVisibleImage) {
             AsyncImage(
@@ -304,7 +305,7 @@ private fun MediaTile(
             Icon(
                 imageVector = if (item.isUploadFailed) Icons.Filled.CloudUpload else Icons.Filled.CheckCircle,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.86f),
+                tint = PynapliColors.OnPhotoSecondary,
                 modifier =
                     Modifier
                         .align(Alignment.Center)
@@ -327,7 +328,7 @@ private fun MediaTile(
                     style = MaterialTheme.typography.labelSmall,
                     modifier =
                         Modifier
-                            .clip(RoundedCornerShape(100.dp))
+                            .clip(PynapliShape.PillShape)
                             .background(MaterialTheme.colorScheme.primary)
                             .padding(horizontal = 7.dp, vertical = 2.dp),
                 )
@@ -335,14 +336,14 @@ private fun MediaTile(
             item.statusBadgeLabel?.let { badge ->
                 Text(
                     text = badge,
-                    color = if (item.isUploadFailed || item.moderationStatus == "removed") MaterialTheme.colorScheme.error else Color.White,
+                    color = if (item.isUploadFailed || item.moderationStatus == "removed") MaterialTheme.colorScheme.error else PynapliColors.OnPhotoPrimary,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier =
                         Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.Black.copy(alpha = 0.6f))
+                            .clip(PynapliShape.SmallShape)
+                            .background(PynapliColors.OnPhotoBadgeFill)
                             .padding(horizontal = 6.dp, vertical = 3.dp),
                 )
             }
@@ -355,13 +356,13 @@ private fun MediaTile(
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.54f))
+                        .background(PynapliColors.OnPhotoBadgeFill)
                         .padding(6.dp),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Lock,
                     contentDescription = "Private",
-                    tint = Color.White,
+                    tint = PynapliColors.OnPhotoPrimary,
                     modifier = Modifier.size(14.dp),
                 )
             }
@@ -372,7 +373,7 @@ private fun MediaTile(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.45f)),
+                        .background(PynapliColors.OverlayScrim),
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(
@@ -420,14 +421,14 @@ private fun TileActionButton(
                 .padding(2.dp)
                 .size(28.dp)
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.6f))
+                .background(PynapliColors.OnPhotoBadgeFill)
                 .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = Color.White,
+            tint = PynapliColors.OnPhotoPrimary,
             modifier = Modifier.size(17.dp),
         )
     }

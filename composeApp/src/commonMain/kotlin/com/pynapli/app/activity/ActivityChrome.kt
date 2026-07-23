@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
@@ -36,6 +35,7 @@ import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliScreenHeader
+import com.pynapli.app.design.PynapliShape
 
 @Composable
 internal fun ActivityGateRow(
@@ -47,9 +47,9 @@ internal fun ActivityGateRow(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 10.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f))
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.42f), RoundedCornerShape(8.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.42f), PynapliShape.CardShape)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -90,7 +90,7 @@ internal fun ActivityAdSlot() {
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 14.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
                 .padding(vertical = 14.dp),
         contentAlignment = Alignment.Center,

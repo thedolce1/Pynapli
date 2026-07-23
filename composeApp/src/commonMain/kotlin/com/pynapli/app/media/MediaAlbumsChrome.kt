@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -27,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliScreenHeader
+import com.pynapli.app.design.PynapliShape
 
 @Composable
 internal fun MediaAlbumsHeader(onBack: () -> Unit) {
@@ -59,9 +59,9 @@ internal fun ErrorBand(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.error.copy(alpha = 0.16f))
-                .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f), PynapliShape.CardShape)
                 .clickable(onClick = onDismiss)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

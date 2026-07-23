@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Person
@@ -32,15 +31,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
 
 @Composable
 internal fun SwipeTagChip(label: String) {
     Box(
         modifier =
             Modifier
-                .clip(RoundedCornerShape(50))
+                .clip(PynapliShape.PillShape)
                 .background(PynapliColors.OnPhotoChipFill)
-                .border(1.dp, PynapliColors.OnPhotoChipStroke, RoundedCornerShape(50))
+                .border(1.dp, PynapliColors.OnPhotoChipStroke, PynapliShape.PillShape)
                 .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
         Text(
@@ -73,7 +73,7 @@ internal fun PhotoCarouselIndicators(
                     Modifier
                         .weight(1f)
                         .height(3.dp)
-                        .clip(RoundedCornerShape(50))
+                        .clip(PynapliShape.PillShape)
                         .background(if (active) PynapliColors.OnPhotoStroke else PynapliColors.OnPhotoIndicatorInactive),
             )
         }
@@ -120,7 +120,7 @@ internal fun SwipeVisitingPill(modifier: Modifier = Modifier) {
         modifier =
             modifier
                 .testTag(SwipeTestTags.VISITING_PILL)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(PynapliShape.PillShape)
                 .background(PynapliColors.WarmBrown.copy(alpha = 0.8f))
                 .padding(horizontal = 6.dp, vertical = 2.dp),
     )

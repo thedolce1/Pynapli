@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliMotion
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.network.dto.MatchDto
 
 @Composable
@@ -61,7 +61,7 @@ internal fun MatchOverlay(
                         val scale = 0.9f + 0.1f * progress
                         scaleX = scale
                         scaleY = scale
-                    }.clip(RoundedCornerShape(24.dp))
+                    }.clip(PynapliShape.DialogShape)
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.People
@@ -31,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.conversation.titleFor
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.messages.MessagesUiState
 import com.pynapli.app.profilelink.ProfileLinkUi
 import com.pynapli.app.profilelink.ProfileLinksUiState
@@ -133,9 +133,9 @@ private fun EmptyActionCenter() {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outline, PynapliShape.CardShape)
                 .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {

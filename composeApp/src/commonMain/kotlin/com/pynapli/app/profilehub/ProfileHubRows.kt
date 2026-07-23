@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
@@ -28,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
 
 @Composable
 internal fun ProfileHubMessageBand(
@@ -39,12 +39,12 @@ internal fun ProfileHubMessageBand(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .background(if (isError) PynapliColors.DangerContainer else PynapliColors.SuccessContainer)
                 .border(
                     width = 1.dp,
                     color = if (isError) MaterialTheme.colorScheme.error else PynapliColors.SuccessBorder,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = PynapliShape.CardShape,
                 ).clickable(onClick = onDismiss)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -77,9 +77,9 @@ internal fun ProfileHubSection(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(PynapliShape.CardShape)
                     .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
+                    .border(1.dp, MaterialTheme.colorScheme.outline, PynapliShape.CardShape),
             content = content,
         )
     }

@@ -61,15 +61,31 @@ object PynapliHeaderTokens {
     val ActionIconSize = 20.dp
 }
 
-/** Corner radii. Repeated cards stay at or below [Card]; sheets may use [Sheet]. */
+/**
+ * Corner radii, mirroring the handoff's radius vocabulary (`Pynapli-Handoff/components`).
+ *
+ * The handoff uses four values with distinct jobs, and the distinction between [Photo] and [Card]
+ * is the one that matters: its `Photo` primitive defaults to 8, while cards and banners are styled
+ * at 12 (its single most common radius). Collapsing those two into one 8dp "card" token is what let
+ * every bordered container in the app drift a step tighter than the design language, so they are
+ * separate tokens here. Pick by the element's *role*, not by what looks close:
+ *
+ * - [Small] — grid tiles and tiny indicators (pips, progress ticks).
+ * - [Photo] — photo and thumbnail corners: album tiles, avatars, media previews.
+ * - [Card] — cards, banners, message bands, list rows, inputs. The default for a bordered container.
+ * - [Sheet] — bottom sheets and the wide-window dialog cards they become.
+ * - [Pill] — fully rounded chips and buttons.
+ */
 object PynapliShape {
     val None = 0.dp
     val Small = 4.dp
-    val Card = 8.dp
+    val Photo = 8.dp
+    val Card = 12.dp
     val Sheet = 16.dp
     val Pill = 100.dp
 
     val SmallShape = RoundedCornerShape(Small)
+    val PhotoShape = RoundedCornerShape(Photo)
     val CardShape = RoundedCornerShape(Card)
     val SheetShape = RoundedCornerShape(topStart = Sheet, topEnd = Sheet)
     val DialogShape = RoundedCornerShape(Sheet) // wide-window sheet-as-dialog cards (all corners)

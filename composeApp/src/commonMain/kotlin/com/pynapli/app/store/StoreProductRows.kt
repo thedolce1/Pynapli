@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
@@ -60,12 +60,12 @@ internal fun StoreTierRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(background)
                 .border(
                     width = if (showHero) 1.5.dp else 1.dp,
                     color = borderColor,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = PynapliShape.CardShape,
                 ).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -77,7 +77,7 @@ internal fun StoreTierRow(
                 fontWeight = FontWeight.SemiBold,
                 modifier =
                     Modifier
-                        .clip(RoundedCornerShape(100))
+                        .clip(PynapliShape.PillShape)
                         .background(PynapliColors.Accent.copy(alpha = 0.16f))
                         .padding(horizontal = 10.dp, vertical = 3.dp),
             )
@@ -159,12 +159,12 @@ internal fun StoreProductRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(PynapliColors.SurfaceRaised)
                 .border(
                     width = 1.dp,
                     color = PynapliColors.Border,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = PynapliShape.CardShape,
                 ).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

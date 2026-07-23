@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Close
@@ -45,6 +44,7 @@ import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliSemantic
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.VerifiedBadge
 
 @Composable
@@ -74,7 +74,7 @@ internal fun ProfileHero(
             Modifier
                 .fillMaxWidth()
                 .height(380.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(PynapliShape.CardShape)
                 .background(PynapliPlaceholderGradients.profileHero),
     ) {
         if (photos.isNotEmpty()) {
@@ -119,9 +119,9 @@ internal fun ProfileHero(
                             Modifier
                                 .weight(1f)
                                 .height(3.dp)
-                                .clip(RoundedCornerShape(2.dp))
+                                .clip(PynapliShape.PillShape)
                                 .background(
-                                    if (index == pagerState.currentPage) Color.White else Color.White.copy(alpha = 0.3f),
+                                    if (index == pagerState.currentPage) PynapliColors.OnPhotoStroke else PynapliColors.OnPhotoIndicatorInactive,
                                 ),
                     )
                 }
@@ -154,7 +154,7 @@ internal fun ProfileHero(
                 Icon(
                     imageVector = Icons.Filled.Close,
                     contentDescription = "Close profile",
-                    tint = Color.White,
+                    tint = PynapliColors.OnPhotoPrimary,
                 )
             }
         }
@@ -173,7 +173,7 @@ internal fun ProfileHero(
             ) {
                 Text(
                     text = displayName,
-                    color = Color.White,
+                    color = PynapliColors.OnPhotoPrimary,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -183,7 +183,7 @@ internal fun ProfileHero(
                 age?.let { value ->
                     Text(
                         text = value.toString(),
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = PynapliColors.OnPhotoSecondary,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Light,
                     )
@@ -275,7 +275,7 @@ private fun ProfileOverflowMenu(
             Icon(
                 imageVector = Icons.Filled.MoreVert,
                 contentDescription = "More options",
-                tint = Color.White,
+                tint = PynapliColors.OnPhotoPrimary,
             )
         }
         DropdownMenu(

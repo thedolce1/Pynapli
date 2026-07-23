@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.FilterChip
@@ -27,6 +26,7 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliSectionIntro
 import com.pynapli.app.design.PynapliSectionTitle
+import com.pynapli.app.design.PynapliShape
 
 @Composable
 internal fun SectionIntro(text: String) {
@@ -170,7 +170,7 @@ internal fun AdvancedPaywallBanner(onSubscribe: () -> Unit) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .testTag(SwipeFilterTags.ADVANCED_PAYWALL),

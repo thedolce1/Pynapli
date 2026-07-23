@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -52,6 +51,7 @@ import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliPasswordVisibilityToggle
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.shared.core.config.LegalLinks
@@ -450,7 +450,7 @@ private fun ProfileStep(
         modifier =
             Modifier
                 .size(120.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(PynapliShape.PhotoShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Icon(
@@ -477,7 +477,7 @@ private fun ProfileStep(
         Spacer(modifier = Modifier.height(8.dp))
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(12.dp),
+            shape = PynapliShape.CardShape,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
@@ -540,7 +540,7 @@ private fun StepProgressDots(step: OnboardingStep) {
                 modifier =
                     Modifier
                         .size(width = width, height = 8.dp)
-                        .clip(RoundedCornerShape(percent = 50))
+                        .clip(PynapliShape.PillShape)
                         .background(color),
             )
         }

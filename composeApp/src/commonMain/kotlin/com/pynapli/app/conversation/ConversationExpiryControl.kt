@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.shared.network.dto.MessageExpiryOption
 
 /** (value seconds or null = off) to a short label, in menu order. */
@@ -62,8 +62,8 @@ internal fun ConversationExpiryControl(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(100.dp))
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(100.dp))
+                .clip(PynapliShape.PillShape)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), PynapliShape.PillShape)
                 .clickable(enabled = !isSettingExpiry) { menuOpen = true }
                 .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
