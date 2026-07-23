@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +83,14 @@ fun VerifiedBadge(
 /**
  * Restrained pill / tag chip. Active state tints border + a faint fill + label with [accent];
  * inactive uses the neutral border and secondary text. Optional [leading] slot (e.g. an icon).
+ *
+ * When [onClick] is supplied the pill is a control, so it reserves the
+ * [PynapliLayout.MinTouchTarget] 48dp interactive size — the pill's own padding only makes it ~32dp
+ * tall, which is below the minimum and leaves adjacent filter chips ambiguous to tap. The
+ * reservation is gated on [onClick] on purpose: a decorative tag chip (the profile peek's
+ * "Together"/"Woman"/tag rows) is a label, not a target, and forcing 48dp on it would blow the
+ * dense FlowRow rhythm apart for no accessibility gain. Same idiom as
+ * [PynapliHeaderActionButton] — compact visual, full-size target.
  */
 @Composable
 fun PynapliPill(
@@ -98,6 +107,7 @@ fun PynapliPill(
     Row(
         modifier =
             modifier
+                .then(if (onClick != null) Modifier.minimumInteractiveComponentSize() else Modifier)
                 .clip(PynapliShape.PillShape)
                 .background(fill)
                 .border(1.dp, borderColor, PynapliShape.PillShape)

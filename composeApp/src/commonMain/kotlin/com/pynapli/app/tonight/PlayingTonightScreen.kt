@@ -103,6 +103,12 @@ fun PlayingTonightScreen(
                 Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
+                    // KNOWN DEFECT: this floater renders under the system status bar (the back
+                    // button collides with the clock). Adding statusBarsPadding() here has NO
+                    // effect — verified on device — so the status-bar inset is resolving to zero
+                    // inside the PynapliOverlays layer even though it works in the Grid/Swipe
+                    // surfaces. Root cause not yet found; fixing it needs the overlay's inset
+                    // plumbing understood rather than another padding modifier.
                     .padding(12.dp),
         )
 
@@ -407,6 +413,8 @@ private fun PillButton(
         fontWeight = FontWeight.SemiBold,
         modifier =
             modifier
+                // Tap target, so it reserves the 48dp minimum like PynapliPill does.
+                .minimumInteractiveComponentSize()
                 .clip(PynapliShape.PillShape)
                 .background(if (filled) PynapliColors.Accent else PynapliColors.Surface)
                 .border(1.dp, if (filled) PynapliColors.Accent else PynapliColors.Border, PynapliShape.PillShape)
@@ -539,6 +547,8 @@ private fun IntentPill(
         fontWeight = FontWeight.SemiBold,
         modifier =
             Modifier
+                // Tap target, so it reserves the 48dp minimum like PynapliPill does.
+                .minimumInteractiveComponentSize()
                 .clip(PynapliShape.PillShape)
                 .background(if (active) PynapliColors.Accent else PynapliColors.SurfaceRaised)
                 .border(1.dp, if (active) PynapliColors.Accent else PynapliColors.Border, PynapliShape.PillShape)
