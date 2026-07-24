@@ -363,6 +363,46 @@ if ($afterRestart.Text -eq "Dev login") {
 }
 $restoredShot = Save-Screen "01_session_restored"
 
+# --- Expired-access-token proof: the app refreshes instead of signing the user out ---
+#
+# The restart proof above relaunches immediately, comfortably inside the 15-minute
+# AUTH_ACCESS_TOKEN_TTL, so it never exercised expiry. That gap let a real bug ship: nothing in the
+# client ever called /v1/auth/refresh, so a relaunch after the TTL read 401 as terminal and cleared
+# the session — users were signed out without ever logging out. This phase reproduces that in
+# seconds instead of waiting out the real TTL.
+#
+# Method: expire the access token in Postgres while leaving the refresh token valid, then let the
+# server's 5s in-memory access-session cache lapse so the next call actually re-reads the row and
+# returns 401. A correct client refreshes and carries on.
+Write-Host "[step] Expiring the access token server-side to prove the refresh path"
+$expireSql = "UPDATE user_sessions SET access_expires_at = now() - interval '1 minute' WHERE revoked_at IS NULL AND refresh_expires_at > now();"
+$expired = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c $expireSql
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not expire user_sessions in Postgres. Is the pynapli-postgres container running?"
+}
+Write-Host "[note] Postgres: $expired"
+
+# Outlive AuthService's accessSessionCacheTtl (5s) so the cached entry cannot answer the next call.
+Start-Sleep -Seconds 8
+
+Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
+Start-Sleep -Milliseconds 1200
+Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
+Dismiss-NotificationPromptIfPresent
+$afterExpiry = Wait-ForAnyText @("Use current location", "Filters", "Grid", "Dev login") 45
+if ($afterExpiry.Text -eq "Dev login") {
+    throw "Expired access token signed the user out. The client is not refreshing (see StoredSessionRefresher / the refresh-on-401 interceptor)."
+}
+$refreshedShot = Save-Screen "02_expired_token_refreshed"
+
+# Server-side confirmation: a refresh rotates the session, so the row must be live again. Without
+# this the UI check alone could pass on a cached screen.
+$liveSessions = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c "SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL AND access_expires_at > now();"
+if ([int]$liveSessions -lt 1) {
+    throw "App stayed on screen but no session was rotated: expected a live access_expires_at row after refresh, found $liveSessions."
+}
+Write-Host "[ok] Expired access token was refreshed, not treated as a sign-out ($liveSessions live session row(s))."
+
 $summaryPath = Join-Path $script:ArtifactDir "qa-summary.json"
 (@{
     passed = $true
@@ -371,9 +411,12 @@ $summaryPath = Join-Path $script:ArtifactDir "qa-summary.json"
     packageName = $PackageName
     encryptedMarkerFound = $true
     plaintextTokenJsonFound = $false
+    expiredAccessTokenRefreshed = $true
+    liveSessionsAfterRefresh = [int]$liveSessions
     screenshots = @{
         signedIn = $signedInShot
         sessionRestored = $restoredShot
+        expiredTokenRefreshed = $refreshedShot
     }
 } | ConvertTo-Json -Depth 4) | Set-Content -Path $summaryPath -Encoding UTF8
 
