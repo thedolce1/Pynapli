@@ -46,10 +46,12 @@ import com.pynapli.app.swipe.NoOpSwipeActionQueueStore
 import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.network.KtorMediaByteUploader
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
+import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.buildWebActivityStreamClient
 import com.pynapli.shared.network.buildWebMessageStreamClient
 import com.pynapli.shared.network.buildWebPresenceStreamClient
@@ -70,12 +72,19 @@ import kotlin.random.Random
 class WebAppGraph {
     private val sessionStore = LocalStorageSessionStore()
     private val pynapliConfig = WebRuntimeConfig.pynapliConfig
+
+    // See AndroidAppGraph: the holder breaks the client <-> refresher construction cycle so an
+    // expired access token is refreshed rather than surfacing as a surprise sign-out.
+    private val sessionRefresher = SessionRefresherHolder()
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
             accessTokenProvider = sessionStore,
             appCheckTokenProvider = NoAppCheckTokenProvider,
-        )
+            sessionRefresher = sessionRefresher,
+        ).also { client ->
+            sessionRefresher.delegate = StoredSessionRefresher(authApi = client, sessionStore = sessionStore)
+        }
     private val authRepository =
         AuthRepository(
             apiClient = apiClient,

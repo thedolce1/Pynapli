@@ -7,11 +7,14 @@ import com.pynapli.shared.network.dto.ApiErrorDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.plugin
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
@@ -65,10 +68,18 @@ class KtorPynapliApiClient(
         accessTokenProvider: AccessTokenProvider,
         appCheckTokenProvider: AppCheckTokenProvider,
         json: Json = PynapliJson,
+        // Pass a SessionRefresherHolder here and fill in its delegate once the auth layer exists;
+        // without a refresher the client has no way to recover from the 15-minute access-token TTL.
+        sessionRefresher: SessionRefresher? = null,
     ) : this(
         config = config,
         accessTokenProvider = accessTokenProvider,
-        httpClient = createPynapliHttpClient(json = json, appCheckTokenProvider = appCheckTokenProvider),
+        httpClient =
+            createPynapliHttpClient(
+                json = json,
+                appCheckTokenProvider = appCheckTokenProvider,
+                sessionRefresher = sessionRefresher,
+            ),
         json = json,
     )
 }
@@ -76,23 +87,26 @@ class KtorPynapliApiClient(
 fun createPynapliHttpClient(
     json: Json = PynapliJson,
     appCheckTokenProvider: AppCheckTokenProvider = NoAppCheckTokenProvider,
+    sessionRefresher: SessionRefresher? = null,
 ): HttpClient =
     HttpClient {
-        configurePynapliHttpClient(json, appCheckTokenProvider)
+        configurePynapliHttpClient(json, appCheckTokenProvider, sessionRefresher)
     }
 
 internal fun createPynapliHttpClient(
     engine: HttpClientEngine,
     json: Json = PynapliJson,
     appCheckTokenProvider: AppCheckTokenProvider = NoAppCheckTokenProvider,
+    sessionRefresher: SessionRefresher? = null,
 ): HttpClient =
     HttpClient(engine) {
-        configurePynapliHttpClient(json, appCheckTokenProvider)
+        configurePynapliHttpClient(json, appCheckTokenProvider, sessionRefresher)
     }
 
 private fun io.ktor.client.HttpClientConfig<*>.configurePynapliHttpClient(
     json: Json,
     appCheckTokenProvider: AppCheckTokenProvider,
+    sessionRefresher: SessionRefresher?,
 ) {
     expectSuccess = false
     install(ContentNegotiation) {
@@ -106,7 +120,51 @@ private fun io.ktor.client.HttpClientConfig<*>.configurePynapliHttpClient(
     install(AppCheckHeaderPlugin) {
         tokenProvider = appCheckTokenProvider
     }
+    if (sessionRefresher != null) {
+        install(SessionRefreshPlugin) {
+            refresher = sessionRefresher
+        }
+    }
 }
+
+private class SessionRefreshPluginConfig {
+    var refresher: SessionRefresher? = null
+}
+
+/**
+ * Refresh-on-401: when an authenticated call comes back 401, swap the expired access token for a
+ * fresh one and replay the request once. Without this, the 15-minute access-token TTL surfaced as
+ * "signed out" — the app read a 401 as a terminal auth failure and cleared the session, even though
+ * a valid refresh token was sitting in the store the whole time.
+ *
+ * Three guards keep it from looping or thrashing: the refresh call itself is never retried,
+ * unauthenticated requests are left alone (a 401 there is real), and a request is replayed at most
+ * once. Concurrency is the refresher's job — the server rotates refresh tokens, so
+ * [SessionRefresher] implementations are single-flight.
+ */
+private val SessionRefreshPlugin =
+    createClientPlugin("PynapliSessionRefresh", ::SessionRefreshPluginConfig) {
+        val refresher = pluginConfig.refresher ?: return@createClientPlugin
+        client.plugin(HttpSend).intercept { request ->
+            val call = execute(request)
+            if (call.response.status != HttpStatusCode.Unauthorized) return@intercept call
+            // Refreshing the refresh call would recurse; a 401 there is genuinely terminal.
+            val path =
+                request.url.encodedPathSegments
+                    .filter { it.isNotEmpty() }
+                    .joinToString("/", prefix = "/")
+            if (path.endsWith(AUTH_REFRESH_PATH)) return@intercept call
+            // No bearer token means this 401 is not about an expired session.
+            val sentAuthorization = request.headers[HttpHeaders.Authorization] ?: return@intercept call
+            // Pass the token that actually failed so concurrent 401s collapse into one refresh.
+            val expiredAccessToken = sentAuthorization.removePrefix("Bearer ").trim().takeIf { it.isNotEmpty() }
+
+            val newAccessToken = refresher.refreshAccessToken(expiredAccessToken) ?: return@intercept call
+            request.headers.remove(HttpHeaders.Authorization)
+            request.headers.append(HttpHeaders.Authorization, "Bearer $newAccessToken")
+            execute(request)
+        }
+    }
 
 private class AppCheckHeaderPluginConfig {
     var tokenProvider: AppCheckTokenProvider = NoAppCheckTokenProvider

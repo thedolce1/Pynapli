@@ -58,8 +58,10 @@ import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SqlDelightSessionStore
+import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.network.KtorMediaByteUploader
 import com.pynapli.shared.network.KtorPynapliApiClient
+import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.buildAndroidActivityStreamClient
 import com.pynapli.shared.network.buildAndroidMessageStreamClient
 import com.pynapli.shared.network.buildAndroidPresenceStreamClient
@@ -77,12 +79,20 @@ class AndroidAppGraph(
     private val database = AndroidPynapliDatabaseFactory(context.applicationContext).createDatabase()
     private val sessionStore = SqlDelightSessionStore(database)
     private val pynapliConfig = AndroidRuntimeConfig.pynapliConfig
+
+    // The HTTP client needs a refresher to recover from the 15-minute access-token TTL, but the
+    // refresher needs the client to call /v1/auth/refresh. The holder breaks that cycle: install it
+    // now, point it at the real implementation once the client exists.
+    private val sessionRefresher = SessionRefresherHolder()
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
             accessTokenProvider = sessionStore,
             appCheckTokenProvider = AndroidFirebaseAppCheckTokenProvider(appContext),
-        )
+            sessionRefresher = sessionRefresher,
+        ).also { client ->
+            sessionRefresher.delegate = StoredSessionRefresher(authApi = client, sessionStore = sessionStore)
+        }
     private val authRepository =
         AuthRepository(
             apiClient = apiClient,
