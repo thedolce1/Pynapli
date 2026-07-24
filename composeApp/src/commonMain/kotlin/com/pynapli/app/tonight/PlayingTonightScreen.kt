@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -103,12 +104,12 @@ fun PlayingTonightScreen(
                 Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    // KNOWN DEFECT: this floater renders under the system status bar (the back
-                    // button collides with the clock). Adding statusBarsPadding() here has NO
-                    // effect — verified on device — so the status-bar inset is resolving to zero
-                    // inside the PynapliOverlays layer even though it works in the Grid/Swipe
-                    // surfaces. Root cause not yet found; fixing it needs the overlay's inset
-                    // plumbing understood rather than another padding modifier.
+                    // The map is deliberately full-bleed behind the status bar, but the floater's
+                    // controls are not: without this the back button collides with the system
+                    // clock. Every other surface inherits this inset from PynapliScreenHeader; the
+                    // floater is hand-rolled precisely because it is not a header, so it applies
+                    // the inset itself.
+                    .statusBarsPadding()
                     .padding(12.dp),
         )
 
