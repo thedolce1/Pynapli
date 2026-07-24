@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliLayout
 
 @Composable
 internal fun ActivityControlsContent(
@@ -43,7 +44,7 @@ internal fun ActivityControlsContent(
                 Modifier
                     .fillMaxWidth()
                     .weight(1f),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            contentPadding = PaddingValues(start = PynapliLayout.ScreenPadding, end = PynapliLayout.ScreenPadding, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             state.errorMessage?.let { message ->
@@ -152,7 +153,7 @@ internal fun PrivacyDiscoveryContent(
                 Modifier
                     .fillMaxWidth()
                     .weight(1f),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            contentPadding = PaddingValues(start = PynapliLayout.ScreenPadding, end = PynapliLayout.ScreenPadding, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             state.errorMessage?.let { message ->

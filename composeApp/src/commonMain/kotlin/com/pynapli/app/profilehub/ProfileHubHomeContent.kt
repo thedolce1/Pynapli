@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.appsettings.AppSettingsUiState
+import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.app.profilelink.ProfileLinksUiState
 
@@ -67,7 +68,7 @@ internal fun ProfileHubContent(
             modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = ProfileSurfaceBottomPadding),
+        contentPadding = PaddingValues(start = PynapliLayout.ScreenPadding, end = PynapliLayout.ScreenPadding, bottom = ProfileSurfaceBottomPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {

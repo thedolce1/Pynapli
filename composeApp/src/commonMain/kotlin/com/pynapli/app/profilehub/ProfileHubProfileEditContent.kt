@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.grid.Intent
@@ -95,7 +96,7 @@ internal fun ProfileEditContent(
                 Modifier
                     .fillMaxWidth()
                     .weight(1f),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            contentPadding = PaddingValues(start = PynapliLayout.ScreenPadding, end = PynapliLayout.ScreenPadding, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             state.errorMessage?.let { message ->

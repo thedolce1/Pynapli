@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliHeaderActionButton
+import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliScreenHeader
 import com.pynapli.app.design.PynapliShape
@@ -129,7 +130,7 @@ internal fun ActivityTabRow(
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        contentPadding = PaddingValues(start = PynapliLayout.ScreenPadding, end = PynapliLayout.ScreenPadding, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         ActivityTabUi.entries.forEach { tab ->

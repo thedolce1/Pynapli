@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.conversation.titleFor
+import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.messages.MessagesUiState
 import com.pynapli.app.profilelink.ProfileLinkUi
@@ -58,7 +59,7 @@ internal fun NotificationCenterContent(
             modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = ProfileSurfaceBottomPadding),
+        contentPadding = PaddingValues(start = PynapliLayout.ScreenPadding, end = PynapliLayout.ScreenPadding, bottom = ProfileSurfaceBottomPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {

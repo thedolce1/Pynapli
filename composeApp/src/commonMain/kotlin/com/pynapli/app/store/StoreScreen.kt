@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliContentWidth
+import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubscriptionTierDto
@@ -121,7 +122,7 @@ private fun StoreScreenContent(
                         Modifier
                             .fillMaxSize()
                             .testTag(StoreTestTags.LIST),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = PynapliLayout.ScreenPadding, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item(key = "current-plan") {
