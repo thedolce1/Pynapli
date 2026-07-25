@@ -403,6 +403,41 @@ if ([int]$liveSessions -lt 1) {
 }
 Write-Host "[ok] Expired access token was refreshed, not treated as a sign-out ($liveSessions live session row(s))."
 
+# --- Revoked-session proof: a session that dies mid-use returns to sign-in without a relaunch ---
+#
+# The mirror image of the phase above. An *expired* access token is recoverable — the client
+# refreshes and stays in. A *revoked* session is terminal — the refresh is rejected, and the app
+# must drop back to sign-in instead of stranding the user in an authenticated shell where every
+# request 401s (the state a moderation ban or a remote logout would otherwise leave them in).
+#
+# Crucially this does NOT relaunch: the app is already open on the Grid from the phase above. The
+# session is revoked server-side, the 5s access-session cache lapses, and the app's own periodic
+# inbox refresh trips the 401 -> terminal-refresh-rejection -> sign-out chain on its own.
+Write-Host "[step] Revoking the session server-side to prove mid-session sign-out (no relaunch)"
+$revokeSql = "UPDATE user_sessions SET revoked_at = now() WHERE revoked_at IS NULL;"
+$revoked = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c $revokeSql
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not revoke user_sessions in Postgres. Is the pynapli-postgres container running?"
+}
+Write-Host "[note] Postgres: $revoked"
+
+# Outlive the 5s access-session cache, then let the app's periodic refresh (inbox loop, ~15s) reach
+# the server and get rejected. Wait-ForAnyText polls until the sign-in screen appears; a regression
+# that leaves the app on the Grid makes it time out here with a clear message.
+Start-Sleep -Seconds 8
+$afterRevoke = Wait-ForAnyText @("Dev login") 60
+if ($afterRevoke.Text -ne "Dev login") {
+    throw "Revoked session did not return to sign-in: the app is still in the authenticated shell (see SessionInvalidationBus / AuthStateHolder.observeSessionInvalidations)."
+}
+$revokedShot = Save-Screen "03_revoked_signed_out"
+
+# Server-side confirmation: every session is revoked and the rejected refresh created no new one.
+$liveAfterRevoke = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c "SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL AND access_expires_at > now();"
+if ([int]$liveAfterRevoke -ne 0) {
+    throw "Expected no live session rows after revoke, found $liveAfterRevoke (a failed refresh must not mint a new session)."
+}
+Write-Host "[ok] Revoked session returned the user to sign-in mid-session (no live session rows remain)."
+
 $summaryPath = Join-Path $script:ArtifactDir "qa-summary.json"
 (@{
     passed = $true
@@ -413,10 +448,13 @@ $summaryPath = Join-Path $script:ArtifactDir "qa-summary.json"
     plaintextTokenJsonFound = $false
     expiredAccessTokenRefreshed = $true
     liveSessionsAfterRefresh = [int]$liveSessions
+    revokedSessionSignedOut = $true
+    liveSessionsAfterRevoke = [int]$liveAfterRevoke
     screenshots = @{
         signedIn = $signedInShot
         sessionRestored = $restoredShot
         expiredTokenRefreshed = $refreshedShot
+        revokedSignedOut = $revokedShot
     }
 } | ConvertTo-Json -Depth 4) | Set-Content -Path $summaryPath -Encoding UTF8
 
