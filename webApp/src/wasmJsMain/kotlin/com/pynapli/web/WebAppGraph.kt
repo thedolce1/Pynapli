@@ -46,6 +46,7 @@ import com.pynapli.app.swipe.NoOpSwipeActionQueueStore
 import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.auth.SessionInvalidationBus
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.network.KtorMediaByteUploader
@@ -76,6 +77,9 @@ class WebAppGraph {
     // See AndroidAppGraph: the holder breaks the client <-> refresher construction cycle so an
     // expired access token is refreshed rather than surfacing as a surprise sign-out.
     private val sessionRefresher = SessionRefresherHolder()
+
+    // Terminal mid-session invalidation (revoked session / suspended account) routes back to sign-in.
+    private val sessionInvalidationBus = SessionInvalidationBus()
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
@@ -83,7 +87,12 @@ class WebAppGraph {
             appCheckTokenProvider = NoAppCheckTokenProvider,
             sessionRefresher = sessionRefresher,
         ).also { client ->
-            sessionRefresher.delegate = StoredSessionRefresher(authApi = client, sessionStore = sessionStore)
+            sessionRefresher.delegate =
+                StoredSessionRefresher(
+                    authApi = client,
+                    sessionStore = sessionStore,
+                    invalidationBus = sessionInvalidationBus,
+                )
         }
     private val authRepository =
         AuthRepository(
@@ -99,6 +108,7 @@ class WebAppGraph {
             platform = "web",
             appVersion = "0.1.0",
             deviceId = stableWebInstallId(),
+            sessionInvalidations = sessionInvalidationBus.events,
         )
 
     val appSettingsStateHolder =

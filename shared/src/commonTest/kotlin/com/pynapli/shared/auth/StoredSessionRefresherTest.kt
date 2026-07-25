@@ -9,13 +9,16 @@ import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * The server rotates the refresh token on every call, so the risky part of this class is not the
@@ -56,14 +59,36 @@ class StoredSessionRefresherTest {
         }
 
     @Test
-    fun returnsNullWhenTheRefreshTokenIsRejected() =
+    fun terminalRejectionClearsTheSessionAndSignalsInvalidation() =
         runBlocking {
             val store = seededStore(accessToken = "expired", refreshToken = "revoked")
             val api = FakeRefreshApi(refreshResult = AppResult.Failure(AppError("INVALID_REFRESH_TOKEN", "nope")))
+            val bus = SessionInvalidationBus()
+            // UNDISPATCHED subscribes synchronously before the refresh emits, so the collector is
+            // guaranteed live when notifyInvalidated fires — no timing race.
+            val invalidated = async(start = CoroutineStart.UNDISPATCHED) { bus.events.first() }
 
-            assertNull(StoredSessionRefresher(api, store).refreshAccessToken("expired"))
-            // The session is left for the caller to clear; the refresher does not sign anyone out.
+            assertNull(StoredSessionRefresher(api, store, bus).refreshAccessToken("expired"))
+            // A dead session is cleared so the HTTP layer stops sending the revoked token...
+            assertNull(store.currentSession())
+            // ...and the app is signalled to return to sign-in.
+            invalidated.await()
+        }
+
+    @Test
+    fun transientFailureLeavesTheSessionIntactAndDoesNotSignOut() =
+        runBlocking {
+            val store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
+            val api = FakeRefreshApi(refreshResult = AppResult.Failure(AppError("NETWORK_ERROR", "offline")))
+            val bus = SessionInvalidationBus()
+            val invalidated = async(start = CoroutineStart.UNDISPATCHED) { bus.events.first() }
+
+            assertNull(StoredSessionRefresher(api, store, bus).refreshAccessToken("expired"))
+            // A blip must not sign the user out: the session survives for a later retry...
             assertEquals("expired", store.currentSession()?.accessToken)
+            // ...and no invalidation is emitted (the collector is still waiting).
+            assertTrue(invalidated.isActive)
+            invalidated.cancel()
         }
 
     @Test

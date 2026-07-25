@@ -2,9 +2,11 @@ package com.pynapli.app.auth
 
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.core.result.AppResult
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.update
 
 class AuthStateHolder(
@@ -15,11 +17,37 @@ class AuthStateHolder(
     // server-side before storage; blank when the platform graph supplies none.
     private val deviceId: String = "",
     private val beforeLogout: suspend () -> Unit = {},
+    // Fires when the session is terminally invalidated mid-use (revoked / account no longer active).
+    // Collected by [observeSessionInvalidations]; empty by default so tests and older call sites need
+    // not supply it.
+    private val sessionInvalidations: Flow<Unit> = emptyFlow(),
 ) {
     private val deviceIdOrNull: String? get() = deviceId.takeIf { it.isNotBlank() }
 
     private val _state = MutableStateFlow(AuthUiState())
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
+
+    /**
+     * Long-running collector, launched once from the app effects, that drops the app back to the
+     * sign-in screen when the session dies mid-use. The refresher has already cleared the stored
+     * tokens by the time this fires, so here we only flip UI state; no network call (a logout call
+     * would just 401 on the dead session).
+     */
+    suspend fun observeSessionInvalidations() {
+        sessionInvalidations.collect {
+            _state.update { current ->
+                if (current.session == null) {
+                    current
+                } else {
+                    current.copy(
+                        session = null,
+                        password = "",
+                        errorMessage = "Your session ended. Please sign in again.",
+                    )
+                }
+            }
+        }
+    }
 
     suspend fun restoreSession() {
         val session = authRepository.currentSessionValidated()

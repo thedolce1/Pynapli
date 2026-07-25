@@ -55,6 +55,12 @@ internal fun PynapliAppEffects(
         authStateHolder.restoreSession()
     }
 
+    // Returns to sign-in the moment the session dies mid-use (revoked / account no longer active),
+    // instead of stranding the user in an authenticated shell where every request 401s.
+    LaunchedEffect(authStateHolder) {
+        authStateHolder.observeSessionInvalidations()
+    }
+
     LaunchedEffect(authState.authenticated, appSettingsStateHolder) {
         if (authState.authenticated) {
             appSettingsStateHolder.load()

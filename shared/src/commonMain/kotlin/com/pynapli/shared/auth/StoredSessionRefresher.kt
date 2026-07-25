@@ -21,6 +21,10 @@ import kotlinx.coroutines.sync.withLock
 class StoredSessionRefresher(
     private val authApi: AuthApi,
     private val sessionStore: SessionStore,
+    // Notified when a refresh is *terminally* rejected, so the app can return to sign-in instead of
+    // looping on a dead session. Null where no observer exists (e.g. unit tests that only assert the
+    // token result).
+    private val invalidationBus: SessionInvalidationBus? = null,
 ) : SessionRefresher {
     private val mutex = Mutex()
 
@@ -39,7 +43,16 @@ class StoredSessionRefresher(
                     sessionStore.currentSession()?.accessToken
                 }
 
-                is AppResult.Failure -> null
+                is AppResult.Failure -> {
+                    // A terminal rejection means the session is dead — revoked, or the account is no
+                    // longer active. Clear it and signal the app to drop back to sign-in. A transient
+                    // failure (network, 5xx) leaves the session intact so a later retry can succeed.
+                    if (result.error.code in terminalAuthErrorCodes) {
+                        sessionStore.clear()
+                        invalidationBus?.notifyInvalidated()
+                    }
+                    null
+                }
             }
         }
 }

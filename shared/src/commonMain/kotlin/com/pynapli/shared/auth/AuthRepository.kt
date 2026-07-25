@@ -108,14 +108,4 @@ class AuthRepository(
             userId = user.userId,
             userStatus = user.status,
         )
-
-    private companion object {
-        private val terminalAuthErrorCodes =
-            setOf(
-                "UNAUTHENTICATED",
-                "INVALID_REFRESH_TOKEN",
-                "ACCOUNT_NOT_ACTIVE",
-                "HTTP_401",
-            )
-    }
 }

@@ -57,6 +57,7 @@ import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.auth.SessionInvalidationBus
 import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.network.KtorMediaByteUploader
@@ -84,6 +85,10 @@ class AndroidAppGraph(
     // refresher needs the client to call /v1/auth/refresh. The holder breaks that cycle: install it
     // now, point it at the real implementation once the client exists.
     private val sessionRefresher = SessionRefresherHolder()
+
+    // Terminal mid-session invalidation (revoked session / suspended account) flows from the
+    // refresher to the auth state holder through this bus, dropping the app back to sign-in.
+    private val sessionInvalidationBus = SessionInvalidationBus()
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
@@ -91,7 +96,12 @@ class AndroidAppGraph(
             appCheckTokenProvider = AndroidFirebaseAppCheckTokenProvider(appContext),
             sessionRefresher = sessionRefresher,
         ).also { client ->
-            sessionRefresher.delegate = StoredSessionRefresher(authApi = client, sessionStore = sessionStore)
+            sessionRefresher.delegate =
+                StoredSessionRefresher(
+                    authApi = client,
+                    sessionStore = sessionStore,
+                    invalidationBus = sessionInvalidationBus,
+                )
         }
     private val authRepository =
         AuthRepository(
@@ -136,6 +146,7 @@ class AndroidAppGraph(
             appVersion = "0.1.0",
             deviceId = stableInstallId(appContext),
             beforeLogout = { pushRegistrationCoordinator.unregisterCurrentDevice() },
+            sessionInvalidations = sessionInvalidationBus.events,
         )
 
     val appSettingsStateHolder =
