@@ -152,6 +152,13 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         isStarted = true
         appGraph?.let { startRealtimeStreams(it) }
+        // Re-sync push registration on every foreground. The reactive collector in
+        // startPushRegistrationSync only re-fires when userId/settings change, so a rotated FCM token
+        // (onNewToken clears the stored fingerprint) would otherwise not be re-registered until the
+        // process restarts — leaving the server holding a dead token and dropping pushes to a user
+        // who has not reopened the app. The sync is fingerprint-guarded, so it is a cheap no-op when
+        // nothing has changed.
+        activityScope.launch { syncPushRegistrationNow() }
     }
 
     private fun startRealtimeStreams(graph: AndroidAppGraph) {

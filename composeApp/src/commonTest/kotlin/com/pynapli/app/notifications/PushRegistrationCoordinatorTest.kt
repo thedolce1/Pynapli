@@ -42,6 +42,26 @@ class PushRegistrationCoordinatorTest {
         }
 
     @Test
+    fun syncReRegistersWhenTheDeviceTokenRotates() =
+        runBlocking {
+            // FCM rotates tokens (reinstall/restore, or a long-idle install). onNewToken clears the
+            // store; the next sync must re-register the new token. This is the guarantee the
+            // foreground re-sync (MainActivity.onStart) relies on to close the rotation gap.
+            val repository = FakePushDeviceRegistrationRepository()
+            val store = InMemoryPushRegistrationStore()
+            val tokenProvider = MutablePushTokenProvider("token-old")
+            val coordinator = coordinator(tokenProvider = tokenProvider, repository = repository, store = store)
+
+            coordinator.syncAuthenticatedDevice("user-1", AppSettings())
+            tokenProvider.token = "token-new"
+            coordinator.syncAuthenticatedDevice("user-1", AppSettings())
+
+            assertEquals(2, repository.registered.size)
+            assertEquals("token-new", repository.registered.last().deviceToken)
+            assertEquals("token-new", store.currentSnapshot()?.deviceToken)
+        }
+
+    @Test
     fun syncUpdatesWhenNotificationEnabledStateChanges() =
         runBlocking {
             val repository = FakePushDeviceRegistrationRepository()
@@ -131,6 +151,12 @@ class PushRegistrationCoordinatorTest {
 
 private class StaticPushTokenProvider(
     private val token: String?,
+) : PushTokenProvider {
+    override suspend fun currentToken(): String? = token
+}
+
+private class MutablePushTokenProvider(
+    var token: String?,
 ) : PushTokenProvider {
     override suspend fun currentToken(): String? = token
 }
