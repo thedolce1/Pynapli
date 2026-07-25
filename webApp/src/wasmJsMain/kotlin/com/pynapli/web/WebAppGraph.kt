@@ -66,9 +66,11 @@ import kotlin.random.Random
 /**
  * Web mirror of `AndroidAppGraph`: builds the shared state-holder set over browser
  * adapters. Deliberately absent on web v1 (WEB_PWA_GAMEPLAN.md): push registration
- * (Web Push is post-v1), billing (Store is read-only), realtime stream coordinators
- * (W3), Playing Tonight + Psync surfaces (v1.x), and the swipe/grid local caches
- * (NoOp stores until a localStorage snapshot store earns its place in W2/W4).
+ * (Web Push is post-v1), billing (Store is read-only), Playing Tonight + Psync surfaces
+ * (v1.x), and the swipe/grid local caches (NoOp stores until a localStorage snapshot store
+ * earns its place in W2/W4). Realtime stream coordinators (presence/activity/messages) ARE
+ * wired here and started from `Main.kt` — they authenticate over WebSockets with a first
+ * frame since browsers cannot set WS headers (W3, shipped).
  */
 class WebAppGraph {
     private val sessionStore = LocalStorageSessionStore()
