@@ -1,9 +1,21 @@
 package com.pynapli.app.notifications
 
 import android.content.Context
-import android.provider.Settings
+import androidx.core.content.edit
 import java.util.UUID
 
+/**
+ * Stand-in push token for builds with no working FCM registration — local dev without
+ * google-services.json, and the release-path fallback in [AndroidFirebasePushTokenProvider] when
+ * Firebase returns no token. The server treats it as an ordinary opaque device token, so pushes
+ * simply never arrive for that device rather than the registration failing outright.
+ *
+ * Deliberately NOT derived from a hardware identifier. This runs in release builds, and
+ * Settings.Secure.ANDROID_ID is a cross-app, survives-reinstall device ID that Google Play policy
+ * discourages and Play Data Safety would have to declare. A random UUID persisted in app-private
+ * preferences gives the same stability per install with none of that — the same trade-off already
+ * made and documented for [com.pynapli.app.stableInstallId].
+ */
 class AndroidDevPushTokenProvider(
     context: Context,
 ) : PushTokenProvider {
@@ -12,13 +24,9 @@ class AndroidDevPushTokenProvider(
 
     override suspend fun currentToken(): String {
         val stableId =
-            Settings.Secure
-                .getString(appContext.contentResolver, Settings.Secure.ANDROID_ID)
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() && it != "9774d56d682e549c" }
-                ?: preferences.getString(KEY_FALLBACK_ID, null)
+            preferences.getString(KEY_FALLBACK_ID, null)?.takeIf { it.isNotEmpty() }
                 ?: UUID.randomUUID().toString().also { generated ->
-                    preferences.edit().putString(KEY_FALLBACK_ID, generated).apply()
+                    preferences.edit { putString(KEY_FALLBACK_ID, generated) }
                 }
 
         return "pynapli-local-dev-${appContext.packageName}-$stableId"

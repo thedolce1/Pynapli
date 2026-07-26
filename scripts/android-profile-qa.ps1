@@ -3,7 +3,7 @@ param(
     [string]$ViewerEmail = "dev@pynapli.local",
     [string]$Password = "PynapliDevPass123!",
     [string]$PackageName = "com.pynapli.app",
-    [string]$LaunchActivity = ".MainActivity",
+    [string]$LaunchActivity = ".DefaultLauncherAlias",
     [string]$DeviceId = "",
     [string]$OutputRoot = "artifacts\android-profile-qa",
     [switch]$SkipSeed,

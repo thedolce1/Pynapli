@@ -37,6 +37,11 @@ iosApp/*.xcodeproj/project.xcworkspace/xcuserdata/
 google-services.json
 GoogleService-Info.plist
 service-account*.json
+# Release signing material. The upload/release keystore is referenced by path via
+# pynapli.android.releaseKeystore (see androidApp/build.gradle.kts) and must never be committed —
+# leaking it lets anyone publish an update to the Play listing.
+*.jks
+*.keystore
 
 # Local media upload sink
 .pynapli-local-media/

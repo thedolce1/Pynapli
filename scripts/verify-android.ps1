@@ -18,7 +18,9 @@ if (!$env:ANDROID_HOME) {
     }
 }
 
-.\gradlew.bat :shared:testAndroidHostTest :composeApp:testAndroidHostTest :composeApp:desktopTest :androidApp:assembleDebug --no-configuration-cache --console=plain
+# lintRelease guards the variant that actually ships. Building only assembleDebug is what let a
+# NewApi error in the base theme break `assembleRelease` without any gate noticing.
+.\gradlew.bat :shared:testAndroidHostTest :composeApp:testAndroidHostTest :composeApp:desktopTest :androidApp:assembleDebug :androidApp:lintRelease --no-configuration-cache --console=plain
 if ($LASTEXITCODE -ne 0) {
     throw "Android verification failed."
 }

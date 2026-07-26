@@ -1,7 +1,7 @@
 param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$PackageName = "com.pynapli.app",
-    [string]$LaunchActivity = ".MainActivity",
+    [string]$LaunchActivity = ".DefaultLauncherAlias",
     [string]$DeviceId = "",
     [string]$OutputRoot = "artifacts\android-grid-denied-location-qa",
     [switch]$SkipSeed,

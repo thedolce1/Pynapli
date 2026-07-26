@@ -169,6 +169,23 @@ Media foundation tables model profile/private albums, owned storage assets, albu
 Media upload slots create pending owned assets and return a PUT contract that can later be backed by Firebase/GCS signed URLs.
 The mobile grid header profile icon opens the Albums screen for managing profile photos and private album upload slots.
 
+## Android release signing
+
+`assembleRelease` builds unsigned unless a keystore is supplied, so the release variant stays
+buildable (and therefore continuously gate-able) on every machine and in CI. To produce a
+Play-uploadable artifact, set these — in `local.properties`, `~/.gradle/gradle.properties`, or as
+`-P` flags — and never commit the keystore (`*.jks` / `*.keystore` are gitignored):
+
+```properties
+pynapli.android.releaseKeystore=../pynapli-upload.jks   # path, resolved from the repo root
+pynapli.android.releaseKeystorePassword=…
+pynapli.android.releaseKeyAlias=…
+pynapli.android.releaseKeyPassword=…
+```
+
+Play version metadata is overridable the same way, so a release build can be stamped without a
+commit: `-Ppynapli.android.versionCode=42 -Ppynapli.android.versionName=1.0.0`.
+
 ## Specs
 
 The product and engineering specs live in [`docs/`](docs/) — see the [docs index](docs/README.md) for a grouped list of every spec. They are the canonical references during early buildout.

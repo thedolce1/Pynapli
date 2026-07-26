@@ -2,4 +2,6 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_discreet_background" />
     <foreground android:drawable="@drawable/ic_launcher_discreet_foreground" />
+    <!-- Themed-icon parity with the square discreet icon; keeps the calculator cover consistent. -->
+    <monochrome android:drawable="@drawable/ic_launcher_discreet_foreground" />
 </adaptive-icon>

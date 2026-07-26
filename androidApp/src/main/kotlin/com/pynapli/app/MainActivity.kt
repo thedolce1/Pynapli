@@ -20,6 +20,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.content.edit
 import com.pynapli.app.location.DeviceLocation
 import com.pynapli.app.location.GridLocationRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
@@ -244,7 +245,7 @@ class MainActivity : ComponentActivity() {
         val preferences = getSharedPreferences(NOTIFICATION_PERMISSION_PREFERENCES, Context.MODE_PRIVATE)
         if (preferences.getBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, false)) return
 
-        preferences.edit().putBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, true).apply()
+        preferences.edit { putBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, true) }
         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 

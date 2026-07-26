@@ -10,6 +10,12 @@ coroutines = "1.10.2"
 serialization = "1.11.0"
 datetime = "0.7.1"
 sqldelight = "2.3.2"
+# Coil 3.4.0 requests org.jetbrains.skiko:skiko 0.9.22.2 while Compose 1.11.0 ships 0.144.6, so
+# :composeApp:checkDesktopMainComposeLibrariesCompatibility warns "Skiko versions are incompatible".
+# Left unpinned deliberately: Gradle already resolves to 0.144.6 (the Compose-shipped one, which is
+# what desktop must run against), and hard-pinning skiko would mean hand-tracking it on every
+# Compose bump — a silent desktop-rendering break if it ever drifted. Re-check on the next Coil or
+# Compose bump; if Coil catches up the warning disappears on its own.
 coil = "3.4.0"
 koin = "4.2.1"
 firebaseBom = "34.12.0"
@@ -28,6 +34,9 @@ kotest = "6.1.11"
 mockk = "1.14.9"
 androidxActivity = "1.12.0"
 androidxFragment = "1.8.9"
+# Already on the Android classpath transitively at this version; pinned here so the
+# androidx.core.content.edit usages depend on it explicitly rather than by accident.
+androidxCore = "1.16.0"
 junit = "4.13.2"
 junitVintage = "5.13.4"
 spotless = "8.6.0"
@@ -91,6 +100,7 @@ compose-ui-backhandler = { module = "org.jetbrains.compose.ui:ui-backhandler", v
 
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "androidxFragment" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }

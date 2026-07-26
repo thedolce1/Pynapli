@@ -59,6 +59,22 @@ jobs:
           -Ppynapli.android.apiBaseUrl="$ANDROID_API_BASE_URL"
           -Ppynapli.android.websocketBaseUrl="$ANDROID_WEBSOCKET_BASE_URL"
           --no-configuration-cache
+      # The release variant is what ships, and until this job existed nothing ever built it: a
+      # lint error (NewApi in the base theme) sat in main breaking `assembleRelease` while every
+      # gate stayed green on `assembleDebug`. Lint + R8 run here so that fails on the PR instead.
+      - name: Verify release variant (lint + minified assemble)
+        run: >
+          ./gradlew
+          :androidApp:lintRelease
+          :androidApp:assembleRelease
+          --no-configuration-cache
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint-release
+          path: androidApp/build/reports/lint-results-release.*
+          if-no-files-found: ignore
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,6 +90,27 @@ jobs:
           path: androidApp/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
           retention-days: 14
+
+  web:
+    name: Web (Wasm compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      # scripts/verify-web.ps1 covers this locally via the pre-push hook, but the hook is opt-in
+      # per clone (core.hooksPath is local config), so the PWA had no CI coverage at all.
+      - name: Compile Wasm targets
+        run: >
+          ./gradlew
+          :shared:compileKotlinWasmJs
+          :composeApp:compileKotlinWasmJs
+          :webApp:compileKotlinWasmJs
+          --no-configuration-cache
 
   docker-smoke:
     name: Docker Smoke (Cloud Run image)

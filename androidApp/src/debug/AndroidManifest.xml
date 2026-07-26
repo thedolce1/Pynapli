@@ -1,5 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
+    <!--
+        Debug builds point at the emulator loopback (http://10.0.2.2:8080) and a LAN host over
+        plain HTTP, so they need cleartext. Release and staging use https/wss and deliberately do
+        NOT carry this flag — see the note in src/main/AndroidManifest.xml.
+    -->
+    <application android:usesCleartextTraffic="true">
         <receiver
             android:name=".debug.DebugQaReceiver"
             android:exported="true">

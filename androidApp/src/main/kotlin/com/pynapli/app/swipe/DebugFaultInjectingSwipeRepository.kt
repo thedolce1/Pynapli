@@ -1,6 +1,7 @@
 package com.pynapli.app.swipe
 
 import android.content.Context
+import androidx.core.content.edit
 import com.pynapli.app.debug.DebugQaFlags
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
@@ -24,10 +25,12 @@ class DebugFaultInjectingSwipeRepository(
         if (DebugQaFlags.isDebuggable(appContext)) {
             val remainingFailures = preferences.getInt(DebugQaFlags.KEY_FAIL_NEXT_SWIPE_ACTIONS, 0)
             if (remainingFailures > 0) {
-                preferences
-                    .edit()
-                    .putInt(DebugQaFlags.KEY_FAIL_NEXT_SWIPE_ACTIONS, remainingFailures - 1)
-                    .commit()
+                // commit, not apply: the QA harness force-stops the app between stages, and an
+                // async write can lose the decremented counter — which silently changes how many
+                // failures the next stage injects.
+                preferences.edit(commit = true) {
+                    putInt(DebugQaFlags.KEY_FAIL_NEXT_SWIPE_ACTIONS, remainingFailures - 1)
+                }
                 return AppResult.Failure(
                     AppError(
                         code = "NETWORK_ERROR",
