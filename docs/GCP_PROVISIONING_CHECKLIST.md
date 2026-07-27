@@ -135,6 +135,31 @@ service-account key with signing rights for the bucket (the current GCS V4 signi
   not `https`, contains a wildcard, or points at a loopback host. An empty list is allowed — that is
   the mobile-only case, since CORS gates browser requests only.
 
+## Step 8b — Config pre-flight (read before the first deploy)
+
+The server **refuses to start** on unsafe production config and names what is wrong (issue codes
+like `ADMIN_API_TOKEN_REQUIRED`, `GCS_MEDIA_STORAGE_REQUIRED`, `APP_CHECK_ENFORCEMENT_REQUIRED`).
+That is deliberate — a failed boot with a named cause beats a server that starts and misbehaves.
+Every variable it reads is listed in `.env.example`; treat that file as the source of truth.
+
+Two defaults are easy to miss because they are *silent* rather than fatal:
+
+- [ ] **`PYNAPLI_ACTIVITY_RETENTION_ENABLED` defaults to ON for local and OFF everywhere else.** Left
+  unset on staging/prod, the activity table grows without bound. Set it to `true`.
+- [ ] **`PYNAPLI_MEDIA_MODERATION_PROVIDER` defaults to `manual`** — no automated image scanning.
+  For a public launch that is a trust decision to make on purpose, not to inherit from a default.
+  Set `cloud_vision` (plus signing credentials) if automated scanning is wanted.
+
+Also worth setting explicitly on Cloud Run:
+
+- [ ] `PYNAPLI_DATABASE_MAX_POOL_SIZE` / `PYNAPLI_DATABASE_MIN_IDLE` — instance count multiplies
+  connections against the Cloud SQL limit, so the default pool per instance can exhaust it as the
+  service scales out.
+
+These are rejected outright in production, so they only matter if something sets them:
+`PYNAPLI_DEV_STORE_PURCHASES_ENABLED`, `PYNAPLI_PLAY_STORE_SANDBOX_ENABLED`,
+`PYNAPLI_MEDIA_DEV_AUTO_APPROVE_UPLOADS`.
+
 ## Step 9 — Cost controls (do NOT skip)
 
 - [ ] Console → Billing → Budgets & alerts: a monthly budget + 50/90/100% email alerts.
