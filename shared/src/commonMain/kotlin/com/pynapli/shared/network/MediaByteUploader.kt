@@ -2,6 +2,7 @@ package com.pynapli.shared.network
 
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
 import io.ktor.client.HttpClient
 import io.ktor.client.request.headers
@@ -35,7 +36,7 @@ class KtorMediaByteUploader(
         uploadHeaders: Map<String, String>,
         bytes: ByteArray,
     ): AppResult<Unit> =
-        runCatching {
+        runCatchingCancellable {
             val response =
                 httpClient.put(uploadUrl) {
                     headers {

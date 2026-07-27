@@ -1,6 +1,7 @@
 package com.pynapli.app.swipe
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -414,7 +415,7 @@ class SwipeStateHolder(
 
     private suspend fun persistPendingActions() {
         val ownerUserId = restoredQueueOwnerUserId
-        runCatching {
+        runCatchingCancellable {
             if (pendingActions.isEmpty()) {
                 queueStore.clear(ownerUserId)
             } else {

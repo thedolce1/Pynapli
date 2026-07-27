@@ -3,6 +3,7 @@ package com.pynapli.shared.network
 import com.pynapli.shared.core.config.PynapliConfig
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.runCatchingCancellable
 import io.ktor.client.HttpClient
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -28,7 +29,7 @@ internal class KtorApiSupport(
         path: String,
         request: Request,
     ): AppResult<Response> =
-        runCatching {
+        runCatchingCancellable {
             httpClient
                 .post(endpoint(path)) {
                     contentType(ContentType.Application.Json)
@@ -49,7 +50,7 @@ internal class KtorApiSupport(
             )
         }
 
-        return runCatching { call(token) }.getOrElse { error -> error.toNetworkFailure() }
+        return runCatchingCancellable { call(token) }.getOrElse { error -> error.toNetworkFailure() }
     }
 }
 

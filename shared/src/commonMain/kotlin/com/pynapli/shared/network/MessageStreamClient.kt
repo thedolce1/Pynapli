@@ -1,5 +1,6 @@
 package com.pynapli.shared.network
 
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.dto.MessageDeltaDto
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.webSocket
@@ -138,7 +139,7 @@ private class ChannelMessageStreamSession(
     private val incoming: Channel<String>,
     private val job: Job,
 ) : MessageStreamSession {
-    override suspend fun receiveText(): String? = runCatching { incoming.receive() }.getOrNull()
+    override suspend fun receiveText(): String? = runCatchingCancellable { incoming.receive() }.getOrNull()
 
     override suspend fun close() {
         job.cancel()

@@ -3,6 +3,7 @@ package com.pynapli.app.onboarding
 import androidx.compose.runtime.Immutable
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
@@ -278,7 +279,7 @@ class OnboardingStateHolder(
      * live media state, not settings.
      */
     suspend fun evaluatePhotoNudge() {
-        val progress = runCatching { progressStore.load() }.getOrNull() ?: return
+        val progress = runCatchingCancellable { progressStore.load() }.getOrNull() ?: return
         val eligible =
             progress.completed &&
                 !progress.photoNudgeDismissed &&
@@ -290,7 +291,7 @@ class OnboardingStateHolder(
     suspend fun recordPhotoNudgeShown() {
         if (photoNudgeCountedThisSession) return
         photoNudgeCountedThisSession = true
-        runCatching {
+        runCatchingCancellable {
             val progress = progressStore.load()
             progressStore.save(progress.copy(photoNudgeSessionsSeen = progress.photoNudgeSessionsSeen + 1))
         }
@@ -298,11 +299,11 @@ class OnboardingStateHolder(
 
     suspend fun dismissPhotoNudge() {
         _state.update { it.copy(photoNudgeEligible = false) }
-        runCatching { progressStore.save(progressStore.load().copy(photoNudgeDismissed = true)) }
+        runCatchingCancellable { progressStore.save(progressStore.load().copy(photoNudgeDismissed = true)) }
     }
 
     private suspend fun markOnboardingInProgress(userId: String?) {
-        runCatching {
+        runCatchingCancellable {
             progressStore.save(
                 progressStore.load().copy(completed = false, userId = userId),
             )
@@ -310,7 +311,7 @@ class OnboardingStateHolder(
     }
 
     private suspend fun markOnboardingCompleted() {
-        runCatching {
+        runCatchingCancellable {
             progressStore.save(
                 progressStore.load().copy(completed = true, userId = null),
             )

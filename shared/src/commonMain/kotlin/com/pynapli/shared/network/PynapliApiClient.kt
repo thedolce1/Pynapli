@@ -3,6 +3,7 @@ package com.pynapli.shared.network
 import com.pynapli.shared.core.config.PynapliConfig
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.dto.ApiErrorDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -185,7 +186,7 @@ internal suspend inline fun <reified T> HttpResponse.toAppResult(json: Json): Ap
     }
 
     val apiError =
-        runCatching {
+        runCatchingCancellable {
             json.decodeFromString<ApiErrorDto>(bodyAsText())
         }.getOrNull()
 

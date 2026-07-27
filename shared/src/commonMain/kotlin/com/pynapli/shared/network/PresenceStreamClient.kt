@@ -1,5 +1,6 @@
 package com.pynapli.shared.network
 
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import com.pynapli.shared.network.dto.PresenceStreamSubscribeDto
 import io.ktor.client.HttpClient
@@ -175,7 +176,7 @@ private class ChannelPresenceStreamSession(
         outgoing.send(text)
     }
 
-    override suspend fun receiveText(): String? = runCatching { incoming.receive() }.getOrNull()
+    override suspend fun receiveText(): String? = runCatchingCancellable { incoming.receive() }.getOrNull()
 
     override suspend fun close() {
         outgoing.close()

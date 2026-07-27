@@ -1,5 +1,6 @@
 package com.pynapli.app.appsettings
 
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +17,7 @@ class AppSettingsStateHolder(
         if (state.value.isLoading) return
         _state.update { it.copy(isLoading = true, errorMessage = null) }
 
-        runCatching { repository.load() }
+        runCatchingCancellable { repository.load() }
             .onSuccess { settings ->
                 _state.update {
                     it.copy(
@@ -89,7 +90,7 @@ class AppSettingsStateHolder(
 
         _state.update { it.copy(isSaving = true, errorMessage = null) }
 
-        return runCatching {
+        return runCatchingCancellable {
             val settings = current.draft.toSettings()
             repository.save(settings)
             settings

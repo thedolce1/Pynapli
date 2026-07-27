@@ -1,6 +1,7 @@
 package com.pynapli.app.grid
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +25,7 @@ class GridStateHolder(
      */
     suspend fun primeFromCacheThenLoad() {
         if (_state.value.cards.isEmpty()) {
-            val cached = runCatching { snapshotStore.load() }.getOrElse { emptyList() }
+            val cached = runCatchingCancellable { snapshotStore.load() }.getOrElse { emptyList() }
             if (cached.isNotEmpty() && _state.value.cards.isEmpty()) {
                 // Show cached cards instantly; a quiet refresh swaps in the live feed atomically
                 // (no blank, no scroll reset) per the spec's instant-render rule.
@@ -47,7 +48,7 @@ class GridStateHolder(
                 errorMessage = if (keepCardsVisible) current.errorMessage else null,
             )
         }
-        runCatching { repository.loadGrid(_state.value.filters) }
+        runCatchingCancellable { repository.loadGrid(_state.value.filters) }
             .onSuccess { feed ->
                 _state.update { current ->
                     current.copy(
@@ -62,7 +63,7 @@ class GridStateHolder(
                     )
                 }
                 // Persist the fresh cards for an instant first paint on next open (best-effort).
-                runCatching { snapshotStore.save(feed.cards) }
+                runCatchingCancellable { snapshotStore.save(feed.cards) }
             }.onFailure { error ->
                 _state.update { current ->
                     val code = (error as? GridFeedException)?.code
@@ -162,7 +163,7 @@ class GridStateHolder(
         if (current.isRefreshing || current.isLoadingMore || current.cards.isEmpty()) return
 
         _state.update { it.copy(isLoadingMore = true, errorCode = null, errorMessage = null) }
-        runCatching { repository.loadGrid(current.filters, cursor) }
+        runCatchingCancellable { repository.loadGrid(current.filters, cursor) }
             .onSuccess { feed ->
                 _state.update { existing ->
                     val existingIds = existing.cards.mapTo(mutableSetOf()) { it.id }
