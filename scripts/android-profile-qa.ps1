@@ -19,177 +19,13 @@ $ErrorActionPreference = "Stop"
 
 # Shared UI-hierarchy helpers. These used to be copy-pasted into every QA script, which is
 # how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
-Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaDevice.psm1") -Force -DisableNameChecking
 
 try {
     Add-Type -AssemblyName System.Drawing
 } catch {
     throw "System.Drawing is required for Android profile screenshot signatures. Run this script on Windows with the local desktop tooling."
-}
-
-function Find-Adb {
-    $command = Get-Command "adb" -ErrorAction SilentlyContinue
-    if ($null -ne $command) { return $command.Source }
-
-    $sdkCandidates = @(
-        $env:ANDROID_HOME,
-        $env:ANDROID_SDK_ROOT,
-        (Join-Path $env:LOCALAPPDATA "Android\Sdk")
-    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-
-    foreach ($sdk in $sdkCandidates) {
-        $candidate = Join-Path $sdk "platform-tools\adb.exe"
-        if (Test-Path $candidate) { return $candidate }
-    }
-
-    throw "adb was not found. Start Android Studio once or install Android SDK Platform Tools."
-}
-
-function Invoke-Adb {
-    param([string[]]$Arguments)
-
-    $output = & $script:Adb -s $script:DeviceId @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "adb failed: $($Arguments -join ' '). Output: $(($output | Out-String).Trim())"
-    }
-    return $output
-}
-
-function Select-AdbDevice {
-    $lines = & $script:Adb devices
-    if ($LASTEXITCODE -ne 0) { throw "Unable to list adb devices." }
-
-    $devices = @(
-        $lines |
-            Where-Object { $_ -match "^\S+\s+device$" } |
-            ForEach-Object { ($_ -split "\s+")[0] }
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($script:DeviceId)) {
-        if ($devices -notcontains $script:DeviceId) {
-            throw "Requested adb device '$script:DeviceId' is not connected. Connected devices: $($devices -join ', ')"
-        }
-        return
-    }
-
-    if ($devices.Count -eq 0) {
-        throw "No connected Android emulator/device found. Start an emulator and retry."
-    }
-    if ($devices.Count -gt 1) {
-        throw "Multiple Android devices are connected. Rerun with -DeviceId. Connected devices: $($devices -join ', ')"
-    }
-    $script:DeviceId = $devices[0]
-}
-
-function Save-Screen {
-    param([string]$Name)
-
-    $remote = "/sdcard/$Name.png"
-    $local = Join-Path $script:ArtifactDir "$Name.png"
-    Invoke-Adb @("shell", "screencap", "-p", $remote) | Out-Null
-    Invoke-Adb @("pull", $remote, $local) | Out-Null
-    Invoke-Adb @("shell", "rm", $remote) | Out-Null
-    return (Resolve-Path $local).Path
-}
-
-function Dump-Ui {
-    param(
-        [string]$Name,
-        [switch]$Keep
-    )
-
-    $remote = "/sdcard/window.xml"
-    $fileName = if ($Keep) { "$Name.xml" } else { "_latest.xml" }
-    $local = Join-Path $script:ArtifactDir $fileName
-    $lastDumpOutput = ""
-
-    for ($attempt = 1; $attempt -le 12; $attempt++) {
-        $previousErrorActionPreference = $ErrorActionPreference
-        $ErrorActionPreference = "Continue"
-        try {
-            $dumpOutput = & $script:Adb -s $script:DeviceId shell uiautomator dump $remote 2>&1
-            $dumpExit = $LASTEXITCODE
-        } finally {
-            $ErrorActionPreference = $previousErrorActionPreference
-        }
-        $lastDumpOutput = ($dumpOutput | Out-String).Trim()
-
-        if ($dumpExit -eq 0 -and $lastDumpOutput -notmatch "ERROR:\s+null root") {
-            & $script:Adb -s $script:DeviceId pull $remote $local 2>$null | Out-Null
-            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $local)) {
-                throw "Unable to pull Android UI hierarchy."
-            }
-
-            $parsed = $null
-            try {
-                $parsed = [xml](Get-Content -Raw -Path $local)
-            } catch {
-                if ($attempt -eq 12) {
-                    throw "Unable to parse Android UI hierarchy at $local"
-                }
-            }
-
-            if ($null -ne $parsed) {
-                # Heavy host load can pop the system "isn't responding" ANR over the app mid-render.
-                # Tap "Wait" and re-dump so callers never see the ANR frame instead of the real screen.
-                if ($null -ne (Find-NodeByText $parsed "responding")) {
-                    $waitNode = Find-NodeByExactText $parsed "Wait"
-                    if ($null -ne $waitNode) {
-                        Tap-Node $waitNode "Wait (ANR)"
-                        Start-Sleep -Milliseconds 1200
-                        continue
-                    }
-                }
-                return $parsed
-            }
-        }
-
-        Start-Sleep -Milliseconds 500
-    }
-
-    throw "Unable to dump Android UI hierarchy after retries. Last output: $lastDumpOutput"
-}
-
-function Wait-ForAnyText {
-    param(
-        [string[]]$Texts,
-        [int]$TimeoutSeconds = $script:WaitSeconds
-    )
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    do {
-        $xml = Dump-Ui "wait"
-        foreach ($text in $Texts) {
-            if ($null -ne (Find-NodeByText $xml $text)) {
-                return [pscustomobject]@{ Text = $text; Xml = $xml }
-            }
-        }
-        Start-Sleep -Milliseconds 500
-    } while ((Get-Date) -lt $deadline)
-
-    $visible = (Get-VisibleTexts $xml) -join " | "
-    throw "Timed out waiting for one of: $($Texts -join ', '). Visible text: $visible"
-}
-
-function Tap-Node {
-    param(
-        $Node,
-        [string]$Label
-    )
-
-    $bounds = Get-Bounds $Node
-    Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
-    Write-Host "[tap] '$Label' at $($bounds.CenterX),$($bounds.CenterY)"
-}
-
-function Tap-Text {
-    param(
-        [string]$Text,
-        [int]$TimeoutSeconds = $script:WaitSeconds
-    )
-
-    $wait = Wait-ForAnyText @($Text) $TimeoutSeconds
-    Tap-Node (Find-NodeByText $wait.Xml $Text) $Text
 }
 
 function Scroll-Down {
@@ -576,11 +412,12 @@ if (-not $SkipGoldenAssertions) {
 }
 
 $script:Adb = Find-Adb
-$script:DeviceId = $DeviceId
-Select-AdbDevice
+$script:DeviceId = Resolve-QaDeviceId -Adb $script:Adb -RequestedDeviceId $DeviceId
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $script:ArtifactDir = Join-Path (Get-Location) (Join-Path $OutputRoot $timestamp)
+# Hand the shared adb helpers their per-run state. Must follow the artifact-dir assignment.
+Set-PynapliQaContext -Adb $script:Adb -DeviceId $script:DeviceId -ArtifactDir $script:ArtifactDir -WaitSeconds $WaitSeconds -DumpMaxAttempts 12
 New-Item -ItemType Directory -Force -Path $script:ArtifactDir | Out-Null
 $script:Screenshots = @{}
 $script:VisualSignatures = @{}

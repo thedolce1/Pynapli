@@ -20,207 +20,8 @@ $ErrorActionPreference = "Stop"
 
 # Shared UI-hierarchy helpers. These used to be copy-pasted into every QA script, which is
 # how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
-Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force
-
-function Find-Adb {
-    $command = Get-Command "adb" -ErrorAction SilentlyContinue
-    if ($null -ne $command) {
-        return $command.Source
-    }
-
-    $sdkCandidates = @(
-        $env:ANDROID_HOME,
-        $env:ANDROID_SDK_ROOT,
-        (Join-Path $env:LOCALAPPDATA "Android\Sdk")
-    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-
-    foreach ($sdk in $sdkCandidates) {
-        $candidate = Join-Path $sdk "platform-tools\adb.exe"
-        if (Test-Path $candidate) {
-            return $candidate
-        }
-    }
-
-    throw "adb was not found. Start Android Studio once or install Android SDK Platform Tools."
-}
-
-function Invoke-Adb {
-    param([string[]]$Arguments)
-
-    $output = $null
-    if ([string]::IsNullOrWhiteSpace($script:DeviceId)) {
-        $output = & $script:Adb @Arguments 2>&1
-    } else {
-        $output = & $script:Adb -s $script:DeviceId @Arguments 2>&1
-    }
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "adb failed: $($Arguments -join ' '). Output: $(($output | Out-String).Trim())"
-    }
-
-    return $output
-}
-
-function Invoke-AdbBestEffort {
-    param([string[]]$Arguments)
-
-    if ([string]::IsNullOrWhiteSpace($script:DeviceId)) {
-        & $script:Adb @Arguments 2>&1 | Out-Null
-    } else {
-        & $script:Adb -s $script:DeviceId @Arguments 2>&1 | Out-Null
-    }
-}
-
-function Select-AdbDevice {
-    $lines = & $script:Adb devices
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to list adb devices."
-    }
-
-    $devices = @(
-        $lines |
-            Where-Object { $_ -match "^\S+\s+device$" } |
-            ForEach-Object { ($_ -split "\s+")[0] }
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($script:DeviceId)) {
-        if ($devices -notcontains $script:DeviceId) {
-            throw "Requested adb device '$script:DeviceId' is not connected. Connected devices: $($devices -join ', ')"
-        }
-        return
-    }
-
-    if ($devices.Count -eq 0) {
-        throw "No connected Android emulator/device found. Start an emulator or connect a device and retry."
-    }
-
-    if ($devices.Count -gt 1) {
-        throw "Multiple Android devices are connected. Rerun with -DeviceId. Connected devices: $($devices -join ', ')"
-    }
-
-    $script:DeviceId = $devices[0]
-}
-
-function Save-Screen {
-    param([string]$Name)
-
-    $remote = "/sdcard/$Name.png"
-    $local = Join-Path $script:ArtifactDir "$Name.png"
-    Invoke-Adb @("shell", "screencap", "-p", $remote) | Out-Null
-    Invoke-Adb @("pull", $remote, $local) | Out-Null
-    Invoke-Adb @("shell", "rm", $remote) | Out-Null
-    return (Resolve-Path $local).Path
-}
-
-function Dump-Ui {
-    param(
-        [string]$Name,
-        [switch]$Keep
-    )
-
-    $remote = "/sdcard/window.xml"
-    $fileName = if ($Keep) { "$Name.xml" } else { "_latest.xml" }
-    $local = Join-Path $script:ArtifactDir $fileName
-    $lastDumpOutput = ""
-
-    for ($attempt = 1; $attempt -le 5; $attempt++) {
-        $dumpOutput = & $script:Adb -s $script:DeviceId shell uiautomator dump $remote 2>&1
-        $dumpExit = $LASTEXITCODE
-        $lastDumpOutput = ($dumpOutput | Out-String).Trim()
-
-        if ($dumpExit -eq 0 -and $lastDumpOutput -notmatch "ERROR:\s+null root") {
-            & $script:Adb -s $script:DeviceId pull $remote $local 2>$null | Out-Null
-            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $local)) {
-                throw "Unable to pull Android UI hierarchy."
-            }
-
-            try {
-                $parsed = [xml](Get-Content -Raw -Path $local)
-                # Heavy host load can pop the system "isn't responding" ANR over the app mid-render.
-                # Tap "Wait" and re-dump so callers never see the ANR frame instead of the real screen.
-                $anrNode = $parsed.SelectNodes("//node[contains(@text,'responding') or contains(@content-desc,'responding')]") | Select-Object -First 1
-                if ($null -ne $anrNode) {
-                    $waitNode = $parsed.SelectNodes("//node[@text='Wait' or @content-desc='Wait']") | Select-Object -First 1
-                    if ($null -ne $waitNode -and $waitNode.GetAttribute("bounds") -match "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
-                        $tapX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
-                        $tapY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
-                        & $script:Adb -s $script:DeviceId shell input tap $tapX $tapY 2>$null | Out-Null
-                        Write-Host "[tap] 'Wait (ANR)' at $tapX,$tapY"
-                        Start-Sleep -Milliseconds 1200
-                        continue
-                    }
-                }
-                return $parsed
-            } catch {
-                if ($attempt -eq 5) {
-                    throw "Unable to parse Android UI hierarchy at $local"
-                }
-            }
-        }
-
-        Start-Sleep -Milliseconds 300
-    }
-
-    throw "Unable to dump Android UI hierarchy after retries. Last output: $lastDumpOutput"
-}
-
-function Wait-ForAnyText {
-    param(
-        [string[]]$Texts,
-        [int]$TimeoutSeconds = $script:WaitSeconds
-    )
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    do {
-        $xml = Dump-Ui "wait"
-        foreach ($text in $Texts) {
-            if ($null -ne (Find-NodeByText $xml $text)) {
-                return [pscustomobject]@{
-                    Text = $text
-                    Xml = $xml
-                }
-            }
-        }
-        Start-Sleep -Milliseconds 500
-    } while ((Get-Date) -lt $deadline)
-
-    $visible = (Get-VisibleTexts $xml) -join " | "
-    throw "Timed out waiting for one of: $($Texts -join ', '). Visible text: $visible"
-}
-
-function Tap-Text {
-    param([string]$Text)
-
-    $wait = Wait-ForAnyText @($Text)
-    $node = Find-NodeByText $wait.Xml $Text
-    $bounds = Get-Bounds $node
-    Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
-    Write-Host "[tap] '$Text' at $($bounds.CenterX),$($bounds.CenterY)"
-}
-
-function Tap-ExactText {
-    param([string]$Text)
-
-    $wait = Wait-ForAnyText @($Text)
-    $node = Find-NodeByExactText $wait.Xml $Text
-    if ($null -eq $node) {
-        throw "Text '$Text' was visible but no exact node match was found."
-    }
-    $bounds = Get-Bounds $node
-    Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
-    Write-Host "[tap] '$Text' at $($bounds.CenterX),$($bounds.CenterY)"
-}
-
-function Tap-FirstAvailableText {
-    param([string[]]$Texts)
-
-    $wait = Wait-ForAnyText $Texts
-    $node = Find-NodeByText $wait.Xml $wait.Text
-    $bounds = Get-Bounds $node
-    Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
-    Write-Host "[tap] '$($wait.Text)' at $($bounds.CenterX),$($bounds.CenterY)"
-    return $wait.Text
-}
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaDevice.psm1") -Force -DisableNameChecking
 
 function Tap-FieldByLabel {
     # Taps the CENTER of the EditText that owns [Label]. Tapping the label text
@@ -342,19 +143,23 @@ function Restore-SoftKeyboard {
 }
 
 function Dismiss-NotificationPromptIfPresent {
-    # The OS POST_NOTIFICATIONS prompt appears once after the session authenticates
-    # (Android 13+). Allow it so notification state stays out of this QA's scope.
-    # Exact match only: the dialog TITLE also contains the word "Allow".
-    for ($attempt = 1; $attempt -le 3; $attempt++) {
+    # The OS POST_NOTIFICATIONS prompt (Android 13+) appears only AFTER the session authenticates,
+    # which lags the account-creation tap by a network round-trip. Poll for it and CONTINUE on a
+    # miss — an earlier version returned on the first miss, so whenever the prompt was slower than
+    # one 1.5s tick it was never dismissed and then blocked the rest of the run behind a modal
+    # ("Timed out waiting for one of: See who's nearby"). Matches the proven shape in
+    # android-secure-token-qa.ps1. Exact match: the dialog TITLE also contains the word "Allow".
+    for ($attempt = 1; $attempt -le 10; $attempt++) {
         Start-Sleep -Milliseconds 1500
         $xml = Dump-Ui "notification_prompt_check"
         $allowButton = Find-NodeByExactText $xml "Allow"
         if ($null -eq $allowButton) {
-            return
+            continue
         }
         $bounds = Get-Bounds $allowButton
         Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
         Write-Host "[note] OS notification prompt allowed (tap at $($bounds.CenterX),$($bounds.CenterY))."
+        return
     }
 }
 
@@ -374,11 +179,12 @@ if (-not (Test-Path ".\gradlew.bat")) {
 }
 
 $script:Adb = Find-Adb
-$script:DeviceId = $DeviceId
-Select-AdbDevice
+$script:DeviceId = Resolve-QaDeviceId -Adb $script:Adb -RequestedDeviceId $DeviceId
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $script:ArtifactDir = Join-Path (Get-Location) (Join-Path $OutputRoot $timestamp)
+# Hand the shared adb helpers their per-run state. Must follow the artifact-dir assignment.
+Set-PynapliQaContext -Adb $script:Adb -DeviceId $script:DeviceId -ArtifactDir $script:ArtifactDir -WaitSeconds $WaitSeconds -DumpMaxAttempts 12
 New-Item -ItemType Directory -Force -Path $script:ArtifactDir | Out-Null
 
 $signupEmail = "qa-onboarding-$timestamp@pynapli.local"
