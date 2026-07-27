@@ -15,6 +15,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Shared UI-hierarchy helpers. These used to be copy-pasted into every QA script, which is
+# how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force
+
 try {
     Add-Type -AssemblyName System.Drawing
 } catch {
@@ -138,70 +142,6 @@ function Dump-Ui {
     throw "Unable to dump Android UI hierarchy after retries. Last output: $lastDumpOutput"
 }
 
-function Get-UiTextNodes {
-    param([xml]$Xml)
-
-    @($Xml.SelectNodes("//*[@text or @content-desc]"))
-}
-
-function Get-VisibleTexts {
-    param([xml]$Xml)
-
-    Get-UiTextNodes $Xml |
-        ForEach-Object {
-            $text = $_.GetAttribute("text")
-            if ([string]::IsNullOrWhiteSpace($text)) {
-                $text = $_.GetAttribute("content-desc")
-            }
-            $text
-        } |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-        Select-Object -Unique
-}
-
-function Find-NodeByText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    $nodes = Get-UiTextNodes $Xml
-
-    foreach ($node in $nodes) {
-        $nodeText = $node.GetAttribute("text")
-        if ($nodeText.Contains($Text)) {
-            return $node
-        }
-    }
-
-    foreach ($node in $nodes) {
-        $nodeDescription = $node.GetAttribute("content-desc")
-        if ($nodeDescription.Contains($Text)) {
-            return $node
-        }
-    }
-
-    return $null
-}
-
-function Get-Bounds {
-    param($Node)
-
-    $bounds = $Node.GetAttribute("bounds")
-    if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
-        throw "Invalid node bounds: $bounds"
-    }
-
-    return [pscustomobject]@{
-        Left = [int]$Matches[1]
-        Top = [int]$Matches[2]
-        Right = [int]$Matches[3]
-        Bottom = [int]$Matches[4]
-        CenterX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
-        CenterY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
-    }
-}
-
 function Wait-ForAnyText {
     param(
         [string[]]$Texts,
@@ -254,150 +194,11 @@ function Scroll-SheetToText {
     throw "Could not scroll the filter sheet to reveal '$Text'."
 }
 
-function Get-FirstGridCardNode {
-    param([xml]$Xml)
-
-    $first = @(Get-GridCardSnapshot $Xml 1 | Select-Object -First 1)
-    if ($first.Count -eq 0) {
-        throw "No visible Grid card text was found."
-    }
-
-    return $first[0].Node
-}
-
-function Get-GridCardSnapshot {
-    param(
-        [xml]$Xml,
-        [int]$Limit = 12
-    )
-
-    $chromeTexts = @(
-        "Current location",
-        "Filters",
-        "Online",
-        "Singles",
-        "Linked",
-        "Grid",
-        "Swipe",
-        "Activity",
-        "Messages",
-        "Store",
-        "NEARBY"
-    )
-
-    $candidates = @(
-        foreach ($node in Get-UiTextNodes $Xml) {
-        $text = $node.GetAttribute("text")
-        if ([string]::IsNullOrWhiteSpace($text)) {
-            continue
-        }
-        if ($chromeTexts -contains $text) {
-            continue
-        }
-        if ($text -match "^\s*(<=|≤)?\s*\d+(\.\d+)?\s*(m|km)\s*$") {
-            continue
-        }
-        # Skip the density/context-strip count (a bare integer like "60"); card names are never
-        # purely numeric.
-        if ($text -match "^\s*\d+\s*$") {
-            continue
-        }
-
-        $bounds = Get-Bounds $node
-        # Floor sits below the horizontally-scrolling quick-filter chip row (Top ~348-406), not just
-        # below the app bar. That row grows every time a filter is added — the Trust chips
-        # (Verified / Face photo / Age verified) are the current tail — and any chip left of the
-        # first card sorts ahead of it, so the "first grid card" resolved to a chip. Excluding the
-        # whole band is future-proof where enumerating chip labels in $chromeTexts is not.
-        if ($bounds.Top -lt 420 -or $bounds.Top -gt 2100) {
-            continue
-        }
-
-        [pscustomobject]@{
-            Node = $node
-            Text = $text
-            Top = $bounds.Top
-            Left = $bounds.Left
-            Right = $bounds.Right
-            Bottom = $bounds.Bottom
-        }
-        }
-    )
-
-    @($candidates | Sort-Object Top, Left | Select-Object -First $Limit)
-}
-
-function Assert-GridSnapshotStable {
-    param(
-        [object[]]$Before,
-        [object[]]$After,
-        [string]$Stage,
-        [int]$MinimumCards = 9,
-        [int]$MaxPositionDeltaPx = 8
-    )
-
-    $count = [Math]::Min($Before.Count, $After.Count)
-    if ($count -lt $MinimumCards) {
-        throw "$Stage did not expose enough comparable Grid cards. Before=$($Before.Count) After=$($After.Count)"
-    }
-
-    for ($index = 0; $index -lt $MinimumCards; $index++) {
-        $beforeCard = $Before[$index]
-        $afterCard = $After[$index]
-        if ($beforeCard.Text -ne $afterCard.Text) {
-            throw "$Stage changed Grid card order at position $index. Before='$($beforeCard.Text)' After='$($afterCard.Text)'"
-        }
-
-        $leftDelta = [Math]::Abs([int]$beforeCard.Left - [int]$afterCard.Left)
-        $topDelta = [Math]::Abs([int]$beforeCard.Top - [int]$afterCard.Top)
-        if ($leftDelta -gt $MaxPositionDeltaPx -or $topDelta -gt $MaxPositionDeltaPx) {
-            throw "$Stage moved Grid card '$($beforeCard.Text)' too far. LeftDelta=$leftDelta TopDelta=$topDelta"
-        }
-    }
-}
-
 function Tap-Node {
     param($Node)
 
     $bounds = Get-Bounds $Node
     Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
-}
-
-function Assert-NoAppErrorText {
-    param(
-        [xml]$Xml,
-        [string]$Stage
-    )
-
-    $allText = (Get-VisibleTexts $Xml) -join "`n"
-    $errorPatterns = @(
-        "Illegal input",
-        "NETWORK_ERROR",
-        "Network request failed",
-        "Request failed",
-        "UNAUTHENTICATED",
-        "HTTP_",
-        "Exception"
-    )
-
-    foreach ($pattern in $errorPatterns) {
-        if ($allText.Contains($pattern)) {
-            throw "$Stage displayed app error text matching '$pattern'. Visible text: $allText"
-        }
-    }
-}
-
-function Assert-TextPresent {
-    param(
-        [xml]$Xml,
-        [string]$Text,
-        [string]$Stage
-    )
-
-    if ($null -eq (Find-NodeByText $Xml $Text)) {
-        $visible = (Get-VisibleTexts $Xml) -join " | "
-        throw "$Stage did not show expected text '$Text'. Visible text: $visible"
-    }
 }
 
 function Get-ImageSignature {

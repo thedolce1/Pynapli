@@ -17,6 +17,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Shared UI-hierarchy helpers. These used to be copy-pasted into every QA script, which is
+# how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force
+
 function Find-Adb {
     $command = Get-Command "adb" -ErrorAction SilentlyContinue
     if ($null -ne $command) {
@@ -145,36 +149,6 @@ function Dump-Ui {
     throw "Unable to dump Android UI hierarchy after retries. Last output: $lastDumpOutput"
 }
 
-function Get-VisibleTexts {
-    param([xml]$Xml)
-
-    @($Xml.SelectNodes("//*[@text or @content-desc]")) |
-        ForEach-Object {
-            $text = $_.GetAttribute("text")
-            if ([string]::IsNullOrWhiteSpace($text)) {
-                $text = $_.GetAttribute("content-desc")
-            }
-            $text
-        } |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-        Select-Object -Unique
-}
-
-function Find-NodeByText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    foreach ($node in @($Xml.SelectNodes("//*[@text or @content-desc]"))) {
-        if ($node.GetAttribute("text").Contains($Text) -or $node.GetAttribute("content-desc").Contains($Text)) {
-            return $node
-        }
-    }
-
-    return $null
-}
-
 function Wait-ForAnyText {
     param(
         [string[]]$Texts,
@@ -212,21 +186,6 @@ function Tap-Text {
     $centerY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
     Invoke-Adb @("shell", "input", "tap", "$centerX", "$centerY") | Out-Null
     Write-Host "[tap] '$Text' at $centerX,$centerY"
-}
-
-function Find-NodeByExactText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    foreach ($node in @($Xml.SelectNodes("//*[@text or @content-desc]"))) {
-        if ($node.GetAttribute("text") -eq $Text -or $node.GetAttribute("content-desc") -eq $Text) {
-            return $node
-        }
-    }
-
-    return $null
 }
 
 function Dismiss-NotificationPromptIfPresent {

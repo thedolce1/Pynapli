@@ -15,6 +15,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Shared UI-hierarchy helpers. These used to be copy-pasted into every QA script, which is
+# how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force
+
 try {
     Add-Type -AssemblyName System.Drawing
 } catch {
@@ -144,111 +148,6 @@ function Dump-Ui {
     throw "Unable to dump Android UI hierarchy after retries. Last output: $lastDumpOutput"
 }
 
-function Get-UiTextNodes {
-    param([xml]$Xml)
-
-    @($Xml.SelectNodes("//*[@text or @content-desc]"))
-}
-
-function Get-VisibleTexts {
-    param([xml]$Xml)
-
-    Get-UiTextNodes $Xml |
-        ForEach-Object {
-            $text = $_.GetAttribute("text")
-            if ([string]::IsNullOrWhiteSpace($text)) {
-                $text = $_.GetAttribute("content-desc")
-            }
-            $text
-        } |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-        Select-Object -Unique
-}
-
-function Find-NodeByText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        $nodeText = $node.GetAttribute("text")
-        if ($nodeText.Contains($Text)) { return $node }
-    }
-    foreach ($node in Get-UiTextNodes $Xml) {
-        $nodeDescription = $node.GetAttribute("content-desc")
-        if ($nodeDescription.Contains($Text)) { return $node }
-    }
-    return $null
-}
-
-function Get-Bounds {
-    param($Node)
-
-    $bounds = $Node.GetAttribute("bounds")
-    if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
-        throw "Invalid node bounds: $bounds"
-    }
-
-    return [pscustomobject]@{
-        Left = [int]$Matches[1]
-        Top = [int]$Matches[2]
-        Right = [int]$Matches[3]
-        Bottom = [int]$Matches[4]
-        CenterX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
-        CenterY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
-    }
-}
-
-function Get-ScreenSize {
-    param([xml]$Xml)
-
-    $root = $Xml.SelectSingleNode("/hierarchy/node")
-    if ($null -ne $root) {
-        $bounds = Get-Bounds $root
-        return [pscustomobject]@{ Width = $bounds.Right; Height = $bounds.Bottom }
-    }
-
-    $right = 0
-    $bottom = 0
-    foreach ($node in $Xml.SelectNodes("//*[@bounds]")) {
-        $bounds = Get-Bounds $node
-        if ($bounds.Right -gt $right) { $right = $bounds.Right }
-        if ($bounds.Bottom -gt $bottom) { $bottom = $bounds.Bottom }
-    }
-    if ($right -le 0 -or $bottom -le 0) {
-        throw "Unable to determine Android screen size from UI hierarchy."
-    }
-    return [pscustomobject]@{ Width = $right; Height = $bottom }
-}
-
-function Find-BottomNavNodeByText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    $screen = Get-ScreenSize $Xml
-    $navTop = [int]($screen.Height * 0.82)
-    $matches = @()
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        $nodeText = $node.GetAttribute("text")
-        if ([string]::IsNullOrWhiteSpace($nodeText)) {
-            $nodeText = $node.GetAttribute("content-desc")
-        }
-        if ($nodeText -eq $Text) {
-            $bounds = Get-Bounds $node
-            if ($bounds.CenterY -ge $navTop) {
-                $matches += [pscustomobject]@{ Node = $node; Bounds = $bounds }
-            }
-        }
-    }
-
-    if ($matches.Count -eq 0) { return $null }
-    return ($matches | Sort-Object { $_.Bounds.CenterY } -Descending | Select-Object -First 1).Node
-}
-
 # Exact text match.
 #
 # Find-NodeByText is a substring match, so "Message" also matches the "Messages" nav tab. The nav is
@@ -260,18 +159,6 @@ function Find-BottomNavNodeByText {
 # bottom-nav band here: Find-BottomNavNodeByText's 0.82*height cut works for *finding* the nav (it
 # takes the lowest match) but the composer sits at ~0.823*height, just inside it, so reusing that
 # threshold to *exclude* the nav also excluded the very node we want.
-function Find-NodeByExactText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        if ($node.GetAttribute("text") -eq $Text) { return $node }
-    }
-    return $null
-}
-
 function Wait-ForContentText {
     param(
         [string]$Text,
@@ -281,7 +168,9 @@ function Wait-ForContentText {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
         $xml = Dump-Ui "wait_content"
-        $node = Find-NodeByExactText $xml $Text
+        # -TextOnly: the composer's "Message" must never be satisfied by some other element's
+        # content-desc. This script's local copy had no content-desc pass, so keep that behaviour.
+        $node = Find-NodeByExactText $xml $Text -TextOnly
         if ($null -ne $node) { return [pscustomobject]@{ Xml = $xml; Node = $node } }
         Start-Sleep -Milliseconds 500
     } while ((Get-Date) -lt $deadline)
@@ -355,43 +244,6 @@ function Tap-BottomNavText {
 
     $visible = (Get-VisibleTexts $xml) -join " | "
     throw "Timed out waiting for bottom navigation item '$Text'. Visible text: $visible"
-}
-
-function Assert-TextPresent {
-    param(
-        [xml]$Xml,
-        [string]$Text,
-        [string]$Stage
-    )
-
-    if ($null -eq (Find-NodeByText $Xml $Text)) {
-        $visible = (Get-VisibleTexts $Xml) -join " | "
-        throw "$Stage did not show expected text '$Text'. Visible text: $visible"
-    }
-}
-
-function Assert-NoAppErrorText {
-    param(
-        [xml]$Xml,
-        [string]$Stage
-    )
-
-    $allText = (Get-VisibleTexts $Xml) -join "`n"
-    $errorPatterns = @(
-        "Something went wrong",
-        "Illegal input",
-        "NETWORK_ERROR",
-        "Network request failed",
-        "Request failed",
-        "UNAUTHENTICATED",
-        "HTTP_",
-        "Exception"
-    )
-    foreach ($pattern in $errorPatterns) {
-        if ($allText.Contains($pattern)) {
-            throw "$Stage displayed app error text matching '$pattern'. Visible text: $allText"
-        }
-    }
 }
 
 function Get-ImageSignature {

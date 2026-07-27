@@ -16,6 +16,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Shared UI-hierarchy helpers. These used to be copy-pasted into every QA script, which is
+# how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force
+
 function Find-Adb {
     $command = Get-Command "adb" -ErrorAction SilentlyContinue
     if ($null -ne $command) {
@@ -137,49 +141,6 @@ function Dump-Ui {
         Start-Sleep -Milliseconds 300
     }
     throw "Unable to dump Android UI hierarchy."
-}
-
-function Get-UiTextNodes {
-    param([xml]$Xml)
-
-    @($Xml.SelectNodes("//*[@text or @content-desc]"))
-}
-
-function Find-NodeByText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        $nodeText = $node.GetAttribute("text")
-        if ($nodeText.Contains($Text)) {
-            return $node
-        }
-    }
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        $nodeDescription = $node.GetAttribute("content-desc")
-        if ($nodeDescription.Contains($Text)) {
-            return $node
-        }
-    }
-
-    return $null
-}
-
-function Get-Bounds {
-    param($Node)
-
-    $bounds = $Node.GetAttribute("bounds")
-    if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
-        throw "Invalid node bounds: $bounds"
-    }
-
-    return [pscustomobject]@{
-        CenterX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
-        CenterY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
-    }
 }
 
 function Wait-ForAnyText {

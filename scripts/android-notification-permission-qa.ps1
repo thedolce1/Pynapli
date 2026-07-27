@@ -17,6 +17,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Shared UI-hierarchy helpers. These used to be copy-pasted into every QA script, which is
+# how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force
+
 function Find-Adb {
     $command = Get-Command "adb" -ErrorAction SilentlyContinue
     if ($null -ne $command) {
@@ -159,85 +163,6 @@ function Dump-Ui {
     throw "Unable to dump Android UI hierarchy after retries. Last output: $lastDumpOutput"
 }
 
-function Get-UiTextNodes {
-    param([xml]$Xml)
-
-    @($Xml.SelectNodes("//*[@text or @content-desc]"))
-}
-
-function Get-VisibleTexts {
-    param([xml]$Xml)
-
-    Get-UiTextNodes $Xml |
-        ForEach-Object {
-            $text = $_.GetAttribute("text")
-            if ([string]::IsNullOrWhiteSpace($text)) {
-                $text = $_.GetAttribute("content-desc")
-            }
-            $text
-        } |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-        Select-Object -Unique
-}
-
-function Find-NodeByText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        $nodeText = $node.GetAttribute("text")
-        if ($nodeText.Contains($Text)) {
-            return $node
-        }
-    }
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        $nodeDescription = $node.GetAttribute("content-desc")
-        if ($nodeDescription.Contains($Text)) {
-            return $node
-        }
-    }
-
-    return $null
-}
-
-function Find-NodeByExactText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        if ($node.GetAttribute("text") -eq $Text) {
-            return $node
-        }
-    }
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        if ($node.GetAttribute("content-desc") -eq $Text) {
-            return $node
-        }
-    }
-
-    return $null
-}
-
-function Get-Bounds {
-    param($Node)
-
-    $bounds = $Node.GetAttribute("bounds")
-    if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
-        throw "Invalid node bounds: $bounds"
-    }
-
-    return [pscustomobject]@{
-        CenterX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
-        CenterY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
-    }
-}
-
 function Wait-ForAnyText {
     param(
         [string[]]$Texts,
@@ -294,59 +219,6 @@ function Tap-FirstAvailableText {
     Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
     Write-Host "[tap] '$($wait.Text)' at $($bounds.CenterX),$($bounds.CenterY)"
     return $wait.Text
-}
-
-function Assert-TextPresent {
-    param(
-        [xml]$Xml,
-        [string]$Text,
-        [string]$Stage
-    )
-
-    if ($null -eq (Find-NodeByText $Xml $Text)) {
-        $visible = (Get-VisibleTexts $Xml) -join " | "
-        throw "$Stage did not show expected text '$Text'. Visible text: $visible"
-    }
-}
-
-function Assert-TextAbsent {
-    param(
-        [xml]$Xml,
-        [string]$Text,
-        [string]$Stage
-    )
-
-    if ($null -ne (Find-NodeByText $Xml $Text)) {
-        $visible = (Get-VisibleTexts $Xml) -join " | "
-        throw "$Stage showed forbidden text '$Text'. Visible text: $visible"
-    }
-}
-
-function Assert-NoAppErrorText {
-    param(
-        [xml]$Xml,
-        [string]$Stage
-    )
-
-    $allText = (Get-VisibleTexts $Xml) -join "`n"
-    $allowed = @(
-        "Use current location to load nearby profiles."
-    )
-    $errorPatterns = @(
-        "Illegal input",
-        "NETWORK_ERROR",
-        "Network request failed",
-        "Request failed",
-        "UNAUTHENTICATED",
-        "HTTP_",
-        "Exception"
-    )
-
-    foreach ($pattern in $errorPatterns) {
-        if ($allText.Contains($pattern) -and $allowed -notcontains $pattern) {
-            throw "$Stage displayed app error text matching '$pattern'. Visible text: $allText"
-        }
-    }
 }
 
 function Write-Summary {

@@ -14,6 +14,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Shared UI-hierarchy helpers. These used to be copy-pasted into every QA script, which is
+# how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force
+
 function Find-Adb {
     $command = Get-Command "adb" -ErrorAction SilentlyContinue
     if ($null -ne $command) {
@@ -146,68 +150,6 @@ function Dump-Ui {
     throw "Unable to dump Android UI hierarchy after retries. Last output: $lastDumpOutput"
 }
 
-function Get-UiTextNodes {
-    param([xml]$Xml)
-
-    @($Xml.SelectNodes("//*[@text or @content-desc]"))
-}
-
-function Get-VisibleTexts {
-    param([xml]$Xml)
-
-    Get-UiTextNodes $Xml |
-        ForEach-Object {
-            $text = $_.GetAttribute("text")
-            if ([string]::IsNullOrWhiteSpace($text)) {
-                $text = $_.GetAttribute("content-desc")
-            }
-            $text
-        } |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-        Select-Object -Unique
-}
-
-function Find-NodeByText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        $nodeText = $node.GetAttribute("text")
-        if ($nodeText.Contains($Text)) {
-            return $node
-        }
-    }
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        $nodeDescription = $node.GetAttribute("content-desc")
-        if ($nodeDescription.Contains($Text)) {
-            return $node
-        }
-    }
-
-    return $null
-}
-
-function Get-Bounds {
-    param($Node)
-
-    $bounds = $Node.GetAttribute("bounds")
-    if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
-        throw "Invalid node bounds: $bounds"
-    }
-
-    return [pscustomobject]@{
-        Left = [int]$Matches[1]
-        Top = [int]$Matches[2]
-        Right = [int]$Matches[3]
-        Bottom = [int]$Matches[4]
-        CenterX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
-        CenterY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
-    }
-}
-
 function Get-ScreenHeight {
     param([xml]$Xml)
 
@@ -228,40 +170,6 @@ function Get-ScreenHeight {
         throw "Unable to determine Android screen height from UI hierarchy."
     }
     return $bottom
-}
-
-function Find-BottomNavNodeByText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    $screenHeight = Get-ScreenHeight $Xml
-    $navTop = [int]($screenHeight * 0.82)
-    $matches = @()
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        $nodeText = $node.GetAttribute("text")
-        if ([string]::IsNullOrWhiteSpace($nodeText)) {
-            $nodeText = $node.GetAttribute("content-desc")
-        }
-
-        if ($nodeText -eq $Text) {
-            $bounds = Get-Bounds $node
-            if ($bounds.CenterY -ge $navTop) {
-                $matches += [pscustomobject]@{
-                    Node = $node
-                    Bounds = $bounds
-                }
-            }
-        }
-    }
-
-    if ($matches.Count -eq 0) {
-        return $null
-    }
-
-    return ($matches | Sort-Object { $_.Bounds.CenterY } -Descending | Select-Object -First 1).Node
 }
 
 function Find-NodeByExactContentDescription {
@@ -378,60 +286,6 @@ function Tap-ContentDescription {
 
     $visible = (Get-VisibleTexts $xml) -join " | "
     throw "Timed out waiting for content description '$Description'. Visible text: $visible"
-}
-
-function Assert-TextPresent {
-    param(
-        [xml]$Xml,
-        [string]$Text,
-        [string]$Stage
-    )
-
-    if ($null -eq (Find-NodeByText $Xml $Text)) {
-        $visible = (Get-VisibleTexts $Xml) -join " | "
-        throw "$Stage did not show expected text '$Text'. Visible text: $visible"
-    }
-}
-
-function Assert-TextAbsent {
-    param(
-        [xml]$Xml,
-        [string]$Text,
-        [string]$Stage
-    )
-
-    if ($null -ne (Find-NodeByText $Xml $Text)) {
-        $visible = (Get-VisibleTexts $Xml) -join " | "
-        throw "$Stage showed forbidden text '$Text'. Visible text: $visible"
-    }
-}
-
-function Assert-NoAppErrorText {
-    param(
-        [xml]$Xml,
-        [string]$Stage,
-        [string[]]$AllowedPatterns = @()
-    )
-
-    $allText = (Get-VisibleTexts $Xml) -join "`n"
-    $errorPatterns = @(
-        "Illegal input",
-        "NETWORK_ERROR",
-        "Network request failed",
-        "Request failed",
-        "UNAUTHENTICATED",
-        "HTTP_",
-        "Exception"
-    )
-
-    foreach ($pattern in $errorPatterns) {
-        if ($AllowedPatterns -contains $pattern) {
-            continue
-        }
-        if ($allText.Contains($pattern)) {
-            throw "$Stage displayed app error text matching '$pattern'. Visible text: $allText"
-        }
-    }
 }
 
 function Set-DebugSwipeFailures {

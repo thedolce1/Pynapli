@@ -17,6 +17,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Shared UI-hierarchy helpers. These used to be copy-pasted into every QA script, which is
+# how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force
+
 try {
     Add-Type -AssemblyName System.Drawing
 } catch {
@@ -146,83 +150,6 @@ function Dump-Ui {
     throw "Unable to dump Android UI hierarchy after retries. Last output: $lastDumpOutput"
 }
 
-function Get-UiTextNodes {
-    param([xml]$Xml)
-
-    @($Xml.SelectNodes("//*[@text or @content-desc]"))
-}
-
-function Get-VisibleTexts {
-    param([xml]$Xml)
-
-    Get-UiTextNodes $Xml |
-        ForEach-Object {
-            $text = $_.GetAttribute("text")
-            if ([string]::IsNullOrWhiteSpace($text)) {
-                $text = $_.GetAttribute("content-desc")
-            }
-            $text
-        } |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-        Select-Object -Unique
-}
-
-function Find-NodeByText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        if ($node.GetAttribute("text").Contains($Text)) { return $node }
-    }
-    foreach ($node in Get-UiTextNodes $Xml) {
-        if ($node.GetAttribute("content-desc").Contains($Text)) { return $node }
-    }
-    return $null
-}
-
-function Find-NodeByExactText {
-    param(
-        [xml]$Xml,
-        [string]$Text
-    )
-
-    foreach ($node in Get-UiTextNodes $Xml) {
-        if ($node.GetAttribute("text") -eq $Text) { return $node }
-    }
-    foreach ($node in Get-UiTextNodes $Xml) {
-        if ($node.GetAttribute("content-desc") -eq $Text) { return $node }
-    }
-    return $null
-}
-
-function Get-Bounds {
-    param($Node)
-
-    $bounds = $Node.GetAttribute("bounds")
-    if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
-        throw "Invalid node bounds: $bounds"
-    }
-
-    return [pscustomobject]@{
-        Left = [int]$Matches[1]
-        Top = [int]$Matches[2]
-        Right = [int]$Matches[3]
-        Bottom = [int]$Matches[4]
-        CenterX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
-        CenterY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
-    }
-}
-
-function Get-ScreenSize {
-    param([xml]$Xml)
-
-    $root = $Xml.SelectSingleNode("/hierarchy/node")
-    $bounds = Get-Bounds $root
-    return [pscustomobject]@{ Width = $bounds.Right; Height = $bounds.Bottom }
-}
-
 function Wait-ForAnyText {
     param(
         [string[]]$Texts,
@@ -320,43 +247,6 @@ function Scroll-Until-Text {
 
     $visible = (Get-VisibleTexts (Dump-Ui "scroll_until_fail")) -join " | "
     throw "Timed out scrolling for one of: $($Texts -join ', '). Visible text: $visible"
-}
-
-function Assert-TextPresent {
-    param(
-        [xml]$Xml,
-        [string]$Text,
-        [string]$Stage
-    )
-
-    if ($null -eq (Find-NodeByText $Xml $Text)) {
-        $visible = (Get-VisibleTexts $Xml) -join " | "
-        throw "$Stage did not show expected text '$Text'. Visible text: $visible"
-    }
-}
-
-function Assert-NoAppErrorText {
-    param(
-        [xml]$Xml,
-        [string]$Stage
-    )
-
-    $allText = (Get-VisibleTexts $Xml) -join "`n"
-    $errorPatterns = @(
-        "Something went wrong",
-        "Illegal input",
-        "NETWORK_ERROR",
-        "Network request failed",
-        "Request failed",
-        "UNAUTHENTICATED",
-        "HTTP_",
-        "Exception"
-    )
-    foreach ($pattern in $errorPatterns) {
-        if ($allText.Contains($pattern)) {
-            throw "$Stage displayed app error text matching '$pattern'. Visible text: $allText"
-        }
-    }
 }
 
 function Get-ImageSignature {
