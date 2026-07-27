@@ -209,7 +209,9 @@ function Open-SwipeTab {
 }
 
 function Open-LinkedSwipeCards {
-    Tap-Text "Linked"
+    # Tap-DeckTab, not Tap-Text: "Linked" is also a badge on linked-partner cards, so a substring
+    # tap can hit the card instead of the tab before the tab row settles (see the module comment).
+    Tap-DeckTab "Linked"
     $linkedWait = Wait-ForAnyText @("Maya", "Alex", "Jules", "Rae") 45
     Start-Sleep -Milliseconds 900
     $xml = Dump-Ui "03b_swipe_linked_images" -Keep

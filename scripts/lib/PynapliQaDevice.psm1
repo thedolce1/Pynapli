@@ -318,6 +318,52 @@ function Tap-FirstAvailableText {
     return $wait.Text
 }
 
+<#
+    Tap a Swipe deck tab (For You / Top Picks / Linked) by anchoring to the tab row rather than
+    trusting the first substring match anywhere on screen.
+
+    "Linked" also renders as a badge on linked-partner cards further down the deck, so a plain
+    Tap-Text could tap the CARD when the tab row had not rendered yet. That was a real intermittent
+    failure in android-swipe-qa.ps1: the tap landed at y=852 (a card) instead of y=383 (the tab),
+    opening an unrelated surface, and the run died on "Timed out waiting for one of: Maya, Alex,
+    Jules, Rae".
+
+    "Top Picks" appears only in the tab row, so it defines where that row is; the requested tab is
+    then matched on the same line. This is also a real wait — it polls until the tab row exists,
+    which the old `Wait-ForAnyText @("For You", "Like")` never did, both strings being permanently
+    on screen.
+#>
+function Tap-DeckTab {
+    param(
+        [string]$Text,
+        [int]$TimeoutSeconds = 45,
+        [int]$RowTolerancePx = 40
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $xml = $null
+    do {
+        $xml = Dump-Ui "deck_tab_wait"
+        $anchor = Find-NodeByExactText $xml "Top Picks"
+        if ($null -ne $anchor) {
+            $anchorY = (Get-Bounds $anchor).CenterY
+            foreach ($node in Get-UiTextNodes $xml) {
+                if ($node.GetAttribute("text") -ne $Text) { continue }
+                $bounds = Get-Bounds $node
+                if ([Math]::Abs($bounds.CenterY - $anchorY) -le $RowTolerancePx) {
+                    Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+                    Write-Host "[tap-deck] '$Text' at $($bounds.CenterX),$($bounds.CenterY)"
+                    return
+                }
+            }
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    $visible = if ($null -ne $xml) { (Get-VisibleTexts $xml) -join " | " } else { "<no dump>" }
+    throw "Timed out waiting for the '$Text' deck tab on the tab row. Visible text: $visible"
+}
+
 function Scroll-SheetToText {
     param(
         [string]$Text,
@@ -351,5 +397,6 @@ Export-ModuleMember -Function @(
     "Tap-ExactText",
     "Tap-BottomNavText",
     "Tap-FirstAvailableText",
+    "Tap-DeckTab",
     "Scroll-SheetToText"
 )

@@ -325,6 +325,18 @@ function Open-SwipeTab {
     return $xml
 }
 
+# Tap a deck tab (For You / Top Picks / Linked) by anchoring to the tab row instead of trusting the
+# first substring match anywhere on screen.
+#
+# "Linked" also renders as a badge on linked-partner cards further down the deck, so a plain
+# Tap-Text could tap the CARD whenever the tab row had not rendered yet. That was a real
+# intermittent failure: the tap landed at y=852 (a card) instead of y=383 (the tab), which opened an
+# unrelated surface and the run died on "Timed out waiting for one of: Maya, Alex, Jules, Rae".
+#
+# "Top Picks" appears only in the tab row, so it defines where that row is; the requested tab is then
+# matched on the same line. This also makes the function a real wait — it polls until the tab row
+# exists, which the previous `Wait-ForAnyText @("For You", "Like")` never did, since both of those
+# strings are permanently on screen.
 function Get-MainSwipeSnapshot {
     param([xml]$Xml)
 
@@ -608,7 +620,7 @@ $script:VisualSignatures.travelSheet = Assert-GoldenStage "travelSheet" $travelX
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_BACK") | Out-Null
 Wait-ForAnyText @("For You", "Like") 20 | Out-Null
 
-Tap-Text "Top Picks"
+Tap-DeckTab "Top Picks"
 Wait-ForAnyText @("Today's Top Picks") 45 | Out-Null
 Start-Sleep -Milliseconds 1000
 $topPicksXml = Dump-Ui "05b_swipe_top_picks_deck" -Keep
@@ -618,10 +630,12 @@ Assert-MainSwipeSnapshotPresent $topPicksSnapshot "Top Picks deck"
 $script:Screenshots.topPicksDeck = Save-Screen "05b_swipe_top_picks_deck"
 $script:VisualSignatures.topPicksDeck = Assert-GoldenStage "topPicksDeck" $topPicksXml $script:Screenshots.topPicksDeck
 Write-Host "[ok] Top Picks main Swipe card: $((Get-SnapshotTexts $topPicksSnapshot) -join ', ')"
-Tap-Text "For You"
-Wait-ForAnyText @("For You", "Like") 20 | Out-Null
+Tap-DeckTab "For You"
 
-Tap-Text "Linked"
+# No Wait-ForAnyText @("For You", "Like") here: both strings are permanently on screen, so that
+# "wait" returned instantly and let the next tap fire mid-switch. Tap-DeckTab polls for the tab row
+# itself, and the assertion below waits on partner names, which are real Linked-deck content.
+Tap-DeckTab "Linked"
 Wait-ForAnyText @("Maya", "Alex", "Jules", "Rae") 45 | Out-Null
 Start-Sleep -Milliseconds 1000
 $linkedXml = Dump-Ui "06_swipe_linked_deck" -Keep
