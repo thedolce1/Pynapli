@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Pre-Android-12 (API 23-30) counterpart to data_extraction_rules.xml.
+
+    android:allowBackup="false" already disables backup on these API levels, so this file is not
+    consulted today. It exists so the restrictive posture is declared on both API ranges rather than
+    resting on a single flag: if allowBackup is ever flipped to true, session tokens and the push
+    registration still stay on the device instead of silently starting to sync to Google Drive.
+-->
+<full-backup-content>
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
+</full-backup-content>

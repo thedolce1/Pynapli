@@ -1,6 +1,7 @@
 package com.pynapli.app.notifications
 
 import android.content.Context
+import androidx.core.content.edit
 
 class AndroidPushRegistrationStore(
     context: Context,
@@ -19,21 +20,19 @@ class AndroidPushRegistrationStore(
     }
 
     override fun save(snapshot: PushRegistrationSnapshot) {
-        preferences
-            .edit()
-            .putString(KEY_FINGERPRINT, snapshot.fingerprint)
-            .putString(KEY_PLATFORM, snapshot.platform)
-            .putString(KEY_DEVICE_TOKEN, snapshot.deviceToken)
-            .apply()
+        preferences.edit {
+            putString(KEY_FINGERPRINT, snapshot.fingerprint)
+            putString(KEY_PLATFORM, snapshot.platform)
+            putString(KEY_DEVICE_TOKEN, snapshot.deviceToken)
+        }
     }
 
     override fun clear() {
-        preferences
-            .edit()
-            .remove(KEY_FINGERPRINT)
-            .remove(KEY_PLATFORM)
-            .remove(KEY_DEVICE_TOKEN)
-            .apply()
+        preferences.edit {
+            remove(KEY_FINGERPRINT)
+            remove(KEY_PLATFORM)
+            remove(KEY_DEVICE_TOKEN)
+        }
     }
 
     companion object {

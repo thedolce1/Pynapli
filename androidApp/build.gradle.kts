@@ -28,6 +28,13 @@ fun stringProperty(
 
 fun buildConfigString(value: String): String = "\"${value.trim().replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
+// Release signing is supplied at build time, never committed. Set these in ~/.gradle/gradle.properties,
+// local.properties, or as -P flags / env vars in the release workflow. When the keystore is absent
+// (every contributor build, CI, and any local `assembleRelease`) the release variant simply builds
+// unsigned instead of failing, so the release path stays continuously verifiable.
+val releaseKeystorePath: String? = stringProperty("pynapli.android.releaseKeystore", "").takeIf { it.isNotBlank() }
+val releaseKeystore: File? = releaseKeystorePath?.let { rootProject.file(it) }?.takeIf { it.exists() }
+
 android {
     namespace = "com.pynapli.app"
     compileSdk = 36
@@ -36,12 +43,38 @@ android {
         applicationId = "com.pynapli.app"
         minSdk = 23
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Overridable so a release build can stamp the Play versionCode from CI without a commit:
+        // -Ppynapli.android.versionCode=42 -Ppynapli.android.versionName=1.0.0
+        versionCode = stringProperty("pynapli.android.versionCode", "1").toInt()
+        versionName = stringProperty("pynapli.android.versionName", "0.1.0")
     }
 
     buildFeatures {
         buildConfig = true
+    }
+
+    lint {
+        // Lint runs in the verify gates and in CI. Warnings stay visible but only errors stop a
+        // build, so a new NewApi/security error fails fast instead of surfacing at release time.
+        abortOnError = true
+        warningsAsErrors = false
+        checkReleaseBuilds = true
+        // OldTargetApi nags to raise targetSdk to the newest API (37). The version policy in
+        // CLAUDE.md is stable-releases-only and targetSdk deliberately tracks stable platforms, so
+        // this one is answered by policy rather than by a bump. GradleDependency stays ON — it also
+        // reports genuinely stale third-party deps, which is signal worth keeping.
+        disable += "OldTargetApi"
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = stringProperty("pynapli.android.releaseKeystorePassword", "")
+                keyAlias = stringProperty("pynapli.android.releaseKeyAlias", "")
+                keyPassword = stringProperty("pynapli.android.releaseKeyPassword", "")
+            }
+        }
     }
 
     buildTypes {
@@ -105,6 +138,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 }
@@ -121,6 +155,7 @@ kotlin {
         implementation(projects.shared)
         implementation(libs.androidx.activity.compose)
         implementation(libs.androidx.fragment)
+        implementation(libs.androidx.core.ktx)
         implementation(platform(libs.firebase.bom))
         implementation(libs.firebase.messaging)
         implementation(libs.firebase.crashlytics)

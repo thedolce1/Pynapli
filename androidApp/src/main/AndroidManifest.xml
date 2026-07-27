@@ -11,18 +11,32 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="Pynapli"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:theme="@style/PynapliTheme">
+        <!--
+            No android:usesCleartextTraffic here. Release and staging both talk to https/wss hosts,
+            so permitting plaintext would only widen the app to downgrade/MITM. The emulator's
+            http://10.0.2.2:8080 loopback is the sole cleartext need, so the flag lives in
+            src/debug/AndroidManifest.xml and is merged into debug builds only.
+        -->
         <!--
             MainActivity no longer carries the LAUNCHER filter directly. The home-screen entry is one
             of two activity-aliases so the user can disguise the app: the default Pynapli icon, or a
             discreet (calculator) icon. Exactly one alias is enabled at a time via AppIconService
             (PackageManager.setComponentEnabledSetting). The default alias is enabled at install; the
             discreet alias is disabled. Both launch MainActivity.
+
+            Not exported, because those aliases are the only entry points another app should be able
+            to start — an alias can be exported while its targetActivity is not. Note this also means
+            `adb shell am start -n com.pynapli.app/.MainActivity` is refused (the shell user cannot
+            start a non-exported component), so scripts/android-*-qa.ps1 launch
+            .DefaultLauncherAlias instead. Own-process PendingIntents (notification deep links) are
+            unaffected.
         -->
         <activity
             android:name=".MainActivity"
-            android:exported="true"
+            android:exported="false"
             android:launchMode="singleTop" />
 
         <activity-alias

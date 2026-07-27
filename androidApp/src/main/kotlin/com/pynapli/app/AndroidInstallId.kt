@@ -1,6 +1,7 @@
 package com.pynapli.app
 
 import android.content.Context
+import androidx.core.content.edit
 import java.util.UUID
 
 /**
@@ -16,7 +17,7 @@ internal fun stableInstallId(context: Context): String {
     val prefs = context.getSharedPreferences(INSTALL_PREFS, Context.MODE_PRIVATE)
     prefs.getString(KEY_INSTALL_ID, null)?.let { return it }
     val id = UUID.randomUUID().toString()
-    prefs.edit().putString(KEY_INSTALL_ID, id).apply()
+    prefs.edit { putString(KEY_INSTALL_ID, id) }
     return id
 }
 

@@ -27,8 +27,8 @@ Build / test (Gradle wrapper):
 .\gradlew.bat :server:run                             # run Ktor server on :8080
 .\gradlew.bat :shared:jvmTest --tests "FullyQualifiedTestClass.testName"   # single test
 .\scripts\verify-fast.ps1                             # tooling check + docker up + Spotless + shared JVM + server tests
-.\scripts\verify-android.ps1                          # Android policy check + shared/Compose host tests + debug APK
-.\scripts\verify-full.ps1                             # full local gate; verify.ps1 is a compatibility alias
+.\scripts\verify-android.ps1                          # Android policy check + shared/Compose host tests + debug APK + release lint
+.\scripts\verify-full.ps1                             # full local gate (incl. release lint + minified release APK); verify.ps1 is a compatibility alias
 .\scripts\verify-web.ps1                              # web gate: spotless + wasm compile (:shared/:composeApp/:webApp) + shared JVM tests
 .\gradlew.bat :webApp:wasmJsBrowserDevelopmentRun     # web PWA dev server on :8081 (Ktor API stays on :8080)
 ```
@@ -59,7 +59,7 @@ Health checks: `GET http://localhost:8080/health` (process), `GET http://localho
 
 ### Module ownership (enforced — see `docs/PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md`)
 
-- `:shared` — KMP product logic, DTOs, repository interfaces, Ktor *client*, validation, state holders, SQLDelight schema, `expect/actual` platform abstractions. Targets: `jvm`, `android` (`com.android.kotlin.multiplatform.library`), `iosX64`, `iosArm64`, `iosSimulatorArm64`. SQLDelight database `PynapliDatabase` lives in package `com.pynapli.shared.storage`. **Must not** contain Firebase/StoreKit/Play-Billing/raw OS calls — those are platform-specific.
+- `:shared` — KMP product logic, DTOs, repository interfaces, Ktor *client*, validation, state holders, SQLDelight schema, `expect/actual` platform abstractions. Targets: `jvm`, `android` (`com.android.kotlin.multiplatform.library`), `iosArm64`, `iosSimulatorArm64`, `wasmJs`. (No `iosX64`: Compose Multiplatform 1.11 stopped publishing Intel-simulator artifacts.) SQLDelight database `PynapliDatabase` lives in package `com.pynapli.shared.storage`. **Must not** contain Firebase/StoreKit/Play-Billing/raw OS calls — those are platform-specific.
 - `:composeApp` — Shared Compose UI (Android + iOS framework `PynapliCompose`, static). Screens consume UI state + callbacks; state holders live in `:shared` unless platform constraints force otherwise. **Screens must not call Ktor directly.**
 - `:androidApp` — `com.android.application` (`com.pynapli.app`, minSdk 23, compileSdk 36, targetSdk 36, JVM target 17). Owns `AndroidManifest`, `Application`, `Activity`, resources only. **Do not** collapse the Android entry point into the KMP library modules.
 - `:server` — Ktor/Netty (`com.pynapli.server.ApplicationKt`). Postgres + PostGIS via JDBC + HikariCP, Flyway migrations, Lettuce Redis. Tests use Testcontainers + Kotest + MockK.
@@ -98,7 +98,7 @@ Versioned under `/v1/`: `auth/email/{signup,login}`, `auth/{refresh,logout}`, `m
 - **Use stable releases only.** No alpha/beta/RC/EAP/dev/preview versions without a written reason.
 - All external versions live in `gradle/libs.versions.toml`. Module build files reference catalog aliases — no inline version strings.
 - Internal deps use type-safe project accessors (`projects.shared`, `projects.composeApp`); `TYPESAFE_PROJECT_ACCESSORS` is enabled.
-- Current baseline: Kotlin 2.3.21, Compose Multiplatform 1.11.0 (bumped from 1.10.3 on 2026-07-03: 1.10.3's wasm target dropped clicks inside scrollable containers — grid tiles, pills, list rows; 1.11.0's reworked web pointer processing fixes it), AGP 9.1.1, Ktor 3.4.3, Gradle 9.4.1, JDK 17, SQLDelight 2.3.2, Coil 3.4.0, Koin 4.2.1, Firebase BoM 34.12.0, Play Billing 8.3.0, Postgres JDBC 42.7.10, Flyway 12.4.0, Lettuce 7.5.1, Kotest 6.1.11.
+- Current baseline: Kotlin 2.3.21, Compose Multiplatform 1.11.0 (bumped from 1.10.3 on 2026-07-03: 1.10.3's wasm target dropped clicks inside scrollable containers — grid tiles, pills, list rows; 1.11.0's reworked web pointer processing fixes it), AGP 9.2.1, Ktor 3.4.3, Gradle 9.4.1, JDK 17, SQLDelight 2.3.2, Coil 3.4.0, Koin 4.2.1, Firebase BoM 34.12.0, Play Billing 8.3.0, Postgres JDBC 42.7.10, Flyway 12.4.0, Lettuce 7.5.1, Kotest 6.1.11.
 - Android `minSdk = 23` (driven by Firebase 34.x requirements, not Compose). iOS minimum is 13.
 - **Verify dependency / Gradle plugin / Compose API / Ktor API / Firebase / StoreKit / Play Billing suggestions against official docs before treating them as correct.** Official references win over AI memory or community posts on conflict.
 

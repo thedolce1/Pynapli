@@ -41,16 +41,13 @@
         "Who",
         "Gender",
         "Orientation",
-        "Trust",
         "Online now",
         "Available tonight",
         "Singles",
         "Linked",
-        "Partnered",
-        "Verified",
-        "Face photo",
-        "Age verified"
+        "Partnered"
       ],
+      "_note": "Trust and its chips (Verified / Face photo / Age verified) are deliberately NOT here: they render past the fold at sheet open now that Who/Gender/Orientation exist, so this stage can only assert what is actually on screen. The script asserts them after Scroll-SheetToText 'Trust' instead — coverage moved, not dropped.",
       "forbiddenTexts": [
         "Illegal input",
         "NETWORK_ERROR",

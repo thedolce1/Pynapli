@@ -3,7 +3,12 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <!--
+            No android:windowLightNavigationBar here: it is API 27+ and minSdk is 23, so declaring
+            it in the base theme fails lint (NewApi) and breaks the release build. The value we
+            want is `false` (dark nav bar, light icons — the app is dark-first), which is already
+            the platform default on every API level, so there is nothing to restate.
+        -->
     </style>
 </resources>
 
