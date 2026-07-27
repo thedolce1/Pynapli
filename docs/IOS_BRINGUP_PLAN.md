@@ -106,6 +106,13 @@ struct ComposeRoot: UIViewControllerRepresentable {
     }
     func updateUIViewController(_ vc: UIViewController, context: Context) {}
 }
+
+// REQUIRED, not optional. Android fails its build if MainActivity.onStop does not cancel the
+// presence/activity streams (scripts/android-location-policy-check.ps1). iOS has no such gate, so
+// wire this explicitly or the sockets run in the background and churn on resume.
+.onChange(of: scenePhase) { phase in
+    phase == .active ? state.graph.startRealtime() : state.graph.stopRealtime()
+}
 ```
 
 Note the Kotlin object maps to `IosPynapliEntry()` in Swift, and default arguments do not cross the

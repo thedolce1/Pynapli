@@ -1,6 +1,7 @@
 package com.pynapli.app.notifications
 
 import platform.Foundation.NSUserDefaults
+import kotlin.concurrent.AtomicReference
 
 /**
  * APNs token holder. Swift sets this from
@@ -14,14 +15,20 @@ import platform.Foundation.NSUserDefaults
  * STATUS: type-checked on Windows, never run. See docs/IOS_BRINGUP_PLAN.md.
  */
 class IosPushTokenProvider : PushTokenProvider {
-    private var token: String? = null
+    /**
+     * Atomic, not a plain `var`: Swift writes this from an APNs delegate callback while the
+     * registration coroutine reads it, and on Kotlin/Native that is a genuine data race rather than
+     * a theoretical one. Android has no equivalent because it asks FCM for the token on each call
+     * instead of caching a mutable field.
+     */
+    private val token = AtomicReference<String?>(null)
 
     /** Called from Swift with the hex-encoded APNs device token. */
     fun updateToken(deviceToken: String?) {
-        token = deviceToken?.trim()?.takeIf { it.isNotEmpty() }
+        token.value = deviceToken?.trim()?.takeIf { it.isNotEmpty() }
     }
 
-    override suspend fun currentToken(): String? = token
+    override suspend fun currentToken(): String? = token.value
 }
 
 /**

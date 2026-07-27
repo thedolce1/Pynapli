@@ -16,6 +16,7 @@ import com.pynapli.shared.auth.SessionInvalidationBus
 import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.core.config.PynapliConfig
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
 import com.pynapli.shared.network.SessionRefresherHolder
@@ -26,6 +27,11 @@ import com.pynapli.shared.network.buildIosPsyncStreamClient
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.storage.IosPynapliDatabaseFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 
 /**
@@ -163,4 +169,42 @@ class IosAppGraph(
     val gridPresenceStreamCoordinator get() = common.gridPresenceStreamCoordinator
     val activityRealtimeCoordinator get() = common.activityRealtimeCoordinator
     val messagesRealtimeCoordinator get() = common.messagesRealtimeCoordinator
+
+    private val realtimeScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var realtimeJobs: List<Job> = emptyList()
+
+    /**
+     * Start the realtime convenience streams. Call from `applicationDidBecomeActive` (or SwiftUI
+     * `scenePhase == .active`).
+     *
+     * This exists as an explicit pair with [stopRealtime] because Android does not leave it to
+     * chance: `scripts/android-location-policy-check.ps1` FAILS THE BUILD if `MainActivity.onStop`
+     * does not cancel the presence stream, the activity stream, and any pending location request.
+     * iOS has no equivalent gate, so the requirement is encoded in the API shape instead — sockets
+     * left running in the background burn battery and reconnect-churn on resume.
+     *
+     * Idempotent, and main-thread only: iOS lifecycle callbacks are delivered on the main thread and
+     * [realtimeJobs] is not synchronised.
+     */
+    fun startRealtime() {
+        if (realtimeJobs.isNotEmpty()) return
+        realtimeJobs =
+            listOf(
+                realtimeScope.launch { runCatchingCancellable { common.gridPresenceStreamCoordinator.run() } },
+                realtimeScope.launch { runCatchingCancellable { common.activityRealtimeCoordinator.run() } },
+                realtimeScope.launch { runCatchingCancellable { common.messagesRealtimeCoordinator.run() } },
+            )
+    }
+
+    /**
+     * Stop them again. Call from `applicationDidEnterBackground` (or `scenePhase != .active`).
+     *
+     * HTTP stays canonical, so nothing is lost by dropping the sockets — the surfaces refetch on
+     * resume. That is the same contract Android relies on in `onStop` and the web shell in its
+     * `visibilitychange` handler.
+     */
+    fun stopRealtime() {
+        realtimeJobs.forEach { it.cancel() }
+        realtimeJobs = emptyList()
+    }
 }
