@@ -129,6 +129,28 @@ reporting. This phase is the hard gate to submission and is mostly codeable.
 | H2 | 🔵 | **Real-device QA matrix** — mid-range Android + older supported device: grid battery/location profile, Playing Tonight battery + push delivery, low-network paths, notification delivery. Harnesses exist; need a physical device. | TESTING |
 | H3 | 🔵🟢 | **Store submission** — Play Console listing, app-store-safe screenshots + copy, **Data Safety form**, content rating, signing/release track (internal → closed → production). | DEVOPS, MODERATION, LAUNCH_STRATEGY |
 
+### API-level coverage (added 2026-07-27)
+
+All 14 `android-*-qa.ps1` scripts run on `Pynapli_Phone`, an **android-36** AVD. `minSdk` is 23, so
+until now the entire API 23–34 range was shipped without ever being launched — and that is exactly
+the range where platform behaviour differs, because edge-to-edge is automatic only on API 35+.
+
+That blind spot hid a real defect: `MainActivity` never called `enableEdgeToEdge()`, so on API ≤34
+the system drew its own opaque `#000000` bars instead of the app's `#0B0B0E` background. Measured on
+a fresh android-34 AVD, before and after the one-line fix:
+
+| Region | Before | After | API 36 |
+|---|---|---|---|
+| Status bar | `(0,0,0)` | `(11,11,14)` | `(11,11,14)` |
+| Below nav bar | `(0,0,0)` | `(11,11,14)` | `(11,11,14)` |
+
+`(11,11,14)` is `#0B0B0E`, the handoff `Background` token — so the two API levels now agree.
+
+A second AVD, **`Pynapli_API34`** (`system-images;android-34;google_apis;x86_64`, pixel_6), now
+exists locally for this. It is not yet wired into the QA scripts; doing so — or at minimum running
+`android-e2e-qa.ps1` against both AVDs before a release — is the durable fix, since a single-API
+suite cannot catch a whole class of platform-behaviour regressions. Worth folding into **H2**.
+
 ---
 
 ## Sequencing & optimization rationale

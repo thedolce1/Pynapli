@@ -53,6 +53,18 @@ android {
         buildConfig = true
     }
 
+    // Java 17, to actually match :shared and :composeApp rather than only claiming to.
+    //
+    // Without this block AGP defaults the Java target to 11 and the Kotlin jvmTarget is derived from
+    // it, silently overriding the JVM_17 set in the kotlin {} block further down. The mismatch is
+    // invisible until this module inlines an `inline fun` from a JVM-17 module, which it had never
+    // done before — at which point the compiler stops with "Cannot inline bytecode built with JVM
+    // target 17 into bytecode that is being built with JVM target 11".
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
     lint {
         // Lint runs in the verify gates and in CI. Warnings stay visible but only errors stop a
         // build, so a new NewApi/security error fails fast instead of surfacing at release time.

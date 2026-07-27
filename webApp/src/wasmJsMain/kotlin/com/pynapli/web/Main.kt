@@ -13,6 +13,7 @@ import com.pynapli.app.PynapliAppGraph
 import com.pynapli.app.PynapliPlatform
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.web.platform.onDocumentVisible
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
@@ -39,9 +40,16 @@ fun main() {
 
     // Realtime convenience deltas (WEB_PWA_GAMEPLAN.md W3.2). The clients wait for a
     // session token with backoff, so starting at boot is safe pre-login.
-    appScope.launch { runCatching { graph.gridPresenceStreamCoordinator.run() } }
-    appScope.launch { runCatching { graph.activityRealtimeCoordinator.run() } }
-    appScope.launch { runCatching { graph.messagesRealtimeCoordinator.run() } }
+    //
+    // Unlike Android and iOS, these are never stopped: a hidden browser tab keeps its socket, and
+    // the shell has no teardown hook. That is a deliberate difference, not a gap — but it does mean
+    // a backgrounded tab still holds a presence connection, so revisit it if presence counts or
+    // socket load look inflated on web. runCatchingCancellable for the same reason as the other two
+    // shells: appScope is app-lifetime today, and a swallowed cancellation would be a silent trap
+    // the moment that stops being true.
+    appScope.launch { runCatchingCancellable { graph.gridPresenceStreamCoordinator.run() } }
+    appScope.launch { runCatchingCancellable { graph.activityRealtimeCoordinator.run() } }
+    appScope.launch { runCatchingCancellable { graph.messagesRealtimeCoordinator.run() } }
 
     // Tab wake: HTTP stays canonical, so returning to a backgrounded tab refetches
     // state the throttled socket may have missed (the stream clients reconnect on

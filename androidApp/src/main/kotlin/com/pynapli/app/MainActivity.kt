@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
@@ -16,7 +17,9 @@ import android.os.Bundle
 import android.os.CancellationSignal
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +29,7 @@ import com.pynapli.app.location.GridLocationRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.PickedMediaForUpload
 import com.pynapli.app.notifications.PynapliNotificationDeepLinks
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -80,6 +84,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge-to-edge on EVERY API level, not just the ones we happen to test on.
+        //
+        // targetSdk 36 means Android 15+ (API 35+) draws this app edge-to-edge automatically and the
+        // Android 16 opt-out is ignored, so the Compose UI is written for it — statusBarsPadding()
+        // and navigationBarsPadding() across ~15 screens. But per Android's edge-to-edge guide, on
+        // "Android 14 (API level 34) and lower, your app's UI does not draw underneath the system
+        // bars and display cutouts by default"; that only happens if enableEdgeToEdge() asks for it.
+        // minSdk is 23, so without this call the whole API 23-34 range renders differently from the
+        // range we ship against — and every android-*-qa.ps1 script runs on an android-36 AVD, which
+        // is precisely the one API level where the difference cannot show up.
+        //
+        // Forced dark rather than the default auto(): SystemBarStyle.auto picks system-bar icon
+        // colours from the SYSTEM theme, but Pynapli is dark-first and unconditionally paints
+        // #0B0B0E behind them. On a device in light mode auto() would choose dark icons over a
+        // near-black background. This matches the intent already stated by windowLightStatusBar
+        // = false in styles.xml.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
         // Build the DI graph off the main thread so onCreate doesn't block the first frame on
         // SQLDelight open + Ktor client creation + ~25 state holders. The boot splash shows until
         // the graph is ready, then the real app swaps in; any cold-launch deep link is replayed.
@@ -168,23 +192,28 @@ class MainActivity : ComponentActivity() {
         activityScope.launch { syncPushRegistrationNow() }
     }
 
+    // runCatchingCancellable, not runCatching: onStop() cancels all three of these jobs, and plain
+    // runCatching catches the resulting CancellationException and returns normally — swallowing the
+    // very signal that is supposed to unwind the coroutine. These are the sites where it matters
+    // most (an actual lifecycle cancellation, twice per app switch), and they were the ones the
+    // original sweep missed.
     private fun startRealtimeStreams(graph: AndroidAppGraph) {
         if (presenceStreamJob?.isActive != true) {
             presenceStreamJob =
                 activityScope.launch {
-                    runCatching { graph.gridPresenceStreamCoordinator.run() }
+                    runCatchingCancellable { graph.gridPresenceStreamCoordinator.run() }
                 }
         }
         if (activityStreamJob?.isActive != true) {
             activityStreamJob =
                 activityScope.launch {
-                    runCatching { graph.activityRealtimeCoordinator.run() }
+                    runCatchingCancellable { graph.activityRealtimeCoordinator.run() }
                 }
         }
         if (messageStreamJob?.isActive != true) {
             messageStreamJob =
                 activityScope.launch {
-                    runCatching { graph.messagesRealtimeCoordinator.run() }
+                    runCatchingCancellable { graph.messagesRealtimeCoordinator.run() }
                 }
         }
     }

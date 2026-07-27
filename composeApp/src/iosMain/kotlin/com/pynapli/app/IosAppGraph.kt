@@ -207,8 +207,11 @@ class IosAppGraph(
      * Stop them again. Call from `applicationDidEnterBackground` (or `scenePhase != .active`).
      *
      * HTTP stays canonical, so nothing is lost by dropping the sockets — the surfaces refetch on
-     * resume. That is the same contract Android relies on in `onStop` and the web shell in its
-     * `visibilitychange` handler.
+     * resume. That is the same contract Android relies on in `MainActivity.onStop`.
+     *
+     * Web deliberately does NOT do this: its `visibilitychange` handler only refetches when the tab
+     * becomes visible again, and the three coordinators run for the life of the page. A browser tab
+     * is not a backgrounded app — there is no battery gate and no OS teardown — so the socket stays.
      */
     fun stopRealtime() {
         realtimeJobs.forEach { it.cancel() }
