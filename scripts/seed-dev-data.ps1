@@ -1,7 +1,9 @@
 param(
     [string]$BaseUrl = "http://localhost:8080",
     [string]$Password = "PynapliDevPass123!",
-    [switch]$SetAndroidEmulatorLocation
+    [switch]$SetAndroidEmulatorLocation,
+    # Which emulator -SetAndroidEmulatorLocation targets. Required once more than one is running.
+    [string]$DeviceId = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -846,8 +848,24 @@ Assert-Success -Response $grid -Action "Viewer grid query"
 if ($SetAndroidEmulatorLocation) {
     $adb = Join-Path $env:LOCALAPPDATA "Android\Sdk\platform-tools\adb.exe"
     if (Test-Path $adb) {
-        & $adb emu geo fix $viewerLongitude $viewerLatitude | Out-Null
-        Write-Host "  [ok] Android emulator location set near seeded profiles."
+        # -s matters: with two AVDs running (android-36 + android-34, see the QA matrix) a bare
+        # `adb emu geo fix` dies with "more than one emulator detected" and the viewer keeps whatever
+        # location it had. Every distance-dependent assertion downstream — grid distances, the Linked
+        # deck — then fails for a reason that looks nothing like the real cause.
+        $geoArgs = @()
+        if (-not [string]::IsNullOrWhiteSpace($DeviceId)) { $geoArgs += @("-s", $DeviceId) }
+        $geoArgs += @("emu", "geo", "fix", $viewerLongitude, $viewerLatitude)
+        $geoOutput = (& $adb @geoArgs 2>&1 | Out-String).Trim()
+
+        # This used to print [ok] unconditionally, so a failed geo fix reported success and the
+        # broken run was blamed on the app. Trust the exit code, and adb's habit of printing
+        # "error:" while still exiting 0.
+        if ($LASTEXITCODE -ne 0 -or $geoOutput -match "error:") {
+            throw "Failed to set the Android emulator location$(if ($DeviceId) { " on $DeviceId" }). " +
+                  "adb said: $geoOutput`n" +
+                  "If several emulators are running, pass -DeviceId (scripts\android-qa-matrix.ps1 does this for you)."
+        }
+        Write-Host "  [ok] Android emulator location set near seeded profiles$(if ($DeviceId) { " ($DeviceId)" })."
     } else {
         Write-Host "  [skip] Android SDK adb was not found."
     }

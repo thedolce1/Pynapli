@@ -118,7 +118,7 @@ if (-not $SkipSeed) {
     Write-Host "[step] Seeding dev data (incl. live Playing Tonight sessions) and emulator location when applicable"
     $seedArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".\scripts\seed-dev-data.ps1", "-BaseUrl", $BaseUrl)
     if ($deviceInfo.isEmulator) {
-        $seedArgs += "-SetAndroidEmulatorLocation"
+        $seedArgs += @("-SetAndroidEmulatorLocation", "-DeviceId", $script:DeviceId)
     }
     & pwsh @seedArgs
     if ($LASTEXITCODE -ne 0) {

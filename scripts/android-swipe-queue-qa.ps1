@@ -270,7 +270,7 @@ try {
 
 if (-not $SkipSeed) {
     Write-Host "[step] Seeding dev data and emulator location"
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File ".\scripts\seed-dev-data.ps1" -BaseUrl $BaseUrl -SetAndroidEmulatorLocation
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File ".\scripts\seed-dev-data.ps1" -BaseUrl $BaseUrl -SetAndroidEmulatorLocation -DeviceId $script:DeviceId
     if ($LASTEXITCODE -ne 0) {
         throw "Dev data seed failed."
     }

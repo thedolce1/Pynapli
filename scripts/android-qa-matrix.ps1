@@ -24,6 +24,11 @@ param(
     [string]$PackageName = "com.pynapli.app",
     [switch]$SkipBuild,
     [switch]$SkipSeed,
+    # Opt-in speed-up. OFF by default on purpose: several scripts consume seeded state (swipe decks,
+    # activity events), and the sweep pattern that is known to get all 14 surfaces green re-seeds per
+    # script. Seeding once and skipping the rest would trade ~15s/script for failures that look like
+    # platform bugs but are exhausted fixtures.
+    [switch]$SeedOnce,
     [switch]$ColdBoot,
     [switch]$KeepEmulators,
     [int]$BootTimeoutSeconds = 420
@@ -131,6 +136,8 @@ if (-not $SkipBuild) {
 
 $results = @()
 $startedByUs = @()
+# $seeded means "a later script should be told to skip seeding". Only ever becomes true when the
+# caller asked for it; otherwise every script seeds itself, as the known-good sweep does.
 $seeded = $SkipSeed.IsPresent
 
 foreach ($avdName in $Avd) {
@@ -153,7 +160,6 @@ foreach ($avdName in $Avd) {
         $supported = (Get-Command $scriptPath).Parameters
         $arguments = @{ DeviceId = $device.Serial; BaseUrl = $BaseUrl }
         if ($supported.ContainsKey("SkipBuild")) { $arguments["SkipBuild"] = $true }
-        # Seeding writes server-side Postgres, so it is shared by every AVD: do it once, then skip.
         if ($seeded -and $supported.ContainsKey("SkipSeed")) { $arguments["SkipSeed"] = $true }
 
         Write-Host "  -> $qaScript on API $apiLevel" -ForegroundColor Yellow
@@ -168,7 +174,7 @@ foreach ($avdName in $Avd) {
             $detail = $_.Exception.Message
             Write-Host "     FAIL: $detail" -ForegroundColor Red
         }
-        $seeded = $true
+        if ($SeedOnce) { $seeded = $true }
 
         $results += [pscustomobject]@{
             Avd      = $avdName
@@ -178,6 +184,17 @@ foreach ($avdName in $Avd) {
             Seconds  = [int]((Get-Date) - $started).TotalSeconds
             Detail   = $detail
         }
+    }
+
+    # Shut this AVD down before starting the next, rather than at the very end. Two emulators up at
+    # once is not just RAM: any tooling that calls adb without -s dies with "more than one emulator
+    # detected", and seed-dev-data.ps1's geo fix did exactly that — silently leaving the viewer's
+    # location unset, which fails distance-dependent surfaces for a reason that looks like an app
+    # bug. That is fixed, but one emulator at a time keeps the next device-blind tool from biting.
+    if ($device.Started -and -not $KeepEmulators) {
+        Write-Host "  shutting down $avdName before the next AVD"
+        & $adb -s $device.Serial emu kill *> $null
+        Start-Sleep -Seconds 5
     }
 }
 

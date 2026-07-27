@@ -209,7 +209,7 @@ Write-Host "[ok] Ktor health: $BaseUrl/health/deep"
 
 if (-not $SkipSeed) {
     Write-Host "[step] Seeding dev data"
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File ".\scripts\seed-dev-data.ps1" -BaseUrl $BaseUrl -SetAndroidEmulatorLocation
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File ".\scripts\seed-dev-data.ps1" -BaseUrl $BaseUrl -SetAndroidEmulatorLocation -DeviceId $script:DeviceId
     if ($LASTEXITCODE -ne 0) {
         throw "Dev data seed failed."
     }
