@@ -304,7 +304,12 @@ function Get-GridCardSnapshot {
         }
 
         $bounds = Get-Bounds $node
-        if ($bounds.Top -lt 340 -or $bounds.Top -gt 2100) {
+        # Floor sits below the horizontally-scrolling quick-filter chip row (Top ~348-406), not just
+        # below the app bar. That row grows every time a filter is added — the Trust chips
+        # (Verified / Face photo / Age verified) are the current tail — and any chip left of the
+        # first card sorts ahead of it, so the "first grid card" resolved to a chip. Excluding the
+        # whole band is future-proof where enumerating chip labels in $chromeTexts is not.
+        if ($bounds.Top -lt 420 -or $bounds.Top -gt 2100) {
             continue
         }
 
@@ -641,13 +646,23 @@ Wait-ForAnyText @("Distance") | Out-Null
 $filterSheetXml = Dump-Ui "03_filters_sheet" -Keep
 Assert-NoAppErrorText $filterSheetXml "Filter sheet"
 Assert-TextPresent $filterSheetXml "Presence" "Filter sheet"
-Assert-TextPresent $filterSheetXml "Trust" "Filter sheet"
 $filterSheetShot = Save-Screen "03_filters_sheet"
 $filterSheetSignature = Assert-GoldenStage "filtersSheet" $filterSheetXml $filterSheetShot
 
-# The profile-filter coherence work inserted Who/Gender/Orientation sections, so the Intent section
-# and its chips now render below the fold at sheet open. Scroll to the deepest one ("Together", an
-# Intent chip) and assert it — reaching it proves the Intent section rendered.
+# Sections below Presence render past the fold at sheet open, and the fold keeps moving up as
+# filters are added (Who/Gender/Orientation from the profile-filter coherence work, then Photos and
+# the tonight/travel presence chips). So assert them by scrolling rather than off the initial dump —
+# otherwise every new filter silently invalidates this stage. Order matters: Trust sits above Intent
+# in the sheet, so reach it first, then continue down to the deepest Intent chip ("Together").
+$filterSheetTrustXml = Scroll-SheetToText "Trust"
+Assert-NoAppErrorText $filterSheetTrustXml "Filter sheet (trust)"
+Assert-TextPresent $filterSheetTrustXml "Trust" "Filter sheet (trust)"
+# The Trust chips moved off the filtersSheet golden with the section itself; assert them here so the
+# coverage is relocated rather than lost.
+foreach ($trustChip in @("Verified", "Face photo", "Age verified")) {
+    Assert-TextPresent $filterSheetTrustXml $trustChip "Filter sheet (trust)"
+}
+
 $filterSheetLowerXml = Scroll-SheetToText "Together"
 Assert-NoAppErrorText $filterSheetLowerXml "Filter sheet (lower)"
 Assert-TextPresent $filterSheetLowerXml "Together" "Filter sheet (lower)"
@@ -675,8 +690,20 @@ Assert-GridSnapshotStable $initialGridCards $clearedGridCards "Filter clear"
 $clearedShot = Save-Screen "05_grid_filter_cleared"
 $clearedSignature = Assert-GoldenStage "filterCleared" $clearedXml $clearedShot
 
-Tap-Node $firstAfterClear
-Wait-ForAnyText @("Message", "Spark", "Request", "Link") 45 | Out-Null
+# Hardening, not a fix for an observed failure: $clearedXml is several seconds stale by this point
+# (Save-Screen + the golden's bitmap analysis run in between), so re-resolve the card rather than
+# tapping coordinates captured before the grid had settled.
+$preTapXml = Dump-Ui "05b_grid_pre_tap"
+$freshCard = Find-NodeByText $preTapXml $firstAfterClearText
+if ($null -eq $freshCard) {
+    $freshCard = Get-FirstGridCardNode $preTapXml
+}
+Tap-Node $freshCard
+# "Spark" only — Find-NodeByText is a substring match, so "Message" matches the "Messages" bottom-nav
+# tab and "Link" matches the "Linked" Who chip, both of which are on the Grid behind the sheet. With
+# those in the list this wait returned instantly and the stage dumped the Grid whenever the sheet
+# animation was slow, which is why it failed only on a loaded emulator.
+Wait-ForAnyText @("Spark") 45 | Out-Null
 $profileXml = Dump-Ui "06_profile_detail" -Keep
 Assert-NoAppErrorText $profileXml "Profile detail"
 Assert-TextPresent $profileXml $firstCardText "Profile detail"
