@@ -1,8 +1,24 @@
 # iOS bring-up plan
 
-Written 2026-07-27, from a Windows machine, so **nothing here has been compiled**. Kotlin/Native
-Apple targets require a macOS host with Xcode; that is a platform requirement, not a configuration
-one. This document exists so day one on a Mac is execution rather than discovery.
+Written 2026-07-27 from a Windows machine. This document exists so day one on a Mac is execution
+rather than discovery.
+
+## What a non-Mac host can and cannot do (measured, not assumed)
+
+An earlier draft of this file said no iOS code could be built on Windows. That was wrong, and the
+distinction matters:
+
+| Task | Result on Windows |
+|---|---|
+| `compileKotlinIosSimulatorArm64` | **Works.** Produces a real klib; iOS Kotlin is fully type-checked. Verified by injecting a deliberate type error and watching the compiler reject it with correct line numbers. |
+| `linkDebugFrameworkIosSimulatorArm64` | **Reports BUILD SUCCESSFUL and produces nothing.** The link task silently does not run; no `.framework` appears on disk. |
+
+That second row is a trap: a green build that did no work. Do not read "BUILD SUCCESSFUL" on any
+`link*` task from a non-Mac host as evidence of anything.
+
+So `iosMain` Kotlin can be written and type-checked here; frameworks, the Xcode project, simulator
+and device builds, `codesign`, and submission all require macOS. Steps 2 and part of 3 below are
+therefore already done.
 
 ## Where iOS actually stands
 
@@ -11,7 +27,7 @@ Better than "not started". The shared layer is essentially done:
 | | |
 |---|---|
 | `expect` declarations with iOS `actual`s | **4 of 4** — none missing |
-| iOS Kotlin files | 5 (`Platform.ios`, `IosPynapliDatabaseFactory`, `SessionTokenCipher.ios`, `MediaImageCodec.ios`, `IosSwipeFactory`) |
+| iOS Kotlin files | 7 — the original 5 plus `IosStreamClients` and `IosAppGraph` (added 2026-07-27) |
 | Framework config | Done — `PynapliCompose`, static, `iosArm64` + `iosSimulatorArm64` |
 | Shared UI | 100% reused; `composeApp` is already multiplatform |
 | `iosApp/` | **README only — no Xcode project** |
@@ -31,7 +47,7 @@ third hand-written copy of the Android wiring.
 | `swipeQueueStore` | `SqlDelightSwipeActionQueueStore` — `IosSwipeFactory` already does this |
 | `swipeRepository` | `ApiSwipeRepository` (no debug fault injector needed) |
 | `storePurchaseGateway` | **StoreKit 2 — new work.** Ship read-only first (`UnavailableStorePurchaseGateway`, as web does) and add purchases as a second slice |
-| `presence/activity/message StreamClient` | **`buildIos*StreamClient` do not exist yet.** Android and Web have theirs; iOS needs the same three |
+| `presence/activity/message StreamClient` | **Done** — `buildIos*StreamClient` in `IosStreamClients.kt` (Darwin engine) |
 
 Then `PynapliApp(graph = PynapliAppGraph(...), platform = PynapliPlatform(...))` — the same two
 objects the other two shells pass.
@@ -47,22 +63,41 @@ simulator before wiring anything else.
 
 **Exit test:** the app launches on a simulator and renders any Compose content.
 
-### 2. `IosAppGraph` + entry point (~1 day)
-Mirror `AndroidAppGraph`: session store, API client, auth chain, then `PynapliCommonGraph` with the
-seam above. Swift side is a thin `UIViewController` host. Write the three `buildIos*StreamClient`
-builders alongside the Android ones in `shared/.../network/`.
+### 2. `IosAppGraph` + entry point — **Kotlin side DONE 2026-07-27**
+Already written and type-checked on Windows:
+- `shared/src/iosMain/.../network/IosStreamClients.kt` — the four `buildIos*StreamClient` builders
+  (Darwin engine; header auth like Android, not the web first-frame path).
+- `composeApp/src/iosMain/.../IosAppGraph.kt` — session/auth chain plus `PynapliCommonGraph`, and a
+  `pynapliAppGraph` property that is the single object the Swift shell passes to `PynapliApp`.
+
+Remaining (Mac): the Swift `UIViewController` host, and supplying `installId` — a random UUID
+persisted in the Keychain, deliberately **not** `identifierForVendor` or any hardware identifier,
+matching the Android choice documented in `AndroidInstallId.kt`.
 
 **Exit test:** dev login reaches an authenticated Grid with seeded cards — the same first milestone
 the web shell used.
 
 ### 3. Keychain session cipher (~half a day) — **security blocker, do not skip**
-`SessionTokenCipher.ios.kt` currently returns `PassThroughSessionTokenCipher`, i.e. **session tokens
-are stored unencrypted on iOS.** It is honestly commented as deferred, not hidden, but it must close
-before any build reaches a real user. Android's equivalent is Keystore-backed and proven by
-`android-secure-token-qa.ps1`, which asserts `enc1:` ciphertext on disk and no plaintext token JSON.
+`SessionTokenCipher.ios.kt` returns `PassThroughSessionTokenCipher`, i.e. **session tokens are stored
+unencrypted on iOS.** Commented as deferred rather than hidden, but it must close before any build
+reaches a real user. Android's is Keystore-backed and proven by `android-secure-token-qa.ps1`, which
+asserts `enc1:` ciphertext on disk and no plaintext token JSON.
 
-**Exit test:** port that QA's assertions — ciphertext present, no plaintext `"accessToken"` — against
-the iOS container.
+**This was deliberately NOT written on Windows**, unlike the rest of step 2. Cryptographic code that
+compiles but has never been executed is worse than a documented gap — it looks solved. Type-checking
+proves the signatures line up; it proves nothing about whether `SecItemAdd` succeeds or the
+ciphertext round-trips.
+
+Recommended design, to keep the Mac work short and avoid hand-rolled crypto: **do not implement AES
+in Kotlin/Native.** Instead let the Keychain be the secret store — `encrypt(plaintext)` writes the
+value under a fresh random handle with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and returns
+`kc1:<handle>`; `decrypt("kc1:<handle>")` reads it back and returns null on any miss. The database
+then holds only an opaque handle. This satisfies the same property the Android QA asserts (no
+plaintext token JSON at rest) using the platform's own secure store rather than custom cryptography.
+
+**Exit test:** port that QA's assertions — no plaintext `"accessToken"` in the container, value
+restores across a cold launch, and returns null (signed-out, never a crash) after the Keychain item
+is deleted.
 
 ### 4. Platform bridges (~1–2 days)
 Location (one-shot, matching the Android policy that `android-location-policy-check.ps1` enforces:
@@ -80,14 +115,17 @@ and note the content category makes a rejection round plausible.
 
 ## Honest estimate
 
-**5–8 working days to a TestFlight build** with Store read-only, assuming no Xcode/toolchain
-surprises — which is not a safe assumption for a first KMP iOS integration. Steps 1 and 2 carry the
-risk; 3–5 are well-understood work against existing contracts.
+**4–7 working days to a TestFlight build** with Store read-only, assuming no Xcode/toolchain
+surprises — which is not a safe assumption for a first KMP iOS integration. Step 1 now carries most
+of the risk, since step 2's Kotlin is written and type-checked; 3–5 are well-understood work against
+existing contracts.
 
 ## Do not do before the Mac arrives
 
-- Hand-writing `project.pbxproj`.
-- Writing large amounts of Swift or `iosMain` Kotlin blind. Nothing iOS-targeted can be compiled on
-  Windows, so every line would be unverified — that is a liability delivered as progress.
+- Hand-writing `project.pbxproj`. It is a generated bundle; a subtly broken one costs more than it
+  saves.
+- Writing Swift blind. Unlike `iosMain` Kotlin, none of it can be compiled here.
+- Implementing the session cipher blind — see step 3. "It compiles" is not adequate assurance for
+  cryptography or Keychain interop.
 
-The Kotlin surface is already complete and verified. The remaining work needs a compiler.
+Everything that a compiler can check has been done. What remains needs a device, a linker, or both.

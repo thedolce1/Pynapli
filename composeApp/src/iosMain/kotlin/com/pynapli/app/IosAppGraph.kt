@@ -1,0 +1,166 @@
+package com.pynapli.app
+
+import com.pynapli.app.appsettings.ApiNotificationPreferencesGateway
+import com.pynapli.app.appsettings.AppSettingsStateHolder
+import com.pynapli.app.appsettings.LocalAppSettingsRepository
+import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
+import com.pynapli.app.auth.AuthStateHolder
+import com.pynapli.app.grid.SqlDelightGridSnapshotStore
+import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
+import com.pynapli.app.onboarding.OnboardingStateHolder
+import com.pynapli.app.store.UnavailableStorePurchaseGateway
+import com.pynapli.app.swipe.ApiSwipeRepository
+import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
+import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.auth.SessionInvalidationBus
+import com.pynapli.shared.auth.SqlDelightSessionStore
+import com.pynapli.shared.auth.StoredSessionRefresher
+import com.pynapli.shared.core.config.PynapliConfig
+import com.pynapli.shared.network.KtorPynapliApiClient
+import com.pynapli.shared.network.NoAppCheckTokenProvider
+import com.pynapli.shared.network.SessionRefresherHolder
+import com.pynapli.shared.network.buildIosActivityStreamClient
+import com.pynapli.shared.network.buildIosMessageStreamClient
+import com.pynapli.shared.network.buildIosPresenceStreamClient
+import com.pynapli.shared.network.buildIosPsyncStreamClient
+import com.pynapli.shared.settings.SqlDelightAppSettingsStore
+import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
+import com.pynapli.shared.storage.IosPynapliDatabaseFactory
+import kotlinx.datetime.TimeZone
+
+/**
+ * iOS mirror of `AndroidAppGraph` / `WebAppGraph`: the session-auth chain plus the platform seam
+ * that [PynapliCommonGraph] needs. Everything downstream of the API client comes from the common
+ * graph, so this file stays small by design — that is the whole point of `PynapliCommonGraph`.
+ *
+ * STATUS — written on Windows and type-checked by `compileKotlinIosSimulatorArm64`, but never LINKED
+ * or RUN: Kotlin/Native can build an iOS klib on a non-Mac host, while producing a framework needs
+ * macOS. Treat this as "the compiler agrees the wiring is consistent", not as working code. See
+ * docs/IOS_BRINGUP_PLAN.md.
+ *
+ * TWO THINGS ARE DELIBERATELY NOT DONE HERE, both requiring a Mac:
+ *
+ *  1. [sessionStore] uses the platform cipher, which on iOS is still a pass-through — so session
+ *     tokens are stored UNENCRYPTED. That is the blocker in step 3 of the plan and must close before
+ *     any build reaches a user. It is not fixed here because cryptographic code that compiles but
+ *     was never executed is worse than a documented gap: it looks solved.
+ *  2. Push registration and StoreKit. The Store ships read-only first, exactly as web does.
+ */
+class IosAppGraph(
+    private val pynapliConfig: PynapliConfig,
+    /**
+     * Stable per-install identifier feeding the account-farm risk signal, supplied by the Swift
+     * shell. A random UUID persisted in the Keychain, NOT `identifierForVendor` or any hardware id —
+     * matching the choice already documented for Android in `AndroidInstallId.kt` and enforced by
+     * Play policy there. Passed in rather than built here because the persistence is platform code.
+     */
+    installId: String,
+) {
+    private val database = IosPynapliDatabaseFactory().createDatabase()
+    private val sessionStore = SqlDelightSessionStore(database)
+
+    // Same construction cycle as the other shells: the HTTP client needs a refresher to recover from
+    // the access-token TTL, and the refresher needs the client to call /v1/auth/refresh.
+    private val sessionRefresher = SessionRefresherHolder()
+    private val sessionInvalidationBus = SessionInvalidationBus()
+
+    private val apiClient =
+        KtorPynapliApiClient(
+            config = pynapliConfig,
+            accessTokenProvider = sessionStore,
+            // App Check on Apple uses DeviceCheck/App Attest via the Firebase Apple SDK, which is
+            // Swift-side and lands with the Firebase step of the plan.
+            appCheckTokenProvider = NoAppCheckTokenProvider,
+            sessionRefresher = sessionRefresher,
+        ).also { client ->
+            sessionRefresher.delegate =
+                StoredSessionRefresher(
+                    authApi = client,
+                    sessionStore = sessionStore,
+                    invalidationBus = sessionInvalidationBus,
+                )
+        }
+
+    private val authRepository = AuthRepository(apiClient = apiClient, sessionStore = sessionStore)
+
+    val deepLinkStateHolder = AppDeepLinkStateHolder()
+
+    val authStateHolder =
+        AuthStateHolder(
+            authRepository = authRepository,
+            platform = "ios",
+            appVersion = "0.1.0",
+            deviceId = installId,
+            // No beforeLogout hook yet: Android uses it to unregister the push device, which lands
+            // with the APNs step of the plan.
+            sessionInvalidations = sessionInvalidationBus.events,
+        )
+
+    val appSettingsStateHolder =
+        AppSettingsStateHolder(
+            repository =
+                ServerBackedAppSettingsRepository(
+                    localRepository = LocalAppSettingsRepository(store = SqlDelightAppSettingsStore(database)),
+                    notificationPreferencesGateway = ApiNotificationPreferencesGateway(apiClient),
+                    timezoneProvider = { TimeZone.currentSystemDefault().id },
+                    remoteSyncEnabled = { authStateHolder.state.value.authenticated },
+                ),
+        )
+
+    val onboardingStateHolder =
+        OnboardingStateHolder(
+            authStateHolder = authStateHolder,
+            profileRepository = ApiOnboardingProfileRepository(apiClient),
+            progressStore = SqlDelightOnboardingProgressStore(database),
+        )
+
+    private val common =
+        PynapliCommonGraph(
+            apiClient = apiClient,
+            gridSnapshotStore = SqlDelightGridSnapshotStore(database),
+            swipeQueueStore = SqlDelightSwipeActionQueueStore(database),
+            swipeRepository = ApiSwipeRepository(apiClient),
+            // Read-only Store for the first iOS release; StoreKit 2 is a later slice.
+            storePurchaseGateway = UnavailableStorePurchaseGateway(),
+            presenceStreamClient =
+                buildIosPresenceStreamClient(pynapliConfig.websocketBaseUrl, sessionStore),
+            activityStreamClient =
+                buildIosActivityStreamClient(pynapliConfig.websocketBaseUrl, sessionStore),
+            messageStreamClient =
+                buildIosMessageStreamClient(pynapliConfig.websocketBaseUrl, sessionStore),
+        )
+
+    /** Psync realtime channel; the per-viewer holder is built inside `PynapliApp`. */
+    val psyncStreamClient = buildIosPsyncStreamClient(pynapliConfig.websocketBaseUrl, sessionStore)
+
+    /** The single object the Swift shell hands to `PynapliApp`. */
+    val pynapliAppGraph: PynapliAppGraph =
+        PynapliAppGraph(
+            authStateHolder = authStateHolder,
+            appSettingsStateHolder = appSettingsStateHolder,
+            gridStateHolder = common.gridStateHolder,
+            profileDetailStateHolder = common.profileDetailStateHolder,
+            conversationStateHolder = common.conversationStateHolder,
+            messagesStateHolder = common.messagesStateHolder,
+            activityStateHolder = common.activityStateHolder,
+            locationStateHolder = common.locationStateHolder,
+            mediaAlbumsStateHolder = common.mediaAlbumsStateHolder,
+            profileHubStateHolder = common.profileHubStateHolder,
+            profileLinksStateHolder = common.profileLinksStateHolder,
+            swipeStateHolder = common.swipeStateHolder,
+            storeStateHolder = common.storeStateHolder,
+            savedGridFilterStateHolder = common.savedGridFilterStateHolder,
+            savedSwipeFilterStateHolder = common.savedSwipeFilterStateHolder,
+            travelLocationStateHolder = common.travelLocationStateHolder,
+            tonightAvailabilityStateHolder = common.tonightAvailabilityStateHolder,
+            playingTonightStateHolder = common.playingTonightStateHolder,
+            psyncRepository = common.psyncRepository,
+            psyncStreamClient = psyncStreamClient,
+            deepLinkStateHolder = deepLinkStateHolder,
+            onboardingStateHolder = onboardingStateHolder,
+        )
+
+    val gridPresenceStreamCoordinator get() = common.gridPresenceStreamCoordinator
+    val activityRealtimeCoordinator get() = common.activityRealtimeCoordinator
+    val messagesRealtimeCoordinator get() = common.messagesRealtimeCoordinator
+}
