@@ -68,6 +68,72 @@ class ServerConfigValidationTest {
     }
 
     @Test
+    fun productionLikeCorsOriginsMustBeHttpsNonLocalAndExact() {
+        val issueCodes =
+            validStagingConfig(
+                corsAllowedOrigins =
+                    listOf(
+                        "http://app.pynapli.com",
+                        "https://localhost:8081",
+                        "https://*.pynapli.com",
+                    ),
+            ).startupValidationIssues().map { it.code }.toSet()
+
+        assertTrue("CORS_ORIGIN_MUST_BE_HTTPS" in issueCodes)
+        assertTrue("CORS_ORIGIN_NOT_PRODUCTION_SAFE" in issueCodes)
+        assertTrue("CORS_ORIGIN_WILDCARD_FORBIDDEN" in issueCodes)
+    }
+
+    @Test
+    fun productionLikeCorsAcceptsRealPwaOrigins() {
+        val config =
+            validStagingConfig(
+                corsAllowedOrigins = listOf("https://app.pynapli.com", "https://staging.pynapli.com:8443"),
+            )
+
+        assertEquals(emptyList(), config.startupValidationIssues())
+    }
+
+    @Test
+    fun emptyCorsOriginsStayValidForAMobileOnlyDeployment() {
+        // CORS gates browser requests only, so a deployment with no web client is legitimate.
+        assertEquals(emptyList(), validStagingConfig(corsAllowedOrigins = emptyList()).startupValidationIssues())
+    }
+
+    @Test
+    fun malformedCorsOriginFailsFastInAnyEnvironment() {
+        // configureHTTP silently ignores an entry it cannot split on "://", so without this the web
+        // app would just stop working in production with nothing logged.
+        val issueCodes =
+            localConfig(corsAllowedOrigins = listOf("app.pynapli.com"))
+                .startupValidationIssues()
+                .map { it.code }
+
+        assertEquals(listOf("CORS_ORIGIN_MALFORMED"), issueCodes)
+    }
+
+    @Test
+    fun corsOriginWithTrailingPathIsRejected() {
+        // allowHost() would receive "app.pynapli.com/" as the host and never match a real Origin.
+        val issueCodes =
+            localConfig(corsAllowedOrigins = listOf("https://app.pynapli.com/"))
+                .startupValidationIssues()
+                .map { it.code }
+
+        assertEquals(listOf("CORS_ORIGIN_MALFORMED"), issueCodes)
+    }
+
+    @Test
+    fun localCorsOriginsMayStayHttpLoopback() {
+        // The local default is http://localhost:8081 for the wasm dev server; only production-like
+        // environments get the https/non-loopback rules.
+        assertEquals(
+            emptyList(),
+            localConfig(corsAllowedOrigins = listOf("http://localhost:8081")).startupValidationIssues(),
+        )
+    }
+
+    @Test
     fun validateForStartupThrowsAllIssueCodes() {
         val error = assertFailsWith<ServerConfigException> { stagingWithLocalDefaults().validateForStartup() }
 
@@ -78,6 +144,7 @@ class ServerConfigValidationTest {
     private fun localConfig(
         mediaDeliveryProvider: String = "signed_gcs",
         playStoreRtdnEnabled: Boolean = false,
+        corsAllowedOrigins: List<String> = emptyList(),
     ): ServerConfig =
         ServerConfig(
             environment = "local",
@@ -88,6 +155,7 @@ class ServerConfigValidationTest {
             redisUrl = "redis://localhost:6379",
             mediaDeliveryProvider = mediaDeliveryProvider,
             playStoreRtdnEnabled = playStoreRtdnEnabled,
+            corsAllowedOrigins = corsAllowedOrigins,
         )
 
     private fun stagingWithLocalDefaults(): ServerConfig =
@@ -103,6 +171,7 @@ class ServerConfigValidationTest {
     private fun validStagingConfig(
         environment: String = "staging",
         playStoreSandboxEnabled: Boolean = false,
+        corsAllowedOrigins: List<String> = emptyList(),
     ): ServerConfig =
         ServerConfig(
             environment = environment,
@@ -124,5 +193,6 @@ class ServerConfigValidationTest {
             activityCursorSecret = "activitystagingruntimevalue123456789",
             swipeDeckTokenSecret = "swipedeckstagingruntimevalue123456789",
             playStoreSandboxEnabled = playStoreSandboxEnabled,
+            corsAllowedOrigins = corsAllowedOrigins,
         )
 }

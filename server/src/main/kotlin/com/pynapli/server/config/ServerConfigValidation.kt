@@ -42,6 +42,7 @@ fun ServerConfig.startupSummary(): ServerStartupSummary =
 internal fun ServerConfig.startupValidationIssues(): List<ServerConfigIssue> =
     buildList {
         validateCommonSettings(this@startupValidationIssues)
+        validateCorsOrigins(this@startupValidationIssues)
         validateProductionLikeSettings(this@startupValidationIssues)
         validateProductionOnlySettings(this@startupValidationIssues)
     }
@@ -99,6 +100,56 @@ private fun MutableList<ServerConfigIssue>.validateCommonSettings(config: Server
                     ),
             code = "PLAY_STORE_RTDN_AUTH_REQUIRED",
             message = "Play RTDN requires a webhook token or OIDC audience plus service-account email.",
+        )
+    }
+}
+
+/**
+ * Browser origins allowed to call the API (the web PWA). CORS gates browser-originated requests
+ * only — native mobile clients are unaffected — so an empty list is a legitimate configuration for
+ * a mobile-only deployment and is deliberately NOT an error here.
+ *
+ * What is checked:
+ *
+ * - Parseability, in every environment. [com.pynapli.server.plugins.configureHTTP] splits each
+ *   entry on "://" and silently ignores anything it cannot split, which is the right default (a
+ *   malformed entry must never widen access) but means a scheme-less typo like "app.pynapli.com"
+ *   disables the web app in production with no error logged anywhere. Fail at startup instead.
+ * - No wildcards in production-like environments. `allowHost("*")` is not how Ktor expresses
+ *   "any origin" (that is `anyHost()`), so a "*" entry does not do what whoever wrote it expected —
+ *   either way it has no place in a production allowlist.
+ * - https only in production-like environments, and no loopback hosts. A plaintext or localhost
+ *   origin in a production allowlist is a misconfiguration, and admitting an http:// origin
+ *   undercuts the transport guarantees the rest of this file enforces.
+ */
+private fun MutableList<ServerConfigIssue>.validateCorsOrigins(config: ServerConfig) {
+    config.corsAllowedOrigins.forEach { origin ->
+        require(
+            condition = origin.isParsableCorsOrigin(),
+            code = "CORS_ORIGIN_MALFORMED",
+            message =
+                "PYNAPLI_CORS_ALLOWED_ORIGINS entries must be scheme://host[:port] with no trailing " +
+                    "path or slash; '$origin' would be silently ignored.",
+        )
+    }
+
+    if (!config.isProductionLikeEnvironment()) return
+
+    config.corsAllowedOrigins.forEach { origin ->
+        require(
+            condition = !origin.contains("*"),
+            code = "CORS_ORIGIN_WILDCARD_FORBIDDEN",
+            message = "Production-like CORS origins must be exact; '$origin' contains a wildcard.",
+        )
+        require(
+            condition = origin.startsWith("https://", ignoreCase = true),
+            code = "CORS_ORIGIN_MUST_BE_HTTPS",
+            message = "Production-like CORS origins must use https; '$origin' does not.",
+        )
+        require(
+            condition = !origin.isLoopbackCorsOrigin(),
+            code = "CORS_ORIGIN_NOT_PRODUCTION_SAFE",
+            message = "Production-like environments must not allow loopback CORS origins; '$origin' is local.",
         )
     }
 }
@@ -251,6 +302,23 @@ private fun String.isLocalRedisUrl(): Boolean {
         normalized == "redis://host.docker.internal:6379" ||
         normalized.contains("localhost") ||
         normalized.contains("127.0.0.1") ||
+        normalized.contains("host.docker.internal")
+}
+
+// Mirrors the scheme/host split in configureHTTP deliberately: this check is only meaningful if it
+// agrees with what the plugin actually does with the value. Also rejects a trailing path or slash,
+// which would be passed to allowHost() as part of the host and never match a real Origin header.
+private fun String.isParsableCorsOrigin(): Boolean {
+    val scheme = substringBefore("://", missingDelimiterValue = "")
+    val host = substringAfter("://", missingDelimiterValue = "")
+    return scheme.isNotEmpty() && host.isNotEmpty() && !host.contains("/")
+}
+
+private fun String.isLoopbackCorsOrigin(): Boolean {
+    val normalized = lowercase()
+    return normalized.contains("localhost") ||
+        normalized.contains("127.0.0.1") ||
+        normalized.contains("[::1]") ||
         normalized.contains("host.docker.internal")
 }
 

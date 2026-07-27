@@ -128,7 +128,12 @@ service-account key with signing rights for the bucket (the current GCS V4 signi
 - [ ] Verify: hit the Cloud Run URL `/health` and `/health/deep` (both must be `200`). Flyway migrations
   run at startup — check the logs show them applied.
 - [ ] CORS: the server now auto-allows `https://app.pynapli.com`; set `PYNAPLI_CORS_ALLOWED_ORIGINS`
-  only to add origins (e.g. a Firebase preview URL).
+  only to add origins (e.g. a Firebase preview URL). Note that setting it **replaces** the default
+  rather than adding to it, so include `https://app.pynapli.com` in the list. Startup validation
+  rejects the deployment if any entry is not `scheme://host[:port]` (a scheme-less value used to be
+  silently ignored, quietly breaking the web app), and in staging/prod additionally if any entry is
+  not `https`, contains a wildcard, or points at a loopback host. An empty list is allowed — that is
+  the mobile-only case, since CORS gates browser requests only.
 
 ## Step 9 — Cost controls (do NOT skip)
 
