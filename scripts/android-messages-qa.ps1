@@ -249,6 +249,58 @@ function Find-BottomNavNodeByText {
     return ($matches | Sort-Object { $_.Bounds.CenterY } -Descending | Select-Object -First 1).Node
 }
 
+# Exact text match.
+#
+# Find-NodeByText is a substring match, so "Message" also matches the "Messages" nav tab. The nav is
+# NOT hidden inside an open conversation (verified on device: composer "Message" and nav "Messages"
+# are on screen together), which meant a wait on "Message" returned instantly no matter what was
+# rendered, and a tap on it could land on the nav bar and navigate away mid-test.
+#
+# Exact matching is the whole fix — "Messages" is simply not equal to "Message". Deliberately NO
+# bottom-nav band here: Find-BottomNavNodeByText's 0.82*height cut works for *finding* the nav (it
+# takes the lowest match) but the composer sits at ~0.823*height, just inside it, so reusing that
+# threshold to *exclude* the nav also excluded the very node we want.
+function Find-NodeByExactText {
+    param(
+        [xml]$Xml,
+        [string]$Text
+    )
+
+    foreach ($node in Get-UiTextNodes $Xml) {
+        if ($node.GetAttribute("text") -eq $Text) { return $node }
+    }
+    return $null
+}
+
+function Wait-ForContentText {
+    param(
+        [string]$Text,
+        [int]$TimeoutSeconds = $script:WaitSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $xml = Dump-Ui "wait_content"
+        $node = Find-NodeByExactText $xml $Text
+        if ($null -ne $node) { return [pscustomobject]@{ Xml = $xml; Node = $node } }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    throw "Timed out waiting for exact text '$Text'."
+}
+
+function Tap-ContentText {
+    param(
+        [string]$Text,
+        [int]$TimeoutSeconds = $script:WaitSeconds
+    )
+
+    $wait = Wait-ForContentText $Text $TimeoutSeconds
+    $bounds = Get-Bounds $wait.Node
+    Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
+    Write-Host "[tap] '$Text' (exact) at $($bounds.CenterX),$($bounds.CenterY)"
+}
+
 function Wait-ForAnyText {
     param(
         [string[]]$Texts,
@@ -768,7 +820,8 @@ Assert-TextPresent $initialXml "You were invited to join this chat" "Initial Mes
 
 Tap-Text "Kai"
 Wait-ForAnyText @("See you tonight") 30 | Out-Null
-Wait-ForAnyText @("Message") 30 | Out-Null
+# Composer, not the nav tab — see Find-NodeByExactText.
+Wait-ForContentText "Message" 30 | Out-Null
 $normalThreadXml = Capture-MessagesStage "normalThread" "04_messages_normal_thread"
 Assert-TextPresent $normalThreadXml "Kai" "Normal thread"
 
@@ -777,9 +830,12 @@ Wait-ForAnyText @("Spark", "Open linked partner profile", "Private album") 30 | 
 $threadProfilePeekXml = Capture-MessagesStage "threadProfilePeek" "04b_messages_thread_profile_peek"
 Assert-TextPresent $threadProfilePeekXml "Kai" "Thread profile peek"
 Tap-Text "Close profile"
-Wait-ForAnyText @("FROM GRID", "Message") 30 | Out-Null
+# Wait for the composer itself to come back: that is what proves the profile peek actually closed.
+# The old @("FROM GRID", "Message") short-circuited on the nav tab and waited for nothing, so the
+# tap below could fire while the peek was still up.
+Wait-ForContentText "Message" 30 | Out-Null
 
-Tap-Text "Message"
+Tap-ContentText "Message"
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_Q") | Out-Null
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_A") | Out-Null
 Wait-ForAnyText @("qa") 10 | Out-Null
@@ -810,7 +866,9 @@ $invitedPromptXml = Capture-MessagesStage "invitedPartnerPrompt" "08_messages_in
 Assert-TextPresent $invitedPromptXml "Decline" "Invited partner prompt"
 
 Tap-Text "Accept"
-Wait-ForAnyText @("Join us when you are ready.", "Message") 30 | Out-Null
+# "Message" dropped: it matched the nav tab, so this returned before the accept had applied. The
+# assertion below is the real check, and it now gets a settled screen to run against.
+Wait-ForAnyText @("Join us when you are ready.") 30 | Out-Null
 $invitedAcceptedXml = Capture-MessagesStage "invitedPartnerAccepted" "09_messages_invited_partner_accepted"
 Assert-TextPresent $invitedAcceptedXml "Join us when you are ready." "Invited partner accepted"
 

@@ -267,6 +267,9 @@ function Get-GridCardSnapshot {
         [int]$Limit = 12
     )
 
+    # Must stay in sync with android-grid-qa.ps1 — both run this detection over the same Grid
+    # screen, and "NEARBY" (the context strip) was added there but never mirrored here, so this
+    # script kept resolving a strip label as its first card.
     $chromeTexts = @(
         "Current location",
         "Filters",
@@ -277,7 +280,8 @@ function Get-GridCardSnapshot {
         "Swipe",
         "Activity",
         "Messages",
-        "Store"
+        "Store",
+        "NEARBY"
     )
 
     $candidates = @(
@@ -292,9 +296,19 @@ function Get-GridCardSnapshot {
         if ($text -match "^\s*(<=|≤)?\s*\d+(\.\d+)?\s*(m|km)\s*$") {
             continue
         }
+        # Skip the density/context-strip count (a bare integer like "60"); card names are never
+        # purely numeric. Ported from android-grid-qa.ps1, which shares this card detection.
+        if ($text -match "^\s*\d+\s*$") {
+            continue
+        }
 
         $bounds = Get-Bounds $node
-        if ($bounds.Top -lt 340 -or $bounds.Top -gt 2100) {
+        # Floor sits below the horizontally-scrolling quick-filter chip row (Top ~348-406), not just
+        # below the app bar. That row grows every time a filter is added — the Trust chips
+        # (Verified / Face photo / Age verified) are the current tail — and any chip left of the
+        # first card sorts ahead of it, so the "first grid card" resolved to a chip. Kept in step
+        # with android-grid-qa.ps1, which runs the same detection over the same Grid screen.
+        if ($bounds.Top -lt 420 -or $bounds.Top -gt 2100) {
             continue
         }
 
