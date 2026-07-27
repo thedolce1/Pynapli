@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Style
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -57,9 +58,15 @@ internal fun SwipeHeader(
         },
         title = "Swipe",
         actions = {
+            // TextButton defaults to colorScheme.primary, which made all three of these gold at
+            // equal weight — competing with each other and with the gold brand glyph, so nothing
+            // read as primary. They are quiet actions by default; the accent is spent only where it
+            // carries information, i.e. when Travel or Filters are actually ACTIVE. Same rule the
+            // Grid chips already follow.
             onOpenPsync?.let { openPsync ->
                 TextButton(
                     onClick = openPsync,
+                    colors = ButtonDefaults.textButtonColors(contentColor = PynapliColors.TextSecondary),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                     modifier = Modifier.testTag(SwipeHeaderTags.OPEN_PSYNC),
                 ) {
@@ -68,6 +75,11 @@ internal fun SwipeHeader(
             }
             TextButton(
                 onClick = onOpenTravel,
+                colors =
+                    ButtonDefaults.textButtonColors(
+                        contentColor =
+                            if (travelCityName != null) PynapliColors.Accent else PynapliColors.TextSecondary,
+                    ),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                 modifier = Modifier.testTag(TravelModeTags.OPEN_SHEET),
             ) {
@@ -75,6 +87,11 @@ internal fun SwipeHeader(
             }
             TextButton(
                 onClick = onOpenFilters,
+                colors =
+                    ButtonDefaults.textButtonColors(
+                        contentColor =
+                            if (activeFilterCount > 0) PynapliColors.Accent else PynapliColors.TextSecondary,
+                    ),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                 modifier = Modifier.testTag(SwipeFilterTags.OPEN_SHEET),
             ) {

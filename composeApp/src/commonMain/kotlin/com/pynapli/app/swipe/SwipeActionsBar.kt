@@ -44,6 +44,10 @@ internal fun SwipeActions(
         horizontalArrangement = Arrangement.spacedBy(10.dp, alignment = Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Neutral, not accent. Rewind is an undo — useful, not premium. It previously shared the
+        // gold with Pineapple Like, which left three of five buttons gold and nothing reading as
+        // special. FRONTEND_DESIGN_DIRECTION_SPEC asks for gold as a premium/highlight accent
+        // rather than a general "interactive" colour.
         SwipeActionButton(
             enabled = rewindEnabled,
             isSubmitting = isSubmitting,
@@ -51,7 +55,7 @@ internal fun SwipeActions(
             icon = Icons.Filled.Refresh,
             contentDescription = "Rewind",
             background = MaterialTheme.colorScheme.surfaceVariant,
-            iconTint = MaterialTheme.colorScheme.primary,
+            iconTint = PynapliColors.TextSecondary,
             onClick = onRewind,
         )
         SwipeActionButton(
@@ -64,6 +68,7 @@ internal fun SwipeActions(
             iconTint = PynapliColors.Danger,
             onClick = onPass,
         )
+        // Also neutral: an intro note is a normal way to reach someone, not the premium action.
         SwipeActionButton(
             enabled = actionEnabled,
             isSubmitting = isSubmitting,
@@ -71,9 +76,12 @@ internal fun SwipeActions(
             icon = Icons.Filled.Edit,
             contentDescription = "Intro Note",
             background = MaterialTheme.colorScheme.surfaceVariant,
-            iconTint = MaterialTheme.colorScheme.primary,
+            iconTint = PynapliColors.TextSecondary,
             onClick = onIntroNote,
         )
+        // The ONLY gold button in the bar. Pineapple Like is the premium standout action, so it is
+        // what the accent is reserved for — it only reads as special while nothing beside it shares
+        // the colour.
         SwipeActionButton(
             enabled = actionEnabled,
             isSubmitting = isSubmitting,
