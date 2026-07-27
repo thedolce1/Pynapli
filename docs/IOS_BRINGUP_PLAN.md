@@ -17,8 +17,7 @@ That second row is a trap: a green build that did no work. Do not read "BUILD SU
 `link*` task from a non-Mac host as evidence of anything.
 
 So `iosMain` Kotlin can be written and type-checked here; frameworks, the Xcode project, simulator
-and device builds, `codesign`, and submission all require macOS. Steps 2 and part of 3 below are
-therefore already done.
+and device builds, `codesign`, and submission all require macOS. Steps 2 and 4 are therefore already done on the Kotlin side.
 
 ## Where iOS actually stands
 
@@ -27,7 +26,7 @@ Better than "not started". The shared layer is essentially done:
 | | |
 |---|---|
 | `expect` declarations with iOS `actual`s | **4 of 4** — none missing |
-| iOS Kotlin files | 7 — the original 5 plus `IosStreamClients` and `IosAppGraph` (added 2026-07-27) |
+| iOS Kotlin files | 9 — the original 5 plus `IosStreamClients`, `IosAppGraph`, `IosPynapliEntry`, `IosPushRegistration` (all 2026-07-27) |
 | Framework config | Done — `PynapliCompose`, static, `iosArm64` + `iosSimulatorArm64` |
 | Shared UI | 100% reused; `composeApp` is already multiplatform |
 | `iosApp/` | **README only — no Xcode project** |
@@ -64,15 +63,53 @@ simulator before wiring anything else.
 **Exit test:** the app launches on a simulator and renders any Compose content.
 
 ### 2. `IosAppGraph` + entry point — **Kotlin side DONE 2026-07-27**
-Already written and type-checked on Windows:
+Written and type-checked on Windows:
 - `shared/src/iosMain/.../network/IosStreamClients.kt` — the four `buildIos*StreamClient` builders
   (Darwin engine; header auth like Android, not the web first-frame path).
-- `composeApp/src/iosMain/.../IosAppGraph.kt` — session/auth chain plus `PynapliCommonGraph`, and a
-  `pynapliAppGraph` property that is the single object the Swift shell passes to `PynapliApp`.
+- `composeApp/src/iosMain/.../IosAppGraph.kt` — session/auth chain plus `PynapliCommonGraph`,
+  exposing one `pynapliAppGraph` property.
+- `composeApp/src/iosMain/.../IosPynapliEntry.kt` — **the entry point is Kotlin.**
+  `ComposeUIViewController` builds the root `UIViewController`, so Swift never touches Compose.
 
-Remaining (Mac): the Swift `UIViewController` host, and supplying `installId` — a random UUID
-persisted in the Keychain, deliberately **not** `identifierForVendor` or any hardware identifier,
-matching the Android choice documented in `AndroidInstallId.kt`.
+Remaining on the Mac is the Swift shell and `installId` — a random UUID persisted in the Keychain,
+deliberately **not** `identifierForVendor` or any hardware identifier, matching the Android choice
+in `AndroidInstallId.kt`.
+
+**Reference Swift — UNCOMPILED, never run.** Written from the Kotlin signatures as a starting point,
+not as known-good code. Expect to adjust it against what Xcode actually generates:
+
+```swift
+// PynapliApp.swift
+import SwiftUI
+import PynapliCompose
+
+final class AppState {
+    let graph: IosAppGraph
+    init() {
+        let config = PynapliConfig(apiBaseUrl: "https://api.pynapli.com",
+                                   websocketBaseUrl: "wss://api.pynapli.com",
+                                   environment: .prod)
+        graph = IosPynapliEntry().createGraph(config: config, installId: KeychainInstallId.value())
+    }
+}
+
+struct ComposeRoot: UIViewControllerRepresentable {
+    let state: AppState
+    func makeUIViewController(context: Context) -> UIViewController {
+        IosPynapliEntry().createViewController(
+            graph: state.graph,
+            onUseCurrentLocation: { LocationBridge.shared.requestOneShotFix(state.graph) },
+            onPickMediaForAlbum: { kind in PhotoPicker.shared.present(for: kind) },
+            onPickConversationPhoto: { PhotoPicker.shared.presentForConversation() },
+            storePurchasesAvailable: false,
+            testerDiagnosticLabel: nil)
+    }
+    func updateUIViewController(_ vc: UIViewController, context: Context) {}
+}
+```
+
+Note the Kotlin object maps to `IosPynapliEntry()` in Swift, and default arguments do not cross the
+interop boundary — pass every parameter explicitly.
 
 **Exit test:** dev login reaches an authenticated Grid with seeded cards — the same first milestone
 the web shell used.
@@ -99,10 +136,20 @@ plaintext token JSON at rest) using the platform's own secure store rather than 
 restores across a cold launch, and returns null (signed-out, never a crash) after the Keychain item
 is deleted.
 
-### 4. Platform bridges (~1–2 days)
-Location (one-shot, matching the Android policy that `android-location-policy-check.ps1` enforces:
-no background location, no continuous updates), photo picker + crop, APNs → the existing
-`PushRegistrationCoordinator`, permission prompts, Firebase Apple SDK (Crashlytics, App Check).
+### 4. Platform bridges (~1–2 days) — **push Kotlin side DONE 2026-07-27**
+Already written and type-checked: `composeApp/src/iosMain/.../notifications/IosPushRegistration.kt`
+— `IosPushTokenProvider` (Swift feeds it the APNs token from
+`didRegisterForRemoteNotificationsWithDeviceToken`) and `IosPushRegistrationStore` (NSUserDefaults,
+not Keychain: a device token is not a secret and should die with an uninstall, matching Android's
+SharedPreferences choice).
+
+Remaining, all Swift: CoreLocation one-shot fix (matching the policy
+`android-location-policy-check.ps1` enforces — no background location, no continuous updates),
+`PHPickerViewController` for photos, APNs registration, permission prompts, and the Firebase Apple
+SDK for Crashlytics and App Check.
+
+CoreLocation was deliberately not written in Kotlin: the delegate/threading model is exactly the kind
+of interop that compiles cleanly and misbehaves at runtime, and it is short in Swift.
 
 ### 5. StoreKit 2 (~2–3 days, can follow first release)
 Implement `StorePurchaseGateway` against StoreKit 2 and verify receipts server-side. The server
@@ -115,10 +162,15 @@ and note the content category makes a rejection round plausible.
 
 ## Honest estimate
 
-**4–7 working days to a TestFlight build** with Store read-only, assuming no Xcode/toolchain
-surprises — which is not a safe assumption for a first KMP iOS integration. Step 1 now carries most
-of the risk, since step 2's Kotlin is written and type-checked; 3–5 are well-understood work against
-existing contracts.
+**3–6 working days to a TestFlight build** with Store read-only, assuming no Xcode/toolchain
+surprises — not a safe assumption for a first KMP iOS integration. Step 1 carries most of the
+remaining risk. Everything Kotlin in steps 2 and 4 is written and compiler-verified; the entry point
+being Kotlin (`ComposeUIViewController`) means the Swift shell is roughly the snippet above plus the
+bridges, rather than a UI layer.
+
+Kotlin written pre-Mac, all type-checked by `compileKotlinIosSimulatorArm64`: 4 stream-client
+builders, `IosAppGraph`, `IosPynapliEntry`, `IosPushTokenProvider`, `IosPushRegistrationStore`.
+None of it has ever executed.
 
 ## Do not do before the Mac arrives
 
