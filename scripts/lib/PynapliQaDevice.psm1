@@ -112,9 +112,23 @@ function Resolve-QaDeviceId {
         throw "No connected Android emulator/device found. Start an emulator and retry."
     }
     if ($devices.Count -gt 1) {
-        throw "Multiple Android devices are connected. Rerun with -DeviceId. Connected devices: $($devices -join ', ')"
+        throw "Multiple Android devices are connected. Rerun with -DeviceId, or use scripts\android-qa-matrix.ps1 to run across every AVD. Connected devices: $($devices -join ', ')"
     }
     return $devices[0]
+}
+
+# The API level a run actually covered. Every QA script reports this now: minSdk is 23, platform
+# behaviour splits at API 35, and for months every script silently ran on android-36 with nothing
+# in its output to say so — which is how an edge-to-edge defect stayed invisible on API <=34.
+function Get-QaDeviceApiLevel {
+    param(
+        [Parameter(Mandatory)][string]$Adb,
+        [Parameter(Mandatory)][string]$DeviceId
+    )
+
+    $value = & $Adb -s $DeviceId shell getprop ro.build.version.sdk 2>$null | Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($value)) { return "unknown" }
+    return $value.Trim()
 }
 
 function Invoke-Adb {
@@ -387,6 +401,7 @@ Export-ModuleMember -Function @(
     "Set-PynapliQaContext",
     "Find-Adb",
     "Resolve-QaDeviceId",
+    "Get-QaDeviceApiLevel",
     "Invoke-Adb",
     "Invoke-AdbBestEffort",
     "Save-Screen",

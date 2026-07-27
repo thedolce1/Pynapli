@@ -55,10 +55,19 @@ function Select-AdbDevice {
     if ($devices.Count -eq 0) { throw "No connected adb device. Start the Pynapli_Phone emulator." }
     if ($script:DeviceId) {
         if ($devices -notcontains $script:DeviceId) { throw "Requested device '$script:DeviceId' not connected. Connected: $($devices -join ', ')" }
+    } elseif ($devices.Count -gt 1) {
+        # Never silently pick one. There are now deliberately two AVDs (android-36 and android-34),
+        # and choosing whichever adb lists first would report a pass for an API level nobody asked
+        # for — the exact failure mode that let an edge-to-edge bug ship. Matches the shared
+        # module's Resolve-QaDeviceId behaviour.
+        throw "Multiple Android devices are connected. Rerun with -DeviceId (or use scripts\android-qa-matrix.ps1 to cover every AVD). Connected: $($devices -join ', ')"
     } else {
         $script:DeviceId = $devices[0]
     }
-    Write-Host "Using device: $script:DeviceId"
+    # API level in the banner so a run is self-describing: this suite historically only ever ran on
+    # one platform version and nothing in its output said so.
+    $api = (& $script:Adb -s $script:DeviceId shell getprop ro.build.version.sdk 2>$null | Select-Object -First 1)
+    Write-Host "Using device: $script:DeviceId (API $($api.Trim()))"
 }
 
 function Save-Screen {

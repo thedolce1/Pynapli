@@ -1,4 +1,4 @@
-# Connected-Android QA for the DOB-first signup stepper (ONBOARDING_AUTH_SPEC, Grindr-reference
+﻿# Connected-Android QA for the DOB-first signup stepper (ONBOARDING_AUTH_SPEC, Grindr-reference
 # flow). Proves the happy path end-to-end on a real emulator: Create account -> typed DD/MM/YYYY
 # birthday -> policies step (single Accept) -> email+password -> denied location permission
 # (useful error + skip) -> mid-signup force-stop resume at the consolidated Profile step ->
@@ -180,6 +180,9 @@ if (-not (Test-Path ".\gradlew.bat")) {
 
 $script:Adb = Find-Adb
 $script:DeviceId = Resolve-QaDeviceId -Adb $script:Adb -RequestedDeviceId $DeviceId
+# API level in the banner: this suite ran only on android-36 for months with nothing in its
+# output saying so, which is how an edge-to-edge defect stayed invisible on API <=34.
+Write-Host "Device: $script:DeviceId (API $(Get-QaDeviceApiLevel -Adb $script:Adb -DeviceId $script:DeviceId))"
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $script:ArtifactDir = Join-Path (Get-Location) (Join-Path $OutputRoot $timestamp)

@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$PackageName = "com.pynapli.app",
     [string]$LaunchActivity = ".DefaultLauncherAlias",
@@ -90,6 +90,9 @@ if (-not (Test-Path ".\gradlew.bat")) {
 
 $script:Adb = Find-Adb
 $script:DeviceId = Resolve-QaDeviceId -Adb $script:Adb -RequestedDeviceId $DeviceId
+# API level in the banner: this suite ran only on android-36 for months with nothing in its
+# output saying so, which is how an edge-to-edge defect stayed invisible on API <=34.
+Write-Host "Device: $script:DeviceId (API $(Get-QaDeviceApiLevel -Adb $script:Adb -DeviceId $script:DeviceId))"
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $script:ArtifactDir = Join-Path (Get-Location) (Join-Path $OutputRoot $timestamp)

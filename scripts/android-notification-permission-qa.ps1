@@ -1,4 +1,4 @@
-# Connected-Android QA for the denied POST_NOTIFICATIONS permission path. Proves the app stays fully
+﻿# Connected-Android QA for the denied POST_NOTIFICATIONS permission path. Proves the app stays fully
 # usable when the user denies notifications: it logs in, denies the notification prompt, reaches the
 # Grid, shows no error/crash text, and POST_NOTIFICATIONS is left ungranted (the spec's "app works
 # with notifications denied" rule). Mirrors scripts/android-grid-denied-location-qa.ps1.
@@ -39,6 +39,9 @@ if (-not (Test-Path ".\gradlew.bat")) {
 
 $script:Adb = Find-Adb
 $script:DeviceId = Resolve-QaDeviceId -Adb $script:Adb -RequestedDeviceId $DeviceId
+# API level in the banner: this suite ran only on android-36 for months with nothing in its
+# output saying so, which is how an edge-to-edge defect stayed invisible on API <=34.
+Write-Host "Device: $script:DeviceId (API $(Get-QaDeviceApiLevel -Adb $script:Adb -DeviceId $script:DeviceId))"
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $script:ArtifactDir = Join-Path (Get-Location) (Join-Path $OutputRoot $timestamp)

@@ -146,10 +146,32 @@ a fresh android-34 AVD, before and after the one-line fix:
 
 `(11,11,14)` is `#0B0B0E`, the handoff `Background` token — so the two API levels now agree.
 
-A second AVD, **`Pynapli_API34`** (`system-images;android-34;google_apis;x86_64`, pixel_6), now
-exists locally for this. It is not yet wired into the QA scripts; doing so — or at minimum running
-`android-e2e-qa.ps1` against both AVDs before a release — is the durable fix, since a single-API
-suite cannot catch a whole class of platform-behaviour regressions. Worth folding into **H2**.
+A second AVD, **`Pynapli_API34`** (`system-images;android-34;google_apis;x86_64`, pixel_6), exists
+locally, and the suite is now wired to use it:
+
+```powershell
+.\scripts\android-qa-matrix.ps1                                       # e2e on every AVD
+.\scripts\android-qa-matrix.ps1 -Scripts android-grid-qa.ps1,android-swipe-qa.ps1
+.\scripts\android-qa-matrix.ps1 -Avd Pynapli_API34 -SkipBuild         # one API level
+```
+
+`android-qa-matrix.ps1` boots each configured AVD (leaving already-running ones alone, and only
+shutting down what it started), runs the chosen scripts against each with the Redis-flush +
+force-stop hygiene a multi-script sweep needs, and prints a pass/fail matrix keyed by API level.
+It probes each script's parameters rather than assuming a uniform surface, because
+`android-e2e-qa.ps1` has no `-SkipBuild`.
+
+Two supporting changes make a wrong-platform run impossible to miss:
+
+- **Every** QA script now prints `Device: <serial> (API <n>)` at startup. Previously nothing in the
+  output recorded which platform version a green run had actually covered.
+- `android-e2e-qa.ps1` no longer silently takes the first connected device. With two AVDs routinely
+  running, `$devices[0]` could report a pass for an API level nobody asked for — it now throws and
+  points at this driver, matching `Resolve-QaDeviceId` in the shared module.
+
+Caveat: `Pynapli_API34` uses a `google_apis` image, **not** `google_apis_playstore`. Play Billing
+paths (`android-store-qa.ps1`) may behave differently there; treat android-36 as authoritative for
+billing and android-34 as the platform-behaviour check. Worth folding the matrix into **H2**.
 
 ---
 

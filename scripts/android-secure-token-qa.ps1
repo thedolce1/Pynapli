@@ -1,4 +1,4 @@
-# Connected-Android QA for Keystore-backed secure token storage (ONBOARDING_AUTH_SPEC
+﻿# Connected-Android QA for Keystore-backed secure token storage (ONBOARDING_AUTH_SPEC
 # "Secure token storage"). Proves on a real emulator/device that (1) a signed-in session
 # survives force-stop + relaunch through the encrypted store, and (2) the on-disk SQLite
 # database (incl. WAL) carries the `enc1:` ciphertext and NO plaintext token JSON.
@@ -72,6 +72,9 @@ if (-not (Test-Path ".\gradlew.bat")) {
 
 $script:Adb = Find-Adb
 $script:DeviceId = Resolve-QaDeviceId -Adb $script:Adb -RequestedDeviceId $DeviceId
+# API level in the banner: this suite ran only on android-36 for months with nothing in its
+# output saying so, which is how an edge-to-edge defect stayed invisible on API <=34.
+Write-Host "Device: $script:DeviceId (API $(Get-QaDeviceApiLevel -Adb $script:Adb -DeviceId $script:DeviceId))"
 $script:PackageNameValue = $PackageName
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
