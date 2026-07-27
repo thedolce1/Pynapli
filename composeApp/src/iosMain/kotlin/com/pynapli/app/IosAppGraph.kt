@@ -183,6 +183,13 @@ class IosAppGraph(
      * iOS has no equivalent gate, so the requirement is encoded in the API shape instead — sockets
      * left running in the background burn battery and reconnect-churn on resume.
      *
+     * NOTE — this duplicates a framework feature, knowingly. Compose Multiplatform provides a common
+     * `LifecycleOwner` that already maps `didBecomeActive`/`willResignActive` to `ON_RESUME`/`ON_PAUSE`,
+     * so this could be observed in shared code with no Swift hook at all. It is hand-rolled because
+     * the project declares no `androidx.lifecycle` dependency and Android drives the same transitions
+     * from `MainActivity.onStop`; adopting the common lifecycle is a slice across both shells, not an
+     * iOS detail. See "Lifecycle" in docs/IOS_BRINGUP_PLAN.md step 2.
+     *
      * Idempotent, and main-thread only: iOS lifecycle callbacks are delivered on the main thread and
      * [realtimeJobs] is not synchronised.
      */

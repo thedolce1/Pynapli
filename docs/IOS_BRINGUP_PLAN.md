@@ -60,6 +60,19 @@ Add the `PynapliCompose` framework via the standard KMP integration, confirm `./
 :composeApp:linkDebugFrameworkIosSimulatorArm64` succeeds, and get a blank Compose view on a
 simulator before wiring anything else.
 
+**Required `Info.plist` key — do this before the first launch, not after debugging one.** JetBrains'
+SwiftUI-integration guide states it flatly: *"Compose Multiplatform rendering requires high refresh
+rates to be explicitly enabled: add the `CADisableMinimumFrameDurationOnPhone` key to your app's
+`Info.plist` file. Without it, the app will crash at runtime."*
+
+```xml
+<key>CADisableMinimumFrameDurationOnPhone</key>
+<true/>
+```
+
+A first-launch crash with no obvious cause is exactly the kind of thing that eats half a day, and it
+is one plist entry.
+
 **Exit test:** the app launches on a simulator and renders any Compose content.
 
 ### 2. `IosAppGraph` + entry point — **Kotlin side DONE 2026-07-27**
@@ -89,14 +102,14 @@ final class AppState {
         let config = PynapliConfig(apiBaseUrl: "https://api.pynapli.com",
                                    websocketBaseUrl: "wss://api.pynapli.com",
                                    environment: .prod)
-        graph = IosPynapliEntry().createGraph(config: config, installId: KeychainInstallId.value())
+        graph = IosPynapliEntry.shared.createGraph(config: config, installId: KeychainInstallId.value())
     }
 }
 
 struct ComposeRoot: UIViewControllerRepresentable {
     let state: AppState
     func makeUIViewController(context: Context) -> UIViewController {
-        IosPynapliEntry().createViewController(
+        IosPynapliEntry.shared.createViewController(
             graph: state.graph,
             onUseCurrentLocation: { LocationBridge.shared.requestOneShotFix(state.graph) },
             onPickMediaForAlbum: { kind in PhotoPicker.shared.present(for: kind) },
@@ -115,8 +128,24 @@ struct ComposeRoot: UIViewControllerRepresentable {
 }
 ```
 
-Note the Kotlin object maps to `IosPynapliEntry()` in Swift, and default arguments do not cross the
-interop boundary — pass every parameter explicitly.
+Note the Kotlin `object` maps to **`IosPynapliEntry.shared`** in Swift, not `IosPynapliEntry()` — the
+Objective-C interop guide records that calling a singleton as `MySingleton()` is deprecated, and the
+generated initializer is unavailable. (An earlier revision of this file had `IosPynapliEntry()`; it
+would not have compiled.) Default arguments also do not cross the interop boundary, so pass every
+parameter explicitly — including `storePurchasesAvailable` and `testerDiagnosticLabel`.
+
+**Lifecycle — read this before wiring `.onChange(of: scenePhase)`.** Compose Multiplatform ships a
+common `LifecycleOwner` and already maps the iOS events for you: `viewWillAppear` → `ON_START`,
+`didBecomeActive` → `ON_RESUME`, `willResignActive` → `ON_PAUSE`, `viewDidDisappear` → `ON_STOP`. So
+`startRealtime()`/`stopRealtime()` is a hand-rolled version of something the framework provides, and
+the Swift wiring below is the cost of not using it.
+
+It is written this way on purpose *for now*: the project declares no `androidx.lifecycle` dependency
+at all (checked — zero references repo-wide), Android drives the same start/stop from
+`MainActivity.onStop` under a build-failing policy check, and adding a lifecycle artifact plus
+rewiring both shells is a real slice, not a footnote in an iOS plan. Revisit it as its own change —
+adopting the common `LifecycleOwner` would let Grid/Activity/Messages observe lifecycle in shared
+code and delete the Swift hook entirely. Until then the Swift hook is **required**, not optional.
 
 **Exit test:** dev login reaches an authenticated Grid with seeded cards — the same first milestone
 the web shell used.
@@ -178,6 +207,26 @@ bridges, rather than a UI layer.
 Kotlin written pre-Mac, all type-checked by `compileKotlinIosSimulatorArm64`: 4 stream-client
 builders, `IosAppGraph`, `IosPynapliEntry`, `IosPushTokenProvider`, `IosPushRegistrationStore`.
 None of it has ever executed.
+
+## Verified against official documentation (2026-07-27)
+
+The iOS Kotlin in this repo was originally written by mirroring the Android and web shells plus
+compiler feedback — **not** from JetBrains/Apple documentation, which CLAUDE.md requires. That check
+was run afterwards and found three things. Recording it here so the next revision starts from what
+was actually confirmed rather than repeating the same assumption:
+
+| Decision | Source | Result |
+|---|---|---|
+| Darwin engine for the four WebSocket stream clients | Ktor client-engines doc | ✅ Correct — Darwin is listed as WebSocket-capable (unlike Apache5, Jetty, Android) |
+| `ComposeUIViewController` as the entry point, wrapped in `UIViewControllerRepresentable` | CMP SwiftUI-integration doc | ✅ Correct — this is the documented pattern |
+| `Info.plist` needs `CADisableMinimumFrameDurationOnPhone` | CMP SwiftUI-integration doc | ❌ **Was missing entirely.** Documented as a runtime crash. Now in step 1 |
+| Swift call shape for the Kotlin `object` | Kotlin/Native ObjC-interop doc | ❌ **Was wrong** — `IosPynapliEntry()` corrected to `.shared` |
+| Hand-rolled `startRealtime`/`stopRealtime` | CMP lifecycle doc | ⚠️ **Framework already provides this.** Deliberate for now; see step 2 |
+| `kotlin.concurrent.AtomicReference` for the APNs token | compiler | ✅ Resolves and type-checks on `iosSimulatorArm64` |
+
+Still **not** doc-verified, because they are Mac-side and not yet written: Keychain/`SecItemAdd`
+attributes for step 3, `PHPickerViewController` usage, APNs registration, Firebase Apple SDK setup,
+and StoreKit 2. Check those against Apple's documentation *before* writing them, not after.
 
 ## Do not do before the Mac arrives
 
