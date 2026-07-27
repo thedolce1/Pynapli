@@ -9,6 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ComposeViewport
 import com.pynapli.app.PynapliApp
+import com.pynapli.app.PynapliAppGraph
+import com.pynapli.app.PynapliPlatform
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.web.platform.onDocumentVisible
@@ -85,33 +87,39 @@ private fun WebAppContent(
     mediaPicker: WebMediaPicker,
 ) {
     PynapliApp(
-        authStateHolder = graph.authStateHolder,
-        appSettingsStateHolder = graph.appSettingsStateHolder,
-        gridStateHolder = graph.gridStateHolder,
-        profileDetailStateHolder = graph.profileDetailStateHolder,
-        conversationStateHolder = graph.conversationStateHolder,
-        messagesStateHolder = graph.messagesStateHolder,
-        activityStateHolder = graph.activityStateHolder,
-        locationStateHolder = graph.locationStateHolder,
-        mediaAlbumsStateHolder = graph.mediaAlbumsStateHolder,
-        profileHubStateHolder = graph.profileHubStateHolder,
-        profileLinksStateHolder = graph.profileLinksStateHolder,
-        swipeStateHolder = graph.swipeStateHolder,
-        storeStateHolder = graph.storeStateHolder,
-        savedGridFilterStateHolder = graph.savedGridFilterStateHolder,
-        savedSwipeFilterStateHolder = graph.savedSwipeFilterStateHolder,
-        travelLocationStateHolder = graph.travelLocationStateHolder,
-        tonightAvailabilityStateHolder = graph.tonightAvailabilityStateHolder,
-        deepLinkStateHolder = graph.deepLinkStateHolder,
-        onboardingStateHolder = graph.onboardingStateHolder,
-        onUseCurrentLocation = locationAdapter::requestCurrentLocation,
-        onPickMediaForAlbum = mediaPicker::pickForAlbum,
-        onPickConversationPhoto = mediaPicker::pickConversationPhoto,
-        // Founder-locked web behavior: Store is read-only; browsers have no launcher icon.
-        storePurchasesAvailable = false,
-        discreetIconSupported = false,
-        devLoginCredentials = graph.devLoginCredentials,
-        testerDiagnosticLabel = graph.testerDiagnosticLabel,
-        onNavigationRouteChanged = router::onRouteChanged,
+        graph =
+            PynapliAppGraph(
+                authStateHolder = graph.authStateHolder,
+                appSettingsStateHolder = graph.appSettingsStateHolder,
+                gridStateHolder = graph.gridStateHolder,
+                profileDetailStateHolder = graph.profileDetailStateHolder,
+                conversationStateHolder = graph.conversationStateHolder,
+                messagesStateHolder = graph.messagesStateHolder,
+                activityStateHolder = graph.activityStateHolder,
+                locationStateHolder = graph.locationStateHolder,
+                mediaAlbumsStateHolder = graph.mediaAlbumsStateHolder,
+                profileHubStateHolder = graph.profileHubStateHolder,
+                profileLinksStateHolder = graph.profileLinksStateHolder,
+                swipeStateHolder = graph.swipeStateHolder,
+                storeStateHolder = graph.storeStateHolder,
+                savedGridFilterStateHolder = graph.savedGridFilterStateHolder,
+                savedSwipeFilterStateHolder = graph.savedSwipeFilterStateHolder,
+                travelLocationStateHolder = graph.travelLocationStateHolder,
+                tonightAvailabilityStateHolder = graph.tonightAvailabilityStateHolder,
+                deepLinkStateHolder = graph.deepLinkStateHolder,
+                onboardingStateHolder = graph.onboardingStateHolder,
+            ),
+        platform =
+            PynapliPlatform(
+                onUseCurrentLocation = locationAdapter::requestCurrentLocation,
+                onPickMediaForAlbum = mediaPicker::pickForAlbum,
+                onPickConversationPhoto = mediaPicker::pickConversationPhoto,
+                // Founder-locked web behavior: Store is read-only; browsers have no launcher icon.
+                storePurchasesAvailable = false,
+                discreetIconSupported = false,
+                devLoginCredentials = graph.devLoginCredentials,
+                testerDiagnosticLabel = graph.testerDiagnosticLabel,
+                onNavigationRouteChanged = router::onRouteChanged,
+            ),
     )
 }

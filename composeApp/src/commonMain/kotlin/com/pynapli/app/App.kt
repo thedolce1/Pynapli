@@ -55,56 +55,31 @@ import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.shared.network.dto.MatchDto
 import kotlinx.coroutines.launch
 
+/**
+ * Root of the shared Compose app.
+ *
+ * Takes two objects rather than the 29 individual parameters it used to: [PynapliAppGraph] for the
+ * state holders and clients, [PynapliPlatform] for host capabilities and callbacks. See those types
+ * for why. Adding a feature now means adding a property there, not widening this signature and both
+ * platform shells with it.
+ */
 @Composable
 fun PynapliApp(
-    authStateHolder: AuthStateHolder,
-    appSettingsStateHolder: AppSettingsStateHolder,
-    gridStateHolder: GridStateHolder,
-    profileDetailStateHolder: ProfileDetailStateHolder,
-    conversationStateHolder: ConversationStateHolder,
-    messagesStateHolder: MessagesStateHolder,
-    activityStateHolder: ActivityStateHolder,
-    locationStateHolder: LocationStateHolder,
-    mediaAlbumsStateHolder: MediaAlbumsStateHolder,
-    profileHubStateHolder: ProfileHubStateHolder,
-    profileLinksStateHolder: ProfileLinksStateHolder,
-    swipeStateHolder: SwipeStateHolder,
-    storeStateHolder: StoreStateHolder,
-    savedGridFilterStateHolder: com.pynapli.app.grid.SavedGridFilterStateHolder? = null,
-    savedSwipeFilterStateHolder: com.pynapli.app.swipe.SavedSwipeFilterStateHolder? = null,
-    travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
-    tonightAvailabilityStateHolder: com.pynapli.app.grid.TonightAvailabilityStateHolder? = null,
-    playingTonightStateHolder: com.pynapli.app.tonight.PlayingTonightStateHolder? = null,
-    psyncRepository: com.pynapli.app.psync.PsyncRepository? = null,
-    psyncStreamClient: com.pynapli.shared.network.PsyncStreamClient? = null,
-    deepLinkStateHolder: AppDeepLinkStateHolder? = null,
-    onboardingStateHolder: OnboardingStateHolder? = null,
-    onUseCurrentLocation: () -> Unit,
-    onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
-    onPickConversationPhoto: () -> Unit = {},
-    onSetDiscreetIcon: (Boolean) -> Unit = {},
-    // Platform capabilities (WEB_PWA_GAMEPLAN.md W5): web is read-only in the Store
-    // (founder-locked) and has no launcher icon to disguise.
-    storePurchasesAvailable: Boolean = true,
-    discreetIconSupported: Boolean = true,
-    devLoginCredentials: DevLoginCredentials? = null,
-    testerDiagnosticLabel: String? = null,
-    // Browser URL sync (WEB_PWA_GAMEPLAN.md W1.2): the web shell mirrors the canonical
-    // route into the address bar; other platforms leave this null.
-    onNavigationRouteChanged: ((String) -> Unit)? = null,
+    graph: PynapliAppGraph,
+    platform: PynapliPlatform,
 ) {
-    val appSettingsState by appSettingsStateHolder.state.collectAsState()
+    val appSettingsState by graph.appSettingsStateHolder.state.collectAsState()
 
-    LaunchedEffect(appSettingsStateHolder) {
-        appSettingsStateHolder.load()
+    LaunchedEffect(graph.appSettingsStateHolder) {
+        graph.appSettingsStateHolder.load()
     }
 
     PynapliTheme(themeMode = appSettingsState.settings.themeMode) {
-        val authState by authStateHolder.state.collectAsState()
-        val conversationState by conversationStateHolder.state.collectAsState()
-        val messagesState by messagesStateHolder.state.collectAsState()
-        val activityState by activityStateHolder.state.collectAsState()
-        val profileDetailState by profileDetailStateHolder.state.collectAsState()
+        val authState by graph.authStateHolder.state.collectAsState()
+        val conversationState by graph.conversationStateHolder.state.collectAsState()
+        val messagesState by graph.messagesStateHolder.state.collectAsState()
+        val activityState by graph.activityStateHolder.state.collectAsState()
+        val profileDetailState by graph.profileDetailStateHolder.state.collectAsState()
         val scope = rememberCoroutineScope()
         var selectedTab by remember { mutableStateOf(PynapliTab.Grid) }
         var profileSurface by remember { mutableStateOf(ProfileSurface.None) }
@@ -112,23 +87,23 @@ fun PynapliApp(
         var psyncVisible by remember { mutableStateOf(false) }
         // Built per signed-in viewer so session mapping (isInitiator/partner) is correct.
         val psyncStateHolder =
-            remember(authState.session?.userId, psyncRepository) {
-                psyncRepository?.let { repo ->
+            remember(authState.session?.userId, graph.psyncRepository) {
+                graph.psyncRepository?.let { repo ->
                     com.pynapli.app.psync
                         .PsyncStateHolder(repo, authState.session?.userId)
                 }
             }
         var activeNotification by remember { mutableStateOf<InAppNotificationUi?>(null) }
         PynapliAppEffects(
-            authStateHolder = authStateHolder,
-            appSettingsStateHolder = appSettingsStateHolder,
-            messagesStateHolder = messagesStateHolder,
-            activityStateHolder = activityStateHolder,
-            conversationStateHolder = conversationStateHolder,
-            mediaAlbumsStateHolder = mediaAlbumsStateHolder,
-            profileHubStateHolder = profileHubStateHolder,
-            profileLinksStateHolder = profileLinksStateHolder,
-            deepLinkStateHolder = deepLinkStateHolder,
+            authStateHolder = graph.authStateHolder,
+            appSettingsStateHolder = graph.appSettingsStateHolder,
+            messagesStateHolder = graph.messagesStateHolder,
+            activityStateHolder = graph.activityStateHolder,
+            conversationStateHolder = graph.conversationStateHolder,
+            mediaAlbumsStateHolder = graph.mediaAlbumsStateHolder,
+            profileHubStateHolder = graph.profileHubStateHolder,
+            profileLinksStateHolder = graph.profileLinksStateHolder,
+            deepLinkStateHolder = graph.deepLinkStateHolder,
             activeNotification = activeNotification,
             onNotification = { activeNotification = it },
             onSelectTab = { selectedTab = it },
@@ -139,9 +114,9 @@ fun PynapliApp(
         // Report the canonical route for the current navigation state. Composed before
         // the early returns below so it fires for auth/onboarding states too; skipped
         // while the session restore is settling so the address bar never flashes /login.
-        if (onNavigationRouteChanged != null && !authState.isCheckingSession) {
+        if (platform.onNavigationRouteChanged != null && !authState.isCheckingSession) {
             val onboardingActiveForRoute =
-                onboardingStateHolder
+                graph.onboardingStateHolder
                     ?.state
                     ?.collectAsState()
                     ?.value
@@ -162,14 +137,14 @@ fun PynapliApp(
                     profileSurface = profileSurface,
                     conversationId = openConversationId,
                 )
-            LaunchedEffect(route) { onNavigationRouteChanged(route) }
+            LaunchedEffect(route) { platform.onNavigationRouteChanged(route) }
         }
 
         // Once the session is settled, re-enter an interrupted signup stepper and
         // decide this session's add-a-photo nudge (ONBOARDING_AUTH_SPEC).
-        LaunchedEffect(authState.isCheckingSession, authState.authenticated, onboardingStateHolder) {
+        LaunchedEffect(authState.isCheckingSession, authState.authenticated, graph.onboardingStateHolder) {
             if (!authState.isCheckingSession && authState.authenticated) {
-                onboardingStateHolder?.onSessionReady()
+                graph.onboardingStateHolder?.onSessionReady()
             }
         }
 
@@ -194,58 +169,62 @@ fun PynapliApp(
         // The signup stepper owns the screen while active: pre-auth steps (DOB,
         // underage stop, account) replace AuthScreen; post-auth steps (location,
         // name, photo) run before the main surfaces appear.
-        val onboardingState = onboardingStateHolder?.state?.collectAsState()?.value
-        if (onboardingStateHolder != null && onboardingState != null && onboardingState.active) {
-            val locationState by locationStateHolder.state.collectAsState()
-            val mediaAlbumsState by mediaAlbumsStateHolder.state.collectAsState()
+        val onboardingState =
+            graph.onboardingStateHolder
+                ?.state
+                ?.collectAsState()
+                ?.value
+        if (graph.onboardingStateHolder != null && onboardingState != null && onboardingState.active) {
+            val locationState by graph.locationStateHolder.state.collectAsState()
+            val mediaAlbumsState by graph.mediaAlbumsStateHolder.state.collectAsState()
             OnboardingFlowScreen(
                 state = onboardingState,
                 locationState = locationState,
                 mediaState = mediaAlbumsState,
-                onDobDayChanged = onboardingStateHolder::updateDobDay,
-                onDobMonthChanged = onboardingStateHolder::updateDobMonth,
-                onDobYearChanged = onboardingStateHolder::updateDobYear,
-                onConfirmDob = onboardingStateHolder::confirmDob,
-                onBackToDob = onboardingStateHolder::backToDob,
-                onCancelToSignIn = onboardingStateHolder::cancelToSignIn,
-                onAcceptPolicies = onboardingStateHolder::acceptPolicies,
-                onBackToPolicies = onboardingStateHolder::backToPolicies,
-                onEmailChanged = onboardingStateHolder::updateEmail,
-                onPasswordChanged = onboardingStateHolder::updatePassword,
-                onSubmitAccount = { scope.launch { onboardingStateHolder.submitAccount() } },
-                onShareLocation = onUseCurrentLocation,
-                onContinueFromLocation = onboardingStateHolder::continueFromLocation,
-                onDisplayNameChanged = onboardingStateHolder::updateDisplayName,
-                onPickPhoto = { onPickMediaForAlbum(MediaAlbumKindUi.Profile) },
-                onFinishProfile = { scope.launch { onboardingStateHolder.finishProfile() } },
-                testerDiagnosticLabel = testerDiagnosticLabel,
+                onDobDayChanged = graph.onboardingStateHolder::updateDobDay,
+                onDobMonthChanged = graph.onboardingStateHolder::updateDobMonth,
+                onDobYearChanged = graph.onboardingStateHolder::updateDobYear,
+                onConfirmDob = graph.onboardingStateHolder::confirmDob,
+                onBackToDob = graph.onboardingStateHolder::backToDob,
+                onCancelToSignIn = graph.onboardingStateHolder::cancelToSignIn,
+                onAcceptPolicies = graph.onboardingStateHolder::acceptPolicies,
+                onBackToPolicies = graph.onboardingStateHolder::backToPolicies,
+                onEmailChanged = graph.onboardingStateHolder::updateEmail,
+                onPasswordChanged = graph.onboardingStateHolder::updatePassword,
+                onSubmitAccount = { scope.launch { graph.onboardingStateHolder.submitAccount() } },
+                onShareLocation = platform.onUseCurrentLocation,
+                onContinueFromLocation = graph.onboardingStateHolder::continueFromLocation,
+                onDisplayNameChanged = graph.onboardingStateHolder::updateDisplayName,
+                onPickPhoto = { platform.onPickMediaForAlbum(MediaAlbumKindUi.Profile) },
+                onFinishProfile = { scope.launch { graph.onboardingStateHolder.finishProfile() } },
+                testerDiagnosticLabel = platform.testerDiagnosticLabel,
             )
             // Composed after the stepper so the crop step draws above it; the main
             // shell hosts its own copy because this branch returns early.
-            PhotoCropOverlay(mediaAlbumsStateHolder, scope)
+            PhotoCropOverlay(graph.mediaAlbumsStateHolder, scope)
             return@PynapliTheme
         }
 
         if (!authState.authenticated) {
             AuthScreen(
                 state = authState,
-                onEmailChanged = authStateHolder::updateEmail,
-                onPasswordChanged = authStateHolder::updatePassword,
-                onBirthdateChanged = authStateHolder::updateBirthdate,
-                onAcceptedAgeAndTermsChanged = authStateHolder::updateAcceptedAgeAndTerms,
-                onModeSelected = authStateHolder::switchMode,
+                onEmailChanged = graph.authStateHolder::updateEmail,
+                onPasswordChanged = graph.authStateHolder::updatePassword,
+                onBirthdateChanged = graph.authStateHolder::updateBirthdate,
+                onAcceptedAgeAndTermsChanged = graph.authStateHolder::updateAcceptedAgeAndTerms,
+                onModeSelected = graph.authStateHolder::switchMode,
                 onSubmit = {
-                    scope.launch { authStateHolder.submit() }
+                    scope.launch { graph.authStateHolder.submit() }
                 },
                 onDevLogin =
-                    devLoginCredentials?.let { credentials ->
-                        { scope.launch { authStateHolder.submitDevLogin(credentials) } }
+                    platform.devLoginCredentials?.let { credentials ->
+                        { scope.launch { graph.authStateHolder.submitDevLogin(credentials) } }
                     },
                 onStartCreateAccount =
-                    onboardingStateHolder?.let { holder ->
+                    graph.onboardingStateHolder?.let { holder ->
                         { holder.startCreateAccount() }
                     },
-                testerDiagnosticLabel = testerDiagnosticLabel,
+                testerDiagnosticLabel = platform.testerDiagnosticLabel,
             )
             return@PynapliTheme
         }
@@ -253,14 +232,14 @@ fun PynapliApp(
         val conversationActions =
             rememberConversationActions(
                 scope = scope,
-                conversationStateHolder = conversationStateHolder,
-                messagesStateHolder = messagesStateHolder,
+                conversationStateHolder = graph.conversationStateHolder,
+                messagesStateHolder = graph.messagesStateHolder,
             )
 
         LaunchedEffect(selectedTab, profileDetailState.blockedTargetUserId) {
             if (selectedTab != PynapliTab.Messages) return@LaunchedEffect
-            val blockedId = profileDetailStateHolder.consumeBlockedTargetUserId() ?: return@LaunchedEffect
-            profileDetailStateHolder.dismiss()
+            val blockedId = graph.profileDetailStateHolder.consumeBlockedTargetUserId() ?: return@LaunchedEffect
+            graph.profileDetailStateHolder.dismiss()
             if (conversationState.detail
                     ?.conversation
                     ?.participants
@@ -268,7 +247,7 @@ fun PynapliApp(
             ) {
                 conversationActions.dismiss()
             }
-            messagesStateHolder.refreshSilently()
+            graph.messagesStateHolder.refreshSilently()
         }
 
         // Adaptive shell (WEB_PWA_GAMEPLAN.md): Compact keeps the proven phone layout
@@ -286,24 +265,24 @@ fun PynapliApp(
             PynapliMainContent(
                 profileSurface = profileSurface,
                 selectedTab = selectedTab,
-                gridStateHolder = gridStateHolder,
-                profileDetailStateHolder = profileDetailStateHolder,
-                conversationStateHolder = conversationStateHolder,
-                messagesStateHolder = messagesStateHolder,
-                activityStateHolder = activityStateHolder,
-                locationStateHolder = locationStateHolder,
-                mediaAlbumsStateHolder = mediaAlbumsStateHolder,
-                profileHubStateHolder = profileHubStateHolder,
-                profileLinksStateHolder = profileLinksStateHolder,
-                swipeStateHolder = swipeStateHolder,
-                storeStateHolder = storeStateHolder,
-                appSettingsStateHolder = appSettingsStateHolder,
-                authStateHolder = authStateHolder,
-                savedGridFilterStateHolder = savedGridFilterStateHolder,
-                savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
-                travelLocationStateHolder = travelLocationStateHolder,
-                tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
-                onboardingStateHolder = onboardingStateHolder,
+                gridStateHolder = graph.gridStateHolder,
+                profileDetailStateHolder = graph.profileDetailStateHolder,
+                conversationStateHolder = graph.conversationStateHolder,
+                messagesStateHolder = graph.messagesStateHolder,
+                activityStateHolder = graph.activityStateHolder,
+                locationStateHolder = graph.locationStateHolder,
+                mediaAlbumsStateHolder = graph.mediaAlbumsStateHolder,
+                profileHubStateHolder = graph.profileHubStateHolder,
+                profileLinksStateHolder = graph.profileLinksStateHolder,
+                swipeStateHolder = graph.swipeStateHolder,
+                storeStateHolder = graph.storeStateHolder,
+                appSettingsStateHolder = graph.appSettingsStateHolder,
+                authStateHolder = graph.authStateHolder,
+                savedGridFilterStateHolder = graph.savedGridFilterStateHolder,
+                savedSwipeFilterStateHolder = graph.savedSwipeFilterStateHolder,
+                travelLocationStateHolder = graph.travelLocationStateHolder,
+                tonightAvailabilityStateHolder = graph.tonightAvailabilityStateHolder,
+                onboardingStateHolder = graph.onboardingStateHolder,
                 conversationActions = conversationActions,
                 scope = scope,
                 onProfileSurface = { profileSurface = it },
@@ -312,16 +291,16 @@ fun PynapliApp(
                     // Route a gated AGE_VERIFICATION_REQUIRED prompt into the existing
                     // Profile-Hub age-verification flow: show the Hub surface and open its dialog.
                     profileSurface = ProfileSurface.Hub
-                    profileHubStateHolder.openAgeVerification()
+                    graph.profileHubStateHolder.openAgeVerification()
                 },
                 onOpenTonight = { tonightVisible = true },
                 onOpenPsync = psyncStateHolder?.let { { psyncVisible = true } },
-                onUseCurrentLocation = onUseCurrentLocation,
-                onPickMediaForAlbum = onPickMediaForAlbum,
-                onPickConversationPhoto = onPickConversationPhoto,
-                onSetDiscreetIcon = onSetDiscreetIcon,
-                storePurchasesAvailable = storePurchasesAvailable,
-                discreetIconSupported = discreetIconSupported,
+                onUseCurrentLocation = platform.onUseCurrentLocation,
+                onPickMediaForAlbum = platform.onPickMediaForAlbum,
+                onPickConversationPhoto = platform.onPickConversationPhoto,
+                onSetDiscreetIcon = platform.onSetDiscreetIcon,
+                storePurchasesAvailable = platform.storePurchasesAvailable,
+                discreetIconSupported = platform.discreetIconSupported,
             )
         }
 
@@ -368,7 +347,7 @@ fun PynapliApp(
                         profileSurface = ProfileSurface.None
                         selectedTab = notification.targetTab
                         notification.activityTab?.let { tab ->
-                            scope.launch { activityStateHolder.selectTab(tab) }
+                            scope.launch { graph.activityStateHolder.selectTab(tab) }
                         }
                         activeNotification = null
                     },
@@ -383,22 +362,22 @@ fun PynapliApp(
             psyncVisible = psyncVisible,
             onPsyncDismiss = { psyncVisible = false },
             selectedTab = selectedTab,
-            playingTonightStateHolder = playingTonightStateHolder,
+            playingTonightStateHolder = graph.playingTonightStateHolder,
             psyncStateHolder = psyncStateHolder,
-            psyncStreamClient = psyncStreamClient,
-            profileDetailStateHolder = profileDetailStateHolder,
-            conversationStateHolder = conversationStateHolder,
-            profileLinksStateHolder = profileLinksStateHolder,
-            authStateHolder = authStateHolder,
-            appSettingsStateHolder = appSettingsStateHolder,
+            psyncStreamClient = graph.psyncStreamClient,
+            profileDetailStateHolder = graph.profileDetailStateHolder,
+            conversationStateHolder = graph.conversationStateHolder,
+            profileLinksStateHolder = graph.profileLinksStateHolder,
+            authStateHolder = graph.authStateHolder,
+            appSettingsStateHolder = graph.appSettingsStateHolder,
             conversationActions = conversationActions,
-            onPickConversationPhoto = onPickConversationPhoto,
+            onPickConversationPhoto = platform.onPickConversationPhoto,
             scope = scope,
         )
 
         // Square-crop step for a freshly picked profile photo; composed last so it
         // draws above the shell and every overlay.
-        PhotoCropOverlay(mediaAlbumsStateHolder, scope)
+        PhotoCropOverlay(graph.mediaAlbumsStateHolder, scope)
     }
 }
 
