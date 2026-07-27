@@ -17,7 +17,6 @@ sqldelight = "2.3.2"
 # Compose bump — a silent desktop-rendering break if it ever drifted. Re-check on the next Coil or
 # Compose bump; if Coil catches up the warning disappears on its own.
 coil = "3.4.0"
-koin = "4.2.1"
 firebaseBom = "34.12.0"
 firebaseAdmin = "9.7.0"
 googleServices = "4.4.4"
@@ -97,8 +96,6 @@ sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", versi
 
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
-koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
-koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
 compose-ui-backhandler = { module = "org.jetbrains.compose.ui:ui-backhandler", version.ref = "composeMultiplatform" }
 
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }

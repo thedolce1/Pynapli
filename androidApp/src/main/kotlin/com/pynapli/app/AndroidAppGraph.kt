@@ -172,143 +172,70 @@ class AndroidAppGraph(
             progressStore = SqlDelightOnboardingProgressStore(database),
         )
 
-    val gridStateHolder =
-        GridStateHolder(
-            repository = ApiGridFeedRepository(apiClient),
-            snapshotStore = SqlDelightGridSnapshotStore(database),
-        )
-
-    val savedGridFilterStateHolder =
-        SavedGridFilterStateHolder(
-            repository = ApiSavedGridFilterRepository(apiClient),
-        )
-
-    val savedSwipeFilterStateHolder =
-        SavedSwipeFilterStateHolder(
-            repository = ApiSavedSwipeFilterRepository(apiClient),
-        )
-
-    val travelLocationStateHolder =
-        com.pynapli.app.location.TravelLocationStateHolder(
-            repository =
-                com.pynapli.app.location
-                    .ApiTravelLocationRepository(apiClient),
-        )
-
-    val tonightAvailabilityStateHolder =
-        TonightAvailabilityStateHolder(
-            repository = ApiTonightAvailabilityRepository(apiClient),
-        )
-
-    val playingTonightStateHolder =
-        com.pynapli.app.tonight.PlayingTonightStateHolder(
-            repository =
-                com.pynapli.app.tonight
-                    .ApiTonightRepository(apiClient),
-        )
-
-    // Psync repository; the per-viewer PsyncStateHolder is built in PynapliApp from this.
-    val psyncRepository =
-        com.pynapli.app.psync
-            .ApiPsyncRepository(apiClient)
-
     // Realtime convenience channel for an open Psync session (refetch on partner-side changes).
+    // Not part of the common graph: the per-viewer PsyncStateHolder is built in PynapliApp, so the
+    // shell only needs to hand the client through.
     val psyncStreamClient =
         buildAndroidPsyncStreamClient(
             websocketBaseUrl = pynapliConfig.websocketBaseUrl,
             tokenProvider = sessionStore,
         )
 
-    val gridPresenceStreamCoordinator =
-        GridPresenceStreamCoordinator(
-            client =
-                buildAndroidPresenceStreamClient(
-                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
-                    tokenProvider = sessionStore,
-                ),
-            gridStateHolder = gridStateHolder,
-        )
-
-    val profileDetailStateHolder =
-        ProfileDetailStateHolder(
-            repository = ApiPublicProfileRepository(apiClient),
-        )
-
-    val conversationStateHolder =
-        ConversationStateHolder(
-            repository = ApiConversationRepository(apiClient, KtorMediaByteUploader()),
-        )
-
-    val messagesStateHolder =
-        MessagesStateHolder(
-            repository = ApiMessagesRepository(apiClient),
-        )
-
-    val activityStateHolder =
-        ActivityStateHolder(
-            repository = ApiActivityFeedRepository(apiClient),
-        )
-
-    val activityRealtimeCoordinator =
-        ActivityRealtimeCoordinator(
-            client =
-                buildAndroidActivityStreamClient(
-                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
-                    tokenProvider = sessionStore,
-                ),
-            activityStateHolder = activityStateHolder,
-        )
-
-    val messagesRealtimeCoordinator =
-        MessagesRealtimeCoordinator(
-            client =
-                buildAndroidMessageStreamClient(
-                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
-                    tokenProvider = sessionStore,
-                ),
-            messagesStateHolder = messagesStateHolder,
-            conversationStateHolder = conversationStateHolder,
-        )
-
-    val locationStateHolder =
-        LocationStateHolder(
-            repository = ApiLocationUpdateRepository(apiClient),
-        )
-
-    val mediaAlbumsStateHolder =
-        MediaAlbumsStateHolder(
-            repository =
-                ApiMediaAlbumsRepository(
-                    apiClient = apiClient,
-                    mediaByteUploader = KtorMediaByteUploader(),
-                ),
-        )
-
-    val profileHubStateHolder =
-        ProfileHubStateHolder(
-            repository = ApiProfileHubRepository(apiClient),
-        )
-
-    val profileLinksStateHolder =
-        ProfileLinksStateHolder(
-            repository = ApiProfileLinksRepository(apiClient),
-        )
-
-    val swipeStateHolder =
-        SwipeStateHolder(
-            repository =
+    /**
+     * Everything downstream of the API client, built once in commonMain. This block used to be
+     * ~140 lines duplicated in WebAppGraph; the two drifted (Playing Tonight and Psync were
+     * Android-only purely because the web shell had not been updated). Only genuinely
+     * platform-owned pieces are passed in below.
+     */
+    private val common =
+        PynapliCommonGraph(
+            apiClient = apiClient,
+            gridSnapshotStore = SqlDelightGridSnapshotStore(database),
+            swipeQueueStore = SqlDelightSwipeActionQueueStore(database),
+            // Debug builds inject swipe failures for the connected QA (android-swipe-queue-qa.ps1).
+            swipeRepository =
                 DebugFaultInjectingSwipeRepository(
                     context = appContext,
                     delegate = ApiSwipeRepository(apiClient),
                 ),
-            queueStore = SqlDelightSwipeActionQueueStore(database),
+            storePurchaseGateway = storePurchaseGateway,
+            presenceStreamClient =
+                buildAndroidPresenceStreamClient(
+                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
+                    tokenProvider = sessionStore,
+                ),
+            activityStreamClient =
+                buildAndroidActivityStreamClient(
+                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
+                    tokenProvider = sessionStore,
+                ),
+            messageStreamClient =
+                buildAndroidMessageStreamClient(
+                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
+                    tokenProvider = sessionStore,
+                ),
         )
 
-    val storeStateHolder =
-        StoreStateHolder(
-            repository = ApiStoreRepository(apiClient),
-            purchaseGateway = storePurchaseGateway,
-        )
+    val gridStateHolder get() = common.gridStateHolder
+    val savedGridFilterStateHolder get() = common.savedGridFilterStateHolder
+    val savedSwipeFilterStateHolder get() = common.savedSwipeFilterStateHolder
+    val travelLocationStateHolder get() = common.travelLocationStateHolder
+    val tonightAvailabilityStateHolder get() = common.tonightAvailabilityStateHolder
+    val playingTonightStateHolder get() = common.playingTonightStateHolder
+    val psyncRepository get() = common.psyncRepository
+    val profileDetailStateHolder get() = common.profileDetailStateHolder
+    val conversationStateHolder get() = common.conversationStateHolder
+    val messagesStateHolder get() = common.messagesStateHolder
+    val activityStateHolder get() = common.activityStateHolder
+    val locationStateHolder get() = common.locationStateHolder
+    val mediaAlbumsStateHolder get() = common.mediaAlbumsStateHolder
+    val profileHubStateHolder get() = common.profileHubStateHolder
+    val profileLinksStateHolder get() = common.profileLinksStateHolder
+    val swipeStateHolder get() = common.swipeStateHolder
+    val storeStateHolder get() = common.storeStateHolder
+    val gridPresenceStreamCoordinator get() = common.gridPresenceStreamCoordinator
+    val activityRealtimeCoordinator get() = common.activityRealtimeCoordinator
+    val messagesRealtimeCoordinator get() = common.messagesRealtimeCoordinator
 
     fun attachBillingActivity(activity: Activity) {
         playBillingPurchaseGateway.attachActivity(activity)

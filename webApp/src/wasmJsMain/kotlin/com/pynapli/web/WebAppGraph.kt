@@ -1,6 +1,7 @@
 package com.pynapli.web
 
 import com.pynapli.app.AppDeepLinkStateHolder
+import com.pynapli.app.PynapliCommonGraph
 import com.pynapli.app.activity.ActivityRealtimeCoordinator
 import com.pynapli.app.activity.ActivityStateHolder
 import com.pynapli.app.activity.ApiActivityFeedRepository
@@ -134,121 +135,58 @@ class WebAppGraph {
             progressStore = LocalStorageOnboardingProgressStore(),
         )
 
-    val gridStateHolder =
-        GridStateHolder(
-            repository = ApiGridFeedRepository(apiClient),
-            snapshotStore = NoOpGridSnapshotStore,
-        )
-
-    val savedGridFilterStateHolder =
-        SavedGridFilterStateHolder(
-            repository = ApiSavedGridFilterRepository(apiClient),
-        )
-
-    val savedSwipeFilterStateHolder =
-        SavedSwipeFilterStateHolder(
-            repository = ApiSavedSwipeFilterRepository(apiClient),
-        )
-
-    val travelLocationStateHolder =
-        TravelLocationStateHolder(
-            repository = ApiTravelLocationRepository(apiClient),
-        )
-
-    val tonightAvailabilityStateHolder =
-        TonightAvailabilityStateHolder(
-            repository = ApiTonightAvailabilityRepository(apiClient),
-        )
-
-    val profileDetailStateHolder =
-        ProfileDetailStateHolder(
-            repository = ApiPublicProfileRepository(apiClient),
-        )
-
-    val conversationStateHolder =
-        ConversationStateHolder(
-            repository = ApiConversationRepository(apiClient, KtorMediaByteUploader()),
-        )
-
-    val messagesStateHolder =
-        MessagesStateHolder(
-            repository = ApiMessagesRepository(apiClient),
-        )
-
-    val activityStateHolder =
-        ActivityStateHolder(
-            repository = ApiActivityFeedRepository(apiClient),
-        )
-
-    val locationStateHolder =
-        LocationStateHolder(
-            repository = ApiLocationUpdateRepository(apiClient),
-        )
-
-    val mediaAlbumsStateHolder =
-        MediaAlbumsStateHolder(
-            repository =
-                ApiMediaAlbumsRepository(
-                    apiClient = apiClient,
-                    mediaByteUploader = KtorMediaByteUploader(),
-                ),
-        )
-
-    val profileHubStateHolder =
-        ProfileHubStateHolder(
-            repository = ApiProfileHubRepository(apiClient),
-        )
-
-    val profileLinksStateHolder =
-        ProfileLinksStateHolder(
-            repository = ApiProfileLinksRepository(apiClient),
-        )
-
-    val swipeStateHolder =
-        SwipeStateHolder(
-            repository = ApiSwipeRepository(apiClient),
-            queueStore = NoOpSwipeActionQueueStore,
-        )
-
-    val storeStateHolder =
-        StoreStateHolder(
-            repository = ApiStoreRepository(apiClient),
-            purchaseGateway = UnavailableStorePurchaseGateway(),
-        )
-
-    // Realtime convenience streams (WEB_PWA_GAMEPLAN.md W3.2), same coordinators as
-    // Android over first-frame-auth web sockets. The resilient clients idle with
-    // backoff until a session token exists, so these run for the whole page lifetime.
-    val gridPresenceStreamCoordinator =
-        GridPresenceStreamCoordinator(
-            client =
+    /**
+     * Everything downstream of the API client, built once in commonMain and shared with
+     * AndroidAppGraph. This block used to be ~110 lines duplicated here; keeping two copies is what
+     * left Playing Tonight and Psync wired on Android only. Web now gets them for free — the
+     * surfaces appear because the graph is shared, not because someone remembered.
+     */
+    private val common =
+        PynapliCommonGraph(
+            apiClient = apiClient,
+            // NoOp stores until a localStorage snapshot store earns its place (WEB_PWA_GAMEPLAN W2/W4).
+            gridSnapshotStore = NoOpGridSnapshotStore,
+            swipeQueueStore = NoOpSwipeActionQueueStore,
+            // Store is founder-locked read-only on web.
+            storePurchaseGateway = UnavailableStorePurchaseGateway(),
+            // First-frame-auth sockets: browsers cannot set WebSocket headers (W3).
+            presenceStreamClient =
                 buildWebPresenceStreamClient(
                     websocketBaseUrl = pynapliConfig.websocketBaseUrl,
                     tokenProvider = sessionStore,
                 ),
-            gridStateHolder = gridStateHolder,
-        )
-
-    val activityRealtimeCoordinator =
-        ActivityRealtimeCoordinator(
-            client =
+            activityStreamClient =
                 buildWebActivityStreamClient(
                     websocketBaseUrl = pynapliConfig.websocketBaseUrl,
                     tokenProvider = sessionStore,
                 ),
-            activityStateHolder = activityStateHolder,
-        )
-
-    val messagesRealtimeCoordinator =
-        MessagesRealtimeCoordinator(
-            client =
+            messageStreamClient =
                 buildWebMessageStreamClient(
                     websocketBaseUrl = pynapliConfig.websocketBaseUrl,
                     tokenProvider = sessionStore,
                 ),
-            messagesStateHolder = messagesStateHolder,
-            conversationStateHolder = conversationStateHolder,
         )
+
+    val gridStateHolder get() = common.gridStateHolder
+    val savedGridFilterStateHolder get() = common.savedGridFilterStateHolder
+    val savedSwipeFilterStateHolder get() = common.savedSwipeFilterStateHolder
+    val travelLocationStateHolder get() = common.travelLocationStateHolder
+    val tonightAvailabilityStateHolder get() = common.tonightAvailabilityStateHolder
+    val playingTonightStateHolder get() = common.playingTonightStateHolder
+    val psyncRepository get() = common.psyncRepository
+    val profileDetailStateHolder get() = common.profileDetailStateHolder
+    val conversationStateHolder get() = common.conversationStateHolder
+    val messagesStateHolder get() = common.messagesStateHolder
+    val activityStateHolder get() = common.activityStateHolder
+    val locationStateHolder get() = common.locationStateHolder
+    val mediaAlbumsStateHolder get() = common.mediaAlbumsStateHolder
+    val profileHubStateHolder get() = common.profileHubStateHolder
+    val profileLinksStateHolder get() = common.profileLinksStateHolder
+    val swipeStateHolder get() = common.swipeStateHolder
+    val storeStateHolder get() = common.storeStateHolder
+    val gridPresenceStreamCoordinator get() = common.gridPresenceStreamCoordinator
+    val activityRealtimeCoordinator get() = common.activityRealtimeCoordinator
+    val messagesRealtimeCoordinator get() = common.messagesRealtimeCoordinator
 
     val devLoginCredentials: DevLoginCredentials? =
         if (pynapliConfig.environment == PynapliEnvironment.Local) {
