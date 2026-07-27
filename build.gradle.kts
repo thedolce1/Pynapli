@@ -36,6 +36,28 @@ allprojects {
     }
 }
 
+// Compose compiler metrics/reports, opt-in via -Ppynapli.composeMetrics=true (see
+// scripts/compose-metrics.ps1). Off by default on purpose: turning them on makes the compiler write
+// per-module reports on every Compose compile, so it is a measurement tool rather than something to
+// carry in normal builds and CI.
+//
+// Configured here rather than in each module so :androidApp, :composeApp and :webApp cannot drift
+// apart — the same class of duplication that caused the QA-harness bugs. Output goes under the ROOT
+// build directory so one script can read every module's report from a single place.
+val composeMetricsEnabled = providers.gradleProperty("pynapli.composeMetrics").orNull == "true"
+
+subprojects {
+    plugins.withId("org.jetbrains.kotlin.plugin.compose") {
+        extensions.configure<org.jetbrains.kotlin.compose.compiler.gradle.ComposeCompilerGradlePluginExtension> {
+            if (composeMetricsEnabled) {
+                val destination = rootProject.layout.buildDirectory.dir("compose-metrics/${project.name}")
+                metricsDestination.set(destination)
+                reportsDestination.set(destination)
+            }
+        }
+    }
+}
+
 tasks.register("printProjectStructure") {
     group = "help"
     description = "Prints the initial Pynapli Gradle module structure."

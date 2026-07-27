@@ -30,6 +30,7 @@ Build / test (Gradle wrapper):
 .\scripts\verify-android.ps1                          # Android policy check + shared/Compose host tests + debug APK + release lint
 .\scripts\verify-full.ps1                             # full local gate (incl. release lint + minified release APK); verify.ps1 is a compatibility alias
 .\scripts\verify-web.ps1                              # web gate: spotless + wasm compile (:shared/:composeApp/:webApp) + shared JVM tests
+.\scripts\compose-metrics.ps1                         # Compose compiler skippability/stability report (opt-in; -Android for the shipping variant)
 .\gradlew.bat :webApp:wasmJsBrowserDevelopmentRun     # web PWA dev server on :8081 (Ktor API stays on :8080)
 ```
 
