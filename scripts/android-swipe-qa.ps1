@@ -964,12 +964,17 @@ Assert-NoAppErrorText $filtersXml "Swipe filters sheet"
 $script:Screenshots.filtersSheet = Save-Screen "04_swipe_filters_sheet"
 $script:VisualSignatures.filtersSheet = Assert-GoldenStage "filtersSheet" $filtersXml $script:Screenshots.filtersSheet
 # The profile<->filter coherence Gender/Orientation sections made the sheet taller, pushing the
-# Intent "Looking for" subsection below the fold at open (same shape as the Grid QA fix in 44eb9fb).
-# The golden's requiredTexts only cover the top-of-sheet sections; scroll down and assert the Intent
-# subsection renders so the lower half stays covered.
+# Intent and Style sections below the fold at open (same shape as the Grid QA fix in 44eb9fb).
+# The golden's requiredTexts only cover the top-of-sheet sections; scroll down and assert the lower
+# ones here so that half stays covered. Intent/Style were still listed in the golden despite this
+# comment already claiming otherwise, which is what broke the stage — the script half of that earlier
+# fix landed but the JSON half did not.
 $filterSheetLowerXml = Scroll-SheetToText "Looking for"
 Assert-NoAppErrorText $filterSheetLowerXml "Swipe filters sheet (lower)"
 Assert-TextPresent $filterSheetLowerXml "Looking for" "Swipe filters sheet (lower)"
+Assert-TextPresent $filterSheetLowerXml "Intent" "Swipe filters sheet (lower)"
+$filterSheetStyleXml = Scroll-SheetToText "Style"
+Assert-TextPresent $filterSheetStyleXml "Style" "Swipe filters sheet (lower)"
 Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_BACK") | Out-Null
 Wait-ForAnyText @("For You", "Like") 20 | Out-Null
 
