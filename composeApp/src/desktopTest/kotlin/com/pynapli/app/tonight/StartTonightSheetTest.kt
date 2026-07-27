@@ -3,7 +3,7 @@ package com.pynapli.app.tonight
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.test.v2.runComposeUiTest
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
