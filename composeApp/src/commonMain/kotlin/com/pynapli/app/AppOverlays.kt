@@ -61,6 +61,25 @@ internal fun PynapliOverlays(
     if (tonightVisible && playingTonightStateHolder != null) {
         // System back (gesture/hardware) closes the full-screen overlay instead of falling
         // through to the Activity — otherwise the only exit is the small top-left back button.
+        //
+        // BackHandler is @Deprecated in CMP 1.11 ("Use NavigationEvent instead") and we are
+        // deliberately staying on it. Investigated 2026-07-27, do not "fix" the warning without
+        // re-checking these three facts:
+        //
+        //  1. The deprecation is WARNING level (no DeprecationLevel argument), so this still
+        //     compiles and works on all five targets we build.
+        //  2. NavigationEventHandler is NOT in org.jetbrains.compose.ui:ui-backhandler. It lives in
+        //     androidx.navigationevent:navigationevent-compose, which is not on our classpath, and
+        //     whose non-Android source sets are commonStubs that throw NotImplementedError:
+        //     "Implemented only in JetBrains fork. Please use
+        //     org.jetbrains.navigationevent:navigationevent-compose instead." Adopting it would
+        //     break back handling on iOS, wasm and desktop at RUNTIME, not compile time.
+        //  3. That JetBrains fork returns zero results on Maven Central — it ships only from a
+        //     JetBrains dev channel, which the stable-releases-only policy in
+        //     docs/OFFICIAL_TECH_REFERENCE_GUIDE.md rules out.
+        //
+        // The warning is intentionally left un-suppressed: it is the reminder to revisit once the
+        // JetBrains artifact reaches a stable Maven Central release.
         BackHandler(onBack = onTonightDismiss)
         // Playing Tonight map surface, opened from the Grid header moon button. Profile/
         // message taps close the overlay and reuse the existing profile-detail path

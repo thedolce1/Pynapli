@@ -67,6 +67,9 @@ internal fun PhotoCropOverlay(
     val state by stateHolder.state.collectAsState()
     val pending = state.pendingCropMedia ?: return
 
+    // Deprecated in CMP 1.11 but deliberately retained — see the note in AppOverlays.kt for why the
+    // NavigationEvent replacement is not adoptable here yet (it throws on iOS/wasm/desktop, and the
+    // multiplatform fork is not on Maven Central).
     BackHandler { stateHolder.cancelPendingCrop() }
     PhotoCropScreen(
         media = pending,
