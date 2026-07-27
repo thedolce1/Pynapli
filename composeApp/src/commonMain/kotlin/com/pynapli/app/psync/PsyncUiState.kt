@@ -1,5 +1,6 @@
 package com.pynapli.app.psync
 
+import androidx.compose.runtime.Immutable
 import com.pynapli.shared.network.dto.PsyncDeckCardDto
 import com.pynapli.shared.network.dto.PsyncRecapDto
 import com.pynapli.shared.network.dto.PsyncSessionDto
@@ -19,7 +20,15 @@ enum class PsyncPhase {
     ENDED, // expired or cancelled
 }
 
-/** Immutable UI state for the Psync surfaces. DTOs never leak past this layer. */
+/**
+ * Immutable UI state for the Psync surfaces. DTOs never leak past this layer.
+ *
+ * The [Immutable] annotation makes that contract visible to the Compose compiler, which otherwise
+ * infers the class unstable because `deck` is a `List` (an interface it cannot prove immutable) —
+ * which in turn makes every composable taking this state non-skippable. Safe here: all fields are
+ * `val`, and the deck is only ever replaced (`copy(deck = …map{})`), never mutated in place.
+ */
+@Immutable
 data class PsyncUiState(
     val isLoading: Boolean = false,
     val isMutating: Boolean = false,
@@ -65,6 +74,8 @@ data class PsyncDeckCardUi(
     val viewerAction: String?,
 )
 
+/** [Immutable] for the same reason as [PsyncUiState]: `togetherMatches` is a `List`. */
+@Immutable
 data class PsyncRecapUi(
     val profilesReviewed: Int,
     val bothLikedCount: Int,

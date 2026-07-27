@@ -61,7 +61,10 @@ foreach ($moduleJson in Get-ChildItem -Recurse $root -Filter "*-module.json") {
 $classFiles = @(Get-ChildItem -Recurse $root -Filter "*-classes.txt")
 if ($classFiles.Count -gt 0) {
     Write-Host ""
-    Write-Host "########## unstable UI models (the ones worth fixing)"
+    Write-Host "########## unstable UI-model candidates - VERIFY before annotating"
+    Write-Host "  (@Immutable is a promise: a wrong one makes Compose skip recompositions it should run."
+    Write-Host "   This is a name heuristic, so mutable interaction holders can show up here too --"
+    Write-Host "   AlbumReorderState did, and correctly stayed un-annotated: it is mutable by design.)"
     $found = $false
     foreach ($cf in $classFiles) {
         $lines = Get-Content $cf.FullName

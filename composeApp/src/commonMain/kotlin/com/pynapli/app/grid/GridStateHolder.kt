@@ -1,5 +1,6 @@
 package com.pynapli.app.grid
 
+import androidx.compose.runtime.Immutable
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
@@ -282,6 +283,17 @@ class SampleGridFeedRepository : GridFeedRepository {
         )
 }
 
+/**
+ * [Immutable] because `cards` is a `List`, and `List` is only an interface — the compiler cannot
+ * prove it is not a `MutableList`, so without this the whole class is inferred unstable and every
+ * composable taking it becomes non-skippable.
+ *
+ * The promise holds: every field is a `val`, `GridProfileCardUi` is itself stable, and the list is
+ * only ever replaced wholesale (`copy(cards = existing.cards + appended)`), never mutated in place.
+ * If that changes — if anything ever hands out a `MutableList` it retains — this annotation becomes
+ * a lie and Compose will skip recompositions it should have run.
+ */
+@Immutable
 data class GridFeedUi(
     val cards: List<GridProfileCardUi>,
     val nextCursor: String? = null,
