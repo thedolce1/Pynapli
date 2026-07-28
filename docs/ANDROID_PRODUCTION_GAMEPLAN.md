@@ -1,6 +1,6 @@
 # Android Production Gameplan
 
-Last updated: 2026-06-08
+Last updated: 2026-07-28
 
 ## Purpose
 
@@ -172,6 +172,15 @@ Two supporting changes make a wrong-platform run impossible to miss:
 Caveat: `Pynapli_API34` uses a `google_apis` image, **not** `google_apis_playstore`. Play Billing
 paths (`android-store-qa.ps1`) may behave differently there; treat android-36 as authoritative for
 billing and android-34 as the platform-behaviour check. Worth folding the matrix into **H2**.
+
+**First full matrix run (2026-07-28): all 28 GREEN** — all 14 `android-*-qa.ps1` scripts × both
+`Pynapli_Phone` (API 36) and `Pynapli_API34` (API 34), confirming the edge-to-edge fix and the
+matrix driver's own hardening (per-script timeout, emulator restart every 5 scripts, install-ready
+gating) hold up across a real two-API-level sweep. One driver bug found and fixed in the process:
+a redundant final shutdown loop re-killed AVDs already stopped moments earlier by the per-AVD loop,
+and adb failing against the now-dead serial left a stale non-zero `$LASTEXITCODE` as the script's
+own exit code — so the all-green run still reported failure. Fixed by deleting the dead loop
+(`b80f25c`); no QA regression, purely a driver reporting bug.
 
 ---
 
