@@ -171,7 +171,6 @@ if (-not $SkipBuild) {
 }
 
 $results = @()
-$startedByUs = @()
 # $seeded means "a later script should be told to skip seeding". Only ever becomes true when the
 # caller asked for it; otherwise every script seeds itself, as the known-good sweep does.
 $seeded = $SkipSeed.IsPresent
@@ -180,7 +179,6 @@ foreach ($avdName in $Avd) {
     Write-Host ""
     Write-Host "=== AVD $avdName ===" -ForegroundColor Cyan
     $device = Start-AvdIfNeeded -Name $avdName
-    if ($device.Started) { $startedByUs += @{ Name = $avdName; Serial = $device.Serial } }
 
     $apiLevel = Get-ApiLevel -Serial $device.Serial
     Write-Host "  $avdName -> $($device.Serial) (API $apiLevel)"
@@ -271,13 +269,6 @@ foreach ($avdName in $Avd) {
         Write-Host "  shutting down $avdName before the next AVD"
         & $adb -s $device.Serial emu kill *> $null
         Start-Sleep -Seconds 5
-    }
-}
-
-if (-not $KeepEmulators) {
-    foreach ($started in $startedByUs) {
-        Write-Host "Shutting down $($started.Name) ($($started.Serial)) — started by this run."
-        & $adb -s $started.Serial emu kill *> $null
     }
 }
 
