@@ -13,7 +13,11 @@
 # ...and *additionally* runs verify-web.ps1 whenever a module that compiles to Wasm is touched
 # (shared, composeApp, webApp). This is not redundant: verify-full contains no wasm compile at all,
 # so a change to shared/ or composeApp/ can pass the Android gate and still break the web build.
-# Both gates run; the push is blocked if either fails.
+#
+# ...and likewise verify-desktop.ps1 whenever :desktopApp or something it consumes is touched
+# (desktopApp, shared, composeApp), for the same reason: no other gate compiles the desktop shell.
+#
+# Every selected gate runs; the push is blocked if any fails.
 #
 # Escape hatches:
 #   git push --no-verify        skip the gate entirely (use when you know why)
@@ -81,6 +85,15 @@ esac
 # additive rather than an alternative.
 case "$changed_paths" in
     *shared/*|*composeApp/*|*webApp/*) gates="$gates verify-web.ps1"; reason="$reason + Wasm module touched" ;;
+esac
+
+# The desktop gate, for the dev-only JVM shell. Also additive: neither verify-fast nor verify-full
+# compiles :desktopApp, so without this a desktopApp-only change gets spotless and nothing else —
+# the shell could stop compiling, and DesktopRuntimeConfigTest (the guard keeping a plaintext token
+# store off real environments) could go red, with a green push either way. :composeApp is included
+# because :desktopApp consumes it, so a Compose change can break the shell's compile.
+case "$changed_paths" in
+    *desktopApp/*|*shared/*|*composeApp/*) gates="$gates verify-desktop.ps1"; reason="$reason + desktop shell affected" ;;
 esac
 
 echo "pre-push: running$(for g in $gates; do printf ' scripts/%s' "$g"; done) ($reason)."

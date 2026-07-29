@@ -30,6 +30,7 @@ Build / test (Gradle wrapper):
 .\scripts\verify-android.ps1                          # Android policy check + shared/Compose host tests + debug APK + release lint
 .\scripts\verify-full.ps1                             # full local gate (incl. release lint + minified release APK); verify.ps1 is a compatibility alias
 .\scripts\verify-web.ps1                              # web gate: spotless + wasm compile (:shared/:composeApp/:webApp) + shared JVM tests
+.\scripts\verify-desktop.ps1                          # desktop gate: spotless + :desktopApp:desktopTest (compiles the JVM shell)
 .\scripts\compose-metrics.ps1                         # Compose compiler skippability/stability report (opt-in; -Android for the shipping variant)
 .\gradlew.bat :webApp:wasmJsBrowserDevelopmentRun     # web PWA dev server on :8081 (Ktor API stays on :8080)
 .\gradlew.bat :desktopApp:run                         # desktop shell — same Compose UI, no emulator (dev-only)
@@ -37,9 +38,13 @@ Build / test (Gradle wrapper):
 
 Server tests use JUnit Platform (Kotest runner), so `--tests` filters apply.
 
-A `pre-push` hook runs the matching verify gate automatically (`composeApp`/`androidApp`/`iosApp` →
-`verify-full`, `webApp` → `verify-web`, otherwise `verify-fast`). It lives in `scripts/hooks/` so it
-is version controlled, but `core.hooksPath` is *local* config — enable it once per clone:
+A `pre-push` hook runs the matching verify gates automatically. One platform gate —
+`composeApp`/`androidApp`/`iosApp` → `verify-full`, otherwise `verify-fast` — plus any *additive*
+gate the change affects, because no single gate covers every target: `shared`/`composeApp`/`webApp`
+also run `verify-web` (neither fast nor full compiles wasm), and `desktopApp`/`shared`/`composeApp`
+also run `verify-desktop` (nothing else compiles the JVM shell). Every selected gate must pass. It
+lives in `scripts/hooks/` so it is version controlled, but `core.hooksPath` is *local* config —
+enable it once per clone:
 
 ```powershell
 git config core.hooksPath scripts/hooks     # one-time, per clone
