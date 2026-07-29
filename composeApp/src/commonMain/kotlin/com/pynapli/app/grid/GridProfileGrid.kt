@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
@@ -34,11 +35,34 @@ import com.pynapli.app.design.pynapliEntrance
  * tiles close to the phone's (~130dp at 390dp width), so more width means MORE people
  * on screen, never a blown-up phone grid — density is this surface's identity
  * (WEB_PWA_GAMEPLAN.md W2.1).
+ *
+ * `internal`, not private: [GridLoadingSkeleton] must lay out with the SAME numbers. It used to
+ * hardcode 3 columns — correct when the grid was phone-only, silently wrong once W2 made the grid
+ * adaptive, which left every wide-pane first load showing 3 full-height bars instead of a preview
+ * of the grid. Sharing the constants is what stops that drifting apart again.
  */
-private val WideTileMinSize = 168.dp
+internal val GridWideTileMinSize = 168.dp
 
 /** Panes narrower than this keep the locked 3-up phone grid. */
-private val WidePaneMinWidth = 600.dp
+internal val GridWidePaneMinWidth = 600.dp
+
+/** Gap between tiles, shared with the skeleton for the same reason. */
+internal val GridTileGap = 1.dp
+
+/**
+ * Column count for a pane of [paneWidth] — the single definition both the real grid and its
+ * skeleton lay out from.
+ *
+ * Mirrors `GridCells.Adaptive`'s own arithmetic (`(available + gap) / (minSize + gap)`, floored,
+ * at least 1) so the skeleton predicts the same number of columns the LazyVerticalGrid will
+ * actually produce, rather than approximating it.
+ */
+internal fun gridColumnCountFor(paneWidth: Dp): Int =
+    if (paneWidth < GridWidePaneMinWidth) {
+        3
+    } else {
+        (((paneWidth + GridTileGap) / (GridWideTileMinSize + GridTileGap)).toInt()).coerceAtLeast(1)
+    }
 
 @Composable
 internal fun ProfileGrid(
@@ -98,10 +122,10 @@ internal fun ProfileGrid(
     // keep the locked 3-up layout byte-for-byte.
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val columns =
-            if (maxWidth < WidePaneMinWidth) {
+            if (maxWidth < GridWidePaneMinWidth) {
                 GridCells.Fixed(3)
             } else {
-                GridCells.Adaptive(minSize = WideTileMinSize)
+                GridCells.Adaptive(minSize = GridWideTileMinSize)
             }
         LazyVerticalGrid(
             columns = columns,

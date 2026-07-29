@@ -236,3 +236,28 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
 - **Phase 4 (surface-by-surface) is now complete across every surface** — Grid, Swipe, Activity,
   Messages, Store, Profile/Albums, Tonight, Psync, Onboarding. Next: **Phase 5** (web/Wasm + iOS
   parity), deferred until after Android ships to testers.
+- 2026-07-28 — **Phase 5 (cross-platform parity) started — web/Wasm.** The iOS half stays blocked on
+  a Mac (nothing beyond type-checking is possible), so this is the web pass. Ran the real PWA in a
+  Chrome window against the local server and walked the surfaces at Expanded (1440) and Compact.
+  **One real defect found and fixed — the Grid loading skeleton.** `GridLoadingSkeleton` hardcoded
+  `columns = 3`, with a doc comment claiming it matched `ProfileGrid` "exactly". True when Phase 2
+  wrote it (the grid was phone-only); silently wrong from the moment WEB_PWA_GAMEPLAN **W2** made
+  `ProfileGrid` adaptive (`<600dp` → `Fixed(3)`, wider → `Adaptive(minSize = 168dp)`). On a wide pane
+  each skeleton tile became a third of the pane wide and, being square, taller than the viewport — so
+  the "content-shaped" loading state rendered as **three full-height bars**. Web is where it hurts:
+  with `NoOpGridSnapshotStore` there is no cached first paint, so that was the first thing every
+  desktop pynapli.com visitor saw; Android hides it behind the snapshot cache, which is exactly why
+  it survived Phase 2's own emulator QA. Fixed the **drift**, not the number — the constants moved to
+  `internal` and both the grid and the skeleton now lay out from one `gridColumnCountFor(paneWidth)`
+  that mirrors `GridCells.Adaptive`'s own arithmetic; the skeleton also derives its row count from
+  pane height (capped, since nothing below the fold is ever seen). `GridColumnCountTest` (4 cases)
+  pins phone widths at 3-up, wide panes above 3 and monotonic, tiles never below the 168dp minimum
+  (which would make the skeleton over-predict columns), and degenerate widths ≥ 1. Verified in the
+  browser before/after: 3 full-height bars → 7 square tiles matching the loaded grid exactly, with
+  Compact still locked at 3-up.
+  **Also verified working on web:** Wasm boot, `/login` → `/grid` routing, dev-login round-trip, the
+  capped/centered auth form, dense grid + context strip, nav rail, W7.4 restore splash, and both PWA
+  install affordances. **Harness note for future web QA:** the in-app browser pane cannot composite
+  here, so `requestAnimationFrame` never fires and Compose never creates its canvas — the app looks
+  dead when it is fine. Confirm with `rafFired`/`document.hidden` before believing a web failure, and
+  drive a real Chrome window (isolated `--user-data-dir`) instead.
