@@ -261,3 +261,24 @@ scale · TalkBack-labeled + 48dp targets + font-scale-safe · emulator-QA green.
   here, so `requestAnimationFrame` never fires and Compose never creates its canvas — the app looks
   dead when it is fine. Confirm with `rafFired`/`document.hidden` before believing a web failure, and
   drive a real Chrome window (isolated `--user-data-dir`) instead.
+- 2026-07-29 — **Phase 5 web surface walk completed** (Swipe, Activity, Messages, Store, Profile hub,
+  conversation) at Expanded 1440x900 and Compact 390x844, driven over CDP with synthesized input,
+  each step asserting the frame actually changed rather than assuming the click landed.
+  **Second real defect found — the PWA install pill blocked the Swipe Like button.**
+  `WebInstallAffordance` floats bottom-end with a 96dp compact inset, which clears the bottom nav
+  but *not* the controls sitting directly above it: at 390x844 the pill (y≈700–748) sat on top of
+  Swipe's Pineapple and Like buttons (y≈724) and the conversation composer's send button (y≈706).
+  Proven functionally, not by eye — tapping exactly where Like is drawn dismissed the pill and left
+  the card unchanged, so a first-time web visitor's **first Like silently did nothing** on the app's
+  primary action. Fixed by raising the Compact inset to a `CompactInstallBottomInset` of 160dp,
+  chosen over a per-route "surfaces with a bottom action bar" list because that list is the same
+  shape as the Grid-skeleton bug fixed the day before: correct when written, silently wrong the
+  moment a surface grows one — and here the symptom is a swallowed tap, not a visual glitch.
+  Everything else measured clean: Swipe centered at 520dp with the W4.2 wide-pane keyboard hints and
+  correctly *without* them at Compact; Activity centered within its `WideFeed` 900 cap (the apparent
+  right-hand gap is simply 3 seeded flirts in a 4-column adaptive grid, not a layout fault); Messages
+  two-pane at 380dp inbox, single-pane at Compact; Store and Profile hub centered within `Feed` 760;
+  and the previous slice's Grid skeleton fix confirmed live at 8 columns on a 1440 viewport.
+  One measurement caveat worth repeating: a Compact capture taken immediately after
+  `Emulation.setDeviceMetricsOverride` showed an empty grid — a mid-relayout frame, not a defect.
+  Let a resize settle before judging it.

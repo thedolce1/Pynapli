@@ -45,6 +45,13 @@ jobs:
       - name: Run verification gate
         # Server integration tests self-manage Postgres/Redis via Testcontainers (Docker is
         # available on ubuntu-latest), so no service containers are required here.
+        #
+        # :desktopApp:desktopTest rides along here rather than in its own job because it pulls
+        # :shared (jvm) -> :composeApp (desktop) -> :desktopApp, all of which this job already
+        # builds for :composeApp:desktopTest — a separate job would rebuild them for one task.
+        # It matters: adding :desktopApp to settings.gradle.kts put it in NO gate at all, locally
+        # or in CI, so the dev shell and DesktopRuntimeConfigTest (which guards a plaintext token
+        # store from targeting a real environment) could both break with everything green.
         env:
           ANDROID_API_BASE_URL: ${{ github.event.inputs.android_api_base_url || 'http://10.0.2.2:8080' }}
           ANDROID_WEBSOCKET_BASE_URL: ${{ github.event.inputs.android_websocket_base_url || 'ws://10.0.2.2:8080' }}
@@ -55,6 +62,7 @@ jobs:
           :server:test
           :composeApp:testAndroidHostTest
           :composeApp:desktopTest
+          :desktopApp:desktopTest
           :androidApp:assembleDebug
           -Ppynapli.android.apiBaseUrl="$ANDROID_API_BASE_URL"
           -Ppynapli.android.websocketBaseUrl="$ANDROID_WEBSOCKET_BASE_URL"
@@ -111,6 +119,13 @@ jobs:
           :composeApp:compileKotlinWasmJs
           :webApp:compileKotlinWasmJs
           --no-configuration-cache
+      # The other half of verify-web, which CI was still missing: the marketing site mirrors the
+      # app palette by hand (web/src/styles/global.css vs PynapliColors.kt), so without this a
+      # palette change forks the brand silently. Run directly rather than ported — pwsh ships on
+      # the GitHub ubuntu images, and a second copy of the rules is a second thing to drift.
+      - name: Brand token drift check
+        shell: pwsh
+        run: ./scripts/check-web-tokens.ps1
 
   docker-smoke:
     name: Docker Smoke (Cloud Run image)

@@ -75,17 +75,45 @@ fun main() {
     ComposeViewport(viewportContainerId = "pynapli-app") {
         Box(modifier = Modifier.fillMaxSize()) {
             WebAppContent(graph, router, locationAdapter, mediaPicker)
-            // Clears the compact bottom bar; on wide windows it sits in the corner.
+            /*
+             * Floats clear of the compact bottom bar; on wide windows it sits in the corner.
+             *
+             * 96dp cleared the nav bar but NOT the controls sitting directly above it, so on a
+             * phone browser the pill landed on top of Swipe's Like/Pineapple buttons and the
+             * conversation composer's send button. Verified by tapping exactly where Like is drawn:
+             * the pill swallowed the tap and the card did not advance — a first-time visitor's
+             * first Like silently did nothing, on the app's primary action.
+             *
+             * Cleared unconditionally at Compact rather than per-route. A "surfaces that have a
+             * bottom action bar" list is the same shape as the bug that made the Grid skeleton
+             * hardcode 3 columns: correct when written, silently wrong the moment a surface grows
+             * one. One clearance tall enough for the tallest bottom control cannot drift, and the
+             * cost is only that a dismissible promo floats slightly higher on surfaces that did
+             * not need it.
+             */
             val compact = currentPynapliWindowSizeClass() == PynapliWindowSizeClass.Compact
             WebInstallAffordance(
                 modifier =
                     Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = if (compact) 96.dp else 24.dp),
+                        .padding(
+                            end = 16.dp,
+                            bottom = if (compact) CompactInstallBottomInset else 24.dp,
+                        ),
             )
         }
     }
 }
+
+/**
+ * Bottom inset for the install pill at Compact.
+ *
+ * Measured at 390x844: the bottom nav occupies the last ~70dp and Swipe's action row sits directly
+ * above it, spanning roughly 96–144dp from the bottom edge. 160dp clears both with margin. Keep it
+ * above the tallest bottom-anchored control on any surface — if one ever grows past this, the
+ * symptom is a swallowed tap, not a visual glitch, so it will not be obvious.
+ */
+private val CompactInstallBottomInset = 160.dp
 
 @androidx.compose.runtime.Composable
 private fun WebAppContent(
