@@ -208,6 +208,26 @@ Contains:
 - Keychain bridge.
 - Firebase Apple SDK setup.
 
+### `desktopApp`
+
+Owns the JVM development shell (added 2026-07-28). Exists so shared Compose UI can be iterated on a
+Windows host without an emulator install per change, and without waiting for a Mac.
+
+Contains:
+
+- Compose Desktop entry point (`com.pynapli.desktop.MainKt`).
+- `DesktopAppGraph` — the same seam the other shells supply to `PynapliCommonGraph`.
+- Desktop stand-ins: file-backed session/settings stores, a Swing file-chooser media picker, and a
+  fixed-coordinate location adapter.
+
+Rules:
+
+- **Never shipped.** It is a development target; there is no distribution track for it.
+- Session tokens are stored in plaintext (no app-controlled keystore on desktop), so
+  `DesktopRuntimeConfig` must refuse non-local API hosts unless explicitly overridden.
+- It does not replace device/emulator QA — insets, gestures, IME, billing and push are invisible
+  here. See "Desktop proxy for UI iteration" in `IOS_BRINGUP_PLAN.md`.
+
 ### `server`
 
 Owns backend authority.

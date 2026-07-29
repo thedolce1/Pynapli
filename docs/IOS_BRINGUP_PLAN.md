@@ -228,6 +228,48 @@ Still **not** doc-verified, because they are Mac-side and not yet written: Keych
 attributes for step 3, `PHPickerViewController` usage, APNs registration, Firebase Apple SDK setup,
 and StoreKit 2. Check those against Apple's documentation *before* writing them, not after.
 
+## Desktop proxy for UI iteration (added 2026-07-28)
+
+`:desktopApp` runs the **same** `:composeApp` Compose tree on the JVM, so shared-UI work does not
+have to wait for the Mac — or pay an emulator install per change:
+
+```powershell
+.\gradlew.bat :desktopApp:run          # local Ktor server must be up
+```
+
+It is a real shell, wired like the others: `DesktopAppGraph` mirrors `IosAppGraph`/`WebAppGraph`
+over `PynapliCommonGraph`, so surfaces appear because the graph is shared. Verified end-to-end on
+2026-07-28 — dev login wrote a `platform='desktop'` session row and the Grid rendered 60 seeded
+profiles from the live API.
+
+**What it genuinely covers:** layout and spacing, navigation, state-holder behaviour, design tokens,
+window size classes (a wide window switches to the desktop nav rail), and the whole HTTP/WebSocket
+client path.
+
+**What it does NOT cover — do not treat green here as iOS assurance:**
+
+| Not covered | Why |
+|---|---|
+| Safe-area / notch insets | No iOS window chrome; the API 34 edge-to-edge defect is exactly this class |
+| Touch gesture feel | Mouse drag is not a finger; swipe velocity//slop differ |
+| Native back gesture | No iOS edge-swipe or Android predictive back |
+| IME / keyboard | Swing text input, not UIKit or the Android IME |
+| StoreKit / Play Billing | Store is read-only (`UnavailableStorePurchaseGateway`) |
+| Push delivery | No APNs/FCM |
+| Skia backend differences | Desktop and iOS Skiko backends can render differently |
+
+So it replaces the *slow inner loop*, not `scripts/android-*-qa.ps1` and not device QA.
+
+Two deliberate constraints, both because the shell keeps session tokens in a **plaintext** file
+(there is no app-controlled keystore on desktop, same reason `SessionTokenCipher.jvm.kt` is a
+pass-through):
+
+- `DesktopRuntimeConfig` **refuses** any non-local API host unless `-Dpynapli.allowRemote=true` is
+  passed explicitly. Covered by tests, including a regression for a prefix-matching hole where
+  `http://localhost.attacker.example` would have been classified local.
+- Location is a **fixed** coordinate (defaulting to the dev seed's viewer position), not a fake
+  sensor — `-Dpynapli.latitude=` / `-Dpynapli.longitude=` to move it.
+
 ## Do not do before the Mac arrives
 
 - Hand-writing `project.pbxproj`. It is a generated bundle; a subtly broken one costs more than it
@@ -235,5 +277,6 @@ and StoreKit 2. Check those against Apple's documentation *before* writing them,
 - Writing Swift blind. Unlike `iosMain` Kotlin, none of it can be compiled here.
 - Implementing the session cipher blind — see step 3. "It compiles" is not adequate assurance for
   cryptography or Keychain interop.
+- Trusting `:desktopApp` for anything in the "does NOT cover" table above.
 
 Everything that a compiler can check has been done. What remains needs a device, a linker, or both.

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Pynapli is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyle app. Five Gradle modules: `:shared`, `:composeApp`, `:androidApp`, `:server`, `:webApp` (Compose-for-Web/Wasm PWA shell — see `docs/WEB_PWA_GAMEPLAN.md`). The iOS shell lives in `iosApp/` (Xcode project, not a Gradle module).
+Pynapli is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyle app. Six Gradle modules: `:shared`, `:composeApp`, `:androidApp`, `:server`, `:webApp` (Compose-for-Web/Wasm PWA shell — see `docs/WEB_PWA_GAMEPLAN.md`), and `:desktopApp` (JVM shell for fast UI iteration — **dev-only, never shipped**; see "Desktop proxy" in `docs/IOS_BRINGUP_PLAN.md`). The iOS shell lives in `iosApp/` (Xcode project, not a Gradle module).
 
 The repo is in early scaffolding/MVP buildout. The `docs/*_SPEC.md` files are the canonical product and engineering specs (all specs and design docs live under `docs/`). Read the relevant spec before changing a feature area — they encode rules that are not yet expressed in code.
 
@@ -32,6 +32,7 @@ Build / test (Gradle wrapper):
 .\scripts\verify-web.ps1                              # web gate: spotless + wasm compile (:shared/:composeApp/:webApp) + shared JVM tests
 .\scripts\compose-metrics.ps1                         # Compose compiler skippability/stability report (opt-in; -Android for the shipping variant)
 .\gradlew.bat :webApp:wasmJsBrowserDevelopmentRun     # web PWA dev server on :8081 (Ktor API stays on :8080)
+.\gradlew.bat :desktopApp:run                         # desktop shell — same Compose UI, no emulator (dev-only)
 ```
 
 Server tests use JUnit Platform (Kotest runner), so `--tests` filters apply.
@@ -65,6 +66,7 @@ Health checks: `GET http://localhost:8080/health` (process), `GET http://localho
 - `:androidApp` — `com.android.application` (`com.pynapli.app`, minSdk 23, compileSdk 36, targetSdk 36, JVM target 17). Owns `AndroidManifest`, `Application`, `Activity`, resources only. **Do not** collapse the Android entry point into the KMP library modules.
 - `:server` — Ktor/Netty (`com.pynapli.server.ApplicationKt`). Postgres + PostGIS via JDBC + HikariCP, Flyway migrations, Lettuce Redis. Tests use Testcontainers + Kotest + MockK.
 - `iosApp/` — Swift/SwiftUI shell that hosts the `PynapliCompose` framework. Not a Gradle module.
+- `:desktopApp` — JVM/Compose-Desktop shell (`com.pynapli.desktop.MainKt`) for fast UI iteration without an emulator or a Mac. `DesktopAppGraph` mirrors the other shells over `PynapliCommonGraph`. **Dev-only, never shipped:** session tokens are plaintext on disk, so `DesktopRuntimeConfig` refuses any non-local API host without an explicit `-Dpynapli.allowRemote=true`. Green here is **not** a substitute for `scripts/android-*-qa.ps1` — it cannot see safe-area insets, touch-gesture feel, IME, billing, or push.
 
 ### Server-authoritative model (load-bearing)
 

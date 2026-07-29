@@ -57,6 +57,13 @@ kotlin {
             implementation(libs.sqldelight.android.driver)
         }
 
+        // OkHttp on the JVM as well, so the desktop shell's WebSocket path is the same engine the
+        // Android shell already exercises — a desktop-only engine difference would make the
+        // fast-iteration target diverge from the thing it stands in for.
+        jvmMain.dependencies {
+            implementation(libs.ktor.client.okhttp)
+        }
+
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)
