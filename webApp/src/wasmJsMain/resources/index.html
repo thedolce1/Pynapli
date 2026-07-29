@@ -31,8 +31,13 @@
             gap: 14px;
             align-items: center;
             justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+            text-align: center;
             pointer-events: none;
         }
+        /* Re-enabled only when the boot screen becomes an interactive failure state. */
+        #pynapli-boot.is-actionable { pointer-events: auto; }
         #pynapli-boot .mark {
             width: 56px;
             height: 56px;
@@ -43,12 +48,41 @@
             text-align: center;
             animation: pynapli-pulse 1.6s ease-in-out infinite;
         }
+        /* A stopped pulse is the first signal that this is no longer "loading". */
+        #pynapli-boot.is-failed .mark { animation: none; }
         #pynapli-boot .word {
             color: #6B6660;
             font: 500 13px/1 system-ui, sans-serif;
             letter-spacing: 0.1em;
             text-transform: uppercase;
         }
+        #pynapli-boot .status {
+            max-width: 34ch;
+            margin: 0;
+            color: #A8A29A;
+            font: 400 14px/1.5 system-ui, sans-serif;
+        }
+        #pynapli-boot .status:empty { display: none; }
+        #pynapli-boot .detail {
+            max-width: 40ch;
+            margin: 0;
+            color: #6B6660;
+            font: 400 12px/1.5 system-ui, sans-serif;
+        }
+        #pynapli-boot .detail:empty { display: none; }
+        #pynapli-boot .action {
+            display: none;
+            margin-top: 2px;
+            padding: 10px 22px;
+            min-height: 44px;              /* same 44dp+ target the app's a11y pass uses */
+            border: 0;
+            border-radius: 100px;
+            background: #FFC928;
+            color: #1a1400;
+            font: 600 14px/1 system-ui, sans-serif;
+            cursor: pointer;
+        }
+        #pynapli-boot.is-actionable .action { display: inline-block; }
         @keyframes pynapli-pulse {
             0%, 100% { transform: scale(1); opacity: 1; }
             50% { transform: scale(0.94); opacity: 0.82; }
@@ -80,14 +114,187 @@
             });
         }
     </script>
-    <!-- Absolute so the loader resolves at the origin root on multi-segment deep links
-         (e.g. /messages/{id}); a relative src resolves to /messages/pynapli.js → 404. -->
-    <script type="application/javascript" src="/pynapli.js"></script>
+    <script type="application/javascript">
+        /*
+         * Boot supervisor.
+         *
+         * WHY: this file previously loaded the bundle with a bare <script src> and had no failure
+         * path at all — no error handler, no timeout, no capability check. Every way booting can
+         * fail therefore looked identical, and identical to success-in-progress: a gold "P" pulsing
+         * forever with no message and no way out.
+         *
+         * That is not hypothetical. Kotlin/Wasm needs WebAssembly GC, which per the official docs
+         * means Chrome 119+, Firefox 120+, and Safari 18.2+ — and for Safari older than 18.2 the
+         * docs say plainly "not supported, no workaround available". Since Pynapli has no iOS app
+         * yet, iOS visitors are exactly who the web app exists to serve, and anyone on iOS 17 or
+         * 18.0/18.1 was getting the infinite splash with no explanation.
+         *
+         * Two layers, deliberately:
+         *   1. A capability probe, so the common known cause gets a SPECIFIC message.
+         *   2. Error handlers + a watchdog, which catch everything else — a 404 on the bundle, a
+         *      network drop mid-download, an exception during start, a browser the probe wrongly
+         *      cleared. The probe improves the wording; this layer guarantees the outcome. If the
+         *      probe is ever wrong, users still get a real error instead of a dead screen.
+         */
+        (function () {
+            'use strict';
+
+            var SLOW_NOTICE_MS = 12000;   // reassure before a slow connection reads as broken
+            var GIVE_UP_MS = 45000;       // long enough for a big bundle on poor mobile data
+            var settled = false;
+            var slowTimer = null;
+            var failTimer = null;
+
+            function el(id) { return document.getElementById(id); }
+
+            function setState(opts) {
+                var boot = el('pynapli-boot');
+                if (!boot) return;
+                var status = el('pynapli-boot-status');
+                var detail = el('pynapli-boot-detail');
+                var action = el('pynapli-boot-action');
+                if (status) status.textContent = opts.status || '';
+                if (detail) detail.textContent = opts.detail || '';
+                if (opts.failed) boot.classList.add('is-failed');
+                if (opts.actionLabel && action) {
+                    action.textContent = opts.actionLabel;
+                    boot.classList.add('is-actionable');
+                } else {
+                    boot.classList.remove('is-actionable');
+                }
+            }
+
+            function fail(status, detail) {
+                if (settled) return;
+                settled = true;
+                clearTimeout(slowTimer);
+                clearTimeout(failTimer);
+                setState({ status: status, detail: detail, failed: true, actionLabel: 'Try again' });
+            }
+
+            // The app booted: stop supervising and clear the overlay. Previously nothing removed
+            // this element at all — it merely happened to end up behind the Compose canvas, which
+            // is luck, not a contract.
+            function succeed() {
+                if (settled) return;
+                settled = true;
+                clearTimeout(slowTimer);
+                clearTimeout(failTimer);
+                var boot = el('pynapli-boot');
+                if (boot && boot.parentNode) boot.parentNode.removeChild(boot);
+            }
+
+            /*
+             * Positive probe for the WasmGC proposal: a type section holding a struct with zero
+             * fields. 0x5F is the struct type form GC introduced, so a runtime without GC rejects
+             * the module. Verified in node that WebAssembly.validate genuinely discriminates here —
+             * this module validates, while an invalid type form (0x11) and a bad magic number both
+             * return false, so a blanket "true" is ruled out.
+             */
+            function supportsWasmGc() {
+                try {
+                    if (typeof WebAssembly === 'undefined' || !WebAssembly.validate) return false;
+                    return WebAssembly.validate(new Uint8Array([
+                        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+                        0x01, 0x03, 0x01, 0x5f, 0x00
+                    ]));
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            function start() {
+                var action = el('pynapli-boot-action');
+                if (action) {
+                    action.addEventListener('click', function () { location.reload(); });
+                }
+
+                if (!supportsWasmGc()) {
+                    // Terminal, and reload will not help — so offer no false hope, just the fix.
+                    settled = true;
+                    setState({
+                        status: 'Pynapli needs a newer browser.',
+                        detail: 'Update to Chrome 119+, Firefox 120+, or Safari 18.2+ ' +
+                                '(iOS 18.2 or later), then open Pynapli again.',
+                        failed: true
+                    });
+                    return;
+                }
+
+                /*
+                 * Clear the overlay the moment Compose mounts into the container, rather than
+                 * assuming paint order hides it.
+                 *
+                 * Detect ANY element child, not a <canvas>. Measured against the real bundle over
+                 * CDP: Compose Multiplatform 1.11 mounts a DIV here and the document contains no
+                 * canvas element at all. A canvas check therefore never fired — which would have
+                 * left this supervisor convinced the app never booted and, worse, firing the
+                 * give-up timeout over a running app and covering it with a full-viewport,
+                 * click-catching error screen. Anything appearing in this container means the
+                 * bundle is alive, which is all this needs to know.
+                 */
+                var host = el('pynapli-app');
+                if (host && typeof MutationObserver !== 'undefined') {
+                    if (host.children.length > 0) {
+                        succeed();
+                    } else {
+                        var observer = new MutationObserver(function () {
+                            if (host.children.length > 0) {
+                                observer.disconnect();
+                                succeed();
+                            }
+                        });
+                        observer.observe(host, { childList: true });
+                    }
+                }
+
+                window.addEventListener('error', function (e) {
+                    // Ignore noise from sub-resources that are not the app itself.
+                    if (e && e.target && e.target !== window) return;
+                    fail('Pynapli could not start.', 'Something went wrong while loading the app.');
+                });
+                window.addEventListener('unhandledrejection', function () {
+                    fail('Pynapli could not start.', 'Something went wrong while loading the app.');
+                });
+
+                slowTimer = setTimeout(function () {
+                    if (settled) return;
+                    setState({ status: 'Still loading — this can take a moment on a slow connection.' });
+                }, SLOW_NOTICE_MS);
+
+                failTimer = setTimeout(function () {
+                    fail('Pynapli is taking longer than expected.',
+                         'Check your connection and try again.');
+                }, GIVE_UP_MS);
+
+                // Injected rather than a static tag so a missing/blocked bundle is catchable.
+                // Absolute src on purpose: a relative one resolves against multi-segment deep links
+                // (e.g. /messages/{id} -> /messages/pynapli.js -> 404) and the app never boots.
+                var script = document.createElement('script');
+                script.src = '/pynapli.js';
+                script.async = false;
+                script.onerror = function () {
+                    fail('Pynapli could not load.',
+                         'The app files could not be downloaded. Check your connection and try again.');
+                };
+                document.head.appendChild(script);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', start);
+            } else {
+                start();
+            }
+        })();
+    </script>
 </head>
 <body>
-<div id="pynapli-boot" aria-label="Pynapli is loading">
-    <div class="mark">P</div>
+<div id="pynapli-boot" role="status" aria-live="polite" aria-label="Pynapli is loading">
+    <div class="mark" aria-hidden="true">P</div>
     <div class="word">Pynapli</div>
+    <p class="status" id="pynapli-boot-status"></p>
+    <p class="detail" id="pynapli-boot-detail"></p>
+    <button class="action" id="pynapli-boot-action" type="button"></button>
 </div>
 <div id="pynapli-app"></div>
 </body>

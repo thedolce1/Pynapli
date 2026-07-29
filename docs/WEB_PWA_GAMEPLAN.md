@@ -188,6 +188,44 @@ plus `verify-web` + `:composeApp:desktopTest` green.
 | W7.3 | **Deep-link boot fix:** `index.html` loaded `pynapli.js` via a *relative* src, so any multi-segment deep link (e.g. `/messages/{threadId}`) resolved it to `/messages/pynapli.js` → 404 and the app never booted on refresh. Made the script src absolute (`/pynapli.js`), matching the already-absolute manifest/icon hrefs. Single-segment routes worked by luck before; nested routes now boot too. |
 | W7.4 | Centered the `isCheckingSession` restore splash (was a bare top-left "Pynapli"); now a centered brand mark for the brief session-restore frame. |
 
+### Phase W8 — Boot resilience: fail visibly, never silently (🟢) — ✅ COMPLETE 2026-07-28
+
+`index.html` loaded the bundle with a bare `<script src>` and had **no failure path at all** — no
+error handler, no timeout, no capability check, and nothing that ever removed the boot overlay. So
+every way booting can fail looked identical to each other *and* to success-in-progress: a gold "P"
+pulsing forever, with no message and no way out.
+
+Not hypothetical. Kotlin/Wasm requires WebAssembly GC — per the official docs **Chrome 119+,
+Firefox 120+, Safari 18.2+**, and for Safari older than 18.2 the docs say plainly *"not supported,
+no workaround available."* Pynapli has no iOS app yet, so iOS visitors are precisely who the web app
+exists to serve, and anyone on iOS 17 / 18.0 / 18.1 was getting the infinite splash. The marketing
+site's "Create account on the web" CTA leads straight into it.
+
+| Slice | What |
+|------|------|
+| W8.1 | **Capability probe** — a positive WasmGC check (a type section holding a zero-field struct; `0x5F` is the struct form GC introduced) gates the load and, when absent, shows "Pynapli needs a newer browser" with the exact minimum versions and **no** retry button, because reloading cannot help. Verified in node that `WebAssembly.validate` genuinely discriminates here: the GC module validates while an invalid type form and a bad magic number both return false, ruling out a blanket `true`. |
+| W8.2 | **Error handlers + watchdog** — `script.onerror`, `window.error`, `unhandledrejection`, a 12s "still loading" reassurance, and a 45s give-up with **Try again**. This layer, not the probe, is what guarantees the outcome: if the probe is ever wrong, users still get a real error instead of a dead screen. |
+| W8.3 | **Deterministic removal of the boot overlay.** Nothing removed it before — it merely ended up behind the Compose content, which is luck, not a contract. A `MutationObserver` now clears it and cancels the timers as soon as Compose mounts. |
+| W8.4 | a11y + affordance: the boot block is `role="status" aria-live="polite"` so state changes are announced, the retry control is a real `<button>` at a ≥44px target, and the pulse stops on failure so "stalled" is visually distinct from "loading". |
+
+**A regression caught before shipping, worth recording.** W8.3 first detected boot by watching for a
+`<canvas>` inside `#pynapli-app`. Measured against the real bundle over CDP, that is wrong: **Compose
+Multiplatform 1.11 mounts a `DIV` and the document contains no canvas element at all.** The observer
+would never have fired, so the 45s watchdog would have painted a false "taking longer than expected"
+error — on a full-viewport, click-catching overlay — over a perfectly working app. Reproduced
+exactly that (`errorTextShown: "Pynapli is taking longer than expected…"` on a booted app) before
+switching the check to "any element child", then re-verified: overlay removed, no false error at 50s.
+
+**Tooling caveats that nearly hid all of this** (recorded because both fail *silently*):
+`chrome --dump-dom` returns an **empty string** in this Chrome build, so every DOM assertion "passes"
+against nothing — a live CDP `Runtime.evaluate` is the only trustworthy check here. And `PrintWindow`
+capture of a Chrome window can come back blank for a page that is rendering fine, which briefly
+looked like a broken boot screen that was never broken.
+
+Verified via a standalone harness (`?mode=missing|throws|silent|ok|nogc`) driven by headless Chrome
+with `--virtual-time-budget` to fast-forward the timers deterministically: all six states — no-GC,
+404, exception, 12s slow notice, 45s give-up, and success — plus the real bundle end-to-end.
+
 ### Deferred (explicitly post-v1)
 
 Playing Tonight + Psync surfaces on web, Stripe web payments, Web Push notifications, SQLDelight
