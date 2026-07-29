@@ -34,6 +34,8 @@ Build / test (Gradle wrapper):
 .\scripts\compose-metrics.ps1                         # Compose compiler skippability/stability report (opt-in; -Android for the shipping variant)
 .\gradlew.bat :webApp:wasmJsBrowserDevelopmentRun     # web PWA dev server on :8081 (Ktor API stays on :8080)
 .\gradlew.bat :desktopApp:run                         # desktop shell — same Compose UI, no emulator (dev-only)
+.\gradlew.bat :desktopApp:hotRunDesktopAsync          # same shell with hot reload (needs a JetBrains Runtime — see below)
+.\gradlew.bat :desktopApp:reload                      # push edits into the already-running hot shell, keeping app state
 ```
 
 Server tests use JUnit Platform (Kotest runner), so `--tests` filters apply.

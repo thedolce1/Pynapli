@@ -242,6 +242,32 @@ over `PynapliCommonGraph`, so surfaces appear because the graph is shared. Verif
 2026-07-28 — dev login wrote a `platform='desktop'` session row and the Grid rendered 60 seeded
 profiles from the live API.
 
+### Hot reload (no setup required)
+
+Compose Multiplatform 1.11.0 **already bundles Compose Hot Reload** and applies it to JVM targets,
+so `:desktopApp` inherited the tasks the moment the module existed. Confirmed 2026-07-28 by
+reverting every build-file change and watching `hotRunDesktop` still appear — **nothing was added
+to the version catalog and no plugin was applied**. An earlier attempt to declare the plugin
+explicitly actually *failed*: Compose already puts it on the buildscript classpath at an unknown
+version, so a version declaration errors with "compatibility cannot be checked."
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"   # JBR is required
+.\gradlew.bat :desktopApp:hotRunDesktopAsync                     # start it
+.\gradlew.bat :desktopApp:reload                                 # push edits in
+```
+
+It needs a **JetBrains Runtime**, which this machine already has: Android Studio ships one
+(`java.vendor = JetBrains s.r.o.`, JDK 21) at the path above — the same JBR the verify scripts
+already fall back to. `hotRunDesktop` also takes `--auto` to reload on file change instead of
+calling `reload` by hand.
+
+Measured, so expectations are calibrated: launch ~25s, first `reload` ~16s, warm `reload` **~4s**.
+That is Gradle round-trip cost, not the sub-second figure the marketing implies — but the app
+**keeps its state**, which is the real win. A title change applied to the same PID with the session
+still authenticated and the Grid still populated; the equivalent restart costs a relaunch plus
+re-navigating to wherever you were.
+
 **What it genuinely covers:** layout and spacing, navigation, state-holder behaviour, design tokens,
 window size classes (a wide window switches to the desktop nav rail), and the whole HTTP/WebSocket
 client path.
