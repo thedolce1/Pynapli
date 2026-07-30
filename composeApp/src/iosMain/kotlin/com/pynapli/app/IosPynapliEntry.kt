@@ -22,11 +22,20 @@ object IosPynapliEntry {
     /**
      * Builds the graph once. Hold the result for the app's lifetime — constructing it twice would
      * open a second SQLDelight connection and a second set of WebSocket clients.
+     *
+     * @param keychain the shell's Keychain access. Omitting it leaves session tokens in **plaintext**
+     *   (see [IosAppGraph]) — acceptable for a first bring-up build, never for one a user installs.
      */
     fun createGraph(
         config: PynapliConfig,
         installId: String,
-    ): IosAppGraph = IosAppGraph(pynapliConfig = config, installId = installId)
+        keychain: IosKeychainBridge? = null,
+    ): IosAppGraph =
+        IosAppGraph(
+            pynapliConfig = config,
+            installId = installId,
+            keychain = keychain,
+        )
 
     /**
      * The root view controller.

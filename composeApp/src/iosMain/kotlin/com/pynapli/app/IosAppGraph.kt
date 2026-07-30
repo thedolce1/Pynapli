@@ -12,9 +12,11 @@ import com.pynapli.app.store.UnavailableStorePurchaseGateway
 import com.pynapli.app.swipe.ApiSwipeRepository
 import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.auth.KeychainSessionTokenCipher
 import com.pynapli.shared.auth.SessionInvalidationBus
 import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.auth.StoredSessionRefresher
+import com.pynapli.shared.auth.createPlatformSessionTokenCipher
 import com.pynapli.shared.core.config.PynapliConfig
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.KtorPynapliApiClient
@@ -61,9 +63,26 @@ class IosAppGraph(
      * Play policy there. Passed in rather than built here because the persistence is platform code.
      */
     installId: String,
+    /**
+     * Keychain access, supplied by the Swift shell — the same seam [installId] uses, and for the same
+     * reason: this is platform code that belongs where it can be compiled and run.
+     *
+     * Leave null ONLY for a throwaway dev build. Null means the session falls back to
+     * [createPlatformSessionTokenCipher]'s pass-through and **tokens are stored in plaintext**, which
+     * is the open blocker in docs/IOS_BRINGUP_PLAN.md step 3. Supply it before any build reaches a
+     * user; see [KeychainSessionTokenCipher] for exactly what the Swift side must do.
+     */
+    keychain: IosKeychainBridge? = null,
 ) {
     private val database = IosPynapliDatabaseFactory().createDatabase()
-    private val sessionStore = SqlDelightSessionStore(database)
+    private val sessionStore =
+        SqlDelightSessionStore(
+            database = database,
+            cipher =
+                keychain?.let {
+                    KeychainSessionTokenCipher(read = it.read, write = it.write, delete = it.delete)
+                } ?: createPlatformSessionTokenCipher(),
+        )
 
     // Same construction cycle as the other shells: the HTTP client needs a refresher to recover from
     // the access-token TTL, and the refresher needs the client to call /v1/auth/refresh.

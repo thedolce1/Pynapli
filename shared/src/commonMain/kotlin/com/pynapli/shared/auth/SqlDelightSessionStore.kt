@@ -11,7 +11,7 @@ import kotlin.time.ExperimentalTime
 class SqlDelightSessionStore(
     private val database: PynapliDatabase,
     private val json: Json = PynapliJson,
-    cipher: SessionTokenCipher = createPlatformSessionTokenCipher(),
+    private val cipher: SessionTokenCipher = createPlatformSessionTokenCipher(),
 ) : SessionStore {
     private val codec = SessionPayloadCodec(cipher, json)
 
@@ -44,6 +44,9 @@ class SqlDelightSessionStore(
 
     override suspend fun clear() {
         database.appMetaQueries.deleteByKey(SESSION_KEY)
+        // Order matters only for tidiness, but the call itself is load-bearing on iOS: the row is a
+        // Keychain reference, so dropping it alone would orphan the token on the device.
+        cipher.forgetStoredSecret()
     }
 
     private fun persist(value: String) {

@@ -15,6 +15,17 @@ interface SessionTokenCipher {
      * callers treat that as a signed-out session, never a crash.
      */
     fun decrypt(value: String): String?
+
+    /**
+     * Drops any secret material this cipher holds outside the stored value, called when the session
+     * is cleared.
+     *
+     * No-op for ciphers whose output is self-contained: Android keeps the ciphertext in the row and
+     * only the (useless alone) key in the Keystore, so deleting the row is already complete. iOS is
+     * different — the Keychain holds the token itself and the row holds only a reference, so without
+     * this hook a sign-out would delete the pointer and leave the secret behind on the device.
+     */
+    fun forgetStoredSecret() {}
 }
 
 /**

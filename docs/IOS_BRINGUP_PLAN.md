@@ -162,15 +162,51 @@ proves the signatures line up; it proves nothing about whether `SecItemAdd` succ
 ciphertext round-trips.
 
 Recommended design, to keep the Mac work short and avoid hand-rolled crypto: **do not implement AES
-in Kotlin/Native.** Instead let the Keychain be the secret store — `encrypt(plaintext)` writes the
-value under a fresh random handle with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and returns
-`kc1:<handle>`; `decrypt("kc1:<handle>")` reads it back and returns null on any miss. The database
-then holds only an opaque handle. This satisfies the same property the Android QA asserts (no
-plaintext token JSON at rest) using the platform's own secure store rather than custom cryptography.
+in Kotlin/Native.** Instead let the Keychain be the secret store — the database row holds only a
+reference, so no key material is ours to manage and no secret reaches SQLite. This satisfies the same
+property the Android QA asserts (no plaintext token JSON at rest) using the platform's own secure
+store rather than custom cryptography.
 
-**Exit test:** port that QA's assertions — no plaintext `"accessToken"` in the container, value
-restores across a cold launch, and returns null (signed-out, never a crash) after the Keychain item
-is deleted.
+#### Kotlin side DONE 2026-07-29 — Swift side still open
+
+The seam is now written, compiled by `compileKotlinIosSimulatorArm64`, and unit-tested where it can
+execute. **The blocker is still open**: nothing calls the Keychain yet, so an unwired build stores
+tokens in plaintext.
+
+- `KeychainSessionTokenCipher` (`:shared` iosMain) — takes `read`/`write`/`delete` from the shell.
+  `encrypt` writes and returns the sentinel `kc1`; `decrypt` returns the payload for `kc1` and null
+  for anything else; `forgetStoredSecret()` deletes on sign-out.
+- `IosKeychainBridge` (`:composeApp` iosMain) — the shell's hand-off, plus a Swift sketch and the
+  exact Apple-doc checklist to verify while writing it.
+- `IosPynapliEntry.createGraph(config:installId:keychain:)` — omit `keychain` and you get the
+  documented plaintext fallback; supply it and the session is Keychain-backed.
+- `SessionTokenCipher.forgetStoredSecret()` (new, default no-op) called from
+  `SqlDelightSessionStore.clear()`. **This is load-bearing only on iOS:** the row is a reference, so
+  without it sign-out would delete the pointer and orphan the token on the device. Android is
+  unaffected — its ciphertext lives in the row.
+- `IndirectionCipherCodecTest` (commonTest, runs on JVM) pins the out-of-band semantics the design
+  relies on: the row carries no secret, the reference round-trips, a vanished Keychain item signs the
+  user out *without* triggering a bogus "upgrade", a legacy plaintext row upgrades into the Keychain,
+  and forgetting leaves nothing recoverable.
+
+**Two deliberate deviations from the sketch above, both refinements:**
+1. **A fixed Keychain slot, not a fresh random handle.** With a random handle every `encrypt` creates
+   a new item and orphans the previous one, accumulating live tokens on the device with nothing to
+   clean them up. A fixed service/account overwrites in place, so exactly one item ever exists.
+2. **The Keychain call lives in Swift, not Kotlin/Native.** An attempt at the CoreFoundation route was
+   written and abandoned: bridging `NSMutableDictionary`/`CFDictionaryRef` and the `kSec*`
+   `CFStringRef` constants produced a wall of type errors (`CFBridgingRetain` unresolved,
+   `NSCopyingProtocol` expected), i.e. exactly the unverifiable interop this step warns about, in the
+   one place where "it compiles" is worth least. Twenty lines of idiomatic Swift, written where they
+   can be compiled and run, beat a hundred lines of blind interop.
+
+**Remaining Mac work (~1–2 hours, not half a day):** write `KeychainStore` in Swift, pass the bridge
+to `createGraph`, and run the exit test.
+
+**Exit test:** port `android-secure-token-qa.ps1`'s assertions — no plaintext `"accessToken"` in the
+container, the value restores across a cold launch, it returns null (signed-out, never a crash) after
+the Keychain item is deleted, and **sign-out leaves no Keychain item behind** (the `forgetStoredSecret`
+path, which is compile-verified only).
 
 ### 4. Platform bridges (~1–2 days) — **push Kotlin side DONE 2026-07-27**
 Already written and type-checked: `composeApp/src/iosMain/.../notifications/IosPushRegistration.kt`
@@ -301,8 +337,9 @@ pass-through):
 - Hand-writing `project.pbxproj`. It is a generated bundle; a subtly broken one costs more than it
   saves.
 - Writing Swift blind. Unlike `iosMain` Kotlin, none of it can be compiled here.
-- Implementing the session cipher blind — see step 3. "It compiles" is not adequate assurance for
-  cryptography or Keychain interop.
+- Implementing the **Keychain call itself** blind — see step 3. The Kotlin seam around it is now
+  written and tested, which was safe because it is ordinary Kotlin; the platform call is not, and an
+  attempt at it produced exactly the unverifiable interop this rule exists to prevent.
 - Trusting `:desktopApp` for anything in the "does NOT cover" table above.
 
 Everything that a compiler can check has been done. What remains needs a device, a linker, or both.
