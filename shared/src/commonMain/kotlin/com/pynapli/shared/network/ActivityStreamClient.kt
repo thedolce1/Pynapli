@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 data class ActivityStreamBackoff(
     val initialDelayMillis: Long = 1_000L,
@@ -38,6 +40,9 @@ data class ActivityStreamBackoff(
         return current.toLong()
     }
 }
+
+/** A stream session that stayed up this long counts as healthy and resets reconnect backoff. */
+internal val HEALTHY_SESSION = 30.seconds
 
 interface ActivityStreamSession {
     suspend fun receiveText(): String?
@@ -75,7 +80,8 @@ class ActivityStreamClient(
                         attempt += 1
                         continue
                     }
-                attempt = 0
+                val connectedAt = TimeSource.Monotonic.markNow()
+                var receivedFrame = false
                 try {
                     while (true) {
                         val text = session.receiveText() ?: break
@@ -83,6 +89,7 @@ class ActivityStreamClient(
                             runCatching {
                                 json.decodeFromString(ActivityDeltaDto.serializer(), text)
                             }.getOrNull() ?: continue
+                        receivedFrame = true
                         emit(delta)
                     }
                 } catch (e: CancellationException) {
@@ -92,6 +99,12 @@ class ActivityStreamClient(
                 } finally {
                     runCatching { session.close() }
                 }
+                // The session ended: server close, network drop, or a post-upgrade auth rejection
+                // (e.g. an expired access token). Always back off before reconnecting, and reset the
+                // backoff only after a healthy session, so a rejected socket can't reconnect in a loop.
+                if (receivedFrame || connectedAt.elapsedNow() >= HEALTHY_SESSION) attempt = 0
+                delay(backoff.delayMillisFor(attempt))
+                attempt += 1
             }
         }
 }

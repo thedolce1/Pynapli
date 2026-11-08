@@ -24,7 +24,8 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.test.fail
 import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 
@@ -108,11 +109,20 @@ class ActivityStreamRouteTest {
                         ),
                     )
 
-                    val maybeFrame =
-                        withTimeout(300) {
-                            runCatching { incoming.tryReceive().getOrNull() }.getOrNull()
-                        }
-                    assertNull(maybeFrame, "Activity deltas must only be delivered to their recipient")
+                    broadcaster.emit(
+                        ActivityRealtimeDelta(
+                            recipientUserId = viewerId,
+                            type = "match",
+                            occurredAt = Instant.parse("2026-05-20T16:00:01Z"),
+                        ),
+                    )
+                    // Sentinel pattern: a delta that must arrive is emitted right after the one that must not.
+                    // The first frame must be the sentinel; if the earlier delta leaked, it would arrive first.
+                    // (A tryReceive() check returns immediately and could never fail.)
+                    val first = withTimeout(1_000) { incoming.receive() }
+                    val text = (first as? Frame.Text)?.readText() ?: fail("Expected text frame")
+                    assertTrue("\"match\"" in text, "Expected the sentinel delta first, got: $text")
+                    assertFalse("\"flirt\"" in text, "Activity deltas must only be delivered to their recipient")
                 }
             }
         }

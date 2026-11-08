@@ -39,6 +39,8 @@ There is no large bloat problem. What the review did find, in priority order:
 
 ## Tier 1 — Defects and real performance issues (fix first)
 
+**Status:** #2, #3, #4, #6, #7, #8 and #9 were fixed in the correctness hot-fixes slice (`fix/correctness-hotfixes`). #4 turned out to cover 4 tests, not 3: `PresenceStreamRouteTest.deltaForBlockedRelationshipIsFiltered` had the same never-failing check. The regression tests for #3 and #6 were confirmed to fail against the old code. #8 has no unit test, because `:shared` has no JVM SQLDelight driver; the emulator E2E run covers it.
+
 | # | Finding | Evidence | Fix | Effort |
 |---|---|---|---|---|
 | 1 ✔ | **GDPR data-export archive marked shipped but not on `main`.** The archive generator commit `d3052a9` exists only on `feat/phase3-data-export` (local + origin). `main` only records export requests and never generates an archive. | `docs/ANDROID_PRODUCTION_GAMEPLAN.md:59`, `docs/PROFILE_SETTINGS_SPEC.md:677` mark it ✅; `git merge-base --is-ancestor d3052a9 HEAD` → not an ancestor | Rebase and merge the branch through the normal gates, or revert both checklist items | M |

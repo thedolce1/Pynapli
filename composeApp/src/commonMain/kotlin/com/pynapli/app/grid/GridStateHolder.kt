@@ -20,6 +20,13 @@ class GridStateHolder(
     val state: StateFlow<GridUiState> = _state.asStateFlow()
 
     /**
+     * Bumped by every [load]. A [loadMore] page that started under an older generation was requested
+     * with old filters/cursor, so its result is dropped instead of appended (same latest-wins idea as
+     * Activity's refreshGeneration).
+     */
+    private var feedGeneration = 0
+
+    /**
      * Instant first paint: render the last persisted Grid cards immediately (if any) so the screen
      * isn't blank while the network refresh runs, then load fresh. Only primes when no cards are
      * present yet, so it never clobbers a live grid. Call once on first composition instead of [load].
@@ -41,6 +48,7 @@ class GridStateHolder(
     suspend fun load(quiet: Boolean = false) {
         val before = _state.value
         val keepCardsVisible = quiet && before.cards.isNotEmpty()
+        feedGeneration += 1
 
         _state.update { current ->
             current.copy(
@@ -59,6 +67,7 @@ class GridStateHolder(
                         paywallMessage = feed.resultLimitPaywallMessage,
                         verificationMessage = null,
                         isRefreshing = false,
+                        isLoadingMore = false,
                         errorCode = null,
                         errorMessage = null,
                     )
@@ -163,9 +172,26 @@ class GridStateHolder(
         val cursor = current.nextCursor ?: return
         if (current.isRefreshing || current.isLoadingMore || current.cards.isEmpty()) return
 
+        val generation = feedGeneration
         _state.update { it.copy(isLoadingMore = true, errorCode = null, errorMessage = null) }
-        runCatchingCancellable { repository.loadGrid(current.filters, cursor) }
+        try {
+            loadMorePage(current.filters, cursor, generation)
+        } finally {
+            // Always release the flag, including on cancellation (e.g. a tab switch mid-request);
+            // otherwise the guard above would block paging for the rest of the session.
+            _state.update { it.copy(isLoadingMore = false) }
+        }
+    }
+
+    private suspend fun loadMorePage(
+        filters: GridFilters,
+        cursor: String,
+        generation: Int,
+    ) {
+        runCatchingCancellable { repository.loadGrid(filters, cursor) }
             .onSuccess { feed ->
+                // Filters changed or a reload ran while this page was in flight: drop the stale page.
+                if (generation != feedGeneration) return@onSuccess
                 _state.update { existing ->
                     val existingIds = existing.cards.mapTo(mutableSetOf()) { it.id }
                     val appended = feed.cards.filterNot { it.id in existingIds }
@@ -180,6 +206,7 @@ class GridStateHolder(
                     )
                 }
             }.onFailure { error ->
+                if (generation != feedGeneration) return@onFailure
                 _state.update { existing ->
                     existing.copy(
                         isLoadingMore = false,

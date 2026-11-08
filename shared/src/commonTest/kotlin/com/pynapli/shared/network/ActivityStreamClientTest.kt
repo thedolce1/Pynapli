@@ -1,13 +1,18 @@
 package com.pynapli.shared.network
 
 import com.pynapli.shared.network.dto.ActivityDeltaDto
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class ActivityStreamClientTest {
     private val json =
@@ -92,6 +97,31 @@ class ActivityStreamClientTest {
 
             assertEquals(listOf("album_request"), deltas.map { it.type })
             assertEquals(2, factory.connectInvocations)
+        }
+
+    // Regression: the server authenticates after the WebSocket upgrade and closes normally on
+    // rejection (e.g. an expired access token). The client used to treat the successful upgrade as
+    // healthy, reset its backoff, and reconnect with no delay — a tight loop. Every session end must
+    // now back off unless the session delivered frames or stayed up.
+    @Test
+    fun backsOffWhenServerClosesImmediatelyWithoutFrames() =
+        runBlocking {
+            val rejected = ScriptedActivitySession(scriptedReceives = emptyList())
+            val factory = ScriptedActivitySessionFactory(sessions = listOf(rejected))
+            val client =
+                ActivityStreamClient(
+                    sessionFactory = factory,
+                    tokenProvider = StaticAccessTokenProvider("expired-token"),
+                    backoff = ActivityStreamBackoff(initialDelayMillis = 100, maxDelayMillis = 100, factor = 1.0),
+                    json = json,
+                )
+
+            val job = launch(Dispatchers.Default) { client.connect().collect { } }
+            delay(350)
+            job.cancelAndJoin()
+
+            // ~350ms at a 100ms backoff allows about 4 connects; the old loop made thousands.
+            assertTrue(factory.connectInvocations in 1..5, "connects=${factory.connectInvocations}")
         }
 }
 

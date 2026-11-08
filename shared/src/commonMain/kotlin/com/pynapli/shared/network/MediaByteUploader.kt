@@ -5,6 +5,7 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.headers
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -23,6 +24,9 @@ interface MediaByteUploader {
     ): AppResult<Unit>
 }
 
+private const val UPLOAD_REQUEST_TIMEOUT_MILLIS = 180_000L
+private const val UPLOAD_SOCKET_TIMEOUT_MILLIS = 60_000L
+
 class KtorMediaByteUploader(
     private val httpClient: HttpClient = createPynapliHttpClient(),
 ) : MediaByteUploader {
@@ -39,6 +43,12 @@ class KtorMediaByteUploader(
         runCatchingCancellable {
             val response =
                 httpClient.put(uploadUrl) {
+                    // The shared client's 15s request timeout suits API calls, not a multi-MB photo
+                    // on a slow cellular link (MEDIA_IMAGE_MAX_BYTES allows 15 MB).
+                    timeout {
+                        requestTimeoutMillis = UPLOAD_REQUEST_TIMEOUT_MILLIS
+                        socketTimeoutMillis = UPLOAD_SOCKET_TIMEOUT_MILLIS
+                    }
                     headers {
                         uploadHeaders.forEach { (name, value) ->
                             append(name, value)

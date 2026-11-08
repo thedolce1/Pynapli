@@ -2,6 +2,8 @@ package com.pynapli.server.media
 
 import com.google.auth.oauth2.GoogleCredentials
 import com.pynapli.shared.network.dto.ReportCategory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -50,7 +52,12 @@ class CloudVisionMediaModerationScanner(
             credentials
         }
 
-    override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision {
+    // The JDK HttpClient.send and the credential refresh both block (up to the 10s request timeout).
+    // scan() runs on the upload-complete request path, so do the work on the IO pool rather than tie
+    // up a Ktor worker thread — the same split PlayStorePurchaseVerifier uses.
+    override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision = withContext(Dispatchers.IO) { scanBlocking(asset) }
+
+    private fun scanBlocking(asset: MediaAssetRecord): MediaModerationDecision {
         // Only image assets are SafeSearch-scannable; anything else stays human-reviewed.
         if (!asset.contentType.startsWith("image/")) {
             return MediaModerationDecision.PendingReview

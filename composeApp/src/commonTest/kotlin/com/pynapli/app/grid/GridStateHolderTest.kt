@@ -652,6 +652,59 @@ class GridStateHolderTest {
             assertEquals(listOf(null, "cursor-1"), repository.receivedCursors)
         }
 
+    // Regression: a page requested under the old filters used to be appended after a reload,
+    // mixing old-filter cards in and overwriting the fresh cursor with a stale one.
+    @Test
+    fun loadMorePageStartedBeforeReloadIsDropped() =
+        runBlocking {
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                CursorGatedGridFeedRepository(
+                    firstPage = GridFeedUi(cards = listOf(card("a")), nextCursor = "old-cursor"),
+                    reloadedPage = GridFeedUi(cards = listOf(card("b")), nextCursor = "fresh-cursor"),
+                    stalePage = GridFeedUi(cards = listOf(card("stale")), nextCursor = "stale-cursor"),
+                    gate = gate,
+                )
+            val stateHolder = GridStateHolder(repository)
+            stateHolder.load()
+
+            val pending = async { stateHolder.loadMore() }
+            yield() // loadMore is now parked on the gate with the old cursor
+            stateHolder.load() // e.g. the user changed filters
+            gate.complete(Unit)
+            pending.await()
+
+            val state = stateHolder.state.value
+            assertEquals(listOf("b"), state.cards.map { it.id })
+            assertEquals("fresh-cursor", state.nextCursor)
+            assertFalse(state.isLoadingMore)
+        }
+
+    // Regression: cancelling an in-flight page (e.g. switching tabs) left isLoadingMore stuck true,
+    // which blocked every later loadMore for the rest of the session.
+    @Test
+    fun cancelledLoadMoreReleasesTheLoadingFlag() =
+        runBlocking {
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                CursorGatedGridFeedRepository(
+                    firstPage = GridFeedUi(cards = listOf(card("a")), nextCursor = "cursor-1"),
+                    reloadedPage = GridFeedUi(cards = listOf(card("a"))),
+                    stalePage = GridFeedUi(cards = listOf(card("b"))),
+                    gate = gate,
+                )
+            val stateHolder = GridStateHolder(repository)
+            stateHolder.load()
+
+            val pending = async { stateHolder.loadMore() }
+            yield()
+            assertTrue(stateHolder.state.value.isLoadingMore)
+            pending.cancel()
+            pending.join()
+
+            assertFalse(stateHolder.state.value.isLoadingMore)
+        }
+
     @Test
     fun primeFromCacheRendersCachedCardsImmediatelyThenSwapsInFreshFeed() =
         runBlocking {
@@ -815,3 +868,27 @@ private class ScriptedGridFeedRepository(
         }
     }
 }
+
+/** Pages requested with a cursor park on [gate]; cursor-less loads return [firstPage] then [reloadedPage]. */
+private class CursorGatedGridFeedRepository(
+    private val firstPage: GridFeedUi,
+    private val reloadedPage: GridFeedUi,
+    private val stalePage: GridFeedUi,
+    private val gate: CompletableDeferred<Unit>,
+) : GridFeedRepository {
+    private var cursorlessLoads = 0
+
+    override suspend fun loadGrid(
+        filters: GridFilters,
+        cursor: String?,
+    ): GridFeedUi {
+        if (cursor != null) {
+            gate.await()
+            return stalePage
+        }
+        cursorlessLoads += 1
+        return if (cursorlessLoads == 1) firstPage else reloadedPage
+    }
+}
+
+private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = null, tone = GridCardTone.Slate)

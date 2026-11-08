@@ -3,6 +3,8 @@ package com.pynapli.shared.auth
 import com.pynapli.shared.network.PynapliJson
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.storage.PynapliDatabase
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.time.Clock
@@ -15,7 +17,20 @@ class SqlDelightSessionStore(
 ) : SessionStore {
     private val codec = SessionPayloadCodec(cipher, json)
 
-    override suspend fun currentSession(): StoredSession? {
+    // Every authenticated API call asks for the session. Without a cache each one re-read SQLite and
+    // re-ran the platform cipher (AndroidKeyStore / Keychain), often from the main dispatcher. This
+    // store is the only writer of the row, so an in-memory copy kept in step by save/clear is exact.
+    // The mutex stops a read that began before save/clear from re-caching the old value afterwards.
+    private val mutex = Mutex()
+    private var cache: CachedSession? = null
+
+    override suspend fun currentSession(): StoredSession? =
+        mutex.withLock {
+            cache?.let { return@withLock it.session }
+            readFromDatabase().also { cache = CachedSession(it) }
+        }
+
+    private fun readFromDatabase(): StoredSession? {
         val value =
             database.appMetaQueries
                 .selectByKey(SESSION_KEY)
@@ -39,15 +54,27 @@ class SqlDelightSessionStore(
                 userId = session.user.userId,
                 userStatus = session.user.status,
             )
-        persist(codec.encode(payload))
+        mutex.withLock {
+            persist(codec.encode(payload))
+            cache = CachedSession(payload.toStoredSession())
+        }
     }
 
     override suspend fun clear() {
-        database.appMetaQueries.deleteByKey(SESSION_KEY)
-        // Order matters only for tidiness, but the call itself is load-bearing on iOS: the row is a
-        // Keychain reference, so dropping it alone would orphan the token on the device.
-        cipher.forgetStoredSecret()
+        mutex.withLock {
+            // Drop the cache first so a failure below can never leave a signed-in copy in memory.
+            cache = CachedSession(null)
+            database.appMetaQueries.deleteByKey(SESSION_KEY)
+            // Order matters only for tidiness, but the call itself is load-bearing on iOS: the row is a
+            // Keychain reference, so dropping it alone would orphan the token on the device.
+            cipher.forgetStoredSecret()
+        }
     }
+
+    /** Distinguishes "loaded, signed out" (session = null) from "not loaded yet" (no cache). */
+    private class CachedSession(
+        val session: StoredSession?,
+    )
 
     private fun persist(value: String) {
         database.appMetaQueries.upsert(

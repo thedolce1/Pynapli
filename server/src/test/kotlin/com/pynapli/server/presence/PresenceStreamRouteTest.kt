@@ -31,7 +31,8 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.test.fail
 import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 
@@ -137,11 +138,20 @@ class PresenceStreamRouteTest {
                         ),
                     )
 
-                    val maybeFrame =
-                        withTimeout(300) {
-                            runCatching { incoming.tryReceive().getOrNull() }.getOrNull()
-                        }
-                    assertNull(maybeFrame, "No frame should arrive for an unsubscribed target")
+                    broadcaster.emit(
+                        PresenceDeltaDto(
+                            userId = subscribedId.toString(),
+                            online = true,
+                            lastActiveAt = Instant.parse("2026-05-09T12:00:01Z").toString(),
+                        ),
+                    )
+                    // Sentinel pattern: a delta that must arrive is emitted right after the one that must not.
+                    // The first frame must be the sentinel; if the earlier delta leaked, it would arrive first.
+                    // (A tryReceive() check returns immediately and could never fail.)
+                    val first = withTimeout(1_000) { incoming.receive() }
+                    val text = (first as? Frame.Text)?.readText() ?: fail("Expected text frame")
+                    assertTrue(subscribedId.toString() in text, "Expected the sentinel delta first, got: $text")
+                    assertFalse(unsubscribedId.toString() in text, "No frame should arrive for an unsubscribed target")
                 }
             }
         }
@@ -151,6 +161,7 @@ class PresenceStreamRouteTest {
         testApplication {
             val viewerId = UUID.randomUUID()
             val blockedTargetId = UUID.randomUUID()
+            val visibleTargetId = UUID.randomUUID()
             val viewerToken = "viewer-token"
             val authService = singleSessionAuthService(viewerToken, viewerId)
             val broadcaster = PresenceBroadcaster()
@@ -174,7 +185,7 @@ class PresenceStreamRouteTest {
                         Frame.Text(
                             streamJson.encodeToString(
                                 PresenceStreamSubscribeDto.serializer(),
-                                PresenceStreamSubscribeDto(userIds = listOf(blockedTargetId.toString())),
+                                PresenceStreamSubscribeDto(userIds = listOf(blockedTargetId.toString(), visibleTargetId.toString())),
                             ),
                         ),
                     )
@@ -188,11 +199,18 @@ class PresenceStreamRouteTest {
                         ),
                     )
 
-                    val maybeFrame =
-                        withTimeout(300) {
-                            runCatching { incoming.tryReceive().getOrNull() }.getOrNull()
-                        }
-                    assertNull(maybeFrame, "Blocked targets must not leak presence to viewer")
+                    broadcaster.emit(
+                        PresenceDeltaDto(
+                            userId = visibleTargetId.toString(),
+                            online = true,
+                            lastActiveAt = Instant.parse("2026-05-09T12:00:01Z").toString(),
+                        ),
+                    )
+                    // Sentinel pattern (see above): the unblocked target's delta must be the first frame.
+                    val first = withTimeout(1_000) { incoming.receive() }
+                    val text = (first as? Frame.Text)?.readText() ?: fail("Expected text frame")
+                    assertTrue(visibleTargetId.toString() in text, "Expected the sentinel delta first, got: $text")
+                    assertFalse(blockedTargetId.toString() in text, "Blocked targets must not leak presence to viewer")
                 }
             }
         }

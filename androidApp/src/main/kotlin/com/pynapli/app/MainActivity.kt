@@ -363,7 +363,8 @@ class MainActivity : ComponentActivity() {
         if (uri == null) return
 
         activityScope.launch {
-            val pickedMedia = readPickedImage(uri)
+            // Off Main: Photo Picker URIs can be cloud-backed, so the read can block long enough to ANR.
+            val pickedMedia = withContext(Dispatchers.IO) { readPickedImage(uri) }
             when {
                 pickedMedia == null -> graph.mediaAlbumsStateHolder.showError("Could not read the selected image.")
                 // Chat photo: upload + send as a per-recipient consent-tap media message.
