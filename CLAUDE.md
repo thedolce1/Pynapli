@@ -10,8 +10,8 @@ The `docs/*_SPEC.md` files are the canonical product and engineering specs. Read
 .\scripts\verify-fast.ps1      # tooling + docker up + Spotless + shared JVM + server tests
 .\scripts\verify-android.ps1   # Android policy + shared/Compose host tests + debug APK + release lint
 .\scripts\verify-full.ps1      # full local gate (incl. minified release APK); verify.ps1 is an alias
-.\scripts\verify-web.ps1       # spotless + wasm compile (:shared/:composeApp/:webApp) + shared JVM tests
-.\scripts\verify-desktop.ps1   # spotless + :desktopApp:desktopTest
+.\scripts\verify-web.ps1       # brand + Compose token checks + spotless + wasm compile + shared JVM tests
+.\scripts\verify-desktop.ps1   # Compose token check + spotless + :desktopApp:desktopTest
 ```
 
 The `pre-push` hook runs the gates a change needs (selection rules: header of `scripts/hooks/pre-push`). `core.hooksPath` is local config — enable once per clone with `git config core.hooksPath scripts/hooks`. **Never run `gradlew` (incl. `--stop`) while a verify gate is running** — it disrupts the daemon.

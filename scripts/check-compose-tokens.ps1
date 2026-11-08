@@ -4,7 +4,7 @@
 # (PynapliColors.kt vs the marketing site CSS); this one guards drift *inside* the app.
 #
 # Why this exists: a 2026-07-23 cohesion audit found 110 hardcoded RoundedCornerShape literals
-# against 13 token usages, spread over nine distinct radii where the handoff defines four — plus
+# against 13 token usages, spread over nine distinct radii where the handoff defines four - plus
 # on-photo pure-white text on the two surfaces the OnPhotoPrimary token was written for. None of it
 # was carelessness. It accumulated because nothing failed when someone typed
 # `RoundedCornerShape(10.dp)`. A cleanup fixes the past; only a check keeps it fixed.
@@ -23,14 +23,21 @@ $ErrorActionPreference = "Stop"
 # shells, whose own chrome (install pill, window host) consumes the same tokens. Two exclusions:
 #  - design/  : where tokens are legitimately defined from raw values.
 #  - *Test/   : visual-regression tests read raw color channels on purpose (luminance-band ratios).
+#
+# Keep this file ASCII-only: it has no BOM, and the pre-push hook falls back to Windows PowerShell
+# 5.1, which reads BOM-less files as cp1252 - a non-ASCII dash inside a string can parse as a quote.
+#
+# Roots resolve against the repo root (not the caller's working directory), so the guard gives the
+# same answer from any directory or IDE task.
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $roots = @("composeApp/src", "webApp/src", "desktopApp/src")
 $excludedPattern = "[\\/]com[\\/]pynapli[\\/]app[\\/]design[\\/]|[\\/](composeApp|webApp|desktopApp)[\\/]src[\\/][A-Za-z]*[Tt]est[\\/]"
 
-# A missing root means the script ran from the wrong directory or a module moved. Skipping it
-# would print "passed" over files that were never read, so fail loudly instead.
-$missing = $roots | Where-Object { -not (Test-Path $_) }
+# A missing or empty root means a module moved or its sources were renamed. Skipping it would print
+# "passed" over code that was never read, so each root must exist and yield files.
+$missing = $roots | Where-Object { -not (Test-Path (Join-Path $repoRoot $_)) }
 if ($missing) {
-    throw "Compose token check: root(s) not found: $($missing -join ', '). Run from the repo root, or update `$roots if a module moved."
+    throw "Compose token check: root(s) not found: $($missing -join ', '). Update `$roots if a module moved."
 }
 
 $rules = @(
@@ -52,20 +59,22 @@ $rules = @(
     @{
         Name    = "bare Compose color"
         Pattern = "Color\.(White|Black|Red|Green|Blue|Gray|LightGray|DarkGray|Yellow|Magenta|Cyan)\b"
-        Hint    = "use PynapliColors — on-photo text/icons use OnPhotoPrimary/OnPhotoSecondary, scrims use OverlayScrim"
+        Hint    = "use PynapliColors - on-photo text/icons use OnPhotoPrimary/OnPhotoSecondary, scrims use OverlayScrim"
     }
 )
 
 $failures = @()
 $scanned = 0
+$emptyRoots = @()
 
 foreach ($root in $roots) {
-    Get-ChildItem -Path $root -Filter *.kt -Recurse -File |
+    $scannedBefore = $scanned
+    Get-ChildItem -Path (Join-Path $repoRoot $root) -Filter *.kt -Recurse -File |
         Where-Object { $_.FullName -notmatch $excludedPattern } |
         ForEach-Object {
             $file = $_
             $scanned++
-            $relative = Resolve-Path -Path $file.FullName -Relative
+            $relative = $file.FullName.Substring($repoRoot.Length)
 
             $lines = [System.IO.File]::ReadAllLines($file.FullName)
             $lineNumber = 0
@@ -94,10 +103,11 @@ foreach ($root in $roots) {
                 }
             }
         }
+    if ($scanned -eq $scannedBefore) { $emptyRoots += $root }
 }
 
-if ($scanned -eq 0) {
-    throw "Compose token check scanned 0 files under $($roots -join ', ') — refusing to report a pass."
+if ($emptyRoots) {
+    throw "Compose token check scanned 0 files under $($emptyRoots -join ', ') - refusing to report a pass."
 }
 
 if ($failures.Count -gt 0) {

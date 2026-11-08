@@ -104,6 +104,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # In-app token drift (raw radii/colors in composeApp, webApp and desktopApp feature code).
+      # Locally it runs in verify-full/android/web/desktop, but those only run behind the opt-in hook.
+      # First, because it needs no Gradle: a violation reports in seconds, and isn't hidden behind
+      # a failing wasm compile.
+      - name: Compose token drift check
+        shell: pwsh
+        run: ./scripts/check-compose-tokens.ps1
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -126,11 +133,6 @@ jobs:
       - name: Brand token drift check
         shell: pwsh
         run: ./scripts/check-web-tokens.ps1
-      # In-app token drift (raw radii/colors in composeApp, webApp and desktopApp feature code).
-      # Locally it runs in verify-full/android/web/desktop, but those only run behind the opt-in hook.
-      - name: Compose token drift check
-        shell: pwsh
-        run: ./scripts/check-compose-tokens.ps1
 
   docker-smoke:
     name: Docker Smoke (Cloud Run image)
