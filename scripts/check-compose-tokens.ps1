@@ -19,12 +19,19 @@
 
 $ErrorActionPreference = "Stop"
 
-# Feature code in every module with Compose UI: :composeApp, and :webApp, whose web-only chrome
-# (install pill, shell) consumes the same tokens. Two exclusions:
+# Feature code in every module with Compose UI: :composeApp, plus the :webApp and :desktopApp
+# shells, whose own chrome (install pill, window host) consumes the same tokens. Two exclusions:
 #  - design/  : where tokens are legitimately defined from raw values.
 #  - *Test/   : visual-regression tests read raw color channels on purpose (luminance-band ratios).
-$roots = @("composeApp/src", "webApp/src")
-$excludedPattern = "[\\/]com[\\/]pynapli[\\/]app[\\/]design[\\/]|[\\/](composeApp|webApp)[\\/]src[\\/][A-Za-z]*[Tt]est[\\/]"
+$roots = @("composeApp/src", "webApp/src", "desktopApp/src")
+$excludedPattern = "[\\/]com[\\/]pynapli[\\/]app[\\/]design[\\/]|[\\/](composeApp|webApp|desktopApp)[\\/]src[\\/][A-Za-z]*[Tt]est[\\/]"
+
+# A missing root means the script ran from the wrong directory or a module moved. Skipping it
+# would print "passed" over files that were never read, so fail loudly instead.
+$missing = $roots | Where-Object { -not (Test-Path $_) }
+if ($missing) {
+    throw "Compose token check: root(s) not found: $($missing -join ', '). Run from the repo root, or update `$roots if a module moved."
+}
 
 $rules = @(
     @{
@@ -53,8 +60,6 @@ $failures = @()
 $scanned = 0
 
 foreach ($root in $roots) {
-    if (-not (Test-Path $root)) { continue }
-
     Get-ChildItem -Path $root -Filter *.kt -Recurse -File |
         Where-Object { $_.FullName -notmatch $excludedPattern } |
         ForEach-Object {
@@ -89,6 +94,10 @@ foreach ($root in $roots) {
                 }
             }
         }
+}
+
+if ($scanned -eq 0) {
+    throw "Compose token check scanned 0 files under $($roots -join ', ') — refusing to report a pass."
 }
 
 if ($failures.Count -gt 0) {

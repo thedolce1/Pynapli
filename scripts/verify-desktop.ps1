@@ -5,6 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 .\scripts\check-local-tooling.ps1
+.\scripts\check-compose-tokens.ps1
 
 $fallbackJavaHome = "C:\Program Files\Android\Android Studio\jbr"
 if (!$env:JAVA_HOME -and (Test-Path (Join-Path $fallbackJavaHome "bin\java.exe"))) {
@@ -28,8 +29,8 @@ if (!$env:JAVA_HOME -and (Test-Path (Join-Path $fallbackJavaHome "bin\java.exe")
 # backend-only push, and keeping the fast gate fast is the reason it exists. Same rationale as
 # verify-web.ps1 being its own script rather than bolted onto verify-full.
 #
-# No token check here (unlike verify-web's check-web-tokens.ps1): :desktopApp contains no Compose
-# feature UI of its own — it hosts :composeApp's, which check-compose-tokens.ps1 already guards.
+# check-compose-tokens.ps1 runs above because :desktopApp has composables of its own (the window
+# host in Main.kt), and a desktopApp-only push never reaches verify-full where the guard also runs.
 $tasks = @(
     ":desktopApp:desktopTest"
 )

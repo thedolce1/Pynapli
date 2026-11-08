@@ -2,7 +2,7 @@
 
 Pynapli is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyle app. Gradle modules: `:shared`, `:composeApp`, `:androidApp`, `:server`, `:webApp` (Wasm PWA shell — `docs/WEB_PWA_GAMEPLAN.md`), `:desktopApp` (dev-only JVM shell — see below). The iOS shell is `iosApp/` (Xcode project, not a Gradle module).
 
-The `docs/*_SPEC.md` files are the canonical product and engineering specs. Read the relevant spec before changing a feature area — they encode rules not yet expressed in code. Module-local rules live in `composeApp/CLAUDE.md` (its design/token rules also apply to Compose code in `:webApp`) and `server/CLAUDE.md`; local run/seed steps are the `local-dev` skill; the slice shipping process is the `ship-slice` skill.
+The `docs/*_SPEC.md` files are the canonical product and engineering specs. Read the relevant spec before changing a feature area — they encode rules not yet expressed in code. Module-local rules live in `composeApp/CLAUDE.md` (its design/token rules also apply to Compose code in `:webApp` and `:desktopApp`) and `server/CLAUDE.md`; local run/seed steps are the `local-dev` skill; the slice shipping process is the `ship-slice` skill.
 
 ## Verify gates
 
