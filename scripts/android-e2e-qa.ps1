@@ -1,4 +1,4 @@
-# Critical-path Android E2E QA (Phase F2, TESTING_STRATEGY_SPEC).
+﻿# Critical-path Android E2E QA (Phase F2, TESTING_STRATEGY_SPEC).
 #
 # Drives the real debug app on a connected emulator/device through the core user journey end to
 # end against the local Ktor server: dev login -> Grid -> Swipe (with a gesture) -> Activity ->

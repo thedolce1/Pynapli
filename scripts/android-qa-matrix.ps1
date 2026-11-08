@@ -1,4 +1,4 @@
-# Cross-API-level Android QA driver.
+﻿# Cross-API-level Android QA driver.
 #
 # WHY THIS EXISTS: every android-*-qa.ps1 runs against whichever emulator is connected, and in
 # practice that has always been Pynapli_Phone (android-36). minSdk is 23, and platform behaviour

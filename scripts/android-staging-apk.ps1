@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$ApiBaseUrl = "https://api-staging.pynapli.com",
     [string]$WebsocketBaseUrl = "",
     [switch]$SkipGoogleServicesCheck

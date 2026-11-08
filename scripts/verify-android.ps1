@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 .\scripts\check-local-tooling.ps1
 .\scripts\android-location-policy-check.ps1

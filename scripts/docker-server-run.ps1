@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$ImageName = "pynapli-api:local",
     [string]$ContainerName = "pynapli-api-local",
     [int]$HostPort = 18080,

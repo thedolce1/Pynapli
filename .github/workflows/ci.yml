@@ -104,11 +104,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # In-app token drift (raw radii/colors in composeApp, webApp and desktopApp feature code).
-      # Locally it runs in verify-full/android/web/desktop, but those only run behind the opt-in hook.
-      # First, because it needs no Gradle: a violation reports in seconds, and isn't hidden behind
-      # a failing wasm compile.
+      # Both token checks run first because they need no Gradle: a violation reports in seconds and
+      # isn't hidden behind a failing wasm compile. The second runs even if the first fails, so one
+      # CI round reports both kinds of drift.
+      #
+      # Brand: the marketing site mirrors the app palette by hand (web/src/styles/global.css vs
+      # PynapliColors.kt), so without this a palette change forks the brand silently. Run directly
+      # rather than ported — pwsh ships on the GitHub ubuntu images.
+      - name: Brand token drift check
+        shell: pwsh
+        run: ./scripts/check-web-tokens.ps1
+      # In-app: raw radii/colors in composeApp, webApp and desktopApp feature code. Locally it runs
+      # in verify-full/android/web/desktop, but those only run behind the opt-in pre-push hook.
       - name: Compose token drift check
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: ./scripts/check-compose-tokens.ps1
       - uses: actions/setup-java@v4
@@ -126,13 +135,6 @@ jobs:
           :composeApp:compileKotlinWasmJs
           :webApp:compileKotlinWasmJs
           --no-configuration-cache
-      # The other half of verify-web, which CI was still missing: the marketing site mirrors the
-      # app palette by hand (web/src/styles/global.css vs PynapliColors.kt), so without this a
-      # palette change forks the brand silently. Run directly rather than ported — pwsh ships on
-      # the GitHub ubuntu images, and a second copy of the rules is a second thing to drift.
-      - name: Brand token drift check
-        shell: pwsh
-        run: ./scripts/check-web-tokens.ps1
 
   docker-smoke:
     name: Docker Smoke (Cloud Run image)

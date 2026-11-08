@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$ManifestPath = "androidApp\src\main\AndroidManifest.xml",
     [string]$MainActivityPath = "androidApp\src\main\kotlin\com\pynapli\app\MainActivity.kt",
     [switch]$RunUnitTests

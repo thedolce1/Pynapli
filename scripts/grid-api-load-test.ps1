@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$BaseUrl = "http://localhost:8080",
     [string]$Password = "PynapliLoadPass123!",
     [int]$CandidateCount = 5000,

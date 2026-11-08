@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Continue"
+﻿$ErrorActionPreference = "Continue"
 
 function Find-AndroidStudioJavaHome {
     $candidate = "C:\Program Files\Android\Android Studio\jbr"

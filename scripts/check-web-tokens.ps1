@@ -1,4 +1,4 @@
-
+﻿
 # Token drift guard: the marketing site mirrors the app design language by hand
 # (web/src/styles/global.css vars vs composeApp PynapliColors.kt). This check fails
 # when a load-bearing hex diverges, so a palette change can't silently fork the brand.

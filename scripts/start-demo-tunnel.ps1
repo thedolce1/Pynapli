@@ -1,4 +1,4 @@
-# Starts a Cloudflare quick tunnel exposing the local Ktor dev server (localhost:8080)
+﻿# Starts a Cloudflare quick tunnel exposing the local Ktor dev server (localhost:8080)
 # over public HTTPS, for partner/founder demo APK sessions (see scripts/seed-demo-data.ps1).
 #
 # The tunnel URL changes on every start (free quick tunnels are ephemeral): the staging demo

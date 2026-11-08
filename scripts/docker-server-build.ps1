@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$ImageName = "pynapli-api:local",
     [switch]$NoCache,
     [switch]$SkipGradle

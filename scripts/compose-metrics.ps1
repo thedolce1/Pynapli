@@ -1,4 +1,4 @@
-# Compose compiler metrics/reports for the Compose modules.
+﻿# Compose compiler metrics/reports for the Compose modules.
 #
 # The compiler can tell you exactly which composables are skippable and which classes it considers
 # unstable — you cannot reason about recomposition cost without it. Metrics are OFF by default

@@ -28,3 +28,8 @@ indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false
+
+[*.ps1]
+# BOM required: the pre-push hook falls back to Windows PowerShell 5.1, which reads BOM-less
+# scripts as cp1252, so a non-ASCII character inside a string (em dash, emoji) can break parsing.
+charset = utf-8-bom

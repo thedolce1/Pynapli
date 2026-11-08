@@ -1,4 +1,4 @@
-
+﻿
 # Compose token drift guard: feature code must express corner radii and colors as design tokens,
 # never as raw literals. Companion to check-web-tokens.ps1, which guards the *cross-platform* hexes
 # (PynapliColors.kt vs the marketing site CSS); this one guards drift *inside* the app.
@@ -24,11 +24,8 @@ $ErrorActionPreference = "Stop"
 #  - design/  : where tokens are legitimately defined from raw values.
 #  - *Test/   : visual-regression tests read raw color channels on purpose (luminance-band ratios).
 #
-# Keep this file ASCII-only: it has no BOM, and the pre-push hook falls back to Windows PowerShell
-# 5.1, which reads BOM-less files as cp1252 - a non-ASCII dash inside a string can parse as a quote.
-#
-# Roots resolve against the repo root (not the caller's working directory), so the guard gives the
-# same answer from any directory or IDE task.
+# Roots resolve against the repo root, so this guard gives the same answer whatever directory it is
+# invoked from. (The verify-*.ps1 gates that call it still expect to run from the repo root.)
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $roots = @("composeApp/src", "webApp/src", "desktopApp/src")
 $excludedPattern = "[\\/]com[\\/]pynapli[\\/]app[\\/]design[\\/]|[\\/](composeApp|webApp|desktopApp)[\\/]src[\\/][A-Za-z]*[Tt]est[\\/]"
@@ -92,7 +89,7 @@ foreach ($root in $roots) {
                     # makes `color.red` (a Color channel property) collide with the `Color.Red` rule.
                     if ($line -cmatch $rule.Pattern) {
                         $failures += [pscustomobject]@{
-                            File = $relative.TrimStart(".", "\", "/")
+                            File = $relative.TrimStart("\", "/")
                             Line = $lineNumber
                             Rule = $rule.Name
                             Hint = $rule.Hint
