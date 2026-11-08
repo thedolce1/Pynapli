@@ -19,11 +19,12 @@
 
 $ErrorActionPreference = "Stop"
 
-# Feature code only. Two exclusions:
+# Feature code in every module with Compose UI: :composeApp, and :webApp, whose web-only chrome
+# (install pill, shell) consumes the same tokens. Two exclusions:
 #  - design/  : where tokens are legitimately defined from raw values.
 #  - *Test/   : visual-regression tests read raw color channels on purpose (luminance-band ratios).
-$roots = @("composeApp/src")
-$excludedPattern = "[\\/]com[\\/]pynapli[\\/]app[\\/]design[\\/]|[\\/]composeApp[\\/]src[\\/][A-Za-z]*[Tt]est[\\/]"
+$roots = @("composeApp/src", "webApp/src")
+$excludedPattern = "[\\/]com[\\/]pynapli[\\/]app[\\/]design[\\/]|[\\/](composeApp|webApp)[\\/]src[\\/][A-Za-z]*[Tt]est[\\/]"
 
 $rules = @(
     @{

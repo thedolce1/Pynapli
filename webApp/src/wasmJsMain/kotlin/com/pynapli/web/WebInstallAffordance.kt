@@ -2,7 +2,6 @@ package com.pynapli.web
 
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
@@ -20,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliShape
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.platform.installPromptAvailable
 import com.pynapli.web.platform.onWindowEvent
@@ -44,7 +44,7 @@ internal fun WebInstallAffordance(modifier: Modifier = Modifier) {
 
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(100.dp),
+        shape = PynapliShape.PillShape,
         color = PynapliColors.SurfaceRaised,
         border = androidx.compose.foundation.BorderStroke(1.dp, PynapliColors.Border),
     ) {
