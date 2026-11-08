@@ -2,7 +2,7 @@
 
 Pynapli is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyle app. Gradle modules: `:shared`, `:composeApp`, `:androidApp`, `:server`, `:webApp` (Wasm PWA shell — `docs/WEB_PWA_GAMEPLAN.md`), `:desktopApp` (dev-only JVM shell — see below). The iOS shell is `iosApp/` (Xcode project, not a Gradle module).
 
-The `docs/*_SPEC.md` files are the canonical product and engineering specs. Read the relevant spec before changing a feature area — they encode rules not yet expressed in code. Module-local rules live in `composeApp/CLAUDE.md` and `server/CLAUDE.md`; local run/seed steps are the `local-dev` skill; the slice shipping process is the `ship-slice` skill.
+The `docs/*_SPEC.md` files are the canonical product and engineering specs. Read the relevant spec before changing a feature area — they encode rules not yet expressed in code. Module-local rules live in `composeApp/CLAUDE.md` (its design/token rules also apply to Compose code in `:webApp`) and `server/CLAUDE.md`; local run/seed steps are the `local-dev` skill; the slice shipping process is the `ship-slice` skill.
 
 ## Verify gates
 
@@ -14,11 +14,11 @@ The `docs/*_SPEC.md` files are the canonical product and engineering specs. Read
 .\scripts\verify-desktop.ps1   # spotless + :desktopApp:desktopTest
 ```
 
-The `pre-push` hook (`scripts/hooks/`) picks one platform gate — `composeApp`/`androidApp`/`iosApp` → `verify-full`, else `verify-fast` — plus additive gates: `shared`/`composeApp`/`webApp` also run `verify-web` (neither fast nor full compiles wasm), `desktopApp`/`shared`/`composeApp` also run `verify-desktop`. `core.hooksPath` is local config — enable once per clone with `git config core.hooksPath scripts/hooks`. **Never run `gradlew` (incl. `--stop`) while a verify gate is running** — it disrupts the daemon.
+The `pre-push` hook runs the gates a change needs (selection rules: header of `scripts/hooks/pre-push`). `core.hooksPath` is local config — enable once per clone with `git config core.hooksPath scripts/hooks`. **Never run `gradlew` (incl. `--stop`) while a verify gate is running** — it disrupts the daemon.
 
 ## Module ownership (enforced — `docs/PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md`)
 
-- `:shared` — product logic, DTOs, repository interfaces, Ktor *client*, validation, state holders, SQLDelight, `expect/actual`. **Must not** contain Firebase/StoreKit/Play-Billing/raw OS calls. No `iosX64` target: Compose Multiplatform 1.11 stopped publishing Intel-simulator artifacts.
+- `:shared` — product logic, DTOs, repository interfaces, Ktor *client*, validation, state holders, SQLDelight, `expect/actual`. **Must not** contain Firebase/StoreKit/Play-Billing/raw OS calls — keep those behind platform services in `:androidApp` / `iosApp`. No `iosX64` target: Compose Multiplatform 1.11 stopped publishing Intel-simulator artifacts.
 - `:composeApp` — shared Compose UI. **Screens must not call Ktor directly.**
 - `:androidApp` — `AndroidManifest`, `Application`, `Activity`, resources only. **Do not** collapse the Android entry point into the KMP library modules.
 - `:desktopApp` — **dev-only, never shipped**: session tokens are plaintext on disk, so `DesktopRuntimeConfig` refuses non-local API hosts without `-Dpynapli.allowRemote=true`. Green here is **not** a substitute for `scripts/android-*-qa.ps1` — it can't see safe-area insets, touch feel, IME, billing, or push.
@@ -27,13 +27,12 @@ The `pre-push` hook (`scripts/hooks/`) picks one platform gate — `composeApp`/
 
 > Ktor is the product authority. Firebase is supporting infrastructure where it gives leverage.
 
-The server owns auth, account risk/trust, profile model, grid discovery, swipe ranking, partner linking, activity generation, chat membership, private album grants, subscription entitlement, age verification, moderation, rate limiting, WebSocket events. Firebase is only FCM, Crashlytics, Analytics, Remote Config, App Check (optional Firebase Auth as IdP). **Never** put discovery ranking, location eligibility, entitlement, partner state, album permissions, or chat membership authority in client-side Firebase rules or mobile UI. WebSocket events are convenience updates; HTTP fetch is canonical — on reconnect, refetch.
+The server owns auth, account risk/trust, profile model, grid discovery, swipe ranking, partner linking, activity generation, chat membership, private album grants, subscription entitlement, age verification, moderation, rate limiting, WebSocket events. Firebase is only FCM, Crashlytics, Analytics, Remote Config, App Check (optional Firebase Auth as IdP). **Never** put discovery ranking, location eligibility, entitlement, partner state, album permissions, or chat membership authority in client-side Firebase rules or mobile UI. Access/refresh tokens are opaque and server-owned. Current location is stored server-side and is **never** echoed back to clients (watch this in `:shared` DTOs). WebSocket events are convenience updates; HTTP fetch is canonical — on reconnect, refetch.
 
 ## Client conventions
 
 - `StateFlow` for screen state, `SharedFlow` for one-off events, immutable UI state objects.
-- Messages: WebSocket deltas are convenience; inbox and open conversation refetch canonical HTTP state after each delta. Conversation detail is newest-first with opaque `nextCursor`. Payloads separate moderation `status` from `deliveryStatus` (`sent`/`read`/`received`). The composer validates blank/over-limit drafts locally before calling the API.
-- Grid profile open/close must return to the exact same `LazyGridState` scroll position; don't refetch/reorder unless the user refreshes or state expires.
+- Messages: inbox and open conversation refetch canonical HTTP state after each WebSocket delta (cursor, status/deliveryStatus, composer rules: `docs/MESSAGING_SPEC.md`).
 - Don't retry non-idempotent mutations without an idempotency key. Don't log message bodies, private media URLs, exact location, or sensitive tags.
 
 ## Version policy (load-bearing — `docs/OFFICIAL_TECH_REFERENCE_GUIDE.md`)
@@ -49,7 +48,6 @@ The server owns auth, account risk/trust, profile model, grid discovery, swipe r
 - **DI is manual constructor injection, on purpose — no DI framework.** Koin (unused) was removed 2026-07-27. Manual wiring fails the build on a missing dependency instead of the first screen that resolves it, which matters across five targets that can't all be run locally. Shared wiring lives in `PynapliCommonGraph`; each shell supplies only platform-specific pieces. Don't add a DI framework without a written reason.
 - Don't introduce a second image loader or DB abstraction (Coil 3 / SQLDelight are chosen).
 - Don't put product business rules in Compose screens or Android/iOS shells — they belong in `:shared` and `:server`.
-- Don't add Firebase calls in `:shared`; keep them behind platform services in `:androidApp` / `iosApp`.
 - Tiny features don't need full `data/`/`domain/`/`presentation/` layering.
 
 ## Specs by area
@@ -60,4 +58,4 @@ The server owns auth, account risk/trust, profile model, grid discovery, swipe r
 
 ## Production-readiness initiative (active)
 
-Driving Pynapli to production grade for Google Play, the App Store, and `pynapli.com` (Wasm PWA). `docs/IMPLEMENTATION_AUDIT.md` is the authoritative gap analysis. Sequencing (founder-locked 2026-05-31): **polish the core loop first** — Grid, Swipe, Activity, Messages, Store and their backend — before new surfaces or differentiators. One feature branch + PR per slice; pause for review only at phase boundaries (details: `ship-slice` skill). UI design rules: `composeApp/CLAUDE.md`.
+Driving Pynapli to production grade for Google Play, the App Store, and `pynapli.com` (Wasm PWA). `docs/IMPLEMENTATION_AUDIT.md` is the authoritative gap analysis. Sequencing (founder-locked 2026-05-31): **polish the core loop first** — Grid, Swipe, Activity, Messages, Store and their backend — before new surfaces or differentiators. One PR per slice; pause for review only at phase boundaries (process: `ship-slice` skill).
