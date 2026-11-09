@@ -20,8 +20,8 @@ import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.yield
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -30,7 +30,7 @@ import kotlin.test.assertTrue
 class AuthStateHolderTest {
     @Test
     fun sessionInvalidationDropsBackToSignIn() =
-        runBlocking {
+        runTest {
             val invalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
             val holder =
                 AuthStateHolder(
@@ -50,7 +50,7 @@ class AuthStateHolderTest {
             assertTrue(holder.state.value.authenticated, "expected a live session after login")
 
             invalidations.emit(Unit)
-            yield() // let the observer apply the state update
+            runCurrent() // let the observer apply the state update
 
             assertFalse(holder.state.value.authenticated, "a terminal invalidation must return to sign-in")
             assertEquals("Your session ended. Please sign in again.", holder.state.value.errorMessage)
@@ -59,7 +59,7 @@ class AuthStateHolderTest {
 
     @Test
     fun invalidationWhileSignedOutIsANoOp() =
-        runBlocking {
+        runTest {
             val invalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
             val holder =
                 AuthStateHolder(
@@ -76,7 +76,7 @@ class AuthStateHolderTest {
             val observer = launch(start = CoroutineStart.UNDISPATCHED) { holder.observeSessionInvalidations() }
 
             invalidations.emit(Unit)
-            yield()
+            runCurrent()
 
             // No spurious error banner appears when there was no session to lose.
             assertFalse(holder.state.value.authenticated)

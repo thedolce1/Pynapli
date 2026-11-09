@@ -5,7 +5,7 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.SavedGridFilterDto
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 class SavedGridFilterStateHolderTest {
     @Test
     fun loadHydratesSavedFilters() =
-        runBlocking {
+        runTest {
             val item = sampleDto(id = "abc", name = "Verified only")
             val repository = FakeRepository(listResult = AppResult.Success(listOf(item)))
             val stateHolder = SavedGridFilterStateHolder(repository)
@@ -29,7 +29,7 @@ class SavedGridFilterStateHolderTest {
 
     @Test
     fun loadEntitlementRequiredClearsItemsAndDoesNotSurfaceError() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeRepository(
                     listResult = AppResult.Failure(AppError("ENTITLEMENT_REQUIRED", "Upgrade required")),
@@ -46,7 +46,7 @@ class SavedGridFilterStateHolderTest {
 
     @Test
     fun saveAddsItemToTopOfList() =
-        runBlocking {
+        runTest {
             val existing = sampleDto(id = "old", name = "Old", createdAt = "2026-05-01T00:00:00Z")
             val created = sampleDto(id = "new", name = "Latest", createdAt = "2026-05-09T00:00:00Z")
             val repository =
@@ -69,7 +69,7 @@ class SavedGridFilterStateHolderTest {
 
     @Test
     fun saveBlankNameSurfacesValidationError() =
-        runBlocking {
+        runTest {
             val repository = FakeRepository(listResult = AppResult.Success(emptyList()))
             val stateHolder = SavedGridFilterStateHolder(repository)
             stateHolder.load()
@@ -82,7 +82,7 @@ class SavedGridFilterStateHolderTest {
 
     @Test
     fun deleteRemovesItem() =
-        runBlocking {
+        runTest {
             val a = sampleDto(id = "a", name = "A")
             val b = sampleDto(id = "b", name = "B")
             val repository =

@@ -7,7 +7,7 @@ import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 class SwipeStateHolderTest {
     @Test
     fun loadLocksPaidFiltersWhenDeckIsAdSupported() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeSwipeRepository(
                     deck = SwipeDeckUi(cards = emptyList(), adSupported = true),
@@ -35,7 +35,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun introNoteValidationStopsOverLimitRequest() =
-        runBlocking {
+        runTest {
             val card = swipeCard(userId = "target-1")
             val repository =
                 FakeSwipeRepository(
@@ -54,7 +54,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun recoverableFailureKeepsSwipeQueuedForRetry() =
-        runBlocking {
+        runTest {
             val card = swipeCard(userId = "target-1")
             val repository =
                 FakeSwipeRepository(
@@ -92,7 +92,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun nonRecoverableFailureRestoresCardAndClearsQueue() =
-        runBlocking {
+        runTest {
             val card = swipeCard(userId = "target-1")
             val repository =
                 FakeSwipeRepository(
@@ -113,7 +113,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun queueFullStopsAdditionalOptimisticActions() =
-        runBlocking {
+        runTest {
             val cards = (1..11).map { index -> swipeCard(userId = "target-$index") }
             val repository =
                 FakeSwipeRepository(
@@ -138,7 +138,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun loadRestoresPersistedQueueAndRetriesWithStableActionId() =
-        runBlocking {
+        runTest {
             val card = swipeCard(userId = "target-1")
             val queued =
                 QueuedSwipeAction(
@@ -174,7 +174,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun persistedQueueIsScopedByViewer() =
-        runBlocking {
+        runTest {
             val card = swipeCard(userId = "target-1")
             val queueStore =
                 FakeSwipeActionQueueStore(
@@ -211,7 +211,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun internalReloadKeepsKnownViewerQueueScope() =
-        runBlocking {
+        runTest {
             val card = swipeCard(userId = "target-1")
             val repository =
                 FakeSwipeRepository(
@@ -236,7 +236,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun selectingTopPicksLoadsPicksDeckAndForYouReturnsToNormalDeck() =
-        runBlocking {
+        runTest {
             val normalCard = swipeCard(userId = "normal-1")
             val pickCard = swipeCard(userId = "pick-1")
             val repository =
@@ -276,7 +276,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun anonymousPendingQueueMigratesWhenViewerIdBecomesAvailable() =
-        runBlocking {
+        runTest {
             val card = swipeCard(userId = "target-1")
             val queued =
                 QueuedSwipeAction(
@@ -311,7 +311,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun rewindRestoresRecoverableQueuedActionWithoutServerCall() =
-        runBlocking {
+        runTest {
             val card = swipeCard(userId = "target-1")
             val repository =
                 FakeSwipeRepository(
@@ -341,7 +341,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun rewindPrependsServerRestoredCardAndDeckSession() =
-        runBlocking {
+        runTest {
             val first = swipeCard(userId = "target-1")
             val restored = swipeCard(userId = "target-2").copy(rankToken = "rank-restored")
             val repository =
@@ -369,7 +369,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun loadStoresNextCursorAndAutoLoadsAdditionalPage() =
-        runBlocking {
+        runTest {
             val firstPage = (1..3).map { swipeCard(userId = "p1-$it") }
             val secondPage = (1..3).map { swipeCard(userId = "p2-$it") }
             val repository =
@@ -404,7 +404,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun loadMoreSkipsWhenAboveThresholdOrNoCursor() =
-        runBlocking {
+        runTest {
             // More than LOAD_MORE_THRESHOLD cards remain, so no prefetch should fire yet.
             val cards = (1..LOAD_MORE_THRESHOLD + 2).map { swipeCard(userId = "card-$it") }
             val repository =
@@ -425,7 +425,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun loadMoreFiltersOutAlreadyVisibleAndPendingCards() =
-        runBlocking {
+        runTest {
             val first = swipeCard(userId = "shared-1")
             val onlyOnFirstPage = swipeCard(userId = "first-only")
             val duplicate = swipeCard(userId = "shared-1")
@@ -462,7 +462,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun applyFiltersIssuesFreshDeckRequestMatchingFilters() =
-        runBlocking {
+        runTest {
             // FILTERS_SPEC L401: applying filters must request a new deck session — not
             // mutate the existing one. The new request must carry the user's filter
             // selection so the server can rank/relax against the right surface.
@@ -502,7 +502,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun applyFiltersDefaultsRestoresDefaultRequest() =
-        runBlocking {
+        runTest {
             // Clear-all in the sheet (C3) goes through applyFilters(defaults). Verify the
             // resulting request DTO matches the default surface so the server hydrates an
             // unfiltered deck — no dealbreakers, default radius, no contexts.
@@ -527,7 +527,7 @@ class SwipeStateHolderTest {
 
     @Test
     fun rewindEntitlementFailureShowsPaywallMessage() =
-        runBlocking {
+        runTest {
             val card = swipeCard(userId = "target-1")
             val repository =
                 FakeSwipeRepository(

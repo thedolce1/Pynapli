@@ -22,7 +22,7 @@ import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import com.pynapli.shared.settings.OnboardingProgress
 import com.pynapli.shared.settings.OnboardingProgressStore
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,7 +36,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun confirmDobValidatesTheTypedDate() =
-        runBlocking {
+        runTest {
             val fixture = Fixture()
             fixture.onboarding.startCreateAccount()
 
@@ -60,7 +60,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun confirmDobStopsUnderageBeforeAccountCreation() =
-        runBlocking {
+        runTest {
             val fixture = Fixture()
             fixture.onboarding.startCreateAccount()
 
@@ -106,7 +106,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun acceptPoliciesRecordsBothAcceptancesAndAdvances() =
-        runBlocking {
+        runTest {
             val fixture = Fixture()
             fixture.onboarding.startCreateAccount()
             fixture.enterDob(day = "01", month = "06", year = "2000")
@@ -122,7 +122,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun submitAccountValidatesBeforeCallingTheApi() =
-        runBlocking {
+        runTest {
             val fixture = Fixture()
             fixture.advanceToAccount()
 
@@ -145,7 +145,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun submitAccountSuccessEntersPostAuthStepsAndMarksInProgress() =
-        runBlocking {
+        runTest {
             val fixture = Fixture()
             fixture.advanceToAccount(day = "29", month = "02", year = "2000")
             fixture.onboarding.updateEmail(" new@pynapli.local ")
@@ -169,7 +169,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun submitAccountFailureSurfacesServerErrorAndStaysOnAccount() =
-        runBlocking {
+        runTest {
             val fixture =
                 Fixture(
                     authApi =
@@ -195,7 +195,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun finishProfileWithBlankNameSkipsTheApiAndCompletes() =
-        runBlocking {
+        runTest {
             val fixture =
                 Fixture(
                     progressStore =
@@ -215,7 +215,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun finishProfileSavesTypedNameThenCompletes() =
-        runBlocking {
+        runTest {
             val fixture =
                 Fixture(
                     progressStore =
@@ -235,7 +235,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun finishProfileKeepsTheStepperOnSaveFailure() =
-        runBlocking {
+        runTest {
             val fixture =
                 Fixture(
                     progressStore =
@@ -266,7 +266,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun resumeSkipsCompletedSignedOutAndForeignAccounts() =
-        runBlocking {
+        runTest {
             // Completed onboarding: no resume even with a session.
             val completed = Fixture()
             completed.signIn()
@@ -299,7 +299,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun resumeReentersTheProfileStepWithPrefilledName() =
-        runBlocking {
+        runTest {
             val armedProgress = OnboardingProgress(completed = false, userId = "user-1")
 
             val namedAlready =
@@ -331,7 +331,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun photoNudgeEligibilityIsBounded() =
-        runBlocking {
+        runTest {
             // Fresh completed account: eligible.
             val fresh = Fixture()
             fresh.onboarding.evaluatePhotoNudge()
@@ -367,7 +367,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun photoNudgeImpressionCountsOncePerProcessSession() =
-        runBlocking {
+        runTest {
             val fixture = Fixture()
             fixture.onboarding.recordPhotoNudgeShown()
             fixture.onboarding.recordPhotoNudgeShown()
@@ -376,7 +376,7 @@ class OnboardingStateHolderTest {
 
     @Test
     fun photoNudgeDismissPersistsAndHidesImmediately() =
-        runBlocking {
+        runTest {
             val fixture = Fixture()
             fixture.onboarding.evaluatePhotoNudge()
             assertTrue(fixture.onboarding.state.value.photoNudgeEligible)

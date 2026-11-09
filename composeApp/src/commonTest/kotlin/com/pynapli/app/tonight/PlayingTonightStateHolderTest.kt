@@ -1,7 +1,7 @@
 package com.pynapli.app.tonight
 
 import com.pynapli.shared.core.result.AppResult
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -82,7 +82,7 @@ private fun item(
 class PlayingTonightStateHolderTest {
     @Test
     fun loadPopulatesFeedAndCurrentSession() =
-        runBlocking {
+        runTest {
             val session =
                 TonightSessionUi(
                     id = "s1",
@@ -108,7 +108,7 @@ class PlayingTonightStateHolderTest {
 
     @Test
     fun setIntentFilterReQueriesWithIntent() =
-        runBlocking {
+        runTest {
             val repo = FakeTonightRepository(feed = listOf(item("a", "solo"), item("b", "social")), current = null)
             val holder = PlayingTonightStateHolder(repo)
             holder.load()
@@ -126,7 +126,7 @@ class PlayingTonightStateHolderTest {
 
     @Test
     fun endCurrentSessionClearsTheFloater() =
-        runBlocking {
+        runTest {
             val session =
                 TonightSessionUi(
                     id = "s9",
@@ -149,7 +149,7 @@ class PlayingTonightStateHolderTest {
 
     @Test
     fun proposeSetsCurrentSession() =
-        runBlocking {
+        runTest {
             val repo = FakeTonightRepository(feed = emptyList(), current = null)
             repo.proposeResult =
                 TonightSessionUi(
@@ -178,7 +178,7 @@ class PlayingTonightStateHolderTest {
 
     @Test
     fun declineClearsTheProposedSession() =
-        runBlocking {
+        runTest {
             val proposed =
                 TonightSessionUi(
                     id = "p1",
@@ -201,7 +201,7 @@ class PlayingTonightStateHolderTest {
 
     @Test
     fun loadPopulatesProfilePhotoOptions() =
-        runBlocking {
+        runTest {
             val repo = FakeTonightRepository(feed = emptyList(), current = null)
             repo.photoOptions =
                 listOf(
@@ -221,7 +221,7 @@ class PlayingTonightStateHolderTest {
 
     @Test
     fun weeklyLimitSurfacesAnUpgradeMessage() =
-        runBlocking {
+        runTest {
             val repo = FakeTonightRepository(feed = emptyList(), current = null)
             repo.proposeError =
                 com.pynapli.shared.core.result

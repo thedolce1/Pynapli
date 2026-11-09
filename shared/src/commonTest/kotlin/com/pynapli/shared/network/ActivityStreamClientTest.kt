@@ -1,18 +1,16 @@
 package com.pynapli.shared.network
 
 import com.pynapli.shared.network.dto.ActivityDeltaDto
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class ActivityStreamClientTest {
     private val json =
@@ -34,7 +32,7 @@ class ActivityStreamClientTest {
 
     @Test
     fun emitsDeltasFromConnectedSession() =
-        runBlocking {
+        runTest {
             val session =
                 ScriptedActivitySession(
                     scriptedReceives =
@@ -69,7 +67,7 @@ class ActivityStreamClientTest {
 
     @Test
     fun reconnectsAfterTransientFailure() =
-        runBlocking {
+        runTest {
             val firstSession = ScriptedActivitySession(scriptedReceives = emptyList())
             val secondSession =
                 ScriptedActivitySession(
@@ -105,7 +103,7 @@ class ActivityStreamClientTest {
     // now back off unless the session delivered frames or stayed up.
     @Test
     fun backsOffWhenServerClosesImmediatelyWithoutFrames() =
-        runBlocking {
+        runTest {
             val rejected = ScriptedActivitySession(scriptedReceives = emptyList())
             val factory = ScriptedActivitySessionFactory(sessions = listOf(rejected))
             val client =
@@ -116,12 +114,13 @@ class ActivityStreamClientTest {
                     json = json,
                 )
 
-            val job = launch(Dispatchers.Default) { client.connect().collect { } }
-            delay(350)
+            // Runs on the test scheduler, so the backoff delays are virtual and the count is exact:
+            // connects at t = 0, 100, 200 and 300 ms. The old tight loop made thousands.
+            val job = launch { client.connect().collect { } }
+            advanceTimeBy(350)
             job.cancelAndJoin()
 
-            // ~350ms at a 100ms backoff allows about 4 connects; the old loop made thousands.
-            assertTrue(factory.connectInvocations in 1..5, "connects=${factory.connectInvocations}")
+            assertEquals(4, factory.connectInvocations, "connects=${factory.connectInvocations}")
         }
 }
 

@@ -10,14 +10,14 @@ import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.ReportDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ProfileDetailStateHolderTest {
     @Test
     fun sendSparkFromTonightTagsFlirtWithPlayingTonightSource() =
-        runBlocking {
+        runTest {
             val repository = RecordingPublicProfileRepository()
             val stateHolder = ProfileDetailStateHolder(repository)
 
@@ -29,7 +29,7 @@ class ProfileDetailStateHolderTest {
 
     @Test
     fun sendSparkFromNormalOpenLeavesSourceNull() =
-        runBlocking {
+        runTest {
             val repository = RecordingPublicProfileRepository()
             val stateHolder = ProfileDetailStateHolder(repository)
 
@@ -41,7 +41,7 @@ class ProfileDetailStateHolderTest {
 
     @Test
     fun normalOpenAfterTonightOpenResetsSource() =
-        runBlocking {
+        runTest {
             val repository = RecordingPublicProfileRepository()
             val stateHolder = ProfileDetailStateHolder(repository)
 
@@ -54,7 +54,7 @@ class ProfileDetailStateHolderTest {
 
     @Test
     fun openOwnPreviewLoadsProfileInReadOnlyMode() =
-        runBlocking {
+        runTest {
             val repository = RecordingPublicProfileRepository()
             val stateHolder = ProfileDetailStateHolder(repository)
 
@@ -68,7 +68,7 @@ class ProfileDetailStateHolderTest {
 
     @Test
     fun normalOpenAfterOwnPreviewClearsOwnProfileFlag() =
-        runBlocking {
+        runTest {
             val repository = RecordingPublicProfileRepository()
             val stateHolder = ProfileDetailStateHolder(repository)
 

@@ -3,7 +3,7 @@ package com.pynapli.shared.network
 import com.pynapli.shared.network.dto.PsyncRealtimeDeltaDto
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -29,7 +29,7 @@ class PsyncStreamClientTest {
 
     @Test
     fun emitsDeltasFromConnectedSession() =
-        runBlocking {
+        runTest {
             val session =
                 ScriptedPsyncSession(
                     scriptedReceives =
@@ -64,7 +64,7 @@ class PsyncStreamClientTest {
 
     @Test
     fun reconnectsAfterTransientFailure() =
-        runBlocking {
+        runTest {
             val firstSession = ScriptedPsyncSession(scriptedReceives = emptyList())
             val secondSession =
                 ScriptedPsyncSession(

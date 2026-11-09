@@ -2,12 +2,12 @@ package com.pynapli.app.grid
 
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 class GridStateHolderTest {
     @Test
     fun togglingOnlineSetsFlagAndCallsRepoWithCombinedFilters() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -33,7 +33,7 @@ class GridStateHolderTest {
 
     @Test
     fun applyingIntentsSerializesToCanonicalTokens() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -50,7 +50,7 @@ class GridStateHolderTest {
 
     @Test
     fun togglingTonightSetsTonightAvailableOnlyOnRequest() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -88,7 +88,7 @@ class GridStateHolderTest {
 
     @Test
     fun applyingLogisticsTagsSerializesToCanonicalTokens() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -105,7 +105,7 @@ class GridStateHolderTest {
 
     @Test
     fun applyingLifestyleTagsSerializesToCanonicalTokens() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -122,7 +122,7 @@ class GridStateHolderTest {
 
     @Test
     fun applyingDiscoveryStylesSerializesToServerValues() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -139,7 +139,7 @@ class GridStateHolderTest {
 
     @Test
     fun applyingGenderAndOrientationSerializesToTokensAndRoundTrips() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -162,7 +162,7 @@ class GridStateHolderTest {
 
     @Test
     fun applyingWithPhotosSerializesAndRoundTrips() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -179,7 +179,7 @@ class GridStateHolderTest {
 
     @Test
     fun togglingVerifiedSetsVerifiedOnlyOnRequest() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -195,7 +195,7 @@ class GridStateHolderTest {
 
     @Test
     fun togglingMultipleQuickFiltersCombinesIntoSingleRequest() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -212,7 +212,7 @@ class GridStateHolderTest {
 
     @Test
     fun setRadiusMetersClampsAndReloads() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -231,7 +231,7 @@ class GridStateHolderTest {
 
     @Test
     fun setAgeRangeNormalizesReversedBoundsAndReloads() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -245,7 +245,7 @@ class GridStateHolderTest {
 
     @Test
     fun clearAllFiltersResetsToDefaultsAndReloads() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -263,7 +263,7 @@ class GridStateHolderTest {
 
     @Test
     fun applyFiltersWithSameValueIsNoOp() =
-        runBlocking {
+        runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
             val stateHolder = GridStateHolder(repository)
 
@@ -276,7 +276,7 @@ class GridStateHolderTest {
 
     @Test
     fun refreshReFetchesCurrentFiltersAndPreservesThem() =
-        runBlocking {
+        runTest {
             val card =
                 GridProfileCardUi(
                     id = "u1",
@@ -314,7 +314,7 @@ class GridStateHolderTest {
 
     @Test
     fun quietLoadKeepsCardsVisibleAndNeverFlipsRefreshing() =
-        runBlocking {
+        runTest {
             val firstCard =
                 GridProfileCardUi(
                     id = "first",
@@ -356,8 +356,11 @@ class GridStateHolderTest {
                             cardIdsDuringQuiet += it.cards.map { card -> card.id }
                         }.launchIn(this)
 
-                val quietJob = async(Dispatchers.Default) { stateHolder.load(quiet = true) }
-                repeat(3) { yield() }
+                val quietJob = async { stateHolder.load(quiet = true) }
+                // Deterministic: run everything runnable on the test scheduler, which parks the load
+                // on the gate. (A real-thread async + yield() could assert before the load started.)
+                runCurrent()
+                assertTrue(repository.parkedAtGate, "the load must be in flight before asserting on it")
 
                 assertTrue(
                     refreshingValues.none { it },
@@ -381,7 +384,7 @@ class GridStateHolderTest {
 
     @Test
     fun quietLoadFailureKeepsExistingCardsAndDoesNotSurfaceError() =
-        runBlocking {
+        runTest {
             val initialCard =
                 GridProfileCardUi(
                     id = "first",
@@ -412,7 +415,7 @@ class GridStateHolderTest {
 
     @Test
     fun ageVerificationRequiredRevertsFiltersAndSurfacesVerificationPrompt() =
-        runBlocking {
+        runTest {
             // GridService throws AGE_VERIFICATION_REQUIRED when an unverified viewer applies a
             // lifestyle filter. The client must revert to defaults (drop the gated filter), surface
             // the verification prompt instead of a raw error, and not show a paywall.
@@ -449,7 +452,7 @@ class GridStateHolderTest {
 
     @Test
     fun successfulLoadClearsAnyPriorVerificationPrompt() =
-        runBlocking {
+        runTest {
             val card =
                 GridProfileCardUi(
                     id = "u1",
@@ -486,7 +489,7 @@ class GridStateHolderTest {
 
     @Test
     fun nonQuietLoadFailurePreservesErrorSemantics() =
-        runBlocking {
+        runTest {
             val repository =
                 ScriptedGridFeedRepository(
                     outcomes =
@@ -506,7 +509,7 @@ class GridStateHolderTest {
 
     @Test
     fun filterChangeKeepsCardsVisibleUntilNewFeedLands() =
-        runBlocking {
+        runTest {
             val firstCard =
                 GridProfileCardUi(
                     id = "first",
@@ -545,8 +548,11 @@ class GridStateHolderTest {
                         .onEach { cardIdsDuringSelect += it.cards.map { card -> card.id } }
                         .launchIn(this)
 
-                val selectJob = async(Dispatchers.Default) { stateHolder.toggleQuickFilter(QuickFilterId.Online) }
-                repeat(3) { yield() }
+                val selectJob = async { stateHolder.toggleQuickFilter(QuickFilterId.Online) }
+                // Deterministic: run everything runnable on the test scheduler, which parks the load
+                // on the gate. (A real-thread async + yield() could assert before the load started.)
+                runCurrent()
+                assertTrue(repository.parkedAtGate, "the load must be in flight before asserting on it")
 
                 assertTrue(
                     cardIdsDuringSelect.all { it == listOf("first") },
@@ -566,7 +572,7 @@ class GridStateHolderTest {
 
     @Test
     fun presenceDeltaUpdatesOnlineFlagWithoutReorderingOrRefreshing() =
-        runBlocking {
+        runTest {
             val cards =
                 listOf(
                     GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null, tone = GridCardTone.Warm),
@@ -596,7 +602,7 @@ class GridStateHolderTest {
 
     @Test
     fun presenceDeltaForUnknownUserIsNoOp() =
-        runBlocking {
+        runTest {
             val cards =
                 listOf(
                     GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null, tone = GridCardTone.Warm),
@@ -615,7 +621,7 @@ class GridStateHolderTest {
 
     @Test
     fun loadMoreAppendsUniqueCardsAndAdvancesCursor() =
-        runBlocking {
+        runTest {
             val first =
                 GridProfileCardUi(
                     id = "first",
@@ -656,7 +662,7 @@ class GridStateHolderTest {
     // mixing old-filter cards in and overwriting the fresh cursor with a stale one.
     @Test
     fun loadMorePageStartedBeforeReloadIsDropped() =
-        runBlocking {
+        runTest {
             val gate = CompletableDeferred<Unit>()
             val repository =
                 CursorGatedGridFeedRepository(
@@ -669,7 +675,7 @@ class GridStateHolderTest {
             stateHolder.load()
 
             val pending = async { stateHolder.loadMore() }
-            yield() // loadMore is now parked on the gate with the old cursor
+            runCurrent() // loadMore is now parked on the gate with the old cursor
             stateHolder.load() // e.g. the user changed filters
             gate.complete(Unit)
             pending.await()
@@ -684,7 +690,7 @@ class GridStateHolderTest {
     // which blocked every later loadMore for the rest of the session.
     @Test
     fun cancelledLoadMoreReleasesTheLoadingFlag() =
-        runBlocking {
+        runTest {
             val gate = CompletableDeferred<Unit>()
             val repository =
                 CursorGatedGridFeedRepository(
@@ -697,7 +703,7 @@ class GridStateHolderTest {
             stateHolder.load()
 
             val pending = async { stateHolder.loadMore() }
-            yield()
+            runCurrent()
             assertTrue(stateHolder.state.value.isLoadingMore)
             pending.cancel()
             pending.join()
@@ -707,7 +713,7 @@ class GridStateHolderTest {
 
     @Test
     fun primeFromCacheRendersCachedCardsImmediatelyThenSwapsInFreshFeed() =
-        runBlocking {
+        runTest {
             val cached =
                 GridProfileCardUi(
                     id = "cached",
@@ -734,13 +740,11 @@ class GridStateHolderTest {
             val snapshotStore = FakeGridSnapshotStore(initial = listOf(cached))
             val stateHolder = GridStateHolder(repository, snapshotStore)
 
-            val priming = async(Dispatchers.Default) { stateHolder.primeFromCacheThenLoad() }
-            // Before the network load completes, the cached cards are already visible (instant paint).
-            while (stateHolder.state.value.cards
-                    .isEmpty()
-            ) {
-                yield()
-            }
+            val priming = async { stateHolder.primeFromCacheThenLoad() }
+            // Run until the network load parks on the gate: the cached cards must already be visible
+            // (instant paint) while it waits.
+            runCurrent()
+            assertTrue(repository.parkedAtGate, "the network load must be in flight")
             assertEquals(
                 listOf("cached"),
                 stateHolder.state.value.cards
@@ -762,7 +766,7 @@ class GridStateHolderTest {
 
     @Test
     fun primeFromCacheFallsBackToNormalLoadWhenNoSnapshot() =
-        runBlocking {
+        runTest {
             val fresh =
                 GridProfileCardUi(
                     id = "fresh",
@@ -828,6 +832,10 @@ private class GatedGridFeedRepository(
 ) : GridFeedRepository {
     private var loadCount = 0
 
+    /** True once a load is waiting on [gate]: lets a test prove it observed the in-flight state. */
+    var parkedAtGate = false
+        private set
+
     override suspend fun loadGrid(
         filters: GridFilters,
         cursor: String?,
@@ -835,6 +843,7 @@ private class GatedGridFeedRepository(
         val index = loadCount
         loadCount += 1
         if (index >= gateBeforeIndex) {
+            parkedAtGate = true
             gate.await()
         }
         return feeds.getOrElse(index) { feeds.last() }

@@ -3,7 +3,7 @@ package com.pynapli.app.location
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CurrentLocationDto
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 class LocationStateHolderTest {
     @Test
     fun firstLocationSubmitsAndRefreshesGrid() =
-        runBlocking {
+        runTest {
             val repository = FakeLocationUpdateRepository()
             val stateHolder = LocationStateHolder(repository)
 
@@ -26,7 +26,7 @@ class LocationStateHolderTest {
 
     @Test
     fun smallMovementSkipsBackendAndGridRefresh() =
-        runBlocking {
+        runTest {
             val repository = FakeLocationUpdateRepository()
             val stateHolder = LocationStateHolder(repository)
 
@@ -41,7 +41,7 @@ class LocationStateHolderTest {
 
     @Test
     fun mediumMovementSubmitsAndRequestsQuietGridRefresh() =
-        runBlocking {
+        runTest {
             val repository = FakeLocationUpdateRepository()
             val stateHolder = LocationStateHolder(repository)
 
@@ -55,7 +55,7 @@ class LocationStateHolderTest {
 
     @Test
     fun largeMovementSubmitsAndRequestsGridRefresh() =
-        runBlocking {
+        runTest {
             val repository = FakeLocationUpdateRepository()
             val stateHolder = LocationStateHolder(repository)
 
@@ -69,7 +69,7 @@ class LocationStateHolderTest {
 
     @Test
     fun failedSubmitDoesNotUpdateMovementAnchor() =
-        runBlocking {
+        runTest {
             val repository = FakeLocationUpdateRepository()
             val stateHolder = LocationStateHolder(repository)
 

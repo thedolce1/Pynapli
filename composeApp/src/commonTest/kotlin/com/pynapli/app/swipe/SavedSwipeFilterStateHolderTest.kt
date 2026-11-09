@@ -5,7 +5,7 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CreateSavedSwipeFilterRequestDto
 import com.pynapli.shared.network.dto.SavedSwipeFilterDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 class SavedSwipeFilterStateHolderTest {
     @Test
     fun loadAgeVerificationRequiredFlagsPromptAndSuppressesRawError() =
-        runBlocking {
+        runTest {
             // SavedSwipeFilterService throws AGE_VERIFICATION_REQUIRED for unverified viewers with
             // lifestyle presets. The holder must collapse items, flag the prompt, and not surface a
             // raw error toast (the verify prompt drives the next step instead).
@@ -36,7 +36,7 @@ class SavedSwipeFilterStateHolderTest {
 
     @Test
     fun saveAgeVerificationRequiredFlagsPromptAndRevertsToNoNewPreset() =
-        runBlocking {
+        runTest {
             val existing = sampleDto(id = "old", name = "Old")
             val repository =
                 FakeRepository(

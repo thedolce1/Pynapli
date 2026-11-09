@@ -4,7 +4,7 @@ import com.pynapli.shared.network.dto.MessageDeltaDto
 import com.pynapli.shared.network.dto.MessageDeltaType
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -30,7 +30,7 @@ class MessageStreamClientTest {
 
     @Test
     fun emitsDeltasFromConnectedSession() =
-        runBlocking {
+        runTest {
             val session =
                 ScriptedMessageSession(
                     scriptedReceives =
@@ -80,7 +80,7 @@ class MessageStreamClientTest {
 
     @Test
     fun reconnectsAfterTransientFailure() =
-        runBlocking {
+        runTest {
             val firstSession = ScriptedMessageSession(scriptedReceives = emptyList())
             val secondSession =
                 ScriptedMessageSession(

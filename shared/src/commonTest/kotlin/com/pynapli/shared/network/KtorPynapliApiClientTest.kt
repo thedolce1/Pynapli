@@ -47,7 +47,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -55,7 +55,7 @@ import kotlin.test.assertIs
 class KtorPynapliApiClientTest {
     @Test
     fun queryGridSendsBearerTokenAndMapsCards() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -99,7 +99,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun configuredAppCheckProviderAddsAttestationHeader() =
-        runBlocking {
+        runTest {
             var appCheckHeader: String? = null
             val httpClient =
                 createPynapliHttpClient(
@@ -130,7 +130,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun queryGridRequiresAccessToken() =
-        runBlocking {
+        runTest {
             val api = KtorPynapliApiClient(testConfig(), StaticAccessTokenProvider(null), testHttpClient())
 
             val result = api.queryGrid()
@@ -141,7 +141,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun queryGridMapsApiErrors() =
-        runBlocking {
+        runTest {
             val httpClient =
                 testHttpClient {
                     respond(
@@ -161,7 +161,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun getMeSendsBearerTokenAndMapsProfile() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -189,7 +189,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun requestDataExportSendsBearerTokenAndMapsStatus() =
-        runBlocking {
+        runTest {
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
             val httpClient =
@@ -222,7 +222,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun deleteAccountSendsConfirmationAndMapsResponse() =
-        runBlocking {
+        runTest {
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
             val httpClient =
@@ -254,7 +254,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun updateProfileSendsPatchAndMapsProfile() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -292,7 +292,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun updateDiscoverySettingsSendsPatchAndMapsSettings() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -354,7 +354,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun updateCurrentLocationSendsBearerToken() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             val httpClient =
@@ -398,7 +398,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun getPublicProfileSendsBearerTokenAndMapsProfile() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -442,7 +442,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun getPublicProfileToleratesOmittedNullableProfileFields() =
-        runBlocking {
+        runTest {
             val httpClient =
                 testHttpClient {
                     respond(
@@ -475,7 +475,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun getSubscriptionEntitlementSendsBearerTokenAndMapsTier() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -520,7 +520,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun getSubscriptionInventorySendsBearerTokenAndMapsPricing() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -579,7 +579,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun submitPlayStorePurchaseSendsBearerTokenAndMapsStatus() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -628,7 +628,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun submitDevStorePurchaseSendsBearerTokenAndMapsInventory() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -686,7 +686,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun activateBoostSendsBearerTokenAndMapsActivation() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -725,7 +725,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun getActivitySummarySendsBearerTokenAndMapsCounts() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -768,7 +768,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun markActivitySeenSendsBearerTokenAndMapsCount() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -804,7 +804,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun createDirectConversationSendsBearerTokenAndMapsConversation() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -835,7 +835,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun sendMessageSendsBearerTokenAndMapsMessage() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             val httpClient =
@@ -873,7 +873,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun deleteMessageSendsBearerTokenAndMapsDeletedPlaceholder() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -916,7 +916,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun getConversationDetailSendsPaginationQuery() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var beforeQuery: String? = null
@@ -947,7 +947,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun listConversationsSendsBearerTokenAndMapsThreads() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -1011,7 +1011,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun markConversationReadSendsBearerTokenAndMapsConversation() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -1053,7 +1053,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun createMediaUploadSendsBearerTokenAndMapsUploadSlot() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null
@@ -1091,7 +1091,7 @@ class KtorPynapliApiClientTest {
 
     @Test
     fun completeMediaUploadSendsBearerTokenAndMapsAlbumItem() =
-        runBlocking {
+        runTest {
             var authorizationHeader: String? = null
             var requestPath: String? = null
             var requestMethod: HttpMethod? = null

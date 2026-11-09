@@ -78,7 +78,7 @@ import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateNotificationPreferencesRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -87,7 +87,7 @@ import kotlin.test.assertNull
 class AuthRepositoryTest {
     @Test
     fun loginPersistsReturnedSession() =
-        runBlocking {
+        runTest {
             val sessionStore = InMemorySessionStore()
             val apiClient =
                 FakeApiClient(
@@ -105,7 +105,7 @@ class AuthRepositoryTest {
 
     @Test
     fun signupPersistsReturnedSession() =
-        runBlocking {
+        runTest {
             val sessionStore = InMemorySessionStore()
             val apiClient =
                 FakeApiClient(
@@ -136,7 +136,7 @@ class AuthRepositoryTest {
 
     @Test
     fun forwardsDeviceIdIntoSignupAndLoginRequests() =
-        runBlocking {
+        runTest {
             val apiClient =
                 FakeApiClient(
                     signupResult = AppResult.Success(testSession("a", "r")),
@@ -169,7 +169,7 @@ class AuthRepositoryTest {
 
     @Test
     fun logoutClearsSessionEvenWhenRemoteLogoutFails() =
-        runBlocking {
+        runTest {
             val sessionStore = InMemorySessionStore()
             sessionStore.save(testSession("access-3", "refresh-3"))
             val apiClient =
@@ -185,7 +185,7 @@ class AuthRepositoryTest {
 
     @Test
     fun currentSessionValidatedClearsTerminalAuthFailure() =
-        runBlocking {
+        runTest {
             val sessionStore = InMemorySessionStore()
             sessionStore.save(testSession("stale-access", "stale-refresh"))
             val apiClient =
@@ -202,7 +202,7 @@ class AuthRepositoryTest {
 
     @Test
     fun currentSessionValidatedKeepsSessionOnRecoverableFailure() =
-        runBlocking {
+        runTest {
             val sessionStore = InMemorySessionStore()
             sessionStore.save(testSession("access-4", "refresh-4"))
             val apiClient =

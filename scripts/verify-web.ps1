@@ -14,14 +14,17 @@ if (!$env:JAVA_HOME -and (Test-Path (Join-Path $fallbackJavaHome "bin\java.exe")
     $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 }
 
-# Web gate: the wasm compile across all three client modules plus the shared JVM tests
-# (state holders/repositories the web reuses are JVM-tested; wasm browser-test infra is
-# deliberately not part of the gate yet). Spotless keeps the new module ktlint-clean.
+# Web gate: the wasm compile across all three client modules, the shared JVM tests, and the
+# common tests of shared + composeApp run on wasm in headless Chrome (Karma). The common tests
+# use runTest (not runBlocking, which doesn't exist on wasm), so they compile and run on every
+# target; running them here keeps it that way. Spotless keeps the new module ktlint-clean.
 $tasks = @(
     ":shared:compileKotlinWasmJs",
     ":composeApp:compileKotlinWasmJs",
     ":webApp:compileKotlinWasmJs",
-    ":shared:jvmTest"
+    ":shared:jvmTest",
+    ":shared:wasmJsBrowserTest",
+    ":composeApp:wasmJsBrowserTest"
 )
 if (!$SkipSpotless) {
     $tasks = @("spotlessCheck") + $tasks

@@ -9,7 +9,7 @@ import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
 import com.pynapli.shared.network.dto.PartnerChatInviteStatus
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,7 +27,7 @@ class MessagesStateHolderTest {
 
     @Test
     fun acceptPartnerInviteUpdatesConversationStatus() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeMessagesRepository(
                     conversations = listOf(conversation("conversation-1", viewerStatus = ConversationParticipantStatus.INVITED)),
@@ -53,7 +53,7 @@ class MessagesStateHolderTest {
 
     @Test
     fun declinePartnerInviteRemovesConversation() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeMessagesRepository(
                     conversations = listOf(conversation("conversation-1", viewerStatus = ConversationParticipantStatus.INVITED)),
@@ -69,7 +69,7 @@ class MessagesStateHolderTest {
 
     @Test
     fun declineThirdPartyApprovalRefreshesThreadInsteadOfRemovingIt() =
-        runBlocking {
+        runTest {
             val pending =
                 conversation(
                     conversationId = "conversation-1",

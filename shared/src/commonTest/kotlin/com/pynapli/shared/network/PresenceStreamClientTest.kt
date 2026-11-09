@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -35,7 +35,7 @@ class PresenceStreamClientTest {
 
     @Test
     fun emitsDeltasFromConnectedSession() =
-        runBlocking {
+        runTest {
             val session =
                 ScriptedSession(
                     scriptedReceives =
@@ -71,7 +71,7 @@ class PresenceStreamClientTest {
 
     @Test
     fun sendsSubscribeFrameOnConnectAndOnUserIdsUpdate() =
-        runBlocking {
+        runTest {
             val session = ScriptedSession(scriptedReceives = listOf("__hold_open__"))
             val factory = ScriptedSessionFactory(sessions = listOf(session))
             val client =
@@ -106,7 +106,7 @@ class PresenceStreamClientTest {
 
     @Test
     fun reconnectsAfterTransientFailure() =
-        runBlocking {
+        runTest {
             val firstSession = ScriptedSession(scriptedReceives = emptyList())
             val secondSession =
                 ScriptedSession(

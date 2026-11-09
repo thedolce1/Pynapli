@@ -3,14 +3,14 @@ package com.pynapli.app.notifications
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.settings.AppSettings
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class PushRegistrationCoordinatorTest {
     @Test
     fun syncRegistersAuthenticatedDevice() =
-        runBlocking {
+        runTest {
             val repository = FakePushDeviceRegistrationRepository()
             val store = InMemoryPushRegistrationStore()
             val coordinator = coordinator(repository = repository, store = store)
@@ -29,7 +29,7 @@ class PushRegistrationCoordinatorTest {
 
     @Test
     fun syncSkipsWhenRegistrationFingerprintIsUnchanged() =
-        runBlocking {
+        runTest {
             val repository = FakePushDeviceRegistrationRepository()
             val store = InMemoryPushRegistrationStore()
             val coordinator = coordinator(repository = repository, store = store)
@@ -43,7 +43,7 @@ class PushRegistrationCoordinatorTest {
 
     @Test
     fun syncReRegistersWhenTheDeviceTokenRotates() =
-        runBlocking {
+        runTest {
             // FCM rotates tokens (reinstall/restore, or a long-idle install). onNewToken clears the
             // store; the next sync must re-register the new token. This is the guarantee the
             // foreground re-sync (MainActivity.onStart) relies on to close the rotation gap.
@@ -63,7 +63,7 @@ class PushRegistrationCoordinatorTest {
 
     @Test
     fun syncUpdatesWhenNotificationEnabledStateChanges() =
-        runBlocking {
+        runTest {
             val repository = FakePushDeviceRegistrationRepository()
             val store = InMemoryPushRegistrationStore()
             val coordinator = coordinator(repository = repository, store = store)
@@ -84,7 +84,7 @@ class PushRegistrationCoordinatorTest {
 
     @Test
     fun syncRegistersDisabledWhenSystemNotificationsAreNotAllowed() =
-        runBlocking {
+        runTest {
             val repository = FakePushDeviceRegistrationRepository()
             val store = InMemoryPushRegistrationStore()
             val coordinator =
@@ -106,7 +106,7 @@ class PushRegistrationCoordinatorTest {
 
     @Test
     fun syncDoesNotStoreFingerprintWhenRegistrationFails() =
-        runBlocking {
+        runTest {
             val repository =
                 FakePushDeviceRegistrationRepository(
                     registerResult = AppResult.Failure(AppError("NETWORK_ERROR", "Offline")),
@@ -121,7 +121,7 @@ class PushRegistrationCoordinatorTest {
 
     @Test
     fun unregisterUsesStoredSnapshotAndClearsOnSuccess() =
-        runBlocking {
+        runTest {
             val repository = FakePushDeviceRegistrationRepository()
             val store = InMemoryPushRegistrationStore()
             val coordinator = coordinator(repository = repository, store = store)

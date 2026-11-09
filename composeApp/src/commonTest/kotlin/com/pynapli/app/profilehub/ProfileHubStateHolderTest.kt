@@ -25,7 +25,7 @@ import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -34,7 +34,7 @@ import kotlin.test.assertNull
 class ProfileHubStateHolderTest {
     @Test
     fun loadKeepsProfileVisibleWhenAgeStatusUnavailable() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     loadAgeResult = AppResult.Failure(AppError("NETWORK_ERROR", "Offline")),
@@ -55,7 +55,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun loadPopulatesSubscriptionEntitlementForSubscriptionSection() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     entitlementResult =
@@ -84,7 +84,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun loadKeepsHubUsableWhenEntitlementUnavailable() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     entitlementResult = AppResult.Failure(AppError("NETWORK_ERROR", "Offline")),
@@ -101,7 +101,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun loadStartsIndependentAccountRequestsTogether() =
-        runBlocking {
+        runTest {
             val loadMeStarted = CompletableDeferred<Unit>()
             val loadAgeStarted = CompletableDeferred<Unit>()
             val latestExportStarted = CompletableDeferred<Unit>()
@@ -144,7 +144,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun startAgeVerificationSendsAdultConfirmationAndShowsFeedback() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     startAgeResult =
@@ -176,7 +176,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun failedAgeVerificationStartKeepsDialogOpenWithError() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     startAgeResult = AppResult.Failure(AppError("BIRTHDATE_REQUIRED", "Add your birthdate.")),
@@ -193,7 +193,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun loadBlocksShowsSafetyCenterBlockList() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     listBlocksResult =
@@ -227,7 +227,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun loadSafetyListsStartsIndependentRequestsTogether() =
-        runBlocking {
+        runTest {
             val blocksStarted = CompletableDeferred<Unit>()
             val hiddenProfilesStarted = CompletableDeferred<Unit>()
             val reportsStarted = CompletableDeferred<Unit>()
@@ -272,7 +272,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun unblockUserRemovesBlockedUserAndShowsFeedback() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     listBlocksResult =
@@ -303,7 +303,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun loadHiddenProfilesShowsSafetyCenterHiddenList() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     listHiddenProfilesResult =
@@ -337,7 +337,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun unhideProfileRemovesHiddenProfileAndShowsFeedback() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     listHiddenProfilesResult =
@@ -368,7 +368,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun loadReportHistoryShowsSafetyCenterReports() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     listReportsResult =
@@ -405,7 +405,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun loadSupportContactShowsServerBackedEmail() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     supportContactResult =
@@ -432,7 +432,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun requestDataExportShowsServerBackedStatus() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     requestDataExportResult = AppResult.Success(testDataExport()),
@@ -451,7 +451,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun tappingAReadyExportReturnsItsDownloadLinkWithoutANewRequest() =
-        runBlocking {
+        runTest {
             val ready = testDataExport().copy(status = "ready", downloadUrl = "https://storage.example/export?sig=1")
             val repository = FakeProfileHubRepository(latestDataExportResult = AppResult.Success(ready))
             val stateHolder = ProfileHubStateHolder(repository)
@@ -463,7 +463,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun tappingAnExportInProgressRefreshesInsteadOfQueueingAnother() =
-        runBlocking {
+        runTest {
             val processing = testDataExport().copy(status = "processing", message = "Your data export is being prepared.")
             val repository = FakeProfileHubRepository(latestDataExportResult = AppResult.Success(processing))
             val stateHolder = ProfileHubStateHolder(repository)
@@ -477,7 +477,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun tappingWithNoExportRequestsOne() =
-        runBlocking {
+        runTest {
             val repository = FakeProfileHubRepository(requestDataExportResult = AppResult.Success(testDataExport()))
             val stateHolder = ProfileHubStateHolder(repository)
 
@@ -493,7 +493,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun deleteAccountSendsConfirmationAndReportsSuccess() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     deleteAccountResult =
@@ -516,7 +516,7 @@ class ProfileHubStateHolderTest {
 
     @Test
     fun failedDeleteAccountShowsErrorAndKeepsSession() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeProfileHubRepository(
                     deleteAccountResult =

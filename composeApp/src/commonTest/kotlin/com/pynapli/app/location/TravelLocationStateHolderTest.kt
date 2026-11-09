@@ -6,7 +6,7 @@ import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
 import com.pynapli.shared.network.dto.TravelLocationDto
 import com.pynapli.shared.network.dto.TravelPlaceDto
 import com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -26,7 +26,7 @@ class TravelLocationStateHolderTest {
 
     @Test
     fun setActiveAgeVerificationRequiredFlagsPromptAndSuppressesRawError() =
-        runBlocking {
+        runTest {
             // TravelLocationService throws AGE_VERIFICATION_REQUIRED for restricted regions when the
             // viewer is unverified. The holder must flag the verify prompt without leaving an active
             // travel row or a raw error toast (the sheet's verify CTA drives the next step).
@@ -48,7 +48,7 @@ class TravelLocationStateHolderTest {
 
     @Test
     fun setActiveEntitlementRequiredStillFlagsPaywallNotVerification() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeRepository(
                     setResult = AppResult.Failure(AppError("ENTITLEMENT_REQUIRED", "Upgrade")),
@@ -64,7 +64,7 @@ class TravelLocationStateHolderTest {
 
     @Test
     fun typingThenSearchingReturnsPlacesAndPickingSendsTheirCoordinates() =
-        runBlocking {
+        runTest {
             val active =
                 TravelLocationDto(
                     city = "Las Vegas",
@@ -105,7 +105,7 @@ class TravelLocationStateHolderTest {
 
     @Test
     fun subMinimumQueryClearsResultsWithoutSearching() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeRepository(
                     searchResult = AppResult.Success(TravelPlaceSearchResponseDto(items = listOf(vegas))),
@@ -124,7 +124,7 @@ class TravelLocationStateHolderTest {
 
     @Test
     fun failedSearchStaysQuietWithEmptyResults() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeRepository(
                     searchResult = AppResult.Failure(AppError("RATE_LIMITED", "slow down")),

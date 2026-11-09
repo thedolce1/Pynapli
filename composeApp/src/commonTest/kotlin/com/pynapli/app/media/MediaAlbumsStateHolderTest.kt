@@ -4,7 +4,7 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 class MediaAlbumsStateHolderTest {
     @Test
     fun loadStartsIndependentAlbumRequestsTogether() =
-        runBlocking {
+        runTest {
             val profileStarted = CompletableDeferred<Unit>()
             val privateStarted = CompletableDeferred<Unit>()
             val grantsStarted = CompletableDeferred<Unit>()
@@ -70,7 +70,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun deleteRemovesItemFromAlbumOnSuccess() =
-        runBlocking {
+        runTest {
             val items = listOf(testMediaItem(MediaAlbumKindUi.Profile, "asset-a", 0), testMediaItem(MediaAlbumKindUi.Profile, "asset-b", 1))
             val repository = FakeMediaAlbumsRepository(profileItems = items)
             val stateHolder = MediaAlbumsStateHolder(repository)
@@ -93,7 +93,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun deleteFailureKeepsItemAndSurfacesError() =
-        runBlocking {
+        runTest {
             val items = listOf(testMediaItem(MediaAlbumKindUi.Profile, "asset-a", 0))
             val repository =
                 FakeMediaAlbumsRepository(profileItems = items).apply {
@@ -118,7 +118,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun previewReorderThenCommitSubmitsCurrentOrderAndAdoptsServerResponse() =
-        runBlocking {
+        runTest {
             val items =
                 listOf(
                     testMediaItem(MediaAlbumKindUi.Profile, "asset-a", 0),
@@ -158,7 +158,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun previewReorderOntoSameAssetLeavesOrderUnchanged() =
-        runBlocking {
+        runTest {
             val items =
                 listOf(
                     testMediaItem(MediaAlbumKindUi.Profile, "asset-a", 0),
@@ -179,7 +179,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun commitReorderFailureRestoresServerOrderAndSurfacesError() =
-        runBlocking {
+        runTest {
             val items =
                 listOf(
                     testMediaItem(MediaAlbumKindUi.Profile, "asset-a", 0),
@@ -217,7 +217,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun setAsMainMovesPhotoToFrontAndPersists() =
-        runBlocking {
+        runTest {
             val items =
                 listOf(
                     testMediaItem(MediaAlbumKindUi.Profile, "asset-a", 0),
@@ -241,7 +241,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun setAsMainOnCurrentPrimaryIsNoOp() =
-        runBlocking {
+        runTest {
             val items =
                 listOf(
                     testMediaItem(MediaAlbumKindUi.Profile, "asset-a", 0),
@@ -263,7 +263,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun failedUploadIsRetainedAndRetrySucceedsWithSameMedia() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeMediaAlbumsRepository().apply {
                     uploadResults += AppResult.Failure(AppError("MEDIA_UPLOAD_FAILED", "Upload failed."))
@@ -306,7 +306,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun stagedProfilePickPausesAtCropWithoutUploading() =
-        runBlocking {
+        runTest {
             val repository = FakeMediaAlbumsRepository()
             val stateHolder = MediaAlbumsStateHolder(repository)
             val media = testPickedMedia()
@@ -320,7 +320,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun stagedPrivatePickPausesAtCropWithoutUploading() =
-        runBlocking {
+        runTest {
             val repository = FakeMediaAlbumsRepository()
             val stateHolder = MediaAlbumsStateHolder(repository)
             val media = testPickedMedia()
@@ -335,7 +335,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun confirmPendingCropUploadsTheCropResultAndClears() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeMediaAlbumsRepository().apply {
                     uploadResults += AppResult.Success(testMediaItem(MediaAlbumKindUi.Profile, "asset-new", 0))
@@ -353,7 +353,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun confirmPendingCropUploadsToTheStagedPrivateAlbum() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeMediaAlbumsRepository().apply {
                     uploadResults += AppResult.Success(testMediaItem(MediaAlbumKindUi.Private, "asset-new", 0))
@@ -371,7 +371,7 @@ class MediaAlbumsStateHolderTest {
 
     @Test
     fun cancelPendingCropClearsWithoutUploading() =
-        runBlocking {
+        runTest {
             val repository = FakeMediaAlbumsRepository()
             val stateHolder = MediaAlbumsStateHolder(repository)
             stateHolder.stagePickedMedia(MediaAlbumKindUi.Profile, testPickedMedia())

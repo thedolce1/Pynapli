@@ -9,7 +9,7 @@ import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionProductId
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -17,7 +17,7 @@ import kotlin.test.assertNull
 class StoreStateHolderTest {
     @Test
     fun purchaseClearsPendingAndRefreshesEntitlement() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeStoreRepository(
                     firstEntitlementTier = SubscriptionTier.FREE,
@@ -40,7 +40,7 @@ class StoreStateHolderTest {
 
     @Test
     fun productPurchaseClearsPendingAndRefreshesBalances() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeStoreRepository(
                     firstEntitlementTier = SubscriptionTier.SELECT,
@@ -62,7 +62,7 @@ class StoreStateHolderTest {
 
     @Test
     fun restoreClearsPendingAndRefreshesEntitlement() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeStoreRepository(
                     firstEntitlementTier = SubscriptionTier.FREE,

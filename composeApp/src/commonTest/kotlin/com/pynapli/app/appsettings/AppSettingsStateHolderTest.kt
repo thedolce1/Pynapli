@@ -7,7 +7,7 @@ import com.pynapli.shared.network.dto.UpdateNotificationPreferencesRequestDto
 import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 class AppSettingsStateHolderTest {
     @Test
     fun saveDraftPersistsLocalSettings() =
-        runBlocking {
+        runTest {
             val repository = InMemoryAppSettingsRepository()
             val stateHolder = AppSettingsStateHolder(repository)
 
@@ -43,7 +43,7 @@ class AppSettingsStateHolderTest {
 
     @Test
     fun updateDiscreetIconSetsDraftFlagAndRoundTripsThroughSettings() =
-        runBlocking {
+        runTest {
             val repository = InMemoryAppSettingsRepository()
             val stateHolder = AppSettingsStateHolder(repository)
 
@@ -76,7 +76,7 @@ class AppSettingsStateHolderTest {
 
     @Test
     fun serverBackedRepositoryMergesNotificationPreferencesOnLoad() =
-        runBlocking {
+        runTest {
             val localRepository =
                 InMemoryAppSettingsRepository(
                     AppSettings(themeMode = AppSettings.THEME_LIGHT, distanceUnit = AppSettings.UNIT_IMPERIAL),
@@ -116,7 +116,7 @@ class AppSettingsStateHolderTest {
 
     @Test
     fun serverBackedRepositoryStartsIndependentLocalAndRemoteLoadsTogether() =
-        runBlocking {
+        runTest {
             val localStarted = CompletableDeferred<Unit>()
             val remoteStarted = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
@@ -150,7 +150,7 @@ class AppSettingsStateHolderTest {
 
     @Test
     fun serverBackedRepositoryMapsEachNotificationCategoryIndependentlyOnLoad() =
-        runBlocking {
+        runTest {
             val localRepository = InMemoryAppSettingsRepository()
             val gateway =
                 FakeNotificationPreferencesGateway(
@@ -179,7 +179,7 @@ class AppSettingsStateHolderTest {
 
     @Test
     fun serverBackedRepositoryKeepsLocalSettingsWhenServerUnavailable() =
-        runBlocking {
+        runTest {
             val local = AppSettings(notificationDetail = AppSettings.NOTIFICATION_STANDARD)
             val localRepository = InMemoryAppSettingsRepository(local)
             val gateway =
@@ -193,7 +193,7 @@ class AppSettingsStateHolderTest {
 
     @Test
     fun serverBackedRepositoryDoesNotSyncWhenRemoteSyncDisabled() =
-        runBlocking {
+        runTest {
             val local = AppSettings(notificationDetail = AppSettings.NOTIFICATION_STANDARD)
             val localRepository = InMemoryAppSettingsRepository(local)
             val gateway = FakeNotificationPreferencesGateway()
@@ -214,7 +214,7 @@ class AppSettingsStateHolderTest {
 
     @Test
     fun serverBackedRepositoryPushesIndependentNotificationTogglesOnSave() =
-        runBlocking {
+        runTest {
             val localRepository = InMemoryAppSettingsRepository()
             val gateway = FakeNotificationPreferencesGateway()
             val repository = ServerBackedAppSettingsRepository(localRepository, gateway)
@@ -254,7 +254,7 @@ class AppSettingsStateHolderTest {
 
     @Test
     fun serverBackedRepositoryUsesDeviceTimezoneWhenSavingQuietHours() =
-        runBlocking {
+        runTest {
             val localRepository = InMemoryAppSettingsRepository()
             val gateway = FakeNotificationPreferencesGateway()
             val repository =

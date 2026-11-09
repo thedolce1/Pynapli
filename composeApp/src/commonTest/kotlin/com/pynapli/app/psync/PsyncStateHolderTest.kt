@@ -11,7 +11,7 @@ import com.pynapli.shared.network.dto.PsyncRecapDto
 import com.pynapli.shared.network.dto.PsyncSessionDto
 import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -131,7 +131,7 @@ class PsyncStateHolderTest {
 
     @Test
     fun refreshMapsCurrentSession() =
-        runBlocking {
+        runTest {
             val repo = FakePsyncRepository().apply { current = session("invited", partnerApproved = false) }
             val holder = holder(repo)
 
@@ -146,7 +146,7 @@ class PsyncStateHolderTest {
 
     @Test
     fun refreshLoadsDeckWhenSessionActive() =
-        runBlocking {
+        runTest {
             val repo =
                 FakePsyncRepository().apply {
                     current = session("active")
@@ -162,7 +162,7 @@ class PsyncStateHolderTest {
 
     @Test
     fun awaitingViewerApprovalWhenInviteeHasNotApproved() =
-        runBlocking {
+        runTest {
             val repo =
                 FakePsyncRepository().apply {
                     current = session("invited", initiator = PARTNER, viewerApproved = false, partnerApproved = true)
@@ -178,7 +178,7 @@ class PsyncStateHolderTest {
 
     @Test
     fun submitActionReflectsViewerChoiceAndLoadsRecapOnCompletion() =
-        runBlocking {
+        runTest {
             val repo =
                 FakePsyncRepository().apply {
                     current = session("active")
@@ -209,7 +209,7 @@ class PsyncStateHolderTest {
 
     @Test
     fun failureSurfacesErrorMessage() =
-        runBlocking {
+        runTest {
             val repo = FakePsyncRepository().apply { failNext = AppError("PSYNC_NO_LINKED_PARTNER", "Need a partner.") }
             val holder = holder(repo)
 

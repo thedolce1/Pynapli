@@ -6,7 +6,7 @@ import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
 import com.pynapli.shared.network.dto.MarkActivitySeenResponseDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -15,7 +15,7 @@ import kotlin.test.assertNull
 class ActivityStateHolderTest {
     @Test
     fun silentRefreshKeepsExistingFeedWhenRefreshFails() =
-        runBlocking {
+        runTest {
             val event = activityEvent(eventId = "event-1")
             val repository =
                 FakeActivityFeedRepository(
@@ -35,7 +35,7 @@ class ActivityStateHolderTest {
 
     @Test
     fun loadStoresEntitlementMetadata() =
-        runBlocking {
+        runTest {
             val event = activityEvent(eventId = "event-1")
             val repository =
                 FakeActivityFeedRepository(
@@ -66,7 +66,7 @@ class ActivityStateHolderTest {
 
     @Test
     fun loadStoresServerBackedActivitySummary() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeActivityFeedRepository(
                     result = AppResult.Success(ActivityFeedUi(items = emptyList())),
@@ -97,7 +97,7 @@ class ActivityStateHolderTest {
 
     @Test
     fun visibleActivityLoadMarksLoadedEventsSeenBeforeRefreshingSummary() =
-        runBlocking {
+        runTest {
             val first = activityEvent(eventId = "event-1", type = "flirt")
             val second = activityEvent(eventId = "event-2", type = "match")
             val repository =
@@ -128,7 +128,7 @@ class ActivityStateHolderTest {
 
     @Test
     fun silentFeedRefreshDoesNotMarkEventsSeen() =
-        runBlocking {
+        runTest {
             val first = activityEvent(eventId = "event-1", type = "flirt")
             val repository =
                 FakeActivityFeedRepository(
@@ -145,7 +145,7 @@ class ActivityStateHolderTest {
 
     @Test
     fun silentSummaryRefreshKeepsExistingBadgeWhenSummaryFails() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeActivityFeedRepository(
                     summaryResult =
@@ -174,7 +174,7 @@ class ActivityStateHolderTest {
 
     @Test
     fun resetClearsServerBackedSummaryAndFeed() =
-        runBlocking {
+        runTest {
             val event = activityEvent(eventId = "event-1")
             val repository =
                 FakeActivityFeedRepository(
@@ -204,7 +204,7 @@ class ActivityStateHolderTest {
 
     @Test
     fun selectingTabQueriesBackendTabAndReplacesFeed() =
-        runBlocking {
+        runTest {
             val viewEvent = activityEvent(eventId = "view-1", type = "profile_view")
             val repository =
                 FakeActivityFeedRepository(
@@ -224,7 +224,7 @@ class ActivityStateHolderTest {
 
     @Test
     fun loadMoreUsesCursorAndAppendsUniqueItems() =
-        runBlocking {
+        runTest {
             val first = activityEvent(eventId = "event-1")
             val second = activityEvent(eventId = "event-2")
             val repository =
@@ -249,7 +249,7 @@ class ActivityStateHolderTest {
 
     @Test
     fun dismissActivityEventRemovesItemFromFeed() =
-        runBlocking {
+        runTest {
             val kept = activityEvent(eventId = "event-1")
             val dismissed = activityEvent(eventId = "event-2")
             val repository =

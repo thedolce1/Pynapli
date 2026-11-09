@@ -14,7 +14,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -27,7 +27,7 @@ import kotlin.test.assertTrue
 class StoredSessionRefresherTest {
     @Test
     fun swapsTheStoredSessionForAFreshOne() =
-        runBlocking {
+        runTest {
             val store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
             val api = FakeRefreshApi(refreshResult = AppResult.Success(session("fresh", "refresh-2")))
 
@@ -42,7 +42,7 @@ class StoredSessionRefresherTest {
 
     @Test
     fun concurrentCallersRefreshOnlyOnce() =
-        runBlocking {
+        runTest {
             val store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
             val api = FakeRefreshApi(refreshResult = AppResult.Success(session("fresh", "refresh-2")))
             val refresher = StoredSessionRefresher(api, store)
@@ -60,7 +60,7 @@ class StoredSessionRefresherTest {
 
     @Test
     fun terminalRejectionClearsTheSessionAndSignalsInvalidation() =
-        runBlocking {
+        runTest {
             val store = seededStore(accessToken = "expired", refreshToken = "revoked")
             val api = FakeRefreshApi(refreshResult = AppResult.Failure(AppError("INVALID_REFRESH_TOKEN", "nope")))
             val bus = SessionInvalidationBus()
@@ -77,7 +77,7 @@ class StoredSessionRefresherTest {
 
     @Test
     fun transientFailureLeavesTheSessionIntactAndDoesNotSignOut() =
-        runBlocking {
+        runTest {
             val store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
             val api = FakeRefreshApi(refreshResult = AppResult.Failure(AppError("NETWORK_ERROR", "offline")))
             val bus = SessionInvalidationBus()
@@ -93,7 +93,7 @@ class StoredSessionRefresherTest {
 
     @Test
     fun returnsNullWithNoStoredSession() =
-        runBlocking {
+        runTest {
             val api = FakeRefreshApi(refreshResult = AppResult.Success(session("fresh", "refresh-2")))
 
             assertNull(StoredSessionRefresher(api, InMemoryRefreshSessionStore()).refreshAccessToken(null))

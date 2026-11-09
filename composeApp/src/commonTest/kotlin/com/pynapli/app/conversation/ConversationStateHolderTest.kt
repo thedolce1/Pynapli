@@ -10,7 +10,7 @@ import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
 import com.pynapli.shared.network.dto.PartnerChatInviteStatus
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -19,7 +19,7 @@ import kotlin.test.assertNull
 class ConversationStateHolderTest {
     @Test
     fun failedSendRetryReusesIdempotencyKeyThenFreshKeyAfterSuccess() =
-        runBlocking {
+        runTest {
             val repository = FakeConversationRepository()
             // First send fails, retry succeeds; a later fresh send succeeds too.
             repository.sendResults.addLast(AppResult.Failure(AppError("RATE_LIMITED", "Slow down.")))
@@ -45,7 +45,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun deleteOwnMessageReplacesBodyWithPlaceholderState() =
-        runBlocking {
+        runTest {
             val repository = FakeConversationRepository()
             val stateHolder = ConversationStateHolder(repository)
             stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
@@ -65,7 +65,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun deleteMessageIgnoresMessageFromOtherParticipant() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeConversationRepository(
                     initialMessage = message(senderUserId = "target"),
@@ -87,7 +87,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun setExpiryUpdatesConversationAndIsANoOpForTheSameValue() =
-        runBlocking {
+        runTest {
             val repository = FakeConversationRepository()
             val stateHolder = ConversationStateHolder(repository)
             stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
@@ -105,7 +105,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun setExpiryFailureSurfacesErrorAndLeavesTimerUnchanged() =
-        runBlocking {
+        runTest {
             val repository =
                 FakeConversationRepository().apply {
                     expiryResult = AppResult.Failure(AppError("ENTITLEMENT_REQUIRED", "Upgrade is required for this feature."))
@@ -121,7 +121,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun sendPhotoAppendsMediaMessageToThread() =
-        runBlocking {
+        runTest {
             val repository = FakeConversationRepository()
             val stateHolder = ConversationStateHolder(repository)
             stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
@@ -148,7 +148,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun revealMediaSwapsLockedPlaceholderForRevealedMessage() =
-        runBlocking {
+        runTest {
             val locked =
                 message(senderUserId = "target", body = "").copy(
                     messageId = "message-1",
@@ -174,7 +174,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun refreshOpenConversationIfConversationIdOnlyRefreshesMatchingThread() =
-        runBlocking {
+        runTest {
             val repository = FakeConversationRepository()
             val stateHolder = ConversationStateHolder(repository)
             stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
@@ -201,7 +201,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun acceptPartnerInviteKeepsJoinedFeedbackThroughSilentRealtimeRefresh() =
-        runBlocking {
+        runTest {
             val invited = partnerInviteConversation(viewerStatus = ConversationParticipantStatus.INVITED)
             val joined = partnerInviteConversation(viewerStatus = ConversationParticipantStatus.ACTIVE, partnerInvite = null)
             val repository =
@@ -227,7 +227,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun typingStartedAddsAndExpiresParticipantForOpenConversation() =
-        runBlocking {
+        runTest {
             val repository = FakeConversationRepository()
             val stateHolder = ConversationStateHolder(repository)
             stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
@@ -252,7 +252,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun typingStartedIgnoresOwnAndOtherConversationEvents() =
-        runBlocking {
+        runTest {
             val repository = FakeConversationRepository()
             val stateHolder = ConversationStateHolder(repository)
             stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
@@ -275,7 +275,7 @@ class ConversationStateHolderTest {
 
     @Test
     fun typingSignalIsThrottledAndStopIsSentOnce() =
-        runBlocking {
+        runTest {
             val repository = FakeConversationRepository()
             val stateHolder = ConversationStateHolder(repository)
             stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
