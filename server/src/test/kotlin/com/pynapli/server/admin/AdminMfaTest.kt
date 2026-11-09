@@ -1,7 +1,7 @@
 package com.pynapli.server.admin
 
 import com.pynapli.server.config.ServerConfig
-import org.junit.Test
+import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 

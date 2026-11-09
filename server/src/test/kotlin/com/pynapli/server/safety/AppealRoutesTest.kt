@@ -17,11 +17,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
-import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class AppealRoutesTest {

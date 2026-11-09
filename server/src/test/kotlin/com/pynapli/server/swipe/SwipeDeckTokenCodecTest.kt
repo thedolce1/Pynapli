@@ -1,10 +1,10 @@
 package com.pynapli.server.swipe
 
 import com.pynapli.server.discovery.DiscoveryFilters
-import org.junit.Test
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals

@@ -1,9 +1,9 @@
 package com.pynapli.server.safety
 
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.time.Instant
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 

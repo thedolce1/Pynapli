@@ -1,6 +1,6 @@
 package com.pynapli.server.messaging
 
-import org.junit.Test
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class MessageSafetyPolicyTest {

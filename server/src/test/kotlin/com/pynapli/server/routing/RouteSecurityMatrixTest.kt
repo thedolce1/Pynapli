@@ -1,10 +1,10 @@
 package com.pynapli.server.routing
 
-import org.junit.Test
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.name
 import kotlin.io.path.readText
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 

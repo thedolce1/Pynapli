@@ -2,13 +2,13 @@ package com.pynapli.server.verification
 
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import kotlinx.coroutines.runBlocking
-import org.junit.Before
-import org.junit.Test
 import java.sql.Date
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 import javax.sql.DataSource
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 class AgeVerificationRepositoryIntegrationTest {
     private val dataSource: DataSource = PynapliTestDatabase.dataSource
 
-    @Before
+    @BeforeTest
     fun reset() {
         PynapliTestDatabase.reset()
     }

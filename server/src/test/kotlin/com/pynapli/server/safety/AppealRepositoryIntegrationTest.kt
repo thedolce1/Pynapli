@@ -3,17 +3,17 @@ package com.pynapli.server.safety
 import com.pynapli.server.moderation.JdbcAdminAppealRepository
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import kotlinx.coroutines.runBlocking
-import org.junit.Before
-import org.junit.Test
 import java.util.UUID
 import javax.sql.DataSource
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class AppealRepositoryIntegrationTest {
     private val dataSource: DataSource = PynapliTestDatabase.dataSource
 
-    @Before
+    @BeforeTest
     fun reset() {
         PynapliTestDatabase.reset()
     }

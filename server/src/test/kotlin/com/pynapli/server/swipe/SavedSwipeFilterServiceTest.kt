@@ -12,9 +12,9 @@ import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
-import org.junit.Test
 import java.time.Instant
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull

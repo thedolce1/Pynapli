@@ -4,10 +4,10 @@ import com.pynapli.server.moderation.JdbcMessageModerationRepository
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import kotlinx.coroutines.runBlocking
-import org.junit.Before
-import org.junit.Test
 import java.util.UUID
 import javax.sql.DataSource
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -16,7 +16,7 @@ import kotlin.test.assertNull
 class MessagingRepositoryIntegrationTest {
     private val dataSource: DataSource = PynapliTestDatabase.dataSource
 
-    @Before
+    @BeforeTest
     fun reset() {
         PynapliTestDatabase.reset()
     }

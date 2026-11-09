@@ -25,11 +25,11 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
-import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SubscriptionRoutesTest {

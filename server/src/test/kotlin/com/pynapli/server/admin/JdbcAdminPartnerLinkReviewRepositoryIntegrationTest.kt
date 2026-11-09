@@ -4,13 +4,13 @@ import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.security.PasswordHash
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import kotlinx.coroutines.runBlocking
-import org.junit.Before
-import org.junit.Test
 import java.sql.Timestamp
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 import javax.sql.DataSource
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -18,7 +18,7 @@ import kotlin.test.assertNull
 class JdbcAdminPartnerLinkReviewRepositoryIntegrationTest {
     private val dataSource: DataSource = PynapliTestDatabase.dataSource
 
-    @Before
+    @BeforeTest
     fun reset() {
         PynapliTestDatabase.reset()
     }

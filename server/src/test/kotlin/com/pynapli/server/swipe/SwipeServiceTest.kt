@@ -34,12 +34,12 @@ import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull

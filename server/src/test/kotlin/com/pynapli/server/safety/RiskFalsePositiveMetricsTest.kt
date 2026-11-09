@@ -5,9 +5,9 @@ import com.pynapli.server.moderation.AdminAppealRecord
 import com.pynapli.server.moderation.AdminAppealRepository
 import com.pynapli.server.moderation.AdminAppealService
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.time.Instant
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class RiskFalsePositiveMetricsTest {

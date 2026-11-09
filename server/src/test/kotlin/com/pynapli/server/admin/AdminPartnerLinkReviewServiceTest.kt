@@ -2,11 +2,11 @@ package com.pynapli.server.admin
 
 import com.pynapli.server.moderation.ModerationException
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull

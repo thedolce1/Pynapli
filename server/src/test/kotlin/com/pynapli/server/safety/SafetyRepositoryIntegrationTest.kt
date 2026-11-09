@@ -6,10 +6,10 @@ import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.ReportCategory
 import com.pynapli.shared.network.dto.ReportTargetType
 import kotlinx.coroutines.runBlocking
-import org.junit.Before
-import org.junit.Test
 import java.util.UUID
 import javax.sql.DataSource
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 class SafetyRepositoryIntegrationTest {
     private val dataSource: DataSource = PynapliTestDatabase.dataSource
 
-    @Before
+    @BeforeTest
     fun reset() {
         PynapliTestDatabase.reset()
     }

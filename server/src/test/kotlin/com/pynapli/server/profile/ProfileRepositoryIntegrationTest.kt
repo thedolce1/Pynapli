@@ -2,17 +2,17 @@ package com.pynapli.server.profile
 
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import kotlinx.coroutines.runBlocking
-import org.junit.Before
-import org.junit.Test
 import java.util.UUID
 import javax.sql.DataSource
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class ProfileRepositoryIntegrationTest {
     private val dataSource: DataSource = PynapliTestDatabase.dataSource
 
-    @Before
+    @BeforeTest
     fun reset() {
         PynapliTestDatabase.reset()
     }

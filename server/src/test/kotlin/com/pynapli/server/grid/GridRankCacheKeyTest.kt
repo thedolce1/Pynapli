@@ -1,7 +1,7 @@
 package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
-import org.junit.Test
+import kotlin.test.Test
 import kotlin.test.assertNotEquals
 
 /**

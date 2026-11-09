@@ -4,8 +4,8 @@ import com.pynapli.server.safety.RateLimitCounter
 import com.pynapli.server.safety.RateLimitRepository
 import com.pynapli.server.safety.RateLimitService
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue

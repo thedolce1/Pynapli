@@ -8,9 +8,9 @@ import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MEDIA_IMAGE_MAX_BYTES
 import com.pynapli.shared.network.dto.ReorderMediaAlbumRequestDto
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.time.Instant
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 

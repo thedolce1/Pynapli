@@ -1,10 +1,10 @@
 package com.pynapli.server.activity
 
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ActivityRetentionServiceTest {

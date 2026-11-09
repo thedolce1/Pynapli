@@ -2,7 +2,7 @@ package com.pynapli.server.notifications
 
 import com.google.auth.oauth2.GoogleCredentials
 import com.pynapli.server.config.ServerConfig
-import org.junit.Test
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
 

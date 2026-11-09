@@ -14,9 +14,9 @@ import com.pynapli.shared.network.dto.CreatePsyncSessionRequestDto
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.time.Instant
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**

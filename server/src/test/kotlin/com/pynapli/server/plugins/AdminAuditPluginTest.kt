@@ -11,7 +11,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeout
-import org.junit.Test
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class AdminAuditPluginTest {

@@ -36,8 +36,6 @@ androidxFragment = "1.8.9"
 # Already on the Android classpath transitively at this version; pinned here so the
 # androidx.core.content.edit usages depend on it explicitly rather than by accident.
 androidxCore = "1.16.0"
-junit = "4.13.2"
-junitVintage = "5.13.4"
 spotless = "8.6.0"
 ktlint = "1.7.1"
 
@@ -56,8 +54,6 @@ spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
-junit = { module = "junit:junit", version.ref = "junit" }
-junit-vintage-engine = { module = "org.junit.vintage:junit-vintage-engine", version.ref = "junitVintage" }
 
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 # Supplies Dispatchers.Main on the desktop JVM (the Swing EDT). Without it MainScope() in the

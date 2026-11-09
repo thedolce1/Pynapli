@@ -9,9 +9,9 @@ import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.time.Instant
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 

@@ -1,8 +1,8 @@
 package com.pynapli.server.presence
 
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 

@@ -14,10 +14,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
-import org.junit.Test
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SubscriptionAdminRoutesTest {

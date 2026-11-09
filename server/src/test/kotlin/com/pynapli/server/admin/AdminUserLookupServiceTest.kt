@@ -12,9 +12,9 @@ import com.pynapli.shared.network.dto.ProfileLinkDto
 import com.pynapli.shared.network.dto.ProfileLinksSummaryDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.time.Instant
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue

@@ -2,7 +2,7 @@ package com.pynapli.server.admin
 
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.moderation.ModerationException
-import org.junit.Test
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 

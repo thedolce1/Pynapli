@@ -1,7 +1,7 @@
 package com.pynapli.server.swipe
 
-import org.junit.Test
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CanonicalPairTest {

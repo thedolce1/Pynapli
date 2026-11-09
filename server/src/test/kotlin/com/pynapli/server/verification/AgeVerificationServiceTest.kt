@@ -7,12 +7,12 @@ import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import kotlinx.coroutines.runBlocking
-import org.junit.Test
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.UUID
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
