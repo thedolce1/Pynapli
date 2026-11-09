@@ -7,12 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
@@ -126,27 +123,6 @@ fun PynapliPill(
     }
 }
 
-/**
- * Gradient placeholder for a photo block (used when no image is loaded). Square by default;
- * pass [content] to overlay scrims/badges/labels inside the same clipped box.
- */
-@Composable
-fun GradientPhotoPlaceholder(
-    brush: Brush,
-    modifier: Modifier = Modifier,
-    radius: Dp = PynapliShape.Card,
-    content: @Composable (() -> Unit)? = null,
-) {
-    Box(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(radius))
-                .background(brush),
-    ) {
-        content?.invoke()
-    }
-}
-
 /** Bottom-up scrim so light text stays legible over a photo. Fill the photo box with this. */
 @Composable
 fun PhotoBottomScrim(
@@ -168,20 +144,5 @@ fun PhotoBottomScrim(
                             ),
                     ),
                 ),
-    )
-}
-
-/** 1dp hairline divider in the brand border color. */
-@Composable
-fun PynapliDivider(
-    modifier: Modifier = Modifier,
-    color: Color = PynapliColors.Border,
-) {
-    Box(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(color),
     )
 }

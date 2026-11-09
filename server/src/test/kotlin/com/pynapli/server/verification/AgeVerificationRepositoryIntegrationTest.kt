@@ -5,7 +5,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
 import java.sql.Date
-import java.sql.Timestamp
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID

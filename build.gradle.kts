@@ -4,10 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.android.application) apply false
-    alias(libs.plugins.android.library) apply false
     alias(libs.plugins.android.kotlin.multiplatform.library) apply false
     alias(libs.plugins.compose.multiplatform) apply false
-    alias(libs.plugins.ktor) apply false
     alias(libs.plugins.sqldelight) apply false
     alias(libs.plugins.google.services) apply false
     alias(libs.plugins.firebase.crashlytics) apply false
@@ -55,20 +53,5 @@ subprojects {
                 reportsDestination.set(destination)
             }
         }
-    }
-}
-
-tasks.register("printProjectStructure") {
-    group = "help"
-    description = "Prints the initial Pynapli Gradle module structure."
-    doLast {
-        println(
-            """
-            Pynapli modules:
-            - :shared     Kotlin Multiplatform product logic, networking, storage contracts
-            - :composeApp Compose Multiplatform app shell for Android and iOS
-            - :server     Ktor backend authority
-            """.trimIndent(),
-        )
     }
 }

@@ -1,32 +1,15 @@
 package com.pynapli.server.grid
 
-import com.pynapli.server.dependencies.RedisCache
 import com.pynapli.server.discovery.DiscoveryFilters
-import com.pynapli.server.safety.JdbcBlockRepository
-import com.pynapli.server.safety.JdbcHiddenProfileRepository
-import com.pynapli.server.swipe.JdbcSwipeRepository
-import com.pynapli.server.swipe.SwipeException
-import com.pynapli.server.swipe.SwipeService
-import com.pynapli.server.swipe.canonicalPair
 import com.pynapli.server.testsupport.PynapliTestDatabase
-import com.pynapli.shared.network.dto.GridQueryRequestDto
-import com.pynapli.shared.network.dto.SwipeAction
-import com.pynapli.shared.network.dto.SwipeActionRequestDto
-import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
-import java.time.Clock
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneOffset
 import java.util.UUID
-import javax.sql.DataSource
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 

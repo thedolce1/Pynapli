@@ -3,7 +3,6 @@ package com.pynapli.server.location
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.runBlocking
-import javax.sql.DataSource
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 

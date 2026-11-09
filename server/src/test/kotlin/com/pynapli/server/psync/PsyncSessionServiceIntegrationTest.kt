@@ -7,7 +7,6 @@ import com.pynapli.shared.network.dto.SuggestPsyncFiltersRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.runBlocking
-import java.sql.Timestamp
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant

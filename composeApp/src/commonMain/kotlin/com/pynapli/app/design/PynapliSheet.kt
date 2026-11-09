@@ -20,11 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -272,33 +268,6 @@ fun PynapliSheetTitle(
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
     )
-}
-
-/** Sheet header: title that takes the row, optional [trailing] slot, optional close button. */
-@Composable
-fun PynapliSheetHeader(
-    title: String,
-    modifier: Modifier = Modifier,
-    onClose: (() -> Unit)? = null,
-    trailing: (@Composable RowScope.() -> Unit)? = null,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(PynapliSpacing.sm),
-    ) {
-        PynapliSheetTitle(text = title, modifier = Modifier.weight(1f))
-        trailing?.invoke(this)
-        if (onClose != null) {
-            IconButton(onClick = onClose) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Close",
-                    tint = PynapliColors.TextSecondary,
-                )
-            }
-        }
-    }
 }
 
 /**

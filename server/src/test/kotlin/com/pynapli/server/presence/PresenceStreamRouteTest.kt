@@ -1,6 +1,5 @@
 package com.pynapli.server.presence
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthRepository
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.EmailIdentityRecord
@@ -19,8 +18,6 @@ import io.ktor.http.HttpHeaders
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout

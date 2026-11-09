@@ -3,7 +3,6 @@ package com.pynapli.app.grid
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable

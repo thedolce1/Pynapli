@@ -87,11 +87,6 @@ internal fun Connection.listActiveTravelCandidateUserIdsNear(
         }
     }
 
-internal fun Connection.hasAnyActiveProfileLinksNear(
-    viewerUserId: UUID,
-    radiusMeters: Int,
-): Boolean = listLinkedCandidateUserIdsNear(viewerUserId, radiusMeters, limit = 1).isNotEmpty()
-
 internal fun Connection.listLinkedCandidateUserIdsNear(
     viewerUserId: UUID,
     radiusMeters: Int,

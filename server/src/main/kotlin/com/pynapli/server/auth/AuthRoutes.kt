@@ -1,6 +1,5 @@
 package com.pynapli.server.auth
 
-import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.LogoutResponseDto

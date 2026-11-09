@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ktor)
     application
 }
 
@@ -53,7 +52,6 @@ dependencies {
     testImplementation(libs.ktor.client.websockets)
     testImplementation(libs.ktor.client.content.negotiation)
     testImplementation(libs.kotest.runner.junit5)
-    testImplementation(libs.kotest.assertions.core)
     testImplementation(libs.mockk)
     testImplementation(libs.testcontainers)
     testImplementation(libs.testcontainers.postgresql)

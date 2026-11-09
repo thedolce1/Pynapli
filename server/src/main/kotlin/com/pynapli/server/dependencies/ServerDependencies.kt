@@ -2,7 +2,6 @@ package com.pynapli.server.dependencies
 
 import com.pynapli.server.account.AccountDataExportWorker
 import com.pynapli.server.account.AccountLifecycleService
-import com.pynapli.server.account.JdbcAccountLifecycleRepository
 import com.pynapli.server.activity.ActivityBroadcaster
 import com.pynapli.server.activity.ActivityCursorCodec
 import com.pynapli.server.activity.ActivityRetentionService
@@ -21,19 +20,13 @@ import com.pynapli.server.admin.JdbcAdminRequestAuditRecorder
 import com.pynapli.server.admin.JdbcAdminSubscriptionSupportRepository
 import com.pynapli.server.admin.JdbcAdminUserLookupRepository
 import com.pynapli.server.auth.AuthService
-import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.config.startupSummary
 import com.pynapli.server.config.validateForStartup
 import com.pynapli.server.grid.GridService
-import com.pynapli.server.grid.JdbcGridViewerTrustRepository
 import com.pynapli.server.grid.SavedGridFilterService
-import com.pynapli.server.location.JdbcLocationRepository
-import com.pynapli.server.location.JdbcTravelLocationRepository
-import com.pynapli.server.location.JdbcTravelPlaceRepository
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationService
-import com.pynapli.server.location.TravelPlaceDatasetLoader
 import com.pynapli.server.location.TravelPlaceSearchService
 import com.pynapli.server.media.JdbcMediaCleanupRepository
 import com.pynapli.server.media.LocalMediaUploadStorage
@@ -46,20 +39,15 @@ import com.pynapli.server.metrics.ProductMetrics
 import com.pynapli.server.moderation.AdminAppealService
 import com.pynapli.server.moderation.AdminReportService
 import com.pynapli.server.moderation.AdminRiskService
-import com.pynapli.server.moderation.JdbcAdminAppealRepository
 import com.pynapli.server.moderation.MessageModerationService
 import com.pynapli.server.notifications.FirebaseAdminPushNotificationSender
-import com.pynapli.server.notifications.JdbcNotificationRepository
 import com.pynapli.server.notifications.LocalLoggingPushNotificationSender
-import com.pynapli.server.notifications.NotificationDispatchService
 import com.pynapli.server.notifications.NotificationDispatchWorker
 import com.pynapli.server.notifications.NotificationService
 import com.pynapli.server.notifications.PushNotificationSender
-import com.pynapli.server.presence.OnlinePresenceTracker
 import com.pynapli.server.presence.PresenceBroadcaster
 import com.pynapli.server.presence.PresenceOfflineScanner
 import com.pynapli.server.presence.PresenceService
-import com.pynapli.server.presence.RedisPresenceRepository
 import com.pynapli.server.profile.JdbcProfileRepository
 import com.pynapli.server.profile.ProfileService
 import com.pynapli.server.profile.TonightAvailabilityService
@@ -72,19 +60,7 @@ import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockService
 import com.pynapli.server.safety.HiddenProfileRepository
 import com.pynapli.server.safety.HiddenProfileService
-import com.pynapli.server.safety.JdbcAppealRepository
-import com.pynapli.server.safety.JdbcBlockRepository
-import com.pynapli.server.safety.JdbcHiddenProfileRepository
-import com.pynapli.server.safety.JdbcReportRepository
-import com.pynapli.server.safety.JdbcRiskRepository
-import com.pynapli.server.safety.RateLimitService
-import com.pynapli.server.safety.RedisRateLimitRepository
 import com.pynapli.server.safety.ReportService
-import com.pynapli.server.safety.RiskPolicyService
-import com.pynapli.server.safety.RiskService
-import com.pynapli.server.subscriptions.DisabledPlayStorePurchaseVerifier
-import com.pynapli.server.subscriptions.GooglePlayStorePurchaseVerifier
-import com.pynapli.server.subscriptions.JdbcSubscriptionRepository
 import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.swipe.SavedSwipeFilterService
@@ -103,7 +79,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.slf4j.LoggerFactory
-import java.time.Duration
 
 class ServerDependencies(
     val config: ServerConfig,

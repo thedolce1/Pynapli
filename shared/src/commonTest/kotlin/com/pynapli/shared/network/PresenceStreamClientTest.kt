@@ -2,13 +2,9 @@ package com.pynapli.shared.network
 
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import com.pynapli.shared.network.dto.PresenceStreamSubscribeDto
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.take
@@ -18,7 +14,6 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class PresenceStreamClientTest {
     private val json =

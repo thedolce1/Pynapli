@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
-import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.SavedGridFilterDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -128,6 +127,3 @@ class ApiSavedGridFilterRepository(
 
     override suspend fun delete(id: String): AppResult<Unit> = apiClient.deleteSavedGridFilter(id)
 }
-
-@Suppress("UNUSED_PARAMETER")
-private fun stripCursor(request: GridQueryRequestDto): GridQueryRequestDto = request.copy(cursor = null)

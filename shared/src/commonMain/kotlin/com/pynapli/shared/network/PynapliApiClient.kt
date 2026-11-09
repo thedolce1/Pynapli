@@ -38,8 +38,7 @@ interface PynapliApiClient :
     TonightApi,
     // Psync (synchronized partner swipe). Server is the product authority; the client just
     // negotiates, swipes the shared deck privately, and reads the recap.
-    PsyncApi,
-    PresenceApi
+    PsyncApi
 
 class KtorPynapliApiClient(
     private val config: PynapliConfig,
@@ -62,8 +61,7 @@ class KtorPynapliApiClient(
     AccountApi by KtorAccountApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     LocationApi by KtorLocationApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
     TonightApi by KtorTonightApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    PsyncApi by KtorPsyncApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)),
-    PresenceApi by KtorPresenceApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
+    PsyncApi by KtorPsyncApi(KtorApiSupport(httpClient, config, json, accessTokenProvider)) {
     constructor(
         config: PynapliConfig,
         accessTokenProvider: AccessTokenProvider,

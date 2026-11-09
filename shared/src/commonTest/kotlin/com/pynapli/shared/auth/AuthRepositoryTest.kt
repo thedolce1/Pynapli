@@ -45,7 +45,6 @@ import com.pynapli.shared.network.dto.MediaAlbumItemsResponseDto
 import com.pynapli.shared.network.dto.MediaUploadSlotDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.NotificationPreferencesDto
-import com.pynapli.shared.network.dto.PresenceHeartbeatResponseDto
 import com.pynapli.shared.network.dto.ProfileLinksSummaryDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.PushDeviceRegistrationResponseDto
@@ -569,6 +568,4 @@ private class FakeApiClient(
     override suspend fun listMatches(): AppResult<MatchesListResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override fun mediaAssetContentUrl(mediaAssetId: String): String = "https://media.example/$mediaAssetId"
-
-    override suspend fun heartbeatPresence(): AppResult<PresenceHeartbeatResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 }
