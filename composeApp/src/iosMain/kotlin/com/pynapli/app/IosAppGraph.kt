@@ -35,6 +35,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
+import platform.Foundation.NSBundle
 
 /**
  * iOS mirror of `AndroidAppGraph` / `WebAppGraph`: the session-auth chain plus the platform seam
@@ -114,7 +115,7 @@ class IosAppGraph(
         AuthStateHolder(
             authRepository = authRepository,
             platform = "ios",
-            appVersion = "0.1.0",
+            appVersion = bundleVersionName(),
             deviceId = installId,
             // No beforeLogout hook yet: Android uses it to unregister the push device, which lands
             // with the APNs step of the plan.
@@ -237,3 +238,6 @@ class IosAppGraph(
         realtimeJobs = emptyList()
     }
 }
+
+/** The app's marketing version (Xcode MARKETING_VERSION), sent with auth requests. */
+private fun bundleVersionName(): String = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "0.0.0"

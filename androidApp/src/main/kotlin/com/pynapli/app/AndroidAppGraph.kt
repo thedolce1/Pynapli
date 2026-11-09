@@ -129,7 +129,7 @@ class AndroidAppGraph(
             repository = ApiPushDeviceRegistrationRepository(apiClient),
             registrationStore = AndroidPushRegistrationStore(appContext),
             platform = "android",
-            appVersion = "0.1.0",
+            appVersion = BuildConfig.VERSION_NAME,
             localeProvider = { Locale.getDefault().toLanguageTag() },
             timezoneProvider = { TimeZone.getDefault().id },
             notificationsAllowed = {
@@ -143,7 +143,7 @@ class AndroidAppGraph(
         AuthStateHolder(
             authRepository = authRepository,
             platform = "android",
-            appVersion = "0.1.0",
+            appVersion = BuildConfig.VERSION_NAME,
             deviceId = stableInstallId(appContext),
             beforeLogout = { pushRegistrationCoordinator.unregisterCurrentDevice() },
             sessionInvalidations = sessionInvalidationBus.events,
@@ -245,11 +245,8 @@ class AndroidAppGraph(
         playBillingPurchaseGateway.detachActivity(activity)
     }
 
-    val devLoginCredentials =
-        DevLoginCredentials(
-            email = "dev@pynapli.local",
-            password = "PynapliDevPass123!",
-        )
+    /** Non-null only in debug builds (per-build-type `DevLoginDefaults.kt`). */
+    val devLoginCredentials: DevLoginCredentials? = devLoginDefaults()
 
     val testerDiagnosticLabel: String? = AndroidRuntimeConfig.testerDiagnosticLabel
 }

@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -148,7 +147,7 @@ class MainActivity : ComponentActivity() {
                                 onPickMediaForAlbum = ::pickMediaForAlbum,
                                 onPickConversationPhoto = ::pickConversationPhoto,
                                 onSetDiscreetIcon = ::applyLauncherIcon,
-                                devLoginCredentials = graph.devLoginCredentials.takeIf { isDebuggable() },
+                                devLoginCredentials = graph.devLoginCredentials,
                                 testerDiagnosticLabel = graph.testerDiagnosticLabel,
                             ),
                     )
@@ -392,8 +391,6 @@ class MainActivity : ComponentActivity() {
     private fun hasLocationPermission(): Boolean =
         checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-
-    private fun isDebuggable(): Boolean = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
     @SuppressLint("MissingPermission")
     private fun submitCurrentLocation() {
