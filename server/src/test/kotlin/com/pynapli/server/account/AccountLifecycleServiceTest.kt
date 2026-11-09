@@ -2,6 +2,7 @@ package com.pynapli.server.account
 
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
@@ -157,7 +158,16 @@ private class FakeAccountLifecycleRepository(
         return deleteResult?.copy(userId = userId)
     }
 
-    override suspend fun claimNextPendingExport(): AccountDataExportRecord? = null
+    override suspend fun claimNextPendingExport(
+        staleAfter: Duration,
+        maxAttempts: Int,
+    ): AccountDataExportRecord? = null
+
+    override suspend fun failAbandonedExports(
+        staleAfter: Duration,
+        maxAttempts: Int,
+        errorMessage: String,
+    ): Int = 0
 
     override suspend fun markExportReady(
         requestId: UUID,

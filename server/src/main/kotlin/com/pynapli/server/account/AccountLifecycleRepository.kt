@@ -1,5 +1,6 @@
 package com.pynapli.server.account
 
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
@@ -10,8 +11,21 @@ interface AccountLifecycleRepository {
 
     suspend fun deleteAccount(userId: UUID): AccountDeletionResult?
 
-    /** Atomically claims one `requested` export, moving it to `processing`. Null if none pending. */
-    suspend fun claimNextPendingExport(): AccountDataExportRecord?
+    /**
+     * Atomically claims one export, moving it to `processing`: a `requested` one, or a `processing`
+     * one whose claim is older than [staleAfter]. Skips requests that used [maxAttempts]. Null if none.
+     */
+    suspend fun claimNextPendingExport(
+        staleAfter: Duration,
+        maxAttempts: Int,
+    ): AccountDataExportRecord?
+
+    /** Fails stale `processing` exports that have no attempts left; returns how many. */
+    suspend fun failAbandonedExports(
+        staleAfter: Duration,
+        maxAttempts: Int,
+        errorMessage: String,
+    ): Int
 
     suspend fun markExportReady(
         requestId: UUID,

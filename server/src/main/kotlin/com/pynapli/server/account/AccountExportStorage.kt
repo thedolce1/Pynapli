@@ -1,7 +1,12 @@
 package com.pynapli.server.account
 
+import com.pynapli.server.media.GcsV4SignedUrlFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -64,4 +69,72 @@ class LocalAccountExportStorage(
                 )
             }
         }
+}
+
+/** Uploads bytes to a pre-signed URL. Seam so the GCS storage is testable without a bucket. */
+fun interface ExportObjectUploader {
+    /** PUTs [bytes] to [signedUrl]; throws if the store doesn't accept them. */
+    suspend fun put(
+        signedUrl: String,
+        bytes: ByteArray,
+        contentType: String,
+    )
+}
+
+/** JDK HttpClient uploader: no extra dependency; blocking I/O stays on [Dispatchers.IO]. */
+class JdkExportObjectUploader(
+    private val httpClient: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(),
+    private val requestTimeout: Duration = Duration.ofMinutes(2),
+) : ExportObjectUploader {
+    override suspend fun put(
+        signedUrl: String,
+        bytes: ByteArray,
+        contentType: String,
+    ) = withContext(Dispatchers.IO) {
+        val request =
+            HttpRequest
+                .newBuilder(URI.create(signedUrl))
+                .timeout(requestTimeout)
+                .header("Content-Type", contentType)
+                .PUT(HttpRequest.BodyPublishers.ofByteArray(bytes))
+                .build()
+        val status = httpClient.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()
+        // The status only: the signed URL is a bearer credential and must not reach the logs.
+        check(status in 200..299) { "Export upload rejected with HTTP $status" }
+    }
+}
+
+/**
+ * Production storage: the server PUTs the archive into a private GCS bucket through a short-lived
+ * V4 signed URL, then hands the user a V4 signed GET URL valid for [ttl] (GCS caps V4 at 7 days).
+ * Downloads go straight to GCS, so [read] returns null and the API download route isn't used.
+ * Pair the bucket with a lifecycle rule that deletes `account-exports/` objects after [ttl].
+ */
+class GcsAccountExportStorage(
+    private val signer: GcsV4SignedUrlFactory,
+    private val bucket: String,
+    private val uploader: ExportObjectUploader = JdkExportObjectUploader(),
+    private val ttl: Duration = Duration.ofDays(7),
+) : AccountExportStorage {
+    override suspend fun store(
+        userId: UUID,
+        requestId: UUID,
+        archive: ExportArchive,
+    ): StoredExport {
+        val objectKey = "$OBJECT_PREFIX$userId/$requestId.json"
+        val upload = signer.sign(method = "PUT", bucket = bucket, objectKey = objectKey, ttl = UPLOAD_URL_TTL)
+        uploader.put(upload.url, archive.bytes, archive.contentType)
+        val download = signer.sign(method = "GET", bucket = bucket, objectKey = objectKey, ttl = ttl)
+        return StoredExport(
+            downloadUrl = download.url,
+            expiresAt = Instant.ofEpochSecond(download.expiresAtEpochSeconds),
+        )
+    }
+
+    override suspend fun read(requestId: UUID): ExportArchive? = null
+
+    companion object {
+        const val OBJECT_PREFIX = "account-exports/"
+        private val UPLOAD_URL_TTL: Duration = Duration.ofMinutes(15)
+    }
 }

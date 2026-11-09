@@ -2,6 +2,7 @@ package com.pynapli.server.account
 
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
@@ -40,19 +41,48 @@ class AccountDataExportProcessorTest {
         }
 
     @Test
+    fun claimsWithTheConfiguredLeasePolicy() =
+        runBlocking {
+            val repository = FakeRepo(pending = null)
+            val processor =
+                AccountDataExportProcessor(
+                    repository,
+                    FakeArchiver(),
+                    FakeStorage(),
+                    Clock.fixed(now, ZoneOffset.UTC),
+                    staleAfter = Duration.ofMinutes(5),
+                    maxAttempts = 2,
+                )
+
+            processor.processNextPending()
+
+            assertEquals(Duration.ofMinutes(5) to 2, repository.claimedWith)
+        }
+
+    @Test
+    fun failAbandonedUsesTheUserFacingMessage() =
+        runBlocking {
+            val repository = FakeRepo(pending = null)
+            AccountDataExportProcessor(repository, FakeArchiver(), FakeStorage(), Clock.fixed(now, ZoneOffset.UTC)).failAbandoned()
+
+            assertEquals(AccountDataExportProcessor.EXPORT_FAILED_MESSAGE, repository.abandonedMessage)
+        }
+
+    @Test
     fun archiveFailureMarksExportFailed() =
         runBlocking {
             val repository = FakeRepo(pending = exportRecord("processing"))
             val failingArchiver =
                 object : AccountDataExportArchiver {
-                    override suspend fun buildArchive(userId: UUID): ExportArchive = throw IllegalStateException("boom")
+                    override suspend fun buildArchive(userId: UUID): ExportArchive = throw IllegalStateException("relation \"profiles\" does not exist at /srv/pynapli")
                 }
             val processor = AccountDataExportProcessor(repository, failingArchiver, FakeStorage(), Clock.fixed(now, ZoneOffset.UTC))
 
             assertTrue(processor.processNextPending())
 
             assertEquals(requestId, repository.failedId)
-            assertEquals("boom", repository.failedMessage)
+            // The exception text stays in the log; the user sees only the generic message.
+            assertEquals(AccountDataExportProcessor.EXPORT_FAILED_MESSAGE, repository.failedMessage)
             assertNull(repository.readyId)
         }
 
@@ -88,7 +118,25 @@ class AccountDataExportProcessorTest {
         var failedId: UUID? = null
         var failedMessage: String? = null
 
-        override suspend fun claimNextPendingExport(): AccountDataExportRecord? = pending?.also { pending = null }
+        var claimedWith: Pair<Duration, Int>? = null
+        var abandonedMessage: String? = null
+
+        override suspend fun claimNextPendingExport(
+            staleAfter: Duration,
+            maxAttempts: Int,
+        ): AccountDataExportRecord? {
+            claimedWith = staleAfter to maxAttempts
+            return pending?.also { pending = null }
+        }
+
+        override suspend fun failAbandonedExports(
+            staleAfter: Duration,
+            maxAttempts: Int,
+            errorMessage: String,
+        ): Int {
+            abandonedMessage = errorMessage
+            return 0
+        }
 
         override suspend fun markExportReady(
             requestId: UUID,

@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.PreparedStatement
 import java.sql.Timestamp
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -55,22 +56,62 @@ internal class JdbcAccountDataExportActions(
             }
         }
 
-    /** Atomically claims the oldest `requested` export, moving it to `processing`. Null if none pending. */
-    suspend fun claimNextPendingExport(): AccountDataExportRecord? =
+    /**
+     * Atomically claims the oldest claimable export and moves it to `processing`: a `requested` one, or
+     * a `processing` one whose claim is older than [staleAfter] (its worker died). Requests that have
+     * used [maxAttempts] are skipped. Null if nothing is claimable.
+     */
+    suspend fun claimNextPendingExport(
+        staleAfter: Duration,
+        maxAttempts: Int,
+    ): AccountDataExportRecord? =
         querySingle(
             """
             UPDATE account_data_export_requests
-            SET status = 'processing'
+            SET status = 'processing', processing_started_at = now(), attempts = attempts + 1
             WHERE id = (
                 SELECT id FROM account_data_export_requests
-                WHERE status = 'requested'
+                WHERE attempts < ?
+                  AND (
+                    status = 'requested'
+                    OR (status = 'processing' AND processing_started_at < now() - make_interval(secs => ?))
+                  )
                 ORDER BY requested_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
             )
             RETURNING $EXPORT_COLUMNS
             """.trimIndent(),
-        ) {}
+        ) {
+            setInt(1, maxAttempts)
+            setLong(2, staleAfter.seconds)
+        }
+
+    /** Fails stale `processing` exports that have no attempts left. Returns how many were failed. */
+    suspend fun failAbandonedExports(
+        staleAfter: Duration,
+        maxAttempts: Int,
+        errorMessage: String,
+    ): Int =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE account_data_export_requests
+                        SET status = 'failed', error_message = ?
+                        WHERE status = 'processing'
+                          AND attempts >= ?
+                          AND processing_started_at < now() - make_interval(secs => ?)
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setString(1, errorMessage)
+                        statement.setInt(2, maxAttempts)
+                        statement.setLong(3, staleAfter.seconds)
+                        statement.executeUpdate()
+                    }
+            }
+        }
 
     suspend fun markExportReady(
         requestId: UUID,

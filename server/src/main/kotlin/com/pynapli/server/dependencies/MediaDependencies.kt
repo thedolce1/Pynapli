@@ -182,7 +182,7 @@ private val LOCAL_MEDIA_ALLOWED_ENVIRONMENTS = setOf("local", "test")
 // GCS V4 signing needs a service-account private key. Prefer a media-specific service
 // account (least privilege: storage object access only); fall back to the Firebase service
 // account so a single-credential setup also works.
-private fun loadMediaSigningCredentials(config: ServerConfig): ServiceAccountCredentials {
+internal fun loadMediaSigningCredentials(config: ServerConfig): ServiceAccountCredentials {
     val json = config.mediaGcsSigningServiceAccountJson ?: config.firebaseServiceAccountJson
     if (json != null) {
         return ByteArrayInputStream(json.toByteArray(StandardCharsets.UTF_8))

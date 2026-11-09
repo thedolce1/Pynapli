@@ -1,5 +1,6 @@
 package com.pynapli.server.account
 
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -16,7 +17,16 @@ class JdbcAccountLifecycleRepository(
 
     override suspend fun deleteAccount(userId: UUID): AccountDeletionResult? = deletionActions.deleteAccount(userId)
 
-    override suspend fun claimNextPendingExport(): AccountDataExportRecord? = exportActions.claimNextPendingExport()
+    override suspend fun claimNextPendingExport(
+        staleAfter: Duration,
+        maxAttempts: Int,
+    ): AccountDataExportRecord? = exportActions.claimNextPendingExport(staleAfter, maxAttempts)
+
+    override suspend fun failAbandonedExports(
+        staleAfter: Duration,
+        maxAttempts: Int,
+        errorMessage: String,
+    ): Int = exportActions.failAbandonedExports(staleAfter, maxAttempts, errorMessage)
 
     override suspend fun markExportReady(
         requestId: UUID,

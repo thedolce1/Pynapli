@@ -48,6 +48,8 @@ data class ServerConfig(
     val accountDataExportEnabled: Boolean = false,
     val accountDataExportIntervalMillis: Long = 60_000L,
     val accountDataExportDirectory: String = ".pynapli-account-exports",
+    /** GCS bucket for export archives when media storage is `gcs`; null = the media bucket. */
+    val accountDataExportBucket: String? = null,
     val firebaseServiceAccountPath: String? = null,
     val firebaseServiceAccountJson: String? = null,
     // Optional explicit Firebase/GCP project id. When the server authenticates via Application
@@ -250,6 +252,7 @@ data class ServerConfig(
                         ?: 60_000L,
                 accountDataExportDirectory =
                     System.getenv("PYNAPLI_ACCOUNT_DATA_EXPORT_DIR") ?: ".pynapli-account-exports",
+                accountDataExportBucket = System.getenv("PYNAPLI_ACCOUNT_DATA_EXPORT_BUCKET")?.takeIf { it.isNotBlank() },
                 firebaseServiceAccountPath =
                     System
                         .getenv("PYNAPLI_FIREBASE_SERVICE_ACCOUNT_PATH")

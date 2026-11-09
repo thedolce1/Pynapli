@@ -5,6 +5,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
 import java.sql.Timestamp
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -45,7 +46,7 @@ class AccountLifecycleRepositoryIntegrationTest {
             val archiver = JdbcAccountDataExportArchiver(dataSource)
 
             repository.createDataExportRequest(userId)
-            val claimed = repository.claimNextPendingExport()
+            val claimed = repository.claimNextPendingExport(STALE_AFTER, MAX_ATTEMPTS)
             assertNotNull(claimed)
             assertEquals("processing", claimed.status)
 
@@ -65,7 +66,48 @@ class AccountLifecycleRepositoryIntegrationTest {
             assertEquals("https://dl.example/${claimed.id}", ready?.downloadUrl)
 
             // Nothing left to claim.
-            assertNull(repository.claimNextPendingExport())
+            assertNull(repository.claimNextPendingExport(STALE_AFTER, MAX_ATTEMPTS))
+        }
+
+    // Regression: a worker that died mid-export left the request in 'processing' forever.
+    @Test
+    fun staleProcessingClaimIsReclaimedButAFreshOneIsNot() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000913")
+            dataSource.insertUserWithProfile(userId, "Ilse")
+            val repository = JdbcAccountLifecycleRepository(dataSource)
+            val request = repository.createDataExportRequest(userId)
+
+            val first = assertNotNull(repository.claimNextPendingExport(STALE_AFTER, MAX_ATTEMPTS))
+            assertEquals(request.id, first.id)
+            // A live claim (just started) must not be taken over.
+            assertNull(repository.claimNextPendingExport(STALE_AFTER, MAX_ATTEMPTS))
+
+            dataSource.ageExportClaim(request.id, STALE_AFTER.plusMinutes(1))
+            val reclaimed = assertNotNull(repository.claimNextPendingExport(STALE_AFTER, MAX_ATTEMPTS))
+            assertEquals(request.id, reclaimed.id)
+            assertEquals("processing", reclaimed.status)
+            assertEquals(2, dataSource.exportAttempts(request.id))
+        }
+
+    @Test
+    fun exportOutOfAttemptsIsFailedInsteadOfRetried() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000914")
+            dataSource.insertUserWithProfile(userId, "Oren")
+            val repository = JdbcAccountLifecycleRepository(dataSource)
+            val request = repository.createDataExportRequest(userId)
+
+            repeat(MAX_ATTEMPTS) {
+                assertNotNull(repository.claimNextPendingExport(STALE_AFTER, MAX_ATTEMPTS))
+                dataSource.ageExportClaim(request.id, STALE_AFTER.plusMinutes(1))
+            }
+            assertNull(repository.claimNextPendingExport(STALE_AFTER, MAX_ATTEMPTS), "no attempts left")
+
+            assertEquals(1, repository.failAbandonedExports(STALE_AFTER, MAX_ATTEMPTS, "gave up"))
+            val failed = assertNotNull(repository.exportRequestById(request.id))
+            assertEquals("failed", failed.status)
+            assertEquals("gave up", failed.errorMessage)
         }
 
     @Test
@@ -127,6 +169,38 @@ class AccountLifecycleRepositoryIntegrationTest {
             assertEquals(1, dataSource.intValue("SELECT count(*) FROM safety_reports WHERE reported_user_id = ?", userId))
             assertEquals(1, dataSource.intValue("SELECT count(*) FROM account_deletion_events WHERE user_id = ?", userId))
         }
+
+    private fun DataSource.ageExportClaim(
+        requestId: UUID,
+        age: Duration,
+    ) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    "UPDATE account_data_export_requests SET processing_started_at = now() - make_interval(secs => ?) WHERE id = ?",
+                ).use { statement ->
+                    statement.setLong(1, age.seconds)
+                    statement.setObject(2, requestId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
+    private fun DataSource.exportAttempts(requestId: UUID): Int =
+        connection.use { connection ->
+            connection.prepareStatement("SELECT attempts FROM account_data_export_requests WHERE id = ?").use { statement ->
+                statement.setObject(1, requestId)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt(1)
+                }
+            }
+        }
+
+    private companion object {
+        val STALE_AFTER: Duration = Duration.ofMinutes(15)
+        const val MAX_ATTEMPTS = 3
+    }
 
     private fun DataSource.insertUserWithProfile(
         userId: UUID,
