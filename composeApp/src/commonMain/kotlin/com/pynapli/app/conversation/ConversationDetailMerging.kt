@@ -12,7 +12,14 @@ internal fun ConversationDetailDto.withAppendedMessage(message: MessageDto): Con
                 unreadCount = 0,
                 updatedAt = message.createdAt,
             ),
-        messages = messages + message,
+        // Idempotent: a refetch can deliver the sent message before the send call returns. A
+        // duplicate id would show the bubble twice and crash the keyed thread list.
+        messages =
+            if (messages.any { existing -> existing.messageId == message.messageId }) {
+                messages.map { existing -> if (existing.messageId == message.messageId) message else existing }
+            } else {
+                messages + message
+            },
     )
 
 internal fun ConversationDetailDto.withUpdatedMessage(message: MessageDto): ConversationDetailDto =

@@ -11,9 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
@@ -27,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,70 +56,127 @@ internal fun MessageList(
     onRevealMedia: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val scrollState = rememberScrollState()
+    // Lazy so a long thread composes only the visible bubbles. Keyed rows also keep the reading
+    // position when "Older messages" prepends a page.
+    val listState = rememberLazyListState()
+    val rows = remember(messages) { messages.toThreadRows() }
+    val lastOwnMessageId =
+        remember(messages, viewerUserId) {
+            messages.lastOrNull { message -> message.senderUserId == viewerUserId }?.messageId
+        }
     val lastMessageId = messages.lastOrNull()?.messageId
 
     LaunchedEffect(lastMessageId) {
         if (lastMessageId != null) {
-            scrollState.scrollTo(scrollState.maxValue)
+            // rows is current here; layoutInfo can still describe the previous frame.
+            listState.scrollToItem(rows.lastIndex + if (hasOlderMessages) 1 else 0)
         }
     }
 
-    Column(
-        modifier = modifier.verticalScroll(scrollState),
+    LazyColumn(
+        state = listState,
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (hasOlderMessages) {
-            TextButton(
-                onClick = onLoadOlder,
-                enabled = !isLoadingOlder,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            ) {
-                if (isLoadingOlder) {
-                    CircularProgressIndicator(
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(18.dp),
-                    )
-                } else {
-                    Text(text = "Older messages")
+            item(key = OLDER_MESSAGES_KEY, contentType = OLDER_MESSAGES_KEY) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    TextButton(
+                        onClick = onLoadOlder,
+                        enabled = !isLoadingOlder,
+                    ) {
+                        if (isLoadingOlder) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        } else {
+                            Text(text = "Older messages")
+                        }
+                    }
                 }
             }
         }
 
         if (messages.isEmpty()) {
-            Text(
-                text = "No messages yet.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(vertical = 18.dp),
-            )
+            item(key = EMPTY_THREAD_KEY, contentType = EMPTY_THREAD_KEY) {
+                Text(
+                    text = "No messages yet.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 18.dp),
+                )
+            }
         } else {
-            val lastOwnMessageId = messages.lastOrNull { message -> message.senderUserId == viewerUserId }?.messageId
-            var lastDateKey: String? = null
-            messages.forEach { message ->
-                val dateKey = message.createdAt.messageDateKey()
-                if (dateKey != null && dateKey != lastDateKey) {
-                    DayDivider(label = dateKey.messageDateLabel())
-                    lastDateKey = dateKey
-                }
-                if (message.messageType == MessageType.SYSTEM) {
-                    SystemNotice(text = message.body)
-                } else {
-                    val mine = message.senderUserId == viewerUserId
-                    MessageBubble(
-                        message = message,
-                        mine = mine,
-                        senderDisplayName = senderDisplayNames[message.senderUserId],
-                        showDeliveryStatus = mine && message.messageId == lastOwnMessageId,
-                        isDeleting = message.messageId in isDeletingMessageIds,
-                        isRevealing = message.messageId in revealingMessageIds,
-                        onDeleteMessage = onDeleteMessage,
-                        onRevealMedia = onRevealMedia,
-                    )
+            items(
+                items = rows,
+                key = { row -> row.key },
+                contentType = { row -> row.contentType },
+            ) { row ->
+                when (row) {
+                    is ThreadRow.Day -> DayDivider(label = row.label)
+                    is ThreadRow.Message -> {
+                        val message = row.message
+                        if (message.messageType == MessageType.SYSTEM) {
+                            SystemNotice(text = message.body)
+                        } else {
+                            val mine = message.senderUserId == viewerUserId
+                            MessageBubble(
+                                message = message,
+                                mine = mine,
+                                senderDisplayName = senderDisplayNames[message.senderUserId],
+                                showDeliveryStatus = mine && message.messageId == lastOwnMessageId,
+                                isDeleting = message.messageId in isDeletingMessageIds,
+                                isRevealing = message.messageId in revealingMessageIds,
+                                onDeleteMessage = onDeleteMessage,
+                                onRevealMedia = onRevealMedia,
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+private const val OLDER_MESSAGES_KEY = "older-messages"
+private const val EMPTY_THREAD_KEY = "empty-thread"
+
+/** One row of the thread: a day divider, or a message (bubble or system notice). */
+internal sealed interface ThreadRow {
+    val key: String
+    val contentType: String
+
+    /** Keyed by the first message of the day, so the key stays unique even for out-of-order input. */
+    data class Day(
+        val firstMessageId: String,
+        val label: String,
+    ) : ThreadRow {
+        override val key: String get() = "day-$firstMessageId"
+        override val contentType: String get() = "day"
+    }
+
+    data class Message(
+        val message: MessageDto,
+    ) : ThreadRow {
+        override val key: String get() = "message-${message.messageId}"
+        override val contentType: String get() = if (message.messageType == MessageType.SYSTEM) "system" else "bubble"
+    }
+}
+
+/** Interleaves a day divider before the first message of each calendar day. */
+internal fun List<MessageDto>.toThreadRows(): List<ThreadRow> {
+    val rows = ArrayList<ThreadRow>(size + 4)
+    var lastDateKey: String? = null
+    forEach { message ->
+        val dateKey = message.createdAt.messageDateKey()
+        if (dateKey != null && dateKey != lastDateKey) {
+            rows += ThreadRow.Day(firstMessageId = message.messageId, label = dateKey.messageDateLabel())
+            lastDateKey = dateKey
+        }
+        rows += ThreadRow.Message(message)
+    }
+    return rows
 }
 
 @Composable
