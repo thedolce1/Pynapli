@@ -20,6 +20,16 @@ enum class TonightIntent(
     }
 }
 
+/** User-facing name for an intent (the map's filter pills, session rows, and the start sheet). */
+internal val TonightIntent.label: String
+    get() =
+        when (this) {
+            TonightIntent.Solo -> "Solo"
+            TonightIntent.Together -> "Together"
+            TonightIntent.Social -> "Social"
+            TonightIntent.Event -> "Events"
+        }
+
 /**
  * One Playing Tonight feed row, mapped from [com.pynapli.shared.network.dto.TonightFeedItemDto].
  * Anchored on an individual (never a couple card); the linked partner is a mini-avatar only.

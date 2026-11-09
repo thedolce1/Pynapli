@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,7 +54,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.OnlineDot
+import com.pynapli.app.design.PynapliButton
+import com.pynapli.app.design.PynapliButtonSize
+import com.pynapli.app.design.PynapliButtonStyle
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliEmptyState
+import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliShape
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -351,8 +357,8 @@ private fun TonightTopFloater(
                         )
                         Text("Together · ${humanizeHostMode(session.hostMode)}", color = PynapliColors.TextTertiary, style = MaterialTheme.typography.labelSmall)
                     }
-                    PillButton("Decline", onDecline, filled = false, modifier = Modifier.testTag(PlayingTonightTags.DECLINE))
-                    PillButton("Approve", onApprove, filled = true, modifier = Modifier.testTag(PlayingTonightTags.APPROVE))
+                    PynapliButton("Decline", onDecline, Modifier.testTag(PlayingTonightTags.DECLINE), style = PynapliButtonStyle.Secondary, size = PynapliButtonSize.Compact)
+                    PynapliButton("Approve", onApprove, Modifier.testTag(PlayingTonightTags.APPROVE), style = PynapliButtonStyle.Primary, size = PynapliButtonSize.Compact)
                 }
 
             session.isProposed ->
@@ -362,7 +368,7 @@ private fun TonightTopFloater(
                         Text("Waiting for your partner", color = PynapliColors.TextPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Text("They need to approve before you go live", color = PynapliColors.TextTertiary, style = MaterialTheme.typography.labelSmall)
                     }
-                    PillButton("Cancel", onEnd, filled = false, modifier = Modifier.testTag(PlayingTonightTags.END))
+                    PynapliButton("Cancel", onEnd, Modifier.testTag(PlayingTonightTags.END), style = PynapliButtonStyle.Secondary, size = PynapliButtonSize.Compact)
                 }
 
             else ->
@@ -372,7 +378,7 @@ private fun TonightTopFloater(
                         Text("You're live · ${intentLabel(session.intent, session.intentRaw)}", color = PynapliColors.TextPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Text(humanizeHostMode(session.hostMode), color = PynapliColors.TextTertiary, style = MaterialTheme.typography.labelSmall)
                     }
-                    PillButton("End", onEnd, filled = false, modifier = Modifier.testTag(PlayingTonightTags.END))
+                    PynapliButton("End", onEnd, Modifier.testTag(PlayingTonightTags.END), style = PynapliButtonStyle.Secondary, size = PynapliButtonSize.Compact)
                 }
         }
     }
@@ -397,30 +403,6 @@ private fun FloaterCard(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         content = content,
-    )
-}
-
-@Composable
-private fun PillButton(
-    label: String,
-    onClick: () -> Unit,
-    filled: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Text(
-        text = label,
-        color = if (filled) PynapliColors.TextInverse else PynapliColors.TextSecondary,
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        modifier =
-            modifier
-                // Tap target, so it reserves the 48dp minimum like PynapliPill does.
-                .minimumInteractiveComponentSize()
-                .clip(PynapliShape.PillShape)
-                .background(if (filled) PynapliColors.Accent else PynapliColors.Surface)
-                .border(1.dp, if (filled) PynapliColors.Accent else PynapliColors.Border, PynapliShape.PillShape)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
     )
 }
 
@@ -494,14 +476,17 @@ private fun TonightSheet(
 
         IntentFilterRow(selected = state.intentFilter, onSelected = onIntentSelected)
 
-        if (state.feedItems.isEmpty()) {
+        if (state.feedItems.isEmpty() && state.isLoading) {
             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                Text(
-                    text = if (state.isLoading) "Loading…" else "Nobody here yet",
-                    color = PynapliColors.TextTertiary,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
             }
+        } else if (state.feedItems.isEmpty()) {
+            PynapliEmptyState(
+                icon = Icons.Filled.DarkMode,
+                title = "Nobody here yet",
+                subtitle = "When someone nearby starts a night out, they'll show up here.",
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+            )
         } else {
             LazyColumn(modifier = Modifier.fillMaxWidth().testTag(PlayingTonightTags.LIST)) {
                 items(state.feedItems, key = { it.sessionId }) { item ->
@@ -524,39 +509,21 @@ private fun IntentFilterRow(
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        IntentPill(label = "All", active = selected == null, onClick = { onSelected(null) })
+        PynapliPill(
+            text = "All",
+            selected = selected == null,
+            onClick = { onSelected(null) },
+            modifier = Modifier.testTag(PlayingTonightTags.intentPill("All")),
+        )
         TonightIntent.entries.forEach { intent ->
-            IntentPill(
-                label = intentLabel(intent, intent.serverValue),
-                active = selected == intent,
+            PynapliPill(
+                text = intent.label,
+                selected = selected == intent,
                 onClick = { onSelected(intent) },
+                modifier = Modifier.testTag(PlayingTonightTags.intentPill(intent.label)),
             )
         }
     }
-}
-
-@Composable
-private fun IntentPill(
-    label: String,
-    active: Boolean,
-    onClick: () -> Unit,
-) {
-    Text(
-        text = label,
-        color = if (active) PynapliColors.TextInverse else PynapliColors.TextSecondary,
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        modifier =
-            Modifier
-                // Tap target, so it reserves the 48dp minimum like PynapliPill does.
-                .minimumInteractiveComponentSize()
-                .clip(PynapliShape.PillShape)
-                .background(if (active) PynapliColors.Accent else PynapliColors.SurfaceRaised)
-                .border(1.dp, if (active) PynapliColors.Accent else PynapliColors.Border, PynapliShape.PillShape)
-                .clickable(onClick = onClick)
-                .testTag(PlayingTonightTags.intentPill(label))
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-    )
 }
 
 @Composable
@@ -686,14 +653,7 @@ private fun HostModePill(hostMode: String) {
 private fun intentLabel(
     intent: TonightIntent?,
     raw: String,
-): String =
-    when (intent) {
-        TonightIntent.Solo -> "Solo"
-        TonightIntent.Together -> "Together"
-        TonightIntent.Social -> "Social"
-        TonightIntent.Event -> "Events"
-        null -> raw.replaceFirstChar { it.uppercase() }
-    }
+): String = intent?.label ?: raw.replaceFirstChar { it.uppercase() }
 
 private fun humanizeHostMode(hostMode: String): String =
     when (hostMode) {

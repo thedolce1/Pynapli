@@ -32,6 +32,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pynapli.app.design.PynapliButton
+import com.pynapli.app.design.PynapliButtonStyle
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.SwipeCardTokens
@@ -344,40 +346,14 @@ private fun PrimaryButton(
     label: String,
     tag: String,
     onClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(PynapliShape.PillShape)
-                .background(PynapliColors.Accent)
-                .clickableTag(tag, onClick)
-                .padding(vertical = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, color = PynapliColors.Black, style = MaterialTheme.typography.labelLarge)
-    }
-}
+) = PynapliButton(label, onClick, Modifier.fillMaxWidth().testTag(tag))
 
 @Composable
 private fun SecondaryButton(
     label: String,
     tag: String,
     onClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(PynapliShape.PillShape)
-                .border(1.dp, PynapliColors.Border, PynapliShape.PillShape)
-                .clickableTag(tag, onClick)
-                .padding(vertical = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, color = PynapliColors.TextPrimary, style = MaterialTheme.typography.labelLarge)
-    }
-}
+) = PynapliButton(label, onClick, Modifier.fillMaxWidth().testTag(tag), style = PynapliButtonStyle.Secondary)
 
 @Composable
 private fun CircleAction(

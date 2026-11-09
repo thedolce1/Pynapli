@@ -121,7 +121,7 @@ internal fun StartTonightSheetBody(
         SectionLabel("Intent")
         ChipRow {
             intentOptions.forEach { i ->
-                SelectableChip(label = intentDisplay(i), selected = intent == i, tag = StartTonightTags.intent(i.serverValue)) { intent = i }
+                SelectableChip(label = i.label, selected = intent == i, tag = StartTonightTags.intent(i.serverValue)) { intent = i }
             }
         }
 
@@ -244,14 +244,6 @@ private fun SelectableChip(
         modifier = Modifier.testTag(tag),
     )
 }
-
-private fun intentDisplay(intent: TonightIntent): String =
-    when (intent) {
-        TonightIntent.Solo -> "Solo"
-        TonightIntent.Together -> "Together"
-        TonightIntent.Social -> "Social"
-        TonightIntent.Event -> "Events"
-    }
 
 internal object StartTonightTags {
     const val SHEET = "tonight-start-sheet"
