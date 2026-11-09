@@ -1,8 +1,7 @@
 package com.pynapli.server.routing
 
-import com.pynapli.server.config.ServerConfig
-import com.pynapli.server.dependencies.ServerDependencies
-import com.pynapli.server.module
+import com.pynapli.server.plugins.configureSerialization
+import com.pynapli.shared.network.dto.DependencyHealthDto
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.http.HttpStatusCode
@@ -16,7 +15,8 @@ class HealthRoutesTest {
     fun healthReturnsOk() =
         testApplication {
             application {
-                module(ServerDependencies.test(testConfig()))
+                configureSerialization()
+                configureHealthRoutes("test") { emptyList() }
             }
 
             val response = client.get("/health")
@@ -29,7 +29,8 @@ class HealthRoutesTest {
     fun deepHealthReturnsOkWhenNoDependencyProbesAreConfigured() =
         testApplication {
             application {
-                module(ServerDependencies.test(testConfig()))
+                configureSerialization()
+                configureHealthRoutes("test") { emptyList() }
             }
 
             val response = client.get("/health/deep")
@@ -38,13 +39,22 @@ class HealthRoutesTest {
             assertTrue(response.body<String>().contains("\"dependencies\":[]"))
         }
 
-    private fun testConfig(): ServerConfig =
-        ServerConfig(
-            environment = "test",
-            port = 8080,
-            databaseUrl = "jdbc:postgresql://localhost:5432/pynapli_test",
-            databaseUser = "pynapli",
-            databasePassword = "pynapli_dev_password",
-            redisUrl = "redis://localhost:6379",
-        )
+    @Test
+    fun deepHealthIsUnavailableWhenAProbeFails() =
+        testApplication {
+            application {
+                configureSerialization()
+                configureHealthRoutes("test") {
+                    listOf(
+                        DependencyHealthDto(name = "postgres", status = "ok"),
+                        DependencyHealthDto(name = "redis", status = "down", detail = "connection refused"),
+                    )
+                }
+            }
+
+            val response = client.get("/health/deep")
+
+            assertEquals(HttpStatusCode.ServiceUnavailable, response.status)
+            assertTrue(response.body<String>().contains("\"status\":\"degraded\""))
+        }
 }

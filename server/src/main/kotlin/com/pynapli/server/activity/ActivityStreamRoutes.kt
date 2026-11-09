@@ -24,11 +24,9 @@ private val activityStreamJson =
     }
 
 fun Application.configureActivityStreamRoutes(
-    authService: AuthService?,
-    broadcaster: ActivityBroadcaster?,
+    authService: AuthService,
+    broadcaster: ActivityBroadcaster,
 ) {
-    if (authService == null || broadcaster == null) return
-
     installRealtimeWebSocketsIfNeeded()
 
     val logger = LoggerFactory.getLogger("ActivityStreamRoutes")

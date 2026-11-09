@@ -18,11 +18,9 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 
 fun Application.configureAgeVerificationRoutes(
-    authService: AuthService?,
-    ageVerificationService: AgeVerificationService?,
+    authService: AuthService,
+    ageVerificationService: AgeVerificationService,
 ) {
-    if (authService == null || ageVerificationService == null) return
-
     routing {
         get("/v1/verification/requirements") {
             val user = call.authenticatedUser(authService)
@@ -49,10 +47,9 @@ fun Application.configureAgeVerificationRoutes(
 
 fun Application.configureAgeVerificationAdminRoutes(
     config: ServerConfig,
-    ageVerificationService: AgeVerificationService?,
+    ageVerificationService: AgeVerificationService,
 ) {
     val adminApiToken = config.adminApiToken ?: return
-    if (ageVerificationService == null) return
 
     routing {
         post("/v1/verification/callback") {

@@ -24,11 +24,9 @@ private val messageStreamJson =
     }
 
 fun Application.configureMessageStreamRoutes(
-    authService: AuthService?,
-    broadcaster: MessageBroadcaster?,
+    authService: AuthService,
+    broadcaster: MessageBroadcaster,
 ) {
-    if (authService == null || broadcaster == null) return
-
     installRealtimeWebSocketsIfNeeded()
 
     val logger = LoggerFactory.getLogger("MessageStreamRoutes")

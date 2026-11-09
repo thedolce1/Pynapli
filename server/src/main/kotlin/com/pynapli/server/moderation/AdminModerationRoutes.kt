@@ -13,10 +13,9 @@ import kotlinx.serialization.Serializable
 
 fun Application.configureAdminModerationRoutes(
     config: ServerConfig,
-    moderationService: MessageModerationService?,
+    moderationService: MessageModerationService,
 ) {
     val adminApiToken = config.adminApiToken ?: return
-    if (moderationService == null) return
 
     routing {
         route("/v1/admin/messages/review-queue") {

@@ -14,11 +14,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 fun Application.configureSavedSwipeFilterRoutes(
-    authService: AuthService?,
-    savedSwipeFilterService: SavedSwipeFilterService?,
+    authService: AuthService,
+    savedSwipeFilterService: SavedSwipeFilterService,
 ) {
-    if (authService == null || savedSwipeFilterService == null) return
-
     routing {
         get("/v1/me/swipe-filters") {
             val user = call.authenticatedUser(authService)

@@ -13,9 +13,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 
-fun Application.configureAuthRoutes(authService: AuthService?) {
-    if (authService == null) return
-
+fun Application.configureAuthRoutes(authService: AuthService) {
     routing {
         route("/v1/auth") {
             post("/email/signup") {

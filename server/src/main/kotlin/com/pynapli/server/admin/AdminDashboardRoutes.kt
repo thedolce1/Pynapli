@@ -16,10 +16,9 @@ import io.ktor.server.routing.routing
  */
 fun Application.configureAdminDashboardRoutes(
     config: ServerConfig,
-    service: AdminDashboardService?,
+    service: AdminDashboardService,
 ) {
     val adminApiToken = config.adminApiToken ?: return
-    if (service == null) return
 
     routing {
         get("/v1/admin/dashboard") {

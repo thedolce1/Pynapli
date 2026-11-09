@@ -12,12 +12,10 @@ import io.ktor.server.routing.routing
 import kotlinx.coroutines.withContext
 
 fun Application.configurePresenceRoutes(
-    authService: AuthService?,
-    presenceService: PresenceService?,
+    authService: AuthService,
+    presenceService: PresenceService,
     requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
 ) {
-    if (authService == null || presenceService == null) return
-
     routing {
         post("/v1/presence/heartbeat") {
             val profiler = requestProfilerFactory.start(call)

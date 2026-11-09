@@ -15,10 +15,9 @@ import kotlinx.serialization.Serializable
 
 fun Application.configureAdminReportRoutes(
     config: ServerConfig,
-    adminReportService: AdminReportService?,
+    adminReportService: AdminReportService,
 ) {
     val adminApiToken = config.adminApiToken ?: return
-    if (adminReportService == null) return
 
     routing {
         route("/v1/admin/reports") {

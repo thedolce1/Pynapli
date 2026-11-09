@@ -20,10 +20,9 @@ import kotlinx.serialization.Serializable
  */
 fun Application.configureProductMetricsRoutes(
     config: ServerConfig,
-    productMetrics: ProductMetrics?,
+    productMetrics: ProductMetrics,
 ) {
     val adminApiToken = config.adminApiToken ?: return
-    if (productMetrics == null) return
 
     routing {
         route("/v1/admin/metrics/product") {

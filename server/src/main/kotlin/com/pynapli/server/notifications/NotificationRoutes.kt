@@ -17,11 +17,9 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 
 fun Application.configureNotificationRoutes(
-    authService: AuthService?,
-    notificationService: NotificationService?,
+    authService: AuthService,
+    notificationService: NotificationService,
 ) {
-    if (authService == null || notificationService == null) return
-
     routing {
         route("/v1/notifications") {
             get("/preferences") {

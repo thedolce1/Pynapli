@@ -15,11 +15,9 @@ import io.ktor.server.routing.routing
 import java.util.UUID
 
 fun Application.configureTonightSessionRoutes(
-    authService: AuthService?,
-    service: TonightSessionService?,
+    authService: AuthService,
+    service: TonightSessionService,
 ) {
-    if (authService == null || service == null) return
-
     routing {
         post("/v1/tonight/sessions") {
             val user = call.authenticatedUser(authService)

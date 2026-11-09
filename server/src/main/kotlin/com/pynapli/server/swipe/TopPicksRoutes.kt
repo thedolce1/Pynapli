@@ -12,12 +12,10 @@ import io.ktor.server.routing.routing
 import kotlinx.coroutines.withContext
 
 fun Application.configureTopPicksRoutes(
-    authService: AuthService?,
-    topPicksService: TopPicksService?,
+    authService: AuthService,
+    topPicksService: TopPicksService,
     requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
 ) {
-    if (authService == null || topPicksService == null) return
-
     routing {
         get("/v1/swipe/picks") {
             val profiler = requestProfilerFactory.start(call)

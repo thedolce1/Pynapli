@@ -13,11 +13,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 fun Application.configureTonightAvailabilityRoutes(
-    authService: AuthService?,
-    service: TonightAvailabilityService?,
+    authService: AuthService,
+    service: TonightAvailabilityService,
 ) {
-    if (authService == null || service == null) return
-
     routing {
         get("/v1/me/availability/tonight") {
             val user = call.authenticatedUser(authService)

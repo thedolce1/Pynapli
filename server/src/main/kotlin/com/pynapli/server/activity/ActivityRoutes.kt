@@ -16,11 +16,9 @@ import io.ktor.server.routing.routing
 import java.util.UUID
 
 fun Application.configureActivityRoutes(
-    authService: AuthService?,
-    activityService: ActivityService?,
+    authService: AuthService,
+    activityService: ActivityService,
 ) {
-    if (authService == null || activityService == null) return
-
     routing {
         get("/v1/activity") {
             val user = call.authenticatedUser(authService)

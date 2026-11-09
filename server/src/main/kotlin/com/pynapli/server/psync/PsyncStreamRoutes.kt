@@ -29,11 +29,9 @@ private val psyncStreamJson =
  * Never carries swipe-by-swipe detail; HTTP fetch remains canonical.
  */
 fun Application.configurePsyncStreamRoutes(
-    authService: AuthService?,
-    broadcaster: PsyncBroadcaster?,
+    authService: AuthService,
+    broadcaster: PsyncBroadcaster,
 ) {
-    if (authService == null || broadcaster == null) return
-
     installRealtimeWebSocketsIfNeeded()
 
     val logger = LoggerFactory.getLogger("PsyncStreamRoutes")

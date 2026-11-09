@@ -18,11 +18,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 fun Application.configureAccountLifecycleRoutes(
-    authService: AuthService?,
-    accountLifecycleService: AccountLifecycleService?,
+    authService: AuthService,
+    accountLifecycleService: AccountLifecycleService,
 ) {
-    if (authService == null || accountLifecycleService == null) return
-
     routing {
         get("/v1/account/data-export") {
             val user = call.authenticatedUser(authService)

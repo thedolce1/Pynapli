@@ -17,12 +17,10 @@ import io.ktor.server.routing.routing
 import kotlinx.coroutines.withContext
 
 fun Application.configureSwipeRoutes(
-    authService: AuthService?,
-    swipeService: SwipeService?,
+    authService: AuthService,
+    swipeService: SwipeService,
     requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
 ) {
-    if (authService == null || swipeService == null) return
-
     routing {
         post("/v1/swipe/deck/query") {
             val profiler = requestProfilerFactory.start(call)

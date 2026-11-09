@@ -14,11 +14,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 fun Application.configureSavedGridFilterRoutes(
-    authService: AuthService?,
-    savedGridFilterService: SavedGridFilterService?,
+    authService: AuthService,
+    savedGridFilterService: SavedGridFilterService,
 ) {
-    if (authService == null || savedGridFilterService == null) return
-
     routing {
         get("/v1/me/grid-filters") {
             val user = call.authenticatedUser(authService)

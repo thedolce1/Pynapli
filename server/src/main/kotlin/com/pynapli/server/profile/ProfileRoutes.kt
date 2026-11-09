@@ -17,12 +17,10 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 
 fun Application.configureProfileRoutes(
-    authService: AuthService?,
-    profileService: ProfileService?,
+    authService: AuthService,
+    profileService: ProfileService,
     requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
 ) {
-    if (authService == null || profileService == null) return
-
     routing {
         get("/v1/me") {
             val user = call.authenticatedUser(authService)

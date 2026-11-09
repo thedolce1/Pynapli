@@ -26,11 +26,9 @@ private val rtdnJson = Json { ignoreUnknownKeys = true }
 
 fun Application.configureSubscriptionRoutes(
     config: ServerConfig,
-    authService: AuthService?,
-    subscriptionService: SubscriptionService?,
+    authService: AuthService,
+    subscriptionService: SubscriptionService,
 ) {
-    if (authService == null || subscriptionService == null) return
-
     routing {
         get("/v1/subscriptions/entitlement") {
             val user = call.authenticatedUser(authService)
@@ -64,10 +62,9 @@ fun Application.configureSubscriptionRoutes(
 
 fun Application.configureSubscriptionAdminRoutes(
     config: ServerConfig,
-    subscriptionService: SubscriptionService?,
+    subscriptionService: SubscriptionService,
 ) {
     val adminApiToken = config.adminApiToken ?: return
-    if (subscriptionService == null) return
 
     routing {
         get("/v1/admin/subscriptions/users/{userId}/entitlements") {
@@ -134,9 +131,9 @@ fun Application.configureSubscriptionAdminRoutes(
 
 fun Application.configurePlayStoreRtdnRoutes(
     config: ServerConfig,
-    subscriptionService: SubscriptionService?,
+    subscriptionService: SubscriptionService,
 ) {
-    if (!config.playStoreRtdnEnabled || subscriptionService == null) return
+    if (!config.playStoreRtdnEnabled) return
     if (config.playStoreRtdnWebhookToken == null && config.playStoreRtdnOidcAudience == null) {
         throw IllegalStateException(
             "Play Store RTDN requires PYNAPLI_PLAY_STORE_RTDN_WEBHOOK_TOKEN or PYNAPLI_PLAY_STORE_RTDN_OIDC_AUDIENCE.",

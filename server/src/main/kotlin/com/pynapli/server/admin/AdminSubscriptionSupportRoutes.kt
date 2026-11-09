@@ -20,10 +20,9 @@ import java.util.UUID
  */
 fun Application.configureAdminSubscriptionSupportRoutes(
     config: ServerConfig,
-    service: AdminSubscriptionSupportService?,
+    service: AdminSubscriptionSupportService,
 ) {
     val adminApiToken = config.adminApiToken ?: return
-    if (service == null) return
 
     routing {
         route("/v1/admin/subscriptions/support") {

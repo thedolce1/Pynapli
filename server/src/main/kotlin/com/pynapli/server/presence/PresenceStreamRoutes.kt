@@ -30,12 +30,10 @@ private val streamJson =
     }
 
 fun Application.configurePresenceStreamRoutes(
-    authService: AuthService?,
-    broadcaster: PresenceBroadcaster?,
-    blockRepository: BlockRepository?,
+    authService: AuthService,
+    broadcaster: PresenceBroadcaster,
+    blockRepository: BlockRepository,
 ) {
-    if (authService == null || broadcaster == null || blockRepository == null) return
-
     installRealtimeWebSocketsIfNeeded()
 
     val logger = LoggerFactory.getLogger("PresenceStreamRoutes")

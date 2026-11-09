@@ -11,11 +11,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 fun Application.configureLocationRoutes(
-    authService: AuthService?,
-    locationService: LocationService?,
+    authService: AuthService,
+    locationService: LocationService,
 ) {
-    if (authService == null || locationService == null) return
-
     routing {
         post("/v1/location/current") {
             val user = call.authenticatedUser(authService)

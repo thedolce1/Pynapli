@@ -20,10 +20,9 @@ import java.util.UUID
  */
 fun Application.configureAdminUserLookupRoutes(
     config: ServerConfig,
-    service: AdminUserLookupService?,
+    service: AdminUserLookupService,
 ) {
     val adminApiToken = config.adminApiToken ?: return
-    if (service == null) return
 
     routing {
         route("/v1/admin/users") {

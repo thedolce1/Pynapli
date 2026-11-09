@@ -20,11 +20,9 @@ import java.util.UUID
  * resolution/recap). All bearer-authed. Realtime + Activity remain later phases.
  */
 fun Application.configurePsyncRoutes(
-    authService: AuthService?,
-    service: PsyncSessionService?,
+    authService: AuthService,
+    service: PsyncSessionService,
 ) {
-    if (authService == null || service == null) return
-
     routing {
         post("/v1/psync/sessions") {
             val user = call.authenticatedUser(authService)

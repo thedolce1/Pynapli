@@ -19,11 +19,9 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 
 fun Application.configureMessagingRoutes(
-    authService: AuthService?,
-    messagingService: MessagingService?,
+    authService: AuthService,
+    messagingService: MessagingService,
 ) {
-    if (authService == null || messagingService == null) return
-
     routing {
         post("/v1/messages/{messageId}/delete") {
             val user = call.authenticatedUser(authService)

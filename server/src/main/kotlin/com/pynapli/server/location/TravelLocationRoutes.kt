@@ -19,21 +19,17 @@ import io.ktor.server.routing.routing
  * can render the local-only state without an error branch.
  */
 fun Application.configureTravelLocationRoutes(
-    authService: AuthService?,
-    travelLocationService: TravelLocationService?,
-    travelPlaceSearchService: TravelPlaceSearchService? = null,
+    authService: AuthService,
+    travelLocationService: TravelLocationService,
+    travelPlaceSearchService: TravelPlaceSearchService,
 ) {
-    if (authService == null || travelLocationService == null) return
-
     routing {
         // Type-ahead place resolution for the free-text travel picker. Sub-minimum
         // queries return an empty list so the client needs no length special-casing.
-        travelPlaceSearchService?.let { searchService ->
-            get("/v1/location/travel/search") {
-                val user = call.authenticatedUser(authService)
-                val query = call.request.queryParameters["q"].orEmpty()
-                call.respond(searchService.search(user.id, query))
-            }
+        get("/v1/location/travel/search") {
+            val user = call.authenticatedUser(authService)
+            val query = call.request.queryParameters["q"].orEmpty()
+            call.respond(travelPlaceSearchService.search(user.id, query))
         }
 
         get("/v1/location/travel") {

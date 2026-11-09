@@ -14,12 +14,10 @@ import io.ktor.server.routing.routing
 import kotlinx.coroutines.withContext
 
 fun Application.configureGridRoutes(
-    authService: AuthService?,
-    gridService: GridService?,
+    authService: AuthService,
+    gridService: GridService,
     requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
 ) {
-    if (authService == null || gridService == null) return
-
     routing {
         post("/v1/grid/query") {
             val profiler = requestProfilerFactory.start(call)

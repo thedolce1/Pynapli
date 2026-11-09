@@ -13,10 +13,9 @@ import kotlinx.serialization.Serializable
 
 fun Application.configureAdminRiskRoutes(
     config: ServerConfig,
-    adminRiskService: AdminRiskService?,
+    adminRiskService: AdminRiskService,
 ) {
     val adminApiToken = config.adminApiToken ?: return
-    if (adminRiskService == null) return
 
     routing {
         route("/v1/admin/risk") {

@@ -13,11 +13,9 @@ import io.ktor.server.routing.routing
  * [TonightFeedService]. `GET /v1/tonight/feed?radiusMeters=&intent=&limit=`.
  */
 fun Application.configureTonightFeedRoutes(
-    authService: AuthService?,
-    service: TonightFeedService?,
+    authService: AuthService,
+    service: TonightFeedService,
 ) {
-    if (authService == null || service == null) return
-
     routing {
         get("/v1/tonight/feed") {
             val user = call.authenticatedUser(authService)

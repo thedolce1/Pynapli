@@ -22,12 +22,10 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 
 fun Application.configureMediaRoutes(
-    authService: AuthService?,
-    mediaService: MediaService?,
+    authService: AuthService,
+    mediaService: MediaService,
     localUploadStorage: LocalMediaUploadStorage? = null,
 ) {
-    if (authService == null || mediaService == null) return
-
     routing {
         route("/v1/media/uploads") {
             localUploadStorage?.let { storage ->

@@ -11,7 +11,6 @@ import com.pynapli.server.auth.configureAuthRoutes
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.dependencies.ServerDependencies
 import com.pynapli.server.dependencies.closeDependenciesOnStop
-import com.pynapli.server.dependencies.requireRoutableServices
 import com.pynapli.server.grid.configureGridRoutes
 import com.pynapli.server.grid.configureSavedGridFilterRoutes
 import com.pynapli.server.location.configureLocationRoutes
@@ -72,18 +71,14 @@ fun main() {
 }
 
 fun Application.module(dependencies: ServerDependencies = ServerDependencies.fromEnvironment()) {
-    // Fail loudly before wiring anything. Each configureXxxRoutes below returns early when its
-    // service is null, so without this a wiring regression would boot a healthy-looking server whose
-    // endpoints all answer 404. Skipped for ServerDependencies.test(), which nulls services on purpose.
-    dependencies.requireRoutableServices()
     closeDependenciesOnStop(dependencies)
     dependencies.notificationDispatchWorker?.start()
     dependencies.activityRetentionWorker?.start()
     dependencies.mediaCleanupWorker?.start()
-    dependencies.tonightSessionExpiryWorker?.start()
+    dependencies.tonightSessionExpiryWorker.start()
     dependencies.accountDataExportWorker?.start()
     dependencies.playStoreSubscriptionSyncWorker?.start()
-    dependencies.presenceOfflineScanner?.start()
+    dependencies.presenceOfflineScanner.start()
     configureSerialization()
     configureStatusPages()
     configureMonitoring()
@@ -91,7 +86,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureRequestMediaBaseUrl()
     configureAppCheck(dependencies.config.appCheckEnforced, selectAppCheckVerifier(dependencies.config))
     configureAdminAudit(dependencies.adminRequestAuditRecorder)
-    configureHealthRoutes(dependencies)
+    configureHealthRoutes(dependencies.config.environment, dependencies::checkAll)
     configureAdminAppealRoutes(dependencies.config, dependencies.adminAppealService)
     configureAdminModerationRoutes(dependencies.config, dependencies.messageModerationService)
     configureAdminReportRoutes(dependencies.config, dependencies.adminReportService)

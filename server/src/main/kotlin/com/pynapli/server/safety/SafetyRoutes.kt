@@ -16,13 +16,11 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 fun Application.configureSafetyRoutes(
-    authService: AuthService?,
-    blockService: BlockService?,
-    hiddenProfileService: HiddenProfileService?,
-    reportService: ReportService?,
+    authService: AuthService,
+    blockService: BlockService,
+    hiddenProfileService: HiddenProfileService,
+    reportService: ReportService,
 ) {
-    if (authService == null || blockService == null || hiddenProfileService == null || reportService == null) return
-
     routing {
         get("/v1/blocks") {
             val user = call.authenticatedUser(authService)

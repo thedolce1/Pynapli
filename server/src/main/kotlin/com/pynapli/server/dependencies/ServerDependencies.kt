@@ -82,86 +82,79 @@ import org.slf4j.LoggerFactory
 
 class ServerDependencies(
     val config: ServerConfig,
-    val database: Database?,
-    private val redisCache: RedisCache?,
-    val authService: AuthService?,
-    val profileService: ProfileService?,
-    val profileLinkService: ProfileLinkService?,
-    val adminUserLookupService: AdminUserLookupService?,
-    val adminPartnerLinkReviewService: AdminPartnerLinkReviewService?,
-    val adminSubscriptionSupportService: AdminSubscriptionSupportService?,
-    val adminDashboardService: AdminDashboardService?,
+    val database: Database,
+    private val redisCache: RedisCache,
+    val authService: AuthService,
+    val profileService: ProfileService,
+    val profileLinkService: ProfileLinkService,
+    val adminUserLookupService: AdminUserLookupService,
+    val adminPartnerLinkReviewService: AdminPartnerLinkReviewService,
+    val adminSubscriptionSupportService: AdminSubscriptionSupportService,
+    val adminDashboardService: AdminDashboardService,
     val adminRequestAuditRecorder: AdminRequestAuditRecorder?,
-    val locationService: LocationService?,
-    val travelLocationService: TravelLocationService?,
-    val travelPlaceSearchService: TravelPlaceSearchService?,
-    val presenceService: PresenceService?,
-    val gridService: GridService?,
-    val messagingService: MessagingService?,
-    val mediaService: MediaService?,
-    val messageModerationService: MessageModerationService?,
-    val adminAppealService: AdminAppealService?,
-    val adminReportService: AdminReportService?,
-    val adminRiskService: AdminRiskService?,
-    val activityService: ActivityService?,
+    val locationService: LocationService,
+    val travelLocationService: TravelLocationService,
+    val travelPlaceSearchService: TravelPlaceSearchService,
+    val presenceService: PresenceService,
+    val gridService: GridService,
+    val messagingService: MessagingService,
+    val mediaService: MediaService,
+    val messageModerationService: MessageModerationService,
+    val adminAppealService: AdminAppealService,
+    val adminReportService: AdminReportService,
+    val adminRiskService: AdminRiskService,
+    val activityService: ActivityService,
     val activityRetentionWorker: ActivityRetentionWorker?,
     val mediaCleanupWorker: MediaCleanupWorker?,
     val accountDataExportWorker: AccountDataExportWorker?,
-    val notificationService: NotificationService?,
+    val notificationService: NotificationService,
     val notificationDispatchWorker: NotificationDispatchWorker?,
-    val productMetrics: ProductMetrics?,
-    val blockService: BlockService?,
-    val hiddenProfileService: HiddenProfileService?,
-    val appealService: AppealService?,
-    val reportService: ReportService?,
-    val swipeService: SwipeService?,
-    val subscriptionService: SubscriptionService?,
+    val productMetrics: ProductMetrics,
+    val blockService: BlockService,
+    val hiddenProfileService: HiddenProfileService,
+    val appealService: AppealService,
+    val reportService: ReportService,
+    val swipeService: SwipeService,
+    val subscriptionService: SubscriptionService,
     val playStoreSubscriptionSyncWorker: PlayStoreSubscriptionSyncWorker?,
     val localMediaUploadStorage: LocalMediaUploadStorage?,
-    val activityBroadcaster: ActivityBroadcaster?,
-    val psyncBroadcaster: com.pynapli.server.psync.PsyncBroadcaster?,
-    val messageBroadcaster: MessageBroadcaster?,
-    val presenceBroadcaster: PresenceBroadcaster?,
-    val presenceOfflineScanner: PresenceOfflineScanner?,
-    val blockRepository: BlockRepository?,
-    val hiddenProfileRepository: HiddenProfileRepository?,
-    val savedGridFilterService: SavedGridFilterService?,
-    val savedSwipeFilterService: SavedSwipeFilterService?,
-    val topPicksService: TopPicksService?,
-    val tonightAvailabilityService: TonightAvailabilityService?,
-    val tonightSessionService: TonightSessionService?,
-    val tonightFeedService: TonightFeedService?,
-    val tonightSessionExpiryWorker: TonightSessionExpiryWorker?,
-    val psyncSessionService: PsyncSessionService?,
-    val ageVerificationService: AgeVerificationService?,
-    val accountLifecycleService: AccountLifecycleService?,
+    val activityBroadcaster: ActivityBroadcaster,
+    val psyncBroadcaster: com.pynapli.server.psync.PsyncBroadcaster,
+    val messageBroadcaster: MessageBroadcaster,
+    val presenceBroadcaster: PresenceBroadcaster,
+    val presenceOfflineScanner: PresenceOfflineScanner,
+    val blockRepository: BlockRepository,
+    val hiddenProfileRepository: HiddenProfileRepository,
+    val savedGridFilterService: SavedGridFilterService,
+    val savedSwipeFilterService: SavedSwipeFilterService,
+    val topPicksService: TopPicksService,
+    val tonightAvailabilityService: TonightAvailabilityService,
+    val tonightSessionService: TonightSessionService,
+    val tonightFeedService: TonightFeedService,
+    val tonightSessionExpiryWorker: TonightSessionExpiryWorker,
+    val psyncSessionService: PsyncSessionService,
+    val ageVerificationService: AgeVerificationService,
+    val accountLifecycleService: AccountLifecycleService,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
-    private val profileActivityScope: CoroutineScope? = null,
+    private val profileActivityScope: CoroutineScope,
     private val probes: List<DependencyProbe>,
-    /**
-     * True only for [test], which nulls every service so the health routes can be exercised without
-     * a database. Everything above is nullable *because of that factory* — [fromEnvironment] always
-     * builds real instances — so this flag is what lets startup tell "deliberately empty fixture"
-     * apart from "a service went missing", which would otherwise just 404 silently.
-     */
-    val isTestFixture: Boolean = false,
 ) : AutoCloseable {
     suspend fun checkAll() = probes.map { it.check() }
 
     override fun close() {
-        runCatching { presenceOfflineScanner?.close() }
+        runCatching { presenceOfflineScanner.close() }
         runCatching { playStoreSubscriptionSyncWorker?.close() }
         runCatching { activityRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
         runCatching { accountDataExportWorker?.close() }
-        runCatching { tonightSessionExpiryWorker?.close() }
+        runCatching { tonightSessionExpiryWorker.close() }
         runCatching { notificationDispatchWorker?.close() }
-        runCatching { profileActivityScope?.cancel() }
+        runCatching { profileActivityScope.cancel() }
         probes.asReversed().forEach { probe ->
             runCatching { probe.close() }
         }
-        runCatching { redisCache?.close() }
-        runCatching { database?.close() }
+        runCatching { redisCache.close() }
+        runCatching { database.close() }
     }
 
     companion object {
@@ -431,133 +424,6 @@ class ServerDependencies(
                     "Unsupported notification push provider: ${config.notificationPushProvider}",
                 )
             }
-
-        /**
-         * Every service null, for tests that only need the health routes.
-         *
-         * [isTestFixture] is exposed so a test can build this same empty shape while claiming to be a
-         * real deployment — that is how [requireRoutableServices] is exercised without hand-listing
-         * every constructor parameter, a list that would rot the moment a service is added.
-         */
-        fun test(
-            config: ServerConfig = ServerConfig.fromEnvironment(),
-            isTestFixture: Boolean = true,
-        ): ServerDependencies =
-            ServerDependencies(
-                config = config,
-                database = null,
-                redisCache = null,
-                authService = null,
-                profileService = null,
-                profileLinkService = null,
-                adminUserLookupService = null,
-                adminPartnerLinkReviewService = null,
-                adminSubscriptionSupportService = null,
-                adminDashboardService = null,
-                adminRequestAuditRecorder = null,
-                locationService = null,
-                travelLocationService = null,
-                travelPlaceSearchService = null,
-                presenceService = null,
-                gridService = null,
-                messagingService = null,
-                mediaService = null,
-                messageModerationService = null,
-                adminAppealService = null,
-                adminReportService = null,
-                adminRiskService = null,
-                activityService = null,
-                activityRetentionWorker = null,
-                mediaCleanupWorker = null,
-                accountDataExportWorker = null,
-                notificationService = null,
-                notificationDispatchWorker = null,
-                productMetrics = null,
-                blockService = null,
-                hiddenProfileService = null,
-                appealService = null,
-                reportService = null,
-                swipeService = null,
-                subscriptionService = null,
-                playStoreSubscriptionSyncWorker = null,
-                localMediaUploadStorage = null,
-                activityBroadcaster = null,
-                psyncBroadcaster = null,
-                messageBroadcaster = null,
-                presenceBroadcaster = null,
-                presenceOfflineScanner = null,
-                blockRepository = null,
-                hiddenProfileRepository = null,
-                savedGridFilterService = null,
-                savedSwipeFilterService = null,
-                topPicksService = null,
-                tonightAvailabilityService = null,
-                tonightSessionService = null,
-                tonightFeedService = null,
-                tonightSessionExpiryWorker = null,
-                psyncSessionService = null,
-                ageVerificationService = null,
-                accountLifecycleService = null,
-                requestProfilerFactory = RequestProfilerFactory.disabled(),
-                probes = emptyList(),
-                isTestFixture = isTestFixture,
-            )
-    }
-}
-
-/**
- * Fails startup when a service that gates a product surface is missing.
- *
- * Every `configureXxxRoutes` opens with `if (service == null) return`, which is the right local
- * behaviour but has a bad global one: a missing dependency does not fail, it just silently declines
- * to register those routes and the API answers 404. That is the same class of problem as a gate that
- * only ever runs the debug variant — the failure is real but invisible until someone hits the
- * endpoint in production.
- *
- * [fromEnvironment] constructs all of these unconditionally, so in a real deployment this can only
- * trip if wiring is edited incorrectly. That is exactly when a loud failure is worth having.
- */
-fun ServerDependencies.requireRoutableServices() {
-    if (isTestFixture) return
-
-    val missing =
-        buildList {
-            fun require(
-                name: String,
-                value: Any?,
-            ) {
-                if (value == null) add(name)
-            }
-
-            require("database", database)
-            require("authService", authService)
-            require("profileService", profileService)
-            require("profileLinkService", profileLinkService)
-            require("locationService", locationService)
-            require("presenceService", presenceService)
-            require("gridService", gridService)
-            require("messagingService", messagingService)
-            require("mediaService", mediaService)
-            require("activityService", activityService)
-            require("swipeService", swipeService)
-            require("subscriptionService", subscriptionService)
-            require("notificationService", notificationService)
-            require("blockService", blockService)
-            require("hiddenProfileService", hiddenProfileService)
-            require("reportService", reportService)
-            require("appealService", appealService)
-            require("accountLifecycleService", accountLifecycleService)
-            require("ageVerificationService", ageVerificationService)
-            require("psyncSessionService", psyncSessionService)
-            require("tonightFeedService", tonightFeedService)
-        }
-
-    if (missing.isNotEmpty()) {
-        throw IllegalStateException(
-            "Refusing to start: ${missing.size} route dependencies are null, so their endpoints would " +
-                "silently 404 instead of serving. Missing: ${missing.joinToString()}. " +
-                "ServerDependencies.fromEnvironment() builds all of these, so this indicates a wiring regression.",
-        )
     }
 }
 

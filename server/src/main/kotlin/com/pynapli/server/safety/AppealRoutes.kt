@@ -12,11 +12,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 fun Application.configureAppealRoutes(
-    authService: AuthService?,
-    appealService: AppealService?,
+    authService: AuthService,
+    appealService: AppealService,
 ) {
-    if (authService == null || appealService == null) return
-
     routing {
         post("/v1/appeals") {
             val user = call.authenticatedUser(authService)

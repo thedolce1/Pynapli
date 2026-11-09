@@ -19,10 +19,9 @@ import java.util.UUID
  */
 fun Application.configureAdminPartnerLinkReviewRoutes(
     config: ServerConfig,
-    service: AdminPartnerLinkReviewService?,
+    service: AdminPartnerLinkReviewService,
 ) {
     val adminApiToken = config.adminApiToken ?: return
-    if (service == null) return
 
     routing {
         route("/v1/admin/partner-links") {
