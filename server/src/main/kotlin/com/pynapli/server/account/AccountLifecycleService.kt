@@ -15,19 +15,19 @@ class AccountLifecycleService(
     suspend fun requestDataExport(userId: UUID): AccountDataExportDto = repository.createDataExportRequest(userId).toDto()
 
     /**
-     * Streams a finished export to its owner. Returns the archive only for an unexpired `ready` export
-     * owned by [userId]; any other case throws `EXPORT_NOT_FOUND` so existence isn't revealed to non-owners.
+     * Serves a locally stored export to whoever holds its download link ([key] is the link's secret).
+     * Only an unexpired `ready` export with a matching key is returned; every other case throws
+     * `EXPORT_NOT_FOUND`, so a wrong key reveals nothing.
      */
     suspend fun downloadExport(
-        userId: UUID,
         requestIdText: String,
+        key: String,
     ): ExportArchive {
         val storage = exportStorage ?: throw AccountLifecycleException("EXPORT_NOT_FOUND")
         val requestId = runCatching { UUID.fromString(requestIdText) }.getOrElse { throw AccountLifecycleException("INVALID_ID") }
         val record = repository.exportRequestById(requestId) ?: throw AccountLifecycleException("EXPORT_NOT_FOUND")
-        val expired = record.expiresAt?.let { !clock.instant().isBefore(it) } ?: false
-        if (record.userId != userId || record.status != "ready" || expired) throw AccountLifecycleException("EXPORT_NOT_FOUND")
-        return storage.read(requestId) ?: throw AccountLifecycleException("EXPORT_NOT_FOUND")
+        if (record.status != "ready" || record.isPastExpiry()) throw AccountLifecycleException("EXPORT_NOT_FOUND")
+        return storage.read(requestId, key) ?: throw AccountLifecycleException("EXPORT_NOT_FOUND")
     }
 
     suspend fun deleteAccount(
@@ -49,16 +49,22 @@ class AccountLifecycleService(
         )
     }
 
-    private fun AccountDataExportRecord.toDto(): AccountDataExportDto =
-        AccountDataExportDto(
+    private fun AccountDataExportRecord.isPastExpiry(): Boolean = expiresAt?.let { !clock.instant().isBefore(it) } ?: false
+
+    private fun AccountDataExportRecord.toDto(): AccountDataExportDto {
+        // Nothing moves rows from 'ready' to 'expired', so report a lapsed link as expired here
+        // rather than hand the app a dead URL.
+        val effectiveStatus = if (status == "ready" && isPastExpiry()) "expired" else status
+        return AccountDataExportDto(
             requestId = id.toString(),
-            status = status,
+            status = effectiveStatus,
             requestedAt = requestedAt.toString(),
             completedAt = completedAt?.toString(),
             expiresAt = expiresAt?.toString(),
-            downloadUrl = downloadUrl,
-            message = messageForExportStatus(status, errorMessage),
+            downloadUrl = downloadUrl.takeIf { effectiveStatus == "ready" },
+            message = messageForExportStatus(effectiveStatus, errorMessage),
         )
+    }
 
     private fun messageForExportStatus(
         status: String,

@@ -450,6 +450,48 @@ class ProfileHubStateHolderTest {
         }
 
     @Test
+    fun tappingAReadyExportReturnsItsDownloadLinkWithoutANewRequest() =
+        runBlocking {
+            val ready = testDataExport().copy(status = "ready", downloadUrl = "https://storage.example/export?sig=1")
+            val repository = FakeProfileHubRepository(latestDataExportResult = AppResult.Success(ready))
+            val stateHolder = ProfileHubStateHolder(repository)
+            stateHolder.load()
+
+            assertEquals("https://storage.example/export?sig=1", stateHolder.onDataExportTapped())
+            assertEquals(0, repository.requestDataExportCalls)
+        }
+
+    @Test
+    fun tappingAnExportInProgressRefreshesInsteadOfQueueingAnother() =
+        runBlocking {
+            val processing = testDataExport().copy(status = "processing", message = "Your data export is being prepared.")
+            val repository = FakeProfileHubRepository(latestDataExportResult = AppResult.Success(processing))
+            val stateHolder = ProfileHubStateHolder(repository)
+            stateHolder.load()
+
+            assertNull(stateHolder.onDataExportTapped())
+
+            assertEquals(0, repository.requestDataExportCalls)
+            assertEquals("Your data export is being prepared.", stateHolder.state.value.feedbackMessage)
+        }
+
+    @Test
+    fun tappingWithNoExportRequestsOne() =
+        runBlocking {
+            val repository = FakeProfileHubRepository(requestDataExportResult = AppResult.Success(testDataExport()))
+            val stateHolder = ProfileHubStateHolder(repository)
+
+            assertNull(stateHolder.onDataExportTapped())
+
+            assertEquals(1, repository.requestDataExportCalls)
+            assertEquals(
+                "requested",
+                stateHolder.state.value.latestDataExport
+                    ?.status,
+            )
+        }
+
+    @Test
     fun deleteAccountSendsConfirmationAndReportsSuccess() =
         runBlocking {
             val repository =
@@ -611,7 +653,13 @@ private class FakeProfileHubRepository(
         return latestDataExportResult
     }
 
-    override suspend fun requestDataExport(): AppResult<AccountDataExportDto> = requestDataExportResult
+    var requestDataExportCalls = 0
+        private set
+
+    override suspend fun requestDataExport(): AppResult<AccountDataExportDto> {
+        requestDataExportCalls += 1
+        return requestDataExportResult
+    }
 
     override suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto> {
         lastDeleteAccountRequest = request

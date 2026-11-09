@@ -209,7 +209,7 @@ fun ProfileHubScreen(
             onOpenAlbums = onOpenAlbums,
             onOpenPartner = stateHolder::openPartner,
             onOpenStore = onOpenStore,
-            onRequestDataExport = { scope.launch { stateHolder.requestDataExport() } },
+            onRequestDataExport = { scope.launch { stateHolder.onDataExportTapped()?.let(uriHandler::openUri) } },
             onDeleteAccountClick = {
                 deleteAccountConfirmation = ""
                 showDeleteAccountConfirm = true

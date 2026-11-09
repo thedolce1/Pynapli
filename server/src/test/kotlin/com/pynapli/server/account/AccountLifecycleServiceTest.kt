@@ -9,6 +9,8 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class AccountLifecycleServiceTest {
     @Test
@@ -58,22 +60,53 @@ class AccountLifecycleServiceTest {
         }
 
     @Test
-    fun downloadExportReturnsReadyArchiveToItsOwner() =
+    fun downloadExportReturnsReadyArchiveForTheLinkKey() =
         runBlocking {
-            val archive = downloadService().downloadExport(EXPORT_OWNER, READY_EXPORT_ID.toString())
+            val archive = downloadService().downloadExport(READY_EXPORT_ID.toString(), LINK_KEY)
 
             assertEquals("archive", archive.bytes.decodeToString())
         }
 
     @Test
-    fun downloadExportHidesAnotherUsersExport() =
+    fun downloadExportRejectsAWrongKey() =
         runBlocking {
             val error =
                 assertFailsWith<AccountLifecycleException> {
-                    downloadService().downloadExport(UUID.randomUUID(), READY_EXPORT_ID.toString())
+                    downloadService().downloadExport(READY_EXPORT_ID.toString(), "f".repeat(64))
                 }
 
             assertEquals("EXPORT_NOT_FOUND", error.code)
+        }
+
+    @Test
+    fun lapsedReadyExportIsReportedExpiredWithoutALink() =
+        runBlocking {
+            val afterExpiry = Clock.fixed(EXPORT_EXPIRES_AT, ZoneOffset.UTC)
+            val service =
+                AccountLifecycleService(
+                    repository = FakeAccountLifecycleRepository(exportById = readyExport(), latestExport = readyExport()),
+                    clock = afterExpiry,
+                )
+
+            val status = assertNotNull(service.latestDataExportRequest(EXPORT_OWNER))
+
+            assertEquals("expired", status.status)
+            assertNull(status.downloadUrl)
+        }
+
+    @Test
+    fun liveReadyExportKeepsItsLink() =
+        runBlocking {
+            val service =
+                AccountLifecycleService(
+                    repository = FakeAccountLifecycleRepository(latestExport = readyExport()),
+                    clock = Clock.fixed(EXPORT_EXPIRES_AT.minusSeconds(60), ZoneOffset.UTC),
+                )
+
+            val status = assertNotNull(service.latestDataExportRequest(EXPORT_OWNER))
+
+            assertEquals("ready", status.status)
+            assertEquals(readyExport().downloadUrl, status.downloadUrl)
         }
 
     @Test
@@ -82,7 +115,7 @@ class AccountLifecycleServiceTest {
             val afterExpiry = Clock.fixed(EXPORT_EXPIRES_AT, ZoneOffset.UTC)
             val error =
                 assertFailsWith<AccountLifecycleException> {
-                    downloadService(afterExpiry).downloadExport(EXPORT_OWNER, READY_EXPORT_ID.toString())
+                    downloadService(afterExpiry).downloadExport(READY_EXPORT_ID.toString(), LINK_KEY)
                 }
 
             assertEquals("EXPORT_NOT_FOUND", error.code)
@@ -111,6 +144,7 @@ class AccountLifecycleServiceTest {
         val EXPORT_OWNER: UUID = UUID.fromString("00000000-0000-0000-0000-000000000903")
         val READY_EXPORT_ID: UUID = UUID.fromString("00000000-0000-0000-0000-000000000904")
         val EXPORT_EXPIRES_AT: Instant = Instant.parse("2026-06-02T12:01:00Z")
+        val LINK_KEY = "a".repeat(64)
     }
 }
 
@@ -121,7 +155,10 @@ private class InMemoryExportStorage : AccountExportStorage {
         archive: ExportArchive,
     ): StoredExport = error("not used")
 
-    override suspend fun read(requestId: UUID): ExportArchive = ExportArchive("export.json", "application/json", "archive".encodeToByteArray())
+    override suspend fun read(
+        requestId: UUID,
+        key: String,
+    ): ExportArchive? = ExportArchive("export.json", "application/json", "archive".encodeToByteArray()).takeIf { key == "a".repeat(64) }
 }
 
 private class FakeAccountLifecycleRepository(
@@ -131,13 +168,14 @@ private class FakeAccountLifecycleRepository(
             revokedSessionCount = 1,
         ),
     private val exportById: AccountDataExportRecord? = null,
+    private val latestExport: AccountDataExportRecord? = null,
 ) : AccountLifecycleRepository {
     var lastExportUserId: UUID? = null
         private set
     var lastDeletedUserId: UUID? = null
         private set
 
-    override suspend fun latestDataExportRequest(userId: UUID): AccountDataExportRecord? = null
+    override suspend fun latestDataExportRequest(userId: UUID): AccountDataExportRecord? = latestExport
 
     override suspend fun createDataExportRequest(userId: UUID): AccountDataExportRecord {
         lastExportUserId = userId

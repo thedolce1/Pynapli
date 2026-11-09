@@ -124,9 +124,10 @@ internal fun appSettingsSummary(state: AppSettingsUiState): String {
 
 internal fun dataExportSummary(state: ProfileHubUiState): String =
     when {
-        state.isDataExportMutating -> "Requesting"
+        state.isDataExportMutating -> "Updating"
         state.latestDataExport == null -> "Request a copy"
-        state.latestDataExport.status == "ready" -> "Ready"
+        state.latestDataExport.status == "ready" -> "Download"
+        state.latestDataExport.status == "processing" -> "Preparing"
         state.latestDataExport.status == "failed" -> "Needs retry"
         state.latestDataExport.status == "expired" -> "Expired"
         else -> "Requested"

@@ -106,7 +106,10 @@ class AccountDataExportProcessorTest {
             return stored
         }
 
-        override suspend fun read(requestId: UUID): ExportArchive? = null
+        override suspend fun read(
+            requestId: UUID,
+            key: String,
+        ): ExportArchive? = null
     }
 
     private inner class FakeRepo(

@@ -110,6 +110,9 @@ class ProfileHubStateHolder(
 
     suspend fun requestDataExport() = account.requestDataExport()
 
+    /** Returns a download link for the screen to open, or null after refreshing/requesting. */
+    suspend fun onDataExportTapped(): String? = account.onDataExportTapped()
+
     suspend fun deleteAccount(confirmation: String): Boolean = account.deleteAccount(confirmation)
 
     suspend fun loadBlocks() = safety.loadBlocks()

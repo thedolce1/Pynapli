@@ -9,6 +9,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.SecureRandom
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -27,8 +28,11 @@ interface AccountExportStorage {
         archive: ExportArchive,
     ): StoredExport
 
-    /** Reads back a stored archive for the local download route; null if absent. */
-    suspend fun read(requestId: UUID): ExportArchive?
+    /** Reads back a stored archive for the local download route; null if absent or [key] is wrong. */
+    suspend fun read(
+        requestId: UUID,
+        key: String,
+    ): ExportArchive?
 }
 
 /**
@@ -48,17 +52,24 @@ class LocalAccountExportStorage(
         archive: ExportArchive,
     ): StoredExport =
         withContext(Dispatchers.IO) {
+            // The key is the download link's secret; it lives only in the file name and the link.
+            val key = newKey()
             Files.createDirectories(directory)
-            Files.write(directory.resolve("$requestId.json"), archive.bytes)
+            Files.write(directory.resolve(fileName(requestId, key)), archive.bytes)
             StoredExport(
-                downloadUrl = "${downloadBaseUrl.trimEnd('/')}/v1/account/data-export/$requestId/download",
+                downloadUrl = "${downloadBaseUrl.trimEnd('/')}/v1/account/data-export/$requestId/download?key=$key",
                 expiresAt = clock.instant().plus(ttl),
             )
         }
 
-    override suspend fun read(requestId: UUID): ExportArchive? =
+    override suspend fun read(
+        requestId: UUID,
+        key: String,
+    ): ExportArchive? =
         withContext(Dispatchers.IO) {
-            val path = directory.resolve("$requestId.json")
+            // Strict format check first: the key becomes part of a file path.
+            if (!KEY_PATTERN.matches(key)) return@withContext null
+            val path = directory.resolve(fileName(requestId, key))
             if (!Files.exists(path)) {
                 null
             } else {
@@ -69,6 +80,22 @@ class LocalAccountExportStorage(
                 )
             }
         }
+
+    private fun fileName(
+        requestId: UUID,
+        key: String,
+    ) = "$requestId-$key.json"
+
+    private fun newKey(): String {
+        val bytes = ByteArray(KEY_BYTES).also(random::nextBytes)
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    private companion object {
+        const val KEY_BYTES = 32
+        val KEY_PATTERN = Regex("[0-9a-f]{64}")
+        val random = SecureRandom()
+    }
 }
 
 /** Uploads bytes to a pre-signed URL. Seam so the GCS storage is testable without a bucket. */
@@ -131,7 +158,10 @@ class GcsAccountExportStorage(
         )
     }
 
-    override suspend fun read(requestId: UUID): ExportArchive? = null
+    override suspend fun read(
+        requestId: UUID,
+        key: String,
+    ): ExportArchive? = null
 
     companion object {
         const val OBJECT_PREFIX = "account-exports/"

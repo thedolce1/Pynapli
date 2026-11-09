@@ -39,10 +39,13 @@ fun Application.configureAccountLifecycleRoutes(
             call.respond(accountLifecycleService.requestDataExport(user.id))
         }
 
+        // Capability URL (local storage only): opened in a browser, which sends no bearer token, so the
+        // random key in the link authorizes the download, like a GCS signed URL. Only the owner ever
+        // sees the link (authenticated status endpoint), and it stops working when the export expires.
         get("/v1/account/data-export/{requestId}/download") {
-            val user = authService.authenticate(call.requiredBearerToken())
             val requestId = call.parameters["requestId"].orEmpty()
-            val archive = accountLifecycleService.downloadExport(user.id, requestId)
+            val key = call.request.queryParameters["key"].orEmpty()
+            val archive = accountLifecycleService.downloadExport(requestId, key)
             call.response.header(HttpHeaders.ContentDisposition, "attachment; filename=\"${archive.filename}\"")
             call.respondBytes(archive.bytes, ContentType.parse(archive.contentType))
         }
