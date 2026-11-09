@@ -6,10 +6,7 @@ import com.pynapli.shared.network.dto.DeleteAccountRequestDto
 import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
+import io.ktor.http.HttpMethod
 
 /** Ktor implementation of [AccountApi], composed into `KtorPynapliApiClient` via delegation. */
 internal class KtorAccountApi(
@@ -29,21 +26,7 @@ internal class KtorAccountApi(
             }
         }
 
-    override suspend fun requestDataExport(): AppResult<AccountDataExportDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/account/data-export")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun requestDataExport(): AppResult<AccountDataExportDto> = support.authPost("/v1/account/data-export")
 
-    override suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/account/delete")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    override suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto> = support.authSend(HttpMethod.Post, "/v1/account/delete", request)
 }

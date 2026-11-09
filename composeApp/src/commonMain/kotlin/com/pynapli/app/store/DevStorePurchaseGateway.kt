@@ -1,6 +1,7 @@
 package com.pynapli.app.store
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.map
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
@@ -29,20 +30,15 @@ class DevStorePurchaseGateway(
         productId: String,
         displayName: String,
     ): AppResult<StorePurchaseResult> =
-        when (val result = apiClient.submitDevStorePurchase(SubmitDevStorePurchaseRequestDto(productId))) {
-            is AppResult.Success ->
-                AppResult.Success(
-                    StorePurchaseResult(
-                        message =
-                            when (result.value.status) {
-                                SubscriptionPurchaseSyncStatus.ACTIVE -> "$displayName active."
-                                "inventory_granted" -> "$displayName added."
-                                else -> "Purchase applied."
-                            },
-                        refreshEntitlement = true,
-                    ),
-                )
-
-            is AppResult.Failure -> result
+        apiClient.submitDevStorePurchase(SubmitDevStorePurchaseRequestDto(productId)).map { value ->
+            StorePurchaseResult(
+                message =
+                    when (value.status) {
+                        SubscriptionPurchaseSyncStatus.ACTIVE -> "$displayName active."
+                        "inventory_granted" -> "$displayName added."
+                        else -> "Purchase applied."
+                    },
+                refreshEntitlement = true,
+            )
         }
 }

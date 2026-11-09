@@ -14,10 +14,7 @@ import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
+import io.ktor.http.HttpMethod
 
 /** Ktor implementation of [SafetyApi], composed into `KtorPynapliApiClient` via delegation. */
 internal class KtorSafetyApi(
@@ -26,15 +23,7 @@ internal class KtorSafetyApi(
     override suspend fun blockUser(
         targetUserId: String,
         request: BlockUserRequestDto,
-    ): AppResult<BlockSummaryDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/blocks/$targetUserId")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    ): AppResult<BlockSummaryDto> = support.authSend(HttpMethod.Post, "/v1/blocks/$targetUserId", request)
 
     override suspend fun unblockUser(targetUserId: String): AppResult<Unit> =
         support.authenticated { token ->
@@ -49,21 +38,9 @@ internal class KtorSafetyApi(
             }
         }
 
-    override suspend fun listBlocks(): AppResult<BlocksListDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/blocks")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun listBlocks(): AppResult<BlocksListDto> = support.authGet("/v1/blocks")
 
-    override suspend fun hideProfile(targetUserId: String): AppResult<HiddenProfileSummaryDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/hidden-profiles/$targetUserId")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun hideProfile(targetUserId: String): AppResult<HiddenProfileSummaryDto> = support.authPost("/v1/hidden-profiles/$targetUserId")
 
     override suspend fun unhideProfile(targetUserId: String): AppResult<Unit> =
         support.authenticated { token ->
@@ -78,38 +55,14 @@ internal class KtorSafetyApi(
             }
         }
 
-    override suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/hidden-profiles")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun listHiddenProfiles(): AppResult<HiddenProfilesListDto> = support.authGet("/v1/hidden-profiles")
 
-    override suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/reports")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    override suspend fun submitReport(request: CreateReportRequestDto): AppResult<ReportDto> = support.authSend(HttpMethod.Post, "/v1/reports", request)
 
     override suspend fun listReports(limit: Int?): AppResult<ReportHistoryListDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/reports")) {
-                    bearerAuth(token)
-                    if (limit != null) parameter("limit", limit)
-                }.toAppResult(support.json)
+        support.authGet("/v1/reports") {
+            if (limit != null) parameter("limit", limit)
         }
 
-    override suspend fun getSupportContact(): AppResult<SupportContactDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/support/contact")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun getSupportContact(): AppResult<SupportContactDto> = support.authGet("/v1/support/contact")
 }

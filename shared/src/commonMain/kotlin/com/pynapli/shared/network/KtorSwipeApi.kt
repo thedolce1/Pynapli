@@ -7,50 +7,18 @@ import com.pynapli.shared.network.dto.SwipeActionResponseDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckResponseDto
 import com.pynapli.shared.network.dto.SwipeRewindResponseDto
-import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
+import io.ktor.http.HttpMethod
 
 /** Ktor implementation of [SwipeApi], composed into `KtorPynapliApiClient` via delegation. */
 internal class KtorSwipeApi(
     private val support: KtorApiSupport,
 ) : SwipeApi {
-    override suspend fun querySwipeDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/swipe/deck/query")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    override suspend fun querySwipeDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckResponseDto> = support.authSend(HttpMethod.Post, "/v1/swipe/deck/query", request)
 
-    override suspend fun submitSwipeAction(request: SwipeActionRequestDto): AppResult<SwipeActionResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/swipe/actions")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    override suspend fun submitSwipeAction(request: SwipeActionRequestDto): AppResult<SwipeActionResponseDto> = support.authSend(HttpMethod.Post, "/v1/swipe/actions", request)
 
-    override suspend fun rewindSwipeAction(): AppResult<SwipeRewindResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/swipe/rewind")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun rewindSwipeAction(): AppResult<SwipeRewindResponseDto> = support.authPost("/v1/swipe/rewind")
 
-    override suspend fun listMatches(): AppResult<MatchesListResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/matches")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun listMatches(): AppResult<MatchesListResponseDto> = support.authGet("/v1/matches")
 }

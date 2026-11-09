@@ -8,47 +8,25 @@ import com.pynapli.shared.network.dto.UnregisterPushDeviceRequestDto
 import com.pynapli.shared.network.dto.UpdateNotificationPreferencesRequestDto
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
-import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
 
 /** Ktor implementation of [NotificationApi], composed into `KtorPynapliApiClient` via delegation. */
 internal class KtorNotificationApi(
     private val support: KtorApiSupport,
 ) : NotificationApi {
-    override suspend fun getNotificationPreferences(): AppResult<NotificationPreferencesDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/notifications/preferences")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun getNotificationPreferences(): AppResult<NotificationPreferencesDto> = support.authGet("/v1/notifications/preferences")
 
     override suspend fun updateNotificationPreferences(
         request: UpdateNotificationPreferencesRequestDto,
-    ): AppResult<NotificationPreferencesDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .patch(support.endpoint("/v1/notifications/preferences")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    ): AppResult<NotificationPreferencesDto> = support.authSend(HttpMethod.Patch, "/v1/notifications/preferences", request)
 
     override suspend fun registerPushDevice(
         request: RegisterPushDeviceRequestDto,
-    ): AppResult<PushDeviceRegistrationResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/notifications/devices")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    ): AppResult<PushDeviceRegistrationResponseDto> = support.authSend(HttpMethod.Post, "/v1/notifications/devices", request)
 
     override suspend fun unregisterPushDevice(request: UnregisterPushDeviceRequestDto): AppResult<Unit> =
         support.authenticated { token ->

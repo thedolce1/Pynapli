@@ -8,60 +8,22 @@ import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequest
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionInventoryResponseDto
 import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncResponseDto
-import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
+import io.ktor.http.HttpMethod
 
 /** Ktor implementation of [SubscriptionApi], composed into `KtorPynapliApiClient` via delegation. */
 internal class KtorSubscriptionApi(
     private val support: KtorApiSupport,
 ) : SubscriptionApi {
-    override suspend fun getSubscriptionEntitlement(): AppResult<SubscriptionEntitlementDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/subscriptions/entitlement")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun getSubscriptionEntitlement(): AppResult<SubscriptionEntitlementDto> = support.authGet("/v1/subscriptions/entitlement")
 
-    override suspend fun getSubscriptionInventory(): AppResult<SubscriptionInventoryResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/subscriptions/inventory")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun getSubscriptionInventory(): AppResult<SubscriptionInventoryResponseDto> = support.authGet("/v1/subscriptions/inventory")
 
     override suspend fun submitPlayStoreSubscriptionPurchase(
         request: SubmitPlayStoreSubscriptionPurchaseRequestDto,
-    ): AppResult<SubscriptionPurchaseSyncResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/subscriptions/play-store/purchases")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    ): AppResult<SubscriptionPurchaseSyncResponseDto> = support.authSend(HttpMethod.Post, "/v1/subscriptions/play-store/purchases", request)
 
-    override suspend fun submitDevStorePurchase(request: SubmitDevStorePurchaseRequestDto): AppResult<StorePurchaseResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/subscriptions/dev/purchases")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    override suspend fun submitDevStorePurchase(request: SubmitDevStorePurchaseRequestDto): AppResult<StorePurchaseResponseDto> = support.authSend(HttpMethod.Post, "/v1/subscriptions/dev/purchases", request)
 
-    override suspend fun activateBoost(): AppResult<BoostActivationDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/boosts")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun activateBoost(): AppResult<BoostActivationDto> = support.authPost("/v1/boosts")
 }

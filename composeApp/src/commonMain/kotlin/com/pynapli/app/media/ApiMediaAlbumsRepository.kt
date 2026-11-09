@@ -1,6 +1,7 @@
 package com.pynapli.app.media
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.map
 import com.pynapli.shared.network.MediaByteUploader
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
@@ -12,11 +13,7 @@ class ApiMediaAlbumsRepository(
     private val apiClient: PynapliApiClient,
     private val mediaByteUploader: MediaByteUploader,
 ) : MediaAlbumsRepository {
-    override suspend fun loadAlbum(kind: MediaAlbumKindUi): AppResult<List<MediaAlbumItemUi>> =
-        when (val result = apiClient.listMediaAlbum(kind.apiValue)) {
-            is AppResult.Success -> AppResult.Success(result.value.items.map { item -> item.toUiWithUrl(kind) })
-            is AppResult.Failure -> result
-        }
+    override suspend fun loadAlbum(kind: MediaAlbumKindUi): AppResult<List<MediaAlbumItemUi>> = apiClient.listMediaAlbum(kind.apiValue).map { value -> value.items.map { item -> item.toUiWithUrl(kind) } }
 
     override suspend fun deleteMedia(assetId: String): AppResult<Unit> = apiClient.deleteMediaAsset(assetId)
 
@@ -24,16 +21,11 @@ class ApiMediaAlbumsRepository(
         kind: MediaAlbumKindUi,
         orderedAssetIds: List<String>,
     ): AppResult<List<MediaAlbumItemUi>> =
-        when (
-            val result =
-                apiClient.reorderMediaAlbum(
-                    albumKind = kind.apiValue,
-                    request = ReorderMediaAlbumRequestDto(orderedAssetIds = orderedAssetIds),
-                )
-        ) {
-            is AppResult.Success -> AppResult.Success(result.value.items.map { item -> item.toUiWithUrl(kind) })
-            is AppResult.Failure -> result
-        }
+        apiClient
+            .reorderMediaAlbum(
+                albumKind = kind.apiValue,
+                request = ReorderMediaAlbumRequestDto(orderedAssetIds = orderedAssetIds),
+            ).map { value -> value.items.map { item -> item.toUiWithUrl(kind) } }
 
     private fun MediaAlbumItemDto.toUiWithUrl(kind: MediaAlbumKindUi): MediaAlbumItemUi =
         toUi(
@@ -76,34 +68,17 @@ class ApiMediaAlbumsRepository(
             .completeMediaUpload(
                 mediaAssetId = slot.mediaAsset.mediaAssetId,
                 request = CompleteMediaUploadRequestDto(albumId = slot.album.albumId),
-            ).let { result ->
-                when (result) {
-                    is AppResult.Success ->
-                        AppResult.Success(
-                            result.value.toUi(
-                                kind = kind,
-                                mediaUrl =
-                                    result.value.mediaAsset.contentUrl
-                                        ?: apiClient.mediaAssetContentUrl(result.value.mediaAsset.mediaAssetId),
-                            ),
-                        )
-                    is AppResult.Failure -> result
-                }
+            ).map { value ->
+                value.toUi(
+                    kind = kind,
+                    mediaUrl =
+                        value.mediaAsset.contentUrl
+                            ?: apiClient.mediaAssetContentUrl(value.mediaAsset.mediaAssetId),
+                )
             }
     }
 
-    override suspend fun loadPrivateGrants(): AppResult<List<MediaPrivateGrantUi>> =
-        when (val result = apiClient.listOwnPrivateAlbumGrants()) {
-            is AppResult.Success ->
-                AppResult.Success(
-                    result.value.grants.map { it.toUi() },
-                )
-            is AppResult.Failure -> result
-        }
+    override suspend fun loadPrivateGrants(): AppResult<List<MediaPrivateGrantUi>> = apiClient.listOwnPrivateAlbumGrants().map { value -> value.grants.map { it.toUi() } }
 
-    override suspend fun revokePrivateGrant(granteeUserId: String): AppResult<Unit> =
-        when (val result = apiClient.revokePrivateAlbumAccess(granteeUserId)) {
-            is AppResult.Success -> AppResult.Success(Unit)
-            is AppResult.Failure -> result
-        }
+    override suspend fun revokePrivateGrant(granteeUserId: String): AppResult<Unit> = apiClient.revokePrivateAlbumAccess(granteeUserId).map { value -> Unit }
 }

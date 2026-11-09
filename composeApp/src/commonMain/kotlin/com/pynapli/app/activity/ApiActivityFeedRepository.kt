@@ -1,6 +1,7 @@
 package com.pynapli.app.activity
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.map
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
 import com.pynapli.shared.network.dto.MarkActivitySeenRequestDto
@@ -16,38 +17,29 @@ class ApiActivityFeedRepository(
         cursor: String?,
         limit: Int,
     ): AppResult<ActivityFeedUi> =
-        when (val result = apiClient.listActivity(limit = limit, tab = tab.apiValue, cursor = cursor)) {
-            is AppResult.Success ->
-                AppResult.Success(
-                    ActivityFeedUi(
-                        items = result.value.items,
-                        nextCursor = result.value.nextCursor,
-                        adSupported = result.value.adSupported,
-                        entitlementTier = result.value.entitlementTier,
-                        revealLimit = result.value.revealLimit,
-                        gatedCount = result.value.gatedCount,
-                    ),
-                )
-            is AppResult.Failure -> result
+        apiClient.listActivity(limit = limit, tab = tab.apiValue, cursor = cursor).map { value ->
+            ActivityFeedUi(
+                items = value.items,
+                nextCursor = value.nextCursor,
+                adSupported = value.adSupported,
+                entitlementTier = value.entitlementTier,
+                revealLimit = value.revealLimit,
+                gatedCount = value.gatedCount,
+            )
         }
 
     override suspend fun loadSummary(): AppResult<ActivitySummaryUi> =
-        when (val result = apiClient.getActivitySummary()) {
-            is AppResult.Success ->
-                AppResult.Success(
-                    ActivitySummaryUi(
-                        badgeCount = result.value.badgeCount,
-                        profileViewCount = result.value.profileViewCount,
-                        flirtCount = result.value.flirtCount,
-                        likeCount = result.value.likeCount,
-                        matchCount = result.value.matchCount,
-                        albumRequestCount = result.value.albumRequestCount,
-                        partnerInviteCount = result.value.partnerInviteCount,
-                        latestBadgeOccurredAt = result.value.latestBadgeOccurredAt,
-                    ),
-                )
-
-            is AppResult.Failure -> result
+        apiClient.getActivitySummary().map { value ->
+            ActivitySummaryUi(
+                badgeCount = value.badgeCount,
+                profileViewCount = value.profileViewCount,
+                flirtCount = value.flirtCount,
+                likeCount = value.likeCount,
+                matchCount = value.matchCount,
+                albumRequestCount = value.albumRequestCount,
+                partnerInviteCount = value.partnerInviteCount,
+                latestBadgeOccurredAt = value.latestBadgeOccurredAt,
+            )
         }
 
     override suspend fun markActivitySeen(eventIds: List<String>): AppResult<MarkActivitySeenResponseDto> = apiClient.markActivitySeen(MarkActivitySeenRequestDto(eventIds = eventIds))

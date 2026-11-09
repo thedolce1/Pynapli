@@ -12,13 +12,9 @@ import com.pynapli.shared.network.dto.RespondAlbumAccessRequestDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessResponseDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
 import com.pynapli.shared.network.dto.SendFlirtResponseDto
-import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
+import io.ktor.http.HttpMethod
 
 /** Ktor implementation of [ActivityApi], composed into `KtorPynapliApiClient` via delegation. */
 internal class KtorActivityApi(
@@ -29,76 +25,28 @@ internal class KtorActivityApi(
         tab: String?,
         cursor: String?,
     ): AppResult<ActivityFeedResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/activity")) {
-                    bearerAuth(token)
-                    limit?.let { parameter("limit", it) }
-                    tab?.let { parameter("tab", it) }
-                    cursor?.let { parameter("cursor", it) }
-                }.toAppResult(support.json)
+        support.authGet("/v1/activity") {
+            limit?.let { parameter("limit", it) }
+            tab?.let { parameter("tab", it) }
+            cursor?.let { parameter("cursor", it) }
         }
 
-    override suspend fun getActivitySummary(): AppResult<ActivitySummaryDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/activity/summary")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun getActivitySummary(): AppResult<ActivitySummaryDto> = support.authGet("/v1/activity/summary")
 
     override suspend fun markActivitySeen(
         request: MarkActivitySeenRequestDto,
-    ): AppResult<MarkActivitySeenResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/activity/seen")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    ): AppResult<MarkActivitySeenResponseDto> = support.authSend(HttpMethod.Post, "/v1/activity/seen", request)
 
-    override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/activity/$eventId/dismiss")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> = support.authPost("/v1/activity/$eventId/dismiss")
 
-    override suspend fun sendFlirt(request: SendFlirtRequestDto): AppResult<SendFlirtResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/activity/flirts")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    override suspend fun sendFlirt(request: SendFlirtRequestDto): AppResult<SendFlirtResponseDto> = support.authSend(HttpMethod.Post, "/v1/activity/flirts", request)
 
     override suspend fun requestAlbumAccess(
         request: RequestAlbumAccessRequestDto,
-    ): AppResult<RequestAlbumAccessResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/activity/album-requests")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    ): AppResult<RequestAlbumAccessResponseDto> = support.authSend(HttpMethod.Post, "/v1/activity/album-requests", request)
 
     override suspend fun respondToAlbumAccessRequest(
         eventId: String,
         request: RespondAlbumAccessRequestDto,
-    ): AppResult<RespondAlbumAccessResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/activity/album-requests/$eventId/respond")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    ): AppResult<RespondAlbumAccessResponseDto> = support.authSend(HttpMethod.Post, "/v1/activity/album-requests/$eventId/respond", request)
 }

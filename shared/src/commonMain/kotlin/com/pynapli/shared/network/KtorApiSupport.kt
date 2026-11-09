@@ -5,9 +5,13 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.post
+import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
 import kotlinx.serialization.json.Json
 
@@ -52,6 +56,52 @@ internal class KtorApiSupport(
 
         return runCatchingCancellable { call(token) }.getOrElse { error -> error.toNetworkFailure() }
     }
+
+    /**
+     * One authenticated request: bearer token, optional extra [configure] (query parameters etc.),
+     * and the response mapped through [toAppResult]. The typed helpers below cover every verb.
+     */
+    suspend inline fun <reified T> authRequest(
+        method: HttpMethod,
+        path: String,
+        crossinline configure: HttpRequestBuilder.() -> Unit = {},
+    ): AppResult<T> =
+        authenticated { token ->
+            httpClient
+                .request(endpoint(path)) {
+                    this.method = method
+                    bearerAuth(token)
+                    configure()
+                }.toAppResult<T>(json)
+        }
+
+    suspend inline fun <reified T> authGet(
+        path: String,
+        crossinline configure: HttpRequestBuilder.() -> Unit = {},
+    ): AppResult<T> = authRequest(HttpMethod.Get, path, configure)
+
+    suspend inline fun <reified T> authDelete(
+        path: String,
+        crossinline configure: HttpRequestBuilder.() -> Unit = {},
+    ): AppResult<T> = authRequest(HttpMethod.Delete, path, configure)
+
+    suspend inline fun <reified T> authPost(
+        path: String,
+        crossinline configure: HttpRequestBuilder.() -> Unit = {},
+    ): AppResult<T> = authRequest(HttpMethod.Post, path, configure)
+
+    /** Authenticated request with a JSON [body]. */
+    suspend inline fun <reified B, reified T> authSend(
+        method: HttpMethod,
+        path: String,
+        body: B,
+        crossinline configure: HttpRequestBuilder.() -> Unit = {},
+    ): AppResult<T> =
+        authRequest(method, path) {
+            contentType(ContentType.Application.Json)
+            setBody(body)
+            configure()
+        }
 }
 
 private fun Throwable.toNetworkFailure(): AppResult.Failure {

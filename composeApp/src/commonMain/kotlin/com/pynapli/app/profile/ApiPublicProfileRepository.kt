@@ -3,6 +3,7 @@ package com.pynapli.app.profile
 import com.pynapli.app.media.MediaAlbumItemUi
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.map
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlockUserRequestDto
@@ -29,17 +30,12 @@ class ApiPublicProfileRepository(
     override suspend fun requestAlbumAccess(userId: String): AppResult<RequestAlbumAccessResponseDto> = apiClient.requestAlbumAccess(RequestAlbumAccessRequestDto(targetUserId = userId))
 
     override suspend fun loadPrivateAlbum(userId: String): AppResult<List<MediaAlbumItemUi>> =
-        when (val result = apiClient.listUserPrivateAlbum(userId)) {
-            is AppResult.Success ->
-                AppResult.Success(
-                    result.value.items.map { item ->
-                        item.toPrivateAlbumUi(
-                            mediaUrl = apiClient.mediaAssetContentUrl(item.mediaAsset.mediaAssetId),
-                        )
-                    },
+        apiClient.listUserPrivateAlbum(userId).map { value ->
+            value.items.map { item ->
+                item.toPrivateAlbumUi(
+                    mediaUrl = apiClient.mediaAssetContentUrl(item.mediaAsset.mediaAssetId),
                 )
-
-            is AppResult.Failure -> result
+            }
         }
 
     override suspend fun blockUser(

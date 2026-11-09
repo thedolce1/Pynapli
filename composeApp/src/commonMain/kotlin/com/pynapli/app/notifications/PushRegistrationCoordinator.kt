@@ -1,6 +1,7 @@
 package com.pynapli.app.notifications
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.core.result.map
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.RegisterPushDeviceRequestDto
 import com.pynapli.shared.network.dto.UnregisterPushDeviceRequestDto
@@ -107,22 +108,17 @@ class ApiPushDeviceRegistrationRepository(
     private val apiClient: PynapliApiClient,
 ) : PushDeviceRegistrationRepository {
     override suspend fun register(registration: PushDeviceRegistration): AppResult<Unit> =
-        when (
-            val result =
-                apiClient.registerPushDevice(
-                    RegisterPushDeviceRequestDto(
-                        platform = registration.platform,
-                        deviceToken = registration.deviceToken,
-                        appVersion = registration.appVersion,
-                        locale = registration.locale,
-                        timezone = registration.timezone,
-                        notificationsEnabled = registration.notificationsEnabled,
-                    ),
-                )
-        ) {
-            is AppResult.Success -> AppResult.Success(Unit)
-            is AppResult.Failure -> result
-        }
+        apiClient
+            .registerPushDevice(
+                RegisterPushDeviceRequestDto(
+                    platform = registration.platform,
+                    deviceToken = registration.deviceToken,
+                    appVersion = registration.appVersion,
+                    locale = registration.locale,
+                    timezone = registration.timezone,
+                    notificationsEnabled = registration.notificationsEnabled,
+                ),
+            ).map { value -> Unit }
 
     override suspend fun unregister(
         platform: String,

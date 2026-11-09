@@ -15,3 +15,10 @@ data class AppError(
     val message: String,
     val recoverable: Boolean = true,
 )
+
+/** Transforms a success value; a failure passes through unchanged. */
+inline fun <T, R> AppResult<T>.map(transform: (T) -> R): AppResult<R> =
+    when (this) {
+        is AppResult.Success -> AppResult.Success(transform(value))
+        is AppResult.Failure -> this
+    }

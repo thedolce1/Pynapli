@@ -16,42 +16,17 @@ import com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
+import io.ktor.http.HttpMethod
 
 /** Ktor implementation of [GridApi], composed into `KtorPynapliApiClient` via delegation. */
 internal class KtorGridApi(
     private val support: KtorApiSupport,
 ) : GridApi {
-    override suspend fun queryGrid(request: GridQueryRequestDto): AppResult<GridQueryResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/grid/query")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    override suspend fun queryGrid(request: GridQueryRequestDto): AppResult<GridQueryResponseDto> = support.authSend(HttpMethod.Post, "/v1/grid/query", request)
 
-    override suspend fun listSavedGridFilters(): AppResult<SavedGridFiltersListDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/me/grid-filters")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun listSavedGridFilters(): AppResult<SavedGridFiltersListDto> = support.authGet("/v1/me/grid-filters")
 
-    override suspend fun createSavedGridFilter(request: CreateSavedGridFilterRequestDto): AppResult<SavedGridFilterDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/me/grid-filters")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    override suspend fun createSavedGridFilter(request: CreateSavedGridFilterRequestDto): AppResult<SavedGridFilterDto> = support.authSend(HttpMethod.Post, "/v1/me/grid-filters", request)
 
     override suspend fun deleteSavedGridFilter(id: String): AppResult<Unit> =
         support.authenticated { token ->
@@ -66,23 +41,9 @@ internal class KtorGridApi(
             }
         }
 
-    override suspend fun listSavedSwipeFilters(): AppResult<SavedSwipeFiltersListDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/me/swipe-filters")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun listSavedSwipeFilters(): AppResult<SavedSwipeFiltersListDto> = support.authGet("/v1/me/swipe-filters")
 
-    override suspend fun createSavedSwipeFilter(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/me/swipe-filters")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    override suspend fun createSavedSwipeFilter(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto> = support.authSend(HttpMethod.Post, "/v1/me/swipe-filters", request)
 
     override suspend fun deleteSavedSwipeFilter(id: String): AppResult<Unit> =
         support.authenticated { token ->
@@ -97,13 +58,7 @@ internal class KtorGridApi(
             }
         }
 
-    override suspend fun getTopPicks(): AppResult<TopPicksResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/swipe/picks")) {
-                    bearerAuth(token)
-                }.toAppResult(support.json)
-        }
+    override suspend fun getTopPicks(): AppResult<TopPicksResponseDto> = support.authGet("/v1/swipe/picks")
 
     override suspend fun getTravelLocation(): AppResult<TravelLocationDto?> =
         support.authenticated { token ->
@@ -121,15 +76,7 @@ internal class KtorGridApi(
             }
         }
 
-    override suspend fun setTravelLocation(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .post(support.endpoint("/v1/location/travel")) {
-                    bearerAuth(token)
-                    contentType(ContentType.Application.Json)
-                    setBody(request)
-                }.toAppResult(support.json)
-        }
+    override suspend fun setTravelLocation(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto> = support.authSend(HttpMethod.Post, "/v1/location/travel", request)
 
     override suspend fun clearTravelLocation(): AppResult<Unit> =
         support.authenticated { token ->
@@ -145,11 +92,7 @@ internal class KtorGridApi(
         }
 
     override suspend fun searchTravelPlaces(query: String): AppResult<TravelPlaceSearchResponseDto> =
-        support.authenticated { token ->
-            support.httpClient
-                .get(support.endpoint("/v1/location/travel/search")) {
-                    bearerAuth(token)
-                    url.parameters.append("q", query)
-                }.toAppResult(support.json)
+        support.authGet("/v1/location/travel/search") {
+            url.parameters.append("q", query)
         }
 }
