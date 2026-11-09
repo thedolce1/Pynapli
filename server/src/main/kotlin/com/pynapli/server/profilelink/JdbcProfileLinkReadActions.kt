@@ -1,8 +1,7 @@
 package com.pynapli.server.profilelink
 
+import com.pynapli.server.db.withConnection
 import com.pynapli.shared.network.dto.ProfileLinkDirection
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
@@ -13,130 +12,120 @@ internal class JdbcProfileLinkReadActions(
     private val dataSource: DataSource,
 ) {
     suspend fun getSummary(viewerUserId: UUID): ProfileLinksSummaryRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                ProfileLinksSummaryRecord(
-                    current =
-                        connection
-                            .queryProfileLinks(viewerUserId, JdbcProfileLinkQueryKind.Current)
-                            .firstOrNull(),
-                    incomingInvites =
-                        connection.queryProfileLinks(viewerUserId, JdbcProfileLinkQueryKind.Incoming),
-                    outgoingInvites =
-                        connection.queryProfileLinks(viewerUserId, JdbcProfileLinkQueryKind.Outgoing),
-                )
-            }
+        dataSource.withConnection { connection ->
+            ProfileLinksSummaryRecord(
+                current =
+                    connection
+                        .queryProfileLinks(viewerUserId, JdbcProfileLinkQueryKind.Current)
+                        .firstOrNull(),
+                incomingInvites =
+                    connection.queryProfileLinks(viewerUserId, JdbcProfileLinkQueryKind.Incoming),
+                outgoingInvites =
+                    connection.queryProfileLinks(viewerUserId, JdbcProfileLinkQueryKind.Outgoing),
+            )
         }
 
     suspend fun isLinkableUser(userId: UUID): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        SELECT EXISTS (
-                            SELECT 1
-                            FROM users u
-                            JOIN profiles p ON p.user_id = u.id
-                            JOIN discovery_settings ds ON ds.user_id = u.id
-                            WHERE u.id = ?
-                              AND u.status = 'active'
-                              AND u.deleted_at IS NULL
-                              AND p.visibility_status = 'visible'
-                              AND ds.incognito = false
-                        )
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, userId)
-                        statement.executeQuery().use { rs ->
-                            rs.next()
-                            rs.getBoolean(1)
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM users u
+                        JOIN profiles p ON p.user_id = u.id
+                        JOIN discovery_settings ds ON ds.user_id = u.id
+                        WHERE u.id = ?
+                          AND u.status = 'active'
+                          AND u.deleted_at IS NULL
+                          AND p.visibility_status = 'visible'
+                          AND ds.incognito = false
+                    )
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getBoolean(1)
                     }
-            }
+                }
         }
 
     suspend fun hasActiveLink(userId: UUID): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        SELECT EXISTS (
-                            SELECT 1
-                            FROM user_profile_links
-                            WHERE status = 'active'
-                              AND unlinked_at IS NULL
-                              AND (user_id = ? OR linked_user_id = ?)
-                        )
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, userId)
-                        statement.setObject(2, userId)
-                        statement.executeQuery().use { rs ->
-                            rs.next()
-                            rs.getBoolean(1)
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM user_profile_links
+                        WHERE status = 'active'
+                          AND unlinked_at IS NULL
+                          AND (user_id = ? OR linked_user_id = ?)
+                    )
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.setObject(2, userId)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getBoolean(1)
                     }
-            }
+                }
         }
 
     suspend fun getPendingInvitationForRecipient(
         recipientUserId: UUID,
         linkId: UUID,
     ): PendingProfileLinkInvitationRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        SELECT id, user_id, linked_user_id
-                        FROM user_profile_links
-                        WHERE id = ?
-                          AND linked_user_id = ?
-                          AND status = 'pending'
-                          AND unlinked_at IS NULL
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, linkId)
-                        statement.setObject(2, recipientUserId)
-                        statement.executeQuery().use { rs ->
-                            if (!rs.next()) null else rs.toJdbcPendingInvitationRecord()
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT id, user_id, linked_user_id
+                    FROM user_profile_links
+                    WHERE id = ?
+                      AND linked_user_id = ?
+                      AND status = 'pending'
+                      AND unlinked_at IS NULL
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, linkId)
+                    statement.setObject(2, recipientUserId)
+                    statement.executeQuery().use { rs ->
+                        if (!rs.next()) null else rs.toJdbcPendingInvitationRecord()
                     }
-            }
+                }
         }
 
     suspend fun findPendingBetween(
         userIdA: UUID,
         userIdB: UUID,
     ): PendingProfileLinkInvitationRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        SELECT id, user_id, linked_user_id
-                        FROM user_profile_links
-                        WHERE status = 'pending'
-                          AND unlinked_at IS NULL
-                          AND (
-                              (user_id = ? AND linked_user_id = ?)
-                              OR (user_id = ? AND linked_user_id = ?)
-                          )
-                        ORDER BY created_at DESC, id ASC
-                        LIMIT 1
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, userIdA)
-                        statement.setObject(2, userIdB)
-                        statement.setObject(3, userIdB)
-                        statement.setObject(4, userIdA)
-                        statement.executeQuery().use { rs ->
-                            if (!rs.next()) null else rs.toJdbcPendingInvitationRecord()
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT id, user_id, linked_user_id
+                    FROM user_profile_links
+                    WHERE status = 'pending'
+                      AND unlinked_at IS NULL
+                      AND (
+                          (user_id = ? AND linked_user_id = ?)
+                          OR (user_id = ? AND linked_user_id = ?)
+                      )
+                    ORDER BY created_at DESC, id ASC
+                    LIMIT 1
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userIdA)
+                    statement.setObject(2, userIdB)
+                    statement.setObject(3, userIdB)
+                    statement.setObject(4, userIdA)
+                    statement.executeQuery().use { rs ->
+                        if (!rs.next()) null else rs.toJdbcPendingInvitationRecord()
                     }
-            }
+                }
         }
 
     suspend fun findRecentUnlinkForEitherUser(
@@ -144,36 +133,34 @@ internal class JdbcProfileLinkReadActions(
         userIdB: UUID,
         since: Instant,
     ): ProfileLinkCooldownRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        SELECT user_id,
-                               linked_user_id,
-                               unlinked_at
-                        FROM user_profile_links
-                        WHERE status = 'unlinked'
-                          AND unlinked_at IS NOT NULL
-                          AND unlinked_at >= ?
-                          AND (
-                              user_id IN (?, ?)
-                              OR linked_user_id IN (?, ?)
-                          )
-                        ORDER BY unlinked_at DESC, id ASC
-                        LIMIT 1
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setTimestamp(1, Timestamp.from(since))
-                        statement.setObject(2, userIdA)
-                        statement.setObject(3, userIdB)
-                        statement.setObject(4, userIdA)
-                        statement.setObject(5, userIdB)
-                        statement.executeQuery().use { rs ->
-                            if (!rs.next()) null else rs.toJdbcProfileLinkCooldownRecord()
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT user_id,
+                           linked_user_id,
+                           unlinked_at
+                    FROM user_profile_links
+                    WHERE status = 'unlinked'
+                      AND unlinked_at IS NOT NULL
+                      AND unlinked_at >= ?
+                      AND (
+                          user_id IN (?, ?)
+                          OR linked_user_id IN (?, ?)
+                      )
+                    ORDER BY unlinked_at DESC, id ASC
+                    LIMIT 1
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setTimestamp(1, Timestamp.from(since))
+                    statement.setObject(2, userIdA)
+                    statement.setObject(3, userIdB)
+                    statement.setObject(4, userIdA)
+                    statement.setObject(5, userIdB)
+                    statement.executeQuery().use { rs ->
+                        if (!rs.next()) null else rs.toJdbcProfileLinkCooldownRecord()
                     }
-            }
+                }
         }
 }
 

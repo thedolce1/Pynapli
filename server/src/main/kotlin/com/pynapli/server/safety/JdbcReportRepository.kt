@@ -1,7 +1,6 @@
 package com.pynapli.server.safety
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.withConnection
 import java.sql.ResultSet
 import java.util.UUID
 import javax.sql.DataSource
@@ -18,47 +17,45 @@ class JdbcReportRepository(
         note: String?,
         reportIdFactory: () -> UUID,
     ): ReportRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        INSERT INTO safety_reports (
-                            id,
-                            reporter_user_id,
-                            reported_user_id,
-                            target_type,
-                            target_id,
-                            category,
-                            note,
-                            source
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'user')
-                        RETURNING id,
-                                  reporter_user_id,
-                                  reported_user_id,
-                                  target_type,
-                                  target_id,
-                                  category,
-                                  note,
-                                  status,
-                                  created_at,
-                                  source
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, reportIdFactory())
-                        statement.setObject(2, reporterUserId)
-                        statement.setObject(3, reportedUserId)
-                        statement.setString(4, targetType)
-                        statement.setString(5, targetId)
-                        statement.setString(6, category)
-                        statement.setString(7, note)
-                        statement.executeQuery().use { rs ->
-                            rs.next()
-                            rs.toReportRecord()
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO safety_reports (
+                        id,
+                        reporter_user_id,
+                        reported_user_id,
+                        target_type,
+                        target_id,
+                        category,
+                        note,
+                        source
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'user')
+                    RETURNING id,
+                              reporter_user_id,
+                              reported_user_id,
+                              target_type,
+                              target_id,
+                              category,
+                              note,
+                              status,
+                              created_at,
+                              source
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, reportIdFactory())
+                    statement.setObject(2, reporterUserId)
+                    statement.setObject(3, reportedUserId)
+                    statement.setString(4, targetType)
+                    statement.setString(5, targetId)
+                    statement.setString(6, category)
+                    statement.setString(7, note)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.toReportRecord()
                     }
-            }
+                }
         }
 
     override suspend fun createSystemReport(
@@ -69,81 +66,77 @@ class JdbcReportRepository(
         note: String?,
         reportIdFactory: () -> UUID,
     ): ReportRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        INSERT INTO safety_reports (
-                            id,
-                            reporter_user_id,
-                            reported_user_id,
-                            target_type,
-                            target_id,
-                            category,
-                            note,
-                            source
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'system')
-                        RETURNING id,
-                                  reporter_user_id,
-                                  reported_user_id,
-                                  target_type,
-                                  target_id,
-                                  category,
-                                  note,
-                                  status,
-                                  created_at,
-                                  source
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, reportIdFactory())
-                        statement.setObject(2, reportedUserId)
-                        statement.setObject(3, reportedUserId)
-                        statement.setString(4, targetType)
-                        statement.setString(5, targetId)
-                        statement.setString(6, category)
-                        statement.setString(7, note)
-                        statement.executeQuery().use { rs ->
-                            rs.next()
-                            rs.toReportRecord()
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO safety_reports (
+                        id,
+                        reporter_user_id,
+                        reported_user_id,
+                        target_type,
+                        target_id,
+                        category,
+                        note,
+                        source
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'system')
+                    RETURNING id,
+                              reporter_user_id,
+                              reported_user_id,
+                              target_type,
+                              target_id,
+                              category,
+                              note,
+                              status,
+                              created_at,
+                              source
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, reportIdFactory())
+                    statement.setObject(2, reportedUserId)
+                    statement.setObject(3, reportedUserId)
+                    statement.setString(4, targetType)
+                    statement.setString(5, targetId)
+                    statement.setString(6, category)
+                    statement.setString(7, note)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.toReportRecord()
                     }
-            }
+                }
         }
 
     override suspend fun listReportsByReporter(
         reporterUserId: UUID,
         limit: Int,
     ): List<ReportHistoryRecord> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        SELECT sr.id,
-                               p.display_name AS reported_display_name,
-                               sr.target_type,
-                               sr.category,
-                               sr.status,
-                               sr.created_at
-                        FROM safety_reports sr
-                        LEFT JOIN profiles p ON p.user_id = sr.reported_user_id
-                        WHERE sr.reporter_user_id = ?
-                          AND sr.source = 'user'
-                        ORDER BY sr.created_at DESC, sr.id DESC
-                        LIMIT ?
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, reporterUserId)
-                        statement.setInt(2, limit.coerceIn(1, MAX_HISTORY_LIMIT))
-                        statement.executeQuery().use { rs ->
-                            buildList {
-                                while (rs.next()) add(rs.toReportHistoryRecord())
-                            }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT sr.id,
+                           p.display_name AS reported_display_name,
+                           sr.target_type,
+                           sr.category,
+                           sr.status,
+                           sr.created_at
+                    FROM safety_reports sr
+                    LEFT JOIN profiles p ON p.user_id = sr.reported_user_id
+                    WHERE sr.reporter_user_id = ?
+                      AND sr.source = 'user'
+                    ORDER BY sr.created_at DESC, sr.id DESC
+                    LIMIT ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, reporterUserId)
+                    statement.setInt(2, limit.coerceIn(1, MAX_HISTORY_LIMIT))
+                    statement.executeQuery().use { rs ->
+                        buildList {
+                            while (rs.next()) add(rs.toReportHistoryRecord())
                         }
                     }
-            }
+                }
         }
 
     private fun ResultSet.toReportHistoryRecord(): ReportHistoryRecord =

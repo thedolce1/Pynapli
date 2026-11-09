@@ -4,7 +4,6 @@ import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlinx.serialization.json.Json
 import org.postgresql.util.PGobject
-import java.sql.Connection
 import java.sql.ResultSet
 import java.util.UUID
 
@@ -14,20 +13,6 @@ import java.util.UUID
  * `jsonb` encoder, and the `ResultSet` row-mappers. `json` is passed in (the repository owns the
  * instance) so these stay free functions. Behavior matches the original private members verbatim.
  */
-internal inline fun <T> Connection.inTransaction(block: () -> T): T {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
-        val result = block()
-        commit()
-        return result
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
-    }
-}
 
 internal fun jsonbOf(
     json: Json,

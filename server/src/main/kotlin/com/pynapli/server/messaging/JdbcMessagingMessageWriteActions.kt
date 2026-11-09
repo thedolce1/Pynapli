@@ -1,5 +1,6 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.db.inTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.SQLException
@@ -164,9 +165,7 @@ internal suspend fun DataSource.setMessagingConversationExpiry(
 ): SetConversationExpiryResult? =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
+            connection.inTransaction {
                 val updated = connection.setParticipantExpiry(userId, conversationId, expirySeconds)
                 if (updated == 0) {
                     connection.rollback()
@@ -181,11 +180,6 @@ internal suspend fun DataSource.setMessagingConversationExpiry(
                     }
                 connection.commit()
                 SetConversationExpiryResult(conversation = conversation, systemMessage = systemMessage)
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
             }
         }
     }

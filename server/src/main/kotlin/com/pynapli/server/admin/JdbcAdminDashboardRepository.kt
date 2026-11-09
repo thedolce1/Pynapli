@@ -1,7 +1,6 @@
 package com.pynapli.server.admin
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.withConnection
 import java.sql.Connection
 import javax.sql.DataSource
 
@@ -9,24 +8,22 @@ internal class JdbcAdminDashboardRepository(
     private val dataSource: DataSource,
 ) : AdminDashboardRepository {
     override suspend fun counts(): AdminDashboardCounts =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val reports = connection.groupedCounts("SELECT status, count(*) FROM safety_reports GROUP BY status")
-                val appeals = connection.groupedCounts("SELECT status, count(*) FROM moderation_appeals GROUP BY status")
-                val risk = connection.groupedCounts("SELECT tier, count(*) FROM account_risk_states GROUP BY tier")
-                AdminDashboardCounts(
-                    reportsOpen = reports["open"] ?: 0,
-                    reportsUnderReview = reports["under_review"] ?: 0,
-                    appealsOpen = appeals["open"] ?: 0,
-                    appealsUnderReview = appeals["under_review"] ?: 0,
-                    appealsEscalated = appeals["escalated"] ?: 0,
-                    heldMessagesOpen = connection.heldMessageCount(),
-                    riskWatch = risk["watch"] ?: 0,
-                    riskFriction = risk["friction"] ?: 0,
-                    riskQuarantine = risk["quarantine"] ?: 0,
-                    riskTerminate = risk["terminate"] ?: 0,
-                )
-            }
+        dataSource.withConnection { connection ->
+            val reports = connection.groupedCounts("SELECT status, count(*) FROM safety_reports GROUP BY status")
+            val appeals = connection.groupedCounts("SELECT status, count(*) FROM moderation_appeals GROUP BY status")
+            val risk = connection.groupedCounts("SELECT tier, count(*) FROM account_risk_states GROUP BY tier")
+            AdminDashboardCounts(
+                reportsOpen = reports["open"] ?: 0,
+                reportsUnderReview = reports["under_review"] ?: 0,
+                appealsOpen = appeals["open"] ?: 0,
+                appealsUnderReview = appeals["under_review"] ?: 0,
+                appealsEscalated = appeals["escalated"] ?: 0,
+                heldMessagesOpen = connection.heldMessageCount(),
+                riskWatch = risk["watch"] ?: 0,
+                riskFriction = risk["friction"] ?: 0,
+                riskQuarantine = risk["quarantine"] ?: 0,
+                riskTerminate = risk["terminate"] ?: 0,
+            )
         }
 
     // The SQL is a compile-time constant (never user input); it groups one enum column into counts.

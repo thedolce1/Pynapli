@@ -1,5 +1,6 @@
 package com.pynapli.server.media
 
+import com.pynapli.server.db.inTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Types
@@ -112,9 +113,7 @@ internal suspend fun DataSource.softDeleteMediaAsset(
 ): MediaAssetRecord? =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
+            connection.inTransaction {
                 val asset =
                     connection
                         .prepareStatement(
@@ -170,11 +169,6 @@ internal suspend fun DataSource.softDeleteMediaAsset(
 
                 connection.commit()
                 asset
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
             }
         }
     }

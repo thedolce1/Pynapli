@@ -1,7 +1,6 @@
 package com.pynapli.server.media
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.withConnection
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
@@ -15,19 +14,17 @@ class JdbcMediaCleanupRepository(
         rejectedBefore: Instant,
         softDeletedBefore: Instant,
     ): MediaCleanupSummary =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                // media_album_items cascade on asset delete (FK ON DELETE CASCADE), so deleting an
-                // asset also drops it from any album in the same statement.
-                val abandoned = connection.deleteCount(DELETE_ABANDONED, abandonedBefore)
-                val rejected = connection.deleteCount(DELETE_REJECTED, rejectedBefore)
-                val softDeleted = connection.deleteCount(DELETE_SOFT_DELETED, softDeletedBefore)
-                MediaCleanupSummary(
-                    abandonedUploads = abandoned,
-                    rejectedAssets = rejected,
-                    softDeletedAssets = softDeleted,
-                )
-            }
+        dataSource.withConnection { connection ->
+            // media_album_items cascade on asset delete (FK ON DELETE CASCADE), so deleting an
+            // asset also drops it from any album in the same statement.
+            val abandoned = connection.deleteCount(DELETE_ABANDONED, abandonedBefore)
+            val rejected = connection.deleteCount(DELETE_REJECTED, rejectedBefore)
+            val softDeleted = connection.deleteCount(DELETE_SOFT_DELETED, softDeletedBefore)
+            MediaCleanupSummary(
+                abandonedUploads = abandoned,
+                rejectedAssets = rejected,
+                softDeletedAssets = softDeleted,
+            )
         }
 
     private fun Connection.deleteCount(

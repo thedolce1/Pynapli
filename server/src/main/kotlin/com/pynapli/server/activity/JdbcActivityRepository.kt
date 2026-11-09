@@ -1,5 +1,6 @@
 package com.pynapli.server.activity
 
+import com.pynapli.server.db.withConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Timestamp
@@ -197,24 +198,22 @@ class JdbcActivityRepository(
         }
 
     override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.prepareStatement(JdbcActivitySql.ACTIVITY_FEED_QUERY).use { statement ->
-                    val eventTypeArray = connection.createArrayOf("text", query.eventTypes.toTypedArray())
-                    statement.setObject(1, query.recipientUserId)
-                    statement.setObject(2, query.recipientUserId)
-                    statement.setBoolean(3, query.eventTypes.isEmpty())
-                    statement.setArray(4, eventTypeArray)
-                    statement.setBoolean(5, query.cursor != null)
-                    statement.setTimestamp(6, query.cursor?.occurredAt?.let { Timestamp.from(it) })
-                    statement.setTimestamp(7, query.cursor?.occurredAt?.let { Timestamp.from(it) })
-                    statement.setObject(8, query.cursor?.eventId)
-                    statement.setInt(9, query.limit)
-                    statement.executeQuery().use { rs ->
-                        buildList {
-                            while (rs.next()) {
-                                add(JdbcActivityRowMappers.activityEvent(rs))
-                            }
+        dataSource.withConnection { connection ->
+            connection.prepareStatement(JdbcActivitySql.ACTIVITY_FEED_QUERY).use { statement ->
+                val eventTypeArray = connection.createArrayOf("text", query.eventTypes.toTypedArray())
+                statement.setObject(1, query.recipientUserId)
+                statement.setObject(2, query.recipientUserId)
+                statement.setBoolean(3, query.eventTypes.isEmpty())
+                statement.setArray(4, eventTypeArray)
+                statement.setBoolean(5, query.cursor != null)
+                statement.setTimestamp(6, query.cursor?.occurredAt?.let { Timestamp.from(it) })
+                statement.setTimestamp(7, query.cursor?.occurredAt?.let { Timestamp.from(it) })
+                statement.setObject(8, query.cursor?.eventId)
+                statement.setInt(9, query.limit)
+                statement.executeQuery().use { rs ->
+                    buildList {
+                        while (rs.next()) {
+                            add(JdbcActivityRowMappers.activityEvent(rs))
                         }
                     }
                 }
@@ -222,14 +221,12 @@ class JdbcActivityRepository(
         }
 
     override suspend fun getActivitySummary(recipientUserId: UUID): ActivitySummaryRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.prepareStatement(JdbcActivitySql.ACTIVITY_SUMMARY_QUERY).use { statement ->
-                    statement.setObject(1, recipientUserId)
-                    statement.executeQuery().use { rs ->
-                        rs.next()
-                        JdbcActivityRowMappers.summary(rs)
-                    }
+        dataSource.withConnection { connection ->
+            connection.prepareStatement(JdbcActivitySql.ACTIVITY_SUMMARY_QUERY).use { statement ->
+                statement.setObject(1, recipientUserId)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    JdbcActivityRowMappers.summary(rs)
                 }
             }
         }
@@ -255,13 +252,11 @@ class JdbcActivityRepository(
         recipientUserId: UUID,
         eventId: UUID,
     ): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.prepareStatement(JdbcActivitySql.DISMISS_ACTIVITY_EVENT_QUERY).use { statement ->
-                    statement.setObject(1, eventId)
-                    statement.setObject(2, recipientUserId)
-                    statement.executeUpdate() > 0
-                }
+        dataSource.withConnection { connection ->
+            connection.prepareStatement(JdbcActivitySql.DISMISS_ACTIVITY_EVENT_QUERY).use { statement ->
+                statement.setObject(1, eventId)
+                statement.setObject(2, recipientUserId)
+                statement.executeUpdate() > 0
             }
         }
 
@@ -269,21 +264,19 @@ class JdbcActivityRepository(
         recipientUserId: UUID,
         eventId: UUID,
     ): AlbumRequestEventRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.prepareStatement(JdbcActivitySql.GET_ALBUM_REQUEST_EVENT_QUERY).use { statement ->
-                    statement.setObject(1, eventId)
-                    statement.setObject(2, recipientUserId)
-                    statement.executeQuery().use { rs ->
-                        if (rs.next()) {
-                            AlbumRequestEventRecord(
-                                eventId = rs.getObject("id", UUID::class.java),
-                                ownerUserId = rs.getObject("recipient_user_id", UUID::class.java),
-                                requesterUserId = rs.getObject("actor_user_id", UUID::class.java),
-                            )
-                        } else {
-                            null
-                        }
+        dataSource.withConnection { connection ->
+            connection.prepareStatement(JdbcActivitySql.GET_ALBUM_REQUEST_EVENT_QUERY).use { statement ->
+                statement.setObject(1, eventId)
+                statement.setObject(2, recipientUserId)
+                statement.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        AlbumRequestEventRecord(
+                            eventId = rs.getObject("id", UUID::class.java),
+                            ownerUserId = rs.getObject("recipient_user_id", UUID::class.java),
+                            requesterUserId = rs.getObject("actor_user_id", UUID::class.java),
+                        )
+                    } else {
+                        null
                     }
                 }
             }

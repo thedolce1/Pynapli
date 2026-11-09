@@ -1,5 +1,6 @@
 package com.pynapli.server.moderation
 
+import com.pynapli.server.db.inTransaction
 import java.sql.Connection
 import java.util.UUID
 
@@ -9,9 +10,7 @@ internal fun Connection.setRiskTierWithAudit(
     actorId: String,
     reason: String,
 ): AdminRiskActionRecord? {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
+    inTransaction {
         if (!activeOrPausedUserExists(userId)) {
             rollback()
             return null
@@ -51,10 +50,5 @@ internal fun Connection.setRiskTierWithAudit(
         )
         commit()
         return state
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
     }
 }

@@ -1,7 +1,6 @@
 package com.pynapli.server.account
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.withConnection
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -35,30 +34,28 @@ class JdbcAccountDataExportArchiver(
     private val clock: Clock = Clock.systemUTC(),
 ) : AccountDataExportArchiver {
     override suspend fun buildArchive(userId: UUID): ExportArchive =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val document =
-                    buildJsonObject {
-                        put("exportedAt", clock.instant().toString())
-                        put("userId", userId.toString())
-                        put("account", connection.queryRows("SELECT id, created_at FROM users WHERE id = ?", userId))
-                        put("profile", connection.queryRows("SELECT * FROM profiles WHERE user_id = ?", userId))
-                        put("discoverySettings", connection.queryRows("SELECT * FROM discovery_settings WHERE user_id = ?", userId))
-                        put(
-                            "sentMessages",
-                            connection.queryRows("SELECT * FROM messages WHERE sender_user_id = ? ORDER BY created_at", userId),
-                        )
-                        put(
-                            "activity",
-                            connection.queryRows("SELECT * FROM activity_events WHERE recipient_user_id = ? ORDER BY occurred_at", userId),
-                        )
-                    }
-                ExportArchive(
-                    filename = "pynapli-data-export-$userId.json",
-                    contentType = "application/json",
-                    bytes = PRETTY_JSON.encodeToString(JsonObject.serializer(), document).encodeToByteArray(),
-                )
-            }
+        dataSource.withConnection { connection ->
+            val document =
+                buildJsonObject {
+                    put("exportedAt", clock.instant().toString())
+                    put("userId", userId.toString())
+                    put("account", connection.queryRows("SELECT id, created_at FROM users WHERE id = ?", userId))
+                    put("profile", connection.queryRows("SELECT * FROM profiles WHERE user_id = ?", userId))
+                    put("discoverySettings", connection.queryRows("SELECT * FROM discovery_settings WHERE user_id = ?", userId))
+                    put(
+                        "sentMessages",
+                        connection.queryRows("SELECT * FROM messages WHERE sender_user_id = ? ORDER BY created_at", userId),
+                    )
+                    put(
+                        "activity",
+                        connection.queryRows("SELECT * FROM activity_events WHERE recipient_user_id = ? ORDER BY occurred_at", userId),
+                    )
+                }
+            ExportArchive(
+                filename = "pynapli-data-export-$userId.json",
+                contentType = "application/json",
+                bytes = PRETTY_JSON.encodeToString(JsonObject.serializer(), document).encodeToByteArray(),
+            )
         }
 
     private fun Connection.queryRows(

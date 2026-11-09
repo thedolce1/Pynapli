@@ -1,8 +1,7 @@
 package com.pynapli.server.admin
 
+import com.pynapli.server.db.withConnection
 import com.pynapli.server.moderation.insertAdminAuditLog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import javax.sql.DataSource
@@ -54,17 +53,15 @@ internal class JdbcAdminRequestAuditRecorder(
                 put("path", path)
                 put("status", status)
             }.toString()
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.insertAdminAuditLog(
-                    actorId = actorId,
-                    action = "admin_request",
-                    targetType = "route",
-                    targetId = null,
-                    reason = null,
-                    metadataJson = metadata,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.insertAdminAuditLog(
+                actorId = actorId,
+                action = "admin_request",
+                targetType = "route",
+                targetId = null,
+                reason = null,
+                metadataJson = metadata,
+            )
         }
     }
 }

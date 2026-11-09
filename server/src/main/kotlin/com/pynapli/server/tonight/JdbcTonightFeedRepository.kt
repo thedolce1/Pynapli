@@ -1,7 +1,6 @@
 package com.pynapli.server.tonight
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.withConnection
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -29,42 +28,40 @@ class JdbcTonightFeedRepository(
         limit: Int,
         now: Instant,
     ): List<TonightFeedRow> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.prepareStatement(SQL).use { statement ->
-                    statement.setObject(1, viewerUserId) // viewer_location CTE
-                    statement.setTimestamp(2, Timestamp.from(now)) // ts.expires_at > ?
-                    statement.setObject(3, viewerUserId) // owner.id <> ?
-                    statement.setDouble(4, radiusMeters.toDouble()) // ST_DWithin radius
-                    statement.setString(5, intent) // intent filter sentinel
-                    statement.setString(6, intent) // intent filter value
-                    statement.setInt(7, limit)
-                    statement.executeQuery().use { rs ->
-                        buildList {
-                            while (rs.next()) {
-                                add(
-                                    TonightFeedRow(
-                                        sessionId = rs.getObject("session_id", UUID::class.java),
-                                        mode = rs.getString("mode"),
-                                        intent = rs.getString("intent"),
-                                        hostMode = rs.getString("host_mode"),
-                                        note = rs.getString("note"),
-                                        photoMediaAssetId = rs.getObject("photo_media_asset_id", UUID::class.java),
-                                        ownerUserId = rs.getObject("owner_user_id", UUID::class.java),
-                                        ownerDisplayName = rs.getString("owner_display_name"),
-                                        ownerShowDistance = rs.getBoolean("owner_show_distance"),
-                                        ownerDistanceMeters = rs.getDouble("owner_distance_meters"),
-                                        ownerThumbnailMediaAssetId =
-                                            rs.getObject("owner_thumbnail_media_asset_id", UUID::class.java),
-                                        ownerLatE3 = rs.getInt("owner_lat_e3"),
-                                        ownerLonE3 = rs.getInt("owner_lon_e3"),
-                                        partnerUserId = rs.getObject("partner_user_id", UUID::class.java),
-                                        partnerDisplayName = rs.getString("partner_display_name"),
-                                        partnerThumbnailMediaAssetId =
-                                            rs.getObject("partner_thumbnail_media_asset_id", UUID::class.java),
-                                    ),
-                                )
-                            }
+        dataSource.withConnection { connection ->
+            connection.prepareStatement(SQL).use { statement ->
+                statement.setObject(1, viewerUserId) // viewer_location CTE
+                statement.setTimestamp(2, Timestamp.from(now)) // ts.expires_at > ?
+                statement.setObject(3, viewerUserId) // owner.id <> ?
+                statement.setDouble(4, radiusMeters.toDouble()) // ST_DWithin radius
+                statement.setString(5, intent) // intent filter sentinel
+                statement.setString(6, intent) // intent filter value
+                statement.setInt(7, limit)
+                statement.executeQuery().use { rs ->
+                    buildList {
+                        while (rs.next()) {
+                            add(
+                                TonightFeedRow(
+                                    sessionId = rs.getObject("session_id", UUID::class.java),
+                                    mode = rs.getString("mode"),
+                                    intent = rs.getString("intent"),
+                                    hostMode = rs.getString("host_mode"),
+                                    note = rs.getString("note"),
+                                    photoMediaAssetId = rs.getObject("photo_media_asset_id", UUID::class.java),
+                                    ownerUserId = rs.getObject("owner_user_id", UUID::class.java),
+                                    ownerDisplayName = rs.getString("owner_display_name"),
+                                    ownerShowDistance = rs.getBoolean("owner_show_distance"),
+                                    ownerDistanceMeters = rs.getDouble("owner_distance_meters"),
+                                    ownerThumbnailMediaAssetId =
+                                        rs.getObject("owner_thumbnail_media_asset_id", UUID::class.java),
+                                    ownerLatE3 = rs.getInt("owner_lat_e3"),
+                                    ownerLonE3 = rs.getInt("owner_lon_e3"),
+                                    partnerUserId = rs.getObject("partner_user_id", UUID::class.java),
+                                    partnerDisplayName = rs.getString("partner_display_name"),
+                                    partnerThumbnailMediaAssetId =
+                                        rs.getObject("partner_thumbnail_media_asset_id", UUID::class.java),
+                                ),
+                            )
                         }
                     }
                 }

@@ -1,7 +1,6 @@
 package com.pynapli.server.swipe
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.withConnection
 import java.util.UUID
 import javax.sql.DataSource
 
@@ -12,9 +11,7 @@ internal class JdbcSwipeMatchActions(
         viewerUserId: UUID,
         limit: Int,
     ): List<MatchSummaryRecord> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.listMatchSummaries(viewerUserId, limit)
-            }
+        dataSource.withConnection { connection ->
+            connection.listMatchSummaries(viewerUserId, limit)
         }
 }

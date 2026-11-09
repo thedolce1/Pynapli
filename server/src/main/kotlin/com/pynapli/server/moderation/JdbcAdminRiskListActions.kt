@@ -1,5 +1,6 @@
 package com.pynapli.server.moderation
 
+import com.pynapli.server.db.inTransaction
 import java.sql.Connection
 import java.util.UUID
 
@@ -9,9 +10,7 @@ internal fun Connection.listRiskStatesWithAudit(
     actorId: String,
     reason: String,
 ): List<AdminRiskStateRecord> {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
+    inTransaction {
         insertAdminAuditLog(
             actorId = actorId,
             action = "risk_states.list",
@@ -23,11 +22,6 @@ internal fun Connection.listRiskStatesWithAudit(
         val states = selectRiskStates(tierFilter, limit)
         commit()
         return states
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
     }
 }
 
@@ -37,9 +31,7 @@ internal fun Connection.listRiskEventsWithAudit(
     actorId: String,
     reason: String,
 ): List<AdminRiskEventRecord> {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
+    inTransaction {
         insertAdminAuditLog(
             actorId = actorId,
             action = "risk_events.list",
@@ -51,10 +43,5 @@ internal fun Connection.listRiskEventsWithAudit(
         val events = selectRiskEvents(userId, limit)
         commit()
         return events
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
     }
 }

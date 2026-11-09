@@ -1,5 +1,7 @@
 package com.pynapli.server.subscriptions
 
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.withConnection
 import com.pynapli.server.moderation.insertAdminAuditLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -61,34 +63,32 @@ internal class JdbcSubscriptionEntitlementActions(
         actorId: String,
         reason: String,
     ): StoredEntitlementRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runSubscriptionTransaction {
-                    val record =
-                        grantStoredEntitlementRecord(
-                            userId = userId,
-                            tier = tier,
-                            source = source,
-                            startsAt = startsAt,
-                            endsAt = endsAt,
-                        ) ?: return@runSubscriptionTransaction null
-                    insertAdminAuditLog(
-                        actorId = actorId,
-                        action = "subscription_entitlement.grant",
-                        targetType = "entitlement",
-                        targetId = record.entitlementId,
-                        reason = reason,
-                        metadataJson =
-                            buildJsonObject {
-                                put("userId", userId.toString())
-                                put("tier", tier)
-                                put("source", source)
-                                put("startsAt", startsAt.toString())
-                                put("endsAt", endsAt?.toString())
-                            }.toString(),
-                    )
-                    record
-                }
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                val record =
+                    grantStoredEntitlementRecord(
+                        userId = userId,
+                        tier = tier,
+                        source = source,
+                        startsAt = startsAt,
+                        endsAt = endsAt,
+                    ) ?: return@inTransaction null
+                insertAdminAuditLog(
+                    actorId = actorId,
+                    action = "subscription_entitlement.grant",
+                    targetType = "entitlement",
+                    targetId = record.entitlementId,
+                    reason = reason,
+                    metadataJson =
+                        buildJsonObject {
+                            put("userId", userId.toString())
+                            put("tier", tier)
+                            put("source", source)
+                            put("startsAt", startsAt.toString())
+                            put("endsAt", endsAt?.toString())
+                        }.toString(),
+                )
+                record
             }
         }
 
@@ -97,25 +97,23 @@ internal class JdbcSubscriptionEntitlementActions(
         actorId: String,
         reason: String,
     ): StoredEntitlementRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runSubscriptionTransaction {
-                    val record = revokeStoredEntitlementRecord(entitlementId) ?: return@runSubscriptionTransaction null
-                    insertAdminAuditLog(
-                        actorId = actorId,
-                        action = "subscription_entitlement.revoke",
-                        targetType = "entitlement",
-                        targetId = record.entitlementId,
-                        reason = reason,
-                        metadataJson =
-                            buildJsonObject {
-                                put("userId", record.userId.toString())
-                                put("tier", record.tier)
-                                put("source", record.source)
-                            }.toString(),
-                    )
-                    record
-                }
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                val record = revokeStoredEntitlementRecord(entitlementId) ?: return@inTransaction null
+                insertAdminAuditLog(
+                    actorId = actorId,
+                    action = "subscription_entitlement.revoke",
+                    targetType = "entitlement",
+                    targetId = record.entitlementId,
+                    reason = reason,
+                    metadataJson =
+                        buildJsonObject {
+                            put("userId", record.userId.toString())
+                            put("tier", record.tier)
+                            put("source", record.source)
+                        }.toString(),
+                )
+                record
             }
         }
 }

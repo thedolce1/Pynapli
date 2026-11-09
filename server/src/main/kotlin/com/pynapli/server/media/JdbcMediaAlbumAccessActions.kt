@@ -1,5 +1,6 @@
 package com.pynapli.server.media
 
+import com.pynapli.server.db.inTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
@@ -80,9 +81,7 @@ internal suspend fun DataSource.decideMediaAlbumAccessRequest(
 ): MediaAlbumAccessRequestRecord? =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
+            connection.inTransaction {
                 val request = connection.updatePendingAlbumAccessRequest(ownerUserId, requesterUserId, approved, decidedByUserId)
 
                 if (request == null) {
@@ -101,11 +100,6 @@ internal suspend fun DataSource.decideMediaAlbumAccessRequest(
 
                 connection.commit()
                 request
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
             }
         }
     }

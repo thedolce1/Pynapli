@@ -1,5 +1,6 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.db.inTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -12,9 +13,7 @@ internal suspend fun DataSource.inviteLinkedMessagingPartner(
 ): PartnerInviteResult =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
+            connection.inTransaction {
                 if (!connection.isActiveParticipant(inviterUserId, conversationId)) {
                     connection.rollback()
                     return@withContext PartnerInviteResult.ConversationNotFound
@@ -64,11 +63,6 @@ internal suspend fun DataSource.inviteLinkedMessagingPartner(
                         }
                 connection.commit()
                 PartnerInviteResult.Invited(conversation)
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
             }
         }
     }
@@ -79,9 +73,7 @@ internal suspend fun DataSource.acceptMessagingPartnerInvite(
 ): ConversationDetailRecord? =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
+            connection.inTransaction {
                 val invite =
                     connection.loadOpenPartnerInvite(conversationId, forUpdate = true)
                         ?: run {
@@ -113,11 +105,6 @@ internal suspend fun DataSource.acceptMessagingPartnerInvite(
                     }
                 connection.commit()
                 detail
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
             }
         }
     }
@@ -128,9 +115,7 @@ internal suspend fun DataSource.declineMessagingPartnerInvite(
 ): Boolean =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
+            connection.inTransaction {
                 val invite =
                     connection.loadOpenPartnerInvite(conversationId, forUpdate = true)
                         ?: run {
@@ -146,11 +131,6 @@ internal suspend fun DataSource.declineMessagingPartnerInvite(
                 connection.declineOpenPartnerInvite(conversationId, invite, userRole)
                 connection.commit()
                 true
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
             }
         }
     }

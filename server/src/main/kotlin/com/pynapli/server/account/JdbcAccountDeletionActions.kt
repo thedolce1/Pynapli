@@ -1,7 +1,7 @@
 package com.pynapli.server.account
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.withConnection
 import java.sql.Connection
 import java.util.UUID
 import javax.sql.DataSource
@@ -10,46 +10,37 @@ internal class JdbcAccountDeletionActions(
     private val dataSource: DataSource,
 ) {
     suspend fun deleteAccount(userId: UUID): AccountDeletionResult? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val previousAutoCommit = connection.autoCommit
-                connection.autoCommit = false
-                try {
-                    val deleted = markUserDeleted(connection, userId)
-                    if (!deleted) {
-                        connection.rollback()
-                        return@withContext null
-                    }
-
-                    hideProfile(connection, userId)
-                    removeFromDiscovery(connection, userId)
-                    clearActiveTravelLocation(connection, userId)
-                    // GDPR/CCPA erasure: scrub PII while preserving safety/legal audit rows.
-                    anonymizeUserIdentity(connection, userId)
-                    anonymizeAuthIdentities(connection, userId)
-                    anonymizeProfile(connection, userId)
-                    val purgedLocationCount = purgeExactLocation(connection, userId)
-                    val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
-                    val endedBenefitCount = endLinkedPartnerBenefits(connection, userId)
-                    val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
-                    val revokedSessionCount = revokeSessions(connection, userId)
-                    recordDeletionEvent(connection, userId, revokedSessionCount)
-
-                    connection.commit()
-                    AccountDeletionResult(
-                        userId = userId,
-                        revokedSessionCount = revokedSessionCount,
-                        purgedLocationCount = purgedLocationCount,
-                        endedPartnerLinkCount = endedPartnerLinkCount,
-                        endedPartnerBenefitCount = endedBenefitCount,
-                        softDeletedMediaCount = softDeletedMediaCount,
-                    )
-                } catch (error: Throwable) {
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                val deleted = markUserDeleted(connection, userId)
+                if (!deleted) {
                     connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = previousAutoCommit
+                    return@withConnection null
                 }
+
+                hideProfile(connection, userId)
+                removeFromDiscovery(connection, userId)
+                clearActiveTravelLocation(connection, userId)
+                // GDPR/CCPA erasure: scrub PII while preserving safety/legal audit rows.
+                anonymizeUserIdentity(connection, userId)
+                anonymizeAuthIdentities(connection, userId)
+                anonymizeProfile(connection, userId)
+                val purgedLocationCount = purgeExactLocation(connection, userId)
+                val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
+                val endedBenefitCount = endLinkedPartnerBenefits(connection, userId)
+                val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
+                val revokedSessionCount = revokeSessions(connection, userId)
+                recordDeletionEvent(connection, userId, revokedSessionCount)
+
+                connection.commit()
+                AccountDeletionResult(
+                    userId = userId,
+                    revokedSessionCount = revokedSessionCount,
+                    purgedLocationCount = purgedLocationCount,
+                    endedPartnerLinkCount = endedPartnerLinkCount,
+                    endedPartnerBenefitCount = endedBenefitCount,
+                    softDeletedMediaCount = softDeletedMediaCount,
+                )
             }
         }
 

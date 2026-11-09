@@ -1,5 +1,6 @@
 package com.pynapli.server.tonight
 
+import com.pynapli.server.db.inTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Timestamp
@@ -14,7 +15,7 @@ internal suspend fun DataSource.claimTonightSessionsDueForReminder(
 ): List<TonightSessionRepository.TonightReminderTarget> =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            connection.inTonightTransaction {
+            connection.inTransaction {
                 // Lock the due-but-unreminded rows; SKIP LOCKED lets concurrent ticks/instances
                 // each take a disjoint set instead of blocking on one another.
                 val dueSessionIds =
@@ -38,7 +39,7 @@ internal suspend fun DataSource.claimTonightSessionsDueForReminder(
                         }
 
                 if (dueSessionIds.isEmpty()) {
-                    return@inTonightTransaction emptyList()
+                    return@inTransaction emptyList()
                 }
 
                 connection

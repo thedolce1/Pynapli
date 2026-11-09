@@ -1,5 +1,6 @@
 package com.pynapli.server.moderation
 
+import com.pynapli.server.db.inTransaction
 import java.sql.Connection
 
 internal fun Connection.listReportsWithAudit(
@@ -8,9 +9,7 @@ internal fun Connection.listReportsWithAudit(
     actorId: String,
     reason: String,
 ): List<AdminReportRecord> {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
+    inTransaction {
         insertAdminAuditLog(
             actorId = actorId,
             action = "reports.list",
@@ -22,11 +21,6 @@ internal fun Connection.listReportsWithAudit(
         val reports = selectReports(status, limit)
         commit()
         return reports
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
     }
 }
 

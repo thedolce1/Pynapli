@@ -1,7 +1,6 @@
 package com.pynapli.server.moderation
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.withConnection
 import java.util.UUID
 import javax.sql.DataSource
 
@@ -14,15 +13,13 @@ class JdbcAdminReportRepository(
         actorId: String,
         reason: String,
     ): List<AdminReportRecord> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.listReportsWithAudit(
-                    status = status,
-                    limit = limit,
-                    actorId = actorId,
-                    reason = reason,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.listReportsWithAudit(
+                status = status,
+                limit = limit,
+                actorId = actorId,
+                reason = reason,
+            )
         }
 
     override suspend fun updateReportStatus(
@@ -31,15 +28,13 @@ class JdbcAdminReportRepository(
         actorId: String,
         reason: String,
     ): AdminReportActionRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.updateReportStatusWithAudit(
-                    reportId = reportId,
-                    status = status,
-                    actorId = actorId,
-                    reason = reason,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.updateReportStatusWithAudit(
+                reportId = reportId,
+                status = status,
+                actorId = actorId,
+                reason = reason,
+            )
         }
 
     override suspend fun resolveReportAndRemoveMedia(
@@ -47,13 +42,11 @@ class JdbcAdminReportRepository(
         actorId: String,
         reason: String,
     ): AdminReportActionRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.resolveReportAndRemoveMediaWithAudit(
-                    reportId = reportId,
-                    actorId = actorId,
-                    reason = reason,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.resolveReportAndRemoveMediaWithAudit(
+                reportId = reportId,
+                actorId = actorId,
+                reason = reason,
+            )
         }
 }

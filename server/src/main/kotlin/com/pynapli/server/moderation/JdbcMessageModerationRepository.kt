@@ -1,7 +1,7 @@
 package com.pynapli.server.moderation
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.withConnection
 import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Timestamp
@@ -17,28 +17,19 @@ class JdbcMessageModerationRepository(
         actorId: String,
         reason: String,
     ): List<MessageReviewRecord> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val previousAutoCommit = connection.autoCommit
-                connection.autoCommit = false
-                try {
-                    connection.insertAdminAuditLog(
-                        actorId = actorId,
-                        action = "message_review_queue.list",
-                        targetType = "message_review_queue",
-                        targetId = null,
-                        reason = reason,
-                        metadataJson = """{"limit":$limit}""",
-                    )
-                    val items = connection.selectOpenMessageReviews(limit)
-                    connection.commit()
-                    items
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = previousAutoCommit
-                }
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                connection.insertAdminAuditLog(
+                    actorId = actorId,
+                    action = "message_review_queue.list",
+                    targetType = "message_review_queue",
+                    targetId = null,
+                    reason = reason,
+                    metadataJson = """{"limit":$limit}""",
+                )
+                val items = connection.selectOpenMessageReviews(limit)
+                connection.commit()
+                items
             }
         }
 
@@ -47,17 +38,15 @@ class JdbcMessageModerationRepository(
         actorId: String,
         reason: String,
     ): MessageReviewActionRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.reviewHeldMessage(
-                    messageId = messageId,
-                    actorId = actorId,
-                    reason = reason,
-                    messageStatus = "visible",
-                    queueStatus = "released",
-                    auditAction = "message_review.release",
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.reviewHeldMessage(
+                messageId = messageId,
+                actorId = actorId,
+                reason = reason,
+                messageStatus = "visible",
+                queueStatus = "released",
+                auditAction = "message_review.release",
+            )
         }
 
     override suspend fun removeHeldMessage(
@@ -65,17 +54,15 @@ class JdbcMessageModerationRepository(
         actorId: String,
         reason: String,
     ): MessageReviewActionRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.reviewHeldMessage(
-                    messageId = messageId,
-                    actorId = actorId,
-                    reason = reason,
-                    messageStatus = "removed",
-                    queueStatus = "removed",
-                    auditAction = "message_review.remove",
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.reviewHeldMessage(
+                messageId = messageId,
+                actorId = actorId,
+                reason = reason,
+                messageStatus = "removed",
+                queueStatus = "removed",
+                auditAction = "message_review.remove",
+            )
         }
 
     private fun Connection.selectOpenMessageReviews(limit: Int): List<MessageReviewRecord> =
@@ -116,9 +103,7 @@ class JdbcMessageModerationRepository(
         queueStatus: String,
         auditAction: String,
     ): MessageReviewActionRecord? {
-        val previousAutoCommit = autoCommit
-        autoCommit = false
-        try {
+        inTransaction {
             val queued =
                 lockOpenQueuedMessage(messageId) ?: run {
                     rollback()
@@ -158,11 +143,6 @@ class JdbcMessageModerationRepository(
                 queueStatus = queueStatus,
                 reviewedAt = reviewedAt,
             )
-        } catch (error: Throwable) {
-            rollback()
-            throw error
-        } finally {
-            autoCommit = previousAutoCommit
         }
     }
 

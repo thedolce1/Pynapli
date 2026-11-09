@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.db.inTransaction
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
@@ -16,9 +17,7 @@ internal fun Connection.recordSwipeActionTransaction(
     matchIdFactory: () -> UUID,
     afterInsert: Connection.() -> Unit = {},
 ): SwipeActionResult {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
+    inTransaction {
         if (!insertSwipeAction(actionId, actorUserId, targetUserId, action, noteText, consumedInventoryId, travelLocationId)) {
             val existing = findSwipeActionById(actionId, actorUserId)
             rollback()
@@ -34,11 +33,6 @@ internal fun Connection.recordSwipeActionTransaction(
 
         commit()
         return SwipeActionResult(recorded = true, match = match)
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
     }
 }
 
@@ -106,9 +100,7 @@ internal fun Connection.rewindSwipeActionTransaction(
     card: SwipeDeckSessionCardRecord,
     rewoundAt: Instant,
 ): Boolean {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
+    inTransaction {
         val rewoundAction =
             markSwipeActionRewound(actionId, actorUserId, targetUserId, rewoundAt)
                 ?: run {
@@ -121,11 +113,6 @@ internal fun Connection.rewindSwipeActionTransaction(
         insertDeckCards(listOf(card))
         commit()
         return true
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
     }
 }
 

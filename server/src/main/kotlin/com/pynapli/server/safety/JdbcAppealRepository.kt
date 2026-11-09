@@ -1,7 +1,6 @@
 package com.pynapli.server.safety
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.withConnection
 import java.util.UUID
 import javax.sql.DataSource
 
@@ -17,37 +16,31 @@ class JdbcAppealRepository(
         reason: String,
         appealIdFactory: () -> UUID,
     ): CreateAppealResult =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.createAppealInTransaction(
-                    userId = userId,
-                    actionType = actionType,
-                    targetType = targetType,
-                    targetId = targetId,
-                    relatedReportId = relatedReportId,
-                    reason = reason,
-                    appealIdFactory = appealIdFactory,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.createAppealInTransaction(
+                userId = userId,
+                actionType = actionType,
+                targetType = targetType,
+                targetId = targetId,
+                relatedReportId = relatedReportId,
+                reason = reason,
+                appealIdFactory = appealIdFactory,
+            )
         }
 
     override suspend fun listAppeals(
         userId: UUID,
         limit: Int,
     ): List<AppealRecord> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.selectAppealsByUser(userId, limit)
-            }
+        dataSource.withConnection { connection ->
+            connection.selectAppealsByUser(userId, limit)
         }
 
     override suspend fun withdrawAppeal(
         userId: UUID,
         appealId: UUID,
     ): AppealRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.withdrawAppealByUser(userId, appealId)
-            }
+        dataSource.withConnection { connection ->
+            connection.withdrawAppealByUser(userId, appealId)
         }
 }

@@ -1,8 +1,8 @@
 package com.pynapli.server.location
 
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.withConnection
 import com.pynapli.shared.network.dto.TravelLocationStatus
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
@@ -13,10 +13,8 @@ class JdbcTravelLocationRepository(
     private val dataSource: DataSource,
 ) : TravelLocationRepository {
     override suspend fun findActive(userId: UUID): TravelLocationRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.selectActive(userId)
-            }
+        dataSource.withConnection { connection ->
+            connection.selectActive(userId)
         }
 
     override suspend fun setActive(
@@ -24,52 +22,43 @@ class JdbcTravelLocationRepository(
         request: TravelLocationUpsert,
         now: Instant,
     ): TravelLocationRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val previousAutoCommit = connection.autoCommit
-                connection.autoCommit = false
-                try {
-                    // Clear any existing active row so the partial unique index lets us insert.
-                    connection.clearActiveRow(userId, now)
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                // Clear any existing active row so the partial unique index lets us insert.
+                connection.clearActiveRow(userId, now)
 
-                    val newId = UUID.randomUUID()
-                    connection
-                        .prepareStatement(
-                            """
-                            INSERT INTO travel_locations (
-                                id, user_id, city, region, country, geom,
-                                active_from, status
-                            )
-                            VALUES (
-                                ?, ?, ?, ?, ?,
-                                ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
-                                ?, ?
-                            )
-                            """.trimIndent(),
-                        ).use { statement ->
-                            statement.setObject(1, newId)
-                            statement.setObject(2, userId)
-                            statement.setString(3, request.city)
-                            statement.setString(4, request.region)
-                            statement.setString(5, request.country)
-                            statement.setDouble(6, request.longitude)
-                            statement.setDouble(7, request.latitude)
-                            statement.setTimestamp(8, Timestamp.from(now))
-                            statement.setString(9, TravelLocationStatus.ACTIVE)
-                            statement.executeUpdate()
-                        }
+                val newId = UUID.randomUUID()
+                connection
+                    .prepareStatement(
+                        """
+                        INSERT INTO travel_locations (
+                            id, user_id, city, region, country, geom,
+                            active_from, status
+                        )
+                        VALUES (
+                            ?, ?, ?, ?, ?,
+                            ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
+                            ?, ?
+                        )
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, newId)
+                        statement.setObject(2, userId)
+                        statement.setString(3, request.city)
+                        statement.setString(4, request.region)
+                        statement.setString(5, request.country)
+                        statement.setDouble(6, request.longitude)
+                        statement.setDouble(7, request.latitude)
+                        statement.setTimestamp(8, Timestamp.from(now))
+                        statement.setString(9, TravelLocationStatus.ACTIVE)
+                        statement.executeUpdate()
+                    }
 
-                    val record =
-                        connection.selectActive(userId)
-                            ?: error("INSERT ... travel_locations returned no readable active row")
-                    connection.commit()
-                    record
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = previousAutoCommit
-                }
+                val record =
+                    connection.selectActive(userId)
+                        ?: error("INSERT ... travel_locations returned no readable active row")
+                connection.commit()
+                record
             }
         }
 
@@ -77,37 +66,33 @@ class JdbcTravelLocationRepository(
         userId: UUID,
         now: Instant,
     ): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.clearActiveRow(userId, now) > 0
-            }
+        dataSource.withConnection { connection ->
+            connection.clearActiveRow(userId, now) > 0
         }
 
     override suspend fun countActivationsSince(
         userId: UUID,
         since: Instant,
     ): Int =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                // Uses idx_travel_locations_user_active_from (V50) for an
-                // index-only count over the recent window.
-                connection
-                    .prepareStatement(
-                        """
-                        SELECT count(*)::integer
-                        FROM travel_locations
-                        WHERE user_id = ?
-                          AND active_from >= ?
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, userId)
-                        statement.setTimestamp(2, Timestamp.from(since))
-                        statement.executeQuery().use { rs ->
-                            rs.next()
-                            rs.getInt(1)
-                        }
+        dataSource.withConnection { connection ->
+            // Uses idx_travel_locations_user_active_from (V50) for an
+            // index-only count over the recent window.
+            connection
+                .prepareStatement(
+                    """
+                    SELECT count(*)::integer
+                    FROM travel_locations
+                    WHERE user_id = ?
+                      AND active_from >= ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.setTimestamp(2, Timestamp.from(since))
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getInt(1)
                     }
-            }
+                }
         }
 
     private fun Connection.clearActiveRow(

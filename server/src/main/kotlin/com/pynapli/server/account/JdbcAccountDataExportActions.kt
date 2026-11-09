@@ -1,5 +1,6 @@
 package com.pynapli.server.account
 
+import com.pynapli.server.db.withConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.PreparedStatement
@@ -13,25 +14,23 @@ internal class JdbcAccountDataExportActions(
     private val dataSource: DataSource,
 ) {
     suspend fun latestDataExportRequest(userId: UUID): AccountDataExportRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        SELECT $EXPORT_COLUMNS
-                        FROM account_data_export_requests
-                        WHERE user_id = ?
-                        ORDER BY requested_at DESC
-                        LIMIT 1
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, userId)
-                        statement.executeQuery().use { rs ->
-                            if (!rs.next()) return@withContext null
-                            rs.toAccountDataExportRecord()
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT $EXPORT_COLUMNS
+                    FROM account_data_export_requests
+                    WHERE user_id = ?
+                    ORDER BY requested_at DESC
+                    LIMIT 1
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeQuery().use { rs ->
+                        if (!rs.next()) return@withConnection null
+                        rs.toAccountDataExportRecord()
                     }
-            }
+                }
         }
 
     suspend fun createDataExportRequest(userId: UUID): AccountDataExportRecord =
@@ -93,24 +92,22 @@ internal class JdbcAccountDataExportActions(
         maxAttempts: Int,
         errorMessage: String,
     ): Int =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        UPDATE account_data_export_requests
-                        SET status = 'failed', error_message = ?
-                        WHERE status = 'processing'
-                          AND attempts >= ?
-                          AND processing_started_at < now() - make_interval(secs => ?)
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setString(1, errorMessage)
-                        statement.setInt(2, maxAttempts)
-                        statement.setLong(3, staleAfter.seconds)
-                        statement.executeUpdate()
-                    }
-            }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    UPDATE account_data_export_requests
+                    SET status = 'failed', error_message = ?
+                    WHERE status = 'processing'
+                      AND attempts >= ?
+                      AND processing_started_at < now() - make_interval(secs => ?)
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setString(1, errorMessage)
+                    statement.setInt(2, maxAttempts)
+                    statement.setLong(3, staleAfter.seconds)
+                    statement.executeUpdate()
+                }
         }
 
     suspend fun markExportReady(
@@ -158,12 +155,10 @@ internal class JdbcAccountDataExportActions(
         sql: String,
         bind: PreparedStatement.() -> Unit,
     ): AccountDataExportRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.prepareStatement(sql).use { statement ->
-                    statement.bind()
-                    statement.executeQuery().use { rs -> if (rs.next()) rs.toAccountDataExportRecord() else null }
-                }
+        dataSource.withConnection { connection ->
+            connection.prepareStatement(sql).use { statement ->
+                statement.bind()
+                statement.executeQuery().use { rs -> if (rs.next()) rs.toAccountDataExportRecord() else null }
             }
         }
 

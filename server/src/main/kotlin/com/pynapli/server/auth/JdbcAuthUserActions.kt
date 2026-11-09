@@ -1,8 +1,8 @@
 package com.pynapli.server.auth
 
 import com.pynapli.server.auth.security.PasswordHash
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.withConnection
 import java.sql.Date
 import java.sql.Timestamp
 import java.time.Instant
@@ -26,60 +26,54 @@ internal class JdbcAuthUserActions(
         privacyAcceptedAt: Instant,
         privacyVersion: String,
     ): UserRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runAuthTransaction {
-                    insertUser(
-                        userId = userId,
-                        emailHash = emailHash,
-                        adultConfirmedAt = adultConfirmedAt,
-                        termsAcceptedAt = termsAcceptedAt,
-                        termsVersion = termsVersion,
-                        privacyAcceptedAt = privacyAcceptedAt,
-                        privacyVersion = privacyVersion,
-                    )
-                    insertEmailIdentity(identityId, userId, emailHash, passwordHash)
-                    insertProfile(userId, birthdate, displayAge)
-                    insertDiscoverySettings(userId)
-                    UserRecord(id = userId, status = "active")
-                }
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                insertUser(
+                    userId = userId,
+                    emailHash = emailHash,
+                    adultConfirmedAt = adultConfirmedAt,
+                    termsAcceptedAt = termsAcceptedAt,
+                    termsVersion = termsVersion,
+                    privacyAcceptedAt = privacyAcceptedAt,
+                    privacyVersion = privacyVersion,
+                )
+                insertEmailIdentity(identityId, userId, emailHash, passwordHash)
+                insertProfile(userId, birthdate, displayAge)
+                insertDiscoverySettings(userId)
+                UserRecord(id = userId, status = "active")
             }
         }
 
     suspend fun findEmailIdentity(emailHash: String): EmailIdentityRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        SELECT ai.user_id, ai.password_hash, ai.password_salt, ai.password_iterations, u.status
-                        FROM auth_identities ai
-                        JOIN users u ON u.id = ai.user_id
-                        WHERE ai.provider = 'email'
-                          AND ai.provider_subject = ?
-                          AND u.deleted_at IS NULL
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setString(1, emailHash)
-                        statement.executeQuery().use { rs ->
-                            if (rs.next()) rs.toEmailIdentityRecord() else null
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT ai.user_id, ai.password_hash, ai.password_salt, ai.password_iterations, u.status
+                    FROM auth_identities ai
+                    JOIN users u ON u.id = ai.user_id
+                    WHERE ai.provider = 'email'
+                      AND ai.provider_subject = ?
+                      AND u.deleted_at IS NULL
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setString(1, emailHash)
+                    statement.executeQuery().use { rs ->
+                        if (rs.next()) rs.toEmailIdentityRecord() else null
                     }
-            }
+                }
         }
 
     suspend fun findUser(userId: UUID): UserRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement("SELECT id, status FROM users WHERE id = ? AND deleted_at IS NULL")
-                    .use { statement ->
-                        statement.setObject(1, userId)
-                        statement.executeQuery().use { rs ->
-                            if (rs.next()) rs.toUserRecord() else null
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement("SELECT id, status FROM users WHERE id = ? AND deleted_at IS NULL")
+                .use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeQuery().use { rs ->
+                        if (rs.next()) rs.toUserRecord() else null
                     }
-            }
+                }
         }
 
     private fun java.sql.Connection.insertUser(

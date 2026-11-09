@@ -1,5 +1,6 @@
 package com.pynapli.server.tonight
 
+import com.pynapli.server.db.inTransaction
 import com.pynapli.server.tonight.TonightSessionRepository.ApproveOutcome
 import com.pynapli.server.tonight.TonightSessionRepository.MutateOutcome
 import kotlinx.coroutines.Dispatchers
@@ -12,7 +13,7 @@ import javax.sql.DataSource
 internal suspend fun DataSource.insertTonightSession(session: TonightSession): TonightSession =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            connection.inTonightTransaction {
+            connection.inTransaction {
                 connection
                     .prepareStatement(
                         """
@@ -55,15 +56,15 @@ internal suspend fun DataSource.approveTonightParticipant(
 ): ApproveOutcome =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            connection.inTonightTransaction {
+            connection.inTransaction {
                 val session =
                     connection.lockTonightSession(sessionId)
-                        ?: return@inTonightTransaction ApproveOutcome.SessionNotFound
+                        ?: return@inTransaction ApproveOutcome.SessionNotFound
                 val participant =
                     session.participants.firstOrNull { it.userId == userId }
-                        ?: return@inTonightTransaction ApproveOutcome.NotParticipant
+                        ?: return@inTransaction ApproveOutcome.NotParticipant
                 if (session.status != TONIGHT_STATUS_PROPOSED || participant.approvalStatus != TONIGHT_APPROVAL_PENDING) {
-                    return@inTonightTransaction ApproveOutcome.NotPending
+                    return@inTransaction ApproveOutcome.NotPending
                 }
 
                 connection.setTonightParticipantApproval(sessionId, userId, TONIGHT_APPROVAL_APPROVED, now)
@@ -80,7 +81,7 @@ internal suspend fun DataSource.approveTonightParticipant(
 
                 val updated =
                     connection.loadTonightSession(sessionId)
-                        ?: return@inTonightTransaction ApproveOutcome.SessionNotFound
+                        ?: return@inTransaction ApproveOutcome.SessionNotFound
                 ApproveOutcome.Updated(updated)
             }
         }
@@ -93,15 +94,15 @@ internal suspend fun DataSource.declineTonightParticipant(
 ): MutateOutcome =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            connection.inTonightTransaction {
+            connection.inTransaction {
                 val session =
                     connection.lockTonightSession(sessionId)
-                        ?: return@inTonightTransaction MutateOutcome.SessionNotFound
+                        ?: return@inTransaction MutateOutcome.SessionNotFound
                 val participant =
                     session.participants.firstOrNull { it.userId == userId }
-                        ?: return@inTonightTransaction MutateOutcome.NotParticipant
+                        ?: return@inTransaction MutateOutcome.NotParticipant
                 if (session.status != TONIGHT_STATUS_PROPOSED || participant.approvalStatus != TONIGHT_APPROVAL_PENDING) {
-                    return@inTonightTransaction MutateOutcome.NotPending
+                    return@inTransaction MutateOutcome.NotPending
                 }
 
                 connection.setTonightParticipantApproval(sessionId, userId, TONIGHT_APPROVAL_DECLINED, now)
@@ -109,7 +110,7 @@ internal suspend fun DataSource.declineTonightParticipant(
 
                 val updated =
                     connection.loadTonightSession(sessionId)
-                        ?: return@inTonightTransaction MutateOutcome.SessionNotFound
+                        ?: return@inTransaction MutateOutcome.SessionNotFound
                 MutateOutcome.Updated(updated)
             }
         }
@@ -122,15 +123,15 @@ internal suspend fun DataSource.endTonightSession(
 ): MutateOutcome =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            connection.inTonightTransaction {
+            connection.inTransaction {
                 val session =
                     connection.lockTonightSession(sessionId)
-                        ?: return@inTonightTransaction MutateOutcome.SessionNotFound
+                        ?: return@inTransaction MutateOutcome.SessionNotFound
                 if (session.participants.none { it.userId == userId }) {
-                    return@inTonightTransaction MutateOutcome.NotParticipant
+                    return@inTransaction MutateOutcome.NotParticipant
                 }
                 if (session.status != TONIGHT_STATUS_PROPOSED && session.status != TONIGHT_STATUS_ACTIVE) {
-                    return@inTonightTransaction MutateOutcome.SessionNotFound
+                    return@inTransaction MutateOutcome.SessionNotFound
                 }
 
                 connection
@@ -144,7 +145,7 @@ internal suspend fun DataSource.endTonightSession(
 
                 val updated =
                     connection.loadTonightSession(sessionId)
-                        ?: return@inTonightTransaction MutateOutcome.SessionNotFound
+                        ?: return@inTransaction MutateOutcome.SessionNotFound
                 MutateOutcome.Updated(updated)
             }
         }

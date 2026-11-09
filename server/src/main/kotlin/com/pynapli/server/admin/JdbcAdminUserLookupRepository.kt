@@ -1,8 +1,7 @@
 package com.pynapli.server.admin
 
+import com.pynapli.server.db.withConnection
 import com.pynapli.server.moderation.insertAdminAuditLog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.sql.Connection
 import java.time.Instant
 import java.util.UUID
@@ -12,23 +11,21 @@ internal class JdbcAdminUserLookupRepository(
     private val dataSource: DataSource,
 ) : AdminUserLookupRepository {
     override suspend fun moderationFacts(userId: UUID): AdminUserModerationFacts =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val risk = connection.riskState(userId)
-                AdminUserModerationFacts(
-                    riskTier = risk?.first ?: "clean",
-                    riskScore = risk?.second ?: 0,
-                    lastReviewedAt = risk?.third,
-                    recentRiskReasons = connection.recentRiskReasons(userId),
-                    reportsAgainstCount = connection.count("safety_reports", "reported_user_id", userId),
-                    reportsByCount = connection.count("safety_reports", "reporter_user_id", userId),
-                    blocksAgainstCount = connection.count("user_blocks", "blocked_user_id", userId),
-                    blocksByCount = connection.count("user_blocks", "blocker_user_id", userId),
-                    activeSessionCount = connection.activeSessionCount(userId),
-                    activeDeviceCount = connection.activeDeviceCount(userId),
-                    recentModerationActions = connection.recentModerationActions(userId),
-                )
-            }
+        dataSource.withConnection { connection ->
+            val risk = connection.riskState(userId)
+            AdminUserModerationFacts(
+                riskTier = risk?.first ?: "clean",
+                riskScore = risk?.second ?: 0,
+                lastReviewedAt = risk?.third,
+                recentRiskReasons = connection.recentRiskReasons(userId),
+                reportsAgainstCount = connection.count("safety_reports", "reported_user_id", userId),
+                reportsByCount = connection.count("safety_reports", "reporter_user_id", userId),
+                blocksAgainstCount = connection.count("user_blocks", "blocked_user_id", userId),
+                blocksByCount = connection.count("user_blocks", "blocker_user_id", userId),
+                activeSessionCount = connection.activeSessionCount(userId),
+                activeDeviceCount = connection.activeDeviceCount(userId),
+                recentModerationActions = connection.recentModerationActions(userId),
+            )
         }
 
     override suspend fun recordLookupAudit(
@@ -36,17 +33,15 @@ internal class JdbcAdminUserLookupRepository(
         userId: UUID,
         reason: String,
     ) {
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.insertAdminAuditLog(
-                    actorId = actorId,
-                    action = "user_lookup",
-                    targetType = "user",
-                    targetId = userId,
-                    reason = reason,
-                    metadataJson = "{}",
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.insertAdminAuditLog(
+                actorId = actorId,
+                action = "user_lookup",
+                targetType = "user",
+                targetId = userId,
+                reason = reason,
+                metadataJson = "{}",
+            )
         }
     }
 

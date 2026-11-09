@@ -1,5 +1,6 @@
 package com.pynapli.server.subscriptions
 
+import com.pynapli.server.db.withConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -16,10 +17,8 @@ internal class JdbcSubscriptionPurchaseRepositoryActions(
         startsAt: Instant,
         endsAt: Instant,
     ): SubscriptionRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.upsertDevSubscriptionPurchaseRecord(userId, productId, tier, startsAt, endsAt)
-            }
+        dataSource.withConnection { connection ->
+            connection.upsertDevSubscriptionPurchaseRecord(userId, productId, tier, startsAt, endsAt)
         }
 
     suspend fun listPlayStoreSubscriptionsDueForVerification(
@@ -27,10 +26,8 @@ internal class JdbcSubscriptionPurchaseRepositoryActions(
         renewalWindowEnd: Instant,
         limit: Int,
     ): List<PlayStoreSubscriptionVerificationCandidate> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.listPlayStoreSubscriptionsDueForVerificationRecords(staleBefore, renewalWindowEnd, limit)
-            }
+        dataSource.withConnection { connection ->
+            connection.listPlayStoreSubscriptionsDueForVerificationRecords(staleBefore, renewalWindowEnd, limit)
         }
 
     suspend fun findPlayStoreSubscriptionByPurchaseToken(
@@ -50,10 +47,8 @@ internal class JdbcSubscriptionPurchaseRepositoryActions(
         processingStatus: String,
         errorCode: String?,
     ): Unit =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.updatePlayStoreRtdnEventStatusRecord(messageId, processingStatus, errorCode)
-            }
+        dataSource.withConnection { connection ->
+            connection.updatePlayStoreRtdnEventStatusRecord(messageId, processingStatus, errorCode)
         }
 
     suspend fun upsertPendingPlayStoreSubscriptionPurchase(
@@ -63,10 +58,8 @@ internal class JdbcSubscriptionPurchaseRepositoryActions(
         tier: String,
         now: Instant,
     ): SubscriptionRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.upsertPendingPlayStoreSubscriptionPurchaseRecord(userId, productId, purchaseToken, tier, now)
-            }
+        dataSource.withConnection { connection ->
+            connection.upsertPendingPlayStoreSubscriptionPurchaseRecord(userId, productId, purchaseToken, tier, now)
         }
 
     suspend fun upsertVerifiedPlayStoreSubscriptionPurchase(
@@ -83,22 +76,20 @@ internal class JdbcSubscriptionPurchaseRepositoryActions(
         currentPeriodEnd: Instant,
         verifiedAt: Instant,
     ): SubscriptionRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.upsertVerifiedPlayStoreSubscriptionPurchaseRecord(
-                    userId = userId,
-                    productId = productId,
-                    purchaseToken = purchaseToken,
-                    orderId = orderId,
-                    tier = tier,
-                    status = status,
-                    externalStatus = externalStatus,
-                    acknowledgementState = acknowledgementState,
-                    acknowledgedAt = acknowledgedAt,
-                    currentPeriodStart = currentPeriodStart,
-                    currentPeriodEnd = currentPeriodEnd,
-                    verifiedAt = verifiedAt,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.upsertVerifiedPlayStoreSubscriptionPurchaseRecord(
+                userId = userId,
+                productId = productId,
+                purchaseToken = purchaseToken,
+                orderId = orderId,
+                tier = tier,
+                status = status,
+                externalStatus = externalStatus,
+                acknowledgementState = acknowledgementState,
+                acknowledgedAt = acknowledgedAt,
+                currentPeriodStart = currentPeriodStart,
+                currentPeriodEnd = currentPeriodEnd,
+                verifiedAt = verifiedAt,
+            )
         }
 }

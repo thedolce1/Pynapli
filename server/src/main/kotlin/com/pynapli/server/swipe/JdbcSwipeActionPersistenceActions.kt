@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.db.withConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -57,20 +58,16 @@ internal class JdbcSwipeActionPersistenceActions(
         actionId: UUID,
         actorUserId: UUID,
     ): SwipeActionRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.findSwipeActionById(actionId, actorUserId)
-            }
+        dataSource.withConnection { connection ->
+            connection.findSwipeActionById(actionId, actorUserId)
         }
 
     suspend fun findLatestRewindableAction(
         viewerUserId: UUID,
         radiusMeters: Int,
     ): SwipeRewindCandidateRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.findLatestRewindableAction(viewerUserId, radiusMeters)
-            }
+        dataSource.withConnection { connection ->
+            connection.findLatestRewindableAction(viewerUserId, radiusMeters)
         }
 
     suspend fun recordSwipeAction(
@@ -83,19 +80,17 @@ internal class JdbcSwipeActionPersistenceActions(
         travelLocationId: UUID?,
         matchIdFactory: () -> UUID,
     ): SwipeActionResult =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.recordSwipeActionTransaction(
-                    actionId = actionId,
-                    actorUserId = actorUserId,
-                    targetUserId = targetUserId,
-                    action = action,
-                    noteText = noteText,
-                    consumedInventoryId = consumedInventoryId,
-                    travelLocationId = travelLocationId,
-                    matchIdFactory = matchIdFactory,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.recordSwipeActionTransaction(
+                actionId = actionId,
+                actorUserId = actorUserId,
+                targetUserId = targetUserId,
+                action = action,
+                noteText = noteText,
+                consumedInventoryId = consumedInventoryId,
+                travelLocationId = travelLocationId,
+                matchIdFactory = matchIdFactory,
+            )
         }
 
     suspend fun recordSwipeActionAndMarkCard(
@@ -111,26 +106,24 @@ internal class JdbcSwipeActionPersistenceActions(
         travelLocationId: UUID?,
         matchIdFactory: () -> UUID,
     ): SwipeActionResult =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.recordSwipeActionTransaction(
-                    actionId = actionId,
-                    actorUserId = actorUserId,
+        dataSource.withConnection { connection ->
+            connection.recordSwipeActionTransaction(
+                actionId = actionId,
+                actorUserId = actorUserId,
+                targetUserId = targetUserId,
+                action = action,
+                noteText = noteText,
+                consumedInventoryId = consumedInventoryId,
+                travelLocationId = travelLocationId,
+                matchIdFactory = matchIdFactory,
+            ) {
+                markDeckCardActionRecorded(
+                    sessionId = sessionId,
+                    cardTokenHash = cardTokenHash,
                     targetUserId = targetUserId,
                     action = action,
-                    noteText = noteText,
-                    consumedInventoryId = consumedInventoryId,
-                    travelLocationId = travelLocationId,
-                    matchIdFactory = matchIdFactory,
-                ) {
-                    markDeckCardActionRecorded(
-                        sessionId = sessionId,
-                        cardTokenHash = cardTokenHash,
-                        targetUserId = targetUserId,
-                        action = action,
-                        now = now,
-                    )
-                }
+                    now = now,
+                )
             }
         }
 
@@ -142,16 +135,14 @@ internal class JdbcSwipeActionPersistenceActions(
         card: SwipeDeckSessionCardRecord,
         rewoundAt: Instant,
     ): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.rewindSwipeActionTransaction(
-                    actionId = actionId,
-                    actorUserId = actorUserId,
-                    targetUserId = targetUserId,
-                    session = session,
-                    card = card,
-                    rewoundAt = rewoundAt,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.rewindSwipeActionTransaction(
+                actionId = actionId,
+                actorUserId = actorUserId,
+                targetUserId = targetUserId,
+                session = session,
+                card = card,
+                rewoundAt = rewoundAt,
+            )
         }
 }

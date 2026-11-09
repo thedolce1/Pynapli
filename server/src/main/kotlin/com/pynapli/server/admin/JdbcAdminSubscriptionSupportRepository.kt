@@ -1,8 +1,7 @@
 package com.pynapli.server.admin
 
+import com.pynapli.server.db.withConnection
 import com.pynapli.server.moderation.insertAdminAuditLog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.sql.Connection
 import java.util.UUID
 import javax.sql.DataSource
@@ -11,16 +10,14 @@ internal class JdbcAdminSubscriptionSupportRepository(
     private val dataSource: DataSource,
 ) : AdminSubscriptionSupportRepository {
     override suspend fun facts(userId: UUID): AdminSubscriptionSupportFacts? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                if (!connection.userExists(userId)) return@use null
+        dataSource.withConnection { connection ->
+            if (!connection.userExists(userId)) return@withConnection null
 
-                AdminSubscriptionSupportFacts(
-                    subscriptions = connection.subscriptions(userId),
-                    benefitsGranted = connection.benefits(userId, asSubscriber = true),
-                    benefitsReceived = connection.benefits(userId, asSubscriber = false),
-                )
-            }
+            AdminSubscriptionSupportFacts(
+                subscriptions = connection.subscriptions(userId),
+                benefitsGranted = connection.benefits(userId, asSubscriber = true),
+                benefitsReceived = connection.benefits(userId, asSubscriber = false),
+            )
         }
 
     override suspend fun recordReviewAudit(
@@ -28,17 +25,15 @@ internal class JdbcAdminSubscriptionSupportRepository(
         userId: UUID,
         reason: String,
     ) {
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.insertAdminAuditLog(
-                    actorId = actorId,
-                    action = "subscription_support_view",
-                    targetType = "user",
-                    targetId = userId,
-                    reason = reason,
-                    metadataJson = "{}",
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.insertAdminAuditLog(
+                actorId = actorId,
+                action = "subscription_support_view",
+                targetType = "user",
+                targetId = userId,
+                reason = reason,
+                metadataJson = "{}",
+            )
         }
     }
 

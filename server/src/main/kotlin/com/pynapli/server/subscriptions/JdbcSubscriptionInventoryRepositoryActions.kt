@@ -1,5 +1,7 @@
 package com.pynapli.server.subscriptions
 
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.withConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Duration
@@ -24,10 +26,8 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
         userId: UUID,
         now: Instant,
     ): UUID? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.consumePremiumInventoryRecordReturningId(userId, "pineapple_like", now)
-            }
+        dataSource.withConnection { connection ->
+            connection.consumePremiumInventoryRecordReturningId(userId, "pineapple_like", now)
         }
 
     suspend fun refundInventoryById(
@@ -54,19 +54,17 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
         expiresAt: Instant?,
         now: Instant,
     ): PremiumInventoryBalanceRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runSubscriptionTransaction {
-                    grantPremiumInventoryRecord(
-                        userId = userId,
-                        inventoryType = inventoryType,
-                        quantity = quantity,
-                        source = source,
-                        expiresAt = expiresAt,
-                        now = now,
-                    )
-                    listPremiumInventoryBalanceRecord(userId, inventoryType, now)
-                }
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                grantPremiumInventoryRecord(
+                    userId = userId,
+                    inventoryType = inventoryType,
+                    quantity = quantity,
+                    source = source,
+                    expiresAt = expiresAt,
+                    now = now,
+                )
+                listPremiumInventoryBalanceRecord(userId, inventoryType, now)
             }
         }
 
@@ -75,23 +73,21 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
         now: Instant,
         duration: Duration,
     ): BoostActivationResult? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runSubscriptionTransaction {
-                    findActiveBoostActivation(userId, now)?.let { active ->
-                        return@runSubscriptionTransaction BoostActivationResult(
-                            activation = active,
-                            consumedInventory = false,
-                        )
-                    }
-                    if (!consumePremiumInventoryRecord(userId, "boost", now)) {
-                        return@runSubscriptionTransaction null
-                    }
-                    BoostActivationResult(
-                        activation = insertBoostActivation(userId, now, duration),
-                        consumedInventory = true,
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                findActiveBoostActivation(userId, now)?.let { active ->
+                    return@inTransaction BoostActivationResult(
+                        activation = active,
+                        consumedInventory = false,
                     )
                 }
+                if (!consumePremiumInventoryRecord(userId, "boost", now)) {
+                    return@inTransaction null
+                }
+                BoostActivationResult(
+                    activation = insertBoostActivation(userId, now, duration),
+                    consumedInventory = true,
+                )
             }
         }
 

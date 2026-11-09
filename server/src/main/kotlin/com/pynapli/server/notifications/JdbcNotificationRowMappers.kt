@@ -76,18 +76,3 @@ internal fun ResultSet.toPushDeliveryTarget(): PushDeliveryTarget =
         platform = getString("platform"),
         deviceToken = getString("device_token"),
     )
-
-internal fun <T> Connection.withNotificationTransaction(block: () -> T): T {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
-        val result = block()
-        commit()
-        return result
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
-    }
-}

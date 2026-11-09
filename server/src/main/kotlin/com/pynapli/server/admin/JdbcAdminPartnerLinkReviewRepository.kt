@@ -1,8 +1,7 @@
 package com.pynapli.server.admin
 
+import com.pynapli.server.db.withConnection
 import com.pynapli.server.moderation.insertAdminAuditLog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.sql.Connection
 import java.util.UUID
 import javax.sql.DataSource
@@ -11,19 +10,17 @@ internal class JdbcAdminPartnerLinkReviewRepository(
     private val dataSource: DataSource,
 ) : AdminPartnerLinkReviewRepository {
     override suspend fun review(userId: UUID): AdminPartnerLinkReviewFacts? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                if (!connection.userExists(userId)) return@use null
+        dataSource.withConnection { connection ->
+            if (!connection.userExists(userId)) return@withConnection null
 
-                val links = connection.links(userId)
-                val currentPartnerId = links.firstOrNull { it.status == "active" && it.unlinkedAt == null }?.otherUserId
-                AdminPartnerLinkReviewFacts(
-                    partnerVisibility = connection.partnerVisibility(userId),
-                    links = links,
-                    reportsAgainstUserCount = connection.reportsAgainst(userId),
-                    reportsAgainstCurrentPartnerCount = currentPartnerId?.let { connection.reportsAgainst(it) } ?: 0,
-                )
-            }
+            val links = connection.links(userId)
+            val currentPartnerId = links.firstOrNull { it.status == "active" && it.unlinkedAt == null }?.otherUserId
+            AdminPartnerLinkReviewFacts(
+                partnerVisibility = connection.partnerVisibility(userId),
+                links = links,
+                reportsAgainstUserCount = connection.reportsAgainst(userId),
+                reportsAgainstCurrentPartnerCount = currentPartnerId?.let { connection.reportsAgainst(it) } ?: 0,
+            )
         }
 
     override suspend fun recordReviewAudit(
@@ -31,17 +28,15 @@ internal class JdbcAdminPartnerLinkReviewRepository(
         userId: UUID,
         reason: String,
     ) {
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.insertAdminAuditLog(
-                    actorId = actorId,
-                    action = "partner_link_review",
-                    targetType = "user",
-                    targetId = userId,
-                    reason = reason,
-                    metadataJson = "{}",
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.insertAdminAuditLog(
+                actorId = actorId,
+                action = "partner_link_review",
+                targetType = "user",
+                targetId = userId,
+                reason = reason,
+                metadataJson = "{}",
+            )
         }
     }
 

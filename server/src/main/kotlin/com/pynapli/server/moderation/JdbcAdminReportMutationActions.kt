@@ -1,5 +1,6 @@
 package com.pynapli.server.moderation
 
+import com.pynapli.server.db.inTransaction
 import java.sql.Connection
 import java.util.UUID
 
@@ -9,9 +10,7 @@ internal fun Connection.updateReportStatusWithAudit(
     actorId: String,
     reason: String,
 ): AdminReportActionRecord? {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
+    inTransaction {
         val previousStatus =
             lockActionableReport(reportId) ?: run {
                 rollback()
@@ -38,11 +37,6 @@ internal fun Connection.updateReportStatusWithAudit(
         )
         commit()
         return action
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
     }
 }
 

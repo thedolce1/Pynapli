@@ -1,5 +1,6 @@
 package com.pynapli.server.moderation
 
+import com.pynapli.server.db.inTransaction
 import java.sql.Connection
 import java.util.UUID
 
@@ -10,9 +11,7 @@ internal fun Connection.enforceAccountStatusWithAudit(
     actorId: String,
     reason: String,
 ): AdminRiskActionRecord? {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
+    inTransaction {
         val previousStatus =
             lockUserStatus(userId) ?: run {
                 rollback()
@@ -66,10 +65,5 @@ internal fun Connection.enforceAccountStatusWithAudit(
         )
         commit()
         return state
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
     }
 }

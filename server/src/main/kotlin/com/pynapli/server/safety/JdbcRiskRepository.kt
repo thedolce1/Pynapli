@@ -1,7 +1,7 @@
 package com.pynapli.server.safety
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.withConnection
 import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Timestamp
@@ -20,56 +20,45 @@ class JdbcRiskRepository(
         metadataJson: String,
         eventIdFactory: () -> UUID,
     ): RiskMutationRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val previousAutoCommit = connection.autoCommit
-                connection.autoCommit = false
-                try {
-                    val state = connection.upsertRiskState(userId, delta)
-                    val event =
-                        connection.insertRiskEvent(
-                            id = eventIdFactory(),
-                            userId = userId,
-                            actorUserId = actorUserId,
-                            source = source,
-                            reason = reason,
-                            delta = delta,
-                            state = state,
-                            metadataJson = metadataJson,
-                        )
-                    connection.commit()
-                    RiskMutationRecord(event = event, state = state)
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = previousAutoCommit
-                }
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                val state = connection.upsertRiskState(userId, delta)
+                val event =
+                    connection.insertRiskEvent(
+                        id = eventIdFactory(),
+                        userId = userId,
+                        actorUserId = actorUserId,
+                        source = source,
+                        reason = reason,
+                        delta = delta,
+                        state = state,
+                        metadataJson = metadataJson,
+                    )
+                connection.commit()
+                RiskMutationRecord(event = event, state = state)
             }
         }
 
     override suspend fun getState(userId: UUID): AccountRiskStateRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        SELECT user_id,
-                               score,
-                               tier,
-                               last_event_at,
-                               last_reviewed_at,
-                               updated_at
-                        FROM account_risk_states
-                        WHERE user_id = ?
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, userId)
-                        statement.executeQuery().use { rs ->
-                            if (rs.next()) rs.toRiskStateRecord() else null
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT user_id,
+                           score,
+                           tier,
+                           last_event_at,
+                           last_reviewed_at,
+                           updated_at
+                    FROM account_risk_states
+                    WHERE user_id = ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.executeQuery().use { rs ->
+                        if (rs.next()) rs.toRiskStateRecord() else null
                     }
-            }
+                }
         }
 
     private fun Connection.upsertRiskState(

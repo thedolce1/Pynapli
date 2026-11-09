@@ -13,21 +13,6 @@ internal const val TONIGHT_APPROVAL_PENDING = "pending"
 internal const val TONIGHT_APPROVAL_APPROVED = "approved"
 internal const val TONIGHT_APPROVAL_DECLINED = "declined"
 
-internal inline fun <T> Connection.inTonightTransaction(block: () -> T): T {
-    val previousAutoCommit = autoCommit
-    autoCommit = false
-    try {
-        val result = block()
-        commit()
-        return result
-    } catch (error: Throwable) {
-        rollback()
-        throw error
-    } finally {
-        autoCommit = previousAutoCommit
-    }
-}
-
 internal fun Connection.insertTonightParticipant(
     sessionId: UUID,
     participant: TonightSessionParticipant,

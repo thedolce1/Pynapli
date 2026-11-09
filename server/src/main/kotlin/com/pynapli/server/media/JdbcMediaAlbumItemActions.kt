@@ -1,5 +1,6 @@
 package com.pynapli.server.media
 
+import com.pynapli.server.db.inTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -12,9 +13,7 @@ internal suspend fun DataSource.reorderMediaAlbumItems(
 ): List<MediaAlbumItemRecord>? =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
+            connection.inTransaction {
                 if (connection.findActiveAlbum(ownerUserId, albumId) == null) {
                     connection.rollback()
                     return@withContext null
@@ -71,11 +70,6 @@ internal suspend fun DataSource.reorderMediaAlbumItems(
                 val items = connection.listActiveAlbumItems(ownerUserId, albumId)
                 connection.commit()
                 items
-            } catch (error: Throwable) {
-                connection.rollback()
-                throw error
-            } finally {
-                connection.autoCommit = previousAutoCommit
             }
         }
     }

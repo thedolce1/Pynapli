@@ -1,5 +1,6 @@
 package com.pynapli.server.notifications
 
+import com.pynapli.server.db.withConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -9,81 +10,77 @@ internal class JdbcNotificationPreferencesActions(
     private val dataSource: DataSource,
 ) {
     suspend fun getPreferences(userId: UUID): NotificationPreferencesRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.ensureNotificationPreferences(userId)
-                connection.prepareStatement(PREFERENCES_QUERY).use { statement ->
-                    statement.setObject(1, userId)
-                    statement.executeQuery().use { rs ->
-                        if (!rs.next()) return@withContext null
-                        rs.toNotificationPreferencesRecord()
-                    }
+        dataSource.withConnection { connection ->
+            connection.ensureNotificationPreferences(userId)
+            connection.prepareStatement(PREFERENCES_QUERY).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeQuery().use { rs ->
+                    if (!rs.next()) return@withConnection null
+                    rs.toNotificationPreferencesRecord()
                 }
             }
         }
 
     suspend fun getDeliveryGate(userId: UUID): NotificationDeliveryGate? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        WITH ensured_preferences AS (
-                            INSERT INTO notification_preferences (user_id)
-                            SELECT id
-                            FROM users
-                            WHERE id = ?
-                              AND deleted_at IS NULL
-                            ON CONFLICT (user_id) DO NOTHING
-                            RETURNING user_id
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    WITH ensured_preferences AS (
+                        INSERT INTO notification_preferences (user_id)
+                        SELECT id
+                        FROM users
+                        WHERE id = ?
+                          AND deleted_at IS NULL
+                        ON CONFLICT (user_id) DO NOTHING
+                        RETURNING user_id
+                    )
+                    SELECT np.user_id,
+                           np.detail_level,
+                           np.messages_enabled,
+                           np.matches_enabled,
+                           np.activity_enabled,
+                           np.flirts_enabled,
+                           np.album_requests_enabled,
+                           np.partner_invites_enabled,
+                           np.system_safety_enabled,
+                           np.quiet_hours_enabled,
+                           np.quiet_hours_start_minute,
+                           np.quiet_hours_end_minute,
+                           np.quiet_hours_timezone,
+                           COUNT(pd.id) FILTER (
+                               WHERE pd.disabled_at IS NULL
+                                 AND pd.notifications_enabled = true
+                           ) AS active_device_count
+                    FROM notification_preferences np
+                    LEFT JOIN push_devices pd
+                      ON pd.user_id = np.user_id
+                    WHERE np.user_id = ?
+                    GROUP BY np.user_id,
+                             np.detail_level,
+                             np.messages_enabled,
+                             np.matches_enabled,
+                             np.activity_enabled,
+                             np.flirts_enabled,
+                             np.album_requests_enabled,
+                             np.partner_invites_enabled,
+                             np.system_safety_enabled,
+                             np.quiet_hours_enabled,
+                             np.quiet_hours_start_minute,
+                             np.quiet_hours_end_minute,
+                             np.quiet_hours_timezone
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, userId)
+                    statement.setObject(2, userId)
+                    statement.executeQuery().use { rs ->
+                        if (!rs.next()) return@withConnection null
+                        NotificationDeliveryGate(
+                            preferences = rs.toNotificationPreferencesRecord(),
+                            activeDeviceCount = rs.getInt("active_device_count"),
                         )
-                        SELECT np.user_id,
-                               np.detail_level,
-                               np.messages_enabled,
-                               np.matches_enabled,
-                               np.activity_enabled,
-                               np.flirts_enabled,
-                               np.album_requests_enabled,
-                               np.partner_invites_enabled,
-                               np.system_safety_enabled,
-                               np.quiet_hours_enabled,
-                               np.quiet_hours_start_minute,
-                               np.quiet_hours_end_minute,
-                               np.quiet_hours_timezone,
-                               COUNT(pd.id) FILTER (
-                                   WHERE pd.disabled_at IS NULL
-                                     AND pd.notifications_enabled = true
-                               ) AS active_device_count
-                        FROM notification_preferences np
-                        LEFT JOIN push_devices pd
-                          ON pd.user_id = np.user_id
-                        WHERE np.user_id = ?
-                        GROUP BY np.user_id,
-                                 np.detail_level,
-                                 np.messages_enabled,
-                                 np.matches_enabled,
-                                 np.activity_enabled,
-                                 np.flirts_enabled,
-                                 np.album_requests_enabled,
-                                 np.partner_invites_enabled,
-                                 np.system_safety_enabled,
-                                 np.quiet_hours_enabled,
-                                 np.quiet_hours_start_minute,
-                                 np.quiet_hours_end_minute,
-                                 np.quiet_hours_timezone
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, userId)
-                        statement.setObject(2, userId)
-                        statement.executeQuery().use { rs ->
-                            if (!rs.next()) return@withContext null
-                            NotificationDeliveryGate(
-                                preferences = rs.toNotificationPreferencesRecord(),
-                                activeDeviceCount = rs.getInt("active_device_count"),
-                            )
-                        }
                     }
-            }
+                }
         }
 
     suspend fun updatePreferences(

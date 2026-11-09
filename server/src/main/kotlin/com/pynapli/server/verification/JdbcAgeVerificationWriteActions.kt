@@ -1,7 +1,7 @@
 package com.pynapli.server.verification
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.withConnection
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -19,31 +19,29 @@ internal class JdbcAgeVerificationWriteActions(
         providerReference: String?,
         requestedAt: Instant,
     ): AgeVerificationRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        INSERT INTO age_verifications (
-                            id, user_id, market, method, provider, provider_reference, status, requested_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-                        RETURNING *
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, verificationId)
-                        statement.setObject(2, userId)
-                        statement.setString(3, market)
-                        statement.setString(4, method)
-                        statement.setString(5, provider)
-                        statement.setString(6, providerReference)
-                        statement.setTimestamp(7, Timestamp.from(requestedAt))
-                        statement.executeQuery().use { rs ->
-                            require(rs.next()) { "age verification insert returned no row" }
-                            rs.toAgeVerificationRecord()
-                        }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO age_verifications (
+                        id, user_id, market, method, provider, provider_reference, status, requested_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+                    RETURNING *
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, verificationId)
+                    statement.setObject(2, userId)
+                    statement.setString(3, market)
+                    statement.setString(4, method)
+                    statement.setString(5, provider)
+                    statement.setString(6, providerReference)
+                    statement.setTimestamp(7, Timestamp.from(requestedAt))
+                    statement.executeQuery().use { rs ->
+                        require(rs.next()) { "age verification insert returned no row" }
+                        rs.toAgeVerificationRecord()
                     }
-            }
+                }
         }
 
     suspend fun recordCallback(
@@ -60,29 +58,27 @@ internal class JdbcAgeVerificationWriteActions(
         reason: String?,
         reviewedAt: Instant,
     ): AgeVerificationRecord =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runAgeVerificationTransaction {
-                    val record =
-                        upsertCallback(
-                            verificationId = verificationId,
-                            userId = userId,
-                            market = market,
-                            method = method,
-                            provider = provider,
-                            providerReference = providerReference,
-                            status = status,
-                            verifiedAt = verifiedAt,
-                            expiresAt = expiresAt,
-                            reviewerId = reviewerId,
-                            reason = reason,
-                            reviewedAt = reviewedAt,
-                        )
-                    if (status == AGE_STATUS_VERIFIED && verifiedAt != null) {
-                        updateProfileAgeVerifiedAt(userId, verifiedAt)
-                    }
-                    record
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                val record =
+                    upsertCallback(
+                        verificationId = verificationId,
+                        userId = userId,
+                        market = market,
+                        method = method,
+                        provider = provider,
+                        providerReference = providerReference,
+                        status = status,
+                        verifiedAt = verifiedAt,
+                        expiresAt = expiresAt,
+                        reviewerId = reviewerId,
+                        reason = reason,
+                        reviewedAt = reviewedAt,
+                    )
+                if (status == AGE_STATUS_VERIFIED && verifiedAt != null) {
+                    updateProfileAgeVerifiedAt(userId, verifiedAt)
                 }
+                record
             }
         }
 
@@ -95,24 +91,22 @@ internal class JdbcAgeVerificationWriteActions(
         reason: String?,
         reviewedAt: Instant,
     ): AgeVerificationRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.runAgeVerificationTransaction {
-                    val record =
-                        updateReview(
-                            verificationId = verificationId,
-                            status = status,
-                            verifiedAt = verifiedAt,
-                            expiresAt = expiresAt,
-                            reviewerId = reviewerId,
-                            reason = reason,
-                            reviewedAt = reviewedAt,
-                        )
-                    if (record != null && status == AGE_STATUS_VERIFIED && verifiedAt != null) {
-                        updateProfileAgeVerifiedAt(record.userId, verifiedAt)
-                    }
-                    record
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                val record =
+                    updateReview(
+                        verificationId = verificationId,
+                        status = status,
+                        verifiedAt = verifiedAt,
+                        expiresAt = expiresAt,
+                        reviewerId = reviewerId,
+                        reason = reason,
+                        reviewedAt = reviewedAt,
+                    )
+                if (record != null && status == AGE_STATUS_VERIFIED && verifiedAt != null) {
+                    updateProfileAgeVerifiedAt(record.userId, verifiedAt)
                 }
+                record
             }
         }
 

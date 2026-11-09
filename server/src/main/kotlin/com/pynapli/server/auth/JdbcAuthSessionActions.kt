@@ -1,5 +1,6 @@
 package com.pynapli.server.auth
 
+import com.pynapli.server.db.withConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Timestamp
@@ -97,21 +98,19 @@ internal class JdbcAuthSessionActions(
         }
 
     suspend fun revokeSession(sessionId: UUID): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection
-                    .prepareStatement(
-                        """
-                        UPDATE user_sessions
-                        SET revoked_at = now()
-                        WHERE id = ?
-                          AND revoked_at IS NULL
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setObject(1, sessionId)
-                        statement.executeUpdate() > 0
-                    }
-            }
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    UPDATE user_sessions
+                    SET revoked_at = now()
+                    WHERE id = ?
+                      AND revoked_at IS NULL
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, sessionId)
+                    statement.executeUpdate() > 0
+                }
         }
 
     private suspend fun findSessionByTokenHash(

@@ -1,7 +1,7 @@
 package com.pynapli.server.moderation
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.withConnection
 import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Types
@@ -17,28 +17,19 @@ class JdbcAdminAppealRepository(
         actorId: String,
         reason: String,
     ): List<AdminAppealRecord> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val previousAutoCommit = connection.autoCommit
-                connection.autoCommit = false
-                try {
-                    connection.insertAdminAuditLog(
-                        actorId = actorId,
-                        action = "appeals.list",
-                        targetType = "moderation_appeals",
-                        targetId = null,
-                        reason = reason,
-                        metadataJson = """{"status":"${status.jsonEscaped()}","limit":$limit}""",
-                    )
-                    val appeals = connection.selectAppeals(status, limit)
-                    connection.commit()
-                    appeals
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = previousAutoCommit
-                }
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                connection.insertAdminAuditLog(
+                    actorId = actorId,
+                    action = "appeals.list",
+                    targetType = "moderation_appeals",
+                    targetId = null,
+                    reason = reason,
+                    metadataJson = """{"status":"${status.jsonEscaped()}","limit":$limit}""",
+                )
+                val appeals = connection.selectAppeals(status, limit)
+                connection.commit()
+                appeals
             }
         }
 
@@ -47,16 +38,14 @@ class JdbcAdminAppealRepository(
         actorId: String,
         reason: String,
     ): AdminAppealActionRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.updateAppealStatusWithAudit(
-                    appealId = appealId,
-                    status = "under_review",
-                    actorId = actorId,
-                    reason = reason,
-                    adminNote = null,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.updateAppealStatusWithAudit(
+                appealId = appealId,
+                status = "under_review",
+                actorId = actorId,
+                reason = reason,
+                adminNote = null,
+            )
         }
 
     override suspend fun decideAppeal(
@@ -66,16 +55,14 @@ class JdbcAdminAppealRepository(
         reason: String,
         adminNote: String?,
     ): AdminAppealActionRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.updateAppealStatusWithAudit(
-                    appealId = appealId,
-                    status = status,
-                    actorId = actorId,
-                    reason = reason,
-                    adminNote = adminNote,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.updateAppealStatusWithAudit(
+                appealId = appealId,
+                status = status,
+                actorId = actorId,
+                reason = reason,
+                adminNote = adminNote,
+            )
         }
 
     private fun Connection.selectAppeals(
@@ -127,9 +114,7 @@ class JdbcAdminAppealRepository(
         reason: String,
         adminNote: String?,
     ): AdminAppealActionRecord? {
-        val previousAutoCommit = autoCommit
-        autoCommit = false
-        try {
+        inTransaction {
             val locked =
                 lockActionableAppeal(appealId) ?: run {
                     rollback()
@@ -167,11 +152,6 @@ class JdbcAdminAppealRepository(
             )
             commit()
             return action
-        } catch (error: Throwable) {
-            rollback()
-            throw error
-        } finally {
-            autoCommit = previousAutoCommit
         }
     }
 

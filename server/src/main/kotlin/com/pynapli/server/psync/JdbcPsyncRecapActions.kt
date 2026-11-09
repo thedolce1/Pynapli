@@ -1,5 +1,6 @@
 package com.pynapli.server.psync
 
+import com.pynapli.server.db.inTransaction
 import com.pynapli.server.psync.PsyncSessionRepository.CompleteOutcome
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

@@ -1,7 +1,7 @@
 package com.pynapli.server.swipe
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.withConnection
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -13,21 +13,12 @@ internal class JdbcSwipeDeckSessionActions(
         session: SwipeDeckSessionRecord,
         cards: List<SwipeDeckSessionCardRecord>,
     ): Unit =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                val previousAutoCommit = connection.autoCommit
-                connection.autoCommit = false
-                try {
-                    connection.insertDeckSession(session)
-                    connection.insertDeckCards(cards)
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                connection.insertDeckSession(session)
+                connection.insertDeckCards(cards)
 
-                    connection.commit()
-                } catch (error: Throwable) {
-                    connection.rollback()
-                    throw error
-                } finally {
-                    connection.autoCommit = previousAutoCommit
-                }
+                connection.commit()
             }
         }
 
@@ -35,27 +26,21 @@ internal class JdbcSwipeDeckSessionActions(
         sessionId: UUID,
         viewerUserId: UUID,
     ): SwipeDeckSessionRecord? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.findDeckSession(sessionId, viewerUserId)
-            }
+        dataSource.withConnection { connection ->
+            connection.findDeckSession(sessionId, viewerUserId)
         }
 
     suspend fun findDeckSessionState(
         sessionId: UUID,
         viewerUserId: UUID,
     ): SwipeDeckSessionState? =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.findDeckSessionState(sessionId, viewerUserId)
-            }
+        dataSource.withConnection { connection ->
+            connection.findDeckSessionState(sessionId, viewerUserId)
         }
 
     suspend fun listDeckSessionTargetIds(sessionId: UUID): Set<UUID> =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.listDeckSessionTargetIds(sessionId)
-            }
+        dataSource.withConnection { connection ->
+            connection.listDeckSessionTargetIds(sessionId)
         }
 
     suspend fun isDeckCardActionable(
@@ -65,16 +50,14 @@ internal class JdbcSwipeDeckSessionActions(
         targetUserId: UUID,
         now: Instant,
     ): Boolean =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.isDeckCardActionable(
-                    sessionId = sessionId,
-                    cardTokenHash = cardTokenHash,
-                    viewerUserId = viewerUserId,
-                    targetUserId = targetUserId,
-                    now = now,
-                )
-            }
+        dataSource.withConnection { connection ->
+            connection.isDeckCardActionable(
+                sessionId = sessionId,
+                cardTokenHash = cardTokenHash,
+                viewerUserId = viewerUserId,
+                targetUserId = targetUserId,
+                now = now,
+            )
         }
 
     suspend fun markDeckCardActionRecorded(
@@ -84,9 +67,7 @@ internal class JdbcSwipeDeckSessionActions(
         action: String,
         now: Instant,
     ): Unit =
-        withContext(Dispatchers.IO) {
-            dataSource.connection.use { connection ->
-                connection.markDeckCardActionRecorded(sessionId, cardTokenHash, targetUserId, action, now)
-            }
+        dataSource.withConnection { connection ->
+            connection.markDeckCardActionRecorded(sessionId, cardTokenHash, targetUserId, action, now)
         }
 }
