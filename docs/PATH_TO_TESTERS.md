@@ -35,7 +35,7 @@ Code is complete and gated; everything here is provisioning or a physical device
 | # | Step | Owner | Notes |
 |---|---|---|---|
 | B1 | Create a release signing keystore; set `pynapli.android.releaseKeystore*` in `local.properties` | 🔵 | Build is already `-P`-configurable and builds unsigned without it. **Back the keystore up — losing it means you can never update the app on Play.** |
-| B2 | Build the staging APK pointed at the A3 URL | 🟢 | `scripts/build-staging-apk.ps1`; `-Ppynapli.android.apiBaseUrl=`/`websocketBaseUrl=` |
+| B2 | Build the staging APK pointed at the A3 URL | 🟢 | `scripts/android-staging-apk.ps1 -ApiBaseUrl https://<A3 host>` (sets `pynapli.android.stagingApiBaseUrl`; the WebSocket URL is derived, override with `-WebsocketBaseUrl`) |
 | B3 | Real-device QA on one physical mid-range phone (**H2**) | 🔵 | Emulator-only so far. Battery/location profile, push delivery, low-network. Harnesses exist. |
 | B4 | Play Console: app entry, internal testing track, upload the signed build | 🔵 | `ANDROID_PRODUCTION_GAMEPLAN.md` H3 |
 | B5 | Data Safety form + content rating + store listing copy/screenshots | 🔵 | H3; a dating/lifestyle app is scrutinised here — budget real time |

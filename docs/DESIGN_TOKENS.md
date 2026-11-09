@@ -123,7 +123,7 @@ object PynapliType {
 
 ## Spacing
 
-8dp base:
+Spacing is deliberately **not** on a fixed grid (settled 2026-07-23): the design handoff hand-tunes gaps, and the app matches it (8dp and 12dp dominate). Use the shared values below where a common rhythm genuinely applies, hand-tune inside components, and don't snap existing screens to a scale.
 
 ```kotlin
 object PynapliSpacing {

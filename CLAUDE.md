@@ -18,8 +18,8 @@ The `pre-push` hook runs the gates a change needs (selection rules: header of `s
 
 ## Module ownership (enforced — `docs/PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md`)
 
-- `:shared` — product logic, DTOs, repository interfaces, Ktor *client*, validation, state holders, SQLDelight, `expect/actual`. **Must not** contain Firebase/StoreKit/Play-Billing/raw OS calls — keep those behind platform services in `:androidApp` / `iosApp`. No `iosX64` target: Compose Multiplatform 1.11 stopped publishing Intel-simulator artifacts.
-- `:composeApp` — shared Compose UI. **Screens must not call Ktor directly.**
+- `:shared` — product logic, DTOs, repository interfaces, Ktor *client*, validation, SQLDelight, `expect/actual`. **Must not** contain Firebase/StoreKit/Play-Billing/raw OS calls — keep those behind platform services in `:androidApp` / `iosApp`. No `iosX64` target: Compose Multiplatform 1.11 stopped publishing Intel-simulator artifacts.
+- `:composeApp` — shared Compose UI and the feature state holders (they build composeApp UI models; every client shares this module). **Screens must not call Ktor directly.**
 - `:androidApp` — `AndroidManifest`, `Application`, `Activity`, resources only. **Do not** collapse the Android entry point into the KMP library modules.
 - `:desktopApp` — **dev-only, never shipped**: session tokens are plaintext on disk, so `DesktopRuntimeConfig` refuses non-local API hosts without `-Dpynapli.allowRemote=true`. Green here is **not** a substitute for `scripts/android-*-qa.ps1` — it can't see safe-area insets, touch feel, IME, billing, or push.
 

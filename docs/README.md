@@ -11,9 +11,7 @@ The app is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyl
 | Doc | What it covers |
 | --- | --- |
 | [PYNAPLI_PRODUCT_SPEC.md](PYNAPLI_PRODUCT_SPEC.md) | Top-level product vision, scope, and core experience. |
-| [MVP_ROADMAP.md](MVP_ROADMAP.md) | Phased MVP plan and delivery sequencing. |
 | [LAUNCH_STRATEGY_SPEC.md](LAUNCH_STRATEGY_SPEC.md) | Go-to-market and launch readiness. |
-| [LEGACY_RULES_IMPORT_REVIEW.md](LEGACY_RULES_IMPORT_REVIEW.md) | Review of legacy rules carried into the current product. |
 
 ## Architecture & engineering
 
@@ -25,7 +23,6 @@ The app is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyl
 | [API_CONTRACT_SPEC.md](API_CONTRACT_SPEC.md) | Versioned `/v1/` HTTP/WebSocket API surface. |
 | [SECURITY_ROUTE_MATRIX.md](SECURITY_ROUTE_MATRIX.md) | Per-route auth / App Check / rate-limit requirements. |
 | [DATA_MODEL_SPEC.md](DATA_MODEL_SPEC.md) | Postgres/PostGIS schema and core domain entities. |
-| [DATABASE_MIGRATION_PLAN.md](DATABASE_MIGRATION_PLAN.md) | Flyway migration strategy and conventions. |
 | [OFFICIAL_TECH_REFERENCE_GUIDE.md](OFFICIAL_TECH_REFERENCE_GUIDE.md) | Version baseline and stable-release-only policy. |
 
 ## Features
@@ -90,11 +87,13 @@ Working documents that track intent and progress — not fixed specs.
 
 | Doc | What it covers |
 | --- | --- |
-| [IMPLEMENTATION_AUDIT.md](IMPLEMENTATION_AUDIT.md) | Running audit of what's built vs. specced. |
+| [IMPLEMENTATION_AUDIT.md](IMPLEMENTATION_AUDIT.md) | Current status per area: built, open gaps, owning spec. History is in [archive/IMPLEMENTATION_HISTORY.md](archive/IMPLEMENTATION_HISTORY.md). |
+| [PATH_TO_TESTERS.md](PATH_TO_TESTERS.md) | Founder checklist from today to the first external testers. |
+| [IOS_BRINGUP_PLAN.md](IOS_BRINGUP_PLAN.md) | Steps to stand up the iOS shell (needs a Mac). |
+| [reviews/CODEBASE_REVIEW_2026-11.md](reviews/CODEBASE_REVIEW_2026-11.md) | 2026-11 codebase review: findings, tiers, and which slices have shipped. |
 | [ANDROID_PRODUCTION_GAMEPLAN.md](ANDROID_PRODUCTION_GAMEPLAN.md) | Phased plan to take Android to production grade. |
 | [WEB_PWA_GAMEPLAN.md](WEB_PWA_GAMEPLAN.md) | Compose-for-Web Wasm PWA plan (W0–W6). |
 | [FRONTEND_POLISH_PASS.md](FRONTEND_POLISH_PASS.md) | Phased enterprise-grade frontend polish pass. |
-| [OPENAPI_HANDOFF_PLAN.md](OPENAPI_HANDOFF_PLAN.md) | Plan for OpenAPI generation and client handoff. |
 
 ## Legal & policy
 
@@ -102,3 +101,14 @@ Working documents that track intent and progress — not fixed specs.
 | --- | --- |
 | [PRIVACY_POLICY_DRAFT.md](PRIVACY_POLICY_DRAFT.md) | Draft privacy policy. |
 | [TERMS_DRAFT.md](TERMS_DRAFT.md) | Draft terms of service. |
+
+## Archive
+
+Superseded docs, kept for history. Don't treat them as current guidance.
+
+| Doc | Was |
+|---|---|
+| [archive/DATABASE_MIGRATION_PLAN.md](archive/DATABASE_MIGRATION_PLAN.md) | Flyway migration strategy and conventions. |
+| [archive/OPENAPI_HANDOFF_PLAN.md](archive/OPENAPI_HANDOFF_PLAN.md) | Plan for OpenAPI generation and client handoff. |
+| [archive/MVP_ROADMAP.md](archive/MVP_ROADMAP.md) | Phased MVP plan and delivery sequencing. |
+| [archive/LEGACY_RULES_IMPORT_REVIEW.md](archive/LEGACY_RULES_IMPORT_REVIEW.md) | Review of legacy rules carried into the current product. |

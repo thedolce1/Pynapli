@@ -5,7 +5,7 @@ production-ready, **within the locked design language** (dark-first, restrained,
 pineapple-gold accent routed through `PynapliColors.Accent`, handoff tokens). This refines the
 existing surfaces; it does not introduce a new aesthetic. See
 `FRONTEND_DESIGN_DIRECTION_SPEC.md` / `DESIGN_AND_NAVIGATION_SPEC.md` for the direction and
-`docs/IMPLEMENTATION_AUDIT.md` for the running slice log.
+`docs/IMPLEMENTATION_AUDIT.md` for current status (slice history is in git and `docs/archive/IMPLEMENTATION_HISTORY.md`).
 
 ## Baseline (already strong)
 

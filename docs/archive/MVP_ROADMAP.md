@@ -1,5 +1,7 @@
 # Pynapli MVP Roadmap
 
+> **Archived 2026-11-09.** Superseded; kept for history only. Current guidance: [docs/README.md](../README.md).
+
 Last updated: 2026-04-24
 
 ## Purpose

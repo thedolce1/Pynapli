@@ -1,5 +1,7 @@
 # Pynapli OpenAPI Handoff Plan
 
+> **Archived 2026-11-09.** Superseded; kept for history only. Current guidance: [docs/README.md](../README.md).
+
 Last updated: 2026-04-24
 
 ## Purpose
@@ -14,10 +16,10 @@ Core rule:
 
 Use:
 
-- [API_CONTRACT_SPEC.md](API_CONTRACT_SPEC.md)
-- [DATA_MODEL_SPEC.md](DATA_MODEL_SPEC.md)
-- [BACKEND_ARCHITECTURE_SPEC.md](BACKEND_ARCHITECTURE_SPEC.md)
-- [MOBILE_APP_ARCHITECTURE_SPEC.md](MOBILE_APP_ARCHITECTURE_SPEC.md)
+- [API_CONTRACT_SPEC.md](../API_CONTRACT_SPEC.md)
+- [DATA_MODEL_SPEC.md](../DATA_MODEL_SPEC.md)
+- [BACKEND_ARCHITECTURE_SPEC.md](../BACKEND_ARCHITECTURE_SPEC.md)
+- [MOBILE_APP_ARCHITECTURE_SPEC.md](../MOBILE_APP_ARCHITECTURE_SPEC.md)
 
 ## OpenAPI File
 

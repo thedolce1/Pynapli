@@ -1,5 +1,7 @@
 # Pynapli Legacy Rules Import Review
 
+> **Archived 2026-11-09.** Superseded; kept for history only. Current guidance: [docs/README.md](../README.md).
+
 Last updated: 2026-04-24
 
 ## Purpose
@@ -27,7 +29,7 @@ Adopted:
 
 Canonical spec:
 
-- [TRUST_AND_SAFETY_SPEC.md](TRUST_AND_SAFETY_SPEC.md)
+- [TRUST_AND_SAFETY_SPEC.md](../TRUST_AND_SAFETY_SPEC.md)
 
 Modified:
 
@@ -53,7 +55,7 @@ Adopted:
 
 Canonical spec:
 
-- [PSYNC_SPEC.md](PSYNC_SPEC.md)
+- [PSYNC_SPEC.md](../PSYNC_SPEC.md)
 
 Modified:
 
@@ -81,7 +83,7 @@ Adopted:
 
 Canonical spec:
 
-- [MESSAGING_SPEC.md](MESSAGING_SPEC.md)
+- [MESSAGING_SPEC.md](../MESSAGING_SPEC.md)
 
 Modified:
 
@@ -102,7 +104,7 @@ Adopted:
 
 Canonical spec:
 
-- [NOTIFICATIONS_SPEC.md](NOTIFICATIONS_SPEC.md)
+- [NOTIFICATIONS_SPEC.md](../NOTIFICATIONS_SPEC.md)
 
 Modified:
 
@@ -123,7 +125,7 @@ Adopted:
 
 Canonical spec:
 
-- [MODERATION_AND_AGE_VERIFICATION_SPEC.md](MODERATION_AND_AGE_VERIFICATION_SPEC.md)
+- [MODERATION_AND_AGE_VERIFICATION_SPEC.md](../MODERATION_AND_AGE_VERIFICATION_SPEC.md)
 
 Modified:
 
@@ -142,7 +144,7 @@ Adopted:
 
 Canonical spec:
 
-- [ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md)
+- [ONBOARDING_AUTH_SPEC.md](../ONBOARDING_AUTH_SPEC.md)
 
 Modified:
 
@@ -162,7 +164,7 @@ Adopted:
 
 Canonical spec:
 
-- [PROFILE_FILTER_SYNC_SPEC.md](PROFILE_FILTER_SYNC_SPEC.md)
+- [PROFILE_FILTER_SYNC_SPEC.md](../PROFILE_FILTER_SYNC_SPEC.md)
 
 Modified:
 
@@ -181,7 +183,7 @@ Adopted:
 
 Canonical spec:
 
-- [PLAYING_TONIGHT_SPEC.md](PLAYING_TONIGHT_SPEC.md)
+- [PLAYING_TONIGHT_SPEC.md](../PLAYING_TONIGHT_SPEC.md)
 
 Modified:
 
@@ -201,7 +203,7 @@ Adopted:
 
 Canonical spec:
 
-- [TESTING_STRATEGY_SPEC.md](TESTING_STRATEGY_SPEC.md)
+- [TESTING_STRATEGY_SPEC.md](../TESTING_STRATEGY_SPEC.md)
 
 ### Launch
 
@@ -216,7 +218,7 @@ Adopted:
 
 Canonical spec:
 
-- [LAUNCH_STRATEGY_SPEC.md](LAUNCH_STRATEGY_SPEC.md)
+- [LAUNCH_STRATEGY_SPEC.md](../LAUNCH_STRATEGY_SPEC.md)
 
 Modified:
 
@@ -236,7 +238,7 @@ Adopted:
 
 Canonical spec:
 
-- [DESIGN_AND_NAVIGATION_SPEC.md](DESIGN_AND_NAVIGATION_SPEC.md)
+- [DESIGN_AND_NAVIGATION_SPEC.md](../DESIGN_AND_NAVIGATION_SPEC.md)
 
 Modified:
 

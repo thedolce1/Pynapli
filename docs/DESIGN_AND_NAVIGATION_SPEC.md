@@ -61,11 +61,13 @@ Use restrained radii:
 
 ## Spacing
 
-Use an 8dp base grid:
+Spacing is deliberately **not** on a fixed grid (settled 2026-07-23): the design handoff hand-tunes gaps, and the app matches it (8dp and 12dp dominate). Use the shared values below where a common rhythm genuinely applies, hand-tune inside components, and don't snap existing screens to a scale.
+
+Common values (`PynapliSpacing` / `PynapliLayout`, see `DESIGN_TOKENS.md`):
 
 - 4dp micro.
-- 8dp small.
-- 16dp standard.
+- 8dp small; 12dp is the other common section rhythm.
+- 16dp standard and screen padding.
 - 24dp large.
 - 32dp section.
 

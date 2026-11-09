@@ -1,6 +1,6 @@
 # composeApp — design rules
 
-Screens consume UI state + callbacks; state holders live in `:shared` unless platform constraints force otherwise. These design rules also apply to Compose code in `:webApp`.
+Screens consume UI state + callbacks from feature state holders, which live here in `:composeApp` next to their UI models (settled 2026-11-09: every client shares this module, and `:server` depends on `:shared`, so moving them would put UI state on the server classpath). Product rules still belong in `:shared`/`:server`, not in holders. These design rules also apply to Compose code in `:webApp`.
 
 Grid profile open/close must return to the exact same `LazyGridState` scroll position; don't refetch/reorder unless the user refreshes or state expires.
 

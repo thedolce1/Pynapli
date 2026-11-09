@@ -1,180 +1,63 @@
 # Pynapli
 
-Pynapli is a Kotlin Multiplatform + Compose + Ktor social lifestyle app.
+Pynapli is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyle app. The Ktor server
+is the product authority; Firebase is supporting infrastructure.
 
-## Initial Modules
+## Modules
 
-- `shared`: cross-platform product logic, API clients, models, state, and local persistence.
-- `composeApp`: Compose Multiplatform app shell and shared UI.
-- `androidApp`: Android application entry point.
-- `server`: Ktor backend authority.
+- `shared`: cross-platform product logic, DTOs, the Ktor API client, validation, SQLDelight storage.
+- `composeApp`: shared Compose UI and the feature state holders.
+- `androidApp`: Android entry point (`Application`, `Activity`, manifest, resources).
+- `server`: Ktor backend (auth, discovery, messaging, moderation, entitlements, WebSockets).
+- `webApp`: Wasm PWA shell for `app.pynapli.com` ([docs/WEB_PWA_GAMEPLAN.md](docs/WEB_PWA_GAMEPLAN.md)).
+- `desktopApp`: dev-only JVM shell for fast UI iteration; never shipped.
+- `iosApp/`: iOS shell (Xcode project, not a Gradle module; [docs/IOS_BRINGUP_PLAN.md](docs/IOS_BRINGUP_PLAN.md)).
+- `web/`: the Astro marketing site (separate from the app; see `web/HOSTING.md`).
 
-## Local Prerequisites
+## Prerequisites
 
-- JDK 17
-- Android Studio with Android SDK
-- Docker Desktop
-- Gradle wrapper, included in this repo
+- JDK 17, Android Studio with the Android SDK, Docker Desktop
 - Xcode on macOS for iOS builds
+- The Gradle wrapper is included
 
-Run the local tooling check:
+Check your tooling:
 
 ```powershell
 .\scripts\check-local-tooling.ps1
 ```
 
-Start local infrastructure:
+## Run locally
 
 ```powershell
-docker compose up -d
+docker compose up -d                 # Postgres (PostGIS) + Redis
+.\gradlew.bat :server:run            # Ktor on :8080; Flyway migrates at startup
+.\scripts\seed-dev-data.ps1          # dev account + nearby profiles (server must be running)
+.\gradlew.bat :androidApp:installDebug
 ```
 
-Check local infrastructure:
+Debug Android builds show a **Dev login** button that signs in as the seeded `dev@pynapli.local`
+account (debug builds only; release and staging builds don't contain the credentials).
+
+Health: `GET /health` (process) and `GET /health/deep` (Postgres + Redis).
+
+## Verify before pushing
 
 ```powershell
-docker compose ps
-docker exec pynapli-redis redis-cli ping
-docker exec pynapli-postgres pg_isready -U pynapli -d pynapli_dev
+git config core.hooksPath scripts/hooks   # once per clone: the pre-push hook picks the gates below
+.\scripts\verify-fast.ps1      # tooling + docker + Spotless + shared JVM + server tests
+.\scripts\verify-full.ps1      # full local gate, incl. the minified release APK
+.\scripts\verify-web.ps1       # Wasm compile + token checks
+.\scripts\verify-desktop.ps1   # desktop shell tests
 ```
 
-Run JVM/server checks once Gradle is available:
-
-```powershell
-.\gradlew.bat :shared:jvmTest :server:test
-```
-
-Run the first Android debug assemble:
-
-```powershell
-.\gradlew.bat :androidApp:assembleDebug
-```
-
-Run the Ktor server locally after Docker is running:
-
-```powershell
-.\gradlew.bat :server:run
-```
-
-For local Grid load testing, start the server first, then run:
-
-```powershell
-.\scripts\grid-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000
-```
-
-The server database pool can be tuned for load runs with:
-
-```powershell
-$env:PYNAPLI_DATABASE_MAX_POOL_SIZE='32'
-$env:PYNAPLI_DATABASE_MIN_IDLE='8'
-$env:PYNAPLI_DATABASE_CONNECTION_TIMEOUT_MS='5000'
-.\gradlew.bat :server:run
-```
-
-For profiled Grid load runs, enable local timing headers before starting Ktor:
-
-```powershell
-$env:PYNAPLI_API_PROFILING_ENABLED='true'
-$env:PYNAPLI_API_PROFILING_SLOW_SPAN_MS='250'
-.\gradlew.bat :server:run
-```
-
-Then request and aggregate the server timings:
-
-```powershell
-.\scripts\grid-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000 -ServerProfile
-```
-
-Seed local development accounts after the server is running:
-
-```powershell
-.\scripts\seed-dev-data.ps1
-```
-
-The Android debug build shows a `Dev login` button on the auth screen. It signs in with:
-
-```text
-Email: dev@pynapli.local
-Password: PynapliDevPass123!
-```
-
-The seed script creates that viewer account, updates its profile/current location, and creates nearby grid profiles so the first authenticated grid has cards to render.
-
-Health endpoints:
-
-```text
-GET http://localhost:8080/health
-GET http://localhost:8080/health/deep
-```
-
-`/health` verifies the app process. `/health/deep` verifies Postgres and Redis. Flyway migrations run at server startup.
-
-Initial auth endpoints:
-
-```text
-POST http://localhost:8080/v1/auth/email/signup
-POST http://localhost:8080/v1/auth/email/login
-POST http://localhost:8080/v1/auth/refresh
-POST http://localhost:8080/v1/auth/logout
-GET  http://localhost:8080/v1/me
-PATCH http://localhost:8080/v1/me/profile
-GET  http://localhost:8080/v1/profiles/{userId}
-POST http://localhost:8080/v1/location/current
-POST http://localhost:8080/v1/presence/heartbeat
-POST http://localhost:8080/v1/grid/query
-GET  http://localhost:8080/v1/messages/threads
-POST http://localhost:8080/v1/messages/threads
-GET  http://localhost:8080/v1/messages/threads/{threadId}?before={cursor}&limit=50
-POST http://localhost:8080/v1/messages/threads/{threadId}/read
-POST http://localhost:8080/v1/messages/threads/{threadId}/messages
-POST http://localhost:8080/v1/media/uploads
-POST http://localhost:8080/v1/media/uploads/{assetId}/complete
-DELETE http://localhost:8080/v1/media/assets/{assetId}
-PUT  http://localhost:8080/v1/media/albums/{kind}/order
-POST   http://localhost:8080/v1/tonight/sessions
-GET    http://localhost:8080/v1/tonight/feed
-GET    http://localhost:8080/v1/me/tonight/session
-POST   http://localhost:8080/v1/tonight/sessions/{id}/approve
-POST   http://localhost:8080/v1/tonight/sessions/{id}/decline
-DELETE http://localhost:8080/v1/tonight/sessions/{id}
-POST   http://localhost:8080/v1/psync/sessions
-GET    http://localhost:8080/v1/me/psync/session
-GET    http://localhost:8080/v1/psync/sessions/{id}
-POST   http://localhost:8080/v1/psync/sessions/{id}/accept
-POST   http://localhost:8080/v1/psync/sessions/{id}/deny
-POST   http://localhost:8080/v1/psync/sessions/{id}/suggest-filters
-POST   http://localhost:8080/v1/psync/sessions/{id}/leave
-POST   http://localhost:8080/v1/psync/sessions/{id}/start
-GET    http://localhost:8080/v1/psync/sessions/{id}/deck
-POST   http://localhost:8080/v1/psync/sessions/{id}/actions
-POST   http://localhost:8080/v1/psync/sessions/{id}/pause
-POST   http://localhost:8080/v1/psync/sessions/{id}/resume
-POST   http://localhost:8080/v1/psync/sessions/{id}/complete
-GET    http://localhost:8080/v1/psync/sessions/{id}/recap
-POST   http://localhost:8080/v1/psync/sessions/{id}/nudge
-WS     http://localhost:8080/v1/psync/stream
-```
-
-Auth currently uses server-owned opaque access/refresh tokens, PBKDF2 password hashing, and hashed email/token storage in Postgres.
-
-Signup creates a default profile and default discovery settings. `GET /v1/me` returns account, profile, and discovery settings.
-Current location is stored server-side for discovery and does not echo exact coordinates back to clients.
-Presence uses Redis TTL keys for online indicators. The first grid query uses server-owned current location and returns lightweight nearby profile cards.
-Grid-origin direct messages create or reuse a one-to-one conversation, then append visible messages after server-side participation checks.
-Thread summaries include unread counts derived from per-participant read markers.
-Message payloads separate moderation `status` from delivery `deliveryStatus` (`sent`, `read`, or `received`).
-The mobile composer validates blank and over-limit drafts locally before calling the message API.
-The mobile app uses authenticated WebSocket convenience deltas for Messages; inbox summaries and an open conversation still refetch canonical HTTP state after each delta.
-Conversation detail returns the newest message page first and uses opaque `nextCursor` tokens to load older history.
-Media foundation tables model profile/private albums, owned storage assets, album items, access requests, and revocable per-user private album grants.
-Media upload slots create pending owned assets and return a PUT contract that can later be backed by Firebase/GCS signed URLs.
-The mobile grid header profile icon opens the Albums screen for managing profile photos and private album upload slots.
+Emulator QA scripts live in `scripts/android-*-qa.ps1` (start with `android-e2e-qa.ps1`).
 
 ## Android release signing
 
 `assembleRelease` builds unsigned unless a keystore is supplied, so the release variant stays
-buildable (and therefore continuously gate-able) on every machine and in CI. To produce a
-Play-uploadable artifact, set these — in `local.properties`, `~/.gradle/gradle.properties`, or as
-`-P` flags — and never commit the keystore (`*.jks` / `*.keystore` are gitignored):
+buildable (and gate-able) on every machine. To produce a Play-uploadable artifact, set these in
+`local.properties`, `~/.gradle/gradle.properties`, or as `-P` flags, and never commit the keystore
+(`*.jks` / `*.keystore` are gitignored):
 
 ```properties
 pynapli.android.releaseKeystore=../pynapli-upload.jks   # path, resolved from the repo root
@@ -183,9 +66,21 @@ pynapli.android.releaseKeyAlias=…
 pynapli.android.releaseKeyPassword=…
 ```
 
-Play version metadata is overridable the same way, so a release build can be stamped without a
-commit: `-Ppynapli.android.versionCode=42 -Ppynapli.android.versionName=1.0.0`.
+Version metadata is overridable the same way (the app reports `versionName` to the server):
+`-Ppynapli.android.versionCode=42 -Ppynapli.android.versionName=1.0.0`. Staging APKs:
+`scripts/android-staging-apk.ps1`.
 
-## Specs
+## Load testing
 
-The product and engineering specs live in [`docs/`](docs/) — see the [docs index](docs/README.md) for a grouped list of every spec. They are the canonical references during early buildout.
+```powershell
+.\scripts\grid-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000
+```
+
+Tune the pool with `PYNAPLI_DATABASE_MAX_POOL_SIZE` / `_MIN_IDLE` / `_CONNECTION_TIMEOUT_MS`, and add
+`-ServerProfile` with `PYNAPLI_API_PROFILING_ENABLED=true` for per-span server timings.
+
+## Docs
+
+The specs in [`docs/`](docs/) are canonical; start at the [docs index](docs/README.md). The API
+contract is [docs/API_CONTRACT_SPEC.md](docs/API_CONTRACT_SPEC.md), and contributor rules for AI
+assistants are in [`CLAUDE.md`](CLAUDE.md).

@@ -24,37 +24,12 @@ Rules:
 - Keep Kotlin, Compose Multiplatform, Android Gradle Plugin, Gradle, and Xcode compatibility visible in pull requests that touch build files.
 - Keep Firebase as platform-specific support infrastructure, not a common shared product authority.
 
-## Initial Toolchain Baseline
+## Toolchain Versions
 
-Recommended baseline as of 2026-04-24:
-
-```toml
-[versions]
-kotlin = "2.3.21"
-composeMultiplatform = "1.10.3"
-agp = "9.2.0"
-gradle = "9.4.1"
-ktor = "3.4.3"
-coroutines = "1.10.2"
-serialization = "1.11.0"
-datetime = "0.7.1"
-sqldelight = "2.3.2"
-coil = "3.4.0"
-koin = "4.2.1"
-firebaseBom = "34.12.0"
-firebaseApple = "12.12.1"
-playBilling = "8.3.0"
-postgres = "42.7.10"
-hikari = "7.0.2"
-flyway = "12.4.0"
-lettuce = "7.5.1.RELEASE"
-logback = "1.5.32"
-testcontainers = "1.21.4"
-kotest = "6.1.11"
-mockk = "1.14.9"
-```
-
-This is a starting baseline, not a permanent lock. It should be rechecked during repo scaffolding.
+`gradle/libs.versions.toml` is the single source of truth for every version (the version policy in
+`CLAUDE.md` and `docs/OFFICIAL_TECH_REFERENCE_GUIDE.md` governs changes: stable releases only,
+verified against official docs). Versions aren't repeated here, because copies drift: the table that
+used to sit here still listed Compose Multiplatform 1.10.3 and Koin after both had changed.
 
 ## Platform Baseline
 
@@ -64,10 +39,7 @@ Android:
 - Minimum SDK: `23`
 - Target SDK: latest store-required SDK at release time
 - Compile SDK: match current stable Android SDK available in CI
-- Android Gradle Plugin: `9.2.0`
-- Gradle wrapper: `9.4.1`
-- Google Play Billing: `8.3.0`
-- Firebase Android BoM: `34.12.0`
+- AGP, Gradle wrapper, Play Billing, Firebase BoM: see `gradle/libs.versions.toml` and `gradle/wrapper/gradle-wrapper.properties`
 
 Why Android minSdk 23:
 
@@ -80,7 +52,7 @@ iOS:
 - Minimum iOS: `13`
 - App bundle ID: `com.pynapli.app`
 - iOS shell: Swift/SwiftUI only where needed to host Compose and platform services
-- Firebase Apple SDK: `12.12.1`
+- Firebase Apple SDK: version pinned in the iOS project once it exists (`docs/IOS_BRINGUP_PLAN.md`)
 - Payments: StoreKit 2
 - Push: APNs with Firebase Cloud Messaging bridge if useful
 
@@ -143,7 +115,6 @@ Contains:
 - Repository interfaces.
 - Client networking.
 - Validation rules.
-- Feature state holders.
 - Local persistence schema.
 - Platform abstraction interfaces.
 
@@ -166,6 +137,7 @@ Contains:
 - Shared design system.
 - Navigation host.
 - Feature composables.
+- Feature state holders (`*StateHolder`, exposing `StateFlow` UI state).
 - Shared UI animation.
 
 Does not contain:
@@ -390,7 +362,7 @@ composeApp/src/commonMain/kotlin/com/pynapli/app/
 Rules:
 
 - Feature screens consume UI state and callbacks.
-- ViewModels/state holders live in `shared` unless platform constraints force otherwise.
+- State holders live in `composeApp` next to the UI models they build; product rules they apply come from `shared` or the server.
 - Design components stay in `composeApp/design`.
 - Shared product models stay in `shared`.
 - No screen should call Ktor directly.
@@ -497,7 +469,7 @@ Use:
 - Kotlinx Datetime.
 - SQLDelight.
 - Coil 3 Compose.
-- Koin only if dependency injection becomes useful.
+- Manual constructor injection (`PynapliCommonGraph` + per-shell graphs). No DI framework: Koin was removed 2026-07-27, and adding one needs a written reason (`CLAUDE.md`).
 
 Avoid initially:
 

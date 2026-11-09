@@ -416,7 +416,7 @@ Never commit:
 
 - Firebase service account JSON
 - DB passwords
-- JWT signing keys
+- Server signing secrets (`PYNAPLI_DISCOVERY_CURSOR_SECRET`, `PYNAPLI_ACTIVITY_CURSOR_SECRET`, `PYNAPLI_SWIPE_DECK_TOKEN_SECRET`, admin token/MFA secrets). Auth tokens are opaque and hashed, so there is no JWT signing key.
 - Store API credentials
 - Apple/Google billing keys
 - Age verification provider keys

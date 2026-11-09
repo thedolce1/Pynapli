@@ -97,24 +97,28 @@ Indexes:
 
 ### user_sessions
 
-Active auth sessions/devices.
+Active auth sessions/devices. Access and refresh tokens are opaque, server-issued random values (not
+JWTs); only their hashes are stored, so a leaked database can't be replayed as sessions.
 
 Fields:
 
 - `id`
 - `user_id`
 - `device_id`
-- `jwt_jti`
-- `refresh_token_hash`
+- `access_token_hash` (unique)
+- `refresh_token_hash` (unique)
 - `platform`
 - `app_version`
+- `access_expires_at`
+- `refresh_expires_at`
 - `last_seen_at`
 - `revoked_at`
+- `created_at`
 
 Indexes:
 
 - `user_id`
-- `jwt_jti`
+- `access_token_hash`, `refresh_token_hash` (unique lookups)
 
 ### account_data_export_requests
 

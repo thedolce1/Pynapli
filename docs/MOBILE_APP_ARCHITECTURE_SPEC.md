@@ -90,11 +90,11 @@ presentation/
 For example:
 
 ```text
-grid/
-  data/GridRepository.kt
-  domain/GridCard.kt
-  presentation/GridViewModel.kt
-  presentation/GridUiState.kt
+composeApp/.../grid/
+  GridRepository.kt      (interface + Api implementation over the :shared Ktor client)
+  GridStateHolder.kt     (StateFlow screen state; lives in :composeApp, not :shared)
+  GridUiState.kt
+  GridScreen.kt
 ```
 
 ## Architecture Pattern
@@ -102,7 +102,7 @@ grid/
 Use a pragmatic layered architecture:
 
 - UI: Compose screens/components
-- Presentation: ViewModels/state holders
+- Presentation: state holders in `:composeApp` (plain classes exposing `StateFlow`; no Android ViewModel)
 - Domain: use cases and business rules
 - Data: repositories, API clients, local cache
 - Platform: expect/actual OS integrations
