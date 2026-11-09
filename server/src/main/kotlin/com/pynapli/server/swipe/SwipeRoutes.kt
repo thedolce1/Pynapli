@@ -1,14 +1,12 @@
 package com.pynapli.server.swipe
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
 import com.pynapli.server.profiling.RequestProfilerFactory
 import com.pynapli.server.profiling.profilerContextElement
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveNullable
@@ -33,7 +31,7 @@ fun Application.configureSwipeRoutes(
                     profiler.measure("swipe.route.deck.total") {
                         val user =
                             profiler.measure("swipe.route.deck.auth") {
-                                authService.authenticate(call.requiredBearerToken())
+                                call.authenticatedUser(authService)
                             }
                         val request =
                             profiler.measure("swipe.route.deck.receive") {
@@ -55,7 +53,7 @@ fun Application.configureSwipeRoutes(
                     profiler.measure("swipe.route.action.total") {
                         val user =
                             profiler.measure("swipe.route.action.auth") {
-                                authService.authenticate(call.requiredBearerToken())
+                                call.authenticatedUser(authService)
                             }
                         val request =
                             profiler.measure("swipe.route.action.receive") {
@@ -77,7 +75,7 @@ fun Application.configureSwipeRoutes(
                     profiler.measure("swipe.route.rewind.total") {
                         val user =
                             profiler.measure("swipe.route.rewind.auth") {
-                                authService.authenticate(call.requiredBearerToken())
+                                call.authenticatedUser(authService)
                             }
                         profiler.measure("swipe.service.rewind.total") {
                             swipeService.rewind(user.id)
@@ -89,14 +87,8 @@ fun Application.configureSwipeRoutes(
         }
 
         get("/v1/matches") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             call.respond(swipeService.listMatches(user.id))
         }
     }
-}
-
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }

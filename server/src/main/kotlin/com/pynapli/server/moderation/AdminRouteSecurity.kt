@@ -1,6 +1,6 @@
 package com.pynapli.server.moderation
 
-import io.ktor.http.HttpHeaders
+import com.pynapli.server.auth.bearerTokenOrNull
 import io.ktor.server.application.ApplicationCall
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -12,10 +12,7 @@ internal data class AdminActor(
 internal fun ApplicationCall.requireAdminActor(expectedToken: String): AdminActor {
     val suppliedToken =
         request.headers["X-Admin-Token"]
-            ?: request.headers[HttpHeaders.Authorization]
-                ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-                ?.substringAfter("Bearer ")
-                ?.trim()
+            ?: bearerTokenOrNull()
             ?: throw ModerationException("ADMIN_UNAUTHENTICATED")
 
     if (!constantTimeEquals(expectedToken, suppliedToken)) {

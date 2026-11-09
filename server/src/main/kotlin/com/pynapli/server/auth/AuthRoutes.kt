@@ -4,7 +4,6 @@ import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -41,7 +40,7 @@ fun Application.configureAuthRoutes(authService: AuthService?) {
             }
 
             post("/logout") {
-                val token = call.bearerToken() ?: throw AuthException("UNAUTHENTICATED")
+                val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
                 call.respond(LogoutResponseDto(loggedOut = authService.logout(token)))
             }
         }
@@ -69,12 +68,6 @@ private suspend fun AuthService.loginEmail(request: EmailLoginRequestDto) =
         platform = request.platform,
         appVersion = request.appVersion,
     )
-
-private fun io.ktor.server.application.ApplicationCall.bearerToken(): String? {
-    val value = request.headers[HttpHeaders.Authorization] ?: return null
-    if (!value.startsWith("Bearer ", ignoreCase = true)) return null
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() }
-}
 
 fun authStatusFor(code: String): HttpStatusCode =
     when (code) {

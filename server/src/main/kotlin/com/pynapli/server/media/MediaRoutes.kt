@@ -1,7 +1,7 @@
 package com.pynapli.server.media
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MEDIA_VIDEO_MAX_BYTES
@@ -10,7 +10,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -59,13 +58,13 @@ fun Application.configureMediaRoutes(
             }
 
             post {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val request = call.receive<CreateMediaUploadRequestDto>()
                 call.respond(mediaService.createUploadSlot(user.id, request))
             }
 
             post("/{assetId}/complete") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val assetId = call.parameters["assetId"] ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
                 val request = call.receive<CompleteMediaUploadRequestDto>()
                 call.respond(mediaService.completeUpload(user.id, assetId, request))
@@ -73,7 +72,7 @@ fun Application.configureMediaRoutes(
         }
 
         delete("/v1/media/assets/{assetId}") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val assetId = call.parameters["assetId"] ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
             mediaService.deleteAsset(user.id, assetId)
             call.respond(HttpStatusCode.OK)
@@ -81,40 +80,34 @@ fun Application.configureMediaRoutes(
 
         route("/v1/media/albums") {
             get("/{kind}") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val kind = call.parameters["kind"] ?: throw MediaException("INVALID_MEDIA_ALBUM_KIND")
                 call.respond(mediaService.listOwnAlbum(user.id, kind))
             }
 
             put("/{kind}/order") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val kind = call.parameters["kind"] ?: throw MediaException("INVALID_MEDIA_ALBUM_KIND")
                 val request = call.receive<ReorderMediaAlbumRequestDto>()
                 call.respond(mediaService.reorderAlbum(user.id, kind, request))
             }
 
             get("/private/grants") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 call.respond(mediaService.listOwnPrivateAlbumGrants(user.id))
             }
 
             post("/private/grants/{granteeUserId}/revoke") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val granteeUserId = call.parameters["granteeUserId"] ?: throw MediaException("INVALID_ID")
                 call.respond(mediaService.revokePrivateAlbumAccess(user.id, granteeUserId))
             }
         }
 
         get("/v1/media/users/{ownerUserId}/albums/private") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val ownerUserId = call.parameters["ownerUserId"] ?: throw MediaException("INVALID_ID")
             call.respond(mediaService.listPrivateAlbumForViewer(user.id, ownerUserId))
         }
     }
-}
-
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }

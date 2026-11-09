@@ -80,7 +80,9 @@ class RouteSecurityMatrixTest {
                 pattern =
                     listOf(
                         "authService\\.authenticate",
+                        "authenticatedUser\\(",
                         "bearerToken\\(",
+                        "bearerTokenOrNull\\(",
                         "requiredBearerToken\\(",
                         "requireAdminActor",
                         "requireSubscriptionAdminActor",

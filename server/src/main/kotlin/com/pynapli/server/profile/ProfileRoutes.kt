@@ -1,14 +1,12 @@
 package com.pynapli.server.profile
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
 import com.pynapli.server.profiling.RequestProfilerFactory
 import com.pynapli.server.profiling.profilerContextElement
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -27,18 +25,18 @@ fun Application.configureProfileRoutes(
 
     routing {
         get("/v1/me") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             call.respond(profileService.getMe(user.id))
         }
 
         patch("/v1/me/profile") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<UpdateProfileRequestDto>()
             call.respond(profileService.updateProfile(user.id, request))
         }
 
         patch("/v1/me/discovery-settings") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<UpdateDiscoverySettingsRequestDto>()
             call.respond(profileService.updateDiscoverySettings(user.id, request))
         }
@@ -50,7 +48,7 @@ fun Application.configureProfileRoutes(
                     profiler.measure("profile.route.total") {
                         val user =
                             profiler.measure("profile.route.auth") {
-                                authService.authenticate(call.requiredBearerToken())
+                                call.authenticatedUser(authService)
                             }
                         val targetUserId =
                             profiler.measure("profile.route.params") {
@@ -66,12 +64,6 @@ fun Application.configureProfileRoutes(
             call.respond(response)
         }
     }
-}
-
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }
 
 private fun String.toUuidOrNull(): UUID? = runCatching { UUID.fromString(this) }.getOrNull()

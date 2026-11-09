@@ -2,9 +2,9 @@ package com.pynapli.server.psync
 
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.bearerTokenOrNull
 import com.pynapli.server.realtime.installRealtimeWebSocketsIfNeeded
 import com.pynapli.shared.network.dto.PsyncRealtimeDeltaDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.webSocket
@@ -41,11 +41,7 @@ fun Application.configurePsyncStreamRoutes(
     routing {
         webSocket("/v1/psync/stream") {
             val token =
-                call.request.headers[HttpHeaders.Authorization]
-                    ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-                    ?.substringAfter("Bearer ")
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() }
+                call.bearerTokenOrNull()
             if (token == null) {
                 close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "UNAUTHENTICATED"))
                 return@webSocket

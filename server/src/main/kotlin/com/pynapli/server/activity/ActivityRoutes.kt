@@ -1,14 +1,12 @@
 package com.pynapli.server.activity
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
 import com.pynapli.shared.network.dto.MarkActivitySeenRequestDto
 import com.pynapli.shared.network.dto.RequestAlbumAccessRequestDto
 import com.pynapli.shared.network.dto.RespondAlbumAccessRequestDto
 import com.pynapli.shared.network.dto.SendFlirtRequestDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -25,7 +23,7 @@ fun Application.configureActivityRoutes(
 
     routing {
         get("/v1/activity") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val limit = call.request.queryParameters["limit"]?.toIntOrNull()
             val tab = call.request.queryParameters["tab"]
             val cursor = call.request.queryParameters["cursor"]
@@ -40,18 +38,18 @@ fun Application.configureActivityRoutes(
         }
 
         get("/v1/activity/summary") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             call.respond(activityService.getActivitySummary(user.id))
         }
 
         post("/v1/activity/seen") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<MarkActivitySeenRequestDto>()
             call.respond(activityService.markActivityEventsSeen(user.id, request.eventIds))
         }
 
         post("/v1/activity/{eventId}/dismiss") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val eventId =
                 call.parameters["eventId"]?.toUuidOrNull()
                     ?: throw ActivityException("ACTIVITY_EVENT_NOT_FOUND")
@@ -59,7 +57,7 @@ fun Application.configureActivityRoutes(
         }
 
         post("/v1/activity/flirts") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<SendFlirtRequestDto>()
             val targetUserId =
                 request.targetUserId.toUuidOrNull()
@@ -68,7 +66,7 @@ fun Application.configureActivityRoutes(
         }
 
         post("/v1/activity/album-requests") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<RequestAlbumAccessRequestDto>()
             val targetUserId =
                 request.targetUserId.toUuidOrNull()
@@ -77,7 +75,7 @@ fun Application.configureActivityRoutes(
         }
 
         post("/v1/activity/album-requests/{eventId}/respond") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val eventId =
                 call.parameters["eventId"]?.toUuidOrNull()
                     ?: throw ActivityException("ALBUM_REQUEST_NOT_FOUND")
@@ -85,12 +83,6 @@ fun Application.configureActivityRoutes(
             call.respond(activityService.respondToAlbumAccessRequest(user.id, eventId, request.approve))
         }
     }
-}
-
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }
 
 private fun String.toUuidOrNull(): UUID? = runCatching { UUID.fromString(this) }.getOrNull()

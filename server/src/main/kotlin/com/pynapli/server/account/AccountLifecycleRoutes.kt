@@ -1,13 +1,13 @@
 package com.pynapli.server.account
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
+import com.pynapli.server.auth.requiredBearerToken
 import com.pynapli.shared.network.dto.DeleteAccountRequestDto
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.header
@@ -25,7 +25,7 @@ fun Application.configureAccountLifecycleRoutes(
 
     routing {
         get("/v1/account/data-export") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val latest = accountLifecycleService.latestDataExportRequest(user.id)
             if (latest == null) {
                 call.respond(HttpStatusCode.NoContent)
@@ -35,7 +35,7 @@ fun Application.configureAccountLifecycleRoutes(
         }
 
         post("/v1/account/data-export") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             call.respond(accountLifecycleService.requestDataExport(user.id))
         }
 
@@ -59,10 +59,4 @@ fun Application.configureAccountLifecycleRoutes(
             call.respond(response)
         }
     }
-}
-
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }

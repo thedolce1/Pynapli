@@ -1,16 +1,14 @@
 package com.pynapli.server.verification
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.moderation.requireAdminActor
 import com.pynapli.server.moderation.requiredAdminReason
 import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -27,7 +25,7 @@ fun Application.configureAgeVerificationRoutes(
 
     routing {
         get("/v1/verification/requirements") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             call.respond(
                 ageVerificationService.requirements(
                     userId = user.id,
@@ -37,12 +35,12 @@ fun Application.configureAgeVerificationRoutes(
         }
 
         get("/v1/verification/status") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             call.respond(ageVerificationService.status(user.id))
         }
 
         post("/v1/verification/start") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<StartAgeVerificationRequestDto>()
             call.respond(ageVerificationService.start(user.id, request))
         }
@@ -73,10 +71,4 @@ fun Application.configureAgeVerificationAdminRoutes(
             }
         }
     }
-}
-
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }

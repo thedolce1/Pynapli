@@ -1,16 +1,14 @@
 package com.pynapli.server.messaging
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto
 import com.pynapli.shared.network.dto.SendMediaMessageRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -28,37 +26,37 @@ fun Application.configureMessagingRoutes(
 
     routing {
         post("/v1/messages/{messageId}/delete") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val messageId = call.parameters["messageId"] ?: throw MessagingException("MESSAGE_NOT_FOUND")
             call.respond(messagingService.deleteOwnMessage(user.id, messageId))
         }
 
         post("/v1/messages/{messageId}/reveal") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val messageId = call.parameters["messageId"] ?: throw MessagingException("MESSAGE_NOT_FOUND")
             call.respond(messagingService.revealMessageMedia(user.id, messageId))
         }
 
         post("/v1/messages/media/uploads") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<CreateMessageMediaUploadRequestDto>()
             call.respond(messagingService.createMessageMediaUploadSlot(user.id, request))
         }
 
         route("/v1/messages/threads") {
             get {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 call.respond(messagingService.listConversations(user.id))
             }
 
             post {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val request = call.receive<CreateDirectConversationRequestDto>()
                 call.respond(messagingService.createDirectConversation(user.id, request))
             }
 
             get("/{threadId}") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 call.respond(
                     messagingService.getConversationDetail(
@@ -71,34 +69,34 @@ fun Application.configureMessagingRoutes(
             }
 
             post("/{threadId}/read") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 call.respond(messagingService.markConversationRead(user.id, threadId))
             }
 
             post("/{threadId}/messages") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 val request = call.receive<SendMessageRequestDto>()
                 call.respond(messagingService.sendMessage(user.id, threadId, request))
             }
 
             put("/{threadId}/expiry") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 val request = call.receive<SetConversationExpiryRequestDto>()
                 call.respond(messagingService.setConversationExpiry(user.id, threadId, request.expirySeconds))
             }
 
             post("/{threadId}/media") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 val request = call.receive<SendMediaMessageRequestDto>()
                 call.respond(messagingService.sendMediaMessage(user.id, threadId, request))
             }
 
             post("/{threadId}/typing") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 val request = call.receive<SendTypingIndicatorRequestDto>()
                 messagingService.sendTypingIndicator(user.id, threadId, request)
@@ -106,34 +104,28 @@ fun Application.configureMessagingRoutes(
             }
 
             post("/{threadId}/partner-invite") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 call.respond(messagingService.inviteLinkedPartnerToConversation(user.id, threadId))
             }
 
             post("/{threadId}/partner-invite/accept") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
                 call.respond(messagingService.acceptPartnerInvite(user.id, threadId))
             }
 
             post("/{threadId}/partner-invite/decline") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
                 call.respond(messagingService.declinePartnerInvite(user.id, threadId))
             }
 
             post("/{threadId}/leave") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("CONVERSATION_NOT_FOUND")
                 call.respond(messagingService.leaveConversation(user.id, threadId))
             }
         }
     }
-}
-
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }

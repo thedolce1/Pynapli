@@ -1,12 +1,10 @@
 package com.pynapli.server.location
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
 import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -32,14 +30,14 @@ fun Application.configureTravelLocationRoutes(
         // queries return an empty list so the client needs no length special-casing.
         travelPlaceSearchService?.let { searchService ->
             get("/v1/location/travel/search") {
-                val user = authService.authenticate(call.requiredBearerToken())
+                val user = call.authenticatedUser(authService)
                 val query = call.request.queryParameters["q"].orEmpty()
                 call.respond(searchService.search(user.id, query))
             }
         }
 
         get("/v1/location/travel") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val current = travelLocationService.getCurrent(user.id)
             if (current == null) {
                 call.respond(HttpStatusCode.NoContent)
@@ -49,21 +47,15 @@ fun Application.configureTravelLocationRoutes(
         }
 
         post("/v1/location/travel") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<SetTravelLocationRequestDto>()
             call.respond(travelLocationService.set(user.id, request))
         }
 
         delete("/v1/location/travel") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val cleared = travelLocationService.clear(user.id)
             if (cleared) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound)
         }
     }
-}
-
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }

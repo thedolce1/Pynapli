@@ -3,12 +3,12 @@ package com.pynapli.server.subscriptions
 import com.google.auth.oauth2.TokenVerifier
 import com.pynapli.server.admin.requireAdminMfa
 import com.pynapli.server.admin.requireSeniorAdmin
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
+import com.pynapli.server.auth.bearerTokenOrNull
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
@@ -33,30 +33,30 @@ fun Application.configureSubscriptionRoutes(
 
     routing {
         get("/v1/subscriptions/entitlement") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             call.respond(subscriptionService.getEntitlement(user.id))
         }
 
         get("/v1/subscriptions/inventory") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             call.respond(subscriptionService.getInventory(user.id))
         }
 
         post("/v1/subscriptions/play-store/purchases") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<SubmitPlayStoreSubscriptionPurchaseRequestDto>()
             call.respond(subscriptionService.recordPlayStoreSubscriptionPurchase(user.id, request))
         }
 
         post("/v1/subscriptions/dev/purchases") {
             if (!config.devStorePurchasesEnabled) throw SubscriptionException("DEV_STORE_PURCHASES_DISABLED")
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<SubmitDevStorePurchaseRequestDto>()
             call.respond(subscriptionService.recordDevStorePurchase(user.id, request))
         }
 
         post("/v1/boosts") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             call.respond(subscriptionService.activateBoost(user.id))
         }
     }
@@ -156,19 +156,10 @@ fun Application.configurePlayStoreRtdnRoutes(
     }
 }
 
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
-}
-
 private fun ApplicationCall.requireSubscriptionAdminActor(expectedToken: String): String {
     val suppliedToken =
         request.headers["X-Admin-Token"]
-            ?: request.headers[HttpHeaders.Authorization]
-                ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-                ?.substringAfter("Bearer ")
-                ?.trim()
+            ?: bearerTokenOrNull()
             ?: throw SubscriptionException("ADMIN_UNAUTHENTICATED")
 
     if (!MessageDigest.isEqual(
@@ -209,10 +200,7 @@ private fun ApplicationCall.requirePlayStoreRtdnAuth(config: ServerConfig) {
 
     val audience = config.playStoreRtdnOidcAudience ?: throw SubscriptionException("RTDN_UNAUTHENTICATED")
     val bearerToken =
-        request.headers[HttpHeaders.Authorization]
-            ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
-            ?.substringAfter("Bearer ")
-            ?.trim()
+        bearerTokenOrNull()
             ?.takeIf { it.isNotEmpty() }
             ?: throw SubscriptionException("RTDN_UNAUTHENTICATED")
 

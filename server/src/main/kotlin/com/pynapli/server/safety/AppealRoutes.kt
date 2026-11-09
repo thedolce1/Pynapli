@@ -1,11 +1,9 @@
 package com.pynapli.server.safety
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
 import com.pynapli.shared.network.dto.CreateAppealRequestDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -21,27 +19,21 @@ fun Application.configureAppealRoutes(
 
     routing {
         post("/v1/appeals") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val request = call.receive<CreateAppealRequestDto>()
             call.respond(appealService.submitAppeal(user.id, request))
         }
 
         get("/v1/appeals") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
             call.respond(appealService.listAppeals(user.id, limit))
         }
 
         post("/v1/appeals/{appealId}/withdraw") {
-            val user = authService.authenticate(call.requiredBearerToken())
+            val user = call.authenticatedUser(authService)
             val appealId = call.parameters["appealId"] ?: throw SafetyException("INVALID_APPEAL_ID")
             call.respond(appealService.withdrawAppeal(user.id, appealId))
         }
     }
-}
-
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }

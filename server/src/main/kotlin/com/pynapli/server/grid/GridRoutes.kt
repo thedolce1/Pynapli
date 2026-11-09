@@ -1,13 +1,11 @@
 package com.pynapli.server.grid
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.authenticatedUser
 import com.pynapli.server.profiling.RequestProfilerFactory
 import com.pynapli.server.profiling.profilerContextElement
 import com.pynapli.shared.network.dto.GridQueryRequestDto
-import io.ktor.http.HttpHeaders
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -30,7 +28,7 @@ fun Application.configureGridRoutes(
                     profiler.measure("grid.route.total") {
                         val user =
                             profiler.measure("grid.route.auth") {
-                                authService.authenticate(call.requiredBearerToken())
+                                call.authenticatedUser(authService)
                             }
                         val request =
                             profiler.measure("grid.route.receive") {
@@ -45,10 +43,4 @@ fun Application.configureGridRoutes(
             call.respond(response)
         }
     }
-}
-
-private fun ApplicationCall.requiredBearerToken(): String {
-    val value = request.headers[HttpHeaders.Authorization] ?: throw AuthException("UNAUTHENTICATED")
-    if (!value.startsWith("Bearer ", ignoreCase = true)) throw AuthException("UNAUTHENTICATED")
-    return value.substringAfter("Bearer ").trim().takeIf { it.isNotEmpty() } ?: throw AuthException("UNAUTHENTICATED")
 }
