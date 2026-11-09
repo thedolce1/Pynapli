@@ -20,9 +20,7 @@ import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
 import com.pynapli.shared.network.SessionRefresherHolder
-import com.pynapli.shared.network.buildWebActivityStreamClient
-import com.pynapli.shared.network.buildWebMessageStreamClient
-import com.pynapli.shared.network.buildWebPresenceStreamClient
+import com.pynapli.shared.network.webRealtimeStreams
 import com.pynapli.web.auth.LocalStorageSessionStore
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.settings.LocalStorageAppSettingsStore
@@ -101,6 +99,9 @@ class WebAppGraph {
             progressStore = LocalStorageOnboardingProgressStore(),
         )
 
+    /** All realtime WebSocket streams, sharing one client and connection pool. */
+    private val realtimeStreams = webRealtimeStreams(pynapliConfig.websocketBaseUrl, sessionStore)
+
     /**
      * Everything downstream of the API client, built once in commonMain and shared with
      * AndroidAppGraph. This block used to be ~110 lines duplicated here; keeping two copies is what
@@ -117,20 +118,11 @@ class WebAppGraph {
             storePurchaseGateway = UnavailableStorePurchaseGateway(),
             // First-frame-auth sockets: browsers cannot set WebSocket headers (W3).
             presenceStreamClient =
-                buildWebPresenceStreamClient(
-                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
-                    tokenProvider = sessionStore,
-                ),
+                realtimeStreams.presence,
             activityStreamClient =
-                buildWebActivityStreamClient(
-                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
-                    tokenProvider = sessionStore,
-                ),
+                realtimeStreams.activity,
             messageStreamClient =
-                buildWebMessageStreamClient(
-                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
-                    tokenProvider = sessionStore,
-                ),
+                realtimeStreams.message,
         )
 
     val gridStateHolder get() = common.gridStateHolder

@@ -32,10 +32,7 @@ import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.SessionRefresherHolder
-import com.pynapli.shared.network.buildAndroidActivityStreamClient
-import com.pynapli.shared.network.buildAndroidMessageStreamClient
-import com.pynapli.shared.network.buildAndroidPresenceStreamClient
-import com.pynapli.shared.network.buildAndroidPsyncStreamClient
+import com.pynapli.shared.network.androidRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
@@ -141,14 +138,14 @@ class AndroidAppGraph(
             progressStore = SqlDelightOnboardingProgressStore(database),
         )
 
+    /** All realtime WebSocket streams, sharing one client and connection pool. */
+    private val realtimeStreams = androidRealtimeStreams(pynapliConfig.websocketBaseUrl, sessionStore)
+
     // Realtime convenience channel for an open Psync session (refetch on partner-side changes).
     // Not part of the common graph: the per-viewer PsyncStateHolder is built in PynapliApp, so the
     // shell only needs to hand the client through.
     val psyncStreamClient =
-        buildAndroidPsyncStreamClient(
-            websocketBaseUrl = pynapliConfig.websocketBaseUrl,
-            tokenProvider = sessionStore,
-        )
+        realtimeStreams.psync
 
     /**
      * Everything downstream of the API client, built once in commonMain. This block used to be
@@ -169,20 +166,11 @@ class AndroidAppGraph(
                 ),
             storePurchaseGateway = storePurchaseGateway,
             presenceStreamClient =
-                buildAndroidPresenceStreamClient(
-                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
-                    tokenProvider = sessionStore,
-                ),
+                realtimeStreams.presence,
             activityStreamClient =
-                buildAndroidActivityStreamClient(
-                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
-                    tokenProvider = sessionStore,
-                ),
+                realtimeStreams.activity,
             messageStreamClient =
-                buildAndroidMessageStreamClient(
-                    websocketBaseUrl = pynapliConfig.websocketBaseUrl,
-                    tokenProvider = sessionStore,
-                ),
+                realtimeStreams.message,
         )
 
     val gridStateHolder get() = common.gridStateHolder

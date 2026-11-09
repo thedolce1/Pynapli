@@ -22,10 +22,7 @@ import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
 import com.pynapli.shared.network.SessionRefresherHolder
-import com.pynapli.shared.network.buildIosActivityStreamClient
-import com.pynapli.shared.network.buildIosMessageStreamClient
-import com.pynapli.shared.network.buildIosPresenceStreamClient
-import com.pynapli.shared.network.buildIosPsyncStreamClient
+import com.pynapli.shared.network.iosRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.storage.IosPynapliDatabaseFactory
@@ -140,6 +137,9 @@ class IosAppGraph(
             progressStore = SqlDelightOnboardingProgressStore(database),
         )
 
+    /** All realtime WebSocket streams, sharing one client and connection pool. */
+    private val realtimeStreams = iosRealtimeStreams(pynapliConfig.websocketBaseUrl, sessionStore)
+
     private val common =
         PynapliCommonGraph(
             apiClient = apiClient,
@@ -149,15 +149,15 @@ class IosAppGraph(
             // Read-only Store for the first iOS release; StoreKit 2 is a later slice.
             storePurchaseGateway = UnavailableStorePurchaseGateway(),
             presenceStreamClient =
-                buildIosPresenceStreamClient(pynapliConfig.websocketBaseUrl, sessionStore),
+                realtimeStreams.presence,
             activityStreamClient =
-                buildIosActivityStreamClient(pynapliConfig.websocketBaseUrl, sessionStore),
+                realtimeStreams.activity,
             messageStreamClient =
-                buildIosMessageStreamClient(pynapliConfig.websocketBaseUrl, sessionStore),
+                realtimeStreams.message,
         )
 
     /** Psync realtime channel; the per-viewer holder is built inside `PynapliApp`. */
-    val psyncStreamClient = buildIosPsyncStreamClient(pynapliConfig.websocketBaseUrl, sessionStore)
+    val psyncStreamClient = realtimeStreams.psync
 
     /** The single object the Swift shell hands to `PynapliApp`. */
     val pynapliAppGraph: PynapliAppGraph =

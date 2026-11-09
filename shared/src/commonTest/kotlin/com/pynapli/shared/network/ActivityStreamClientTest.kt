@@ -21,7 +21,7 @@ class ActivityStreamClientTest {
 
     @Test
     fun backoffDelayGrowsExponentiallyAndCaps() {
-        val backoff = ActivityStreamBackoff(initialDelayMillis = 1_000, maxDelayMillis = 16_000, factor = 2.0)
+        val backoff = StreamBackoff(initialDelayMillis = 1_000, maxDelayMillis = 16_000, factor = 2.0)
         assertEquals(1_000, backoff.delayMillisFor(0))
         assertEquals(2_000, backoff.delayMillisFor(1))
         assertEquals(4_000, backoff.delayMillisFor(2))
@@ -49,7 +49,8 @@ class ActivityStreamClientTest {
                 )
             val factory = ScriptedActivitySessionFactory(sessions = listOf(session))
             val client =
-                ActivityStreamClient(
+                JsonStreamClient(
+                    deserializer = ActivityDeltaDto.serializer(),
                     sessionFactory = factory,
                     tokenProvider = StaticAccessTokenProvider("test-token"),
                     json = json,
@@ -81,10 +82,11 @@ class ActivityStreamClientTest {
                 )
             val factory = ScriptedActivitySessionFactory(sessions = listOf(firstSession, secondSession))
             val client =
-                ActivityStreamClient(
+                JsonStreamClient(
+                    deserializer = ActivityDeltaDto.serializer(),
                     sessionFactory = factory,
                     tokenProvider = StaticAccessTokenProvider("test-token"),
-                    backoff = ActivityStreamBackoff(initialDelayMillis = 10, maxDelayMillis = 20, factor = 1.0),
+                    backoff = StreamBackoff(initialDelayMillis = 10, maxDelayMillis = 20, factor = 1.0),
                     json = json,
                 )
 
@@ -107,10 +109,11 @@ class ActivityStreamClientTest {
             val rejected = ScriptedActivitySession(scriptedReceives = emptyList())
             val factory = ScriptedActivitySessionFactory(sessions = listOf(rejected))
             val client =
-                ActivityStreamClient(
+                JsonStreamClient(
+                    deserializer = ActivityDeltaDto.serializer(),
                     sessionFactory = factory,
                     tokenProvider = StaticAccessTokenProvider("expired-token"),
-                    backoff = ActivityStreamBackoff(initialDelayMillis = 100, maxDelayMillis = 100, factor = 1.0),
+                    backoff = StreamBackoff(initialDelayMillis = 100, maxDelayMillis = 100, factor = 1.0),
                     json = json,
                 )
 
@@ -126,7 +129,9 @@ class ActivityStreamClientTest {
 
 private class ScriptedActivitySession(
     private val scriptedReceives: List<String>,
-) : ActivityStreamSession {
+) : StreamSession {
+    override suspend fun send(text: String) {}
+
     private var receiveIndex = 0
 
     override suspend fun receiveText(): String? {
@@ -141,12 +146,12 @@ private class ScriptedActivitySession(
 
 private class ScriptedActivitySessionFactory(
     private val sessions: List<ScriptedActivitySession>,
-) : ActivityStreamSessionFactory {
+) : StreamSessionFactory {
     val tokensSeen = mutableListOf<String>()
     var connectInvocations: Int = 0
         private set
 
-    override suspend fun connect(token: String): ActivityStreamSession {
+    override suspend fun connect(token: String): StreamSession {
         tokensSeen += token
         val session = sessions.getOrElse(connectInvocations) { sessions.last() }
         connectInvocations += 1

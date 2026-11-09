@@ -24,7 +24,7 @@ class PresenceStreamClientTest {
 
     @Test
     fun backoffDelayGrowsExponentiallyAndCaps() {
-        val backoff = PresenceStreamBackoff(initialDelayMillis = 1_000, maxDelayMillis = 16_000, factor = 2.0)
+        val backoff = StreamBackoff(initialDelayMillis = 1_000, maxDelayMillis = 16_000, factor = 2.0)
         assertEquals(1_000, backoff.delayMillisFor(0))
         assertEquals(2_000, backoff.delayMillisFor(1))
         assertEquals(4_000, backoff.delayMillisFor(2))
@@ -53,8 +53,12 @@ class PresenceStreamClientTest {
             val factory = ScriptedSessionFactory(sessions = listOf(session))
             val client =
                 PresenceStreamClient(
-                    sessionFactory = factory,
-                    tokenProvider = StaticAccessTokenProvider("test-token"),
+                    JsonStreamClient(
+                        deserializer = PresenceDeltaDto.serializer(),
+                        sessionFactory = factory,
+                        tokenProvider = StaticAccessTokenProvider("test-token"),
+                        json = json,
+                    ),
                     json = json,
                 )
 
@@ -76,8 +80,12 @@ class PresenceStreamClientTest {
             val factory = ScriptedSessionFactory(sessions = listOf(session))
             val client =
                 PresenceStreamClient(
-                    sessionFactory = factory,
-                    tokenProvider = StaticAccessTokenProvider("test-token"),
+                    JsonStreamClient(
+                        deserializer = PresenceDeltaDto.serializer(),
+                        sessionFactory = factory,
+                        tokenProvider = StaticAccessTokenProvider("test-token"),
+                        json = json,
+                    ),
                     json = json,
                 )
 
@@ -121,9 +129,13 @@ class PresenceStreamClientTest {
             val factory = ScriptedSessionFactory(sessions = listOf(firstSession, secondSession))
             val client =
                 PresenceStreamClient(
-                    sessionFactory = factory,
-                    tokenProvider = StaticAccessTokenProvider("test-token"),
-                    backoff = PresenceStreamBackoff(initialDelayMillis = 10, maxDelayMillis = 20, factor = 1.0),
+                    JsonStreamClient(
+                        deserializer = PresenceDeltaDto.serializer(),
+                        sessionFactory = factory,
+                        tokenProvider = StaticAccessTokenProvider("test-token"),
+                        backoff = StreamBackoff(initialDelayMillis = 10, maxDelayMillis = 20, factor = 1.0),
+                        json = json,
+                    ),
                     json = json,
                 )
 
@@ -140,7 +152,7 @@ class PresenceStreamClientTest {
 
 private class ScriptedSession(
     private val scriptedReceives: List<String>,
-) : PresenceStreamSession {
+) : StreamSession {
     val sentMessages = mutableListOf<String>()
     private var receiveIndex = 0
 
@@ -164,12 +176,12 @@ private class ScriptedSession(
 
 private class ScriptedSessionFactory(
     private val sessions: List<ScriptedSession>,
-) : PresenceStreamSessionFactory {
+) : StreamSessionFactory {
     val tokensSeen = mutableListOf<String>()
     var connectInvocations: Int = 0
         private set
 
-    override suspend fun connect(token: String): PresenceStreamSession {
+    override suspend fun connect(token: String): StreamSession {
         tokensSeen += token
         val session = sessions.getOrElse(connectInvocations) { sessions.last() }
         connectInvocations += 1

@@ -26,10 +26,7 @@ import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
 import com.pynapli.shared.network.SessionRefresherHolder
-import com.pynapli.shared.network.buildJvmActivityStreamClient
-import com.pynapli.shared.network.buildJvmMessageStreamClient
-import com.pynapli.shared.network.buildJvmPresenceStreamClient
-import com.pynapli.shared.network.buildJvmPsyncStreamClient
+import com.pynapli.shared.network.jvmRealtimeStreams
 import kotlinx.datetime.TimeZone
 import kotlin.random.Random
 
@@ -104,6 +101,9 @@ class DesktopAppGraph {
             progressStore = DesktopOnboardingProgressStore(),
         )
 
+    /** All realtime WebSocket streams, sharing one client and connection pool. */
+    private val realtimeStreams = jvmRealtimeStreams(pynapliConfig.websocketBaseUrl, sessionStore)
+
     private val common =
         PynapliCommonGraph(
             apiClient = apiClient,
@@ -112,15 +112,15 @@ class DesktopAppGraph {
             swipeRepository = ApiSwipeRepository(apiClient),
             storePurchaseGateway = UnavailableStorePurchaseGateway(),
             presenceStreamClient =
-                buildJvmPresenceStreamClient(pynapliConfig.websocketBaseUrl, sessionStore),
+                realtimeStreams.presence,
             activityStreamClient =
-                buildJvmActivityStreamClient(pynapliConfig.websocketBaseUrl, sessionStore),
+                realtimeStreams.activity,
             messageStreamClient =
-                buildJvmMessageStreamClient(pynapliConfig.websocketBaseUrl, sessionStore),
+                realtimeStreams.message,
         )
 
     /** Psync realtime channel; the per-viewer holder is built inside `PynapliApp`. */
-    val psyncStreamClient = buildJvmPsyncStreamClient(pynapliConfig.websocketBaseUrl, sessionStore)
+    val psyncStreamClient = realtimeStreams.psync
 
     val gridStateHolder get() = common.gridStateHolder
     val locationStateHolder get() = common.locationStateHolder

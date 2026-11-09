@@ -81,6 +81,9 @@ class RouteSecurityMatrixTest {
                     listOf(
                         "authService\\.authenticate",
                         "authenticatedUser\\(",
+                        // Realtime streams: both authenticate the socket before anything is sent.
+                        "authenticateStream\\(",
+                        "recipientStream\\(",
                         "bearerToken\\(",
                         "bearerTokenOrNull\\(",
                         "requiredBearerToken\\(",

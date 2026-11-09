@@ -1,33 +1,24 @@
 package com.pynapli.server.presence
 
-import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
-import com.pynapli.server.realtime.awaitStreamToken
+import com.pynapli.server.realtime.authenticateStream
 import com.pynapli.server.realtime.installRealtimeWebSocketsIfNeeded
+import com.pynapli.server.realtime.streamJson
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import com.pynapli.shared.network.dto.PresenceStreamSubscribeDto
 import io.ktor.server.application.Application
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.webSocket
-import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
-import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
-
-private val streamJson =
-    Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
 
 fun Application.configurePresenceStreamRoutes(
     authService: AuthService,
@@ -40,20 +31,7 @@ fun Application.configurePresenceStreamRoutes(
 
     routing {
         webSocket("/v1/presence/stream") {
-            // Header for native clients; first-frame auth for browsers (awaitStreamToken).
-            val token = awaitStreamToken()
-            if (token == null) {
-                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "UNAUTHENTICATED"))
-                return@webSocket
-            }
-
-            val viewerId =
-                try {
-                    authService.authenticate(token).id
-                } catch (e: AuthException) {
-                    close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, e.code))
-                    return@webSocket
-                }
+            val viewerId = authenticateStream(authService) ?: return@webSocket
 
             val subscription = AtomicReference<Set<UUID>>(emptySet())
 

@@ -18,7 +18,7 @@ class PsyncStreamClientTest {
 
     @Test
     fun backoffDelayGrowsExponentiallyAndCaps() {
-        val backoff = PsyncStreamBackoff(initialDelayMillis = 1_000, maxDelayMillis = 16_000, factor = 2.0)
+        val backoff = StreamBackoff(initialDelayMillis = 1_000, maxDelayMillis = 16_000, factor = 2.0)
         assertEquals(1_000, backoff.delayMillisFor(0))
         assertEquals(2_000, backoff.delayMillisFor(1))
         assertEquals(4_000, backoff.delayMillisFor(2))
@@ -46,7 +46,8 @@ class PsyncStreamClientTest {
                 )
             val factory = ScriptedPsyncSessionFactory(sessions = listOf(session))
             val client =
-                PsyncStreamClient(
+                JsonStreamClient(
+                    deserializer = PsyncRealtimeDeltaDto.serializer(),
                     sessionFactory = factory,
                     tokenProvider = StaticAccessTokenProvider("test-token"),
                     json = json,
@@ -78,10 +79,11 @@ class PsyncStreamClientTest {
                 )
             val factory = ScriptedPsyncSessionFactory(sessions = listOf(firstSession, secondSession))
             val client =
-                PsyncStreamClient(
+                JsonStreamClient(
+                    deserializer = PsyncRealtimeDeltaDto.serializer(),
                     sessionFactory = factory,
                     tokenProvider = StaticAccessTokenProvider("test-token"),
-                    backoff = PsyncStreamBackoff(initialDelayMillis = 10, maxDelayMillis = 20, factor = 1.0),
+                    backoff = StreamBackoff(initialDelayMillis = 10, maxDelayMillis = 20, factor = 1.0),
                     json = json,
                 )
 
@@ -97,7 +99,9 @@ class PsyncStreamClientTest {
 
 private class ScriptedPsyncSession(
     private val scriptedReceives: List<String>,
-) : PsyncStreamSession {
+) : StreamSession {
+    override suspend fun send(text: String) {}
+
     private var receiveIndex = 0
 
     override suspend fun receiveText(): String? {
@@ -112,12 +116,12 @@ private class ScriptedPsyncSession(
 
 private class ScriptedPsyncSessionFactory(
     private val sessions: List<ScriptedPsyncSession>,
-) : PsyncStreamSessionFactory {
+) : StreamSessionFactory {
     val tokensSeen = mutableListOf<String>()
     var connectInvocations: Int = 0
         private set
 
-    override suspend fun connect(token: String): PsyncStreamSession {
+    override suspend fun connect(token: String): StreamSession {
         tokensSeen += token
         val session = sessions.getOrElse(connectInvocations) { sessions.last() }
         connectInvocations += 1
