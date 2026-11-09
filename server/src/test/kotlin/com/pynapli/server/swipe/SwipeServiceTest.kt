@@ -19,15 +19,13 @@ import com.pynapli.server.safety.AccountRiskStateRecord
 import com.pynapli.server.safety.BlockRecord
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockSummaryRecord
-import com.pynapli.server.safety.RateLimitCounter
-import com.pynapli.server.safety.RateLimitRepository
-import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.subscriptions.LinkedPartnerSubscriptionRecord
 import com.pynapli.server.subscriptions.StoredEntitlementRecord
 import com.pynapli.server.subscriptions.SubscriptionRecord
 import com.pynapli.server.subscriptions.SubscriptionRepository
 import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.server.testsupport.denyingRateLimitService
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
@@ -2036,16 +2034,6 @@ private class StaticBlockRepository(
 
     override suspend fun listBlockedRelatedUserIds(userId: UUID): Set<UUID> = relatedByUser[userId].orEmpty()
 }
-
-private fun denyingRateLimitService(): RateLimitService =
-    RateLimitService(
-        object : RateLimitRepository {
-            override suspend fun increment(
-                key: String,
-                windowSeconds: Long,
-            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
-        },
-    )
 
 private fun restrictedRiskPolicy(tier: String = "quarantine"): RiskPolicyService =
     RiskPolicyService { userId ->

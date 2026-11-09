@@ -1,11 +1,9 @@
 package com.pynapli.server.swipe
 
 import com.pynapli.server.discovery.DiscoveryFilters
-import com.pynapli.server.subscriptions.LinkedPartnerSubscriptionRecord
-import com.pynapli.server.subscriptions.StoredEntitlementRecord
 import com.pynapli.server.subscriptions.SubscriptionRecord
-import com.pynapli.server.subscriptions.SubscriptionRepository
 import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.server.testsupport.StaticSubscriptionRepository
 import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
@@ -158,7 +156,7 @@ class TopPicksServiceTest {
     ): TopPicksService {
         val subscriptionService =
             if (tier == SubscriptionTier.FREE) {
-                SubscriptionService(TopPicksStubSubscriptionRepository(), clock = clock)
+                SubscriptionService(StaticSubscriptionRepository(), clock = clock)
             } else {
                 paidSubscriptionService(viewer, tier)
             }
@@ -175,7 +173,7 @@ class TopPicksServiceTest {
         tier: String,
     ): SubscriptionService =
         SubscriptionService(
-            TopPicksStubSubscriptionRepository(
+            StaticSubscriptionRepository(
                 own =
                     mapOf(
                         userId to
@@ -333,28 +331,4 @@ private class InMemoryTopPicksRepository : TopPicksRepository {
     }
 
     fun sessionCount(userId: UUID): Int = sessions[userId]?.size ?: 0
-}
-
-private class TopPicksStubSubscriptionRepository(
-    private val own: Map<UUID, SubscriptionRecord> = emptyMap(),
-) : SubscriptionRepository {
-    override suspend fun findBestActiveOwnSubscription(
-        userId: UUID,
-        now: Instant,
-    ): SubscriptionRecord? = own[userId]
-
-    override suspend fun findBestActiveLinkedPartnerSubscription(
-        userId: UUID,
-        now: Instant,
-    ): LinkedPartnerSubscriptionRecord? = null
-
-    override suspend fun findBestActiveStoredEntitlement(
-        userId: UUID,
-        now: Instant,
-    ): StoredEntitlementRecord? = null
-
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = false
 }

@@ -3,6 +3,7 @@ package com.pynapli.server.subscriptions
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
+import com.pynapli.server.testsupport.testServerConfig
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -169,13 +170,7 @@ class SubscriptionAdminRoutesTest {
         }
 
     private fun testConfig(rtdnEnabled: Boolean = false): ServerConfig =
-        ServerConfig(
-            environment = "test",
-            port = 8080,
-            databaseUrl = "jdbc:postgresql://localhost:5432/pynapli_test",
-            databaseUser = "pynapli",
-            databasePassword = "pynapli_dev_password",
-            redisUrl = "redis://localhost:6379",
+        testServerConfig().copy(
             playStoreRtdnEnabled = rtdnEnabled,
             playStoreRtdnWebhookToken = "test-rtdn-token",
             adminApiToken = "test-admin-token",

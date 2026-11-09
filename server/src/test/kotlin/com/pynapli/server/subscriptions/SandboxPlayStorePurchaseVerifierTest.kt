@@ -1,6 +1,7 @@
 package com.pynapli.server.subscriptions
 
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.testsupport.testServerConfig
 import com.pynapli.shared.network.dto.SubscriptionProductId
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
@@ -113,13 +114,7 @@ class SandboxPlayStorePurchaseVerifierTest {
         environment: String,
         sandbox: Boolean,
     ): ServerConfig =
-        ServerConfig(
-            environment = environment,
-            port = 8080,
-            databaseUrl = "jdbc:postgresql://localhost:5432/pynapli_test",
-            databaseUser = "pynapli",
-            databasePassword = "pynapli_dev_password",
-            redisUrl = "redis://localhost:6379",
+        testServerConfig(environment = environment).copy(
             playStoreSandboxEnabled = sandbox,
         )
 }

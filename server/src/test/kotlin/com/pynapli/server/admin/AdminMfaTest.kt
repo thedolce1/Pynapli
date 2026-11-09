@@ -1,6 +1,7 @@
 package com.pynapli.server.admin
 
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.testsupport.testServerConfig
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -28,13 +29,7 @@ class AdminMfaTest {
         enforced: Boolean,
         secrets: Map<String, String> = emptyMap(),
     ): ServerConfig =
-        ServerConfig(
-            environment = "test",
-            port = 8080,
-            databaseUrl = "jdbc:postgresql://localhost:5432/pynapli_test",
-            databaseUser = "pynapli",
-            databasePassword = "pynapli_dev_password",
-            redisUrl = "redis://localhost:6379",
+        testServerConfig().copy(
             adminApiToken = "test-admin-token",
             adminMfaEnforced = enforced,
             adminMfaSecrets = secrets,

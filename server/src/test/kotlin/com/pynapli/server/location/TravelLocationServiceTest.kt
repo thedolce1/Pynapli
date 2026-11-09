@@ -1,10 +1,8 @@
 package com.pynapli.server.location
 
-import com.pynapli.server.subscriptions.LinkedPartnerSubscriptionRecord
-import com.pynapli.server.subscriptions.StoredEntitlementRecord
 import com.pynapli.server.subscriptions.SubscriptionRecord
-import com.pynapli.server.subscriptions.SubscriptionRepository
 import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.server.testsupport.StaticSubscriptionRepository
 import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.TravelLocationStatus
@@ -34,7 +32,7 @@ class TravelLocationServiceTest {
             val service =
                 TravelLocationService(
                     repository = InMemoryTravelLocationRepository(),
-                    subscriptionService = SubscriptionService(StubSubscriptionRepository(), clock = clock),
+                    subscriptionService = SubscriptionService(StaticSubscriptionRepository(), clock = clock),
                     clock = clock,
                 )
 
@@ -205,7 +203,7 @@ class TravelLocationServiceTest {
             val service =
                 TravelLocationService(
                     repository = InMemoryTravelLocationRepository(),
-                    subscriptionService = SubscriptionService(StubSubscriptionRepository(), clock = clock),
+                    subscriptionService = SubscriptionService(StaticSubscriptionRepository(), clock = clock),
                     clock = clock,
                 )
 
@@ -369,7 +367,7 @@ class TravelLocationServiceTest {
         tier: String,
     ): SubscriptionService =
         SubscriptionService(
-            StubSubscriptionRepository(
+            StaticSubscriptionRepository(
                 own =
                     mapOf(
                         userId to
@@ -447,30 +445,6 @@ private class InMemoryTravelLocationRepository : TravelLocationRepository {
     fun activeRowCount(userId: UUID): Int = rows.count { it.userId == userId && it.status == "active" && it.activeUntil == null }
 
     fun totalRowCount(userId: UUID): Int = rows.count { it.userId == userId }
-}
-
-private class StubSubscriptionRepository(
-    private val own: Map<UUID, SubscriptionRecord> = emptyMap(),
-) : SubscriptionRepository {
-    override suspend fun findBestActiveOwnSubscription(
-        userId: UUID,
-        now: Instant,
-    ): SubscriptionRecord? = own[userId]
-
-    override suspend fun findBestActiveLinkedPartnerSubscription(
-        userId: UUID,
-        now: Instant,
-    ): LinkedPartnerSubscriptionRecord? = null
-
-    override suspend fun findBestActiveStoredEntitlement(
-        userId: UUID,
-        now: Instant,
-    ): StoredEntitlementRecord? = null
-
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = false
 }
 
 private class StaticTravelRegionPolicy(

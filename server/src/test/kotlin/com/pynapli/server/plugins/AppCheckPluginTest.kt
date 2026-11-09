@@ -4,6 +4,7 @@ import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.safety.DisabledAppCheckVerifier
 import com.pynapli.server.safety.FirebaseAppCheckVerifier
 import com.pynapli.server.safety.HeaderPresenceAppCheckVerifier
+import com.pynapli.server.testsupport.testServerConfig
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -116,13 +117,7 @@ class AppCheckPluginTest {
         enforced: Boolean,
         projectNumber: String? = null,
     ): ServerConfig =
-        ServerConfig(
-            environment = "test",
-            port = 8080,
-            databaseUrl = "jdbc:postgresql://localhost:5432/pynapli_test",
-            databaseUser = "pynapli",
-            databasePassword = "pynapli_dev_password",
-            redisUrl = "redis://localhost:6379",
+        testServerConfig().copy(
             appCheckEnforced = enforced,
             appCheckProjectNumber = projectNumber,
         )

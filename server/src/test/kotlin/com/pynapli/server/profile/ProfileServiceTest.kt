@@ -11,10 +11,8 @@ import com.pynapli.server.presence.PresenceRepository
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.presence.PresenceState
 import com.pynapli.server.safety.AccountRiskStateRecord
-import com.pynapli.server.safety.RateLimitCounter
-import com.pynapli.server.safety.RateLimitRepository
-import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RiskPolicyService
+import com.pynapli.server.testsupport.denyingRateLimitService
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import kotlinx.coroutines.runBlocking
@@ -765,15 +763,6 @@ private class StaticPresenceRepository(
 }
 
 // Always over the limit: increment reports a count far above any policy cap, so check().allowed is false.
-private fun denyingRateLimitService(): RateLimitService =
-    RateLimitService(
-        object : RateLimitRepository {
-            override suspend fun increment(
-                key: String,
-                windowSeconds: Long,
-            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
-        },
-    )
 
 private fun restrictedRiskPolicy(tier: String = "quarantine"): RiskPolicyService =
     RiskPolicyService { userId ->

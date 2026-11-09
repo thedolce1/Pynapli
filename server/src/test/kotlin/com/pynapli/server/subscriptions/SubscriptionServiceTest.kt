@@ -1,8 +1,6 @@
 package com.pynapli.server.subscriptions
 
-import com.pynapli.server.safety.RateLimitCounter
-import com.pynapli.server.safety.RateLimitRepository
-import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.testsupport.denyingRateLimitService
 import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.PremiumInventoryType
 import com.pynapli.shared.network.dto.SubmitDevStorePurchaseRequestDto
@@ -1157,13 +1155,3 @@ private class MutableEntitlementRepository(
 }
 
 private fun uuid(value: Int): UUID = UUID.fromString("00000000-0000-0000-0000-${value.toString().padStart(12, '0')}")
-
-private fun denyingRateLimitService(): RateLimitService =
-    RateLimitService(
-        object : RateLimitRepository {
-            override suspend fun increment(
-                key: String,
-                windowSeconds: Long,
-            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
-        },
-    )

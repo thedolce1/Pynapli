@@ -1,11 +1,9 @@
 package com.pynapli.server.swipe
 
 import com.pynapli.server.grid.GridViewerTrustRepository
-import com.pynapli.server.subscriptions.LinkedPartnerSubscriptionRecord
-import com.pynapli.server.subscriptions.StoredEntitlementRecord
 import com.pynapli.server.subscriptions.SubscriptionRecord
-import com.pynapli.server.subscriptions.SubscriptionRepository
 import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.server.testsupport.StaticSubscriptionRepository
 import com.pynapli.shared.network.dto.CreateSavedSwipeFilterRequestDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SwipeDealbreakerKey
@@ -267,7 +265,7 @@ private class StaticGridViewerTrustRepository(
 
 private fun paidSubscriptionService(userId: UUID): SubscriptionService =
     SubscriptionService(
-        StubSubscriptionRepository(
+        StaticSubscriptionRepository(
             own =
                 mapOf(
                     userId to
@@ -283,28 +281,4 @@ private fun paidSubscriptionService(userId: UUID): SubscriptionService =
         ),
     )
 
-private fun freeTierSubscriptionService(): SubscriptionService = SubscriptionService(StubSubscriptionRepository())
-
-private class StubSubscriptionRepository(
-    private val own: Map<UUID, SubscriptionRecord> = emptyMap(),
-) : SubscriptionRepository {
-    override suspend fun findBestActiveOwnSubscription(
-        userId: UUID,
-        now: Instant,
-    ): SubscriptionRecord? = own[userId]
-
-    override suspend fun findBestActiveLinkedPartnerSubscription(
-        userId: UUID,
-        now: Instant,
-    ): LinkedPartnerSubscriptionRecord? = null
-
-    override suspend fun findBestActiveStoredEntitlement(
-        userId: UUID,
-        now: Instant,
-    ): StoredEntitlementRecord? = null
-
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = false
-}
+private fun freeTierSubscriptionService(): SubscriptionService = SubscriptionService(StaticSubscriptionRepository())

@@ -1,5 +1,6 @@
 package com.pynapli.server.safety
 
+import com.pynapli.server.testsupport.denyingRateLimitService
 import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.ReportCategory
 import com.pynapli.shared.network.dto.ReportTargetType
@@ -200,16 +201,6 @@ class ReportServiceTest {
         assertEquals(true, contact.body.contains(viewerId.toString()))
     }
 }
-
-private fun denyingRateLimitService(): RateLimitService =
-    RateLimitService(
-        object : RateLimitRepository {
-            override suspend fun increment(
-                key: String,
-                windowSeconds: Long,
-            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
-        },
-    )
 
 private class CapturingReportRiskSignalPublisher : ReportRiskSignalPublisher {
     val captured = mutableListOf<CapturedReportRiskSignal>()

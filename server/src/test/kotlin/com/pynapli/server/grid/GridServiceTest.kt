@@ -8,14 +8,10 @@ import com.pynapli.server.presence.PresenceState
 import com.pynapli.server.safety.HiddenProfileRecord
 import com.pynapli.server.safety.HiddenProfileRepository
 import com.pynapli.server.safety.HiddenProfileSummaryRecord
-import com.pynapli.server.safety.RateLimitCounter
-import com.pynapli.server.safety.RateLimitRepository
-import com.pynapli.server.safety.RateLimitService
-import com.pynapli.server.subscriptions.LinkedPartnerSubscriptionRecord
-import com.pynapli.server.subscriptions.StoredEntitlementRecord
 import com.pynapli.server.subscriptions.SubscriptionRecord
-import com.pynapli.server.subscriptions.SubscriptionRepository
 import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.server.testsupport.StaticSubscriptionRepository
+import com.pynapli.server.testsupport.denyingRateLimitService
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlinx.coroutines.runBlocking
@@ -779,37 +775,3 @@ private fun paidSubscriptionService(
                 ),
         ),
     )
-
-private fun denyingRateLimitService(): RateLimitService =
-    RateLimitService(
-        object : RateLimitRepository {
-            override suspend fun increment(
-                key: String,
-                windowSeconds: Long,
-            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
-        },
-    )
-
-private class StaticSubscriptionRepository(
-    private val own: Map<UUID, SubscriptionRecord> = emptyMap(),
-) : SubscriptionRepository {
-    override suspend fun findBestActiveOwnSubscription(
-        userId: UUID,
-        now: Instant,
-    ): SubscriptionRecord? = own[userId]
-
-    override suspend fun findBestActiveLinkedPartnerSubscription(
-        userId: UUID,
-        now: Instant,
-    ): LinkedPartnerSubscriptionRecord? = null
-
-    override suspend fun findBestActiveStoredEntitlement(
-        userId: UUID,
-        now: Instant,
-    ): StoredEntitlementRecord? = null
-
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = false
-}

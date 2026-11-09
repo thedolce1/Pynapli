@@ -1,8 +1,6 @@
 package com.pynapli.server.verification
 
-import com.pynapli.server.safety.RateLimitCounter
-import com.pynapli.server.safety.RateLimitRepository
-import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.testsupport.denyingRateLimitService
 import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
@@ -588,13 +586,3 @@ private class InMemoryAgeVerificationRepository(
         return record
     }
 }
-
-private fun denyingRateLimitService(): RateLimitService =
-    RateLimitService(
-        object : RateLimitRepository {
-            override suspend fun increment(
-                key: String,
-                windowSeconds: Long,
-            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
-        },
-    )

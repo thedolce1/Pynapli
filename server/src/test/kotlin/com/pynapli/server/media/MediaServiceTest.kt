@@ -1,8 +1,6 @@
 package com.pynapli.server.media
 
-import com.pynapli.server.safety.RateLimitCounter
-import com.pynapli.server.safety.RateLimitRepository
-import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.testsupport.denyingRateLimitService
 import com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto
 import com.pynapli.shared.network.dto.CreateMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MEDIA_IMAGE_MAX_BYTES
@@ -1109,13 +1107,3 @@ private class InMemoryMediaRepository : MediaRepository {
             }
     }
 }
-
-private fun denyingRateLimitService(): RateLimitService =
-    RateLimitService(
-        object : RateLimitRepository {
-            override suspend fun increment(
-                key: String,
-                windowSeconds: Long,
-            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
-        },
-    )

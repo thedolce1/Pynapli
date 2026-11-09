@@ -2,6 +2,7 @@ package com.pynapli.server.notifications
 
 import com.google.auth.oauth2.GoogleCredentials
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.testsupport.testServerConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
@@ -52,13 +53,7 @@ class FirebaseCredentialSourceTest {
         json: String? = null,
         path: String? = null,
     ): ServerConfig =
-        ServerConfig(
-            environment = "test",
-            port = 8080,
-            databaseUrl = "jdbc:postgresql://localhost:5432/pynapli_test",
-            databaseUser = "pynapli",
-            databasePassword = "pynapli_dev_password",
-            redisUrl = "redis://localhost:6379",
+        testServerConfig().copy(
             firebaseServiceAccountJson = json,
             firebaseServiceAccountPath = path,
         )

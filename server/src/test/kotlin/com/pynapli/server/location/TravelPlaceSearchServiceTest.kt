@@ -1,8 +1,6 @@
 package com.pynapli.server.location
 
-import com.pynapli.server.safety.RateLimitCounter
-import com.pynapli.server.safety.RateLimitRepository
-import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.testsupport.denyingRateLimitService
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
 import kotlin.test.Test
@@ -147,13 +145,3 @@ private class RecordingTravelPlaceRepository(
         rows: Sequence<TravelPlaceRow>,
     ): Int = 0
 }
-
-private fun denyingRateLimitService(): RateLimitService =
-    RateLimitService(
-        object : RateLimitRepository {
-            override suspend fun increment(
-                key: String,
-                windowSeconds: Long,
-            ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
-        },
-    )

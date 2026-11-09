@@ -1,10 +1,8 @@
 package com.pynapli.server.grid
 
-import com.pynapli.server.subscriptions.LinkedPartnerSubscriptionRecord
-import com.pynapli.server.subscriptions.StoredEntitlementRecord
 import com.pynapli.server.subscriptions.SubscriptionRecord
-import com.pynapli.server.subscriptions.SubscriptionRepository
 import com.pynapli.server.subscriptions.SubscriptionService
+import com.pynapli.server.testsupport.StaticSubscriptionRepository
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.SubscriptionTier
@@ -76,7 +74,7 @@ private class StaticSavedGridViewerTrustRepository(
 
 private fun paidSubscriptionService(userId: UUID): SubscriptionService =
     SubscriptionService(
-        SavedFilterSubscriptionRepository(
+        StaticSubscriptionRepository(
             own =
                 mapOf(
                     userId to
@@ -91,27 +89,3 @@ private fun paidSubscriptionService(userId: UUID): SubscriptionService =
                 ),
         ),
     )
-
-private class SavedFilterSubscriptionRepository(
-    private val own: Map<UUID, SubscriptionRecord> = emptyMap(),
-) : SubscriptionRepository {
-    override suspend fun findBestActiveOwnSubscription(
-        userId: UUID,
-        now: Instant,
-    ): SubscriptionRecord? = own[userId]
-
-    override suspend fun findBestActiveLinkedPartnerSubscription(
-        userId: UUID,
-        now: Instant,
-    ): LinkedPartnerSubscriptionRecord? = null
-
-    override suspend fun findBestActiveStoredEntitlement(
-        userId: UUID,
-        now: Instant,
-    ): StoredEntitlementRecord? = null
-
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = false
-}

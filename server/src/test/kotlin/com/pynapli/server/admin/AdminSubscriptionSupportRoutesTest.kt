@@ -3,6 +3,7 @@ package com.pynapli.server.admin
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
+import com.pynapli.server.testsupport.testServerConfig
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -256,13 +257,7 @@ class AdminSubscriptionSupportRoutesTest {
         adminMfaEnforced: Boolean = false,
         adminMfaSecrets: Map<String, String> = emptyMap(),
     ): ServerConfig =
-        ServerConfig(
-            environment = "test",
-            port = 8080,
-            databaseUrl = "jdbc:postgresql://localhost:5432/pynapli_test",
-            databaseUser = "pynapli",
-            databasePassword = "pynapli_dev_password",
-            redisUrl = "redis://localhost:6379",
+        testServerConfig().copy(
             adminApiToken = adminToken,
             adminRoles = adminRoles,
             adminMfaEnforced = adminMfaEnforced,
