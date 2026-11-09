@@ -309,6 +309,37 @@ class TravelPassportDiscoveryTest :
             }
         }
 
+        // Pins both sides of the Grid radius OR (home GPS near viewer, OR active travel point near
+        // viewer). Grid narrows candidates with a UNION of two index lookups before applying that OR,
+        // so each side must still match on its own, and a user matching both must appear once.
+        "grid radius matches home or travel point independently and never duplicates" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000e00")
+                val homeNearTravelFar = UUID.fromString("00000000-0000-0000-0000-000000000e01")
+                val homeFarTravelNear = UUID.fromString("00000000-0000-0000-0000-000000000e02")
+                val bothNear = UUID.fromString("00000000-0000-0000-0000-000000000e03")
+                val bothFar = UUID.fromString("00000000-0000-0000-0000-000000000e04")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.4194, latitude = 37.7749)
+                dataSource.insertDiscoverableUser(homeNearTravelFar, "Ari", age = 31, longitude = -122.4180, latitude = 37.7740)
+                dataSource.insertActiveTravelLocation(userId = homeNearTravelFar, city = "New York", latitude = 40.7128, longitude = -74.0060)
+                dataSource.insertDiscoverableUser(homeFarTravelNear, "Bo", age = 33, longitude = -74.0060, latitude = 40.7128)
+                dataSource.insertActiveTravelLocation(userId = homeFarTravelNear, city = "San Francisco", latitude = 37.7745, longitude = -122.4185)
+                dataSource.insertDiscoverableUser(bothNear, "Cy", age = 35, longitude = -122.4170, latitude = 37.7745)
+                dataSource.insertActiveTravelLocation(userId = bothNear, city = "San Francisco", latitude = 37.7750, longitude = -122.4190)
+                dataSource.insertDiscoverableUser(bothFar, "Di", age = 36, longitude = -74.0060, latitude = 40.7128)
+                dataSource.insertActiveTravelLocation(userId = bothFar, city = "Boston", latitude = 42.3601, longitude = -71.0589)
+
+                val cards =
+                    JdbcGridRepository(dataSource)
+                        .queryNearby(viewer, radiusMeters = 5_000, limit = 10, filters = DiscoveryFilters())
+                        .cards
+                val ids = cards.map { it.userId }
+
+                assertEquals(setOf(homeNearTravelFar, homeFarTravelNear, bothNear), ids.toSet())
+                assertEquals(ids.size, ids.toSet().size, "a user near on both sides must appear once: $ids")
+            }
+        }
+
         "grid query with travelingHereOnly returns only travel-mode visitors" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000d11")

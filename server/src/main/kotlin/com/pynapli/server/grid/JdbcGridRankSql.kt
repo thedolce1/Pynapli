@@ -43,6 +43,22 @@ internal fun Connection.queryGridRank(
              AND tl.active_until IS NULL
             WHERE ul.user_id = ?
         ),
+        -- Candidate ids from two index-backed radius lookups (home GPS, active travel point). The
+        -- radius test below is an OR across two LEFT-JOINed tables, which no index can serve, so
+        -- without this every visible user was scanned and distance-tested (EXPLAIN on 106k users:
+        -- seq scan, ~1.1 s). base_candidates keeps that OR, so the result set is unchanged.
+        nearby_ids AS (
+            SELECT near_home.user_id
+            FROM viewer_location v
+            JOIN user_locations near_home ON ST_DWithin(v.geom, near_home.geom, ?)
+            UNION
+            SELECT near_travel.user_id
+            FROM viewer_location v
+            JOIN travel_locations near_travel
+              ON near_travel.status = 'active'
+             AND near_travel.active_until IS NULL
+             AND ST_DWithin(v.geom, near_travel.geom, ?)
+        ),
         base_candidates AS (
             SELECT u.id AS user_id,
                    COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
@@ -92,7 +108,8 @@ internal fun Connection.queryGridRank(
                        )
                    ) AS has_visible_linked_partner
             FROM viewer_location v
-            JOIN user_locations ul ON true
+            JOIN nearby_ids n ON true
+            JOIN user_locations ul ON ul.user_id = n.user_id
             JOIN users u ON u.id = ul.user_id
             JOIN profiles p ON p.user_id = u.id
             JOIN discovery_settings ds ON ds.user_id = u.id
@@ -268,65 +285,70 @@ internal fun Connection.queryGridRank(
         val intents = createArrayOf("text", filters.intents.toTypedArray())
         val genders = createArrayOf("text", filters.genders.toTypedArray())
         val orientations = createArrayOf("text", filters.orientations.toTypedArray())
-        statement.setObject(1, viewerUserId)
+        // Bound in SQL order; the running index keeps added placeholders from shifting the rest.
+        var index = 1
+        statement.setObject(index++, viewerUserId)
+        // nearby_ids radius (home GPS + travel point).
+        statement.setDouble(index++, radiusMeters.toDouble())
+        statement.setDouble(index++, radiusMeters.toDouble())
         // has_visible_linked_partner gate + per-viewer block params (skipped when null).
-        statement.setNullableUuid(2, userSpecificViewerId)
-        statement.setNullableUuid(3, userSpecificViewerId)
-        statement.setNullableUuid(4, userSpecificViewerId)
+        statement.setNullableUuid(index++, userSpecificViewerId)
+        statement.setNullableUuid(index++, userSpecificViewerId)
+        statement.setNullableUuid(index++, userSpecificViewerId)
         // self exclusion gate.
-        statement.setNullableUuid(5, userSpecificViewerId)
-        statement.setNullableUuid(6, userSpecificViewerId)
+        statement.setNullableUuid(index++, userSpecificViewerId)
+        statement.setNullableUuid(index++, userSpecificViewerId)
         // ST_DWithin radius bound twice (real GPS + travel point).
-        statement.setDouble(7, radiusMeters.toDouble())
-        statement.setDouble(8, radiusMeters.toDouble())
-        statement.setObject(9, filters.minimumAge)
-        statement.setObject(10, filters.minimumAge)
-        statement.setObject(11, filters.maximumAge)
-        statement.setObject(12, filters.maximumAge)
-        statement.setArray(13, contexts)
-        statement.setArray(14, contexts)
-        statement.setBoolean(15, filters.verifiedOnly)
-        statement.setBoolean(16, filters.facePhotoVerifiedOnly)
-        statement.setBoolean(17, filters.ageVerifiedOnly)
-        statement.setArray(18, styles)
-        statement.setArray(19, styles)
-        statement.setArray(20, lifestyleTags)
-        statement.setArray(21, lifestyleTags)
-        statement.setArray(22, logisticsTags)
-        statement.setArray(23, logisticsTags)
-        statement.setBoolean(24, filters.tonightAvailableOnly)
-        statement.setArray(25, intents)
-        statement.setArray(26, intents)
-        statement.setArray(27, genders)
-        statement.setArray(28, genders)
-        statement.setArray(29, orientations)
-        statement.setArray(30, orientations)
+        statement.setDouble(index++, radiusMeters.toDouble())
+        statement.setDouble(index++, radiusMeters.toDouble())
+        statement.setObject(index++, filters.minimumAge)
+        statement.setObject(index++, filters.minimumAge)
+        statement.setObject(index++, filters.maximumAge)
+        statement.setObject(index++, filters.maximumAge)
+        statement.setArray(index++, contexts)
+        statement.setArray(index++, contexts)
+        statement.setBoolean(index++, filters.verifiedOnly)
+        statement.setBoolean(index++, filters.facePhotoVerifiedOnly)
+        statement.setBoolean(index++, filters.ageVerifiedOnly)
+        statement.setArray(index++, styles)
+        statement.setArray(index++, styles)
+        statement.setArray(index++, lifestyleTags)
+        statement.setArray(index++, lifestyleTags)
+        statement.setArray(index++, logisticsTags)
+        statement.setArray(index++, logisticsTags)
+        statement.setBoolean(index++, filters.tonightAvailableOnly)
+        statement.setArray(index++, intents)
+        statement.setArray(index++, intents)
+        statement.setArray(index++, genders)
+        statement.setArray(index++, genders)
+        statement.setArray(index++, orientations)
+        statement.setArray(index++, orientations)
         // FILTERS_SPEC "Has photos" gate.
-        statement.setBoolean(31, filters.withPhotosOnly)
+        statement.setBoolean(index++, filters.withPhotosOnly)
         // FILTERS_SPEC "Active today" gate.
-        statement.setBoolean(32, filters.activeTodayOnly)
+        statement.setBoolean(index++, filters.activeTodayOnly)
         // FILTERS_SPEC "Recently joined" / "Traveling here" gates.
-        statement.setBoolean(33, filters.recentlyJoinedOnly)
-        statement.setBoolean(34, filters.travelingHereOnly)
+        statement.setBoolean(index++, filters.recentlyJoinedOnly)
+        statement.setBoolean(index++, filters.travelingHereOnly)
         // FILTERS_SPEC "Has private album" gate.
-        statement.setBoolean(35, filters.hasPrivateAlbumOnly)
+        statement.setBoolean(index++, filters.hasPrivateAlbumOnly)
         // per-viewer block exclusion (self path).
-        statement.setNullableUuid(36, userSpecificViewerId)
-        statement.setNullableUuid(37, userSpecificViewerId)
-        statement.setNullableUuid(38, userSpecificViewerId)
+        statement.setNullableUuid(index++, userSpecificViewerId)
+        statement.setNullableUuid(index++, userSpecificViewerId)
+        statement.setNullableUuid(index++, userSpecificViewerId)
         // linkedOnly filter (?::boolean IS NULL / true / false).
-        statement.setObject(39, filters.linkedOnly)
-        statement.setObject(40, filters.linkedOnly)
-        statement.setObject(41, filters.linkedOnly)
+        statement.setObject(index++, filters.linkedOnly)
+        statement.setObject(index++, filters.linkedOnly)
+        statement.setObject(index++, filters.linkedOnly)
         // Keyset cursor predicate (no-op when cursor is null).
-        statement.setBoolean(42, cursor != null)
-        statement.setObject(43, cursor?.boostBucket)
-        statement.setObject(44, cursor?.boostBucket)
-        statement.setObject(45, cursor?.distanceBucketMeters)
-        statement.setObject(46, cursor?.boostBucket)
-        statement.setObject(47, cursor?.distanceBucketMeters)
-        statement.setObject(48, cursor?.userId)
-        statement.setInt(49, limit)
+        statement.setBoolean(index++, cursor != null)
+        statement.setObject(index++, cursor?.boostBucket)
+        statement.setObject(index++, cursor?.boostBucket)
+        statement.setObject(index++, cursor?.distanceBucketMeters)
+        statement.setObject(index++, cursor?.boostBucket)
+        statement.setObject(index++, cursor?.distanceBucketMeters)
+        statement.setObject(index++, cursor?.userId)
+        statement.setInt(index++, limit)
         statement.executeQuery().use { rs ->
             buildList {
                 while (rs.next()) {
