@@ -54,6 +54,7 @@ import com.pynapli.server.profile.TonightAvailabilityService
 import com.pynapli.server.profilelink.JdbcProfileLinkRepository
 import com.pynapli.server.profilelink.ProfileLinkService
 import com.pynapli.server.profiling.RequestProfilerFactory
+import com.pynapli.server.psync.PsyncSessionExpiryWorker
 import com.pynapli.server.psync.PsyncSessionService
 import com.pynapli.server.safety.AppealService
 import com.pynapli.server.safety.BlockRepository
@@ -133,6 +134,7 @@ class ServerDependencies(
     val tonightFeedService: TonightFeedService,
     val tonightSessionExpiryWorker: TonightSessionExpiryWorker,
     val psyncSessionService: PsyncSessionService,
+    val psyncSessionExpiryWorker: PsyncSessionExpiryWorker? = null,
     val ageVerificationService: AgeVerificationService,
     val accountLifecycleService: AccountLifecycleService,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
@@ -148,6 +150,7 @@ class ServerDependencies(
         runCatching { mediaCleanupWorker?.close() }
         runCatching { accountDataExportWorker?.close() }
         runCatching { tonightSessionExpiryWorker.close() }
+        runCatching { psyncSessionExpiryWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
         runCatching { profileActivityScope.cancel() }
         probes.asReversed().forEach { probe ->
@@ -408,6 +411,7 @@ class ServerDependencies(
                 tonightFeedService = tonight.tonightFeedService,
                 tonightSessionExpiryWorker = tonight.tonightSessionExpiryWorker,
                 psyncSessionService = swipe.psyncSessionService,
+                psyncSessionExpiryWorker = swipe.psyncSessionExpiryWorker,
                 ageVerificationService = ageVerificationService,
                 accountLifecycleService = core.accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,

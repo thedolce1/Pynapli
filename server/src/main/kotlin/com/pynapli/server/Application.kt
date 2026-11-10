@@ -76,6 +76,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.activityRetentionWorker?.start()
     dependencies.mediaCleanupWorker?.start()
     dependencies.tonightSessionExpiryWorker.start()
+    dependencies.psyncSessionExpiryWorker?.start()
     dependencies.accountDataExportWorker?.start()
     dependencies.playStoreSubscriptionSyncWorker?.start()
     dependencies.presenceOfflineScanner.start()

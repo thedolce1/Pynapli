@@ -924,6 +924,30 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "the expiry worker resolves an unlinked started session without any request" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                com.pynapli.server.profilelink
+                    .JdbcProfileLinkRepository(dataSource)
+                    .unlinkCurrent(initiator)
+                assertEquals("active", dataSource.statusOf(sessionId))
+
+                PsyncSessionExpiryWorker(svc, intervalMillis = 50).use { worker ->
+                    worker.start()
+                    kotlinx.coroutines.withTimeout(10_000) {
+                        while (dataSource.statusOf(sessionId) != "completed") kotlinx.coroutines.delay(25)
+                    }
+                }
+                assertEquals(listOf("like"), dataSource.psyncSwipeActions(sessionId, initiator, target))
+            }
+        }
+
         // ---- The deck respects both partners' history ----------------------------------
 
         "the deck leaves out anyone either partner already swiped on, matched with or reported" {
