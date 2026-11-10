@@ -58,9 +58,7 @@ jobs:
         run: >
           ./gradlew
           :shared:jvmTest
-          :shared:testAndroidHostTest
           :server:test
-          :composeApp:testAndroidHostTest
           :composeApp:desktopTest
           :desktopApp:desktopTest
           :androidApp:assembleDebug

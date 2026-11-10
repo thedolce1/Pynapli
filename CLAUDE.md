@@ -8,7 +8,7 @@ The `docs/*_SPEC.md` files are the canonical product and engineering specs. Read
 
 ```powershell
 .\scripts\verify-fast.ps1      # tooling + docker up + Spotless + shared JVM + server tests
-.\scripts\verify-android.ps1   # Android policy + shared/Compose host tests + debug APK + release lint
+.\scripts\verify-android.ps1   # Android policy + shared JVM + Compose desktop tests + debug APK + release lint
 .\scripts\verify-full.ps1      # full local gate (incl. minified release APK); verify.ps1 is an alias
 .\scripts\verify-web.ps1       # brand + Compose token checks + spotless + wasm compile + shared JVM tests + common tests on wasm (headless Chrome)
 .\scripts\verify-desktop.ps1   # Compose token check + spotless + :desktopApp:desktopTest

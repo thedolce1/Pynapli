@@ -249,8 +249,8 @@ Later:
 - **Format (Spotless)** — `./gradlew spotlessCheck`. Uses `fetch-depth: 0` + an explicit
   `git fetch origin main` so the Spotless `ratchetFrom = "origin/main"` ratchet can diff changed
   files. (ktlint via Spotless; detekt deferred — see `OFFICIAL_TECH_REFERENCE_GUIDE.md`.)
-- **Verify (tests + assemble)** — `:shared:jvmTest :shared:testAndroidHostTest :server:test
-  :composeApp:testAndroidHostTest :composeApp:desktopTest :androidApp:assembleDebug`. Server
+- **Verify (tests + assemble)** — `:shared:jvmTest :server:test
+  :composeApp:desktopTest :androidApp:assembleDebug`. Server
   integration tests self-manage Postgres/Redis via Testcontainers (Docker is present on
   `ubuntu-latest`), so no GitHub service containers are needed. Uploads test reports (always) and
   the debug APK (on success) as artifacts.

@@ -18,7 +18,8 @@ kotlin {
         namespace = "com.pynapli.shared"
         compileSdk = 36
         minSdk = 23
-        withHostTest {}
+        // No withHostTest {}: commonTest already runs on the JVM (desktop/jvm) and on wasm, and the
+        // Android actuals (Keystore cipher, SQLite driver) need a device, which emulator QA covers.
     }
 
     // No iosX64: Compose Multiplatform 1.11 stopped publishing Intel-simulator artifacts;

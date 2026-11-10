@@ -11,7 +11,8 @@ kotlin {
         namespace = "com.pynapli.compose"
         compileSdk = 36
         minSdk = 23
-        withHostTest {}
+        // No withHostTest {}: commonTest already runs on the JVM (desktop/jvm) and on wasm, and the
+        // Android actuals (Keystore cipher, SQLite driver) need a device, which emulator QA covers.
         androidResources {
             enable = true
         }
