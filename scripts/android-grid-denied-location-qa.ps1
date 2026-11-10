@@ -18,6 +18,7 @@ $ErrorActionPreference = "Stop"
 # how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
 Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force -DisableNameChecking
 Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaDevice.psm1") -Force -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaGolden.psm1") -Force -DisableNameChecking
 
 function Invoke-PostgresSql {
     param([string]$Sql)
@@ -32,19 +33,6 @@ function Invoke-PostgresSql {
         throw "Postgres SQL failed: $output"
     }
     return $output
-}
-
-function Get-Sha256Base64Url {
-    param([string]$Value)
-
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value.Trim().ToLowerInvariant())
-        $hash = $sha.ComputeHash($bytes)
-        return [Convert]::ToBase64String($hash).TrimEnd("=").Replace("+", "-").Replace("/", "_")
-    } finally {
-        $sha.Dispose()
-    }
 }
 
 function Remove-DevViewerLocation {

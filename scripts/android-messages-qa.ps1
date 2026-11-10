@@ -19,6 +19,7 @@ $ErrorActionPreference = "Stop"
 # how android-tonight-qa.ps1 ended up with a stale copy of the Grid card detection.
 Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force -DisableNameChecking
 Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaDevice.psm1") -Force -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaGolden.psm1") -Force -DisableNameChecking
 
 try {
     Add-Type -AssemblyName System.Drawing
@@ -68,77 +69,6 @@ function Tap-ContentText {
     Write-Host "[tap] '$Text' (exact) at $($bounds.CenterX),$($bounds.CenterY)"
 }
 
-function Get-ImageSignature {
-    param([string]$Path)
-
-    $bitmap = [System.Drawing.Bitmap]::new($Path)
-    $buckets = @{}
-    try {
-        $stepX = [Math]::Max(1, [int][Math]::Floor($bitmap.Width / 96))
-        $stepY = [Math]::Max(1, [int][Math]::Floor($bitmap.Height / 160))
-        $sampleCount = 0
-        $bright = 0
-        $nonBlack = 0
-
-        for ($y = 0; $y -lt $bitmap.Height; $y += $stepY) {
-            for ($x = 0; $x -lt $bitmap.Width; $x += $stepX) {
-                $color = $bitmap.GetPixel($x, $y)
-                $sampleCount += 1
-                $luma = (0.2126 * $color.R) + (0.7152 * $color.G) + (0.0722 * $color.B)
-                if ($luma -gt 210) { $bright += 1 }
-                if ($luma -gt 15) { $nonBlack += 1 }
-                $bucket = "$([int]($color.R / 32)):$([int]($color.G / 32)):$([int]($color.B / 32))"
-                $buckets[$bucket] = $true
-            }
-        }
-
-        return [pscustomobject]@{
-            width = $bitmap.Width
-            height = $bitmap.Height
-            sampleCount = $sampleCount
-            brightRatio = [Math]::Round($bright / [double]$sampleCount, 4)
-            nonBlackRatio = [Math]::Round($nonBlack / [double]$sampleCount, 4)
-            colorBucketCount = $buckets.Count
-        }
-    } finally {
-        $bitmap.Dispose()
-    }
-}
-
-function Assert-ImageSignature {
-    param(
-        [string]$StageName,
-        [string]$ScreenshotPath,
-        $StageSpec
-    )
-
-    if ($null -eq $StageSpec.image) { return $null }
-    $signature = Get-ImageSignature $ScreenshotPath
-    $checks = @{
-        minWidth = "width"
-        minHeight = "height"
-        minNonBlackRatio = "nonBlackRatio"
-        maxBrightRatio = "brightRatio"
-        minColorBucketCount = "colorBucketCount"
-    }
-
-    foreach ($check in $checks.GetEnumerator()) {
-        $expected = $StageSpec.image.($check.Key)
-        if ($null -eq $expected) { continue }
-
-        $actual = $signature.($check.Value)
-        if ($check.Key.StartsWith("max")) {
-            if ([double]$actual -gt [double]$expected) {
-                throw "$StageName screenshot signature exceeded $($check.Key): actual=$actual expectedMax=$expected path=$ScreenshotPath"
-            }
-        } elseif ([double]$actual -lt [double]$expected) {
-            throw "$StageName screenshot signature missed $($check.Key): actual=$actual expectedMin=$expected path=$ScreenshotPath"
-        }
-    }
-
-    return $signature
-}
-
 function Assert-GoldenStage {
     param(
         [string]$StageName,
@@ -153,31 +83,7 @@ function Assert-GoldenStage {
         throw "Golden stage '$StageName' is missing from $GoldenSpec"
     }
 
-    foreach ($text in @($stageSpec.requiredTexts)) {
-        Assert-TextPresent $Xml $text "$StageName golden"
-    }
-
-    $visibleText = (Get-VisibleTexts $Xml) -join "`n"
-    foreach ($text in @($stageSpec.forbiddenTexts)) {
-        if (-not [string]::IsNullOrWhiteSpace($text) -and $visibleText.Contains($text)) {
-            throw "$StageName golden displayed forbidden text '$text'. Visible text: $visibleText"
-        }
-    }
-
-    return Assert-ImageSignature $StageName $ScreenshotPath $stageSpec
-}
-
-function Get-Sha256Base64Url {
-    param([string]$Value)
-
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value.Trim().ToLowerInvariant())
-        $hash = $sha.ComputeHash($bytes)
-        return [Convert]::ToBase64String($hash).TrimEnd("=").Replace("+", "-").Replace("/", "_")
-    } finally {
-        $sha.Dispose()
-    }
+    return Assert-GoldenStageSpec $StageName $Xml $ScreenshotPath $stageSpec
 }
 
 function Invoke-DevSql {
