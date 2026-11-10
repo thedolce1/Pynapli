@@ -735,6 +735,104 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        // ---- Psync likes reach the target ----------------------------------------------
+
+        "an unanswered Psync like is delivered to the target's Likes You; a pass is not" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                val finished = svc.actOnSingle(sessionId, partner, "pass")
+                assertTrue(finished.sessionCompleted)
+
+                // No match yet, but the like now exists as a real swipe like from this session.
+                assertEquals(0, dataSource.countMatchesFor(initiator))
+                assertEquals(listOf("like"), dataSource.psyncSwipeActions(sessionId, initiator, target))
+                assertEquals(emptyList(), dataSource.psyncSwipeActions(sessionId, partner, target))
+                assertEquals(1, dataSource.countActivityEvents(target, "swipe_like"))
+
+                // Re-completing must not deliver it twice.
+                svc.complete(sessionId, initiator)
+                assertEquals(1, dataSource.countActivityEvents(target, "swipe_like"))
+                assertEquals(listOf("like"), dataSource.psyncSwipeActions(sessionId, initiator, target))
+            }
+        }
+
+        "both partners' likes are delivered, and a Pineapple Like keeps its kind" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "pineapple_like")
+                svc.actOnSingle(sessionId, partner, "like")
+
+                assertEquals(listOf("pineapple_like"), dataSource.psyncSwipeActions(sessionId, initiator, target))
+                assertEquals(listOf("like"), dataSource.psyncSwipeActions(sessionId, partner, target))
+                assertEquals(1, dataSource.countActivityEvents(target, "pineapple_like"))
+                assertEquals(1, dataSource.countActivityEvents(target, "swipe_like"))
+            }
+        }
+
+        "a like that resolves into a match is not also announced as a pending like" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.setTogetherEnabled(target)
+                dataSource.insertSwipeLike(target, initiator) // liked the initiator only
+
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "like")
+
+                // Together match covers both partners, so neither like is left pending.
+                assertEquals(2, dataSource.countActivityEvents(target, "match"))
+                assertEquals(0, dataSource.countActivityEvents(target, "swipe_like"))
+            }
+        }
+
+        "a partner's earlier Swipe decision on the target is left alone" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.insertSwipeLike(initiator, target, action = "pass") // passed in Swipe earlier
+
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "pass")
+
+                assertEquals(emptyList(), dataSource.psyncSwipeActions(sessionId, initiator, target))
+                assertEquals(0, dataSource.countActivityEvents(target, "swipe_like"))
+            }
+        }
+
+        "a like on a target blocked mid-session is never delivered" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                dataSource.insertBlock(partner, target)
+
+                svc.complete(sessionId, initiator)
+                assertEquals(emptyList(), dataSource.psyncSwipeActions(sessionId, initiator, target))
+                assertEquals(0, dataSource.countActivityEvents(target, "swipe_like"))
+            }
+        }
+
         "a private solo match surfaces only for the matched partner, not the other" {
             runBlocking {
                 val (initiator, partner) = seedLinkedPair()
@@ -1173,6 +1271,27 @@ private fun DataSource.insertSwipeLike(
             }
     }
 }
+
+/** Actions this Psync session delivered into `swipe_actions` for one partner and target. */
+private fun DataSource.psyncSwipeActions(
+    sessionId: UUID,
+    actorUserId: UUID,
+    targetUserId: UUID,
+): List<String> =
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                SELECT action FROM swipe_actions
+                WHERE psync_session_id = ? AND actor_user_id = ? AND target_user_id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, sessionId)
+                statement.setObject(2, actorUserId)
+                statement.setObject(3, targetUserId)
+                statement.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getString(1)) } }
+            }
+    }
 
 private fun DataSource.countMatchesFor(userId: UUID): Int =
     connection.use { connection ->

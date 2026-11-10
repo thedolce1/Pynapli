@@ -101,3 +101,20 @@ data class PsyncResolvedMatch(
     val matchId: UUID,
     val kind: String,
 )
+
+/**
+ * A partner's Psync like that completion delivered to the target as a normal swipe like without a
+ * match yet (the target has not liked that partner back). The service replays these post-commit
+ * into the target's Likes You. [action] is `like` or `pineapple_like`. Passes are never delivered.
+ */
+data class PsyncDeliveredLike(
+    val actorUserId: UUID,
+    val targetUserId: UUID,
+    val action: String,
+)
+
+/** What resolving a completed deck produced: canonical matches plus likes still awaiting an answer. */
+data class PsyncResolution(
+    val matches: List<PsyncResolvedMatch>,
+    val deliveredLikes: List<PsyncDeliveredLike>,
+)
