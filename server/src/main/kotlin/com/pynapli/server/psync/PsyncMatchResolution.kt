@@ -123,7 +123,11 @@ internal fun Connection.targetLikesPartner(
         """
         SELECT EXISTS (
             SELECT 1 FROM swipe_actions
-            WHERE actor_user_id = ? AND target_user_id = ? AND action = 'like'
+            WHERE actor_user_id = ? AND target_user_id = ?
+              -- Same definition of a live like as the Swipe match query (JdbcSwipeActionSql):
+              -- a Pineapple Like counts, a rewound like does not.
+              AND action IN ('like', 'pineapple_like')
+              AND rewound_at IS NULL
         )
         """.trimIndent(),
     ).use { statement ->
