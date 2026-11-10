@@ -136,7 +136,16 @@ interface PsyncSessionRepository {
         action: String,
         now: Instant,
         actionIdFactory: () -> UUID = UUID::randomUUID,
+        // The premium_inventory row a Pineapple Like spent, or null for a like/pass.
+        consumedInventoryId: UUID? = null,
     ): RecordActionOutcome
+
+    /**
+     * Claim the Pineapple Likes that were spent in sessions that have ended but were never
+     * delivered to the target as a swipe like, and return the inventory rows to refund (one entry
+     * per like). Each is claimed exactly once.
+     */
+    suspend fun claimUndeliveredPineappleRefunds(): List<UUID> = emptyList()
 
     /** Count of [actorUserId]'s own recorded decisions in [sessionId]. */
     suspend fun countActionsForActor(

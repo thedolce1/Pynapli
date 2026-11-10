@@ -54,6 +54,7 @@ class PsyncSessionServiceIntegrationTest :
             clock: Clock = Clock.systemUTC(),
             broadcaster: PsyncBroadcaster? = null,
             rateLimitService: com.pynapli.server.safety.RateLimitService? = null,
+            pineappleInventory: PsyncPineappleInventory? = null,
         ): PsyncSessionService =
             PsyncSessionService(
                 repository = JdbcPsyncSessionRepository(dataSource),
@@ -80,6 +81,7 @@ class PsyncSessionServiceIntegrationTest :
                         .JdbcHiddenProfileRepository(dataSource),
                 broadcaster = broadcaster,
                 rateLimitService = rateLimitService,
+                pineappleInventory = pineappleInventory,
                 clock = clock,
             )
 
@@ -833,6 +835,100 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        // ---- Pineapple Likes spend inventory -------------------------------------------
+
+        "a Pineapple Like spends one from inventory and the delivered like carries it" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val inventory = TestPineappleInventory(dataSource, initiator, quantity = 2)
+
+                val svc = deckService(listOf(target), pineappleInventory = inventory)
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "pineapple_like")
+                assertEquals(1, inventory.remaining())
+                // Replaying the same decision is idempotent and spends nothing more.
+                svc.actOnSingle(sessionId, initiator, "pineapple_like")
+                assertEquals(1, inventory.remaining())
+
+                svc.actOnSingle(sessionId, partner, "pass")
+                assertEquals(listOf("pineapple_like"), dataSource.psyncSwipeActions(sessionId, initiator, target))
+                assertEquals(inventory.inventoryId, dataSource.deliveredInventoryId(sessionId, initiator, target))
+                // Delivered, so it stays spent.
+                assertEquals(1, inventory.remaining())
+            }
+        }
+
+        "a Pineapple Like with none left is refused and records nothing" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val inventory = TestPineappleInventory(dataSource, initiator, quantity = 0)
+
+                val svc = deckService(listOf(target), pineappleInventory = inventory)
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                val refused = assertFailsWith<PsyncException> { svc.actOnSingle(sessionId, initiator, "pineapple_like") }
+                assertEquals("PINEAPPLE_LIKE_INVENTORY_REQUIRED", refused.code)
+                assertNull(
+                    svc
+                        .getDeck(sessionId, initiator)
+                        .cards
+                        .single()
+                        .viewerAction,
+                )
+                // A plain like still works.
+                svc.actOnSingle(sessionId, initiator, "like")
+                assertEquals(
+                    "like",
+                    svc
+                        .getDeck(sessionId, initiator)
+                        .cards
+                        .single()
+                        .viewerAction,
+                )
+            }
+        }
+
+        "a Pineapple Like is refunded once when the session is left before completing" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val inventory = TestPineappleInventory(dataSource, initiator, quantity = 1)
+
+                val svc = deckService(listOf(target), pineappleInventory = inventory)
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "pineapple_like")
+                assertEquals(0, inventory.remaining())
+
+                svc.leave(sessionId, partner)
+                assertEquals(1, inventory.remaining())
+                // Later sweeps must not refund it again.
+                svc.expireStale()
+                assertEquals(1, inventory.remaining())
+            }
+        }
+
+        "a Pineapple Like on a target blocked mid-session is refunded at completion" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val inventory = TestPineappleInventory(dataSource, initiator, quantity = 1)
+
+                val svc = deckService(listOf(target), pineappleInventory = inventory)
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "pineapple_like")
+                dataSource.insertBlock(partner, target)
+
+                svc.complete(sessionId, initiator)
+                assertEquals(emptyList(), dataSource.psyncSwipeActions(sessionId, initiator, target))
+                assertEquals(1, inventory.remaining())
+            }
+        }
+
         "a private solo match surfaces only for the matched partner, not the other" {
             runBlocking {
                 val (initiator, partner) = seedLinkedPair()
@@ -1271,6 +1367,85 @@ private fun DataSource.insertSwipeLike(
             }
     }
 }
+
+/**
+ * Pineapple Like inventory backed by a real `premium_inventory` row (the Psync and Swipe action
+ * tables reference it), so tests can assert the balance after spends and refunds.
+ */
+private class TestPineappleInventory(
+    private val dataSource: DataSource,
+    private val ownerUserId: UUID,
+    quantity: Int,
+) : PsyncPineappleInventory {
+    val inventoryId: UUID = UUID.randomUUID()
+
+    init {
+        dataSource.connection.use { connection ->
+            connection
+                .prepareStatement(
+                    "INSERT INTO premium_inventory (id, user_id, inventory_type, quantity, source) VALUES (?, ?, 'pineapple_like', ?, 'dev')",
+                ).use { statement ->
+                    statement.setObject(1, inventoryId)
+                    statement.setObject(2, ownerUserId)
+                    statement.setInt(3, quantity)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
+    override suspend fun consume(userId: UUID): UUID? =
+        dataSource.connection.use { connection ->
+            connection
+                .prepareStatement(
+                    "UPDATE premium_inventory SET quantity = quantity - 1 WHERE id = ? AND user_id = ? AND quantity > 0",
+                ).use { statement ->
+                    statement.setObject(1, inventoryId)
+                    statement.setObject(2, userId)
+                    if (statement.executeUpdate() > 0) inventoryId else null
+                }
+        }
+
+    override suspend fun refund(inventoryId: UUID) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement("UPDATE premium_inventory SET quantity = quantity + 1 WHERE id = ?").use { statement ->
+                statement.setObject(1, inventoryId)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    fun remaining(): Int =
+        dataSource.connection.use { connection ->
+            connection.prepareStatement("SELECT quantity FROM premium_inventory WHERE id = ?").use { statement ->
+                statement.setObject(1, inventoryId)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt(1)
+                }
+            }
+        }
+}
+
+/** The inventory row carried by the swipe like this session delivered, or null. */
+private fun DataSource.deliveredInventoryId(
+    sessionId: UUID,
+    actorUserId: UUID,
+    targetUserId: UUID,
+): UUID? =
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                SELECT consumed_inventory_id FROM swipe_actions
+                WHERE psync_session_id = ? AND actor_user_id = ? AND target_user_id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, sessionId)
+                statement.setObject(2, actorUserId)
+                statement.setObject(3, targetUserId)
+                statement.executeQuery().use { rs -> if (rs.next()) rs.getObject(1, UUID::class.java) else null }
+            }
+    }
 
 /** Actions this Psync session delivered into `swipe_actions` for one partner and target. */
 private fun DataSource.psyncSwipeActions(

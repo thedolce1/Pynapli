@@ -30,6 +30,8 @@ class PsyncSessionService(
     rateLimitService: com.pynapli.server.safety.RateLimitService? = null,
     riskPolicyService: com.pynapli.server.safety.RiskPolicyService? = null,
     subscriptionService: com.pynapli.server.subscriptions.SubscriptionService? = null,
+    // Pineapple Likes sent in a session spend inventory; null (tests, no billing) leaves them free.
+    pineappleInventory: PsyncPineappleInventory? = subscriptionService?.let(::SubscriptionPsyncPineappleInventory),
     deckTokenCodec: com.pynapli.server.swipe.SwipeDeckTokenCodec =
         com.pynapli.server.swipe
             .SwipeDeckTokenCodec(),
@@ -37,6 +39,7 @@ class PsyncSessionService(
     json: Json = Json,
 ) {
     private val events = PsyncSessionEvents(activityService, notificationPublisher, broadcaster, clock)
+    private val pineappleRefunds = PsyncPineappleRefunds(repository, pineappleInventory)
     private val deckCoordinator =
         PsyncDeckCoordinator(
             repository = repository,
@@ -54,6 +57,7 @@ class PsyncSessionService(
             riskPolicyService = riskPolicyService,
             subscriptionService = subscriptionService,
             events = events,
+            pineappleRefunds = pineappleRefunds,
             clock = clock,
             json = json,
         )
@@ -63,6 +67,8 @@ class PsyncSessionService(
             deckCoordinator = deckCoordinator,
             recapBuilder = PsyncRecapBuilder(repository),
             events = events,
+            pineappleInventory = pineappleInventory,
+            pineappleRefunds = pineappleRefunds,
             rateLimitService = rateLimitService,
             deckTokenCodec = deckTokenCodec,
             clock = clock,

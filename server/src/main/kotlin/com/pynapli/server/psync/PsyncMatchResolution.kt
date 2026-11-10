@@ -34,10 +34,10 @@ internal fun Connection.resolveMatches(
     val matches =
         buildList {
             for (target in targets) {
-                val aAction = likedByInitiator[target]
-                val bAction = likedByPartner[target]
-                val aLiked = aAction != null
-                val bLiked = bAction != null
+                val aLike = likedByInitiator[target]
+                val bLike = likedByPartner[target]
+                val aLiked = aLike != null
+                val bLiked = bLike != null
                 if (!aLiked && !bLiked) continue
                 // Blocks override all match state, and a blocked like is never delivered.
                 if (blockedBetween(target, initiator) || blockedBetween(target, partner)) continue
@@ -47,11 +47,11 @@ internal fun Connection.resolveMatches(
 
                 // Deliver each partner's like as a normal swipe like so the target can see it and
                 // like back later. A like the target has not answered yet goes to their Likes You.
-                if (aAction != null && deliverPsyncLike(session.id, initiator, target, aAction) && !tLikesA) {
-                    delivered += PsyncDeliveredLike(initiator, target, aAction)
+                if (aLike != null && deliverPsyncLike(session.id, initiator, target, aLike) && !tLikesA) {
+                    delivered += PsyncDeliveredLike(initiator, target, aLike.action)
                 }
-                if (bAction != null && deliverPsyncLike(session.id, partner, target, bAction) && !tLikesB) {
-                    delivered += PsyncDeliveredLike(partner, target, bAction)
+                if (bLike != null && deliverPsyncLike(session.id, partner, target, bLike) && !tLikesB) {
+                    delivered += PsyncDeliveredLike(partner, target, bLike.action)
                 }
 
                 if (aLiked && bLiked && togetherEnabled(target) && (tLikesA || tLikesB)) {
@@ -90,22 +90,30 @@ internal fun Connection.deliverPsyncLike(
     sessionId: UUID,
     actorUserId: UUID,
     targetUserId: UUID,
-    action: String,
+    like: PsyncLike,
 ): Boolean =
     prepareStatement(
         """
-        INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, psync_session_id)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, psync_session_id, consumed_inventory_id)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT DO NOTHING
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, UUID.randomUUID())
         statement.setObject(2, actorUserId)
         statement.setObject(3, targetUserId)
-        statement.setString(4, action)
+        statement.setString(4, like.action)
         statement.setObject(5, sessionId)
+        // Carried over so a later Swipe rewind of this Pineapple Like refunds the row that paid.
+        statement.setObject(6, like.consumedInventoryId)
         statement.executeUpdate() > 0
     }
+
+/** A partner's like on a deck target: `like` or `pineapple_like`, plus the inventory row it spent. */
+internal data class PsyncLike(
+    val action: String,
+    val consumedInventoryId: UUID?,
+)
 
 internal fun Connection.participantIdsForSessions(sessionIds: List<UUID>): Map<UUID, List<UUID>> =
     prepareStatement(
@@ -136,10 +144,10 @@ internal fun Connection.deckTargetIds(sessionId: UUID): List<UUID> =
 internal fun Connection.likedTargetsByActor(
     sessionId: UUID,
     actorUserId: UUID,
-): Map<UUID, String> =
+): Map<UUID, PsyncLike> =
     prepareStatement(
         """
-        SELECT target_user_id, action
+        SELECT target_user_id, action, consumed_inventory_id
         FROM psync_session_actions
         WHERE session_id = ? AND actor_user_id = ? AND action IN ('like', 'pineapple_like')
         """.trimIndent(),
@@ -147,7 +155,14 @@ internal fun Connection.likedTargetsByActor(
         statement.setObject(1, sessionId)
         statement.setObject(2, actorUserId)
         statement.executeQuery().use { rs ->
-            buildMap { while (rs.next()) put(rs.getObject("target_user_id", UUID::class.java), rs.getString("action")) }
+            buildMap {
+                while (rs.next()) {
+                    put(
+                        rs.getObject("target_user_id", UUID::class.java),
+                        PsyncLike(rs.getString("action"), rs.getObject("consumed_inventory_id", UUID::class.java)),
+                    )
+                }
+            }
         }
     }
 
