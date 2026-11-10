@@ -23,8 +23,12 @@ allprojects {
             .get()
     extensions.configure<com.diffplug.gradle.spotless.SpotlessExtension> {
         kotlin {
-            target("src/**/*.kt")
-            targetExclude("**/build/**", "**/generated/**")
+            // Rooted at src/ rather than the pattern "src/**/*.kt": a pattern target makes Gradle walk
+            // the whole project directory, including build/, and a compile running in the same build
+            // (verify-web compiles and runs the wasm tests alongside spotlessCheck) can rewrite build/
+            // mid-walk and fail the check with "Could not read path ...".
+            target(fileTree("src") { include("**/*.kt") })
+            targetExclude("**/generated/**")
             ktlint(ktlintVersion)
         }
         kotlinGradle {
