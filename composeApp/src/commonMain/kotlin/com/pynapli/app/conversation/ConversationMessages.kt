@@ -15,11 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +34,11 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.Check
+import com.pynapli.app.design.icons.filled.Delete
+import com.pynapli.app.design.icons.filled.DoneAll
+import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.MessageType
 

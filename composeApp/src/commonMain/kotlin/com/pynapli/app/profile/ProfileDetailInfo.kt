@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,6 +29,9 @@ import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.automirrored.filled.ArrowForward
+import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleTag

@@ -12,12 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -33,6 +27,12 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliHeaderTokens
 import com.pynapli.app.design.PynapliScreenHeader
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.Check
+import com.pynapli.app.design.icons.filled.Link
+import com.pynapli.app.design.icons.filled.Refresh
+import com.pynapli.app.design.icons.filled.ShoppingBag
+import com.pynapli.app.design.icons.filled.Smartphone
 import com.pynapli.shared.network.dto.EntitlementSource
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import com.pynapli.shared.network.dto.SubscriptionTier

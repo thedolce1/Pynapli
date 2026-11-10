@@ -5,9 +5,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -21,6 +18,9 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliHeaderTokens
 import com.pynapli.app.design.PynapliScreenHeader
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
+import com.pynapli.app.design.icons.filled.Notifications
 
 /**
  * Back-navigation top bar for the Profile hub and its sub-screens (Edit, panels). Delegates to the

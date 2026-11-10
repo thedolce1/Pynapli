@@ -6,13 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -22,6 +15,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.ChatBubble
+import com.pynapli.app.design.icons.filled.Close
+import com.pynapli.app.design.icons.filled.Favorite
+import com.pynapli.app.design.icons.filled.FavoriteBorder
+import com.pynapli.app.design.icons.filled.PersonAdd
+import com.pynapli.app.design.icons.filled.PhotoLibrary
 
 @Composable
 internal fun ProfileActions(

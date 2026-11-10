@@ -1,11 +1,11 @@
 package com.pynapli.app.design
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.Visibility
+import com.pynapli.app.design.icons.filled.VisibilityOff
 
 /**
  * Show/hide trailing icon for password fields. Use as `trailingIcon` on every password

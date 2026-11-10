@@ -8,11 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -36,6 +31,11 @@ import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.PynapliSheetActionRow
 import com.pynapli.app.design.PynapliSheetColumn
 import com.pynapli.app.design.PynapliSheetTitle
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.Lock
+import com.pynapli.app.design.icons.filled.Place
+import com.pynapli.app.design.icons.filled.Search
+import com.pynapli.app.design.icons.filled.VerifiedUser
 import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.location.TravelLocationUiState
 import com.pynapli.shared.network.dto.TravelPlaceDto

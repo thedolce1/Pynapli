@@ -1,17 +1,17 @@
 package com.pynapli.app.design
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material.icons.filled.Style
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.outlined.ChatBubble as ChatBubbleOutlined
-import androidx.compose.material.icons.outlined.GridView as GridViewOutlined
-import androidx.compose.material.icons.outlined.LocalFireDepartment as LocalFireDepartmentOutlined
-import androidx.compose.material.icons.outlined.ShoppingBag as ShoppingBagOutlined
-import androidx.compose.material.icons.outlined.Style as StyleOutlined
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.ChatBubble
+import com.pynapli.app.design.icons.filled.GridView
+import com.pynapli.app.design.icons.filled.LocalFireDepartment
+import com.pynapli.app.design.icons.filled.ShoppingBag
+import com.pynapli.app.design.icons.filled.Style
+import com.pynapli.app.design.icons.outlined.ChatBubble as ChatBubbleOutlined
+import com.pynapli.app.design.icons.outlined.GridView as GridViewOutlined
+import com.pynapli.app.design.icons.outlined.LocalFireDepartment as LocalFireDepartmentOutlined
+import com.pynapli.app.design.icons.outlined.ShoppingBag as ShoppingBagOutlined
+import com.pynapli.app.design.icons.outlined.Style as StyleOutlined
 
 /**
  * One [unselected] / [selected] vector pair per bottom-nav tab. The nav renders the active tab with

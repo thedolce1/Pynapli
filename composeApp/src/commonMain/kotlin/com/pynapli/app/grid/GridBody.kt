@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliErrorState
 import com.pynapli.app.design.PynapliMotion
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.SearchOff
 import com.pynapli.app.location.LocationUiState
 
 private enum class GridPhase { Loading, LocationRequired, Error, EmptyFiltered, Content }

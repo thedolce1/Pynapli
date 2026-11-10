@@ -13,12 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -45,6 +39,12 @@ import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliSemantic
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.VerifiedBadge
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.Block
+import com.pynapli.app.design.icons.filled.Close
+import com.pynapli.app.design.icons.filled.Flag
+import com.pynapli.app.design.icons.filled.MoreVert
+import com.pynapli.app.design.icons.filled.VisibilityOff
 
 @Composable
 internal fun ProfileHero(

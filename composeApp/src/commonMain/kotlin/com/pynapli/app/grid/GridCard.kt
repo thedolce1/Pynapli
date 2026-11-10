@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +45,9 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.DarkMode
+import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.shared.distance.formatDistanceForUnit
 
 // Pure black on purpose: a shadow is an occlusion effect, not a palette value, so it does not

@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,6 +35,8 @@ import com.pynapli.app.design.PynapliButtonStyle
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.SwipeCardTokens
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
 import kotlinx.coroutines.launch
 
 /** Stable test tags for the Psync session surface (PS-5c). */

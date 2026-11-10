@@ -16,10 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +37,10 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.ads.AdPlacement
 import com.pynapli.app.ads.AdPlacementPolicy
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
+import com.pynapli.app.design.icons.automirrored.filled.ArrowForward
+import com.pynapli.app.design.icons.filled.ArrowUpward
 import com.pynapli.shared.network.dto.SwipeCardDto
 
 @Composable

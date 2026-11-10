@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +23,9 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.activity.ActivityTabUi
 import com.pynapli.app.conversation.titleFor
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.ChatBubble
+import com.pynapli.app.design.icons.filled.LocalFireDepartment
 import com.pynapli.shared.network.dto.ActivityEventDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.settings.AppSettings

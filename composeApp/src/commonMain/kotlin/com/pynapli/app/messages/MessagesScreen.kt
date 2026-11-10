@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +28,8 @@ import com.pynapli.app.design.PynapliHeaderAvatar
 import com.pynapli.app.design.PynapliListSkeleton
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliScreenHeader
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.Refresh
 import com.pynapli.app.design.pynapliEntrance
 import com.pynapli.shared.network.dto.ConversationDto
 import kotlinx.coroutines.launch
