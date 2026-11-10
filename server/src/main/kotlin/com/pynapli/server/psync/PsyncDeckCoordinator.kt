@@ -29,11 +29,15 @@ internal class PsyncDeckCoordinator(
         val oversample = (session.deckSize * 2).coerceAtMost(PSYNC_MAX_RANK_LIMIT)
         val ranked = generator.rankCandidates(session.initiatorUserId, session.filters, oversample)
 
+        val rankedIds = ranked.mapNotNull { runCatching { UUID.fromString(it.userId) }.getOrNull() }
         val excluded =
             buildSet {
                 add(session.initiatorUserId)
                 add(partnerId)
                 addAll(blockedOrHiddenTargets(session.initiatorUserId, partnerId))
+                // The ranker ran from the initiator's side only. Drop anyone EITHER partner has
+                // already swiped on, matched with or reported, so nobody is asked twice.
+                addAll(repository.alreadySettledTargets(listOf(session.initiatorUserId, partnerId), rankedIds))
             }
         val deckCards =
             ranked

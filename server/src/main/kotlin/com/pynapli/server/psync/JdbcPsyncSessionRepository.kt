@@ -73,6 +73,11 @@ class JdbcPsyncSessionRepository(
         now: Instant,
     ): MutateOutcome = dataSource.activatePsyncWithDeck(json, sessionId, deckSessionId, cards, now)
 
+    override suspend fun alreadySettledTargets(
+        partnerUserIds: List<UUID>,
+        targetUserIds: List<UUID>,
+    ): Set<UUID> = dataSource.psyncAlreadySettledTargets(partnerUserIds, targetUserIds)
+
     override suspend fun listDeckCards(sessionId: UUID): List<PsyncSessionCard> = dataSource.listPsyncDeckCards(json, sessionId)
 
     override suspend fun listActionsForActor(
