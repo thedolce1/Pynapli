@@ -41,7 +41,7 @@ fun MessagesScreen(
     onProfileIconClick: () -> Unit = {},
     profileImageUrl: String? = null,
     modifier: Modifier = Modifier,
-    stateHolder: MessagesStateHolder = rememberMessagesStateHolder(),
+    stateHolder: MessagesStateHolder,
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -66,14 +66,6 @@ fun MessagesScreen(
         modifier = modifier,
     )
 }
-
-@Composable
-private fun rememberMessagesStateHolder(): MessagesStateHolder =
-    remember {
-        MessagesStateHolder(
-            repository = SampleMessagesRepository(),
-        )
-    }
 
 @Composable
 private fun MessagesScreenContent(

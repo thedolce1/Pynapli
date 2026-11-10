@@ -112,7 +112,7 @@ There is no large bloat problem. What the review did find, in priority order:
 4. **Web Tonight/Psync.** The web shell hides them while the common graph builds them anyway, and two comments disagree on which is intended (`webApp/.../Main.kt:127-147` vs `WebAppGraph.kt:69-71,140-142`).
 5. **CI runs commonTest twice** (`testAndroidHostTest` + the JVM test task) with no `androidHostTest` sources. Keep this only if exercising Android actuals is the point.
 6. **`compose.materialIconsExtended`** (61 icons used). It may no longer be updated upstream. Verify against the official Compose Multiplatform docs before acting; vendoring the 61 icons would cut wasm and desktop size.
-7. **Sample repositories and `rememberXStateHolder()` defaults** in main code: if a caller forgets a parameter, the screen silently shows fake data. Make the parameters required and move the samples into tests.
+7. **Sample repositories and `rememberXStateHolder()` defaults** in main code: if a caller forgets a parameter, the screen silently shows fake data. Make the parameters required and move the samples into tests. ✔ Done: the six screen parameters are required, the `remember…StateHolder()` sample factories are gone, two sample repositories moved to `commonTest`, four were deleted; the compiler then flagged 9 Grid tests that had been relying on the sample conversation default.
 
 ## Checked and fine (not findings)
 

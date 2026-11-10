@@ -21,9 +21,9 @@ import kotlinx.coroutines.launch
 @Composable
 fun GridScreen(
     modifier: Modifier = Modifier,
-    stateHolder: GridStateHolder = rememberGridStateHolder(),
-    profileDetailStateHolder: ProfileDetailStateHolder = rememberProfileDetailStateHolder(),
-    conversationStateHolder: ConversationStateHolder = rememberConversationStateHolder(),
+    stateHolder: GridStateHolder,
+    profileDetailStateHolder: ProfileDetailStateHolder,
+    conversationStateHolder: ConversationStateHolder,
     viewerUserId: String? = null,
     locationState: LocationUiState = LocationUiState(),
     profileImageUrl: String? = null,

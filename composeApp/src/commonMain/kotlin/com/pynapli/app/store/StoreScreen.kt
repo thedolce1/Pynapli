@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,7 +28,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun StoreScreen(
-    stateHolder: StoreStateHolder = rememberStoreStateHolder(),
+    stateHolder: StoreStateHolder,
     modifier: Modifier = Modifier,
     // Web is read-only (founder-locked): catalog + balances visible, no purchase controls.
     purchasesAvailable: Boolean = true,
@@ -50,9 +49,6 @@ fun StoreScreen(
         purchasesAvailable = purchasesAvailable,
     )
 }
-
-@Composable
-private fun rememberStoreStateHolder(): StoreStateHolder = remember { StoreStateHolder(repository = SampleStoreRepository()) }
 
 @Composable
 private fun StoreScreenContent(

@@ -298,18 +298,6 @@ class ApiGridFeedRepository(
         }
 }
 
-class SampleGridFeedRepository : GridFeedRepository {
-    override suspend fun loadGrid(
-        filters: GridFilters,
-        cursor: String?,
-    ): GridFeedUi =
-        GridFeedUi(
-            cards = sampleGridCards,
-            adSupported = true,
-            advancedFiltersApplied = filters.requiresAdvancedEntitlement,
-        )
-}
-
 /**
  * [Immutable] because `cards` is a `List`, and `List` is only an interface — the compiler cannot
  * prove it is not a `MutableList`, so without this the whole class is inferred unstable and every

@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.conversation.ConversationStateHolder
+import com.pynapli.app.conversation.SampleConversationRepository
 import com.pynapli.app.design.PynapliTheme
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profile.SamplePublicProfileRepository
@@ -36,6 +38,7 @@ class GridVerificationRowInteractionTest {
                         GridScreen(
                             stateHolder = gridStateHolder,
                             profileDetailStateHolder = profileDetailStateHolder,
+                            conversationStateHolder = ConversationStateHolder(SampleConversationRepository()),
                             profileImageUrl = null,
                             onOpenAgeVerification = { verificationOpened = true },
                         )

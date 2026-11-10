@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runComposeUiTest
+import com.pynapli.app.conversation.ConversationStateHolder
+import com.pynapli.app.conversation.SampleConversationRepository
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profile.SamplePublicProfileRepository
 import kotlinx.coroutines.runBlocking
@@ -38,6 +40,7 @@ class GridScreenScrollPreservationTest {
                 GridScreen(
                     stateHolder = gridStateHolder,
                     profileDetailStateHolder = profileDetailStateHolder,
+                    conversationStateHolder = ConversationStateHolder(SampleConversationRepository()),
                     gridState = gridState,
                 )
             }
@@ -89,6 +92,7 @@ class GridScreenScrollPreservationTest {
                 GridScreen(
                     stateHolder = gridStateHolder,
                     profileDetailStateHolder = profileDetailStateHolder,
+                    conversationStateHolder = ConversationStateHolder(SampleConversationRepository()),
                 )
             }
             waitUntil(timeoutMillis = 5_000) {
@@ -126,6 +130,7 @@ class GridScreenScrollPreservationTest {
                 GridScreen(
                     stateHolder = gridStateHolder,
                     profileDetailStateHolder = profileDetailStateHolder,
+                    conversationStateHolder = ConversationStateHolder(SampleConversationRepository()),
                     gridState = gridState,
                 )
             }
@@ -176,6 +181,7 @@ class GridScreenScrollPreservationTest {
                 GridScreen(
                     stateHolder = gridStateHolder,
                     profileDetailStateHolder = profileDetailStateHolder,
+                    conversationStateHolder = ConversationStateHolder(SampleConversationRepository()),
                     gridState = gridState,
                 )
             }
@@ -228,6 +234,7 @@ class GridScreenScrollPreservationTest {
                 GridScreen(
                     stateHolder = gridStateHolder,
                     profileDetailStateHolder = profileDetailStateHolder,
+                    conversationStateHolder = ConversationStateHolder(SampleConversationRepository()),
                     lifestyleFiltersAllowed = false,
                 )
             }

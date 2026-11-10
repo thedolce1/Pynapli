@@ -4,6 +4,8 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
+import com.pynapli.app.conversation.ConversationStateHolder
+import com.pynapli.app.conversation.SampleConversationRepository
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profile.SamplePublicProfileRepository
 import kotlinx.coroutines.runBlocking
@@ -23,6 +25,7 @@ class GridBodyStatesTest {
                 GridScreen(
                     stateHolder = gridStateHolder,
                     profileDetailStateHolder = ProfileDetailStateHolder(SamplePublicProfileRepository()),
+                    conversationStateHolder = ConversationStateHolder(SampleConversationRepository()),
                 )
             }
             waitForIdle()
@@ -47,6 +50,7 @@ class GridBodyStatesTest {
                 GridScreen(
                     stateHolder = gridStateHolder,
                     profileDetailStateHolder = ProfileDetailStateHolder(SamplePublicProfileRepository()),
+                    conversationStateHolder = ConversationStateHolder(SampleConversationRepository()),
                 )
             }
             waitForIdle()

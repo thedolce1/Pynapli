@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ActivityScreen(
     modifier: Modifier = Modifier,
-    stateHolder: ActivityStateHolder = rememberActivityStateHolder(),
+    stateHolder: ActivityStateHolder,
     distanceUnit: String = AppSettings.UNIT_METRIC,
     onOpenStore: () -> Unit = {},
     onOpenMatch: (ActivityEventDto) -> Unit = {},
@@ -66,14 +66,6 @@ fun ActivityScreen(
         modifier = modifier,
     )
 }
-
-@Composable
-private fun rememberActivityStateHolder(): ActivityStateHolder =
-    remember {
-        ActivityStateHolder(
-            repository = SampleActivityFeedRepository(),
-        )
-    }
 
 @Composable
 private fun ActivityScreenContent(
