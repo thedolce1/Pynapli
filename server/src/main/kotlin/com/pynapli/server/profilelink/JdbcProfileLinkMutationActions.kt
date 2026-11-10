@@ -158,12 +158,24 @@ internal class JdbcProfileLinkMutationActions(
                           )
                         RETURNING id
                     ),
-                    -- PSYNC_SPEC edge case: ending the partner link cancels any live Psync session.
+                    -- PSYNC_SPEC edge case: ending the partner link ends any live Psync session. One
+                    -- that never started is cancelled outright.
                     cancelled_psync AS (
                         UPDATE psync_sessions
                         SET status = 'cancelled', ended_at = now()
                         WHERE partner_link_id IN (SELECT id FROM unlinked)
-                          AND status IN ('invited', 'configuring', 'ready', 'active', 'paused')
+                          AND status IN ('invited', 'configuring', 'ready')
+                        RETURNING id
+                    ),
+                    -- A started one has decisions in it: put its deadline in the past so the Psync
+                    -- service refuses further swipes and resolves it (likes made so far are
+                    -- delivered, matches resolve) instead of discarding them. A minute back rather
+                    -- than now() so app/database clock skew can't leave it briefly swipeable.
+                    ended_psync AS (
+                        UPDATE psync_sessions
+                        SET expires_at = now() - interval '1 minute'
+                        WHERE partner_link_id IN (SELECT id FROM unlinked)
+                          AND status IN ('active', 'paused')
                         RETURNING id
                     )
                     SELECT count(*) AS unlinked_count FROM unlinked

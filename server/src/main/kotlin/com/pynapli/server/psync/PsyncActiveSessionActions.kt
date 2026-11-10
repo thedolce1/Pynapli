@@ -91,11 +91,7 @@ internal class PsyncActiveSessionActions(
                 if (finish is PsyncSessionRepository.CompleteOutcome.Completed &&
                     finish.session.status == PSYNC_STATUS_COMPLETED
                 ) {
-                    events.emitMatchActivity(finish.resolvedMatches)
-                    events.emitDeliveredLikes(finish.deliveredLikes)
-                    pineappleRefunds.sweep()
-                    events.emitDelta(sessionId, PsyncBroadcaster.SESSION_COMPLETED, session.allParticipantIds())
-                    events.recordForBoth(finish.session, "psync_recap")
+                    announceResolved(finish)
                     true
                 } else {
                     false
@@ -121,12 +117,45 @@ internal class PsyncActiveSessionActions(
         userId: UUID,
     ): PsyncRecapDto {
         val completed = repository.complete(sessionId, userId, clock.instant()).completedOrThrow()
+        announceResolved(completed)
+        return recapBuilder.buildRecap(completed.session, userId)
+    }
+
+    /**
+     * End a started session early on behalf of [userId] (they left). What each partner already
+     * decided still counts: likes are delivered and matches resolve, exactly as when the deck is
+     * finished. Cards nobody reached are simply dropped, never treated as passes.
+     */
+    suspend fun endStarted(
+        sessionId: UUID,
+        userId: UUID,
+    ): PsyncSessionDto {
+        val completed = repository.complete(sessionId, userId, clock.instant()).completedOrThrow()
+        announceResolved(completed)
+        return completed.session.toDto()
+    }
+
+    /**
+     * Resolve every started session whose deadline has passed (including ones whose partner link
+     * ended). Returns how many were resolved. One failing session never blocks the rest.
+     */
+    suspend fun resolveOverdue(): Int =
+        repository.listOverdueStartedSessions(clock.instant()).count { overdue ->
+            runCatching {
+                val outcome = repository.complete(overdue.sessionId, overdue.initiatorUserId, clock.instant())
+                if (outcome is PsyncSessionRepository.CompleteOutcome.Completed) announceResolved(outcome)
+                outcome is PsyncSessionRepository.CompleteOutcome.Completed
+            }.getOrDefault(false)
+        }
+
+    /** Post-commit fan-out for a resolved session. Every step is idempotent on a re-complete. */
+    private suspend fun announceResolved(completed: PsyncSessionRepository.CompleteOutcome.Completed) {
         events.emitMatchActivity(completed.resolvedMatches)
         events.emitDeliveredLikes(completed.deliveredLikes)
         pineappleRefunds.sweep()
-        // Idempotent per (recipient, type, session) — safe on an idempotent re-complete.
+        events.emitDelta(completed.session.id, PsyncBroadcaster.SESSION_COMPLETED, completed.session.allParticipantIds())
+        // Idempotent per (recipient, type, session).
         events.recordForBoth(completed.session, "psync_recap")
-        return recapBuilder.buildRecap(completed.session, userId)
     }
 
     suspend fun getRecap(
@@ -211,6 +240,12 @@ internal class PsyncActiveSessionActions(
         if (session.participants.none { it.userId == userId }) throw PsyncException("PSYNC_SESSION_NOT_FOUND")
         val live = session.status == PSYNC_STATUS_ACTIVE || (allowPaused && session.status == PSYNC_STATUS_PAUSED)
         if (!live) throw PsyncException("PSYNC_INVALID_STATE")
+        // Past its deadline (or its partner link ended): no more swiping. Resolve it now so the
+        // caller's refetch finds the recap.
+        if (!session.expiresAt.isAfter(clock.instant())) {
+            resolveOverdue()
+            throw PsyncException("PSYNC_INVALID_STATE")
+        }
         return session
     }
 }
