@@ -19,6 +19,13 @@
 #
 # Every selected gate runs; the push is blocked if any fails.
 #
+# Already-verified commits are not re-verified. Merging a slice is "push the branch (gated), then
+# fast-forward main and push main". Fast-forwarding creates no new code, but main's push saw the
+# slice's files as new and re-ran every gate on the exact commits that had just passed, roughly
+# doubling the time a merge took. A ref whose tip is already on another remote branch is skipped:
+# that branch's push only succeeded if its gate passed. (One caveat: a branch pushed with
+# --no-verify is trusted the same way, which is what --no-verify already means.)
+#
 # Escape hatches:
 #   git push --no-verify        skip the gate entirely (use when you know why)
 #   PYNAPLI_HOOK_DRY_RUN=1      print the chosen gate and exit without running it
@@ -41,11 +48,22 @@ zero=$(git hash-object --stdin </dev/null | tr '[0-9a-f]' '0')
 # Collect every path this push would publish. Reads the ref updates git feeds us on stdin.
 changed_paths=""
 saw_ref=0
+skipped_verified=
 while read -r local_ref local_oid remote_ref remote_oid; do
     [ -z "$local_oid" ] && continue
     # Branch deletion: nothing to verify.
     [ "$local_oid" = "$zero" ] && continue
     saw_ref=1
+
+    # Already on another remote branch -> already passed this gate when that branch was pushed.
+    target=$(printf '%s' "$remote_ref" | sed 's#^refs/heads/##')
+    verified_on=$(git branch -r --contains "$local_oid" 2>/dev/null |
+        sed 's/^[* ]*//' | grep -v -- ' -> ' | grep -v -x "origin/$target" | head -n 1)
+    if [ -n "$verified_on" ]; then
+        echo "pre-push: $local_oid is already on $verified_on, which passed the gate when it was pushed; skipping."
+        skipped_verified=1
+        continue
+    fi
 
     if [ "$remote_oid" = "$zero" ]; then
         # New branch on the remote: the slice's content is what it adds over main.
@@ -71,7 +89,11 @@ if [ "$saw_ref" = "0" ]; then
 fi
 
 if [ -z "$(printf '%s' "$changed_paths" | tr -d '[:space:]')" ]; then
-    echo "pre-push: no file changes in this push, skipping the gate."
+    if [ -n "$skipped_verified" ]; then
+        echo "pre-push: everything in this push was already verified."
+    else
+        echo "pre-push: no file changes in this push, skipping the gate."
+    fi
     exit 0
 fi
 
