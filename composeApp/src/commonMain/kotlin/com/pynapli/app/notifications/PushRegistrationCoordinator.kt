@@ -30,7 +30,7 @@ class PushRegistrationCoordinator(
                 appVersion = appVersion,
                 locale = localeProvider()?.trim()?.takeIf { it.isNotEmpty() },
                 timezone = timezoneProvider()?.trim()?.takeIf { it.isNotEmpty() },
-                notificationsEnabled = settings.pushNotificationsEnabled && notificationsAllowed(),
+                notificationsEnabled = settings.anyPushCategoryEnabled && notificationsAllowed(),
             )
         val fingerprint = registration.fingerprint(currentUserId)
         if (registrationStore.currentFingerprint() == fingerprint) return
@@ -61,9 +61,6 @@ class PushRegistrationCoordinator(
             is AppResult.Failure -> Unit
         }
     }
-
-    private val AppSettings.pushNotificationsEnabled: Boolean
-        get() = messageNotifications || matchNotifications || activityNotifications
 }
 
 interface PushTokenProvider {

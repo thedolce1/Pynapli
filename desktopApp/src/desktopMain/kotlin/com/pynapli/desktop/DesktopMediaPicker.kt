@@ -1,9 +1,9 @@
 package com.pynapli.desktop
 
-import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.media.MediaAlbumKindUi
-import com.pynapli.app.media.MediaAlbumsStateHolder
+import com.pynapli.app.media.MediaPickTarget
 import com.pynapli.app.media.PickedMediaForUpload
+import com.pynapli.app.media.PickedMediaRouter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,37 +21,35 @@ import javax.swing.filechooser.FileNameExtensionFilter
  * so measuring here would only duplicate that work.
  */
 class DesktopMediaPicker(
-    private val conversationStateHolder: ConversationStateHolder,
-    private val mediaAlbumsStateHolder: MediaAlbumsStateHolder,
+    private val router: PickedMediaRouter,
     private val scope: CoroutineScope,
 ) {
     fun pickConversationPhoto() {
-        pick { media -> scope.launch { conversationStateHolder.sendPhoto(media) } }
+        pick(MediaPickTarget.Conversation)
     }
 
     fun pickForAlbum(kind: MediaAlbumKindUi) {
-        pick { media -> scope.launch { mediaAlbumsStateHolder.stagePickedMedia(kind, media) } }
+        pick(MediaPickTarget.Album(kind))
     }
 
-    private fun pick(onPicked: (PickedMediaForUpload) -> Unit) {
+    private fun pick(target: MediaPickTarget) {
         scope.launch {
             // Swing dialogs and file reads both block; keeping them off the Compose UI dispatcher
             // is what stops the window freezing while the chooser is open.
             val file = withContext(Dispatchers.IO) { chooseImageFile() } ?: return@launch
             val bytes = withContext(Dispatchers.IO) { runCatching { file.readBytes() }.getOrNull() }
-            if (bytes == null || bytes.isEmpty()) {
-                mediaAlbumsStateHolder.showError("Could not read the selected image.")
-                return@launch
-            }
-            onPicked(
-                PickedMediaForUpload(
-                    contentType = contentTypeFor(file),
-                    byteSize = bytes.size.toLong(),
-                    pixelWidth = null,
-                    pixelHeight = null,
-                    bytes = bytes,
-                ),
-            )
+            val media =
+                bytes?.takeIf { it.isNotEmpty() }?.let {
+                    PickedMediaForUpload(
+                        contentType = contentTypeFor(file),
+                        byteSize = it.size.toLong(),
+                        pixelWidth = null,
+                        pixelHeight = null,
+                        bytes = it,
+                    )
+                }
+            // null (unreadable) shows the shared error; otherwise the router sends or stages it.
+            router.deliver(target, media)
         }
     }
 

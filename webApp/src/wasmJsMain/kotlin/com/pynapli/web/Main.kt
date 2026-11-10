@@ -12,6 +12,7 @@ import com.pynapli.app.PynapliApp
 import com.pynapli.app.PynapliPlatform
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
+import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.web.platform.onDocumentVisible
 import kotlinx.coroutines.MainScope
@@ -32,8 +33,7 @@ fun main() {
         )
     val mediaPicker =
         WebMediaPicker(
-            conversationStateHolder = graph.pynapliAppGraph.conversationStateHolder,
-            mediaAlbumsStateHolder = graph.pynapliAppGraph.mediaAlbumsStateHolder,
+            router = PickedMediaRouter(graph.pynapliAppGraph.mediaAlbumsStateHolder, graph.pynapliAppGraph.conversationStateHolder),
             scope = appScope,
         )
 

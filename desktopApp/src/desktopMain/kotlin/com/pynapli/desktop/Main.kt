@@ -8,6 +8,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.pynapli.app.PynapliApp
 import com.pynapli.app.PynapliPlatform
+import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.shared.core.result.runCatchingCancellable
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -44,8 +45,7 @@ fun main() {
         )
     val mediaPicker =
         DesktopMediaPicker(
-            conversationStateHolder = graph.pynapliAppGraph.conversationStateHolder,
-            mediaAlbumsStateHolder = graph.pynapliAppGraph.mediaAlbumsStateHolder,
+            router = PickedMediaRouter(graph.pynapliAppGraph.mediaAlbumsStateHolder, graph.pynapliAppGraph.conversationStateHolder),
             scope = appScope,
         )
 

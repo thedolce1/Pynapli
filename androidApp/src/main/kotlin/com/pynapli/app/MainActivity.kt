@@ -26,17 +26,15 @@ import androidx.core.content.edit
 import com.pynapli.app.location.DeviceLocation
 import com.pynapli.app.location.submitAndRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
+import com.pynapli.app.media.MediaPickTarget
 import com.pynapli.app.media.PickedMediaForUpload
 import com.pynapli.app.notifications.PynapliNotificationDeepLinks
 import com.pynapli.shared.core.result.runCatchingCancellable
-import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -52,8 +50,7 @@ class MainActivity : ComponentActivity() {
     private var pendingDeepLinkIntent: Intent? = null
     private var pendingLocationSignal: CancellationSignal? = null
     private var realtimeJobs: List<Job> = emptyList()
-    private var pendingMediaAlbumKind: MediaAlbumKindUi? = null
-    private var pendingConversationPhoto: Boolean = false
+    private var pendingPickTarget: MediaPickTarget? = null
     private val locationPermissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions(),
@@ -74,9 +71,7 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(
             ActivityResultContracts.RequestPermission(),
         ) {
-            activityScope.launch {
-                syncPushRegistrationNow()
-            }
+            activityScope.launch { appGraph?.pushRegistrationSync?.syncNow() }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -132,8 +127,12 @@ class MainActivity : ComponentActivity() {
     private fun onAppGraphReady(graph: AndroidAppGraph) {
         appGraph = graph
         graph.attachBillingActivity(this)
-        startPushRegistrationSync(graph)
-        startNotificationPermissionPromptSync(graph)
+        activityScope.launch { graph.pushRegistrationSync.followSessionAndSettings() }
+        activityScope.launch {
+            graph.pushRegistrationSync.notificationPermissionWanted.collectLatest { wanted ->
+                if (wanted) requestNotificationPermissionIfUseful()
+            }
+        }
         pendingDeepLinkIntent?.let { handleNotificationDeepLink(it, graph) }
         pendingDeepLinkIntent = null
         if (isStarted) startRealtimeStreams(graph)
@@ -156,13 +155,9 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         isStarted = true
         appGraph?.let { startRealtimeStreams(it) }
-        // Re-sync push registration on every foreground. The reactive collector in
-        // startPushRegistrationSync only re-fires when userId/settings change, so a rotated FCM token
-        // (onNewToken clears the stored fingerprint) would otherwise not be re-registered until the
-        // process restarts — leaving the server holding a dead token and dropping pushes to a user
-        // who has not reopened the app. The sync is fingerprint-guarded, so it is a cheap no-op when
-        // nothing has changed.
-        activityScope.launch { syncPushRegistrationNow() }
+        // Re-sync push on every foreground so a rotated FCM token is re-registered (see
+        // PushRegistrationSync.syncNow); fingerprint-guarded, so a no-op when nothing changed.
+        activityScope.launch { appGraph?.pushRegistrationSync?.syncNow() }
     }
 
     // runCatchingCancellable, not runCatching: onStop() cancels all three of these jobs, and plain
@@ -193,42 +188,6 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private fun startPushRegistrationSync(graph: AndroidAppGraph) {
-        activityScope.launch {
-            combine(
-                graph.authStateHolder.state,
-                graph.appSettingsStateHolder.state,
-            ) { authState, appSettingsState ->
-                PushRegistrationSyncInput(
-                    userId = authState.session?.userId,
-                    settings = appSettingsState.settings,
-                )
-            }.distinctUntilChanged()
-                .collectLatest { input ->
-                    graph.pushRegistrationCoordinator.syncAuthenticatedDevice(
-                        userId = input.userId,
-                        settings = input.settings,
-                    )
-                }
-        }
-    }
-
-    private fun startNotificationPermissionPromptSync(graph: AndroidAppGraph) {
-        activityScope.launch {
-            combine(
-                graph.authStateHolder.state,
-                graph.appSettingsStateHolder.state,
-            ) { authState, appSettingsState ->
-                authState.authenticated && appSettingsState.settings.pushNotificationsEnabled()
-            }.distinctUntilChanged()
-                .collectLatest { shouldPrompt ->
-                    if (shouldPrompt) {
-                        requestNotificationPermissionIfUseful()
-                    }
-                }
-        }
-    }
-
     private fun requestNotificationPermissionIfUseful() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
@@ -237,16 +196,6 @@ class MainActivity : ComponentActivity() {
 
         preferences.edit { putBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, true) }
         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-    }
-
-    private suspend fun syncPushRegistrationNow() {
-        val graph = appGraph ?: return
-        val authState = graph.authStateHolder.state.value
-        val settings = graph.appSettingsStateHolder.state.value.settings
-        graph.pushRegistrationCoordinator.syncAuthenticatedDevice(
-            userId = authState.session?.userId,
-            settings = settings,
-        )
     }
 
     private fun handleNotificationDeepLink(
@@ -270,20 +219,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun pickMediaForAlbum(kind: MediaAlbumKindUi) {
-        pendingMediaAlbumKind = kind
-        pendingConversationPhoto = false
-        mediaPickerLauncher.launch(
-            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-        )
-    }
+    private fun pickMediaForAlbum(kind: MediaAlbumKindUi) = launchPhotoPicker(MediaPickTarget.Album(kind))
 
-    private fun pickConversationPhoto() {
-        pendingMediaAlbumKind = null
-        pendingConversationPhoto = true
-        mediaPickerLauncher.launch(
-            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-        )
+    private fun pickConversationPhoto() = launchPhotoPicker(MediaPickTarget.Conversation)
+
+    private fun launchPhotoPicker(target: MediaPickTarget) {
+        pendingPickTarget = target
+        mediaPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
 
     private fun applyLauncherIcon(discreet: Boolean) {
@@ -311,22 +253,14 @@ class MainActivity : ComponentActivity() {
 
     private fun handlePickedMedia(uri: Uri?) {
         val graph = appGraph ?: return
-        val sendToConversation = pendingConversationPhoto
-        val kind = pendingMediaAlbumKind
-        pendingConversationPhoto = false
-        pendingMediaAlbumKind = null
+        val target = pendingPickTarget ?: return
+        pendingPickTarget = null
         if (uri == null) return
 
         activityScope.launch {
             // Off Main: Photo Picker URIs can be cloud-backed, so the read can block long enough to ANR.
             val pickedMedia = withContext(Dispatchers.IO) { readPickedImage(uri) }
-            when {
-                pickedMedia == null -> graph.pynapliAppGraph.mediaAlbumsStateHolder.showError("Could not read the selected image.")
-                // Chat photo: upload + send as a per-recipient consent-tap media message.
-                sendToConversation -> graph.pynapliAppGraph.conversationStateHolder.sendPhoto(pickedMedia)
-                // Profile and private album photos both pause at the shared square-crop step.
-                kind != null -> graph.pynapliAppGraph.mediaAlbumsStateHolder.stagePickedMedia(kind, pickedMedia)
-            }
+            graph.pickedMediaRouter.deliver(target, pickedMedia)
         }
     }
 
@@ -442,13 +376,6 @@ class MainActivity : ComponentActivity() {
             )
         }.getOrNull()
 }
-
-private data class PushRegistrationSyncInput(
-    val userId: String?,
-    val settings: AppSettings,
-)
-
-private fun AppSettings.pushNotificationsEnabled(): Boolean = messageNotifications || matchNotifications || activityNotifications
 
 private const val NOTIFICATION_PERMISSION_PREFERENCES = "pynapli_notification_permission"
 private const val KEY_NOTIFICATION_PERMISSION_REQUESTED = "requested"

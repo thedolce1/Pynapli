@@ -15,10 +15,12 @@ import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
 import com.pynapli.app.debug.DebugQaFlags
 import com.pynapli.app.grid.SqlDelightGridSnapshotStore
+import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.app.notifications.AndroidFirebasePushTokenProvider
 import com.pynapli.app.notifications.AndroidPushRegistrationStore
 import com.pynapli.app.notifications.ApiPushDeviceRegistrationRepository
 import com.pynapli.app.notifications.PushRegistrationCoordinator
+import com.pynapli.app.notifications.PushRegistrationSync
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.store.DevStorePurchaseGateway
@@ -174,6 +176,12 @@ class AndroidAppGraph(
             messageStreamClient =
                 realtimeStreams.message,
         )
+
+    /** Routes a picked photo to its album or the open conversation. */
+    val pickedMediaRouter by lazy { PickedMediaRouter(pynapliAppGraph.mediaAlbumsStateHolder, pynapliAppGraph.conversationStateHolder) }
+
+    /** Keeps the device's push registration in step with the session and settings. */
+    val pushRegistrationSync = PushRegistrationSync(pushRegistrationCoordinator, authStateHolder, appSettingsStateHolder)
 
     /** The object MainActivity hands to `PynapliApp`: every common holder plus this shell's pieces. */
     val pynapliAppGraph: PynapliAppGraph =
