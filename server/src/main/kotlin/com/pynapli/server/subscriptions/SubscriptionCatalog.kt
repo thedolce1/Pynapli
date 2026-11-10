@@ -7,6 +7,13 @@ import com.pynapli.shared.network.dto.SubscriptionProductId
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
 
+/**
+ * The plan catalog the Store renders. A tier's [SubscriptionTierDto.features] lists what the plan
+ * adds; it must NOT repeat what the structured flags already say. Every client renders
+ * `adSupported` ("Ad-supported" / "No ads") and `linkedPartnerIncluded` ("Linked partner included" /
+ * "Single account entitlement") as rows of their own, so repeating them here showed them twice
+ * (Social listed both twice until 2026-11-10). SubscriptionCatalogTest pins this.
+ */
 internal object SubscriptionCatalog {
     fun inventory(): SubscriptionInventoryResponseDto =
         SubscriptionInventoryResponseDto(
@@ -41,14 +48,12 @@ internal object SubscriptionCatalog {
                 playStoreProductId = SubscriptionProductId.PLAY_SOCIAL_MONTHLY,
                 features =
                     listOf(
-                        "No ads",
                         "Expanded grid",
                         "More swipe likes",
                         "Rewind",
                         "More Activity reveal",
                         "Saved filters",
                         "Travel preview",
-                        "Linked partner included",
                     ),
             ),
             SubscriptionTierDto(
@@ -68,7 +73,6 @@ internal object SubscriptionCatalog {
                         "Weekly Pineapple Likes",
                         "Monthly Boost",
                         "Daily curated Picks",
-                        "Linked partner included",
                     ),
             ),
         )
