@@ -40,7 +40,7 @@ internal suspend fun DataSource.completePsyncSession(
                 val updated =
                     connection.loadSession(json, sessionId)
                         ?: return@inTransaction CompleteOutcome.SessionNotFound
-                CompleteOutcome.Completed(updated, resolved)
+                CompleteOutcome.Completed(updated, resolved.matches, resolved.deliveredLikes)
             }
         }
     }

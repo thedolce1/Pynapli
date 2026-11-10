@@ -234,6 +234,9 @@ interface PsyncSessionRepository {
         data class Completed(
             val session: PsyncSession,
             val resolvedMatches: List<PsyncResolvedMatch>,
+            // Likes this completion delivered to targets who have not liked back yet (empty on an
+            // idempotent re-complete), replayed post-commit into the targets' Likes You.
+            val deliveredLikes: List<PsyncDeliveredLike> = emptyList(),
         ) : CompleteOutcome
 
         object SessionNotFound : CompleteOutcome

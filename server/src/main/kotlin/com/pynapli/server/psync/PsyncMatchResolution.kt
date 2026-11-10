@@ -20,48 +20,92 @@ import java.util.UUID
 internal fun Connection.resolveMatches(
     session: PsyncSession,
     matchIdFactory: () -> UUID,
-): List<PsyncResolvedMatch> {
+): PsyncResolution {
     val initiator = session.initiatorUserId
     val partner =
         session.participants.firstOrNull { it.userId != initiator }?.userId
-            ?: return emptyList() // a session always has two participants; nothing to resolve otherwise
+            // a session always has two participants; nothing to resolve otherwise
+            ?: return PsyncResolution(emptyList(), emptyList())
     val targets = deckTargetIds(session.id)
     val likedByInitiator = likedTargetsByActor(session.id, initiator)
     val likedByPartner = likedTargetsByActor(session.id, partner)
+    val delivered = mutableListOf<PsyncDeliveredLike>()
 
-    return buildList {
-        for (target in targets) {
-            val aLiked = target in likedByInitiator
-            val bLiked = target in likedByPartner
-            if (!aLiked && !bLiked) continue
-            // Blocks override all match state.
-            if (blockedBetween(target, initiator) || blockedBetween(target, partner)) continue
+    val matches =
+        buildList {
+            for (target in targets) {
+                val aAction = likedByInitiator[target]
+                val bAction = likedByPartner[target]
+                val aLiked = aAction != null
+                val bLiked = bAction != null
+                if (!aLiked && !bLiked) continue
+                // Blocks override all match state, and a blocked like is never delivered.
+                if (blockedBetween(target, initiator) || blockedBetween(target, partner)) continue
 
-            val tLikesA = targetLikesPartner(target, initiator)
-            val tLikesB = targetLikesPartner(target, partner)
+                val tLikesA = targetLikesPartner(target, initiator)
+                val tLikesB = targetLikesPartner(target, partner)
 
-            if (aLiked && bLiked && togetherEnabled(target) && (tLikesA || tLikesB)) {
-                val matchA = upsertMatch(initiator, target, matchIdFactory)
-                val matchB = upsertMatch(partner, target, matchIdFactory)
-                insertSessionMatch(session.id, target, kind = "together", ownerUserId = null, matchId = matchB)
-                add(PsyncResolvedMatch(initiator, target, matchA, "together"))
-                add(PsyncResolvedMatch(partner, target, matchB, "together"))
-                continue
-            }
-            // Solo passthrough(s): each liking partner the target liked back.
-            if (aLiked && tLikesA) {
-                val matchId = upsertMatch(initiator, target, matchIdFactory)
-                insertSessionMatch(session.id, target, kind = "solo", ownerUserId = initiator, matchId = matchId)
-                add(PsyncResolvedMatch(initiator, target, matchId, "solo"))
-            }
-            if (bLiked && tLikesB) {
-                val matchId = upsertMatch(partner, target, matchIdFactory)
-                insertSessionMatch(session.id, target, kind = "solo", ownerUserId = partner, matchId = matchId)
-                add(PsyncResolvedMatch(partner, target, matchId, "solo"))
+                // Deliver each partner's like as a normal swipe like so the target can see it and
+                // like back later. A like the target has not answered yet goes to their Likes You.
+                if (aAction != null && deliverPsyncLike(session.id, initiator, target, aAction) && !tLikesA) {
+                    delivered += PsyncDeliveredLike(initiator, target, aAction)
+                }
+                if (bAction != null && deliverPsyncLike(session.id, partner, target, bAction) && !tLikesB) {
+                    delivered += PsyncDeliveredLike(partner, target, bAction)
+                }
+
+                if (aLiked && bLiked && togetherEnabled(target) && (tLikesA || tLikesB)) {
+                    val matchA = upsertMatch(initiator, target, matchIdFactory)
+                    val matchB = upsertMatch(partner, target, matchIdFactory)
+                    insertSessionMatch(session.id, target, kind = "together", ownerUserId = null, matchId = matchB)
+                    add(PsyncResolvedMatch(initiator, target, matchA, "together"))
+                    add(PsyncResolvedMatch(partner, target, matchB, "together"))
+                    continue
+                }
+                // Solo passthrough(s): each liking partner the target liked back.
+                if (aLiked && tLikesA) {
+                    val matchId = upsertMatch(initiator, target, matchIdFactory)
+                    insertSessionMatch(session.id, target, kind = "solo", ownerUserId = initiator, matchId = matchId)
+                    add(PsyncResolvedMatch(initiator, target, matchId, "solo"))
+                }
+                if (bLiked && tLikesB) {
+                    val matchId = upsertMatch(partner, target, matchIdFactory)
+                    insertSessionMatch(session.id, target, kind = "solo", ownerUserId = partner, matchId = matchId)
+                    add(PsyncResolvedMatch(partner, target, matchId, "solo"))
+                }
             }
         }
-    }
+    // A like that resolved into a match (a together match can include a partner the target never
+    // liked individually) is not also announced as a pending like.
+    val matchedPairs = matches.map { it.partnerUserId to it.targetUserId }.toSet()
+    return PsyncResolution(matches, delivered.filterNot { (it.actorUserId to it.targetUserId) in matchedPairs })
 }
+
+/**
+ * Write a partner's Psync like into `swipe_actions`, tagged with the session it came from. Returns
+ * false when the partner already has a live decision on this target from the ordinary Swipe deck;
+ * that earlier decision stands and nothing new is delivered.
+ */
+internal fun Connection.deliverPsyncLike(
+    sessionId: UUID,
+    actorUserId: UUID,
+    targetUserId: UUID,
+    action: String,
+): Boolean =
+    prepareStatement(
+        """
+        INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, psync_session_id)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT DO NOTHING
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, UUID.randomUUID())
+        statement.setObject(2, actorUserId)
+        statement.setObject(3, targetUserId)
+        statement.setString(4, action)
+        statement.setObject(5, sessionId)
+        statement.executeUpdate() > 0
+    }
 
 internal fun Connection.participantIdsForSessions(sessionIds: List<UUID>): Map<UUID, List<UUID>> =
     prepareStatement(
@@ -92,10 +136,10 @@ internal fun Connection.deckTargetIds(sessionId: UUID): List<UUID> =
 internal fun Connection.likedTargetsByActor(
     sessionId: UUID,
     actorUserId: UUID,
-): Set<UUID> =
+): Map<UUID, String> =
     prepareStatement(
         """
-        SELECT target_user_id
+        SELECT target_user_id, action
         FROM psync_session_actions
         WHERE session_id = ? AND actor_user_id = ? AND action IN ('like', 'pineapple_like')
         """.trimIndent(),
@@ -103,7 +147,7 @@ internal fun Connection.likedTargetsByActor(
         statement.setObject(1, sessionId)
         statement.setObject(2, actorUserId)
         statement.executeQuery().use { rs ->
-            buildSet { while (rs.next()) add(rs.getObject("target_user_id", UUID::class.java)) }
+            buildMap { while (rs.next()) put(rs.getObject("target_user_id", UUID::class.java), rs.getString("action")) }
         }
     }
 

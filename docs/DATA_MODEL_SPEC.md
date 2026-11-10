@@ -405,11 +405,13 @@ Fields:
 - `note_text`, nullable
 - `created_at`
 - `reversed_at`, nullable
+- `psync_session_id`, nullable: set when the like was delivered from a completed Psync session
 
 Indexes:
 
 - `(actor_user_id, target_user_id)`
 - `target_user_id, created_at`
+- `psync_session_id`, where set
 
 ### matches
 

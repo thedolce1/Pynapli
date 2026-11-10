@@ -78,6 +78,7 @@ internal class PsyncActiveSessionActions(
                     finish.session.status == PSYNC_STATUS_COMPLETED
                 ) {
                     events.emitMatchActivity(finish.resolvedMatches)
+                    events.emitDeliveredLikes(finish.deliveredLikes)
                     events.emitDelta(sessionId, PsyncBroadcaster.SESSION_COMPLETED, session.allParticipantIds())
                     events.recordForBoth(finish.session, "psync_recap")
                     true
@@ -106,6 +107,7 @@ internal class PsyncActiveSessionActions(
     ): PsyncRecapDto {
         val completed = repository.complete(sessionId, userId, clock.instant()).completedOrThrow()
         events.emitMatchActivity(completed.resolvedMatches)
+        events.emitDeliveredLikes(completed.deliveredLikes)
         // Idempotent per (recipient, type, session) — safe on an idempotent re-complete.
         events.recordForBoth(completed.session, "psync_recap")
         return recapBuilder.buildRecap(completed.session, userId)

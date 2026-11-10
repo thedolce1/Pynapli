@@ -50,6 +50,19 @@ internal class PsyncSessionEvents(
     }
 
     /**
+     * Surface delivered Psync likes in each target's Likes You, exactly as a like from the ordinary
+     * Swipe deck would appear. The target sees an individual's like; nothing says it came from a
+     * Psync session, and passes are never delivered.
+     */
+    suspend fun emitDeliveredLikes(likes: List<PsyncDeliveredLike>) {
+        val activity = activityService ?: return
+        for (like in likes) {
+            val eventType = if (like.action == "pineapple_like") "pineapple_like" else "swipe_like"
+            activity.recordSwipeInterest(like.actorUserId, like.targetUserId, eventType)
+        }
+    }
+
+    /**
      * Replay resolved matches into the existing match pipeline post-commit. Psync never streams
      * individual swipes — only the resolved match outcome surfaces.
      */
