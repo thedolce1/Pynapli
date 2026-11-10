@@ -29,7 +29,7 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - name: Spotless check
-        run: ./gradlew spotlessCheck --no-configuration-cache
+        run: ./gradlew spotlessCheck
 
   verify:
     name: Verify (tests + assemble)
@@ -64,7 +64,6 @@ jobs:
           :androidApp:assembleDebug
           -Ppynapli.android.apiBaseUrl="$ANDROID_API_BASE_URL"
           -Ppynapli.android.websocketBaseUrl="$ANDROID_WEBSOCKET_BASE_URL"
-          --no-configuration-cache
       # The release variant is what ships, and until this job existed nothing ever built it: a
       # lint error (NewApi in the base theme) sat in main breaking `assembleRelease` while every
       # gate stayed green on `assembleDebug`. Lint + R8 run here so that fails on the PR instead.
@@ -73,7 +72,6 @@ jobs:
           ./gradlew
           :androidApp:lintRelease
           :androidApp:assembleRelease
-          --no-configuration-cache
       - name: Upload lint report
         if: always()
         uses: actions/upload-artifact@v4
@@ -132,7 +130,6 @@ jobs:
           :shared:compileKotlinWasmJs
           :composeApp:compileKotlinWasmJs
           :webApp:compileKotlinWasmJs
-          --no-configuration-cache
 
   docker-smoke:
     name: Docker Smoke (Cloud Run image)
@@ -160,7 +157,7 @@ jobs:
           }
           trap cleanup EXIT
 
-          ./gradlew :server:installDist --no-configuration-cache --console=plain
+          ./gradlew :server:installDist --console=plain
           docker build -f infra/server.Dockerfile -t pynapli-api:ci .
 
           docker compose -p pynapli-ci up -d postgres redis

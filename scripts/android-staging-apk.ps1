@@ -27,7 +27,6 @@ try {
     & $gradle :androidApp:assembleStaging `
         "-Ppynapli.android.stagingApiBaseUrl=$ApiBaseUrl" `
         "-Ppynapli.android.stagingWebsocketBaseUrl=$WebsocketBaseUrl" `
-        --no-configuration-cache `
         --console=plain
     if ($LASTEXITCODE -ne 0) {
         throw "assembleStaging failed with exit code $LASTEXITCODE."

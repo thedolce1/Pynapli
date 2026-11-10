@@ -67,7 +67,6 @@ jobs:
           :androidApp:assembleStaging
           -Ppynapli.android.stagingApiBaseUrl="${{ inputs.api_base_url }}"
           -Ppynapli.android.stagingWebsocketBaseUrl="${{ inputs.websocket_base_url }}"
-          --no-configuration-cache
           --console=plain
 
       - name: Upload staging APK artifact

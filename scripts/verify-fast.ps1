@@ -19,7 +19,7 @@ if (!$SkipDockerCompose) {
     }
 }
 
-.\gradlew.bat spotlessCheck :shared:jvmTest :server:test --no-configuration-cache --console=plain
+.\gradlew.bat spotlessCheck :shared:jvmTest :server:test --console=plain
 if ($LASTEXITCODE -ne 0) {
     throw "Fast verification failed."
 }

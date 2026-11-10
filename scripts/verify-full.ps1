@@ -32,7 +32,7 @@ if (!$SkipDockerCompose) {
 # lintRelease + assembleRelease guard the variant that actually ships (lint catches NewApi/security
 # errors, R8 catches shrinker breakage). The full gate stopped at assembleDebug until 2026-07-26,
 # which is why a release-breaking lint error could sit in main unnoticed.
-.\gradlew.bat spotlessCheck :shared:jvmTest :server:test :composeApp:desktopTest :androidApp:assembleDebug :androidApp:lintRelease :androidApp:assembleRelease --no-configuration-cache --console=plain
+.\gradlew.bat spotlessCheck :shared:jvmTest :server:test :composeApp:desktopTest :androidApp:assembleDebug :androidApp:lintRelease :androidApp:assembleRelease --console=plain
 if ($LASTEXITCODE -ne 0) {
     throw "Full verification failed."
 }

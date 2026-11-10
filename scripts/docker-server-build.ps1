@@ -13,7 +13,7 @@ try {
     if (-not $SkipGradle) {
         Write-Host "Building Ktor server distribution..."
         $gradle = if ([System.IO.Path]::DirectorySeparatorChar -eq "\") { ".\gradlew.bat" } else { "./gradlew" }
-        & $gradle :server:installDist --no-configuration-cache --console=plain
+        & $gradle :server:installDist --console=plain
         if ($LASTEXITCODE -ne 0) {
             throw "Gradle :server:installDist failed with exit code $LASTEXITCODE."
         }
