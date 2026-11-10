@@ -198,6 +198,49 @@ internal suspend fun DataSource.recordPsyncAction(
         }
     }
 
+internal suspend fun DataSource.psyncAlreadySettledTargets(
+    partnerUserIds: List<UUID>,
+    targetUserIds: List<UUID>,
+): Set<UUID> =
+    if (partnerUserIds.isEmpty() || targetUserIds.isEmpty()) {
+        emptySet()
+    } else {
+        withContext(Dispatchers.IO) {
+            connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        SELECT DISTINCT t.id
+                        FROM unnest(?::uuid[]) AS t(id)
+                        CROSS JOIN unnest(?::uuid[]) AS p(id)
+                        WHERE EXISTS (
+                                  SELECT 1 FROM swipe_actions sa
+                                  WHERE sa.actor_user_id = p.id
+                                    AND sa.target_user_id = t.id
+                                    AND sa.rewound_at IS NULL
+                              )
+                           OR EXISTS (
+                                  SELECT 1 FROM matches m
+                                  WHERE (m.user_a = p.id AND m.user_b = t.id)
+                                     OR (m.user_a = t.id AND m.user_b = p.id)
+                              )
+                           OR EXISTS (
+                                  SELECT 1 FROM safety_reports sr
+                                  WHERE sr.reporter_user_id = p.id
+                                    AND sr.reported_user_id = t.id
+                              )
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setArray(1, connection.createArrayOf("uuid", targetUserIds.toTypedArray()))
+                        statement.setArray(2, connection.createArrayOf("uuid", partnerUserIds.toTypedArray()))
+                        statement.executeQuery().use { rs ->
+                            buildSet { while (rs.next()) add(rs.getObject(1, UUID::class.java)) }
+                        }
+                    }
+            }
+        }
+    }
+
 /**
  * Claims spent-but-undelivered Pineapple Likes in ended sessions. "Delivered" means completion
  * wrote this actor's like on this target into `swipe_actions` for the session; from then on the

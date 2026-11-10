@@ -806,10 +806,11 @@ class PsyncSessionServiceIntegrationTest :
                 val (initiator, partner) = seedLinkedPair()
                 val target = UUID.randomUUID()
                 dataSource.insertUserWithProfile(target, "Target")
-                dataSource.insertSwipeLike(initiator, target, action = "pass") // passed in Swipe earlier
 
                 val svc = deckServiceWithActivity(listOf(target))
                 val sessionId = svc.activeSessionOver(initiator, partner, target)
+                // Passed in the ordinary Swipe deck while the session was already running.
+                dataSource.insertSwipeLike(initiator, target, action = "pass")
                 svc.actOnSingle(sessionId, initiator, "like")
                 svc.actOnSingle(sessionId, partner, "pass")
 
@@ -832,6 +833,40 @@ class PsyncSessionServiceIntegrationTest :
                 svc.complete(sessionId, initiator)
                 assertEquals(emptyList(), dataSource.psyncSwipeActions(sessionId, initiator, target))
                 assertEquals(0, dataSource.countActivityEvents(target, "swipe_like"))
+            }
+        }
+
+        // ---- The deck respects both partners' history ----------------------------------
+
+        "the deck leaves out anyone either partner already swiped on, matched with or reported" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val fresh = UUID.randomUUID()
+                val swipedByPartner = UUID.randomUUID()
+                val matchedWithPartner = UUID.randomUUID()
+                val reportedByPartner = UUID.randomUUID()
+                val rewoundByPartner = UUID.randomUUID()
+                listOf(fresh, swipedByPartner, matchedWithPartner, reportedByPartner, rewoundByPartner)
+                    .forEach { dataSource.insertUserWithProfile(it, "Cand") }
+                dataSource.insertSwipeLike(partner, swipedByPartner, action = "pass")
+                dataSource.insertMatch(partner, matchedWithPartner)
+                dataSource.insertReport(partner, reportedByPartner)
+                dataSource.insertSwipeLike(partner, rewoundByPartner, rewound = true)
+
+                val svc = deckService(listOf(swipedByPartner, matchedWithPartner, reportedByPartner, rewoundByPartner, fresh))
+                val sessionId = svc.readyFor(initiator, partner)
+                svc.start(sessionId, initiator)
+                svc.start(sessionId, partner)
+
+                // A rewound decision is no decision, so that person can still be dealt.
+                assertEquals(
+                    setOf(rewoundByPartner.toString(), fresh.toString()),
+                    svc
+                        .getDeck(sessionId, initiator)
+                        .cards
+                        .map { it.card.userId }
+                        .toSet(),
+                )
             }
         }
 
@@ -1424,6 +1459,38 @@ private class TestPineappleInventory(
                 }
             }
         }
+}
+
+private fun DataSource.insertMatch(
+    userOne: UUID,
+    userTwo: UUID,
+) {
+    val (userA, userB) = if (userOne.toString() < userTwo.toString()) userOne to userTwo else userTwo to userOne
+    connection.use { connection ->
+        connection.prepareStatement("INSERT INTO matches (id, user_a, user_b) VALUES (?, ?, ?)").use { statement ->
+            statement.setObject(1, UUID.randomUUID())
+            statement.setObject(2, userA)
+            statement.setObject(3, userB)
+            statement.executeUpdate()
+        }
+    }
+}
+
+private fun DataSource.insertReport(
+    reporterUserId: UUID,
+    reportedUserId: UUID,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                "INSERT INTO safety_reports (id, reporter_user_id, reported_user_id, target_type, category) VALUES (?, ?, ?, 'profile', 'harassment_or_threats')",
+            ).use { statement ->
+                statement.setObject(1, UUID.randomUUID())
+                statement.setObject(2, reporterUserId)
+                statement.setObject(3, reportedUserId)
+                statement.executeUpdate()
+            }
+    }
 }
 
 /** The inventory row carried by the swipe like this session delivered, or null. */

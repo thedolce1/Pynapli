@@ -109,6 +109,16 @@ interface PsyncSessionRepository {
         now: Instant,
     ): MutateOutcome
 
+    /**
+     * Of [targetUserIds], those either partner has already settled with: a live swipe decision
+     * (like, pass or Pineapple Like), an existing match, or a safety report. They never belong in
+     * a shared deck. The ranker only knows the initiator's history; this covers both partners.
+     */
+    suspend fun alreadySettledTargets(
+        partnerUserIds: List<UUID>,
+        targetUserIds: List<UUID>,
+    ): Set<UUID> = emptySet()
+
     /** The shared ordered deck cards for a session (position ascending). */
     suspend fun listDeckCards(sessionId: UUID): List<PsyncSessionCard>
 
