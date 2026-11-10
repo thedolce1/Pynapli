@@ -19,6 +19,8 @@ internal class PsyncLifecycleActions(
     private val subscriptionService: SubscriptionService?,
     private val events: PsyncSessionEvents,
     private val pineappleRefunds: PsyncPineappleRefunds,
+    // Resolves started sessions past their deadline; returns how many.
+    private val resolveOverdueStarted: suspend () -> Int,
     private val clock: Clock,
     private val json: Json,
 ) {
@@ -154,12 +156,16 @@ internal class PsyncLifecycleActions(
         return CurrentPsyncSessionDto(session = session.toDto())
     }
 
-    /** Sweep non-terminal sessions past their expiry to 'expired'. Returns rows swept. */
+    /**
+     * Close out every session past its deadline: a started one is resolved (decisions made so far
+     * count), one that never started becomes 'expired'. Returns how many sessions were closed.
+     */
     suspend fun expireStale(): Int {
+        val resolved = resolveOverdueStarted()
         val expired = repository.expireStale(clock.instant())
         events.recordExpired(expired)
         // Also covers sessions cancelled elsewhere (a partner unlinking), which have no hook here.
         pineappleRefunds.sweep()
-        return expired.size
+        return resolved + expired.size
     }
 }

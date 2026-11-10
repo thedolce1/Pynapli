@@ -836,6 +836,94 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        // ---- Ending a started session keeps what was decided ---------------------------
+
+        "leaving a started session resolves it: likes so far are delivered, unseen cards are not passes" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val seen = UUID.randomUUID()
+                val unseen = UUID.randomUUID()
+                dataSource.insertUserWithProfile(seen, "Seen")
+                dataSource.insertUserWithProfile(unseen, "Unseen")
+                dataSource.insertSwipeLike(seen, initiator) // already likes the initiator
+
+                val svc = deckServiceWithActivity(listOf(seen, unseen))
+                val sessionId = svc.readyFor(initiator, partner)
+                svc.start(sessionId, initiator)
+                svc.start(sessionId, partner)
+                svc.actOn(sessionId, initiator, seen, "like")
+
+                val left = svc.leave(sessionId, partner)
+                assertEquals("completed", left.status)
+                // The initiator's reciprocated like became their private solo match.
+                assertEquals(1, dataSource.countMatchesFor(initiator))
+                assertEquals(1, svc.getRecap(sessionId, initiator).soloMatchCount)
+                assertEquals(1, svc.getRecap(sessionId, initiator).profilesReviewed)
+                // Nobody decided on the unseen card, so nothing was written for it.
+                assertEquals(emptyList(), dataSource.psyncSwipeActions(sessionId, initiator, unseen))
+                assertEquals(emptyList(), dataSource.psyncSwipeActions(sessionId, partner, unseen))
+            }
+        }
+
+        "a started session past its deadline is resolved, not expired, and refuses more swipes" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val first = UUID.randomUUID()
+                val second = UUID.randomUUID()
+                dataSource.insertUserWithProfile(first, "First")
+                dataSource.insertUserWithProfile(second, "Second")
+
+                val start = Instant.parse("2026-11-10T12:00:00Z")
+                val svc = deckServiceWithActivity(listOf(first, second), clock = Clock.fixed(start, ZoneOffset.UTC))
+                val sessionId = svc.readyFor(initiator, partner)
+                svc.start(sessionId, initiator)
+                svc.start(sessionId, partner)
+                svc.actOn(sessionId, initiator, first, "like")
+
+                val later = deckServiceWithActivity(listOf(first, second), clock = Clock.fixed(start.plus(Duration.ofHours(25)), ZoneOffset.UTC))
+                val token =
+                    svc
+                        .getDeck(sessionId, partner)
+                        .cards
+                        .first { it.card.userId == second.toString() }
+                        .cardToken
+                val refused =
+                    assertFailsWith<PsyncException> {
+                        later.submitAction(sessionId, partner, SubmitPsyncActionRequestDto(token, "like"))
+                    }
+                assertEquals("PSYNC_INVALID_STATE", refused.code)
+
+                assertEquals("completed", dataSource.statusOf(sessionId))
+                assertEquals(listOf("like"), dataSource.psyncSwipeActions(sessionId, initiator, first))
+                assertEquals(1, dataSource.countActivityEvents(first, "swipe_like"))
+                assertEquals(0, dataSource.countActivityEvents(initiator, "psync_expired"))
+                // The couple is free to start a new session.
+                assertNull(later.current(initiator).session)
+            }
+        }
+
+        "unlinking during a started session resolves it on the next sweep" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+
+                com.pynapli.server.profilelink
+                    .JdbcProfileLinkRepository(dataSource)
+                    .unlinkCurrent(initiator)
+                // No further swiping once the link has ended.
+                assertFailsWith<PsyncException> { svc.actOnSingle(sessionId, partner, "like") }
+
+                assertEquals("completed", dataSource.statusOf(sessionId))
+                assertEquals(listOf("like"), dataSource.psyncSwipeActions(sessionId, initiator, target))
+                assertEquals(emptyList(), dataSource.psyncSwipeActions(sessionId, partner, target))
+            }
+        }
+
         // ---- The deck respects both partners' history ----------------------------------
 
         "the deck leaves out anyone either partner already swiped on, matched with or reported" {
@@ -926,7 +1014,7 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
-        "a Pineapple Like is refunded once when the session is left before completing" {
+        "a Pineapple Like sent before a partner leaves is delivered, not refunded" {
             runBlocking {
                 val (initiator, partner) = seedLinkedPair()
                 val target = UUID.randomUUID()
@@ -936,11 +1024,31 @@ class PsyncSessionServiceIntegrationTest :
                 val svc = deckService(listOf(target), pineappleInventory = inventory)
                 val sessionId = svc.activeSessionOver(initiator, partner, target)
                 svc.actOnSingle(sessionId, initiator, "pineapple_like")
+
+                svc.leave(sessionId, partner)
+                assertEquals(listOf("pineapple_like"), dataSource.psyncSwipeActions(sessionId, initiator, target))
                 assertEquals(0, inventory.remaining())
+                // Later sweeps must not refund a delivered like.
+                svc.expireStale()
+                assertEquals(0, inventory.remaining())
+            }
+        }
+
+        "an undelivered Pineapple Like is refunded only once across repeated sweeps" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val inventory = TestPineappleInventory(dataSource, initiator, quantity = 1)
+
+                val svc = deckService(listOf(target), pineappleInventory = inventory)
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "pineapple_like")
+                dataSource.insertBlock(initiator, target)
 
                 svc.leave(sessionId, partner)
                 assertEquals(1, inventory.remaining())
-                // Later sweeps must not refund it again.
+                svc.expireStale()
                 svc.expireStale()
                 assertEquals(1, inventory.remaining())
             }

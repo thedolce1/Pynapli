@@ -279,6 +279,34 @@ internal suspend fun DataSource.findCurrentPsyncSessionForUser(
         }
     }
 
+internal suspend fun DataSource.listOverdueStartedPsyncSessions(now: Instant): List<PsyncOverdueSession> =
+    withContext(Dispatchers.IO) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT id, initiator_user_id FROM psync_sessions
+                    WHERE status IN ('active', 'paused')
+                      AND expires_at <= ?
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setTimestamp(1, Timestamp.from(now))
+                    statement.executeQuery().use { rs ->
+                        buildList {
+                            while (rs.next()) {
+                                add(
+                                    PsyncOverdueSession(
+                                        sessionId = rs.getObject("id", UUID::class.java),
+                                        initiatorUserId = rs.getObject("initiator_user_id", UUID::class.java),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+        }
+    }
+
 internal suspend fun DataSource.expireStalePsyncSessions(now: Instant): List<PsyncExpiredSession> =
     withContext(Dispatchers.IO) {
         connection.use { connection ->

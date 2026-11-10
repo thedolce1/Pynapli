@@ -113,6 +113,12 @@ data class PsyncDeliveredLike(
     val action: String,
 )
 
+/** A started session past its deadline, with the initiator to resolve it on behalf of. */
+data class PsyncOverdueSession(
+    val sessionId: UUID,
+    val initiatorUserId: UUID,
+)
+
 /** What resolving a completed deck produced: canonical matches plus likes still awaiting an answer. */
 data class PsyncResolution(
     val matches: List<PsyncResolvedMatch>,

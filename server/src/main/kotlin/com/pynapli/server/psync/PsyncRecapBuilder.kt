@@ -30,7 +30,9 @@ internal class PsyncRecapBuilder(
         return PsyncRecapDto(
             sessionId = session.id.toString(),
             status = session.status,
-            profilesReviewed = repository.countDeckCards(session.id),
+            // What the viewer actually got through, not the deck size: a session can end early
+            // (a partner left, the deadline passed) with cards nobody reached.
+            profilesReviewed = repository.countActionsForActor(session.id, viewerUserId),
             bothLikedCount = repository.countBothLiked(session.id),
             togetherMatchCount = together.size,
             soloMatchCount = mySolo,

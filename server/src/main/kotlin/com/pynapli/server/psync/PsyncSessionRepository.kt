@@ -81,6 +81,13 @@ interface PsyncSessionRepository {
     /** Sweep stale non-terminal sessions to 'expired'. Returns the swept sessions + participants. */
     suspend fun expireStale(now: Instant): List<PsyncExpiredSession>
 
+    /**
+     * Started (active or paused) sessions whose deadline has passed, each with a participant to
+     * resolve it as. A partner link ending moves a started session's deadline to now, so those
+     * show up here too.
+     */
+    suspend fun listOverdueStartedSessions(now: Instant): List<PsyncOverdueSession> = emptyList()
+
     // ---- PS-2: shared deck + private swipes --------------------------------------------
 
     /**

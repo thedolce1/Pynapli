@@ -50,17 +50,6 @@ class PsyncSessionService(
             deckTokenCodec = deckTokenCodec,
             clock = clock,
         )
-    private val lifecycle =
-        PsyncLifecycleActions(
-            repository = repository,
-            activityService = activityService,
-            riskPolicyService = riskPolicyService,
-            subscriptionService = subscriptionService,
-            events = events,
-            pineappleRefunds = pineappleRefunds,
-            clock = clock,
-            json = json,
-        )
     private val activeSessions =
         PsyncActiveSessionActions(
             repository = repository,
@@ -72,6 +61,18 @@ class PsyncSessionService(
             rateLimitService = rateLimitService,
             deckTokenCodec = deckTokenCodec,
             clock = clock,
+        )
+    private val lifecycle =
+        PsyncLifecycleActions(
+            repository = repository,
+            activityService = activityService,
+            riskPolicyService = riskPolicyService,
+            subscriptionService = subscriptionService,
+            events = events,
+            pineappleRefunds = pineappleRefunds,
+            resolveOverdueStarted = { activeSessions.resolveOverdue() },
+            clock = clock,
+            json = json,
         )
 
     suspend fun create(
@@ -98,7 +99,14 @@ class PsyncSessionService(
     suspend fun leave(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = lifecycle.leave(sessionId, userId)
+    ): PsyncSessionDto {
+        // Leaving before the deck exists is a plain cancel. Leaving a started session ends it for
+        // both partners but keeps what each already decided (PSYNC_SPEC "Either partner ends the
+        // session" -> complete).
+        val session = repository.findById(sessionId, withDisplayNames = false)
+        val started = session != null && session.status in PSYNC_STARTED_STATUSES && session.participants.any { it.userId == userId }
+        return if (started) activeSessions.endStarted(sessionId, userId) else lifecycle.leave(sessionId, userId)
+    }
 
     suspend fun start(
         sessionId: UUID,

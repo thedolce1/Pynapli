@@ -34,8 +34,12 @@ internal val PSYNC_TERMINAL_STATUSES = setOf("completed", "expired", "cancelled"
 // Filters can be re-suggested while negotiating or once ready (re-opens negotiation).
 internal val PSYNC_SUGGESTABLE_STATUSES = setOf("invited", "configuring", "ready")
 
-// Sweep these to 'expired' when past expires_at.
-internal val PSYNC_EXPIRABLE_STATUSES = setOf("invited", "configuring", "ready", "paused")
+// Sweep these to 'expired' when past expires_at: sessions that never started, so nothing was swiped.
+internal val PSYNC_EXPIRABLE_STATUSES = setOf("invited", "configuring", "ready")
+
+// A started session has a deck and possibly decisions. Past its deadline, on leave, or when the
+// partner link ends, it is resolved like a finished one instead of being discarded.
+internal val PSYNC_STARTED_STATUSES = setOf(PSYNC_STATUS_ACTIVE, PSYNC_STATUS_PAUSED)
 
 internal val PSYNC_NON_TERMINAL_STATUS_LIST = PSYNC_NON_TERMINAL_STATUSES.joinToString(", ") { "'$it'" }
 internal val PSYNC_EXPIRABLE_STATUS_LIST = PSYNC_EXPIRABLE_STATUSES.joinToString(", ") { "'$it'" }

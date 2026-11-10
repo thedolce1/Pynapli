@@ -60,6 +60,8 @@ class JdbcPsyncSessionRepository(
 
     override suspend fun expireStale(now: Instant): List<PsyncExpiredSession> = dataSource.expireStalePsyncSessions(now)
 
+    override suspend fun listOverdueStartedSessions(now: Instant): List<PsyncOverdueSession> = dataSource.listOverdueStartedPsyncSessions(now)
+
     override suspend fun start(
         sessionId: UUID,
         userId: UUID,
