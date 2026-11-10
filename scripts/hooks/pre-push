@@ -2,8 +2,8 @@
 #
 # Pynapli pre-push gate.
 #
-# CI (GitHub Actions) is the intended gate, but while Actions billing is suspended the local
-# verify scripts are the only thing standing between a regression and main — and they only run
+# CI (GitHub Actions) runs on main and is the Linux cross-check; the local
+# verify scripts are what stands between a regression and main (no branch protection) — and they only run
 # if someone remembers. This hook removes the remembering.
 #
 # It picks the same gate CLAUDE.md prescribes by hand, based on what the push actually touches:
