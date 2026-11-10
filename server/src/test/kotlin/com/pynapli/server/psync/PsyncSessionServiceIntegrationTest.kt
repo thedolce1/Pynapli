@@ -574,6 +574,45 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "a target's Pineapple Like counts as reciprocation" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.insertSwipeLike(target, initiator, action = "pineapple_like")
+
+                val svc = deckService(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "pass")
+
+                val recap = svc.complete(sessionId, initiator)
+                assertEquals(1, recap.soloMatchCount)
+                assertEquals(1, dataSource.countMatchesFor(initiator))
+            }
+        }
+
+        "a target's rewound like does not count as reciprocation" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.setTogetherEnabled(target)
+                dataSource.insertSwipeLike(target, initiator, rewound = true)
+
+                val svc = deckService(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "like")
+
+                val recap = svc.complete(sessionId, initiator)
+                assertEquals(0, recap.togetherMatchCount)
+                assertEquals(0, recap.soloMatchCount)
+                assertEquals(0, dataSource.countMatchesFor(initiator))
+                assertEquals(0, dataSource.countMatchesFor(partner))
+            }
+        }
+
         "both like but the target is not together-open -> a solo match per reciprocated partner" {
             runBlocking {
                 val (initiator, partner) = seedLinkedPair()
@@ -1114,15 +1153,22 @@ private fun DataSource.setSharePsyncSolo(userId: UUID) {
 private fun DataSource.insertSwipeLike(
     actorUserId: UUID,
     targetUserId: UUID,
+    action: String = "like",
+    rewound: Boolean = false,
 ) {
     connection.use { connection ->
         connection
             .prepareStatement(
-                "INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action) VALUES (?, ?, ?, 'like')",
+                """
+                INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, rewound_at)
+                VALUES (?, ?, ?, ?, CASE WHEN ? THEN now() END)
+                """.trimIndent(),
             ).use { statement ->
                 statement.setObject(1, UUID.randomUUID())
                 statement.setObject(2, actorUserId)
                 statement.setObject(3, targetUserId)
+                statement.setString(4, action)
+                statement.setBoolean(5, rewound)
                 statement.executeUpdate()
             }
     }

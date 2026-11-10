@@ -1,6 +1,6 @@
 # Pynapli Implementation Status
 
-Updated: 2026-11-09
+Updated: 2026-11-10
 
 What is built and what is still open, per area, against the specs. The specs stay the source of
 truth; this page is the current status snapshot only.
@@ -37,10 +37,10 @@ remain), **Partial** (real slices shipped; material gaps), **Not started**.
 | Backend architecture | Mostly done | Sensitive-log and analytics redaction review; production bucket/CDN validation; formal cloud environments. | [BACKEND_ARCHITECTURE_SPEC](BACKEND_ARCHITECTURE_SPEC.md) |
 | Mobile architecture | Partial | iOS platform integrations; secure token storage review; iOS process-death queue QA; broader device visual QA. State holders live in `:composeApp` by decision (2026-11-09). | [MOBILE_APP_ARCHITECTURE_SPEC](MOBILE_APP_ARCHITECTURE_SPEC.md) |
 | Testing | Partial | HTTP-layer cases for expired entitlement, revoked grant, unlinked, rate-limited and stale-idempotency paths (covered at service/repository level); iOS tests; a production-hardware, larger-metro load run. | [TESTING_STRATEGY_SPEC](TESTING_STRATEGY_SPEC.md) |
-| CI/CD | Partial | GitHub Actions billing is suspended, so slices are gated locally by the pre-push hook. Remaining: branch protection and required checks (founder); staging workflows against live secrets; detekt once a Kotlin-2.3-compatible stable release exists. | [DEVOPS_INFRA_SETUP_SPEC](DEVOPS_INFRA_SETUP_SPEC.md) |
+| CI/CD | Partial | GitHub Actions runs again (2026-11); the pre-push hook still gates locally. Remaining: branch protection and required checks (founder); staging workflows against live secrets; detekt once a Kotlin-2.3-compatible stable release exists. | [DEVOPS_INFRA_SETUP_SPEC](DEVOPS_INFRA_SETUP_SPEC.md) |
 | DevOps and infra | Partial | Staging Cloud SQL/PostGIS, Memorystore, GCS, Secret Manager values, App Distribution groups, WIF secrets, custom domain/DNS, cost alerts, live App Check enforcement, Play/App Store production setup (all founder provisioning). | [DEVOPS_INFRA_SETUP_SPEC](DEVOPS_INFRA_SETUP_SPEC.md) |
 | Analytics | Partial | Client behavioural analytics events (funnel KPIs and crash reporting are wired). Never send lifestyle-sensitive payloads. | [ANALYTICS_AND_METRICS_SPEC](ANALYTICS_AND_METRICS_SPEC.md) |
-| Psync | Mostly done | Two-device emulator QA with a linked partner; optional visual polish. | [PSYNC_SPEC](PSYNC_SPEC.md) |
+| Psync | Partial | Server state machine is complete; the product loop is not. Psync likes are never delivered to the target (matches need a pre-existing like); Pineapple Likes aren't charged; the deck applies only the initiator's hard gates and implicit location (no travel context); live sessions never idle-expire. Client is still the PS-5c skeleton: placeholder cards, no setup/review or suggest-changes UI, no pause/leave/report in the deck, one entry point. No two-device QA. | [PSYNC_SPEC](PSYNC_SPEC.md) |
 | Playing Tonight | Mostly done | Physical-device battery and notification-delivery pass (delivery also needs FCM `google-services.json`). | [PLAYING_TONIGHT_SPEC](PLAYING_TONIGHT_SPEC.md) |
 | Web PWA | Partial | Tracked phase by phase in [WEB_PWA_GAMEPLAN](WEB_PWA_GAMEPLAN.md) (W0–W6). | [WEB_PWA_GAMEPLAN](WEB_PWA_GAMEPLAN.md) |
 | iOS | Not started | Xcode project, StoreKit 2, APNs, UI validation and tests; see [IOS_BRINGUP_PLAN](IOS_BRINGUP_PLAN.md). Needs a Mac. | [IOS_BRINGUP_PLAN](IOS_BRINGUP_PLAN.md) |
@@ -55,8 +55,8 @@ remain), **Partial** (real slices shipped; material gaps), **Not started**.
 3. **iOS is not started**, so StoreKit, APNs and iOS process-death behaviour are untested.
 4. **Trust and safety providers are stubs or seams**: age verification, CSAM hash matching and App
    Check enforcement all need live providers before a public launch.
-5. **Branch protection is off and CI can't run** (billing), so the local pre-push hook is the only
-   gate. Keep `core.hooksPath` set on every clone.
+5. **Branch protection is off**, so nothing forces CI to pass before a merge; the local pre-push
+   hook is the only enforced gate. Keep `core.hooksPath` set on every clone.
 
 ## Ground rules
 
