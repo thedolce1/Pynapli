@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.shared.network.dto.MatchDto
 
 @Composable
@@ -90,11 +91,13 @@ internal fun MatchOverlay(
                     ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                     ),
+                modifier = Modifier.handCursor(),
             ) {
                 Text("Message")
             }
             TextButton(
                 onClick = onDismiss,
+                modifier = Modifier.handCursor(),
             ) {
                 Text("Keep swiping")
             }

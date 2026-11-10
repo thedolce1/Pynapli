@@ -24,6 +24,7 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliScreenHeader
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.Style
@@ -67,7 +68,7 @@ internal fun SwipeHeader(
                     onClick = openPsync,
                     colors = ButtonDefaults.textButtonColors(contentColor = PynapliColors.TextSecondary),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.testTag(SwipeHeaderTags.OPEN_PSYNC),
+                    modifier = Modifier.testTag(SwipeHeaderTags.OPEN_PSYNC).handCursor(),
                 ) {
                     Text(text = "Psync", maxLines = 1, style = MaterialTheme.typography.labelLarge)
                 }
@@ -80,7 +81,7 @@ internal fun SwipeHeader(
                             if (travelCityName != null) PynapliColors.Accent else PynapliColors.TextSecondary,
                     ),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                modifier = Modifier.testTag(TravelModeTags.OPEN_SHEET),
+                modifier = Modifier.testTag(TravelModeTags.OPEN_SHEET).handCursor(),
             ) {
                 Text(text = travelCityName ?: "Travel", maxLines = 1, style = MaterialTheme.typography.labelLarge)
             }
@@ -92,7 +93,7 @@ internal fun SwipeHeader(
                             if (activeFilterCount > 0) PynapliColors.Accent else PynapliColors.TextSecondary,
                     ),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                modifier = Modifier.testTag(SwipeFilterTags.OPEN_SHEET),
+                modifier = Modifier.testTag(SwipeFilterTags.OPEN_SHEET).handCursor(),
             ) {
                 Text(
                     text = if (activeFilterCount > 0) "Filters ($activeFilterCount)" else "Filters",
@@ -172,7 +173,7 @@ internal fun SwipePaywallRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onOpenStore) {
+        TextButton(onClick = onOpenStore, modifier = Modifier.handCursor()) {
             Text(text = "Social", maxLines = 1)
         }
     }

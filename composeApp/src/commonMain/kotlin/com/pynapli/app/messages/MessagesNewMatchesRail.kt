@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.conversation.titleFor
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPlaceholderGradients
+import com.pynapli.app.design.handCursor
 import com.pynapli.shared.network.dto.ConversationDto
 
 internal object NewMatchesRailTags {
@@ -104,6 +105,7 @@ private fun NewMatchAvatar(
         modifier =
             modifier
                 .width(68.dp)
+                .handCursor()
                 .clickable(onClickLabel = "Open conversation", role = Role.Button, onClick = onClick)
                 // Read each match as one item (name + online); the avatar glyph is decorative.
                 .semantics(mergeDescendants = true) {},

@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.design.PynapliConfirmDialog
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.app.messages.MessagesUiState
 import com.pynapli.app.profilelink.ProfileLinksUiState
@@ -319,6 +320,7 @@ private fun DeleteAccountDialog(
             Button(
                 onClick = onDelete,
                 enabled = !isDeleting && confirmation.trim() == "DELETE",
+                modifier = Modifier.handCursor(enabled = !isDeleting && confirmation.trim() == "DELETE"),
             ) {
                 Text(if (isDeleting) "Deleting" else "Delete")
             }
@@ -327,6 +329,7 @@ private fun DeleteAccountDialog(
             TextButton(
                 onClick = onDismiss,
                 enabled = !isDeleting,
+                modifier = Modifier.handCursor(enabled = !isDeleting),
             ) {
                 Text("Cancel")
             }
@@ -364,17 +367,18 @@ private fun AgeVerificationDialog(
         confirmButton = {
             when {
                 alreadyVerified || pending -> {
-                    TextButton(onClick = onDismiss) { Text("Close") }
+                    TextButton(onClick = onDismiss, modifier = Modifier.handCursor()) { Text("Close") }
                 }
 
                 !hasBirthdate -> {
-                    Button(onClick = onEditProfile) { Text("Edit profile") }
+                    Button(onClick = onEditProfile, modifier = Modifier.handCursor()) { Text("Edit profile") }
                 }
 
                 else -> {
                     Button(
                         onClick = onStart,
                         enabled = !state.isAgeVerificationMutating,
+                        modifier = Modifier.handCursor(enabled = !state.isAgeVerificationMutating),
                     ) {
                         Text(if (state.isAgeVerificationMutating) "Starting" else "Confirm & start")
                     }
@@ -383,7 +387,7 @@ private fun AgeVerificationDialog(
         },
         dismissButton = {
             if (!alreadyVerified && !pending) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss, modifier = Modifier.handCursor()) { Text("Cancel") }
             }
         },
     )

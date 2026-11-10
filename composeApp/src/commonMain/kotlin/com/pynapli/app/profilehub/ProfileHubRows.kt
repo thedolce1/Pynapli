@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.ChevronRight
 
@@ -45,7 +46,8 @@ internal fun ProfileHubMessageBand(
                     width = 1.dp,
                     color = if (isError) MaterialTheme.colorScheme.error else PynapliColors.SuccessBorder,
                     shape = PynapliShape.CardShape,
-                ).clickable(onClick = onDismiss)
+                ).handCursor()
+                .clickable(onClick = onDismiss)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -96,7 +98,7 @@ internal fun ProfileHubRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
+                .then(if (onClick == null) Modifier else Modifier.handCursor().clickable(onClick = onClick))
                 .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -158,6 +160,7 @@ internal fun PrivacyToggleRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .handCursor()
                 .clickable { onCheckedChange(!checked) }
                 .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -186,6 +189,7 @@ internal fun PrivacyToggleRow(
         Switch(
             checked = checked,
             onCheckedChange = null,
+            modifier = Modifier.handCursor(),
         )
     }
 }

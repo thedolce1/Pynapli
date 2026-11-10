@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -201,10 +202,10 @@ internal fun PhotoCropScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onCancel, enabled = !processing) {
+            TextButton(onClick = onCancel, enabled = !processing, modifier = Modifier.handCursor(enabled = !processing)) {
                 Text(text = "Cancel")
             }
-            Button(onClick = { processing = true }, enabled = !processing) {
+            Button(onClick = { processing = true }, enabled = !processing, modifier = Modifier.handCursor(enabled = !processing)) {
                 if (processing) {
                     CircularProgressIndicator(
                         color = MaterialTheme.colorScheme.onPrimary,

@@ -78,6 +78,19 @@ Breakpoints follow Material 3 window size classes, implemented as a small `Pynap
   full-screen takeover); Swipe = centered deck stage with keyboard hints; Activity = wider FOMO
   grid. Hover states on interactive tiles; Enter-to-send; Esc-closes-pane.
 
+Pointer, keyboard and text size on every width (2026-11-10, for members on a computer or tablet,
+who skew older):
+
+- **Hand cursor** on everything clickable (`Modifier.handCursor`, design/PynapliPointer.kt). Compose
+  sets none by default, so every control showed the arrow. The token guard fails a clickable
+  modifier or Material control without one; scrims (`indication = null`) are exempt.
+- **Esc closes** Playing Tonight, Psync, the profile hub and albums (`Modifier.closeOnEscape`), but
+  only while the surface itself has focus, so Esc inside a text field never drops an edit.
+- **Browser font size is honored**: the setting (Chrome: Appearance > Font size) becomes Compose's
+  fontScale, 1.0 to 1.5x (`pynapliTextScaleForBrowserFont`). Text grows and layout units don't. The
+  Grid's wide-pane tile minimum grows with it, so names stay whole (8 → 5 columns at 1.5x in a
+  1440px window), and pill labels never wrap.
+
 Design language is unchanged: same tokens, dark-first, dense, restrained gold. Desktop layouts are
 *compositions* of existing surfaces, not restyles.
 

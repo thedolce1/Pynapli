@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.grid.DiscoveryStyle
 import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleTag
@@ -104,6 +105,7 @@ internal fun AgeSection(
                 }
             },
             valueRange = SwipeFilters.MIN_FILTER_AGE.toFloat()..SwipeFilters.MAX_FILTER_AGE.toFloat(),
+            modifier = Modifier.handCursor(),
         )
     }
 }
@@ -124,6 +126,7 @@ internal fun DistanceSection(
             value = radiusMeters.toFloat(),
             onValueChange = { value -> onChange(value.toInt()) },
             valueRange = SwipeFilters.MIN_RADIUS_METERS.toFloat()..SwipeFilters.MAX_RADIUS_METERS.toFloat(),
+            modifier = Modifier.handCursor(),
         )
     }
 }

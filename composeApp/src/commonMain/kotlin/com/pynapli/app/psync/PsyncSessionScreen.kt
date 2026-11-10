@@ -39,6 +39,7 @@ import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.SwipeCardTokens
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
 import kotlinx.coroutines.launch
@@ -383,4 +384,4 @@ private fun CircleAction(
 private fun Modifier.clickableTag(
     tag: String,
     onClick: () -> Unit,
-): Modifier = this.testTag(tag).clickable(onClick = onClick)
+): Modifier = this.testTag(tag).handCursor().clickable(onClick = onClick)

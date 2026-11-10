@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.ChatBubble
 import com.pynapli.app.design.icons.filled.Close
@@ -51,7 +52,7 @@ internal fun ProfileActions(
         Button(
             onClick = onMessage,
             enabled = allowGridMessages,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().handCursor(enabled = allowGridMessages),
         ) {
             Icon(
                 imageVector = Icons.Filled.ChatBubble,
@@ -71,7 +72,7 @@ internal fun ProfileActions(
             OutlinedButton(
                 onClick = onSpark,
                 enabled = allowFlirts && !isSendingFlirt,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).handCursor(enabled = allowFlirts && !isSendingFlirt),
             ) {
                 Icon(
                     imageVector = Icons.Filled.FavoriteBorder,
@@ -92,7 +93,15 @@ internal fun ProfileActions(
                         "pending" -> false
                         else -> allowAlbumRequests && !isRequestingAlbum
                     },
-                modifier = Modifier.weight(1f),
+                modifier =
+                    Modifier.weight(1f).handCursor(
+                        enabled =
+                            when (privateAlbumAccessStatus) {
+                                "granted" -> !isLoadingPrivateAlbum
+                                "pending" -> false
+                                else -> allowAlbumRequests && !isRequestingAlbum
+                            },
+                    ),
             ) {
                 Icon(
                     imageVector = Icons.Filled.PhotoLibrary,
@@ -117,7 +126,7 @@ internal fun ProfileActions(
             OutlinedButton(
                 onClick = onInviteProfileLink,
                 enabled = action.enabled && !action.isSubmitting,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().handCursor(enabled = action.enabled && !action.isSubmitting),
             ) {
                 if (action.isSubmitting) {
                     CircularProgressIndicator(
@@ -182,7 +191,7 @@ internal fun SwipeProfileActions(
         OutlinedButton(
             onClick = onPass,
             enabled = !isSubmitting,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).handCursor(enabled = !isSubmitting),
         ) {
             Icon(
                 imageVector = Icons.Filled.Close,
@@ -198,7 +207,7 @@ internal fun SwipeProfileActions(
         Button(
             onClick = onLike,
             enabled = !isSubmitting,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).handCursor(enabled = !isSubmitting),
         ) {
             Icon(
                 imageVector = Icons.Filled.Favorite,
@@ -223,7 +232,8 @@ internal fun MatchedSwipeProfileActions(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(bottom = 18.dp),
+                .padding(bottom = 18.dp)
+                .handCursor(),
     ) {
         Icon(
             imageVector = Icons.Filled.ChatBubble,

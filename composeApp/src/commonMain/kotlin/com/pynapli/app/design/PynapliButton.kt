@@ -44,6 +44,7 @@ fun PynapliButton(
                 .clip(PynapliShape.PillShape)
                 .background(if (primary) PynapliColors.Accent else PynapliColors.Surface)
                 .border(1.dp, if (primary) PynapliColors.Accent else PynapliColors.Border, PynapliShape.PillShape)
+                .handCursor()
                 .clickable(onClick = onClick)
                 .then(
                     when (size) {

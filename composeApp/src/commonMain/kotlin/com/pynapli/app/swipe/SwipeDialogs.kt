@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Person
 
@@ -109,13 +110,13 @@ internal fun LinkedPartnerPreviewDialog(
         confirmButton = {
             Button(
                 onClick = onViewProfile,
-                modifier = Modifier.testTag(SwipeTestTags.LINKED_PARTNER_PREVIEW_VIEW_PROFILE),
+                modifier = Modifier.testTag(SwipeTestTags.LINKED_PARTNER_PREVIEW_VIEW_PROFILE).handCursor(),
             ) {
                 Text("View profile")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, modifier = Modifier.handCursor()) {
                 Text("Close")
             }
         },
@@ -170,6 +171,7 @@ internal fun IntroNoteDialog(
             Button(
                 onClick = onSend,
                 enabled = canSend,
+                modifier = Modifier.handCursor(enabled = canSend),
             ) {
                 Text(text = if (isSubmitting) "Sending" else "Send")
             }
@@ -178,6 +180,7 @@ internal fun IntroNoteDialog(
             TextButton(
                 onClick = onDismiss,
                 enabled = !isSubmitting,
+                modifier = Modifier.handCursor(enabled = !isSubmitting),
             ) {
                 Text("Cancel")
             }

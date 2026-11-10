@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Close
 
@@ -49,10 +50,10 @@ fun PhotoNudgeBanner(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onAddPhoto) {
+            TextButton(onClick = onAddPhoto, modifier = Modifier.handCursor()) {
                 Text("Add photo")
             }
-            IconButton(onClick = onDismiss) {
+            IconButton(onClick = onDismiss, modifier = Modifier.handCursor()) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Dismiss photo reminder",

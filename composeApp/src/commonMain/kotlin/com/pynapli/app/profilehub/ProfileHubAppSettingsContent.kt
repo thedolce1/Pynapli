@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.appsettings.AppSettingsUiState
 import com.pynapli.app.design.PynapliLayout
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.OpenInNew
 import com.pynapli.shared.core.config.LegalLinks
@@ -224,6 +225,7 @@ private fun LegalLinkRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .handCursor()
                 .clickable(onClick = onOpen)
                 .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,

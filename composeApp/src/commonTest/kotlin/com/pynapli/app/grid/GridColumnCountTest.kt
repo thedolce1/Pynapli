@@ -62,4 +62,13 @@ class GridColumnCountTest {
         assertTrue(gridColumnCountFor(0.dp) >= 1)
         assertTrue(gridColumnCountFor(1.dp) >= 1)
     }
+
+    @Test
+    fun `large text means fewer, larger wide-pane tiles but leaves the phone grid alone`() {
+        // 1356dp is the Grid pane beside the rail in a 1440px browser window.
+        assertEquals(8, gridColumnCountFor(1356.dp, fontScale = 1f))
+        assertEquals(5, gridColumnCountFor(1356.dp, fontScale = 1.5f))
+        assertEquals(5, gridColumnCountFor(1356.dp, fontScale = 3f), "capped at the 1.5x the web applies")
+        assertEquals(3, gridColumnCountFor(390.dp, fontScale = 1.5f), "phone panes stay 3-up")
+    }
 }

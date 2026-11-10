@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 
 @Composable
 internal fun SwipeAdSlot() {
@@ -70,7 +71,7 @@ internal fun SwipePendingSync(
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+        TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp), modifier = Modifier.handCursor()) {
             Text("Retry")
         }
     }

@@ -108,17 +108,21 @@ fun PynapliPill(
                 .clip(PynapliShape.PillShape)
                 .background(fill)
                 .border(1.dp, borderColor, PynapliShape.PillShape)
-                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .then(if (onClick != null) Modifier.handCursor().clickable(onClick = onClick) else Modifier)
                 .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         leading?.invoke()
+        // A pill is one word or two; wrapping split "Events" into "Even/ts" in a narrow row at large
+        // text sizes. Rows of pills scroll instead.
         Text(
             text = text,
             color = labelColor,
             fontSize = PynapliType.Caption,
             fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }

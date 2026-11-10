@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Close
 import com.pynapli.shared.distance.formatDistanceForUnit
@@ -148,7 +149,8 @@ internal fun ActivityRow(
                     // Compact 36dp visual, >=48dp touch target.
                     .minimumInteractiveComponentSize()
                     .size(36.dp)
-                    .clip(CircleShape),
+                    .clip(CircleShape)
+                    .handCursor(enabled = !pendingDismiss),
         ) {
             if (pendingDismiss) {
                 CircularProgressIndicator(

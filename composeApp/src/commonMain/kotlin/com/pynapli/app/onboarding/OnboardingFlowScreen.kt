@@ -50,6 +50,7 @@ import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliPasswordVisibilityToggle
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.app.location.LocationUiState
@@ -230,12 +231,12 @@ private fun DobStep(
     Button(
         onClick = onConfirmDob,
         enabled = state.dobComplete,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().handCursor(enabled = state.dobComplete),
     ) {
         Text("Next")
     }
     Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onCancelToSignIn) {
+    TextButton(onClick = onCancelToSignIn, modifier = Modifier.handCursor()) {
         Text("Already have an account? Sign in")
     }
 }
@@ -272,12 +273,12 @@ private fun UnderageStopStep(
     Spacer(modifier = Modifier.height(28.dp))
     Button(
         onClick = onBackToDob,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().handCursor(),
     ) {
         Text("Go back")
     }
     Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onCancelToSignIn) {
+    TextButton(onClick = onCancelToSignIn, modifier = Modifier.handCursor()) {
         Text("Back to sign in")
     }
 }
@@ -313,12 +314,12 @@ private fun PoliciesStep(
     Spacer(modifier = Modifier.height(12.dp))
     Button(
         onClick = onAcceptPolicies,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().handCursor(),
     ) {
         Text("Accept")
     }
     Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onBackToDob) {
+    TextButton(onClick = onBackToDob, modifier = Modifier.handCursor()) {
         Text("Back")
     }
 }
@@ -339,7 +340,7 @@ private fun PolicyReadRow(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.weight(1f),
         )
-        OutlinedButton(onClick = onRead) {
+        OutlinedButton(onClick = onRead, modifier = Modifier.handCursor()) {
             Text("Read")
         }
     }
@@ -393,7 +394,7 @@ private fun AccountStep(
         onClick = onSubmitAccount,
     )
     Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onBackToPolicies, enabled = !state.isSubmitting) {
+    TextButton(onClick = onBackToPolicies, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
         Text("Back")
     }
 }
@@ -426,7 +427,7 @@ private fun LocationStep(
         onClick = onShareLocation,
     )
     Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onContinue, enabled = !locationState.isUpdating) {
+    TextButton(onClick = onContinue, enabled = !locationState.isUpdating, modifier = Modifier.handCursor(enabled = !locationState.isUpdating)) {
         Text("Skip for now")
     }
 }
@@ -593,7 +594,7 @@ private fun SubmittingButton(
     Button(
         onClick = onClick,
         enabled = !isSubmitting,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().handCursor(enabled = !isSubmitting),
     ) {
         if (isSubmitting) {
             CircularProgressIndicator(

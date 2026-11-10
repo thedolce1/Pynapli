@@ -48,7 +48,7 @@ fun PynapliEmptyState(
         if (actionLabel != null && onAction != null) {
             Button(
                 onClick = onAction,
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.padding(top = 16.dp).handCursor(),
             ) {
                 Text(text = actionLabel)
             }
@@ -74,7 +74,7 @@ fun PynapliErrorState(
         if (onRetry != null) {
             Button(
                 onClick = onRetry,
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.padding(top = 16.dp).handCursor(),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Refresh,

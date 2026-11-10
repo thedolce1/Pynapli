@@ -21,6 +21,11 @@ message is a candidate follow-up if analytics show it matters.
 - [ ] Messages composer: **Enter** sends; **Shift+Enter** inserts a newline; **Esc**
       closes the open conversation. (Handler is desktop-test-green; CDP-injected keys
       never reached the wasm handler, so this needs one human tap.)
+- [ ] **Esc** closes Playing Tonight (moon button), Psync and the profile screen; Esc while
+      typing in a profile field does NOT close it. (Browser-verified via CDP after a click
+      gives the page focus; confirm once with a real keyboard.)
+- [ ] Browser font size **Large** (Chrome: Settings > Appearance > Font size), then reload:
+      text grows, Grid names are not cut off, Tonight's filter pills stay on one line.
 - [ ] Swipe (window ≥ 950px): **←** passes, **→** likes, **↑** pineapples; hints row
       shows under the action bar; actions animate exactly like the buttons.
 - [ ] "Use current location" on the Grid: browser permission prompt appears; Allow

@@ -28,6 +28,7 @@ import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliTabIcons
 import com.pynapli.app.design.PynapliWindowSizeClass
+import com.pynapli.app.design.closeOnEscape
 import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.grid.GridScreen
 import com.pynapli.app.grid.GridStateHolder
@@ -133,7 +134,8 @@ internal fun ColumnScope.PynapliMainContent(
                     Modifier
                         .align(Alignment.CenterHorizontally)
                         .widthIn(max = PynapliContentWidth.Feed)
-                        .weight(1f),
+                        .weight(1f)
+                        .closeOnEscape { onProfileSurface(ProfileSurface.Hub) },
             )
         }
         else ->
@@ -298,7 +300,8 @@ private fun ColumnScope.ProfileHubSurface(
             Modifier
                 .align(Alignment.CenterHorizontally)
                 .widthIn(max = PynapliContentWidth.Feed)
-                .weight(1f),
+                .weight(1f)
+                .closeOnEscape { onProfileSurface(ProfileSurface.None) },
     )
 
     // Own-profile preview ("Preview profile" row) opens the read-only public-profile peek over

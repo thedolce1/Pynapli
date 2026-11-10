@@ -14,4 +14,6 @@ The visual target is the Claude design handoff at `C:\Users\Smaye\Downloads\Pyna
 
 Radii and colors **must** be tokens, not literals — enforced by `scripts/check-compose-tokens.ps1` (its header lists the rules and the `token-guard:allow` escape). It scans `composeApp/src`, `webApp/src` and `desktopApp/src`, and runs in CI plus `verify-full`/`-android`/`-web`/`-desktop`. Pick a `PynapliShape` by the element's *role*: `SmallShape` grid tiles/indicators, `PhotoShape` photos/thumbnails, `CardShape` cards/banners/rows/inputs, `SheetShape` sheets, `PillShape` chips.
 
+Anything a pointer can activate carries `Modifier.handCursor(enabled = <its enabled>)` (design/PynapliPointer.kt); the same guard fails a clickable modifier or clickable Material control without it. Full-screen surfaces close on Esc with `Modifier.closeOnEscape` (design/PynapliEscape.kt).
+
 Everything else in `docs/FRONTEND_DESIGN_DIRECTION_SPEC.md` / `docs/DESIGN_AND_NAVIGATION_SPEC.md` still holds (dark-first, dense Grid, restrained, no decorative blobs). Update visual-regression goldens deliberately when restyling.

@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.handCursor
 
 @Composable
 internal fun ProfileTextField(
@@ -58,7 +59,8 @@ internal fun ProfileHubSaveButton(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                .handCursor(enabled = !isSaving),
     ) {
         if (isSaving) {
             CircularProgressIndicator(
@@ -83,6 +85,7 @@ internal fun DiscoveryStyleRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .handCursor()
                 .clickable { onSelected(value) }
                 .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,

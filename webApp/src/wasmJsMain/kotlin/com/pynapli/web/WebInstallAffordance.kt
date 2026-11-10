@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Close
 import com.pynapli.web.platform.BrowserLocalStorage
@@ -54,6 +55,7 @@ internal fun WebInstallAffordance(modifier: Modifier = Modifier) {
                     showInstallPrompt()
                     available = false
                 },
+                modifier = Modifier.handCursor(),
             ) {
                 Text(text = "Install Pynapli", color = PynapliColors.Accent)
             }
@@ -62,7 +64,7 @@ internal fun WebInstallAffordance(modifier: Modifier = Modifier) {
                     dismissed = true
                     BrowserLocalStorage.set(DISMISS_KEY, "true")
                 },
-                modifier = Modifier.padding(end = 4.dp),
+                modifier = Modifier.padding(end = 4.dp).handCursor(),
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,

@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.conversation.titleFor
 import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.ChatBubble
 import com.pynapli.app.design.icons.filled.People
@@ -267,12 +268,14 @@ private fun ActionCenterRow(
             TextButton(
                 onClick = onDecline,
                 enabled = !isMutating,
+                modifier = Modifier.handCursor(enabled = !isMutating),
             ) {
                 Text(declineLabel)
             }
             TextButton(
                 onClick = onAccept,
                 enabled = !isMutating,
+                modifier = Modifier.handCursor(enabled = !isMutating),
             ) {
                 Text(acceptLabel)
             }

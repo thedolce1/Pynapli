@@ -13,6 +13,12 @@
 # 6/10/12/14/18dp, and the handoff gives no canonical answer, so a spacing rule would fail on day
 # one and get switched off. Radii and colors are clean, so this guard ships green and stays on.
 #
+# Also guarded: the hand cursor. Compose shows no hand over clickables on its own, so on the web and
+# desktop every button, tile and row showed the plain arrow (measured 2026-11-10) - the main
+# "clickable" cue for mouse users, and the web is how many members use the app. Every clickable
+# modifier and clickable Material control must carry `handCursor(...)` (design/PynapliPointer.kt).
+# Scrims (`indication = null`) are exempt: a hand over the whole backdrop would be wrong.
+#
 # Escape hatch: put `token-guard:allow` in a comment on the offending line, for the rare value that
 # is genuinely not a palette/shape decision (e.g. a pure-black text drop shadow, which is an
 # occlusion effect). Greppable, so the exceptions stay reviewable.
@@ -60,6 +66,20 @@ $rules = @(
     }
 )
 
+$clickableModifier = "\.(clickable|combinedClickable|selectable|toggleable)\b\s*[({]"
+$materialControl = "(?<![\w.])(TextButton|Button|OutlinedButton|IconButton|Surface|DropdownMenuItem|Switch|Slider|RangeSlider|FilterChip|NavigationRailItem|NavigationBarItem|Checkbox)\("
+
+# Index of the ")" closing the "(" at $open. Paren counting only; argument lists here carry no
+# unbalanced parens inside strings.
+function Find-CloseParen([string]$text, [int]$open) {
+    $depth = 0
+    for ($i = $open; $i -lt $text.Length; $i++) {
+        if ($text[$i] -eq "(") { $depth++ }
+        elseif ($text[$i] -eq ")") { $depth--; if ($depth -eq 0) { return $i } }
+    }
+    return $text.Length - 1
+}
+
 $failures = @()
 $scanned = 0
 $emptyRoots = @()
@@ -84,6 +104,17 @@ foreach ($root in $roots) {
                 $previous = if ($lineNumber -ge 2) { $lines[$lineNumber - 2] } else { "" }
                 if ($line -match "token-guard:allow" -or $previous -match "token-guard:allow") { continue }
 
+                if ($line -cmatch $clickableModifier -and $line -notmatch "indication\s*=\s*null" -and
+                    $line -notmatch "handCursor\(" -and $previous.Trim() -notmatch "handCursor\([^()]*\)$") {
+                    $failures += [pscustomobject]@{
+                        File = $relative.TrimStart("\", "/")
+                        Line = $lineNumber
+                        Rule = "clickable without a hand cursor"
+                        Hint = "chain .handCursor(enabled = <same enabled>) right before it (design/PynapliPointer.kt)"
+                        Text = $line.Trim()
+                    }
+                }
+
                 foreach ($rule in $rules) {
                     # -cmatch, not -match: PowerShell regex is case-insensitive by default, which
                     # makes `color.red` (a Color channel property) collide with the `Color.Red` rule.
@@ -96,6 +127,28 @@ foreach ($root in $roots) {
                             Text = $line.Trim()
                         }
                         break
+                    }
+                }
+            }
+
+            # Material controls span lines, so they are checked over the whole file text.
+            $text = [System.IO.File]::ReadAllText($file.FullName)
+            foreach ($match in [regex]::Matches($text, $materialControl)) {
+                $lineIndex = ($text.Substring(0, $match.Index) -split "`n").Count - 1
+                $current = $lines[$lineIndex]
+                $above = if ($lineIndex -ge 1) { $lines[$lineIndex - 1] } else { "" }
+                if ($current.TrimStart().StartsWith("//") -or $current.TrimStart().StartsWith("*") -or $current -match "\bfun\s+\w+\(") { continue }
+                if ($current -match "token-guard:allow" -or $above -match "token-guard:allow") { continue }
+                $open = $match.Index + $match.Length - 1
+                $arguments = $text.Substring($open, (Find-CloseParen $text $open) - $open + 1)
+                if ($match.Groups[1].Value -eq "Surface" -and $arguments -notmatch "onClick") { continue }
+                if ($arguments -notmatch "handCursor\(") {
+                    $failures += [pscustomobject]@{
+                        File = $relative.TrimStart("\", "/")
+                        Line = $lineIndex + 1
+                        Rule = "clickable $($match.Groups[1].Value) without a hand cursor"
+                        Hint = "add .handCursor(enabled = <same enabled>) to its modifier (design/PynapliPointer.kt)"
+                        Text = $current.Trim()
                     }
                 }
             }
@@ -122,4 +175,4 @@ if ($failures.Count -gt 0) {
     throw "Compose token drift check failed."
 }
 
-Write-Host "Compose token check passed: no raw radii or colors in $scanned feature files."
+Write-Host "Compose token check passed: no raw radii or colors, and every clickable has a hand cursor, in $scanned feature files."

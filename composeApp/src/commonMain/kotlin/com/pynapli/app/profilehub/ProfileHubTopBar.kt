@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliHeaderTokens
 import com.pynapli.app.design.PynapliScreenHeader
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
 import com.pynapli.app.design.icons.filled.Notifications
@@ -73,7 +74,8 @@ private fun NotificationsHeaderAction(
             Modifier
                 .size(PynapliHeaderTokens.ActionButtonSize)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .handCursor(),
     ) {
         if (actionCount > 0) {
             BadgedBox(

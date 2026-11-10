@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Close
 import com.pynapli.app.design.icons.filled.Edit
@@ -128,7 +129,7 @@ private fun SwipeActionButton(
         IconButton(
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.size(56.dp).testTag(testTag),
+            modifier = Modifier.size(56.dp).testTag(testTag).handCursor(enabled = enabled),
         ) {
             if (isSubmitting) {
                 CircularProgressIndicator(

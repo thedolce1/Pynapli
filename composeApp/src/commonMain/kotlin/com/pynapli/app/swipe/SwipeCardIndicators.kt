@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.CheckCircle
 import com.pynapli.app.design.icons.filled.Person
@@ -140,7 +141,7 @@ internal fun SwipeLinkedPartnerBadge(
             .clip(CircleShape)
     val tappableModifier =
         if (onClick != null && enabled) {
-            baseModifier.clickable(onClick = onClick)
+            baseModifier.handCursor().clickable(onClick = onClick)
         } else {
             baseModifier
         }

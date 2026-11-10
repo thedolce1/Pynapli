@@ -29,6 +29,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.Send
 import com.pynapli.app.design.icons.filled.Image
@@ -130,7 +131,7 @@ internal fun Composer(
             IconButton(
                 onClick = onPickPhoto,
                 enabled = !isSending && !isSendingPhoto,
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(44.dp).handCursor(enabled = !isSending && !isSendingPhoto),
             ) {
                 if (isSendingPhoto) {
                     CircularProgressIndicator(
@@ -185,7 +186,8 @@ internal fun Composer(
                     Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(sendButtonColor),
+                        .background(sendButtonColor)
+                        .handCursor(enabled = canSend),
             ) {
                 if (isSending) {
                     CircularProgressIndicator(

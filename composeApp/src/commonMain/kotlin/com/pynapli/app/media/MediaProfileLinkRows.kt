@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.People
 import com.pynapli.app.design.icons.filled.Person
@@ -100,7 +101,7 @@ internal fun ProfileLinkRow(
                 )
 
             primaryActionLabel != null ->
-                TextButton(onClick = onPrimaryAction) {
+                TextButton(onClick = onPrimaryAction, modifier = Modifier.handCursor()) {
                     Text(primaryActionLabel)
                 }
         }
@@ -150,10 +151,10 @@ internal fun IncomingProfileLinkRow(
                 modifier = Modifier.size(18.dp),
             )
         } else {
-            TextButton(onClick = onDecline) {
+            TextButton(onClick = onDecline, modifier = Modifier.handCursor()) {
                 Text("Decline")
             }
-            TextButton(onClick = onAccept) {
+            TextButton(onClick = onAccept, modifier = Modifier.handCursor()) {
                 Text("Accept")
             }
         }
@@ -207,6 +208,7 @@ internal fun LinkMessageBand(
                 .clip(PynapliShape.CardShape)
                 .background(color.copy(alpha = 0.14f))
                 .border(1.dp, color.copy(alpha = 0.38f), PynapliShape.CardShape)
+                .handCursor()
                 .clickable(onClick = onDismiss)
                 .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,

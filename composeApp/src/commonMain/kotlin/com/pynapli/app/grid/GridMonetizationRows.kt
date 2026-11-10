@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.VerifiedUser
@@ -52,7 +53,7 @@ internal fun GridPaywallRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onOpenStore) {
+        TextButton(onClick = onOpenStore, modifier = Modifier.handCursor()) {
             Text(text = "Social", maxLines = 1)
         }
     }
@@ -94,7 +95,7 @@ internal fun GridVerificationRow(
         )
         TextButton(
             onClick = onOpenAgeVerification,
-            modifier = Modifier.testTag(GridVerificationTags.CTA),
+            modifier = Modifier.testTag(GridVerificationTags.CTA).handCursor(),
         ) {
             Text(text = "Verify", maxLines = 1, color = PynapliColors.Accent)
         }

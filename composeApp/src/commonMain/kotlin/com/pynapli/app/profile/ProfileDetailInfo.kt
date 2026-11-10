@@ -29,6 +29,7 @@ import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowForward
 import com.pynapli.app.design.icons.filled.Person
@@ -157,6 +158,7 @@ internal fun LinkedPartnerSection(
             Modifier
                 .fillMaxWidth()
                 .clip(PynapliShape.CardShape)
+                .handCursor()
                 .clickable { onOpenLinkedPartner(partner) }
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f), PynapliShape.CardShape)

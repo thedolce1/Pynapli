@@ -3,6 +3,7 @@ package com.pynapli.app.design
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Visibility
 import com.pynapli.app.design.icons.filled.VisibilityOff
@@ -18,7 +19,7 @@ fun PynapliPasswordVisibilityToggle(
     visible: Boolean,
     onToggle: () -> Unit,
 ) {
-    IconButton(onClick = onToggle) {
+    IconButton(onClick = onToggle, modifier = Modifier.handCursor()) {
         Icon(
             imageVector = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
             contentDescription = if (visible) "Hide password" else "Show password",

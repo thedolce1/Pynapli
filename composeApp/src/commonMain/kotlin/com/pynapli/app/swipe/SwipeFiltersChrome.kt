@@ -25,6 +25,7 @@ import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliSectionIntro
 import com.pynapli.app.design.PynapliSectionTitle
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Lock
 
@@ -144,7 +145,7 @@ private fun DealbreakerLockChip(
                 selectedLabelColor = PynapliColors.Accent,
                 selectedLeadingIconColor = PynapliColors.Accent,
             ),
-        modifier = Modifier.testTag(SwipeFilterTags.dealbreakerTag(dealbreakerKey)),
+        modifier = Modifier.testTag(SwipeFilterTags.dealbreakerTag(dealbreakerKey)).handCursor(enabled = eligible),
     )
 }
 
@@ -193,7 +194,7 @@ internal fun AdvancedPaywallBanner(onSubscribe: () -> Unit) {
         )
         TextButton(
             onClick = onSubscribe,
-            modifier = Modifier.testTag(SwipeFilterTags.ADVANCED_PAYWALL_SUBSCRIBE),
+            modifier = Modifier.testTag(SwipeFilterTags.ADVANCED_PAYWALL_SUBSCRIBE).handCursor(),
         ) {
             Text(text = "Subscribe", maxLines = 1)
         }

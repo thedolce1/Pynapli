@@ -46,6 +46,7 @@ fun PynapliConfirmDialog(
                     } else {
                         ButtonDefaults.buttonColors()
                     },
+                modifier = Modifier.handCursor(enabled = !isBusy),
             ) {
                 if (isBusy) {
                     CircularProgressIndicator(
@@ -64,7 +65,7 @@ fun PynapliConfirmDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isBusy) { Text(cancelLabel) }
+            TextButton(onClick = onDismiss, enabled = !isBusy, modifier = Modifier.handCursor(enabled = !isBusy)) { Text(cancelLabel) }
         },
     )
 }

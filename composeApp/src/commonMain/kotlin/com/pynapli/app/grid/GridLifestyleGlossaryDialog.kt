@@ -12,13 +12,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.handCursor
 
 @Composable
 internal fun LifestyleGlossaryDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text(text = "Close") }
+            TextButton(onClick = onDismiss, modifier = Modifier.handCursor()) { Text(text = "Close") }
         },
         title = { Text(text = "Lifestyle terms") },
         text = {

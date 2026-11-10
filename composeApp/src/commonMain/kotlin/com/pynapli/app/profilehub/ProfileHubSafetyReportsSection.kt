@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.ChatBubble
 import com.pynapli.app.design.icons.filled.Security
@@ -110,6 +111,7 @@ private fun SupportContactRow(
                 .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surface)
                 .border(1.dp, MaterialTheme.colorScheme.outline, PynapliShape.CardShape)
+                .handCursor()
                 .clickable { onContactSupport(contact) }
                 .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -136,7 +138,7 @@ private fun SupportContactRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        TextButton(onClick = { onContactSupport(contact) }) {
+        TextButton(onClick = { onContactSupport(contact) }, modifier = Modifier.handCursor()) {
             Text("Email")
         }
     }

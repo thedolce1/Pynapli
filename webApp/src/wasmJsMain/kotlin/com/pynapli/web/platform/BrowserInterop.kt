@@ -124,3 +124,13 @@ internal object BrowserLocalStorage {
         runCatching { localStorageRemoveItem(key) }
     }
 }
+
+/**
+ * The browser's default font size in CSS px: 16 unless the user changed it in the browser's
+ * settings (Chrome: Appearance > Font size; Large is 20, Very large is 24). Read through a probe
+ * element sized `medium`, the CSS keyword for exactly that preference.
+ */
+internal fun browserDefaultFontSizePx(): Double =
+    js(
+        "(() => { const p = document.createElement('div'); p.style.cssText = 'position:absolute;visibility:hidden;font-size:medium'; document.body.appendChild(p); const px = parseFloat(getComputedStyle(p).fontSize) || 16; p.remove(); return px; })()",
+    )

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import com.pynapli.app.design.PynapliGridSkeleton
 import com.pynapli.app.design.PynapliShape
 import kotlin.math.ceil
@@ -23,7 +24,7 @@ import kotlin.math.ceil
 @Composable
 internal fun GridLoadingSkeleton(modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier = modifier) {
-        val columns = gridColumnCountFor(maxWidth)
+        val columns = gridColumnCountFor(maxWidth, LocalDensity.current.fontScale)
         // Tiles are square, so a row is about as tall as a tile is wide. Fill the pane and round up
         // so the shimmer reaches the bottom edge rather than stopping short on a tall window.
         val tileSide = (maxWidth - GridTileGap * (columns - 1)) / columns

@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Check
 import com.pynapli.app.design.icons.filled.Delete
@@ -84,6 +85,7 @@ internal fun MessageList(
                     TextButton(
                         onClick = onLoadOlder,
                         enabled = !isLoadingOlder,
+                        modifier = Modifier.handCursor(enabled = !isLoadingOlder),
                     ) {
                         if (isLoadingOlder) {
                             CircularProgressIndicator(
@@ -193,7 +195,7 @@ private fun MessageMedia(
                 .size(width = 240.dp, height = 240.dp)
                 .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .then(if (url == null) Modifier.clickable(enabled = !isRevealing) { onRevealMedia(message.messageId) } else Modifier),
+                .then(if (url == null) Modifier.handCursor(enabled = !isRevealing).clickable(enabled = !isRevealing) { onRevealMedia(message.messageId) } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         if (url != null) {
@@ -391,7 +393,8 @@ private fun MessageBubble(
                         modifier =
                             Modifier
                                 .size(32.dp)
-                                .testTag(ConversationTestTags.deleteMessage(message.messageId)),
+                                .testTag(ConversationTestTags.deleteMessage(message.messageId))
+                                .handCursor(enabled = !isDeleting),
                     ) {
                         if (isDeleting) {
                             CircularProgressIndicator(

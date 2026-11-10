@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import com.pynapli.app.design.PynapliSheetActionRow
+import com.pynapli.app.design.handCursor
 
 @Composable
 internal fun SwipeAdvancedFilterControls(
@@ -79,14 +80,14 @@ internal fun SwipeFiltersFooter(
         start = {
             TextButton(
                 onClick = onClearAll,
-                modifier = Modifier.testTag(SwipeFilterTags.CLEAR_ALL),
+                modifier = Modifier.testTag(SwipeFilterTags.CLEAR_ALL).handCursor(),
             ) { Text(text = "Clear all") }
         },
     ) {
-        OutlinedButton(onClick = onDismiss) { Text(text = "Cancel") }
+        OutlinedButton(onClick = onDismiss, modifier = Modifier.handCursor()) { Text(text = "Cancel") }
         Button(
             onClick = { onApply(draft) },
-            modifier = Modifier.testTag(SwipeFilterTags.APPLY),
+            modifier = Modifier.testTag(SwipeFilterTags.APPLY).handCursor(),
         ) { Text(text = "Apply") }
     }
 }

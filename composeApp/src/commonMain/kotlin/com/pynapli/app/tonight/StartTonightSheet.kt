@@ -41,6 +41,7 @@ import com.pynapli.app.design.PynapliSectionTitle
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.PynapliSheetColumn
 import com.pynapli.app.design.PynapliSheetTitle
+import com.pynapli.app.design.handCursor
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
 
 private const val MAX_NOTE = 100
@@ -171,7 +172,8 @@ internal fun StartTonightSheetBody(
                                     width = if (selected) 2.dp else 1.dp,
                                     color = if (selected) PynapliColors.Accent else PynapliColors.Border,
                                     shape = PynapliShape.CardShape,
-                                ).clickable { selectedPhotoId = if (selected) null else option.assetId }
+                                ).handCursor()
+                                .clickable { selectedPhotoId = if (selected) null else option.assetId }
                                 .testTag(StartTonightTags.photo(option.assetId)),
                     ) {
                         option.thumbnailUrl?.let { url ->
@@ -192,7 +194,7 @@ internal fun StartTonightSheetBody(
                 Text("Show on the zone map", color = PynapliColors.TextPrimary, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
                 Text("Always approximate — never your exact spot", color = PynapliColors.TextTertiary, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
             }
-            Switch(checked = mapVisible, onCheckedChange = { mapVisible = it }, modifier = Modifier.testTag(StartTonightTags.MAP_VISIBLE))
+            Switch(checked = mapVisible, onCheckedChange = { mapVisible = it }, modifier = Modifier.testTag(StartTonightTags.MAP_VISIBLE).handCursor())
         }
 
         Button(
@@ -210,7 +212,7 @@ internal fun StartTonightSheetBody(
                 )
             },
             enabled = !isSubmitting,
-            modifier = Modifier.fillMaxWidth().testTag(StartTonightTags.SUBMIT),
+            modifier = Modifier.fillMaxWidth().testTag(StartTonightTags.SUBMIT).handCursor(enabled = !isSubmitting),
         ) {
             Text(if (mode == TonightMode.Together) "Propose to partner" else "Go live")
         }
@@ -241,7 +243,7 @@ private fun SelectableChip(
         onClick = onClick,
         label = { Text(label) },
         colors = FilterChipDefaults.filterChipColors(),
-        modifier = Modifier.testTag(tag),
+        modifier = Modifier.testTag(tag).handCursor(),
     )
 }
 

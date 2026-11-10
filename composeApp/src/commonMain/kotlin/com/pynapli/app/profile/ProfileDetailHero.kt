@@ -39,6 +39,7 @@ import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliSemantic
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.VerifiedBadge
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Block
 import com.pynapli.app.design.icons.filled.Close
@@ -148,7 +149,8 @@ internal fun ProfileHero(
                     Modifier
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(PynapliColors.OverlayScrim),
+                        .background(PynapliColors.OverlayScrim)
+                        .handCursor(),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
@@ -269,7 +271,8 @@ private fun ProfileOverflowMenu(
                 Modifier
                     .size(42.dp)
                     .clip(CircleShape)
-                    .background(PynapliColors.OverlayScrim),
+                    .background(PynapliColors.OverlayScrim)
+                    .handCursor(),
         ) {
             Icon(
                 imageVector = Icons.Filled.MoreVert,
@@ -294,6 +297,7 @@ private fun ProfileOverflowMenu(
                     expanded = false
                     onHideClick()
                 },
+                modifier = Modifier.handCursor(),
             )
             DropdownMenuItem(
                 text = { Text("Block") },
@@ -308,6 +312,7 @@ private fun ProfileOverflowMenu(
                     expanded = false
                     onBlockClick()
                 },
+                modifier = Modifier.handCursor(),
             )
             DropdownMenuItem(
                 text = { Text("Report") },
@@ -322,6 +327,7 @@ private fun ProfileOverflowMenu(
                     expanded = false
                     onReportClick()
                 },
+                modifier = Modifier.handCursor(),
             )
         }
     }

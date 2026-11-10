@@ -39,6 +39,7 @@ import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.CalendarMonth
 import com.pynapli.app.design.icons.filled.PhotoLibrary
@@ -347,6 +348,7 @@ private fun BirthdateField(
                 Modifier
                     .matchParentSize()
                     .clip(PynapliShape.SmallShape)
+                    .handCursor()
                     .clickable { showPicker = true },
         )
     }
@@ -365,12 +367,13 @@ private fun BirthdateField(
                         }
                         showPicker = false
                     },
+                    modifier = Modifier.handCursor(),
                 ) {
                     Text("OK")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showPicker = false }, modifier = Modifier.handCursor()) { Text("Cancel") }
             },
         ) {
             DatePicker(state = pickerState)
@@ -415,6 +418,7 @@ private fun ProfilePhotosEditRow(
         TextButton(
             onClick = onManagePhotos,
             contentPadding = PaddingValues(0.dp),
+            modifier = Modifier.handCursor(),
         ) {
             Icon(
                 imageVector = Icons.Filled.PhotoLibrary,

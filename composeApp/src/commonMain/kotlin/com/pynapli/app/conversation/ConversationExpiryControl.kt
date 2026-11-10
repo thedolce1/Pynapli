@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Schedule
 import com.pynapli.shared.network.dto.MessageExpiryOption
@@ -63,6 +64,7 @@ internal fun ConversationExpiryControl(
                 .fillMaxWidth()
                 .clip(PynapliShape.PillShape)
                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), PynapliShape.PillShape)
+                .handCursor(enabled = !isSettingExpiry)
                 .clickable(enabled = !isSettingExpiry) { menuOpen = true }
                 .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -92,6 +94,7 @@ internal fun ConversationExpiryControl(
                         menuOpen = false
                         onSetExpiry(seconds)
                     },
+                    modifier = Modifier.handCursor(),
                 )
             }
         }

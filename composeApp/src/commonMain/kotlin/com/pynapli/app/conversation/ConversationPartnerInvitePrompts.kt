@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Check
 import com.pynapli.app.design.icons.filled.Close
@@ -61,6 +62,7 @@ internal fun PartnerInvitePrompt(
                 Button(
                     onClick = onAcceptInvite,
                     enabled = !isResponding,
+                    modifier = Modifier.handCursor(enabled = !isResponding),
                 ) {
                     if (isResponding) {
                         CircularProgressIndicator(
@@ -82,6 +84,7 @@ internal fun PartnerInvitePrompt(
                 OutlinedButton(
                     onClick = onDeclineInvite,
                     enabled = !isResponding,
+                    modifier = Modifier.handCursor(enabled = !isResponding),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Close,

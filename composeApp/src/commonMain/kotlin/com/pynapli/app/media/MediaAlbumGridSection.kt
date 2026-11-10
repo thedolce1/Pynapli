@@ -36,6 +36,7 @@ import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Add
 import com.pynapli.app.design.icons.filled.CheckCircle
@@ -189,7 +190,7 @@ private fun RetryUploadRow(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onRetry) {
+        TextButton(onClick = onRetry, modifier = Modifier.handCursor()) {
             Text(text = "Retry ${kind.title.lowercase()} upload")
         }
     }
@@ -211,6 +212,7 @@ private fun AddMediaTile(
                 .clip(PynapliShape.PhotoShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(1.dp, MaterialTheme.colorScheme.outline, PynapliShape.PhotoShape)
+                .handCursor(enabled = !isUploading && canAdd)
                 .clickable(enabled = !isUploading && canAdd, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -421,6 +423,7 @@ private fun TileActionButton(
                 .size(28.dp)
                 .clip(CircleShape)
                 .background(PynapliColors.OnPhotoBadgeFill)
+                .handCursor()
                 .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

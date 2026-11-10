@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Block
 import com.pynapli.app.design.icons.filled.ChatBubble
@@ -255,6 +256,7 @@ private fun BlockedUserRow(
                 .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surface)
                 .border(1.dp, MaterialTheme.colorScheme.outline, PynapliShape.CardShape)
+                .handCursor(enabled = !isUnblocking)
                 .clickable(enabled = !isUnblocking) { onUnblockUser(blockedUser.blockedUserId) }
                 .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -286,6 +288,7 @@ private fun BlockedUserRow(
         TextButton(
             onClick = { onUnblockUser(blockedUser.blockedUserId) },
             enabled = !isUnblocking,
+            modifier = Modifier.handCursor(enabled = !isUnblocking),
         ) {
             Text(if (isUnblocking) "Unblocking" else "Unblock")
         }
@@ -305,6 +308,7 @@ private fun HiddenProfileRow(
                 .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surface)
                 .border(1.dp, MaterialTheme.colorScheme.outline, PynapliShape.CardShape)
+                .handCursor(enabled = !isUnhiding)
                 .clickable(enabled = !isUnhiding) { onUnhideProfile(hiddenProfile.hiddenUserId) }
                 .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -336,6 +340,7 @@ private fun HiddenProfileRow(
         TextButton(
             onClick = { onUnhideProfile(hiddenProfile.hiddenUserId) },
             enabled = !isUnhiding,
+            modifier = Modifier.handCursor(enabled = !isUnhiding),
         ) {
             Text(if (isUnhiding) "Unhiding" else "Unhide")
         }

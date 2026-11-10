@@ -17,6 +17,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliErrorState
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Refresh
 import com.pynapli.app.design.icons.filled.Star
@@ -76,16 +77,16 @@ internal fun EmptyDeck(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             when {
                 topPicksMode ->
-                    Button(onClick = onBackToForYou) {
+                    Button(onClick = onBackToForYou, modifier = Modifier.handCursor()) {
                         Text("Back to For You")
                     }
                 else -> {
                     if (filtersActive) {
-                        OutlinedButton(onClick = onOpenFilters) {
+                        OutlinedButton(onClick = onOpenFilters, modifier = Modifier.handCursor()) {
                             Text("Adjust filters")
                         }
                     }
-                    Button(onClick = onRefresh) {
+                    Button(onClick = onRefresh, modifier = Modifier.handCursor()) {
                         Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
                         Spacer(Modifier.size(6.dp))
                         Text("Refresh")

@@ -45,6 +45,7 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.DarkMode
 import com.pynapli.app.design.icons.filled.Person
@@ -89,6 +90,7 @@ internal fun GridProfileTile(
                 .aspectRatio(1f)
                 .clip(PynapliShape.SmallShape)
                 .hoverable(hoverInteractions)
+                .handCursor()
                 .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onClick)
                 // Group the tile so a screen reader announces it as one item (name + presence +
                 // visiting + distance + partner/tonight badges) instead of several fragments.

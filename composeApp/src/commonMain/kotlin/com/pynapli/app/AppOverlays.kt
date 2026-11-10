@@ -12,6 +12,7 @@ import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.conversation.ConversationSheet
 import com.pynapli.app.conversation.ConversationStateHolder
+import com.pynapli.app.design.closeOnEscape
 import com.pynapli.app.grid.profileLinkActionFor
 import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
@@ -100,7 +101,7 @@ internal fun PynapliOverlays(
                     profileDetailStateHolder.openFromTonight(userId)
                 }
             },
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().closeOnEscape(onTonightDismiss),
         )
     }
 
@@ -118,7 +119,7 @@ internal fun PynapliOverlays(
         PsyncSessionScreen(
             stateHolder = psyncStateHolder,
             onBack = onPsyncDismiss,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().closeOnEscape(onPsyncDismiss),
         )
     }
 

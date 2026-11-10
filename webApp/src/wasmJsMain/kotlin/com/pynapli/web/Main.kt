@@ -3,17 +3,23 @@ package com.pynapli.web
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ComposeViewport
 import com.pynapli.app.PynapliApp
 import com.pynapli.app.PynapliPlatform
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
+import com.pynapli.app.design.pynapliTextScaleForBrowserFont
 import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.shared.core.result.runCatchingCancellable
+import com.pynapli.web.platform.browserDefaultFontSizePx
 import com.pynapli.web.platform.onDocumentVisible
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
@@ -70,8 +76,9 @@ fun main() {
     }
 
     ComposeViewport(viewportContainerId = "pynapli-app") {
-        Box(modifier = Modifier.fillMaxSize()) {
-            WebAppContent(graph, router, locationAdapter, mediaPicker)
+        WithBrowserTextScale {
+            Box(modifier = Modifier.fillMaxSize()) {
+                WebAppContent(graph, router, locationAdapter, mediaPicker)
             /*
              * Floats clear of the compact bottom bar; on wide windows it sits in the corner.
              *
@@ -88,18 +95,30 @@ fun main() {
              * cost is only that a dismissible promo floats slightly higher on surfaces that did
              * not need it.
              */
-            val compact = currentPynapliWindowSizeClass() == PynapliWindowSizeClass.Compact
-            WebInstallAffordance(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(
-                            end = 16.dp,
-                            bottom = if (compact) CompactInstallBottomInset else 24.dp,
-                        ),
-            )
+                val compact = currentPynapliWindowSizeClass() == PynapliWindowSizeClass.Compact
+                WebInstallAffordance(
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(
+                                end = 16.dp,
+                                bottom = if (compact) CompactInstallBottomInset else 24.dp,
+                            ),
+                )
+            }
         }
     }
+}
+
+/**
+ * Honors the browser's font-size setting (see pynapliTextScaleForBrowserFont) for everything on the
+ * page, the install pill included. Read once: a browser applies a changed setting on reload anyway.
+ */
+@androidx.compose.runtime.Composable
+private fun WithBrowserTextScale(content: @androidx.compose.runtime.Composable () -> Unit) {
+    val textScale = remember { pynapliTextScaleForBrowserFont(browserDefaultFontSizePx()) }
+    val density = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * textScale), content = content)
 }
 
 /**

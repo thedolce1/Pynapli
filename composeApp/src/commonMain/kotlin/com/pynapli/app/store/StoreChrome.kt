@@ -27,6 +27,7 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliHeaderTokens
 import com.pynapli.app.design.PynapliScreenHeader
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Check
 import com.pynapli.app.design.icons.filled.Link
@@ -54,6 +55,7 @@ internal fun StoreHeader(
                 OutlinedButton(
                     onClick = onRestorePurchases,
                     enabled = restoreEnabled,
+                    modifier = Modifier.handCursor(enabled = restoreEnabled),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Refresh,

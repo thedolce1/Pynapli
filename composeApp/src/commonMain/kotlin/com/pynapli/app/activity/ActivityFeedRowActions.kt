@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.shared.network.dto.ActivityEventDto
@@ -68,6 +69,7 @@ internal fun AlbumRequestActions(
                     OutlinedButton(
                         onClick = { onReviewAlbumRequest(item.eventId) },
                         enabled = !pendingAction,
+                        modifier = Modifier.handCursor(enabled = !pendingAction),
                     ) {
                         Text(text = "Review", maxLines = 1)
                     }
@@ -84,14 +86,14 @@ internal fun AlbumRequestActions(
                 OutlinedButton(
                     onClick = { onAlbumRequestDecision(item.eventId, false) },
                     enabled = !pendingAction,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).handCursor(enabled = !pendingAction),
                 ) {
                     Text(text = if (pendingAction) "..." else "Deny", maxLines = 1)
                 }
                 Button(
                     onClick = { onAlbumRequestDecision(item.eventId, true) },
                     enabled = !pendingAction,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).handCursor(enabled = !pendingAction),
                 ) {
                     Text(text = if (pendingAction) "..." else "Grant", maxLines = 1)
                 }
@@ -126,7 +128,7 @@ internal fun ActivityPrimaryAction(
                         .fillMaxWidth()
                         .padding(top = 8.dp),
             ) {
-                Button(onClick = { onOpenMatch(item) }) {
+                Button(onClick = { onOpenMatch(item) }, modifier = Modifier.handCursor()) {
                     Text(text = "Message", maxLines = 1)
                 }
             }
@@ -143,6 +145,7 @@ internal fun ActivityPrimaryAction(
                 Button(
                     onClick = { if (conversationId != null) onOpenPartnerChatInvite(conversationId) },
                     enabled = conversationId != null,
+                    modifier = Modifier.handCursor(enabled = conversationId != null),
                 ) {
                     Text(text = "Open invite", maxLines = 1)
                 }

@@ -31,6 +31,7 @@ import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.PynapliSheetActionRow
 import com.pynapli.app.design.PynapliSheetColumn
 import com.pynapli.app.design.PynapliSheetTitle
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.Place
@@ -147,14 +148,14 @@ internal fun TravelModeSheet(
                         {
                             TextButton(
                                 onClick = onClear,
-                                modifier = Modifier.testTag(TravelModeTags.CLEAR),
+                                modifier = Modifier.testTag(TravelModeTags.CLEAR).handCursor(),
                             ) { Text(text = "Clear travel mode") }
                         }
                     } else {
                         null
                     },
             ) {
-                OutlinedButton(onClick = onDismiss) { Text(text = "Close") }
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.handCursor()) { Text(text = "Close") }
             }
         }
     }
@@ -170,6 +171,7 @@ private fun TravelPlaceRow(
             Modifier
                 .fillMaxWidth()
                 .clip(PynapliShape.CardShape)
+                .handCursor()
                 .clickable(onClick = onPick)
                 .padding(horizontal = 8.dp, vertical = 10.dp)
                 .testTag(TravelModeTags.placeTag(place.displayName)),
@@ -221,7 +223,7 @@ private fun TravelPaywallBanner(onSubscribe: () -> Unit) {
         )
         Button(
             onClick = onSubscribe,
-            modifier = Modifier.testTag(TravelModeTags.PAYWALL_SUBSCRIBE),
+            modifier = Modifier.testTag(TravelModeTags.PAYWALL_SUBSCRIBE).handCursor(),
         ) { Text(text = "Subscribe", maxLines = 1) }
     }
 }
@@ -260,7 +262,7 @@ private fun TravelVerificationBanner(onVerify: () -> Unit) {
         )
         Button(
             onClick = onVerify,
-            modifier = Modifier.testTag(TravelModeTags.VERIFICATION_VERIFY),
+            modifier = Modifier.testTag(TravelModeTags.VERIFICATION_VERIFY).handCursor(),
         ) { Text(text = "Verify", maxLines = 1) }
     }
 }

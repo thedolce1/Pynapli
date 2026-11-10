@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliHeaderActionButton
 import com.pynapli.app.design.PynapliScreenHeader
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
 
@@ -54,6 +55,7 @@ internal fun ErrorBand(
                 .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.error.copy(alpha = 0.16f))
                 .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f), PynapliShape.CardShape)
+                .handCursor()
                 .clickable(onClick = onDismiss)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

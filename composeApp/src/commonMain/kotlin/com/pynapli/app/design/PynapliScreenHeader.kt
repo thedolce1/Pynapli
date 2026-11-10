@@ -147,6 +147,7 @@ fun PynapliHeaderAvatar(
                 .clip(CircleShape)
                 .background(AvatarPlaceholderBrush)
                 .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                .handCursor()
                 .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -194,7 +195,8 @@ fun PynapliHeaderActionButton(
                 .minimumInteractiveComponentSize()
                 .size(PynapliHeaderTokens.ActionButtonSize)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .handCursor(enabled = enabled),
     ) {
         Icon(
             imageVector = icon,

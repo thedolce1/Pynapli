@@ -38,6 +38,7 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliSemantic
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.ChatBubble
 import com.pynapli.app.design.icons.filled.Check
@@ -81,6 +82,7 @@ internal fun ConversationRow(
         modifier =
             modifier
                 .fillMaxWidth()
+                .handCursor()
                 .clickable(onClickLabel = "Open conversation", role = Role.Button, onClick = onClick)
                 // Read the whole row as one item (name + unread + preview), leaving the nested
                 // accept/decline invite buttons as their own focusable controls.
@@ -186,7 +188,7 @@ private fun InviteActionRow(
         OutlinedButton(
             onClick = onDeclinePartnerInvite,
             enabled = !isMutating,
-            modifier = Modifier.testTag(MessagesTestTags.declineInvite(conversationId)),
+            modifier = Modifier.testTag(MessagesTestTags.declineInvite(conversationId)).handCursor(enabled = !isMutating),
         ) {
             Icon(
                 imageVector = Icons.Filled.Close,
@@ -198,7 +200,7 @@ private fun InviteActionRow(
         Button(
             onClick = onAcceptPartnerInvite,
             enabled = !isMutating,
-            modifier = Modifier.testTag(MessagesTestTags.acceptInvite(conversationId)),
+            modifier = Modifier.testTag(MessagesTestTags.acceptInvite(conversationId)).handCursor(enabled = !isMutating),
         ) {
             if (isMutating) {
                 CircularProgressIndicator(

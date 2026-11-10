@@ -44,6 +44,7 @@ import com.pynapli.app.design.PhotoBottomScrim
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Close
 import com.pynapli.app.design.icons.filled.Lock
@@ -183,6 +184,7 @@ private fun ActivityFomoTile(
                 .clip(PynapliShape.CardShape)
                 .background(tileBackgroundBrush(item.actorUserId))
                 .border(if (focused) 2.dp else 1.dp, borderColor, PynapliShape.CardShape)
+                .handCursor()
                 .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onTileClick)
                 // One item per tile (actor + activity + distance); the dismiss button stays its own
                 // focusable control.
@@ -265,6 +267,7 @@ private fun ActivityTileDismiss(
                 .size(28.dp)
                 .clip(CircleShape)
                 .background(PynapliColors.OverlayScrim)
+                .handCursor(enabled = !pendingDismiss)
                 .clickable(enabled = !pendingDismiss, onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
@@ -295,6 +298,7 @@ private fun ActivityLockedTile(onClick: () -> Unit) {
                 .clip(PynapliShape.CardShape)
                 .background(PynapliPlaceholderGradients.neutralTile)
                 .border(1.dp, PynapliColors.BorderSoft, PynapliShape.CardShape)
+                .handCursor()
                 .clickable(onClick = onClick)
                 .testTag(ActivityFomoTags.LOCKED_TILE),
         contentAlignment = Alignment.Center,
@@ -330,6 +334,7 @@ private fun ActivityUnlockBanner(
                 .clip(PynapliShape.CardShape)
                 .background(PynapliColors.Accent.copy(alpha = 0.12f))
                 .border(1.dp, PynapliColors.Accent.copy(alpha = 0.40f), PynapliShape.CardShape)
+                .handCursor()
                 .clickable(onClick = onOpenStore)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

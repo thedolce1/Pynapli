@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.handCursor
 import com.pynapli.shared.profile.ProfileTaxonomies
 
 @Composable
@@ -34,6 +35,7 @@ internal fun DistanceSection(
             onValueChange = { value -> onChange(value.toInt()) },
             valueRange = GridFilters.MIN_RADIUS_METERS.toFloat()..GridFilters.MAX_RADIUS_METERS.toFloat(),
             steps = 0,
+            modifier = Modifier.handCursor(),
         )
     }
 }
@@ -65,6 +67,7 @@ internal fun AgeSection(
                 }
             },
             valueRange = GridFilters.MIN_FILTER_AGE.toFloat()..GridFilters.MAX_FILTER_AGE.toFloat(),
+            modifier = Modifier.handCursor(),
         )
     }
 }
@@ -136,9 +139,9 @@ internal fun TonightAvailabilityRow(
             modifier = Modifier.weight(1f),
         )
         if (state.isCurrentlyAvailable) {
-            TextButton(onClick = onClear, enabled = !state.isMutating) { Text(text = "Clear") }
+            TextButton(onClick = onClear, enabled = !state.isMutating, modifier = Modifier.handCursor(enabled = !state.isMutating)) { Text(text = "Clear") }
         } else {
-            TextButton(onClick = onSet, enabled = !state.isMutating) { Text(text = "Set") }
+            TextButton(onClick = onSet, enabled = !state.isMutating, modifier = Modifier.handCursor(enabled = !state.isMutating)) { Text(text = "Set") }
         }
     }
 }
@@ -194,7 +197,7 @@ internal fun LifestyleSectionHeader(onOpenGlossary: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onOpenGlossary) { Text(text = "Glossary") }
+        TextButton(onClick = onOpenGlossary, modifier = Modifier.handCursor()) { Text(text = "Glossary") }
     }
 }
 

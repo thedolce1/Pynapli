@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
@@ -103,11 +104,11 @@ internal fun StoreTierRow(
                 )
             }
             if (isCurrent) {
-                OutlinedButton(onClick = {}, enabled = false) {
+                OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.handCursor(enabled = false)) {
                     Text("Current")
                 }
             } else if (isFree) {
-                OutlinedButton(onClick = {}, enabled = false) {
+                OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.handCursor(enabled = false)) {
                     Text("Included")
                 }
             } else if (purchasesAvailable) {
@@ -119,6 +120,7 @@ internal fun StoreTierRow(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
                         ),
+                    modifier = Modifier.handCursor(enabled = !purchaseInFlight && tier.playStoreProductId != null),
                 ) {
                     Text(if (isPurchasing) "Opening" else "Choose")
                 }
@@ -206,6 +208,7 @@ internal fun StoreProductRow(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
                         ),
+                    modifier = Modifier.handCursor(enabled = !purchaseInFlight),
                 ) {
                     Text(if (isPurchasing) "Adding" else product.priceUsdCents.storePriceLabel(product.quantity))
                 }

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.VerifiedUser
 import com.pynapli.shared.network.dto.SavedSwipeFilterDto
@@ -95,7 +96,7 @@ internal fun SwipeVerificationBanner(onVerify: () -> Unit) {
         )
         Button(
             onClick = onVerify,
-            modifier = Modifier.testTag(SwipeFilterTags.SAVED_VERIFICATION_VERIFY),
+            modifier = Modifier.testTag(SwipeFilterTags.SAVED_VERIFICATION_VERIFY).handCursor(),
         ) { Text(text = "Verify", maxLines = 1) }
     }
 }
@@ -125,7 +126,7 @@ internal fun SaveSwipePresetRow(
         Button(
             onClick = onSave,
             enabled = !isSaving && name.isNotBlank(),
-            modifier = Modifier.testTag(SwipeFilterTags.SAVE_PRESET_SUBMIT),
+            modifier = Modifier.testTag(SwipeFilterTags.SAVE_PRESET_SUBMIT).handCursor(enabled = !isSaving && name.isNotBlank()),
         ) { Text(text = if (isSaving) "Saving" else "Save") }
     }
 }

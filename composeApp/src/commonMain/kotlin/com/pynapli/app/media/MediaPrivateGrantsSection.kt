@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.People
@@ -129,7 +130,7 @@ private fun PrivateGrantRow(
                 modifier = Modifier.size(18.dp),
             )
         } else {
-            TextButton(onClick = onRevoke) {
+            TextButton(onClick = onRevoke, modifier = Modifier.handCursor()) {
                 Icon(
                     imageVector = Icons.Filled.PersonOff,
                     contentDescription = null,

@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -63,6 +65,7 @@ import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
 import com.pynapli.app.design.icons.automirrored.filled.Chat
@@ -257,6 +260,7 @@ private fun TonightError(
                 .clip(PynapliShape.CardShape)
                 .background(PynapliColors.TonightMapScrim)
                 .border(1.dp, PynapliColors.Warning.copy(alpha = 0.5f), PynapliShape.CardShape)
+                .handCursor()
                 .clickable(onClick = onDismiss)
                 .testTag(PlayingTonightTags.ERROR)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -446,6 +450,7 @@ private fun TonightTopFloater(
                     .clip(CircleShape)
                     .background(PynapliColors.SurfaceRaised.copy(alpha = 0.8f))
                     .border(1.dp, PynapliColors.Border, CircleShape)
+                    .handCursor()
                     .clickable(onClick = onBack)
                     .testTag(PlayingTonightTags.BACK),
             contentAlignment = Alignment.Center,
@@ -456,7 +461,12 @@ private fun TonightTopFloater(
         when {
             session == null ->
                 FloaterCard(
-                    modifier = Modifier.weight(1f).clickable(onClick = onStartSession).testTag(PlayingTonightTags.START),
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .handCursor()
+                            .clickable(onClick = onStartSession)
+                            .testTag(PlayingTonightTags.START),
                     leadingDashed = true,
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null, tint = PynapliColors.Accent, modifier = Modifier.size(18.dp))
@@ -632,10 +642,13 @@ private fun IntentFilterRow(
     selected: TonightIntent?,
     onSelected: (TonightIntent?) -> Unit,
 ) {
+    // Scrolls rather than squeezing: five pills overflow the wide-window side panel (and a phone)
+    // once text is enlarged.
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -666,6 +679,7 @@ private fun TonightSessionRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .handCursor()
                 .clickable { onOpenProfile(item.userId) }
                 .testTag(PlayingTonightTags.row(item.sessionId))
                 .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -729,6 +743,7 @@ private fun TonightSessionRow(
                     .clip(PynapliShape.CardShape)
                     .background(PynapliColors.SurfaceRaised)
                     .border(1.dp, PynapliColors.Border, PynapliShape.CardShape)
+                    .handCursor()
                     .clickable { onMessage(item.userId) }
                     .testTag(PlayingTonightTags.message(item.sessionId)),
             contentAlignment = Alignment.Center,

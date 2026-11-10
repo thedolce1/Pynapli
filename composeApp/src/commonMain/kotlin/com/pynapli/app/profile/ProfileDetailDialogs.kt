@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliConfirmDialog
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Check
 import com.pynapli.shared.network.dto.ReportCategory
@@ -92,7 +93,7 @@ internal fun ReportCategoryDialog(
                     ) {
                         TextButton(
                             onClick = { selectedCategory = category },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).handCursor(),
                         ) {
                             Text(
                                 text = category.toReportLabel(),
@@ -124,6 +125,7 @@ internal fun ReportCategoryDialog(
                     onSubmit(category, null)
                 },
                 enabled = !isSubmitting && selectedCategory != null,
+                modifier = Modifier.handCursor(enabled = !isSubmitting && selectedCategory != null),
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(
@@ -137,7 +139,7 @@ internal fun ReportCategoryDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isSubmitting) { Text("Cancel") }
+            TextButton(onClick = onDismiss, enabled = !isSubmitting, modifier = Modifier.handCursor(enabled = !isSubmitting)) { Text("Cancel") }
         },
     )
 }

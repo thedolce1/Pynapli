@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliErrorState
 import com.pynapli.app.design.PynapliMotion
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.SearchOff
 import com.pynapli.app.location.LocationUiState
@@ -77,7 +78,7 @@ internal fun GridBody(
                     Button(
                         onClick = onUseCurrentLocation,
                         enabled = !locationState.isUpdating,
-                        modifier = Modifier.padding(top = 14.dp),
+                        modifier = Modifier.padding(top = 14.dp).handCursor(enabled = !locationState.isUpdating),
                     ) {
                         Text(text = if (locationState.isUpdating) "Updating..." else "Use current location")
                     }

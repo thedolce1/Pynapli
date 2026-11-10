@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPlaceholderGradients
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
 import com.pynapli.app.design.icons.filled.Close
@@ -63,7 +64,7 @@ internal fun FullScreenConversationHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = onBack, modifier = Modifier.handCursor()) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
@@ -81,7 +82,7 @@ internal fun FullScreenConversationHeader(
                         .weight(1f)
                         .then(
                             if (participant != null) {
-                                Modifier.clickable { onOpenParticipantProfile(participant) }
+                                Modifier.handCursor().clickable { onOpenParticipantProfile(participant) }
                             } else {
                                 Modifier
                             },
@@ -110,6 +111,7 @@ internal fun FullScreenConversationHeader(
                     }
                 },
                 enabled = participant != null,
+                modifier = Modifier.handCursor(enabled = participant != null),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Person,
@@ -118,7 +120,7 @@ internal fun FullScreenConversationHeader(
                     modifier = Modifier.size(20.dp),
                 )
             }
-            IconButton(onClick = {}) {
+            IconButton(onClick = {}, modifier = Modifier.handCursor()) {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,
                     contentDescription = "Conversation options",
@@ -150,7 +152,7 @@ private fun ConversationAvatar(
                 Modifier
                     .size(46.dp)
                     .clip(CircleShape)
-                    .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                    .then(if (onClick != null) Modifier.handCursor().clickable(onClick = onClick) else Modifier)
                     .background(PynapliPlaceholderGradients.messagingAvatar)
                     .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
             contentAlignment = Alignment.Center,
@@ -240,7 +242,7 @@ internal fun ConversationHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = onDismiss) {
+        IconButton(onClick = onDismiss, modifier = Modifier.handCursor()) {
             Icon(
                 imageVector = Icons.Filled.Close,
                 contentDescription = "Close conversation",

@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.activity.ActivityTabUi
 import com.pynapli.app.conversation.titleFor
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.ChatBubble
 import com.pynapli.app.design.icons.filled.LocalFireDepartment
@@ -60,6 +61,7 @@ internal fun InAppNotificationBanner(
                 .fillMaxWidth()
                 .clip(PynapliShape.CardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .handCursor()
                 .clickable(onClick = onClick)
                 .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,

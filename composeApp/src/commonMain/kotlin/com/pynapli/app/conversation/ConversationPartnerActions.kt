@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.Logout
 import com.pynapli.app.design.icons.filled.PersonAdd
@@ -149,6 +150,7 @@ internal fun ConversationPartnerActions(
                         TextButton(
                             onClick = onInvitePartner,
                             enabled = !state.isInvitingPartner,
+                            modifier = Modifier.handCursor(enabled = !state.isInvitingPartner),
                         ) {
                             if (state.isInvitingPartner) {
                                 CircularProgressIndicator(
@@ -173,6 +175,7 @@ internal fun ConversationPartnerActions(
                         TextButton(
                             onClick = onLeaveConversation,
                             enabled = !state.isLeaving,
+                            modifier = Modifier.handCursor(enabled = !state.isLeaving),
                         ) {
                             if (state.isLeaving) {
                                 CircularProgressIndicator(

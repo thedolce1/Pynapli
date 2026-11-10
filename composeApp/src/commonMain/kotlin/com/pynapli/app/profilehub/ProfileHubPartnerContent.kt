@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliLayout
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.profilelink.ProfileLinkUi
 import com.pynapli.app.profilelink.ProfileLinksUiState
 
@@ -195,7 +196,7 @@ private fun PartnerLinkRow(
         if (busy) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
         } else if (actionLabel != null) {
-            TextButton(onClick = onAction) {
+            TextButton(onClick = onAction, modifier = Modifier.handCursor()) {
                 Text(text = actionLabel, color = MaterialTheme.colorScheme.error)
             }
         }
@@ -229,10 +230,10 @@ private fun PartnerInviteRow(
         if (busy) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
         } else {
-            TextButton(onClick = onDecline) {
+            TextButton(onClick = onDecline, modifier = Modifier.handCursor()) {
                 Text(text = "Decline", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = onAccept) {
+            TextButton(onClick = onAccept, modifier = Modifier.handCursor()) {
                 Text(text = "Accept", color = MaterialTheme.colorScheme.primary)
             }
         }

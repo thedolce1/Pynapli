@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.testTag
 import com.pynapli.app.design.PynapliBottomSheet
 import com.pynapli.app.design.PynapliSheetActionRow
 import com.pynapli.app.design.PynapliSheetColumn
+import com.pynapli.app.design.handCursor
 
 @Composable
 internal fun GridFiltersSheet(
@@ -178,14 +179,14 @@ internal fun GridFiltersSheet(
                 start = {
                     TextButton(
                         onClick = onClearAll,
-                        modifier = Modifier.testTag(GridFilterTags.CLEAR_ALL),
+                        modifier = Modifier.testTag(GridFilterTags.CLEAR_ALL).handCursor(),
                     ) { Text(text = "Clear all") }
                 },
             ) {
-                OutlinedButton(onClick = onDismiss) { Text(text = "Cancel") }
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.handCursor()) { Text(text = "Cancel") }
                 Button(
                     onClick = { onApply(draft.withLifestyleAccess(lifestyleFiltersAllowed)) },
-                    modifier = Modifier.testTag(GridFilterTags.APPLY),
+                    modifier = Modifier.testTag(GridFilterTags.APPLY).handCursor(),
                 ) { Text(text = "Apply") }
             }
         }

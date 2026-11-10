@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
@@ -57,12 +58,23 @@ internal val GridTileGap = 1.dp
  * at least 1) so the skeleton predicts the same number of columns the LazyVerticalGrid will
  * actually produce, rather than approximating it.
  */
-internal fun gridColumnCountFor(paneWidth: Dp): Int =
+internal fun gridColumnCountFor(
+    paneWidth: Dp,
+    fontScale: Float = 1f,
+): Int =
     if (paneWidth < GridWidePaneMinWidth) {
         3
     } else {
-        (((paneWidth + GridTileGap) / (GridWideTileMinSize + GridTileGap)).toInt()).coerceAtLeast(1)
+        (((paneWidth + GridTileGap) / (gridWideTileMinSize(fontScale) + GridTileGap)).toInt()).coerceAtLeast(1)
     }
+
+/**
+ * Wide-pane tile minimum, grown with the text scale. A member who enlarged text (the browser's font
+ * setting on the web, the system font size elsewhere) did it to read names, and at 1.5x a 168dp tile
+ * cut most of them off. Width still means more tiles; large text just means fewer, larger ones.
+ * Capped at 1.5x, the largest text scale the web applies.
+ */
+internal fun gridWideTileMinSize(fontScale: Float): Dp = GridWideTileMinSize * fontScale.coerceIn(1f, 1.5f)
 
 @Composable
 internal fun ProfileGrid(
@@ -125,7 +137,7 @@ internal fun ProfileGrid(
             if (maxWidth < GridWidePaneMinWidth) {
                 GridCells.Fixed(3)
             } else {
-                GridCells.Adaptive(minSize = GridWideTileMinSize)
+                GridCells.Adaptive(minSize = gridWideTileMinSize(LocalDensity.current.fontScale))
             }
         LazyVerticalGrid(
             columns = columns,

@@ -26,6 +26,7 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliTabIcon
 import com.pynapli.app.design.PynapliTabIcons
+import com.pynapli.app.design.handCursor
 
 internal enum class PynapliTab(
     val label: String,
@@ -79,6 +80,7 @@ internal fun PynapliBottomNavigation(
                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
+                modifier = Modifier.handCursor(enabled = enabled),
             )
         }
     }
@@ -123,6 +125,7 @@ internal fun PynapliNavigationRail(
                             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         ),
+                    modifier = Modifier.handCursor(),
                 )
             }
             Spacer(modifier = Modifier.weight(1f))

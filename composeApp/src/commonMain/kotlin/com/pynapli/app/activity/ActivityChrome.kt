@@ -32,6 +32,7 @@ import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliScreenHeader
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.Notifications
@@ -77,7 +78,7 @@ internal fun ActivityGateRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        TextButton(onClick = onOpenStore) {
+        TextButton(onClick = onOpenStore, modifier = Modifier.handCursor()) {
             Text(text = "Select", maxLines = 1)
         }
     }
@@ -211,6 +212,7 @@ internal fun ActivityLoadMoreRow(
         OutlinedButton(
             onClick = onLoadMore,
             enabled = !loading,
+            modifier = Modifier.handCursor(enabled = !loading),
         ) {
             if (loading) {
                 CircularProgressIndicator(

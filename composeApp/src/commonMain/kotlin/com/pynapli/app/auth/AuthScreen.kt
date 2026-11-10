@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliPasswordVisibilityToggle
+import com.pynapli.app.design.handCursor
 
 @Composable
 fun AuthScreen(
@@ -143,6 +144,7 @@ fun AuthScreen(
                     checked = state.acceptedAgeAndTerms,
                     onCheckedChange = onAcceptedAgeAndTermsChanged,
                     enabled = !state.isSubmitting,
+                    modifier = Modifier.handCursor(enabled = !state.isSubmitting),
                 )
                 Text(
                     text = "I confirm I am 18 or older and accept the Terms and Privacy Policy.",
@@ -172,7 +174,7 @@ fun AuthScreen(
         Button(
             onClick = onSubmit,
             enabled = !state.isSubmitting,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().handCursor(enabled = !state.isSubmitting),
         ) {
             if (state.isSubmitting) {
                 CircularProgressIndicator(
@@ -203,6 +205,7 @@ fun AuthScreen(
                     }
                 },
                 enabled = !state.isSubmitting,
+                modifier = Modifier.handCursor(enabled = !state.isSubmitting),
             ) {
                 Text(if (state.mode == AuthMode.SignIn) "Create account" else "Sign in")
             }
@@ -213,6 +216,7 @@ fun AuthScreen(
             TextButton(
                 onClick = login,
                 enabled = !state.isSubmitting,
+                modifier = Modifier.handCursor(enabled = !state.isSubmitting),
             ) {
                 Text("Dev login")
             }

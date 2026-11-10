@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.handCursor
 import com.pynapli.shared.network.dto.SavedGridFilterDto
 
 @Composable
@@ -56,6 +57,7 @@ internal fun SavePresetRow(
         Button(
             onClick = onSave,
             enabled = !isSaving && name.isNotBlank(),
+            modifier = Modifier.handCursor(enabled = !isSaving && name.isNotBlank()),
         ) { Text(text = if (isSaving) "Saving" else "Save") }
     }
 }
