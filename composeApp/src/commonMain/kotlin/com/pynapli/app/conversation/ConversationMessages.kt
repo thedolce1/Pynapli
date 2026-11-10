@@ -40,6 +40,7 @@ import com.pynapli.app.design.icons.filled.Check
 import com.pynapli.app.design.icons.filled.Delete
 import com.pynapli.app.design.icons.filled.DoneAll
 import com.pynapli.app.design.icons.filled.Lock
+import com.pynapli.app.design.pynapliIconButtonSize
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.MessageType
 
@@ -392,7 +393,7 @@ private fun MessageBubble(
                         enabled = !isDeleting,
                         modifier =
                             Modifier
-                                .size(32.dp)
+                                .size(pynapliIconButtonSize(32.dp))
                                 .testTag(ConversationTestTags.deleteMessage(message.messageId))
                                 .handCursor(enabled = !isDeleting),
                     ) {

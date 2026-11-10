@@ -45,6 +45,7 @@ import com.pynapli.app.design.icons.filled.Delete
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.PhotoLibrary
 import com.pynapli.app.design.icons.filled.Star
+import com.pynapli.app.design.pynapliIconButtonSize
 
 internal fun LazyGridScope.albumSection(
     kind: MediaAlbumKindUi,
@@ -420,7 +421,7 @@ private fun TileActionButton(
         modifier =
             Modifier
                 .padding(2.dp)
-                .size(28.dp)
+                .size(pynapliIconButtonSize(28.dp))
                 .clip(CircleShape)
                 .background(PynapliColors.OnPhotoBadgeFill)
                 .handCursor()

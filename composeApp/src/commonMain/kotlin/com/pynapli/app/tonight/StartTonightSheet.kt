@@ -42,6 +42,7 @@ import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.PynapliSheetColumn
 import com.pynapli.app.design.PynapliSheetTitle
 import com.pynapli.app.design.handCursor
+import com.pynapli.app.design.wideChipHeight
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
 
 private const val MAX_NOTE = 100
@@ -243,7 +244,7 @@ private fun SelectableChip(
         onClick = onClick,
         label = { Text(label) },
         colors = FilterChipDefaults.filterChipColors(),
-        modifier = Modifier.testTag(tag).handCursor(),
+        modifier = Modifier.testTag(tag).wideChipHeight().handCursor(),
     )
 }
 

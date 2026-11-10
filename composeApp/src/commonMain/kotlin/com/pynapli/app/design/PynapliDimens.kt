@@ -28,6 +28,11 @@ object PynapliLayout {
     val HeaderHeight = 64.dp
     val BottomNavHeight = 64.dp
     val MinTouchTarget = 48.dp
+
+    // Drawn sizes on tablets and computers (Medium+), see design/PynapliWideControls.kt. Phones keep
+    // the compact sizes: their touch targets already reach MinTouchTarget.
+    val WideChipHeight = 40.dp
+    val WideIconButtonSize = 40.dp
 }
 
 /**

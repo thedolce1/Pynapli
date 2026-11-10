@@ -90,6 +90,10 @@ who skew older):
   fontScale, 1.0 to 1.5x (`pynapliTextScaleForBrowserFont`). Text grows and layout units don't. The
   Grid's wide-pane tile minimum grows with it, so names stay whole (8 → 5 columns at 1.5x in a
   1440px window), and pill labels never wrap.
+- **Comfortable control sizes** on Medium+ windows (design/PynapliWideControls.kt): pills, chips
+  and small icon buttons draw at 40dp (they were 26–32dp). Touch areas were already 48dp, measured;
+  this is about what people aim at, especially with a mouse, which gets no touch widening. Phones
+  are unchanged.
 
 Design language is unchanged: same tokens, dark-first, dense, restrained gold. Desktop layouts are
 *compositions* of existing surfaces, not restyles.

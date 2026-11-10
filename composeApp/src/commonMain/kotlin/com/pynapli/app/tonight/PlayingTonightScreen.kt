@@ -71,6 +71,7 @@ import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
 import com.pynapli.app.design.icons.automirrored.filled.Chat
 import com.pynapli.app.design.icons.filled.Add
 import com.pynapli.app.design.icons.filled.DarkMode
+import com.pynapli.app.design.pynapliIconButtonSize
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -739,7 +740,7 @@ private fun TonightSessionRow(
         Box(
             modifier =
                 Modifier
-                    .size(32.dp)
+                    .size(pynapliIconButtonSize(32.dp))
                     .clip(PynapliShape.CardShape)
                     .background(PynapliColors.SurfaceRaised)
                     .border(1.dp, PynapliColors.Border, PynapliShape.CardShape)

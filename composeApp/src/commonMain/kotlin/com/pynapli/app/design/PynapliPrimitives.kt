@@ -104,7 +104,7 @@ fun PynapliPill(
     Row(
         modifier =
             modifier
-                .then(if (onClick != null) Modifier.minimumInteractiveComponentSize() else Modifier)
+                .then(if (onClick != null) Modifier.minimumInteractiveComponentSize().wideChipHeight() else Modifier)
                 .clip(PynapliShape.PillShape)
                 .background(fill)
                 .border(1.dp, borderColor, PynapliShape.PillShape)

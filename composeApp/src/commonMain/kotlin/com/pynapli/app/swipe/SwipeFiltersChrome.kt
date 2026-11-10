@@ -28,6 +28,7 @@ import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Lock
+import com.pynapli.app.design.wideChipHeight
 
 @Composable
 internal fun SectionIntro(text: String) {
@@ -145,7 +146,7 @@ private fun DealbreakerLockChip(
                 selectedLabelColor = PynapliColors.Accent,
                 selectedLeadingIconColor = PynapliColors.Accent,
             ),
-        modifier = Modifier.testTag(SwipeFilterTags.dealbreakerTag(dealbreakerKey)).handCursor(enabled = eligible),
+        modifier = Modifier.testTag(SwipeFilterTags.dealbreakerTag(dealbreakerKey)).wideChipHeight().handCursor(enabled = eligible),
     )
 }
 

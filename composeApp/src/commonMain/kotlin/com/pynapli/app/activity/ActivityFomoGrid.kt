@@ -48,6 +48,7 @@ import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Close
 import com.pynapli.app.design.icons.filled.Lock
+import com.pynapli.app.design.pynapliIconButtonSize
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.network.dto.ActivityEventDto
 
@@ -262,9 +263,9 @@ private fun ActivityTileDismiss(
     Box(
         modifier =
             modifier
-                // Compact 28dp visual, >=48dp touch target.
+                // Compact 28dp visual on phones (40dp on tablets and computers), >=48dp touch target.
                 .minimumInteractiveComponentSize()
-                .size(28.dp)
+                .size(pynapliIconButtonSize(28.dp))
                 .clip(CircleShape)
                 .background(PynapliColors.OverlayScrim)
                 .handCursor(enabled = !pendingDismiss)
