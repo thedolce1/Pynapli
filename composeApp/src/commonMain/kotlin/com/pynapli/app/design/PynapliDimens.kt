@@ -41,6 +41,7 @@ object PynapliLayout {
  */
 object PynapliContentWidth {
     val Form = 440.dp // auth + onboarding + narrow single-purpose forms
+    val Stage = 520.dp // a centered card deck (Swipe, Psync); a stretched hero card is the stretched-phone tell
     val Conversation = 720.dp // a readable chat column (bubbles + composer) in a wide Messages pane
     val Feed = 760.dp // single-column card lists (Store plans, profile hub, media albums)
     val WideFeed = 900.dp // multi-column card grids (Activity FOMO)

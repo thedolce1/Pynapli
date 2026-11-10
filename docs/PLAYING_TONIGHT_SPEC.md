@@ -83,6 +83,13 @@ Map:
 - No street-level pins.
 - Default is zone-only.
 - Map/list visibility is opt-in per session.
+- Markers are placed only in the part of the map nothing covers (below the top floater, above the
+  sheet, beside the side panel), so the viewer's own marker is always visible.
+
+Layout by window width (all clients, including the web companion at `/tonight`):
+
+- Phone: full-bleed map, top floater, draggable bottom sheet.
+- Tablet/desktop (Medium+): a side panel (back, own-session card, feed) beside the map.
 
 ## Interactions
 

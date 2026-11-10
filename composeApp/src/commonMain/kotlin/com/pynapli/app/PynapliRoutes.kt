@@ -18,6 +18,10 @@ object PynapliRoutes {
     const val PROFILE = "/profile"
     const val STORE = "/store"
 
+    /** Full-screen overlays: real paths so browser back closes them and they can be bookmarked. */
+    const val TONIGHT = "/tonight"
+    const val PSYNC = "/psync"
+
     fun messagesThread(conversationId: String): String = "$MESSAGES/$conversationId"
 
     /**
@@ -72,6 +76,16 @@ object PynapliRoutes {
                 true
             }
 
+            normalized == TONIGHT -> {
+                deepLinks.openTonight()
+                true
+            }
+
+            normalized == PSYNC -> {
+                deepLinks.openPsync()
+                true
+            }
+
             else -> false
         }
     }
@@ -84,10 +98,15 @@ internal fun pynapliRouteFor(
     tab: PynapliTab,
     profileSurface: ProfileSurface,
     conversationId: String?,
+    tonightOpen: Boolean = false,
+    psyncOpen: Boolean = false,
 ): String =
     when {
         onboardingActive -> PynapliRoutes.SIGNUP
         !authenticated -> PynapliRoutes.LOGIN
+        // The overlays draw above every tab and the profile surface, so they win.
+        psyncOpen -> PynapliRoutes.PSYNC
+        tonightOpen -> PynapliRoutes.TONIGHT
         profileSurface != ProfileSurface.None -> PynapliRoutes.PROFILE
         else ->
             when (tab) {

@@ -50,6 +50,10 @@ class AppDeepLinkStateHolder {
 
     fun openProfile() = openSimpleTarget(TARGET_PROFILE)
 
+    fun openTonight() = openSimpleTarget(TARGET_TONIGHT)
+
+    fun openPsync() = openSimpleTarget(TARGET_PSYNC)
+
     private fun openSimpleTarget(target: String) {
         _state.value =
             AppDeepLinkCommand(
@@ -69,5 +73,7 @@ class AppDeepLinkStateHolder {
         const val TARGET_SWIPE = "swipe"
         const val TARGET_STORE = "store"
         const val TARGET_PROFILE = "profile"
+        const val TARGET_TONIGHT = "tonight"
+        const val TARGET_PSYNC = "psync"
     }
 }

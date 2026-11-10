@@ -81,8 +81,14 @@ fun PynapliApp(
             activeNotification = activeNotification,
             onNotification = { activeNotification = it },
             onSelectTab = { selectedTab = it },
-            onClearProfileSurface = { profileSurface = ProfileSurface.None },
+            onClearOverlays = {
+                profileSurface = ProfileSurface.None
+                tonightVisible = false
+                psyncVisible = false
+            },
             onOpenProfileHub = { profileSurface = ProfileSurface.Hub },
+            onOpenTonight = { tonightVisible = true },
+            onOpenPsync = { psyncVisible = true },
         )
 
         // Report the canonical route for the current navigation state. Composed before
@@ -110,6 +116,8 @@ fun PynapliApp(
                     tab = selectedTab,
                     profileSurface = profileSurface,
                     conversationId = openConversationId,
+                    tonightOpen = tonightVisible && graph.playingTonightStateHolder != null,
+                    psyncOpen = psyncVisible && psyncStateHolder != null,
                 )
             LaunchedEffect(route) { platform.onNavigationRouteChanged(route) }
         }

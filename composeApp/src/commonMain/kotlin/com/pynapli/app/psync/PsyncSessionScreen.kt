@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,11 +29,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pynapli.app.design.PynapliButton
 import com.pynapli.app.design.PynapliButtonStyle
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliContentWidth
+import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.SwipeCardTokens
 import com.pynapli.app.design.icons.Icons
@@ -72,14 +76,14 @@ fun PsyncSessionScreen(
 
     LaunchedEffect(Unit) { stateHolder.refresh() }
 
-    Box(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(PynapliColors.Black)
-                .testTag(PsyncSessionTags.SCREEN),
+    // Capped like the Swipe stage: on a tablet or desktop the deck card, buttons and recap read as
+    // one centered column instead of a phone layout stretched edge to edge. A no-op on phones.
+    PynapliMaxWidthColumn(
+        maxWidth = PynapliContentWidth.Stage,
+        modifier = modifier.testTag(PsyncSessionTags.SCREEN),
+        background = PynapliColors.Black,
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(20.dp)) {
             PsyncHeader(title = "Psync", onBack = onBack)
             Spacer(Modifier.height(16.dp))
 
@@ -111,7 +115,7 @@ fun PsyncSessionScreen(
 private fun IdlePhase(onStart: () -> Unit) {
     StatusPhase(
         title = "Swipe together",
-        body = "Start a Psync session and review the same people with your partner — privately, from your own phones.",
+        body = "Start a Psync session and review the same people with your partner — privately, each on your own device.",
     ) {
         PrimaryButton("Start Psync", PsyncSessionTags.START_PSYNC_BUTTON, onClick = onStart)
     }
@@ -299,7 +303,7 @@ private fun StatusPhase(
         Spacer(Modifier.height(40.dp))
         Text(title, color = PynapliColors.TextPrimary, style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(10.dp))
-        Text(body, color = PynapliColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
+        Text(body, color = PynapliColors.TextSecondary, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
         Spacer(Modifier.height(24.dp))
         actions()
     }

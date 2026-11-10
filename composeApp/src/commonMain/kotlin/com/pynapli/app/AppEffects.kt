@@ -39,8 +39,10 @@ internal fun PynapliAppEffects(
     activeNotification: InAppNotificationUi?,
     onNotification: (InAppNotificationUi?) -> Unit,
     onSelectTab: (PynapliTab) -> Unit,
-    onClearProfileSurface: () -> Unit,
+    onClearOverlays: () -> Unit,
     onOpenProfileHub: () -> Unit,
+    onOpenTonight: () -> Unit,
+    onOpenPsync: () -> Unit,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -69,7 +71,7 @@ internal fun PynapliAppEffects(
 
     LaunchedEffect(authState.authenticated) {
         if (!authState.authenticated) {
-            onClearProfileSurface()
+            onClearOverlays()
             onNotification(null)
             messageUnreadSnapshot = null
             activityEventSnapshot = null
@@ -108,7 +110,9 @@ internal fun PynapliAppEffects(
         if (!authState.authenticated) return@LaunchedEffect
         holder.state.collect { command ->
             if (command == null) return@collect
-            onClearProfileSurface()
+            // Every target is a fresh destination, so close whatever overlay was showing. This is
+            // also what makes browser back from /tonight or /psync close the overlay.
+            onClearOverlays()
             when (command.target) {
                 AppDeepLinkStateHolder.TARGET_ACTIVITY -> {
                     onSelectTab(PynapliTab.Activity)
@@ -140,6 +144,18 @@ internal fun PynapliAppEffects(
                 AppDeepLinkStateHolder.TARGET_STORE -> onSelectTab(PynapliTab.Store)
 
                 AppDeepLinkStateHolder.TARGET_PROFILE -> onOpenProfileHub()
+
+                // Each overlay opens over the tab that owns its entry point, so closing it lands
+                // where the in-app button would have.
+                AppDeepLinkStateHolder.TARGET_TONIGHT -> {
+                    onSelectTab(PynapliTab.Grid)
+                    onOpenTonight()
+                }
+
+                AppDeepLinkStateHolder.TARGET_PSYNC -> {
+                    onSelectTab(PynapliTab.Swipe)
+                    onOpenPsync()
+                }
             }
             holder.markHandled(command.commandId)
         }

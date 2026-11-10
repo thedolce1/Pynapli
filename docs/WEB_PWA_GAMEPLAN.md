@@ -17,7 +17,10 @@ browsers get parity with the mobile app's proven layouts.
 
 1. **V1 scope = core loop first**: Auth/Onboarding, Grid, Swipe, Activity, Messages,
    Profile/Settings, Store **read-only**. Playing Tonight + Psync follow as v1.x slices after the
-   shell is proven.
+   shell is proven. **Shipped 2026-11-10** (founder: the web is a full companion, since many members
+   use a tablet or computer): both are wired on web, reachable at `/tonight` and `/psync` (browser
+   back closes them, the paths can be bookmarked), Tonight uses a side panel beside the map on
+   Medium+ windows, and Psync is a centered `PynapliContentWidth.Stage` column.
 2. **Web payments deferred**: the web Store shows current plan, linked-partner benefit, and
    inventory balances with "purchase on the mobile app" guidance. A Stripe web-checkout path is a
    separate later initiative (server webhooks + entitlement reconciliation).
@@ -228,7 +231,7 @@ with `--virtual-time-budget` to fast-forward the timers deterministically: all s
 
 ### Deferred (explicitly post-v1)
 
-Playing Tonight + Psync surfaces on web, Stripe web payments, Web Push notifications, SQLDelight
+Stripe web payments, Web Push notifications, SQLDelight
 web-worker cache, Compose-for-Web accessibility deep-pass beyond the Lighthouse gate (the a11y
 semantics work from the mobile polish pass carries over where CMP web supports it), iOS parity
 (separate phase).

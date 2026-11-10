@@ -19,6 +19,8 @@ class PynapliRoutesTest {
                 "/messages" to AppDeepLinkStateHolder.TARGET_MESSAGES,
                 "/profile" to AppDeepLinkStateHolder.TARGET_PROFILE,
                 "/store" to AppDeepLinkStateHolder.TARGET_STORE,
+                "/tonight" to AppDeepLinkStateHolder.TARGET_TONIGHT,
+                "/psync" to AppDeepLinkStateHolder.TARGET_PSYNC,
             )
         cases.forEach { (path, expectedTarget) ->
             val deepLinks = AppDeepLinkStateHolder()
@@ -94,6 +96,45 @@ class PynapliRoutesTest {
                 tab = PynapliTab.Store,
                 profileSurface = ProfileSurface.None,
                 conversationId = null,
+            ),
+        )
+    }
+
+    @Test
+    fun openOverlaysWinOverTheTabAndProfileSurface() {
+        assertEquals(
+            PynapliRoutes.TONIGHT,
+            pynapliRouteFor(
+                authenticated = true,
+                onboardingActive = false,
+                tab = PynapliTab.Grid,
+                profileSurface = ProfileSurface.Hub,
+                conversationId = null,
+                tonightOpen = true,
+            ),
+        )
+        assertEquals(
+            PynapliRoutes.PSYNC,
+            pynapliRouteFor(
+                authenticated = true,
+                onboardingActive = false,
+                tab = PynapliTab.Swipe,
+                profileSurface = ProfileSurface.None,
+                conversationId = null,
+                tonightOpen = true,
+                psyncOpen = true,
+            ),
+        )
+        // Signed out, an overlay flag left over from the last session must not leak into the URL.
+        assertEquals(
+            PynapliRoutes.LOGIN,
+            pynapliRouteFor(
+                authenticated = false,
+                onboardingActive = false,
+                tab = PynapliTab.Grid,
+                profileSurface = ProfileSurface.None,
+                conversationId = null,
+                tonightOpen = true,
             ),
         )
     }

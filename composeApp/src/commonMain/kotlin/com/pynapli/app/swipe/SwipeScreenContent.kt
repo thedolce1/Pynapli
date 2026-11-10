@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.ads.AdPlacement
 import com.pynapli.app.ads.AdPlacementPolicy
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
 import com.pynapli.app.design.icons.automirrored.filled.ArrowForward
@@ -93,7 +94,7 @@ internal fun SwipeScreenContent(
                         if (wideStage) {
                             Modifier
                                 .align(Alignment.TopCenter)
-                                .widthIn(max = WideStageMaxWidth)
+                                .widthIn(max = PynapliContentWidth.Stage)
                                 .fillMaxHeight()
                         } else {
                             Modifier.fillMaxSize()
@@ -211,9 +212,6 @@ internal fun SwipeScreenContent(
         }
     }
 }
-
-/** Wide panes center the deck; a stretched hero card is the stretched-phone tell. */
-private val WideStageMaxWidth = 520.dp
 
 private val WideStageMinPaneWidth = 600.dp
 

@@ -170,16 +170,15 @@ class PynapliCommonGraph(
      * (auth, settings, deep links, onboarding, the Psync stream). Built here once so the Android, iOS,
      * web and desktop shells don't each repeat a 22-argument mapping.
      *
-     * A null [psyncStreamClient] hides Psync; [includePlayingTonightFeed] = false hides the Playing
-     * Tonight feed. The web shell uses both (WEB_PWA_GAMEPLAN: neither surface ships on web yet).
+     * Every shell ships Playing Tonight and Psync, so [psyncStreamClient] is required: a shell that
+     * forgot it used to hide Psync silently (web did, until 2026-11-10).
      */
     fun appGraph(
         authStateHolder: AuthStateHolder,
         appSettingsStateHolder: AppSettingsStateHolder,
         deepLinkStateHolder: AppDeepLinkStateHolder? = null,
         onboardingStateHolder: OnboardingStateHolder? = null,
-        psyncStreamClient: PsyncStreamClient? = null,
-        includePlayingTonightFeed: Boolean = true,
+        psyncStreamClient: PsyncStreamClient,
     ): PynapliAppGraph =
         PynapliAppGraph(
             authStateHolder = authStateHolder,
@@ -199,8 +198,8 @@ class PynapliCommonGraph(
             savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
             travelLocationStateHolder = travelLocationStateHolder,
             tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
-            playingTonightStateHolder = playingTonightStateHolder.takeIf { includePlayingTonightFeed },
-            psyncRepository = psyncRepository.takeIf { psyncStreamClient != null },
+            playingTonightStateHolder = playingTonightStateHolder,
+            psyncRepository = psyncRepository,
             psyncStreamClient = psyncStreamClient,
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,

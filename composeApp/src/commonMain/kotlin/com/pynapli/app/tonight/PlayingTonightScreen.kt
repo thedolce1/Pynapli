@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,9 +45,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.OnlineDot
@@ -56,6 +61,8 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.PynapliWindowSizeClass
+import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
 import com.pynapli.app.design.icons.automirrored.filled.Chat
@@ -86,18 +93,7 @@ fun PlayingTonightScreen(
 
     LaunchedEffect(Unit) { stateHolder.load() }
 
-    Box(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(PynapliColors.Black)
-                .testTag(PlayingTonightTags.SCREEN),
-    ) {
-        ZoneMap(
-            items = state.feedItems,
-            modifier = Modifier.fillMaxSize(),
-        )
-
+    val floater: @Composable (Modifier) -> Unit = { floaterModifier ->
         TonightTopFloater(
             session = state.currentSession,
             viewerUserId = viewerUserId,
@@ -106,44 +102,26 @@ fun PlayingTonightScreen(
             onApprove = { scope.launch { stateHolder.approveSession() } },
             onDecline = { scope.launch { stateHolder.declineSession() } },
             onEnd = { scope.launch { stateHolder.endCurrentSession() } },
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    // The map is deliberately full-bleed behind the status bar, but the floater's
-                    // controls are not: without this the back button collides with the system
-                    // clock. Every other surface inherits this inset from PynapliScreenHeader; the
-                    // floater is hand-rolled precisely because it is not a header, so it applies
-                    // the inset itself.
-                    .statusBarsPadding()
-                    .padding(12.dp),
+            modifier = floaterModifier,
         )
-
-        TonightSheet(
+    }
+    val feed: @Composable (Modifier) -> Unit = { feedModifier ->
+        TonightFeed(
             state = state,
             onIntentSelected = { scope.launch { stateHolder.setIntentFilter(it) } },
             onOpenProfile = onOpenProfile,
             onMessage = onMessage,
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier = feedModifier,
         )
+    }
+    val error: @Composable (Modifier) -> Unit = { errorModifier ->
+        state.errorMessage?.let { message -> TonightError(message, stateHolder::clearError, errorModifier) }
+    }
 
-        state.errorMessage?.let { message ->
-            Text(
-                text = message,
-                color = PynapliColors.TextPrimary,
-                style = MaterialTheme.typography.bodySmall,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 72.dp, start = 12.dp, end = 12.dp)
-                        .clip(PynapliShape.CardShape)
-                        .background(PynapliColors.TonightMapScrim)
-                        .border(1.dp, PynapliColors.Warning.copy(alpha = 0.5f), PynapliShape.CardShape)
-                        .clickable { stateHolder.clearError() }
-                        .testTag(PlayingTonightTags.ERROR)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-            )
-        }
+    if (currentPynapliWindowSizeClass() == PynapliWindowSizeClass.Compact) {
+        CompactTonightLayout(state.feedItems, floater, feed, error, modifier)
+    } else {
+        WideTonightLayout(state.feedItems, floater, feed, error, modifier)
     }
 
     if (showStartSheet) {
@@ -161,12 +139,143 @@ fun PlayingTonightScreen(
     }
 }
 
+/**
+ * Phone layout: full-bleed map under a top floater and a draggable bottom sheet. The map projects
+ * into the strip between them (measured floater height, live sheet height), so no dot and not the
+ * "you" marker can land behind either.
+ */
+@Composable
+private fun CompactTonightLayout(
+    items: List<TonightFeedItemUi>,
+    floater: @Composable (Modifier) -> Unit,
+    feed: @Composable (Modifier) -> Unit,
+    error: @Composable (Modifier) -> Unit,
+    modifier: Modifier,
+) {
+    var floaterHeightPx by remember { mutableStateOf(0) }
+    var snapIndex by remember { mutableStateOf(1) }
+    val sheetFraction by animateFloatAsState(TonightSheetSnaps[snapIndex], label = "tonight-sheet")
+    val density = LocalDensity.current
+
+    BoxWithConstraints(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(PynapliColors.Black)
+                .testTag(PlayingTonightTags.SCREEN),
+    ) {
+        val sheetHeight = maxHeight * sheetFraction
+        val floaterHeight = with(density) { floaterHeightPx.toDp() }
+        ZoneMap(
+            items = items,
+            topInset = floaterHeight,
+            bottomInset = sheetHeight,
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        floater(
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .onSizeChanged { floaterHeightPx = it.height }
+                // The map is deliberately full-bleed behind the status bar, but the floater's
+                // controls are not: without this the back button collides with the system clock.
+                // Every other surface inherits this inset from PynapliScreenHeader; the floater is
+                // hand-rolled precisely because it is not a header, so it applies the inset itself.
+                .statusBarsPadding()
+                .padding(12.dp),
+        )
+
+        TonightSheet(
+            height = sheetHeight,
+            onDragUp = { if (snapIndex < TonightSheetSnaps.lastIndex) snapIndex++ },
+            onDragDown = { if (snapIndex > 0) snapIndex-- },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            feed(Modifier.fillMaxWidth())
+        }
+
+        error(
+            Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = floaterHeight, start = 12.dp, end = 12.dp),
+        )
+    }
+}
+
+/**
+ * Tablet and desktop layout: a side panel (back, the viewer's session card, the feed) beside the
+ * map, the way desktop map apps do it. The phone sheet stretched across a wide window left rows
+ * 1,400px long with the message button stranded at the far edge, and covered most of the map.
+ */
+@Composable
+private fun WideTonightLayout(
+    items: List<TonightFeedItemUi>,
+    floater: @Composable (Modifier) -> Unit,
+    feed: @Composable (Modifier) -> Unit,
+    error: @Composable (Modifier) -> Unit,
+    modifier: Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(PynapliColors.Black)
+                .testTag(PlayingTonightTags.SCREEN),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .width(TonightPanelWidth)
+                    .fillMaxHeight()
+                    .background(PynapliColors.Surface)
+                    .statusBarsPadding(),
+        ) {
+            floater(Modifier.fillMaxWidth().padding(12.dp))
+            feed(Modifier.fillMaxWidth().weight(1f))
+        }
+        VerticalDivider(thickness = 1.dp, color = PynapliColors.BorderSoft)
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+            ZoneMap(items = items, topInset = 0.dp, bottomInset = 0.dp, modifier = Modifier.fillMaxSize())
+            error(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun TonightError(
+    message: String,
+    onDismiss: () -> Unit,
+    modifier: Modifier,
+) {
+    Text(
+        text = message,
+        color = PynapliColors.TextPrimary,
+        style = MaterialTheme.typography.bodySmall,
+        modifier =
+            modifier
+                .clip(PynapliShape.CardShape)
+                .background(PynapliColors.TonightMapScrim)
+                .border(1.dp, PynapliColors.Warning.copy(alpha = 0.5f), PynapliShape.CardShape)
+                .clickable(onClick = onDismiss)
+                .testTag(PlayingTonightTags.ERROR)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+    )
+}
+
+/** Wide enough for a row's name, badges and note without wrapping; the map gets the rest. */
+private val TonightPanelWidth = 380.dp
+
+private val TonightSheetSnaps = listOf(0.22f, 0.56f, 0.9f)
+
 // ── Zone map ────────────────────────────────────────────────────────────────
 // Abstract, privacy-first map: zone halos sized by session count, dots jittered within
 // their coarse zone bucket. No real geocoding, no precise coordinates, no street level.
 @Composable
 private fun ZoneMap(
     items: List<TonightFeedItemUi>,
+    topInset: Dp,
+    bottomInset: Dp,
     modifier: Modifier = Modifier,
 ) {
     val accent = PynapliColors.Accent
@@ -174,6 +283,13 @@ private fun ZoneMap(
     Canvas(modifier = modifier.background(PynapliColors.Black)) {
         val w = size.width
         val h = size.height
+        // The street grid stays full-bleed for texture; everything meaningful is placed in the
+        // visible band between [topInset] and [bottomInset]. When the sheet is dragged nearly to
+        // the top that band collapses, so it never shrinks below a minimum strip.
+        val areaTop = topInset.toPx().coerceIn(0f, h)
+        val areaBottom = (h - bottomInset.toPx()).coerceAtLeast((areaTop + MIN_MAP_BAND_PX).coerceAtMost(h))
+        val areaHeight = areaBottom - areaTop
+        val areaCenter = Offset(w / 2f, areaTop + areaHeight / 2f)
 
         // Faint street grid for texture.
         val gridColor = PynapliColors.BorderSoft
@@ -215,7 +331,7 @@ private fun ZoneMap(
             val jy = (hash(seed * 7 + 13) % 1000 / 1000f - 0.5f) * 0.08f
             val fx = (pad + (1 - 2 * pad) * nx + jx).coerceIn(0.04f, 0.96f)
             val fy = (pad + (1 - 2 * pad) * (1 - ny) + jy).coerceIn(0.04f, 0.96f)
-            return Offset(fx * w, fy * h)
+            return Offset(fx * w, areaTop + fy * areaHeight)
         }
 
         // Zone halos: one soft glow per distinct bucket, larger where more sessions cluster.
@@ -250,26 +366,29 @@ private fun ZoneMap(
             }
         }
 
-        // "You" reference marker at center.
-        drawCircle(color = PynapliColors.TextPrimary, radius = 5f, center = Offset(w / 2f, h / 2f))
+        // "You" reference marker at the center of the visible band.
+        drawCircle(color = PynapliColors.TextPrimary, radius = 5f, center = areaCenter)
         drawCircle(
             color = PynapliColors.TextPrimary.copy(alpha = 0.35f),
             radius = 12f,
-            center = Offset(w / 2f, h / 2f),
+            center = areaCenter,
             style =
                 androidx.compose.ui.graphics.drawscope
                     .Stroke(width = 1.5f),
         )
     }
 
-    // Legend — the visual contract that this is approximate.
-    Box(modifier = modifier) {
+    // Legend — the visual contract that this is approximate. Bottom-left of the visible band:
+    // the top-left corner it used to sit in is under the status bar on phones and under the back
+    // button once the floater is laid out over it.
+    Box(modifier = modifier.padding(bottom = bottomInset)) {
         Text(
             text = "Approximate · never street-level",
             color = PynapliColors.TextTertiary,
             style = MaterialTheme.typography.labelSmall,
             modifier =
                 Modifier
+                    .align(Alignment.BottomStart)
                     .padding(12.dp)
                     .clip(PynapliShape.CardShape)
                     .background(PynapliColors.Black.copy(alpha = 0.65f))
@@ -277,6 +396,8 @@ private fun ZoneMap(
         )
     }
 }
+
+private const val MIN_MAP_BAND_PX = 96f
 
 private fun parseZone(zoneKey: String): Pair<Int, Int> {
     val parts = zoneKey.split("_")
@@ -406,24 +527,20 @@ private fun FloaterCard(
     )
 }
 
-// ── Draggable sheet ─────────────────────────────────────────────────────────
+// ── Draggable sheet (phone) and the feed it carries ───────────────────────────
 @Composable
 private fun TonightSheet(
-    state: PlayingTonightUiState,
-    onIntentSelected: (TonightIntent?) -> Unit,
-    onOpenProfile: (String) -> Unit,
-    onMessage: (String) -> Unit,
+    height: Dp,
+    onDragUp: () -> Unit,
+    onDragDown: () -> Unit,
     modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
 ) {
-    val snaps = listOf(0.22f, 0.56f, 0.9f)
-    var snapIndex by remember { mutableStateOf(1) }
-    val targetFraction by animateFloatAsState(snaps[snapIndex], label = "tonight-sheet")
-
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .fillMaxHeight(targetFraction)
+                .height(height)
                 .clip(PynapliShape.SheetShape)
                 .background(PynapliColors.Surface)
                 .border(
@@ -439,8 +556,8 @@ private fun TonightSheet(
                     .fillMaxWidth()
                     .pointerInput(Unit) {
                         detectVerticalDragGestures { _, dragAmount ->
-                            if (dragAmount < -6f && snapIndex < snaps.lastIndex) snapIndex++
-                            if (dragAmount > 6f && snapIndex > 0) snapIndex--
+                            if (dragAmount < -6f) onDragUp()
+                            if (dragAmount > 6f) onDragDown()
                         }
                     }.padding(vertical = 10.dp),
             contentAlignment = Alignment.Center,
@@ -454,7 +571,20 @@ private fun TonightSheet(
                         .background(PynapliColors.Border),
             )
         }
+        content()
+    }
+}
 
+/** Header, intent filters and the session list; carried by the phone sheet and the wide panel. */
+@Composable
+private fun TonightFeed(
+    state: PlayingTonightUiState,
+    onIntentSelected: (TonightIntent?) -> Unit,
+    onOpenProfile: (String) -> Unit,
+    onMessage: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
