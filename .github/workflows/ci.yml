@@ -26,7 +26,7 @@ jobs:
           distribution: temurin
           java-version: 17
       # spotlessCheck configures every project, including the Android modules, which need the SDK.
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - uses: gradle/actions/setup-gradle@v4
       - name: Spotless check
         run: ./gradlew spotlessCheck
@@ -40,7 +40,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - uses: gradle/actions/setup-gradle@v4
       - name: Run verification gate
         # Server integration tests self-manage Postgres/Redis via Testcontainers (Docker is
@@ -120,7 +120,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - uses: gradle/actions/setup-gradle@v4
       # scripts/verify-web.ps1 covers this locally via the pre-push hook, but the hook is opt-in
       # per clone (core.hooksPath is local config), so the PWA had no CI coverage at all.
