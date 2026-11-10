@@ -17,6 +17,8 @@ internal class PsyncActiveSessionActions(
     private val deckCoordinator: PsyncDeckCoordinator,
     private val recapBuilder: PsyncRecapBuilder,
     private val events: PsyncSessionEvents,
+    private val pineappleInventory: PsyncPineappleInventory?,
+    private val pineappleRefunds: PsyncPineappleRefunds,
     private val rateLimitService: RateLimitService?,
     private val deckTokenCodec: SwipeDeckTokenCodec,
     private val clock: Clock,
@@ -68,7 +70,19 @@ internal class PsyncActiveSessionActions(
         val card =
             repository.findCardByTokenHash(sessionId, deckTokenCodec.tokenHash(request.cardToken))
                 ?: throw PsyncException("PSYNC_INVALID_CARD")
-        val outcome = repository.recordAction(sessionId, userId, card.targetUserId, request.action, clock.instant())
+        val spentInventoryId = spendPineappleLikeIfNew(sessionId, userId, card.targetUserId, request.action)
+        val outcome =
+            repository.recordAction(
+                sessionId = sessionId,
+                actorUserId = userId,
+                targetUserId = card.targetUserId,
+                action = request.action,
+                now = clock.instant(),
+                consumedInventoryId = spentInventoryId,
+            )
+        // Lost a race with a concurrent submit for the same card: that decision stands, so give
+        // back what this call spent.
+        if (!outcome.newlyRecorded && spentInventoryId != null) pineappleInventory?.refund(spentInventoryId)
 
         val deckCount = repository.countDeckCards(sessionId)
         val completed =
@@ -79,6 +93,7 @@ internal class PsyncActiveSessionActions(
                 ) {
                     events.emitMatchActivity(finish.resolvedMatches)
                     events.emitDeliveredLikes(finish.deliveredLikes)
+                    pineappleRefunds.sweep()
                     events.emitDelta(sessionId, PsyncBroadcaster.SESSION_COMPLETED, session.allParticipantIds())
                     events.recordForBoth(finish.session, "psync_recap")
                     true
@@ -108,6 +123,7 @@ internal class PsyncActiveSessionActions(
         val completed = repository.complete(sessionId, userId, clock.instant()).completedOrThrow()
         events.emitMatchActivity(completed.resolvedMatches)
         events.emitDeliveredLikes(completed.deliveredLikes)
+        pineappleRefunds.sweep()
         // Idempotent per (recipient, type, session) — safe on an idempotent re-complete.
         events.recordForBoth(completed.session, "psync_recap")
         return recapBuilder.buildRecap(completed.session, userId)
@@ -155,6 +171,23 @@ internal class PsyncActiveSessionActions(
         }
         events.emitDelta(sessionId, PsyncBroadcaster.NUDGE, session.otherParticipantIds(userId))
         return PsyncNudgeResponseDto(sent = true)
+    }
+
+    /**
+     * A Pineapple Like spends one from the actor's inventory, as in the Swipe deck. A repeat of a
+     * decision the actor already made on this card is an idempotent replay and spends nothing.
+     */
+    private suspend fun spendPineappleLikeIfNew(
+        sessionId: UUID,
+        userId: UUID,
+        targetUserId: UUID,
+        action: String,
+    ): UUID? {
+        val inventory = pineappleInventory ?: return null
+        if (action != PSYNC_ACTION_PINEAPPLE_LIKE) return null
+        val alreadyDecided = repository.listActionsForActor(sessionId, userId).any { it.targetUserId == targetUserId }
+        if (alreadyDecided) return null
+        return inventory.consume(userId) ?: throw PsyncException("PINEAPPLE_LIKE_INVENTORY_REQUIRED")
     }
 
     private suspend fun bothPartnersFinished(

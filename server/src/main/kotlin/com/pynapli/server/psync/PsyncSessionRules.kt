@@ -23,7 +23,8 @@ internal const val PSYNC_MAX_DECK_SIZE = 50
 // Oversample ceiling for the ranker so cross-partner filtering still yields deckSize.
 internal const val PSYNC_MAX_RANK_LIMIT = 60
 
-internal val PSYNC_VALID_ACTIONS = setOf("like", "pass", "pineapple_like")
+internal const val PSYNC_ACTION_PINEAPPLE_LIKE = "pineapple_like"
+internal val PSYNC_VALID_ACTIONS = setOf("like", "pass", PSYNC_ACTION_PINEAPPLE_LIKE)
 
 // Non-terminal: a session that still has a future (negotiating or live). Terminal =
 // completed/expired/cancelled.

@@ -18,6 +18,7 @@ internal class PsyncLifecycleActions(
     private val riskPolicyService: RiskPolicyService?,
     private val subscriptionService: SubscriptionService?,
     private val events: PsyncSessionEvents,
+    private val pineappleRefunds: PsyncPineappleRefunds,
     private val clock: Clock,
     private val json: Json,
 ) {
@@ -111,7 +112,7 @@ internal class PsyncLifecycleActions(
     suspend fun deny(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = repository.deny(sessionId, userId, clock.instant()).toDtoOrThrow()
+    ): PsyncSessionDto = repository.deny(sessionId, userId, clock.instant()).toDtoOrThrow().also { pineappleRefunds.sweep() }
 
     suspend fun suggestFilters(
         sessionId: UUID,
@@ -131,7 +132,7 @@ internal class PsyncLifecycleActions(
     suspend fun leave(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = repository.leave(sessionId, userId, clock.instant()).toDtoOrThrow()
+    ): PsyncSessionDto = repository.leave(sessionId, userId, clock.instant()).toDtoOrThrow().also { pineappleRefunds.sweep() }
 
     suspend fun get(
         sessionId: UUID,
@@ -157,6 +158,8 @@ internal class PsyncLifecycleActions(
     suspend fun expireStale(): Int {
         val expired = repository.expireStale(clock.instant())
         events.recordExpired(expired)
+        // Also covers sessions cancelled elsewhere (a partner unlinking), which have no hook here.
+        pineappleRefunds.sweep()
         return expired.size
     }
 }

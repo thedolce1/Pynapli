@@ -92,7 +92,10 @@ class JdbcPsyncSessionRepository(
         action: String,
         now: Instant,
         actionIdFactory: () -> UUID,
-    ): RecordActionOutcome = dataSource.recordPsyncAction(sessionId, actorUserId, targetUserId, action, now, actionIdFactory)
+        consumedInventoryId: UUID?,
+    ): RecordActionOutcome = dataSource.recordPsyncAction(sessionId, actorUserId, targetUserId, action, now, actionIdFactory, consumedInventoryId)
+
+    override suspend fun claimUndeliveredPineappleRefunds(): List<UUID> = dataSource.claimUndeliveredPsyncPineappleRefunds()
 
     override suspend fun countActionsForActor(
         sessionId: UUID,

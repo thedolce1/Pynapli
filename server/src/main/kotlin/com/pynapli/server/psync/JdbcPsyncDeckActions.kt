@@ -167,6 +167,7 @@ internal suspend fun DataSource.recordPsyncAction(
     action: String,
     now: Instant,
     actionIdFactory: () -> UUID,
+    consumedInventoryId: UUID?,
 ): RecordActionOutcome =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
@@ -175,8 +176,10 @@ internal suspend fun DataSource.recordPsyncAction(
                     connection
                         .prepareStatement(
                             """
-                            INSERT INTO psync_session_actions (id, session_id, actor_user_id, target_user_id, action, created_at)
-                            VALUES (?, ?, ?, ?, ?, ?)
+                            INSERT INTO psync_session_actions (
+                                id, session_id, actor_user_id, target_user_id, action, created_at, consumed_inventory_id
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
                             ON CONFLICT (session_id, actor_user_id, target_user_id) DO NOTHING
                             """.trimIndent(),
                         ).use { statement ->
@@ -186,11 +189,51 @@ internal suspend fun DataSource.recordPsyncAction(
                             statement.setObject(4, targetUserId)
                             statement.setString(5, action)
                             statement.setTimestamp(6, Timestamp.from(now))
+                            statement.setObject(7, consumedInventoryId)
                             statement.executeUpdate()
                         }
                 val actedCount = connection.countActions(sessionId, actorUserId)
                 RecordActionOutcome(newlyRecorded = inserted > 0, actedCount = actedCount)
             }
+        }
+    }
+
+/**
+ * Claims spent-but-undelivered Pineapple Likes in ended sessions. "Delivered" means completion
+ * wrote this actor's like on this target into `swipe_actions` for the session; from then on the
+ * Swipe rewind path owns the refund. Clearing the column is the claim, so a row is returned once.
+ */
+internal suspend fun DataSource.claimUndeliveredPsyncPineappleRefunds(): List<UUID> =
+    withContext(Dispatchers.IO) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    WITH claim AS (
+                        SELECT psa.id, psa.consumed_inventory_id
+                        FROM psync_session_actions psa
+                        JOIN psync_sessions s ON s.id = psa.session_id
+                        WHERE psa.consumed_inventory_id IS NOT NULL
+                          AND s.status IN ('completed', 'expired', 'cancelled')
+                          AND NOT EXISTS (
+                              SELECT 1 FROM swipe_actions sa
+                              WHERE sa.psync_session_id = psa.session_id
+                                AND sa.actor_user_id = psa.actor_user_id
+                                AND sa.target_user_id = psa.target_user_id
+                          )
+                        FOR UPDATE OF psa SKIP LOCKED
+                    )
+                    UPDATE psync_session_actions p
+                    SET consumed_inventory_id = NULL
+                    FROM claim
+                    WHERE p.id = claim.id
+                    RETURNING claim.consumed_inventory_id
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.executeQuery().use { rs ->
+                        buildList { while (rs.next()) add(rs.getObject(1, UUID::class.java)) }
+                    }
+                }
         }
     }
 
