@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "description": "Web companion QA (scripts/web-qa.ps1) screenshot signatures: loose luminance/colour ratios, not pixel goldens, shared by the desktop (1440x900), tablet (820x1180) and phone (390x844) shots of each stage. Every stage requires a mostly dark frame (dark-first design; a light-theme leak or an error page fails) and enough colour variety to rule out a blank or half-rendered frame. Thresholds sit at roughly half of the lowest value measured on 2026-11-10 against seed-dev-data.ps1 data. Grid and Swipe need photo-tile coverage, Psync its gold Start button.",
+  "stages": {
+    "grid": { "image": { "minDarkRatio": 0.3, "maxBrightRatio": 0.05, "minNonBlackRatio": 0.5, "minColorBucketCount": 30 } },
+    "grid-large-text": { "image": { "minDarkRatio": 0.3, "maxBrightRatio": 0.05, "minNonBlackRatio": 0.5, "minColorBucketCount": 30 } },
+    "swipe": { "image": { "minDarkRatio": 0.3, "maxBrightRatio": 0.05, "minNonBlackRatio": 0.15, "minColorBucketCount": 20 } },
+    "activity": { "image": { "minDarkRatio": 0.5, "maxBrightRatio": 0.05, "minNonBlackRatio": 0.06, "minColorBucketCount": 20 } },
+    "messages": { "image": { "minDarkRatio": 0.5, "maxBrightRatio": 0.05, "minNonBlackRatio": 0.02, "minColorBucketCount": 20 } },
+    "profile": { "image": { "minDarkRatio": 0.5, "maxBrightRatio": 0.05, "minNonBlackRatio": 0.18, "minColorBucketCount": 16 } },
+    "store": { "image": { "minDarkRatio": 0.5, "maxBrightRatio": 0.06, "minNonBlackRatio": 0.2, "minColorBucketCount": 14 } },
+    "tonight": { "image": { "minDarkRatio": 0.5, "maxBrightRatio": 0.05, "minNonBlackRatio": 0.18, "minColorBucketCount": 16 } },
+    "tonight-large-text": { "image": { "minDarkRatio": 0.5, "maxBrightRatio": 0.05, "minNonBlackRatio": 0.18, "minColorBucketCount": 16 } },
+    "psync": { "image": { "minDarkRatio": 0.5, "maxBrightRatio": 0.05, "minAccentYellowRatio": 0.008, "minColorBucketCount": 12 } }
+  }
+}

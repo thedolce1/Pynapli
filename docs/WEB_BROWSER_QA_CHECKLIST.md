@@ -2,6 +2,13 @@
 
 Last updated: 2026-07-04. Companion to `WEB_PWA_GAMEPLAN.md` W6.3.
 
+**Automated pass first: `.\scripts\web-qa.ps1`** (local server running; Chrome + Node 22+).
+It builds the production bundle and drives it in headless Chrome at desktop, tablet and phone
+sizes: every main surface by URL, Playing Tonight and Psync through history and bookmarks,
+Psync's live stream, the hand cursor, Esc, and Chrome's "Very large" font setting. Screenshots
+are checked against `scripts/web-qa-goldens.json`. Run it for any web-facing change; the
+manual rows below cover only what it cannot.
+
 Chrome (desktop, wide + phone viewport) was driven end-to-end by automation throughout
 W0–W5 — login, Grid, inspector peek, filters dialog, two-pane Messages with live
 realtime delivery, Swipe stage, Activity, read-only Store, URL routing, install pill.
