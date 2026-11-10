@@ -285,6 +285,35 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "create pushes exactly one invite to the invited partner" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val drafts = mutableListOf<com.pynapli.server.notifications.NotificationEventDraft>()
+                val svc =
+                    PsyncSessionService(
+                        repository = JdbcPsyncSessionRepository(dataSource),
+                        notificationPublisher =
+                            object : com.pynapli.server.notifications.NotificationPublisher {
+                                override suspend fun enqueue(
+                                    notification: com.pynapli.server.notifications.NotificationEventDraft,
+                                ): com.pynapli.server.notifications.NotificationOutboxRecord? {
+                                    drafts.add(notification)
+                                    return null
+                                }
+                            },
+                    )
+
+                val created = svc.create(initiator, CreatePsyncSessionRequestDto())
+
+                val draft = drafts.single()
+                assertEquals(com.pynapli.server.notifications.NotificationKind.PSYNC_INVITE, draft.kind)
+                assertEquals(partner, draft.recipientUserId)
+                assertEquals(initiator, draft.actorUserId)
+                assertEquals("psync_invite:${created.id}:$partner", draft.idempotencyKey)
+                assertEquals(created.id, draft.payload["sessionId"])
+            }
+        }
+
         "create without an active link is rejected" {
             runBlocking {
                 val lonely = UUID.randomUUID()

@@ -97,6 +97,7 @@ internal class PsyncLifecycleActions(
             eventType = "psync_invite",
             sessionId = created.id,
         )
+        events.notifyInvite(sessionId = created.id, inviterUserId = userId, inviteeUserId = link.partnerUserId)
         return created.toDto()
     }
 
