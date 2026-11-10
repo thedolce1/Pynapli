@@ -11,7 +11,6 @@ import com.pynapli.app.PynapliPlatform
 import com.pynapli.shared.core.result.runCatchingCancellable
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 
 /**
  * Desktop entry point — a Windows/macOS/Linux window hosting the same `:composeApp` UI that
@@ -39,14 +38,14 @@ fun main() {
     val appScope = MainScope()
     val locationAdapter =
         DesktopLocationAdapter(
-            locationStateHolder = graph.locationStateHolder,
-            gridStateHolder = graph.gridStateHolder,
+            locationStateHolder = graph.pynapliAppGraph.locationStateHolder,
+            gridStateHolder = graph.pynapliAppGraph.gridStateHolder,
             scope = appScope,
         )
     val mediaPicker =
         DesktopMediaPicker(
-            conversationStateHolder = graph.conversationStateHolder,
-            mediaAlbumsStateHolder = graph.mediaAlbumsStateHolder,
+            conversationStateHolder = graph.pynapliAppGraph.conversationStateHolder,
+            mediaAlbumsStateHolder = graph.pynapliAppGraph.mediaAlbumsStateHolder,
             scope = appScope,
         )
 
@@ -54,9 +53,7 @@ fun main() {
     // starting them pre-login is safe. runCatchingCancellable for the reason the other shells give:
     // appScope is app-lifetime here, and a swallowed cancellation would become a silent trap the
     // moment that stops being true.
-    appScope.launch { runCatchingCancellable { graph.gridPresenceStreamCoordinator.run() } }
-    appScope.launch { runCatchingCancellable { graph.activityRealtimeCoordinator.run() } }
-    appScope.launch { runCatchingCancellable { graph.messagesRealtimeCoordinator.run() } }
+    graph.startRealtime(appScope)
 
     application {
         Window(

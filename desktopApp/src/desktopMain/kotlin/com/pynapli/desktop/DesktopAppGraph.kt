@@ -27,6 +27,8 @@ import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
 import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.jvmRealtimeStreams
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.datetime.TimeZone
 import kotlin.random.Random
 
@@ -122,42 +124,18 @@ class DesktopAppGraph {
     /** Psync realtime channel; the per-viewer holder is built inside `PynapliApp`. */
     val psyncStreamClient = realtimeStreams.psync
 
-    val gridStateHolder get() = common.gridStateHolder
-    val locationStateHolder get() = common.locationStateHolder
-    val conversationStateHolder get() = common.conversationStateHolder
-    val mediaAlbumsStateHolder get() = common.mediaAlbumsStateHolder
-    val messagesStateHolder get() = common.messagesStateHolder
-    val activityStateHolder get() = common.activityStateHolder
-    val gridPresenceStreamCoordinator get() = common.gridPresenceStreamCoordinator
-    val activityRealtimeCoordinator get() = common.activityRealtimeCoordinator
-    val messagesRealtimeCoordinator get() = common.messagesRealtimeCoordinator
-
     /** The single object the desktop entry point hands to `PynapliApp`. */
     val pynapliAppGraph: PynapliAppGraph =
-        PynapliAppGraph(
+        common.appGraph(
             authStateHolder = authStateHolder,
             appSettingsStateHolder = appSettingsStateHolder,
-            gridStateHolder = common.gridStateHolder,
-            profileDetailStateHolder = common.profileDetailStateHolder,
-            conversationStateHolder = common.conversationStateHolder,
-            messagesStateHolder = common.messagesStateHolder,
-            activityStateHolder = common.activityStateHolder,
-            locationStateHolder = common.locationStateHolder,
-            mediaAlbumsStateHolder = common.mediaAlbumsStateHolder,
-            profileHubStateHolder = common.profileHubStateHolder,
-            profileLinksStateHolder = common.profileLinksStateHolder,
-            swipeStateHolder = common.swipeStateHolder,
-            storeStateHolder = common.storeStateHolder,
-            savedGridFilterStateHolder = common.savedGridFilterStateHolder,
-            savedSwipeFilterStateHolder = common.savedSwipeFilterStateHolder,
-            travelLocationStateHolder = common.travelLocationStateHolder,
-            tonightAvailabilityStateHolder = common.tonightAvailabilityStateHolder,
-            playingTonightStateHolder = common.playingTonightStateHolder,
-            psyncRepository = common.psyncRepository,
-            psyncStreamClient = psyncStreamClient,
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,
+            psyncStreamClient = psyncStreamClient,
         )
+
+    /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */
+    fun startRealtime(scope: CoroutineScope): List<Job> = common.startRealtime(scope)
 
     /** Matches the web shell: the dev-login shortcut appears only against a local server. */
     val devLoginCredentials: DevLoginCredentials? =

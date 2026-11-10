@@ -3,6 +3,8 @@ package com.pynapli.app
 import com.pynapli.app.activity.ActivityRealtimeCoordinator
 import com.pynapli.app.activity.ActivityStateHolder
 import com.pynapli.app.activity.ApiActivityFeedRepository
+import com.pynapli.app.appsettings.AppSettingsStateHolder
+import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.conversation.ApiConversationRepository
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.ApiGridFeedRepository
@@ -23,6 +25,7 @@ import com.pynapli.app.media.MediaAlbumsStateHolder
 import com.pynapli.app.messages.ApiMessagesRepository
 import com.pynapli.app.messages.MessagesRealtimeCoordinator
 import com.pynapli.app.messages.MessagesStateHolder
+import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.profile.ApiPublicProfileRepository
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilehub.ApiProfileHubRepository
@@ -41,11 +44,16 @@ import com.pynapli.app.swipe.SwipeRepository
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.app.tonight.ApiTonightRepository
 import com.pynapli.app.tonight.PlayingTonightStateHolder
+import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.ActivityStreamClient
 import com.pynapli.shared.network.KtorMediaByteUploader
 import com.pynapli.shared.network.MessageStreamClient
 import com.pynapli.shared.network.PresenceStreamClient
+import com.pynapli.shared.network.PsyncStreamClient
 import com.pynapli.shared.network.PynapliApiClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /**
  * Every state holder that is built from the API client and nothing platform-specific.
@@ -155,5 +163,58 @@ class PynapliCommonGraph(
             client = messageStreamClient,
             messagesStateHolder = messagesStateHolder,
             conversationStateHolder = conversationStateHolder,
+        )
+
+    /**
+     * The [PynapliAppGraph] for this shell: every common holder plus the few pieces each shell owns
+     * (auth, settings, deep links, onboarding, the Psync stream). Built here once so the Android, iOS,
+     * web and desktop shells don't each repeat a 22-argument mapping.
+     *
+     * A null [psyncStreamClient] hides Psync; [includePlayingTonightFeed] = false hides the Playing
+     * Tonight feed. The web shell uses both (WEB_PWA_GAMEPLAN: neither surface ships on web yet).
+     */
+    fun appGraph(
+        authStateHolder: AuthStateHolder,
+        appSettingsStateHolder: AppSettingsStateHolder,
+        deepLinkStateHolder: AppDeepLinkStateHolder? = null,
+        onboardingStateHolder: OnboardingStateHolder? = null,
+        psyncStreamClient: PsyncStreamClient? = null,
+        includePlayingTonightFeed: Boolean = true,
+    ): PynapliAppGraph =
+        PynapliAppGraph(
+            authStateHolder = authStateHolder,
+            appSettingsStateHolder = appSettingsStateHolder,
+            gridStateHolder = gridStateHolder,
+            profileDetailStateHolder = profileDetailStateHolder,
+            conversationStateHolder = conversationStateHolder,
+            messagesStateHolder = messagesStateHolder,
+            activityStateHolder = activityStateHolder,
+            locationStateHolder = locationStateHolder,
+            mediaAlbumsStateHolder = mediaAlbumsStateHolder,
+            profileHubStateHolder = profileHubStateHolder,
+            profileLinksStateHolder = profileLinksStateHolder,
+            swipeStateHolder = swipeStateHolder,
+            storeStateHolder = storeStateHolder,
+            savedGridFilterStateHolder = savedGridFilterStateHolder,
+            savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
+            travelLocationStateHolder = travelLocationStateHolder,
+            tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
+            playingTonightStateHolder = playingTonightStateHolder.takeIf { includePlayingTonightFeed },
+            psyncRepository = psyncRepository.takeIf { psyncStreamClient != null },
+            psyncStreamClient = psyncStreamClient,
+            deepLinkStateHolder = deepLinkStateHolder,
+            onboardingStateHolder = onboardingStateHolder,
+        )
+
+    /**
+     * Starts the realtime coordinators (grid presence, activity, messages) in [scope] and returns their
+     * jobs so the shell can cancel them when it goes to the background. Each coordinator reconnects on
+     * its own; a cancellation is never swallowed (runCatchingCancellable).
+     */
+    fun startRealtime(scope: CoroutineScope): List<Job> =
+        listOf(
+            scope.launch { runCatchingCancellable { gridPresenceStreamCoordinator.run() } },
+            scope.launch { runCatchingCancellable { activityRealtimeCoordinator.run() } },
+            scope.launch { runCatchingCancellable { messagesRealtimeCoordinator.run() } },
         )
 }

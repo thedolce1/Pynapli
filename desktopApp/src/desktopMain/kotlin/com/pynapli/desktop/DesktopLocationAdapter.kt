@@ -2,8 +2,8 @@ package com.pynapli.desktop
 
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.location.DeviceLocation
-import com.pynapli.app.location.GridLocationRefresh
 import com.pynapli.app.location.LocationStateHolder
+import com.pynapli.app.location.submitAndRefresh
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -29,19 +29,14 @@ class DesktopLocationAdapter(
     fun requestCurrentLocation() {
         locationStateHolder.beginUpdate()
         scope.launch {
-            val result =
-                locationStateHolder.submitLocation(
-                    DeviceLocation(
-                        latitude = readCoordinate("pynapli.latitude", DEFAULT_LATITUDE),
-                        longitude = readCoordinate("pynapli.longitude", DEFAULT_LONGITUDE),
-                        accuracyMeters = FIXED_ACCURACY_METERS,
-                    ),
-                )
-            when (result.gridRefresh) {
-                GridLocationRefresh.None -> Unit
-                GridLocationRefresh.QuietRefresh -> gridStateHolder.load(quiet = true)
-                GridLocationRefresh.Refresh -> gridStateHolder.load()
-            }
+            locationStateHolder.submitAndRefresh(
+                DeviceLocation(
+                    latitude = readCoordinate("pynapli.latitude", DEFAULT_LATITUDE),
+                    longitude = readCoordinate("pynapli.longitude", DEFAULT_LONGITUDE),
+                    accuracyMeters = FIXED_ACCURACY_METERS,
+                ),
+                gridStateHolder,
+            )
         }
     }
 

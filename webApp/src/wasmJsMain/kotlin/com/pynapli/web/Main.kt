@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ComposeViewport
 import com.pynapli.app.PynapliApp
-import com.pynapli.app.PynapliAppGraph
 import com.pynapli.app.PynapliPlatform
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
@@ -27,14 +26,14 @@ fun main() {
     val appScope = MainScope()
     val locationAdapter =
         WebLocationAdapter(
-            locationStateHolder = graph.locationStateHolder,
-            gridStateHolder = graph.gridStateHolder,
+            locationStateHolder = graph.pynapliAppGraph.locationStateHolder,
+            gridStateHolder = graph.pynapliAppGraph.gridStateHolder,
             scope = appScope,
         )
     val mediaPicker =
         WebMediaPicker(
-            conversationStateHolder = graph.conversationStateHolder,
-            mediaAlbumsStateHolder = graph.mediaAlbumsStateHolder,
+            conversationStateHolder = graph.pynapliAppGraph.conversationStateHolder,
+            mediaAlbumsStateHolder = graph.pynapliAppGraph.mediaAlbumsStateHolder,
             scope = appScope,
         )
 
@@ -47,17 +46,15 @@ fun main() {
     // socket load look inflated on web. runCatchingCancellable for the same reason as the other two
     // shells: appScope is app-lifetime today, and a swallowed cancellation would be a silent trap
     // the moment that stops being true.
-    appScope.launch { runCatchingCancellable { graph.gridPresenceStreamCoordinator.run() } }
-    appScope.launch { runCatchingCancellable { graph.activityRealtimeCoordinator.run() } }
-    appScope.launch { runCatchingCancellable { graph.messagesRealtimeCoordinator.run() } }
+    graph.startRealtime(appScope)
 
     // Tab wake: HTTP stays canonical, so returning to a backgrounded tab refetches
     // state the throttled socket may have missed (the stream clients reconnect on
     // their own backoff).
     onDocumentVisible {
         if (graph.authStateHolder.state.value.authenticated) {
-            appScope.launch { graph.messagesStateHolder.refreshSilently() }
-            appScope.launch { graph.activityStateHolder.refreshSummarySilently() }
+            appScope.launch { graph.pynapliAppGraph.messagesStateHolder.refreshSilently() }
+            appScope.launch { graph.pynapliAppGraph.activityStateHolder.refreshSummarySilently() }
         }
     }
 
@@ -123,28 +120,7 @@ private fun WebAppContent(
     mediaPicker: WebMediaPicker,
 ) {
     PynapliApp(
-        graph =
-            PynapliAppGraph(
-                authStateHolder = graph.authStateHolder,
-                appSettingsStateHolder = graph.appSettingsStateHolder,
-                gridStateHolder = graph.gridStateHolder,
-                profileDetailStateHolder = graph.profileDetailStateHolder,
-                conversationStateHolder = graph.conversationStateHolder,
-                messagesStateHolder = graph.messagesStateHolder,
-                activityStateHolder = graph.activityStateHolder,
-                locationStateHolder = graph.locationStateHolder,
-                mediaAlbumsStateHolder = graph.mediaAlbumsStateHolder,
-                profileHubStateHolder = graph.profileHubStateHolder,
-                profileLinksStateHolder = graph.profileLinksStateHolder,
-                swipeStateHolder = graph.swipeStateHolder,
-                storeStateHolder = graph.storeStateHolder,
-                savedGridFilterStateHolder = graph.savedGridFilterStateHolder,
-                savedSwipeFilterStateHolder = graph.savedSwipeFilterStateHolder,
-                travelLocationStateHolder = graph.travelLocationStateHolder,
-                tonightAvailabilityStateHolder = graph.tonightAvailabilityStateHolder,
-                deepLinkStateHolder = graph.deepLinkStateHolder,
-                onboardingStateHolder = graph.onboardingStateHolder,
-            ),
+        graph = graph.pynapliAppGraph,
         platform =
             PynapliPlatform(
                 onUseCurrentLocation = locationAdapter::requestCurrentLocation,

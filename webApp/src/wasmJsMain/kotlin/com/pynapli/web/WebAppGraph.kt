@@ -1,6 +1,7 @@
 package com.pynapli.web
 
 import com.pynapli.app.AppDeepLinkStateHolder
+import com.pynapli.app.PynapliAppGraph
 import com.pynapli.app.PynapliCommonGraph
 import com.pynapli.app.appsettings.ApiNotificationPreferencesGateway
 import com.pynapli.app.appsettings.AppSettingsStateHolder
@@ -25,6 +26,8 @@ import com.pynapli.web.auth.LocalStorageSessionStore
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.settings.LocalStorageAppSettingsStore
 import com.pynapli.web.settings.LocalStorageOnboardingProgressStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.datetime.TimeZone
 import kotlin.random.Random
 
@@ -125,26 +128,22 @@ class WebAppGraph {
                 realtimeStreams.message,
         )
 
-    val gridStateHolder get() = common.gridStateHolder
-    val savedGridFilterStateHolder get() = common.savedGridFilterStateHolder
-    val savedSwipeFilterStateHolder get() = common.savedSwipeFilterStateHolder
-    val travelLocationStateHolder get() = common.travelLocationStateHolder
-    val tonightAvailabilityStateHolder get() = common.tonightAvailabilityStateHolder
-    val playingTonightStateHolder get() = common.playingTonightStateHolder
-    val psyncRepository get() = common.psyncRepository
-    val profileDetailStateHolder get() = common.profileDetailStateHolder
-    val conversationStateHolder get() = common.conversationStateHolder
-    val messagesStateHolder get() = common.messagesStateHolder
-    val activityStateHolder get() = common.activityStateHolder
-    val locationStateHolder get() = common.locationStateHolder
-    val mediaAlbumsStateHolder get() = common.mediaAlbumsStateHolder
-    val profileHubStateHolder get() = common.profileHubStateHolder
-    val profileLinksStateHolder get() = common.profileLinksStateHolder
-    val swipeStateHolder get() = common.swipeStateHolder
-    val storeStateHolder get() = common.storeStateHolder
-    val gridPresenceStreamCoordinator get() = common.gridPresenceStreamCoordinator
-    val activityRealtimeCoordinator get() = common.activityRealtimeCoordinator
-    val messagesRealtimeCoordinator get() = common.messagesRealtimeCoordinator
+    /**
+     * The object the web entry point hands to `PynapliApp`. Psync and the Playing Tonight feed are not
+     * part of the web shell yet (no Psync stream, no Tonight feed), so they stay hidden here.
+     */
+    val pynapliAppGraph: PynapliAppGraph =
+        common.appGraph(
+            authStateHolder = authStateHolder,
+            appSettingsStateHolder = appSettingsStateHolder,
+            deepLinkStateHolder = deepLinkStateHolder,
+            onboardingStateHolder = onboardingStateHolder,
+            psyncStreamClient = null,
+            includePlayingTonightFeed = false,
+        )
+
+    /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */
+    fun startRealtime(scope: CoroutineScope): List<Job> = common.startRealtime(scope)
 
     val devLoginCredentials: DevLoginCredentials? =
         if (pynapliConfig.environment == PynapliEnvironment.Local) {

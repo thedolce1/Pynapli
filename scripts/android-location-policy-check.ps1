@@ -60,8 +60,10 @@ if (!$onStopMatch.Success) {
 $onStopBody = $onStopMatch.Groups["body"].Value
 Assert-Contains $onStopBody "pendingLocationSignal\?\.cancel\(\)" "MainActivity.onStop must cancel any pending one-shot location request."
 Assert-Contains $onStopBody "pendingLocationSignal\s*=\s*null" "MainActivity.onStop must clear pendingLocationSignal after canceling."
-Assert-Contains $onStopBody "presenceStreamJob\?\.cancel\(\)" "MainActivity.onStop must stop the Grid presence stream."
-Assert-Contains $onStopBody "activityStreamJob\?\.cancel\(\)" "MainActivity.onStop must stop the Activity realtime stream."
+# The realtime streams (Grid presence, Activity, Messages) run as one job list started by
+# PynapliCommonGraph.startRealtime; onStop must cancel all of it so no socket outlives the foreground.
+Assert-Contains $onStopBody "realtimeJobs\.forEach \{ it\.cancel\(\) \}" "MainActivity.onStop must stop the realtime streams (Grid presence, Activity, Messages)."
+Assert-Contains $onStopBody "realtimeJobs\s*=\s*emptyList\(\)" "MainActivity.onStop must clear realtimeJobs after canceling."
 
 if ($RunUnitTests) {
     .\gradlew.bat :composeApp:desktopTest --tests com.pynapli.app.location.LocationStateHolderTest --console=plain

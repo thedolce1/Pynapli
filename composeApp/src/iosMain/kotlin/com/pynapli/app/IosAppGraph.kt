@@ -18,7 +18,6 @@ import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.auth.createPlatformSessionTokenCipher
 import com.pynapli.shared.core.config.PynapliConfig
-import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
 import com.pynapli.shared.network.SessionRefresherHolder
@@ -30,7 +29,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import platform.Foundation.NSBundle
 
@@ -161,34 +159,13 @@ class IosAppGraph(
 
     /** The single object the Swift shell hands to `PynapliApp`. */
     val pynapliAppGraph: PynapliAppGraph =
-        PynapliAppGraph(
+        common.appGraph(
             authStateHolder = authStateHolder,
             appSettingsStateHolder = appSettingsStateHolder,
-            gridStateHolder = common.gridStateHolder,
-            profileDetailStateHolder = common.profileDetailStateHolder,
-            conversationStateHolder = common.conversationStateHolder,
-            messagesStateHolder = common.messagesStateHolder,
-            activityStateHolder = common.activityStateHolder,
-            locationStateHolder = common.locationStateHolder,
-            mediaAlbumsStateHolder = common.mediaAlbumsStateHolder,
-            profileHubStateHolder = common.profileHubStateHolder,
-            profileLinksStateHolder = common.profileLinksStateHolder,
-            swipeStateHolder = common.swipeStateHolder,
-            storeStateHolder = common.storeStateHolder,
-            savedGridFilterStateHolder = common.savedGridFilterStateHolder,
-            savedSwipeFilterStateHolder = common.savedSwipeFilterStateHolder,
-            travelLocationStateHolder = common.travelLocationStateHolder,
-            tonightAvailabilityStateHolder = common.tonightAvailabilityStateHolder,
-            playingTonightStateHolder = common.playingTonightStateHolder,
-            psyncRepository = common.psyncRepository,
-            psyncStreamClient = psyncStreamClient,
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,
+            psyncStreamClient = psyncStreamClient,
         )
-
-    val gridPresenceStreamCoordinator get() = common.gridPresenceStreamCoordinator
-    val activityRealtimeCoordinator get() = common.activityRealtimeCoordinator
-    val messagesRealtimeCoordinator get() = common.messagesRealtimeCoordinator
 
     private val realtimeScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var realtimeJobs: List<Job> = emptyList()
@@ -215,12 +192,7 @@ class IosAppGraph(
      */
     fun startRealtime() {
         if (realtimeJobs.isNotEmpty()) return
-        realtimeJobs =
-            listOf(
-                realtimeScope.launch { runCatchingCancellable { common.gridPresenceStreamCoordinator.run() } },
-                realtimeScope.launch { runCatchingCancellable { common.activityRealtimeCoordinator.run() } },
-                realtimeScope.launch { runCatchingCancellable { common.messagesRealtimeCoordinator.run() } },
-            )
+        realtimeJobs = common.startRealtime(realtimeScope)
     }
 
     /**

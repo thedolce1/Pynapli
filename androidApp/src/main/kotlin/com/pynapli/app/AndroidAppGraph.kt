@@ -36,6 +36,8 @@ import com.pynapli.shared.network.androidRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import java.util.Locale
 import java.util.TimeZone
 
@@ -173,26 +175,18 @@ class AndroidAppGraph(
                 realtimeStreams.message,
         )
 
-    val gridStateHolder get() = common.gridStateHolder
-    val savedGridFilterStateHolder get() = common.savedGridFilterStateHolder
-    val savedSwipeFilterStateHolder get() = common.savedSwipeFilterStateHolder
-    val travelLocationStateHolder get() = common.travelLocationStateHolder
-    val tonightAvailabilityStateHolder get() = common.tonightAvailabilityStateHolder
-    val playingTonightStateHolder get() = common.playingTonightStateHolder
-    val psyncRepository get() = common.psyncRepository
-    val profileDetailStateHolder get() = common.profileDetailStateHolder
-    val conversationStateHolder get() = common.conversationStateHolder
-    val messagesStateHolder get() = common.messagesStateHolder
-    val activityStateHolder get() = common.activityStateHolder
-    val locationStateHolder get() = common.locationStateHolder
-    val mediaAlbumsStateHolder get() = common.mediaAlbumsStateHolder
-    val profileHubStateHolder get() = common.profileHubStateHolder
-    val profileLinksStateHolder get() = common.profileLinksStateHolder
-    val swipeStateHolder get() = common.swipeStateHolder
-    val storeStateHolder get() = common.storeStateHolder
-    val gridPresenceStreamCoordinator get() = common.gridPresenceStreamCoordinator
-    val activityRealtimeCoordinator get() = common.activityRealtimeCoordinator
-    val messagesRealtimeCoordinator get() = common.messagesRealtimeCoordinator
+    /** The object MainActivity hands to `PynapliApp`: every common holder plus this shell's pieces. */
+    val pynapliAppGraph: PynapliAppGraph =
+        common.appGraph(
+            authStateHolder = authStateHolder,
+            appSettingsStateHolder = appSettingsStateHolder,
+            deepLinkStateHolder = deepLinkStateHolder,
+            onboardingStateHolder = onboardingStateHolder,
+            psyncStreamClient = psyncStreamClient,
+        )
+
+    /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */
+    fun startRealtime(scope: CoroutineScope): List<Job> = common.startRealtime(scope)
 
     fun attachBillingActivity(activity: Activity) {
         playBillingPurchaseGateway.attachActivity(activity)

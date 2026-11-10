@@ -1,5 +1,6 @@
 package com.pynapli.app.location
 
+import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.CurrentLocationDto
@@ -92,6 +93,24 @@ class LocationStateHolder(
         private const val SMALL_MOVEMENT_THRESHOLD_METERS = 250.0
         private const val LARGE_MOVEMENT_THRESHOLD_METERS = 1_000.0
     }
+}
+
+/**
+ * Submits [location], then refreshes [grid] the way the result asks: quietly for a small move (cards
+ * stay on screen), fully for a big one, not at all when nothing changed. Every shell's location adapter
+ * calls this instead of repeating the dispatch.
+ */
+suspend fun LocationStateHolder.submitAndRefresh(
+    location: DeviceLocation,
+    grid: GridStateHolder,
+): LocationUpdateResult {
+    val result = submitLocation(location)
+    when (result.gridRefresh) {
+        GridLocationRefresh.None -> Unit
+        GridLocationRefresh.QuietRefresh -> grid.load(quiet = true)
+        GridLocationRefresh.Refresh -> grid.load()
+    }
+    return result
 }
 
 data class LocationUpdateResult(

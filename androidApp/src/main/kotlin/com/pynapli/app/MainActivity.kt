@@ -24,7 +24,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.edit
 import com.pynapli.app.location.DeviceLocation
-import com.pynapli.app.location.GridLocationRefresh
+import com.pynapli.app.location.submitAndRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.PickedMediaForUpload
 import com.pynapli.app.notifications.PynapliNotificationDeepLinks
@@ -51,9 +51,7 @@ class MainActivity : ComponentActivity() {
     private var isStarted = false
     private var pendingDeepLinkIntent: Intent? = null
     private var pendingLocationSignal: CancellationSignal? = null
-    private var presenceStreamJob: Job? = null
-    private var activityStreamJob: Job? = null
-    private var messageStreamJob: Job? = null
+    private var realtimeJobs: List<Job> = emptyList()
     private var pendingMediaAlbumKind: MediaAlbumKindUi? = null
     private var pendingConversationPhoto: Boolean = false
     private val locationPermissionLauncher =
@@ -63,7 +61,7 @@ class MainActivity : ComponentActivity() {
             if (permissions.values.any { granted -> granted }) {
                 submitCurrentLocation()
             } else {
-                appGraph?.locationStateHolder?.markPermissionDenied()
+                appGraph?.pynapliAppGraph?.locationStateHolder?.markPermissionDenied()
             }
         }
     private val mediaPickerLauncher =
@@ -116,31 +114,7 @@ class MainActivity : ComponentActivity() {
                 null -> PynapliBootSplash()
                 else ->
                     PynapliApp(
-                        graph =
-                            PynapliAppGraph(
-                                authStateHolder = graph.authStateHolder,
-                                appSettingsStateHolder = graph.appSettingsStateHolder,
-                                gridStateHolder = graph.gridStateHolder,
-                                profileDetailStateHolder = graph.profileDetailStateHolder,
-                                conversationStateHolder = graph.conversationStateHolder,
-                                messagesStateHolder = graph.messagesStateHolder,
-                                activityStateHolder = graph.activityStateHolder,
-                                locationStateHolder = graph.locationStateHolder,
-                                mediaAlbumsStateHolder = graph.mediaAlbumsStateHolder,
-                                profileHubStateHolder = graph.profileHubStateHolder,
-                                profileLinksStateHolder = graph.profileLinksStateHolder,
-                                swipeStateHolder = graph.swipeStateHolder,
-                                storeStateHolder = graph.storeStateHolder,
-                                savedGridFilterStateHolder = graph.savedGridFilterStateHolder,
-                                savedSwipeFilterStateHolder = graph.savedSwipeFilterStateHolder,
-                                travelLocationStateHolder = graph.travelLocationStateHolder,
-                                tonightAvailabilityStateHolder = graph.tonightAvailabilityStateHolder,
-                                playingTonightStateHolder = graph.playingTonightStateHolder,
-                                psyncRepository = graph.psyncRepository,
-                                psyncStreamClient = graph.psyncStreamClient,
-                                deepLinkStateHolder = graph.deepLinkStateHolder,
-                                onboardingStateHolder = graph.onboardingStateHolder,
-                            ),
+                        graph = graph.pynapliAppGraph,
                         platform =
                             PynapliPlatform(
                                 onUseCurrentLocation = ::requestCurrentLocation,
@@ -197,35 +171,17 @@ class MainActivity : ComponentActivity() {
     // most (an actual lifecycle cancellation, twice per app switch), and they were the ones the
     // original sweep missed.
     private fun startRealtimeStreams(graph: AndroidAppGraph) {
-        if (presenceStreamJob?.isActive != true) {
-            presenceStreamJob =
-                activityScope.launch {
-                    runCatchingCancellable { graph.gridPresenceStreamCoordinator.run() }
-                }
-        }
-        if (activityStreamJob?.isActive != true) {
-            activityStreamJob =
-                activityScope.launch {
-                    runCatchingCancellable { graph.activityRealtimeCoordinator.run() }
-                }
-        }
-        if (messageStreamJob?.isActive != true) {
-            messageStreamJob =
-                activityScope.launch {
-                    runCatchingCancellable { graph.messagesRealtimeCoordinator.run() }
-                }
-        }
+        // Already running: keep the live sockets. If any stream stopped, restart the set.
+        if (realtimeJobs.isNotEmpty() && realtimeJobs.all { it.isActive }) return
+        realtimeJobs.forEach { it.cancel() }
+        realtimeJobs = graph.startRealtime(activityScope)
     }
 
     override fun onStop() {
         pendingLocationSignal?.cancel()
         pendingLocationSignal = null
-        presenceStreamJob?.cancel()
-        presenceStreamJob = null
-        activityStreamJob?.cancel()
-        activityStreamJob = null
-        messageStreamJob?.cancel()
-        messageStreamJob = null
+        realtimeJobs.forEach { it.cancel() }
+        realtimeJobs = emptyList()
         super.onStop()
     }
 
@@ -365,11 +321,11 @@ class MainActivity : ComponentActivity() {
             // Off Main: Photo Picker URIs can be cloud-backed, so the read can block long enough to ANR.
             val pickedMedia = withContext(Dispatchers.IO) { readPickedImage(uri) }
             when {
-                pickedMedia == null -> graph.mediaAlbumsStateHolder.showError("Could not read the selected image.")
+                pickedMedia == null -> graph.pynapliAppGraph.mediaAlbumsStateHolder.showError("Could not read the selected image.")
                 // Chat photo: upload + send as a per-recipient consent-tap media message.
-                sendToConversation -> graph.conversationStateHolder.sendPhoto(pickedMedia)
+                sendToConversation -> graph.pynapliAppGraph.conversationStateHolder.sendPhoto(pickedMedia)
                 // Profile and private album photos both pause at the shared square-crop step.
-                kind != null -> graph.mediaAlbumsStateHolder.stagePickedMedia(kind, pickedMedia)
+                kind != null -> graph.pynapliAppGraph.mediaAlbumsStateHolder.stagePickedMedia(kind, pickedMedia)
             }
         }
     }
@@ -378,7 +334,7 @@ class MainActivity : ComponentActivity() {
         if (hasLocationPermission()) {
             submitCurrentLocation()
         } else {
-            appGraph?.locationStateHolder?.beginUpdate()
+            appGraph?.pynapliAppGraph?.locationStateHolder?.beginUpdate()
             locationPermissionLauncher.launch(
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -394,7 +350,7 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     private fun submitCurrentLocation() {
-        val locationStateHolder = appGraph?.locationStateHolder ?: return
+        val locationStateHolder = appGraph?.pynapliAppGraph?.locationStateHolder ?: return
         if (!hasLocationPermission()) {
             locationStateHolder.markPermissionDenied()
             return
@@ -443,19 +399,14 @@ class MainActivity : ComponentActivity() {
     private fun submitDeviceLocation(currentLocation: Location) {
         val graph = appGraph ?: return
         activityScope.launch {
-            val result =
-                graph.locationStateHolder.submitLocation(
-                    DeviceLocation(
-                        latitude = currentLocation.latitude,
-                        longitude = currentLocation.longitude,
-                        accuracyMeters = currentLocation.accuracyMetersOrNull(),
-                    ),
-                )
-            when (result.gridRefresh) {
-                GridLocationRefresh.None -> Unit
-                GridLocationRefresh.QuietRefresh -> graph.gridStateHolder.load(quiet = true)
-                GridLocationRefresh.Refresh -> graph.gridStateHolder.load()
-            }
+            graph.pynapliAppGraph.locationStateHolder.submitAndRefresh(
+                DeviceLocation(
+                    latitude = currentLocation.latitude,
+                    longitude = currentLocation.longitude,
+                    accuracyMeters = currentLocation.accuracyMetersOrNull(),
+                ),
+                graph.pynapliAppGraph.gridStateHolder,
+            )
         }
     }
 

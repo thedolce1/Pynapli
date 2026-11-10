@@ -2,8 +2,8 @@ package com.pynapli.web
 
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.location.DeviceLocation
-import com.pynapli.app.location.GridLocationRefresh
 import com.pynapli.app.location.LocationStateHolder
+import com.pynapli.app.location.submitAndRefresh
 import com.pynapli.web.platform.geolocationAvailable
 import com.pynapli.web.platform.requestBrowserGeolocation
 import kotlinx.coroutines.CoroutineScope
@@ -30,19 +30,14 @@ class WebLocationAdapter(
         requestBrowserGeolocation(
             onSuccess = { latitude, longitude, accuracyMeters ->
                 scope.launch {
-                    val result =
-                        locationStateHolder.submitLocation(
-                            DeviceLocation(
-                                latitude = latitude,
-                                longitude = longitude,
-                                accuracyMeters = accuracyMeters.toInt(),
-                            ),
-                        )
-                    when (result.gridRefresh) {
-                        GridLocationRefresh.None -> Unit
-                        GridLocationRefresh.QuietRefresh -> gridStateHolder.load(quiet = true)
-                        GridLocationRefresh.Refresh -> gridStateHolder.load()
-                    }
+                    locationStateHolder.submitAndRefresh(
+                        DeviceLocation(
+                            latitude = latitude,
+                            longitude = longitude,
+                            accuracyMeters = accuracyMeters.toInt(),
+                        ),
+                        gridStateHolder,
+                    )
                 }
             },
             onPermissionDenied = { locationStateHolder.markPermissionDenied() },
