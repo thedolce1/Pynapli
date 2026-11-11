@@ -125,7 +125,8 @@ internal fun Connection.loadSession(
         prepareStatement(
             """
             SELECT id, partner_link_id, initiator_user_id, status, filters::text AS filters,
-                   deck_size, deck_session_id, created_at, started_at, expires_at, ended_at
+                   deck_size, deck_session_id, created_at, started_at, expires_at, ended_at,
+                   travel_location_id, location_label
             FROM psync_sessions
             WHERE id = ?
             """.trimIndent(),

@@ -21,6 +21,7 @@ internal class PsyncLifecycleActions(
     private val pineappleRefunds: PsyncPineappleRefunds,
     // Resolves started sessions past their deadline; returns how many.
     private val resolveOverdueStarted: suspend () -> Int,
+    private val travelLocationRepository: com.pynapli.server.location.TravelLocationRepository?,
     private val clock: Clock,
     private val json: Json,
 ) {
@@ -35,6 +36,9 @@ internal class PsyncLifecycleActions(
         }
         requirePsyncDeckSize(request.deckSize)
 
+        // The deck is dealt around the initiator, at their Travel mode destination if one is on.
+        val location = travelLocationRepository.psyncLocationFor(userId)
+
         // PSYNC_SPEC Monetization: the deck size is capped by the initiator's tier (Free is small).
         subscriptionService?.let { subscriptions ->
             val policy = subscriptions.getPolicy(userId)
@@ -42,6 +46,7 @@ internal class PsyncLifecycleActions(
                 throw PsyncException("PSYNC_DECK_SIZE_NOT_ALLOWED")
             }
             requirePsyncFiltersAllowed(request.filters, policy)
+            requirePsyncTravelAllowed(location, policy)
             // "Limited Psync sessions": cap how many the initiator may start per rolling 24 hours.
             if (policy.psyncDailySessionLimit != Int.MAX_VALUE) {
                 val startedToday = repository.countStartedSessionsSince(userId, clock.instant().minus(PSYNC_SESSION_LIMIT_WINDOW))
@@ -78,6 +83,8 @@ internal class PsyncLifecycleActions(
                 expiresAt = now.plus(PSYNC_INVITE_TTL),
                 endedAt = null,
                 participants = emptyList(),
+                travelLocationId = location.travelLocationId,
+                locationLabel = location.label,
             )
 
         val participants =

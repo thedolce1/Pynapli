@@ -67,6 +67,13 @@ class JdbcPsyncSessionRepository(
 
     override suspend fun listOverdueStartedSessions(now: Instant): List<PsyncOverdueSession> = dataSource.listOverdueStartedPsyncSessions(now)
 
+    override suspend fun resetLocation(
+        sessionId: UUID,
+        travelLocationId: UUID?,
+        locationLabel: String?,
+        now: Instant,
+    ): MutateOutcome = dataSource.resetPsyncLocation(json, sessionId, travelLocationId, locationLabel, now)
+
     override suspend fun start(
         sessionId: UUID,
         userId: UUID,

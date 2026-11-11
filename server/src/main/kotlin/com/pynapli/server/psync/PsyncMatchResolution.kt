@@ -47,10 +47,10 @@ internal fun Connection.resolveMatches(
 
                 // Deliver each partner's like as a normal swipe like so the target can see it and
                 // like back later. A like the target has not answered yet goes to their Likes You.
-                if (aLike != null && deliverPsyncLike(session.id, initiator, target, aLike) && !tLikesA) {
+                if (aLike != null && deliverPsyncLike(session.id, session.travelLocationId, initiator, target, aLike) && !tLikesA) {
                     delivered += PsyncDeliveredLike(initiator, target, aLike.action)
                 }
-                if (bLike != null && deliverPsyncLike(session.id, partner, target, bLike) && !tLikesB) {
+                if (bLike != null && deliverPsyncLike(session.id, session.travelLocationId, partner, target, bLike) && !tLikesB) {
                     delivered += PsyncDeliveredLike(partner, target, bLike.action)
                 }
 
@@ -88,14 +88,19 @@ internal fun Connection.resolveMatches(
  */
 internal fun Connection.deliverPsyncLike(
     sessionId: UUID,
+    // The travel destination the session was dealt at, so the like follows the same 24-hour
+    // after-leaving rule as a like sent from Travel mode in Swipe.
+    travelLocationId: UUID?,
     actorUserId: UUID,
     targetUserId: UUID,
     like: PsyncLike,
 ): Boolean =
     prepareStatement(
         """
-        INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, psync_session_id, consumed_inventory_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO swipe_actions (
+            id, actor_user_id, target_user_id, action, psync_session_id, consumed_inventory_id, travel_location_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT DO NOTHING
         """.trimIndent(),
     ).use { statement ->
@@ -106,6 +111,7 @@ internal fun Connection.deliverPsyncLike(
         statement.setObject(5, sessionId)
         // Carried over so a later Swipe rewind of this Pineapple Like refunds the row that paid.
         statement.setObject(6, like.consumedInventoryId)
+        statement.setObject(7, travelLocationId)
         statement.executeUpdate() > 0
     }
 

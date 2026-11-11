@@ -100,9 +100,10 @@ internal suspend fun DataSource.insertPsyncSession(
                         """
                         INSERT INTO psync_sessions (
                             id, partner_link_id, initiator_user_id, status, filters,
-                            deck_size, deck_session_id, created_at, started_at, expires_at, ended_at
+                            deck_size, deck_session_id, created_at, started_at, expires_at, ended_at,
+                            travel_location_id, location_label
                         )
-                        VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?)
                         """.trimIndent(),
                     ).use { statement ->
                         statement.setObject(1, session.id)
@@ -116,6 +117,8 @@ internal suspend fun DataSource.insertPsyncSession(
                         statement.setTimestamp(9, session.startedAt?.let(Timestamp::from))
                         statement.setTimestamp(10, Timestamp.from(session.expiresAt))
                         statement.setTimestamp(11, session.endedAt?.let(Timestamp::from))
+                        statement.setObject(12, session.travelLocationId)
+                        statement.setString(13, session.locationLabel)
                         statement.executeUpdate()
                     }
 
@@ -296,6 +299,51 @@ internal suspend fun DataSource.findCurrentPsyncSessionForUser(
                         }
                     } ?: return@withContext null
             connection.loadSession(json, sessionId, withDisplayNames = true)
+        }
+    }
+
+/**
+ * The location the session was set up with no longer matches the initiator's (they turned Travel
+ * mode on, off, or picked another city). Record the new one and send the session back to both
+ * partners for approval, clearing anyone's Start tap. Only a session that hasn't started can move.
+ */
+internal suspend fun DataSource.resetPsyncLocation(
+    json: Json,
+    sessionId: UUID,
+    travelLocationId: UUID?,
+    locationLabel: String?,
+    now: Instant,
+): MutateOutcome =
+    withContext(Dispatchers.IO) {
+        connection.use { connection ->
+            connection.inTransaction {
+                connection.lockSession(json, sessionId) ?: return@inTransaction MutateOutcome.SessionNotFound
+                val moved =
+                    connection
+                        .prepareStatement(
+                            """
+                            UPDATE psync_sessions
+                            SET status = 'configuring', travel_location_id = ?, location_label = ?
+                            WHERE id = ? AND status IN ('invited', 'configuring', 'ready')
+                            """.trimIndent(),
+                        ).use { statement ->
+                            statement.setObject(1, travelLocationId)
+                            statement.setString(2, locationLabel)
+                            statement.setObject(3, sessionId)
+                            statement.executeUpdate()
+                        }
+                if (moved == 0) return@inTransaction MutateOutcome.InvalidState
+                connection
+                    .prepareStatement(
+                        "UPDATE psync_session_participants SET approved = false, started = false, updated_at = ? WHERE session_id = ?",
+                    ).use { statement ->
+                        statement.setTimestamp(1, Timestamp.from(now))
+                        statement.setObject(2, sessionId)
+                        statement.executeUpdate()
+                    }
+                val updated = connection.loadSession(json, sessionId) ?: return@inTransaction MutateOutcome.SessionNotFound
+                MutateOutcome.Updated(updated)
+            }
         }
     }
 

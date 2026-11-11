@@ -182,6 +182,11 @@ class PsyncStateHolder(
     suspend fun start() =
         onSession { sessionId ->
             mutateSession { repository.start(sessionId) }
+            if (_state.value.errorCode == LOCATION_CHANGED) {
+                // The server sent the session back for both to review; show the new setup.
+                refresh()
+                _state.update { it.copy(errorMessage = LOCATION_CHANGED_MESSAGE, errorCode = LOCATION_CHANGED) }
+            }
             refreshDeckIfActive()
         }
 
@@ -374,6 +379,8 @@ class PsyncStateHolder(
     private companion object {
         const val DEFAULT_DECK_SIZE = 25
         const val DELTA_NUDGE = "nudge"
+        const val LOCATION_CHANGED = "PSYNC_LOCATION_CHANGED"
+        const val LOCATION_CHANGED_MESSAGE = "Where you're swiping changed since you both agreed. Take another look and agree again."
         const val DELTA_PARTNER_FINISHED = "partner_finished"
         val SESSION_GONE_CODES = setOf("PSYNC_INVALID_STATE", "PSYNC_SESSION_NOT_FOUND")
     }

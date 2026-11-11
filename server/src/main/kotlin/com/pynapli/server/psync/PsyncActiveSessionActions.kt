@@ -20,6 +20,8 @@ internal class PsyncActiveSessionActions(
     private val pineappleInventory: PsyncPineappleInventory?,
     private val pineappleRefunds: PsyncPineappleRefunds,
     private val rateLimitService: RateLimitService?,
+    private val travelLocationRepository: com.pynapli.server.location.TravelLocationRepository?,
+    private val subscriptionService: com.pynapli.server.subscriptions.SubscriptionService?,
     private val deckTokenCodec: SwipeDeckTokenCodec,
     private val clock: Clock,
 ) {
@@ -38,6 +40,16 @@ internal class PsyncActiveSessionActions(
         if (!started.allStarted) {
             events.emitDelta(sessionId, PsyncBroadcaster.PARTNER_STARTED, started.session.otherParticipantIds(userId))
             return started.session.toDto()
+        }
+
+        // Both agreed to a deck at a particular place. If the initiator has since turned Travel mode
+        // on, off, or moved it, dealing now would show them somewhere neither agreed to: ask again.
+        val location = travelLocationRepository.psyncLocationFor(started.session.initiatorUserId)
+        if (location.travelLocationId != started.session.travelLocationId) {
+            subscriptionService?.let { requirePsyncTravelAllowed(location, it.getPolicy(started.session.initiatorUserId)) }
+            repository.resetLocation(sessionId, location.travelLocationId, location.label, clock.instant()).toDtoOrThrow()
+            events.emitDelta(sessionId, PsyncBroadcaster.SESSION_UPDATED, started.session.allParticipantIds())
+            throw PsyncException("PSYNC_LOCATION_CHANGED")
         }
 
         return when (val activated = deckCoordinator.activateWithGeneratedDeck(sessionId, started.session)) {

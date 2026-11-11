@@ -88,6 +88,8 @@ data class PsyncSessionUi(
     // Who has tapped Start once both approved.
     val viewerStarted: Boolean = false,
     val partnerStarted: Boolean = false,
+    // The initiator's Travel mode destination the deck is dealt at, or null for around their home.
+    val locationLabel: String? = null,
 ) {
     val phase: PsyncPhase
         get() =
@@ -116,7 +118,15 @@ data class PsyncSessionUi(
     fun setupSummary(distanceUnit: String): List<String> =
         buildList {
             add("$deckSize profiles")
-            add("Within ${formatDistanceForUnit(filters.radiusMeters, fallbackLabel = null, distanceUnit = distanceUnit)}")
+            val radius = formatDistanceForUnit(filters.radiusMeters, fallbackLabel = null, distanceUnit = distanceUnit)
+            // The deck is dealt around the initiator: say so, and say when that's a trip.
+            add(
+                when {
+                    locationLabel != null -> "Within $radius of $locationLabel (Travel mode)"
+                    isInitiator -> "Within $radius of you"
+                    else -> "Within $radius of ${partnerDisplayName ?: "your partner"}"
+                },
+            )
             val lo = filters.minimumAge
             val hi = filters.maximumAge
             when {
@@ -176,6 +186,7 @@ fun PsyncSessionDto.toUi(viewerUserId: String?): PsyncSessionUi {
         filters = filters,
         viewerStarted = viewer?.started ?: false,
         partnerStarted = partner?.started ?: false,
+        locationLabel = locationLabel,
     )
 }
 
