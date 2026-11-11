@@ -162,6 +162,7 @@ internal fun ColumnScope.PynapliMainContent(
                         onOpenAgeVerification = onOpenAgeVerification,
                         onOpenTonight = onOpenTonight,
                         onUseCurrentLocation = onUseCurrentLocation,
+                        travelLocationStateHolder = travelLocationStateHolder,
                     )
                 PynapliTab.Messages ->
                     MessagesTabContent(
@@ -354,6 +355,7 @@ private fun ColumnScope.GridTabContent(
     onOpenAgeVerification: () -> Unit,
     onOpenTonight: () -> Unit,
     onUseCurrentLocation: () -> Unit,
+    travelLocationStateHolder: TravelLocationStateHolder? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val locationState by locationStateHolder.state.collectAsState()
@@ -408,6 +410,7 @@ private fun ColumnScope.GridTabContent(
         onOpenStore = onOpenStore,
         onOpenAgeVerification = onOpenAgeVerification,
         onOpenTonight = onOpenTonight,
+        travelLocationStateHolder = travelLocationStateHolder,
     )
 }
 

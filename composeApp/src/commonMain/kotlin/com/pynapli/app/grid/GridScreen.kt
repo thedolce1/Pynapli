@@ -12,6 +12,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.location.LocationUiState
+import com.pynapli.app.location.TravelLocationStateHolder
+import com.pynapli.app.location.TravelLocationUiState
 import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
@@ -38,8 +40,11 @@ fun GridScreen(
     onOpenStore: () -> Unit = {},
     onOpenAgeVerification: () -> Unit = {},
     onOpenTonight: () -> Unit = {},
+    travelLocationStateHolder: TravelLocationStateHolder? = null,
 ) {
     val state by stateHolder.state.collectAsState()
+    val travelState by travelLocationStateHolder?.state?.collectAsState()
+        ?: remember { mutableStateOf(TravelLocationUiState()) }
     val profileState by profileDetailStateHolder.state.collectAsState()
     val profileLinksState by profileLinksStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf(null) }
@@ -59,6 +64,12 @@ fun GridScreen(
 
     LaunchedEffect(tonightAvailabilityStateHolder) {
         tonightAvailabilityStateHolder?.load()
+    }
+
+    // Travel mode moves the Grid too, so the Grid has to know when it is on (it was only loaded by
+    // the Swipe screen before).
+    LaunchedEffect(travelLocationStateHolder) {
+        travelLocationStateHolder?.load()
     }
 
     GridScreenContent(
@@ -90,6 +101,15 @@ fun GridScreen(
         },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onRefresh = { scope.launch { stateHolder.refresh() } },
+        travelCityName = travelState.current?.city,
+        onTurnOffTravel = {
+            travelLocationStateHolder?.let { holder ->
+                scope.launch {
+                    holder.clear()
+                    stateHolder.refresh()
+                }
+            }
+        },
         onProfileSelected = { card ->
             scope.launch { profileDetailStateHolder.open(card) }
         },

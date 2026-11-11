@@ -43,6 +43,9 @@ internal fun GridScreenContent(
     onOpenAgeVerification: () -> Unit = {},
     onOpenTonight: () -> Unit = {},
     modifier: Modifier = Modifier,
+    // Travel mode destination when it is on. The Grid is showing that city, not where the viewer is.
+    travelCityName: String? = null,
+    onTurnOffTravel: () -> Unit = {},
 ) {
     var sheetVisible by remember { mutableStateOf(false) }
 
@@ -66,6 +69,11 @@ internal fun GridScreenContent(
             onToggled = onQuickFilterToggled,
             onOpenSheet = { sheetVisible = true },
         )
+        // Without this, someone who forgot Travel mode was on sees another city's people and
+        // distances with nothing on the Grid saying why (the Swipe header already shows it).
+        travelCityName?.let { city ->
+            GridTravelRow(city = city, onTurnOff = onTurnOffTravel)
+        }
         if (state.cards.isNotEmpty()) {
             GridContextStrip(cards = state.cards, distanceUnit = distanceUnit)
         }
