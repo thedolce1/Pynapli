@@ -1,5 +1,6 @@
 package com.pynapli.server.psync
 
+import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.HiddenProfileRepository
@@ -16,6 +17,7 @@ internal class PsyncDeckCoordinator(
     private val blockRepository: BlockRepository?,
     private val hiddenProfileRepository: HiddenProfileRepository?,
     private val presenceService: PresenceService?,
+    private val mediaAssetUrlResolver: MediaAssetUrlResolver?,
     private val deckTokenCodec: SwipeDeckTokenCodec,
     private val clock: Clock,
 ) {
@@ -94,7 +96,8 @@ internal class PsyncDeckCoordinator(
                         generatedAt = session.startedAt!!,
                     )
                 PsyncDeckCardDto(
-                    card = card.snapshot.copy(online = card.targetUserId in online),
+                    // The snapshot's signed photo links expire within minutes; issue fresh ones.
+                    card = card.snapshot.copy(online = card.targetUserId in online).withFreshPhotoUrls(mediaAssetUrlResolver),
                     cardToken = rawToken,
                     viewerAction = myActions[card.targetUserId],
                 )
