@@ -342,6 +342,7 @@ class ServerDependencies(
                     activityService = activityService,
                     messageMediaGateway = media.messageMediaGateway,
                     productMetrics = core.productMetrics,
+                    travelLocationRepository = core.travelLocationRepository,
                 )
             val swipe =
                 buildSwipeDependencies(

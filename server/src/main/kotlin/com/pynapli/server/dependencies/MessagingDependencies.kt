@@ -44,6 +44,7 @@ internal fun buildMessagingDependencies(
     activityService: ActivityService,
     messageMediaGateway: com.pynapli.server.messaging.MessageMediaGateway,
     productMetrics: com.pynapli.server.metrics.ProductMetrics,
+    travelLocationRepository: com.pynapli.server.location.TravelLocationRepository? = null,
 ): MessagingDependencies {
     val messagingService =
         MessagingService(
@@ -70,6 +71,9 @@ internal fun buildMessagingDependencies(
     val adminRiskService =
         AdminRiskService(
             JdbcAdminRiskRepository(dataSource),
+            travelEnforcement =
+                com.pynapli.server.safety
+                    .TravelRiskEnforcement(travelLocationRepository),
         )
     return MessagingDependencies(
         messagingService = messagingService,

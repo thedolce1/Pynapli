@@ -77,6 +77,7 @@ interface DeviceRiskSignalPublisher {
 
 class RiskService(
     private val repository: RiskRepository,
+    private val travelEnforcement: TravelRiskEnforcement? = null,
 ) : ReportRiskSignalPublisher,
     RateLimitRiskSignalPublisher,
     MessageReviewRiskSignalPublisher,
@@ -91,7 +92,7 @@ class RiskService(
         targetType: String,
         category: String,
     ) {
-        repository.recordEvent(
+        recordEvent(
             userId = reportedUserId,
             actorUserId = reporterUserId,
             source = SOURCE_REPORT,
@@ -108,6 +109,20 @@ class RiskService(
 
     suspend fun getState(userId: UUID): AccountRiskStateRecord? = repository.getState(userId)
 
+    /** Every risk event goes through here, so tier consequences apply whatever raised the score. */
+    private suspend fun recordEvent(
+        userId: UUID,
+        actorUserId: UUID?,
+        source: String,
+        reason: String,
+        delta: Int,
+        metadataJson: String = "{}",
+    ): RiskMutationRecord {
+        val result = repository.recordEvent(userId, actorUserId, source, reason, delta, metadataJson)
+        travelEnforcement?.onTierChanged(userId, result.state.tier)
+        return result
+    }
+
     override suspend fun recordRateLimitHit(
         userId: UUID,
         action: String,
@@ -115,7 +130,7 @@ class RiskService(
         limit: Long,
         windowSeconds: Long,
     ) {
-        repository.recordEvent(
+        recordEvent(
             userId = userId,
             actorUserId = null,
             source = SOURCE_RATE_LIMIT,
@@ -136,7 +151,7 @@ class RiskService(
         messageId: UUID,
         reason: String,
     ) {
-        repository.recordEvent(
+        recordEvent(
             userId = userId,
             actorUserId = null,
             source = SOURCE_MESSAGE_REVIEW,
@@ -158,7 +173,7 @@ class RiskService(
         reason: String,
         category: String,
     ) {
-        repository.recordEvent(
+        recordEvent(
             userId = userId,
             actorUserId = null,
             source = SOURCE_MEDIA_MODERATION,
@@ -180,7 +195,7 @@ class RiskService(
         elapsedSeconds: Long,
         speedKmh: Double,
     ) {
-        repository.recordEvent(
+        recordEvent(
             userId = userId,
             actorUserId = null,
             source = SOURCE_LOCATION,
@@ -201,7 +216,7 @@ class RiskService(
         userId: UUID,
         switchesInDay: Int,
     ) {
-        repository.recordEvent(
+        recordEvent(
             userId = userId,
             actorUserId = null,
             source = SOURCE_LOCATION,
@@ -213,7 +228,7 @@ class RiskService(
     }
 
     override suspend fun recordAgeVerificationPassed(userId: UUID) {
-        repository.recordEvent(
+        recordEvent(
             userId = userId,
             actorUserId = null,
             source = SOURCE_VERIFICATION,
@@ -227,7 +242,7 @@ class RiskService(
         distinctAccountCount: Int,
         windowHours: Long,
     ) {
-        repository.recordEvent(
+        recordEvent(
             userId = userId,
             actorUserId = null,
             source = SOURCE_DEVICE,
