@@ -1,10 +1,12 @@
 package com.pynapli.app.psync
 
 import androidx.compose.runtime.Immutable
+import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.network.dto.PsyncDeckCardDto
 import com.pynapli.shared.network.dto.PsyncRecapDto
 import com.pynapli.shared.network.dto.PsyncSessionDto
 import com.pynapli.shared.network.dto.SwipeCardDto
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 
 /**
  * Where the viewer sits in the Psync flow, derived from the server-owned session status.
@@ -58,6 +60,8 @@ data class PsyncSessionUi(
     val partnerDisplayName: String?,
     val viewerApproved: Boolean,
     val partnerApproved: Boolean,
+    // The setup both partners are agreeing to.
+    val filters: SwipeDeckRequestDto = SwipeDeckRequestDto(),
 ) {
     val phase: PsyncPhase
         get() =
@@ -71,9 +75,37 @@ data class PsyncSessionUi(
                 else -> PsyncPhase.ENDED // expired | cancelled
             }
 
-    /** The viewer is the invitee and still needs to approve the (current) setup. */
+    /**
+     * The viewer still needs to approve the current setup: they were invited, or their partner
+     * suggested different filters (which resets everyone's approval but the suggester's).
+     */
     val awaitingViewerApproval: Boolean
-        get() = !isInitiator && !viewerApproved && (status == "invited" || status == "configuring")
+        get() = !viewerApproved && (status == "invited" || status == "configuring")
+
+    /** The partner changed the filters and the viewer has not answered yet. */
+    val partnerSuggestedChanges: Boolean
+        get() = status == "configuring" && !viewerApproved && partnerApproved
+
+    /** The setup in plain words, one line per fact, for both the inviter and the invitee. */
+    fun setupSummary(distanceUnit: String): List<String> =
+        buildList {
+            add("$deckSize profiles")
+            add("Within ${formatDistanceForUnit(filters.radiusMeters, fallbackLabel = null, distanceUnit = distanceUnit)}")
+            val lo = filters.minimumAge
+            val hi = filters.maximumAge
+            when {
+                lo != null && hi != null -> add("Ages $lo to $hi")
+                lo != null -> add("Ages $lo and up")
+                hi != null -> add("Ages up to $hi")
+            }
+            if (filters.verifiedOnly) add("Verified only")
+            if (filters.linkedOnly == true) add("Linked partners only")
+            if (filters.withPhotosOnly) add("With photos")
+            val more =
+                filters.discoveryStyles.size + filters.intents.size + filters.lifestyleTags.size + filters.logisticsTags.size +
+                    filters.genders.size + filters.orientations.size
+            if (more > 0) add(if (more == 1) "1 more preference" else "$more more preferences")
+        }
 }
 
 data class PsyncDeckCardUi(
@@ -113,6 +145,7 @@ fun PsyncSessionDto.toUi(viewerUserId: String?): PsyncSessionUi {
         partnerDisplayName = partner?.displayName,
         viewerApproved = viewer?.approved ?: false,
         partnerApproved = partner?.approved ?: false,
+        filters = filters,
     )
 }
 

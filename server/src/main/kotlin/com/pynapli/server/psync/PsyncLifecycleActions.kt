@@ -105,6 +105,8 @@ internal class PsyncLifecycleActions(
             sessionId = created.id,
         )
         events.notifyInvite(sessionId = created.id, inviterUserId = userId, inviteeUserId = link.partnerUserId)
+        // If the partner already has Psync open, the invite appears without a manual refresh.
+        events.emitDelta(created.id, PsyncBroadcaster.SESSION_UPDATED, listOf(link.partnerUserId))
         return created.toDto()
     }
 
@@ -116,13 +118,17 @@ internal class PsyncLifecycleActions(
         if (riskPolicyService?.isSocialActionRestricted(userId) == true) {
             throw PsyncException("RISK_RESTRICTED")
         }
-        return repository.accept(sessionId, userId, clock.instant()).toDtoOrThrow()
+        return repository.accept(sessionId, userId, clock.instant()).toDtoOrThrow().also { tellPartner(it, userId) }
     }
 
     suspend fun deny(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = repository.deny(sessionId, userId, clock.instant()).toDtoOrThrow().also { pineappleRefunds.sweep() }
+    ): PsyncSessionDto =
+        repository.deny(sessionId, userId, clock.instant()).toDtoOrThrow().also {
+            pineappleRefunds.sweep()
+            tellPartner(it, userId)
+        }
 
     suspend fun suggestFilters(
         sessionId: UUID,
@@ -136,13 +142,31 @@ internal class PsyncLifecycleActions(
                 SwipeDeckRequestDto.serializer(),
                 request.filters.copy(cursor = null),
             )
-        return repository.suggestFilters(sessionId, userId, filtersJson, clock.instant()).toDtoOrThrow()
+        return repository.suggestFilters(sessionId, userId, filtersJson, clock.instant()).toDtoOrThrow().also { tellPartner(it, userId) }
     }
 
     suspend fun leave(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = repository.leave(sessionId, userId, clock.instant()).toDtoOrThrow().also { pineappleRefunds.sweep() }
+    ): PsyncSessionDto =
+        repository.leave(sessionId, userId, clock.instant()).toDtoOrThrow().also {
+            pineappleRefunds.sweep()
+            tellPartner(it, userId)
+        }
+
+    /**
+     * Tell the other partner the setup moved (accepted, declined, filters suggested, cancelled) so
+     * a screen waiting on them updates at once. Without this they stay on "Waiting for ..." until
+     * they reopen Psync.
+     */
+    private suspend fun tellPartner(
+        session: PsyncSessionDto,
+        actorUserId: UUID,
+    ) = events.emitDelta(
+        UUID.fromString(session.id),
+        PsyncBroadcaster.SESSION_UPDATED,
+        session.participantIds().filter { it != actorUserId },
+    )
 
     suspend fun get(
         sessionId: UUID,
@@ -172,6 +196,7 @@ internal class PsyncLifecycleActions(
         val resolved = resolveOverdueStarted()
         val expired = repository.expireStale(clock.instant())
         events.recordExpired(expired)
+        expired.forEach { events.emitDelta(it.sessionId, PsyncBroadcaster.SESSION_UPDATED, it.participantUserIds) }
         // Also covers sessions cancelled elsewhere (a partner unlinking), which have no hook here.
         pineappleRefunds.sweep()
         return resolved + expired.size

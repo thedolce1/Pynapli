@@ -99,7 +99,9 @@ data class PsyncMatchDto(
 @Serializable
 data class PsyncRealtimeDeltaDto(
     val sessionId: String,
-    val type: String, // partner_started | session_active | partner_finished | session_completed | session_paused | session_resumed | nudge
+    // partner_started | session_active | partner_finished | session_completed | session_paused |
+    // session_resumed | nudge | session_updated (setup changed before the deck started)
+    val type: String,
     val occurredAt: String,
 )
 

@@ -314,6 +314,33 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        // ---- Setup changes reach the other partner live ---------------------------------
+
+        "invite, suggest, accept and decline each tell the OTHER partner the setup changed" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val broadcaster = PsyncBroadcaster(replay = 32)
+                val svc = deckService(emptyList(), broadcaster = broadcaster)
+
+                fun updatesFor() =
+                    broadcaster.deltas.replayCache
+                        .filter { it.type == PsyncBroadcaster.SESSION_UPDATED }
+                        .map { it.recipientUserId }
+
+                val sessionId = UUID.fromString(svc.create(initiator, CreatePsyncSessionRequestDto()).id)
+                assertEquals(listOf(partner), updatesFor())
+
+                svc.suggestFilters(sessionId, partner, SuggestPsyncFiltersRequestDto(SwipeDeckRequestDto(radiusMeters = 10_000)))
+                assertEquals(listOf(partner, initiator), updatesFor())
+
+                svc.accept(sessionId, initiator)
+                assertEquals(listOf(partner, initiator, partner), updatesFor())
+
+                svc.leave(sessionId, partner) // not started yet, so this is a cancel
+                assertEquals(listOf(partner, initiator, partner, initiator), updatesFor())
+            }
+        }
+
         // ---- Session limits per tier ---------------------------------------------------
 
         "a Free initiator can start one session per 24 hours; unstarted invites don't count" {

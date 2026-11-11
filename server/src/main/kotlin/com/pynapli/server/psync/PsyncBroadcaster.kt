@@ -39,6 +39,10 @@ class PsyncBroadcaster(
         const val SESSION_PAUSED = "session_paused"
         const val SESSION_RESUMED = "session_resumed"
         const val NUDGE = "nudge"
+
+        // The setup changed before the deck started: invited, accepted, declined, filters
+        // suggested, cancelled or expired. Carries no detail; the client refetches the session.
+        const val SESSION_UPDATED = "session_updated"
     }
 }
 

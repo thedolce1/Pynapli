@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +44,7 @@ import com.pynapli.app.design.PynapliButtonStyle
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
+import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.SwipeCardTokens
 import com.pynapli.app.design.handCursor
@@ -51,8 +55,11 @@ import com.pynapli.app.design.icons.filled.Favorite
 import com.pynapli.app.design.icons.filled.Star
 import com.pynapli.app.swipe.SwipeActionButton
 import com.pynapli.app.swipe.SwipeCardStack
+import com.pynapli.app.swipe.SwipeFilters
+import com.pynapli.app.swipe.SwipeFiltersSheet
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.launch
 
@@ -70,7 +77,15 @@ object PsyncSessionTags {
     const val PROGRESS = "psync_progress"
     const val RECAP = "psync_recap"
     const val WAITING = "psync_waiting"
+    const val SETUP_SUMMARY = "psync_setup_summary"
+    const val EDIT_FILTERS_BUTTON = "psync_edit_filters_button"
+    const val SUGGEST_CHANGES_BUTTON = "psync_suggest_changes_button"
+
+    fun deckSizeChip(size: Int) = "psync_deck_size_$size"
 }
+
+/** Deck sizes offered at setup. The server caps them by tier (Free 10, Social 25, Select 50). */
+private val PSYNC_DECK_SIZES = listOf(10, 25, 50)
 
 /**
  * The Psync synchronized-swipe surface (PS-5c, PSYNC_SPEC). A single phase-driven screen over
@@ -107,8 +122,12 @@ fun PsyncSessionScreen(
             }
 
             when (state.phase) {
-                PsyncPhase.IDLE -> IdlePhase(onStart = { scope.launch { stateHolder.createSession() } })
-                PsyncPhase.INVITED, PsyncPhase.CONFIGURING -> NegotiationPhase(state, stateHolder, scope)
+                PsyncPhase.IDLE ->
+                    SetupPhase(
+                        distanceUnit = distanceUnit,
+                        onInvite = { deckSize, filters -> scope.launch { stateHolder.createSession(deckSize, filters.toSwipeDeckRequest()) } },
+                    )
+                PsyncPhase.INVITED, PsyncPhase.CONFIGURING -> NegotiationPhase(state, stateHolder, scope, distanceUnit)
                 PsyncPhase.READY -> ReadyPhase(state, onStart = { scope.launch { stateHolder.start() } })
                 PsyncPhase.ACTIVE -> ActivePhase(state, stateHolder, scope, distanceUnit, onOpenProfile)
                 PsyncPhase.PAUSED ->
@@ -135,36 +154,176 @@ fun PsyncSessionScreen(
     }
 }
 
+/**
+ * Before inviting: the initiator picks what the two of them will review. Nothing is sent until
+ * they tap Invite, and the partner sees this same setup before agreeing to it.
+ */
 @Composable
-private fun IdlePhase(onStart: () -> Unit) {
-    StatusPhase(
-        title = "Swipe together",
-        body = "Start a Psync session and review the same people with your partner — privately, each on your own device.",
-    ) {
-        PrimaryButton("Start Psync", PsyncSessionTags.START_PSYNC_BUTTON, onClick = onStart)
+private fun SetupPhase(
+    distanceUnit: String,
+    onInvite: (deckSize: Int, filters: SwipeFilters) -> Unit,
+) {
+    var deckSize by rememberSaveable { mutableStateOf(PSYNC_DECK_SIZES[1]) }
+    var filters by remember { mutableStateOf(SwipeFilters.defaults) }
+    var editingFilters by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(24.dp))
+        Text("Swipe together", color = PynapliColors.TextPrimary, style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Review the same people with your partner, each on your own device. Your swipes stay private.",
+            color = PynapliColors.TextSecondary,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(24.dp))
+
+        SetupLabel("Deck size")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PSYNC_DECK_SIZES.forEach { size ->
+                PynapliPill(
+                    text = "$size",
+                    selected = size == deckSize,
+                    onClick = { deckSize = size },
+                    modifier = Modifier.testTag(PsyncSessionTags.deckSizeChip(size)),
+                )
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+
+        SetupLabel("Who you'll see")
+        SetupSummaryCard(lines = filters.toSwipeDeckRequest().toSetupLines(distanceUnit))
+        Spacer(Modifier.height(10.dp))
+        SecondaryButton("Change filters", PsyncSessionTags.EDIT_FILTERS_BUTTON) { editingFilters = true }
+
+        Spacer(Modifier.height(24.dp))
+        PrimaryButton("Invite partner", PsyncSessionTags.START_PSYNC_BUTTON) { onInvite(deckSize, filters) }
+    }
+
+    if (editingFilters) {
+        SwipeFiltersSheet(
+            initial = filters,
+            onDismiss = { editingFilters = false },
+            onApply = { updated ->
+                filters = updated
+                editingFilters = false
+            },
+            onClearAll = {
+                filters = SwipeFilters.defaults
+                editingFilters = false
+            },
+        )
     }
 }
 
+/**
+ * The setup is on the table and someone has to answer. Both partners see the same summary, so
+ * nobody agrees to a session they can't see (PSYNC_SPEC "Partner Review" / "Filter Agreement").
+ */
 @Composable
 private fun NegotiationPhase(
     state: PsyncUiState,
     stateHolder: PsyncStateHolder,
     scope: kotlinx.coroutines.CoroutineScope,
+    distanceUnit: String,
 ) {
     val session = state.session ?: return
     val partner = session.partnerDisplayName ?: "Your partner"
-    if (session.awaitingViewerApproval) {
-        StatusPhase(title = "$partner invited you to Psync", body = "Review the same deck together. Swipes stay private.") {
+    var suggesting by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(24.dp))
+        val title =
+            when {
+                session.partnerSuggestedChanges -> "$partner suggested changes"
+                session.awaitingViewerApproval -> "$partner invited you to Psync"
+                else -> "Waiting for $partner"
+            }
+        val body =
+            when {
+                session.partnerSuggestedChanges -> "Here's the updated setup. You both need to agree before it starts."
+                session.awaitingViewerApproval -> "You'll review the same deck. Swipes stay private."
+                else -> "They'll see this setup and can accept, suggest changes or decline."
+            }
+        Text(title, color = PynapliColors.TextPrimary, style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(8.dp))
+        Text(body, color = PynapliColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(20.dp))
+
+        SetupSummaryCard(lines = session.setupSummary(distanceUnit))
+        Spacer(Modifier.height(20.dp))
+
+        if (session.awaitingViewerApproval) {
             PrimaryButton("Accept", PsyncSessionTags.ACCEPT_BUTTON) { scope.launch { stateHolder.accept() } }
             Spacer(Modifier.height(10.dp))
+            SecondaryButton("Suggest changes", PsyncSessionTags.SUGGEST_CHANGES_BUTTON) { suggesting = true }
+            Spacer(Modifier.height(10.dp))
             SecondaryButton("Decline", PsyncSessionTags.DECLINE_BUTTON) { scope.launch { stateHolder.deny() } }
-        }
-    } else {
-        StatusPhase(title = "Waiting for $partner", body = "We'll start as soon as they accept.") {
+        } else {
+            SecondaryButton("Change filters", PsyncSessionTags.SUGGEST_CHANGES_BUTTON) { suggesting = true }
+            Spacer(Modifier.height(10.dp))
             SecondaryButton("Cancel", PsyncSessionTags.DECLINE_BUTTON) { scope.launch { stateHolder.leave() } }
         }
     }
+
+    if (suggesting) {
+        SwipeFiltersSheet(
+            initial = SwipeFilters.fromSwipeDeckRequest(session.filters),
+            onDismiss = { suggesting = false },
+            onApply = { updated ->
+                suggesting = false
+                scope.launch { stateHolder.suggestFilters(updated.toSwipeDeckRequest()) }
+            },
+            onClearAll = {
+                suggesting = false
+                scope.launch { stateHolder.suggestFilters(SwipeFilters.defaults.toSwipeDeckRequest()) }
+            },
+        )
+    }
 }
+
+@Composable
+private fun SetupLabel(text: String) {
+    Text(
+        text = text,
+        color = PynapliColors.TextSecondary,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
+}
+
+/** The agreed (or proposed) setup, one fact per line. */
+@Composable
+private fun SetupSummaryCard(lines: List<String>) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(PynapliShape.CardShape)
+                .background(PynapliColors.Surface)
+                .border(1.dp, PynapliColors.Border, PynapliShape.CardShape)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .testTag(PsyncSessionTags.SETUP_SUMMARY),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        lines.forEach { line ->
+            Text(line, color = PynapliColors.TextPrimary, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+/** The filter half of [PsyncSessionUi.setupSummary], for the setup step before a session exists. */
+private fun SwipeDeckRequestDto.toSetupLines(distanceUnit: String): List<String> =
+    PsyncSessionUi(
+        id = "",
+        status = "",
+        deckSize = 0,
+        isInitiator = true,
+        partnerDisplayName = null,
+        viewerApproved = true,
+        partnerApproved = false,
+        filters = this,
+    ).setupSummary(distanceUnit).drop(1)
 
 @Composable
 private fun ReadyPhase(

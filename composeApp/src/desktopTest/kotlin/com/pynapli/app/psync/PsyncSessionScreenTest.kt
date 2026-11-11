@@ -58,7 +58,20 @@ private class StaticPsyncRepository(
 
     override suspend fun loadSession(sessionId: String) = AppResult.Success(current ?: session("cancelled"))
 
-    override suspend fun createSession(deckSize: Int) = AppResult.Success(current ?: session("invited"))
+    var createdWith: Pair<Int, SwipeDeckRequestDto>? = null
+
+    override suspend fun createSession(
+        deckSize: Int,
+        filters: SwipeDeckRequestDto,
+    ): AppResult<PsyncSessionDto> {
+        createdWith = deckSize to filters
+        return AppResult.Success(current ?: session("invited"))
+    }
+
+    override suspend fun suggestFilters(
+        sessionId: String,
+        filters: SwipeDeckRequestDto,
+    ) = AppResult.Success(current ?: session("configuring"))
 
     override suspend fun accept(sessionId: String) = AppResult.Success(current ?: session("ready"))
 
@@ -99,6 +112,49 @@ class PsyncSessionScreenTest {
             }
             waitForIdle()
             onNodeWithTag(PsyncSessionTags.START_PSYNC_BUTTON).assertIsDisplayed()
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun setupInvitesWithTheChosenDeckSize() =
+        runComposeUiTest {
+            val repo = StaticPsyncRepository(current = null)
+            setContent { PsyncSessionScreen(stateHolder = holder(repo), onBack = {}) }
+            waitForIdle()
+
+            onNodeWithTag(PsyncSessionTags.SETUP_SUMMARY).assertIsDisplayed()
+            onNodeWithTag(PsyncSessionTags.deckSizeChip(10)).performClick()
+            onNodeWithTag(PsyncSessionTags.START_PSYNC_BUTTON).performClick()
+            waitForIdle()
+
+            kotlin.test.assertEquals(10, repo.createdWith?.first)
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun theInviteeSeesTheSetupAndCanAcceptSuggestOrDecline() =
+        runComposeUiTest {
+            val invited =
+                session("invited").copy(
+                    initiatorUserId = PARTNER,
+                    deckSize = 25,
+                    filters = SwipeDeckRequestDto(minimumAge = 30, maximumAge = 45, verifiedOnly = true),
+                    participants =
+                        listOf(
+                            PsyncParticipantDto(VIEWER, "Viewer", "partner", "pending", false),
+                            PsyncParticipantDto(PARTNER, "Pat", "initiator", "accepted", true),
+                        ),
+                )
+            setContent { PsyncSessionScreen(stateHolder = holder(StaticPsyncRepository(current = invited)), onBack = {}) }
+            waitForIdle()
+
+            onNodeWithText("Pat invited you to Psync").assertIsDisplayed()
+            onNodeWithText("25 profiles").assertIsDisplayed()
+            onNodeWithText("Ages 30 to 45").assertIsDisplayed()
+            onNodeWithText("Verified only").assertIsDisplayed()
+            onNodeWithTag(PsyncSessionTags.ACCEPT_BUTTON).assertIsDisplayed()
+            onNodeWithTag(PsyncSessionTags.SUGGEST_CHANGES_BUTTON).assertIsDisplayed()
+            onNodeWithTag(PsyncSessionTags.DECLINE_BUTTON).assertIsDisplayed()
         }
 
     @OptIn(ExperimentalTestApi::class)

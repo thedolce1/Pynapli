@@ -82,7 +82,24 @@ private class FakePsyncRepository : PsyncRepository {
         return resultOf(CurrentPsyncSessionDto(session = current))
     }
 
-    override suspend fun createSession(deckSize: Int): AppResult<PsyncSessionDto> {
+    var lastFilters: SwipeDeckRequestDto? = null
+    var lastDeckSize: Int? = null
+
+    override suspend fun suggestFilters(
+        sessionId: String,
+        filters: SwipeDeckRequestDto,
+    ): AppResult<PsyncSessionDto> {
+        calls += "suggestFilters"
+        lastFilters = filters
+        return resultOf(current ?: session("configuring"))
+    }
+
+    override suspend fun createSession(
+        deckSize: Int,
+        filters: SwipeDeckRequestDto,
+    ): AppResult<PsyncSessionDto> {
+        lastDeckSize = deckSize
+        lastFilters = filters
         calls += "createSession"
         return resultOf(current ?: session("invited"))
     }
@@ -266,6 +283,88 @@ class PsyncStateHolderTest {
                 holder.state.value.recap!!
                     .profilesReviewed,
             )
+        }
+
+    @Test
+    fun createSendsTheChosenDeckSizeAndFilters() =
+        runTest {
+            val repo = FakePsyncRepository()
+            val holder = holder(repo)
+
+            holder.createSession(deckSize = 10, filters = SwipeDeckRequestDto(radiusMeters = 5_000, verifiedOnly = true))
+
+            assertEquals(10, repo.lastDeckSize)
+            assertEquals(5_000, repo.lastFilters?.radiusMeters)
+            assertEquals(true, repo.lastFilters?.verifiedOnly)
+        }
+
+    @Test
+    fun suggestingFiltersSendsThemAndAppliesTheReturnedSession() =
+        runTest {
+            val repo = FakePsyncRepository().apply { current = session("invited", initiator = PARTNER, viewerApproved = false, partnerApproved = true) }
+            val holder = holder(repo)
+            holder.refresh()
+            assertTrue(
+                holder.state.value.session!!
+                    .awaitingViewerApproval,
+            )
+
+            // The server resets approvals except the suggester's.
+            repo.current = session("configuring", initiator = PARTNER, viewerApproved = true, partnerApproved = false)
+            holder.suggestFilters(SwipeDeckRequestDto(radiusMeters = 10_000))
+
+            assertTrue(repo.calls.contains("suggestFilters"))
+            assertEquals(10_000, repo.lastFilters?.radiusMeters)
+            assertEquals(PsyncPhase.CONFIGURING, holder.state.value.phase)
+            assertTrue(
+                !holder.state.value.session!!
+                    .awaitingViewerApproval,
+            )
+        }
+
+    @Test
+    fun theInitiatorMustAnswerWhenTheirPartnerSuggestsChanges() =
+        runTest {
+            val repo = FakePsyncRepository().apply { current = session("configuring", viewerApproved = false, partnerApproved = true) }
+            val holder = holder(repo)
+            holder.refresh()
+
+            val session = holder.state.value.session!!
+            assertTrue(session.isInitiator)
+            assertTrue(session.partnerSuggestedChanges)
+            assertTrue(session.awaitingViewerApproval)
+        }
+
+    @Test
+    fun aSwipeOnASessionThatEndedFollowsItToTheRecap() =
+        runTest {
+            val repo =
+                FakePsyncRepository().apply {
+                    current = session("active")
+                    deck = listOf(deckCard("a"))
+                    recap =
+                        PsyncRecapDto(
+                            sessionId = "session-1",
+                            status = "completed",
+                            profilesReviewed = 0,
+                            bothLikedCount = 0,
+                            togetherMatchCount = 0,
+                            soloMatchCount = 0,
+                            filtersSummary = "25km",
+                            togetherMatches = emptyList(),
+                        )
+                }
+            val holder = holder(repo)
+            holder.refresh()
+
+            // The partner left and the realtime update never arrived.
+            repo.current = null
+            repo.ended = session("completed")
+            repo.failNext = AppError("PSYNC_INVALID_STATE", "This Psync session is no longer active.")
+            holder.submitAction("a", "like")
+
+            assertEquals(PsyncPhase.COMPLETED, holder.state.value.phase)
+            assertEquals(null, holder.state.value.errorMessage)
         }
 
     @Test
