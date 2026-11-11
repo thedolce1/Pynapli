@@ -8,6 +8,7 @@ import com.pynapli.server.notifications.NotificationService
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.psync.JdbcPsyncSessionRepository
 import com.pynapli.server.psync.PsyncBroadcaster
+import com.pynapli.server.psync.PsyncSessionExpiryWorker
 import com.pynapli.server.psync.PsyncSessionService
 import com.pynapli.server.psync.SwipeServicePsyncDeckGenerator
 import com.pynapli.server.safety.BlockRepository
@@ -32,6 +33,7 @@ import javax.sql.DataSource
 internal class SwipeDependencies(
     val swipeService: SwipeService,
     val psyncSessionService: PsyncSessionService,
+    val psyncSessionExpiryWorker: PsyncSessionExpiryWorker,
     val topPicksService: TopPicksService,
 )
 
@@ -93,6 +95,9 @@ internal fun buildSwipeDependencies(
     return SwipeDependencies(
         swipeService = swipeService,
         psyncSessionService = psyncSessionService,
+        // Closes out sessions nobody comes back to (abandoned mid-deck, partner link ended) so
+        // their likes are still delivered. Requests do the same sweep, so 5 minutes is plenty.
+        psyncSessionExpiryWorker = PsyncSessionExpiryWorker(psyncSessionService, intervalMillis = 5 * 60 * 1000L),
         topPicksService = topPicksService,
     )
 }
