@@ -50,6 +50,34 @@ internal class PsyncSessionEvents(
     }
 
     /**
+     * Push the invite to the invited partner (the Activity card is recorded separately). Follows
+     * their "partner invites" notification setting, like a Playing Tonight invite. Idempotent per
+     * session and recipient.
+     */
+    suspend fun notifyInvite(
+        sessionId: UUID,
+        inviterUserId: UUID,
+        inviteeUserId: UUID,
+    ) {
+        notificationPublisher?.enqueue(
+            NotificationEventDraft(
+                recipientUserId = inviteeUserId,
+                actorUserId = inviterUserId,
+                kind = NotificationKind.PSYNC_INVITE,
+                subjectId = sessionId,
+                idempotencyKey = "psync_invite:$sessionId:$inviteeUserId",
+                payload =
+                    mapOf(
+                        "target" to "activity",
+                        "activityTab" to "requests",
+                        "activityEventType" to "psync_invite",
+                        "sessionId" to sessionId.toString(),
+                    ),
+            ),
+        )
+    }
+
+    /**
      * Surface delivered Psync likes in each target's Likes You, exactly as a like from the ordinary
      * Swipe deck would appear. The target sees an individual's like; nothing says it came from a
      * Psync session, and passes are never delivered.

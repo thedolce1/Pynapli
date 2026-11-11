@@ -16,6 +16,7 @@ internal fun NotificationPreferencesRecord.allows(kind: String): Boolean =
         NotificationKind.PROFILE_LINK_ACCEPTED,
         NotificationKind.PARTNER_CHAT_INVITE,
         NotificationKind.TONIGHT_INVITE,
+        NotificationKind.PSYNC_INVITE,
         -> partnerInvitesEnabled
         NotificationKind.TONIGHT_REMINDER -> activityEnabled
         NotificationKind.SYSTEM_SAFETY -> systemSafetyEnabled
@@ -62,6 +63,11 @@ internal fun notificationCopy(
             NotificationCopy(
                 "Playing Tonight invite",
                 "Your linked partner wants to go live tonight.",
+            )
+        NotificationKind.PSYNC_INVITE ->
+            NotificationCopy(
+                "Psync invite",
+                "Your linked partner wants to swipe together.",
             )
         NotificationKind.TONIGHT_REMINDER ->
             NotificationCopy(

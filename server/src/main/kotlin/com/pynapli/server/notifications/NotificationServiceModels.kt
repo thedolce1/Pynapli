@@ -17,6 +17,7 @@ object NotificationKind {
     const val PARTNER_CHAT_INVITE = "partner_chat_invite"
     const val TONIGHT_INVITE = "tonight_invite"
     const val TONIGHT_REMINDER = "tonight_reminder"
+    const val PSYNC_INVITE = "psync_invite"
     const val SYSTEM_SAFETY = "system_safety"
 }
 
