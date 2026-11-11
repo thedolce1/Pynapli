@@ -169,6 +169,8 @@ minutes before expiry. The reminder uses a `tonight_sessions.reminder_sent_at` l
 atomically (`FOR UPDATE SKIP LOCKED`) so it fires at most once per session across worker ticks/
 instances; the existing `TonightSessionExpiryWorker` runs the scan each tick. (V61 migration.)
 
+**Link ends -> together session ends (2026-11-11):** `JdbcProfileLinkRepository.unlinkCurrent` ends any proposed or live together session between the two in the same statement, so an unlinked pair never stays on the public feed. Solo sessions are untouched.
+
 **Partner responses reach the proposer (2026-11-11):** approving, declining or ending a linked-together session pushes the other partner (`TONIGHT_ACCEPTED` / `TONIGHT_DECLINED` neutral / `TONIGHT_ENDED`, gated by `partnerInvitesEnabled`), and the Playing Tonight screen re-checks its own session every 15 seconds while a together session depends on the partner, with a short notice when it changes. Tonight and Psync pushes now open their own screens on Android instead of Activity.
 
 **Partner-offline pause/end shipped (2026-06-03):** linked-together (`mode='together'`,
