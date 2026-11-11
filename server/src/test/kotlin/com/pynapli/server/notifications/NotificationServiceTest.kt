@@ -204,6 +204,27 @@ class NotificationServiceTest {
         }
 
     @Test
+    fun aFailedOutboxWriteIsDroppedInsteadOfFailingTheCaller() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryNotificationRepository(userId).apply { failOutboxWrites = true }
+            val service = NotificationService(repository)
+
+            val outbox =
+                service.enqueue(
+                    NotificationEventDraft(
+                        recipientUserId = userId,
+                        actorUserId = UUID.randomUUID(),
+                        kind = NotificationKind.MESSAGE,
+                        subjectId = UUID.randomUUID(),
+                        idempotencyKey = "message:fail:$userId",
+                    ),
+                )
+
+            assertEquals(null, outbox)
+        }
+
+    @Test
     fun enqueueRateLimitsMessageBurstsByConversation() =
         runBlocking {
             val userId = UUID.randomUUID()
@@ -379,6 +400,7 @@ private class InMemoryNotificationRepository(
 ) : NotificationRepository {
     var registration: PushDeviceRegistration? = null
     var activeDeviceCount: Int = 1
+    var failOutboxWrites: Boolean = false
     val outbox = mutableListOf<NotificationOutboxInsert>()
     val recentNotifications = mutableListOf<RecentNotification>()
     val recentChecks = mutableListOf<RecentNotificationCheck>()
@@ -456,6 +478,7 @@ private class InMemoryNotificationRepository(
         notification: NotificationOutboxInsert,
         notificationIdFactory: () -> UUID,
     ): NotificationOutboxRecord? {
+        if (failOutboxWrites) throw java.sql.SQLException("check constraint violated")
         if (outbox.any { it.idempotencyKey == notification.idempotencyKey }) return null
         outbox.add(notification)
         return NotificationOutboxRecord(
