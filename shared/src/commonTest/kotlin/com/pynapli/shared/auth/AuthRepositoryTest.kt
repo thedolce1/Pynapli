@@ -565,6 +565,8 @@ private class FakeApiClient(
 
     override suspend fun rewindSwipeAction(): AppResult<SwipeRewindResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun likeBack(targetUserId: String): AppResult<com.pynapli.shared.network.dto.SwipeActionResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun listMatches(): AppResult<MatchesListResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override fun mediaAssetContentUrl(mediaAssetId: String): String = "https://media.example/$mediaAssetId"

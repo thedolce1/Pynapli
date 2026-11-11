@@ -164,6 +164,32 @@ class ActivityStateHolder(
         }
     }
 
+    /**
+     * Like back someone who liked the viewer, straight from their Activity card. A match goes to
+     * Matches and Messages on its own (the server opens the conversation); here it's just named.
+     */
+    suspend fun likeBack(item: com.pynapli.shared.network.dto.ActivityEventDto) {
+        if (item.eventId in _state.value.likedBackEventIds) return
+        _state.update { it.copy(likedBackEventIds = it.likedBackEventIds + item.eventId, actionFeedback = null, errorMessage = null) }
+        when (val result = repository.likeBack(item.actorUserId)) {
+            is AppResult.Success ->
+                _state.update {
+                    it.copy(
+                        actionFeedback =
+                            if (result.value.match != null) {
+                                "It's a match with ${item.actorDisplayName}. Say hi in Messages."
+                            } else {
+                                "You liked ${item.actorDisplayName} back."
+                            },
+                    )
+                }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(likedBackEventIds = it.likedBackEventIds - item.eventId, errorMessage = result.error.message)
+                }
+        }
+    }
+
     suspend fun respondToAlbumRequest(
         eventId: String,
         approve: Boolean,

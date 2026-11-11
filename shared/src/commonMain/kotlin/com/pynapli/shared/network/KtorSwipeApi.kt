@@ -20,5 +20,13 @@ internal class KtorSwipeApi(
 
     override suspend fun rewindSwipeAction(): AppResult<SwipeRewindResponseDto> = support.authPost("/v1/swipe/rewind")
 
+    override suspend fun likeBack(targetUserId: String): AppResult<SwipeActionResponseDto> =
+        support.authSend(
+            HttpMethod.Post,
+            "/v1/swipe/like-back",
+            com.pynapli.shared.network.dto
+                .LikeBackRequestDto(targetUserId),
+        )
+
     override suspend fun listMatches(): AppResult<MatchesListResponseDto> = support.authGet("/v1/matches")
 }

@@ -48,6 +48,8 @@ internal fun ActivityRow(
     onOpenMatch: (ActivityEventDto) -> Unit,
     onOpenPartnerChatInvite: (String) -> Unit,
     onOpenPsync: (String) -> Unit,
+    onLikeBack: (ActivityEventDto) -> Unit,
+    likedBackEventIds: Set<String>,
     onDismissEvent: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -141,6 +143,8 @@ internal fun ActivityRow(
                 onOpenMatch = onOpenMatch,
                 onOpenPartnerChatInvite = onOpenPartnerChatInvite,
                 onOpenPsync = onOpenPsync,
+                onLikeBack = onLikeBack,
+                likedBackEventIds = likedBackEventIds,
             )
         }
         IconButton(

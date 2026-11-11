@@ -106,6 +106,12 @@ data class SwipeActionResponseDto(
     val match: MatchDto? = null,
 )
 
+/** Like back someone who liked you, from Activity, without needing them in your Swipe deck. */
+@Serializable
+data class LikeBackRequestDto(
+    val targetUserId: String,
+)
+
 @Serializable
 data class SwipeRewindResponseDto(
     val rewound: Boolean,

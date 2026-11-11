@@ -168,6 +168,14 @@ class JdbcSwipeRepository(
             matchIdFactory = matchIdFactory,
         )
 
+    override suspend fun likeBack(
+        actionId: UUID,
+        viewerUserId: UUID,
+        targetUserId: UUID,
+        travelLocationId: UUID?,
+        matchIdFactory: () -> UUID,
+    ): SwipeActionResult? = actionActions.likeBack(actionId, viewerUserId, targetUserId, travelLocationId, matchIdFactory)
+
     override suspend fun recordSwipeActionAndMarkCard(
         actionId: UUID,
         actorUserId: UUID,
