@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
+import com.pynapli.app.grid.discoveryTagLabel
 import com.pynapli.shared.network.dto.SwipeCardDto
 
 @Composable
@@ -179,7 +180,8 @@ internal fun BoxScope.SwipeCardFooter(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 card.tags.forEach { tag ->
-                    SwipeTagChip(label = tag)
+                    // The server sends taxonomy keys; show the label people read elsewhere.
+                    SwipeTagChip(label = discoveryTagLabel(tag))
                 }
             }
         }
