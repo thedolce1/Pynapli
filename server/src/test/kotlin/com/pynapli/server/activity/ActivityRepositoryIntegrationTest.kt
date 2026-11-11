@@ -371,6 +371,28 @@ class ActivityRepositoryIntegrationTest {
         }
 
     @Test
+    fun albumGrantedKeepsOneCardPerOwnerAndResurfacesOnReGrant() =
+        runBlocking {
+            val owner = UUID.fromString("00000000-0000-0000-0000-000000001851")
+            val requester = UUID.fromString("00000000-0000-0000-0000-000000001852")
+            dataSource.insertUserWithDiscovery(owner, displayName = "Owner")
+            dataSource.insertUserWithDiscovery(requester, displayName = "Requester")
+            val repository = JdbcActivityRepository(dataSource)
+
+            assertTrue(repository.recordAlbumGranted(owner, requester))
+            val first = repository.listActivity(ActivityFeedQuery(requester, setOf("album_granted"), 10, null)).single()
+            repository.markActivityEventsSeen(requester, setOf(first.eventId))
+
+            // Granted again later (after a revoke): the same card comes back as unseen.
+            assertTrue(repository.recordAlbumGranted(owner, requester))
+            assertEquals(1, dataSource.eventCount("album_granted"))
+            val again = repository.listActivity(ActivityFeedQuery(requester, setOf("album_granted"), 10, null)).single()
+            assertEquals(owner, again.actorUserId)
+            assertFalse(again.seen)
+            assertFalse(repository.recordAlbumGranted(owner, owner))
+        }
+
+    @Test
     fun recordFlirtRoundTripsPlayingTonightSourceIntoFeed() =
         runBlocking {
             val taggedSender = UUID.fromString("00000000-0000-0000-0000-000000002101")

@@ -70,6 +70,7 @@ object PynapliNotificationDeepLinks {
             "profile_view" -> ActivityTabUi.Views.apiValue
             "flirt" -> ActivityTabUi.Flirts.apiValue
             "album_request",
+            "album_granted",
             "partner_chat_invite",
             "psync_invite",
             -> ActivityTabUi.Requests.apiValue

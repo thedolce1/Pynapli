@@ -11,6 +11,7 @@ internal fun ActivityEventDto.activityText(): String =
         "pineapple_like" -> "sent a Pineapple"
         "intro_note" -> "sent an Intro Note"
         "match" -> "matched with you"
+        "album_granted" -> "shared their private album with you"
         "partner_chat_invite" -> "sent a chat invite"
         "psync_invite" -> "invited you to Psync"
         "psync_started" -> "started Psync with you"
@@ -29,6 +30,7 @@ internal fun ActivityEventDto.isUnreadBadgeActivity(): Boolean =
             "match",
             "partner_chat_invite",
             "psync_invite",
+            "album_granted",
             -> true
             "album_request" -> albumRequestStatus == null || albumRequestStatus == "pending"
             else -> false

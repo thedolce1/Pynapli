@@ -12,6 +12,7 @@ object NotificationKind {
     const val FLIRT = "flirt"
     const val PROFILE_VIEW = "profile_view"
     const val ALBUM_REQUEST = "album_request"
+    const val ALBUM_GRANTED = "album_granted"
     const val PROFILE_LINK_INVITE = "profile_link_invite"
     const val PROFILE_LINK_ACCEPTED = "profile_link_accepted"
     const val PARTNER_CHAT_INVITE = "partner_chat_invite"

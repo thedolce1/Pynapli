@@ -273,6 +273,32 @@ class ActivityServiceTest {
         }
 
     @Test
+    fun grantingAnAlbumRequestTellsTheRequesterButADenialStaysSilent() =
+        runBlocking {
+            val ownerUserId = UUID.randomUUID()
+            val requesterUserId = UUID.randomUUID()
+            val eventId = UUID.randomUUID()
+            val repository =
+                InMemoryActivityRepository().apply {
+                    albumRequestEvent = AlbumRequestEventRecord(eventId, ownerUserId, requesterUserId)
+                }
+            val media = io.mockk.mockk<com.pynapli.server.media.MediaService>()
+            io.mockk.coEvery { media.decidePrivateAlbumAccessRequest(ownerUserId, requesterUserId, true) } returns "approved"
+            io.mockk.coEvery { media.decidePrivateAlbumAccessRequest(ownerUserId, requesterUserId, false) } returns "denied"
+            val notifications = RecordingNotificationPublisher()
+            val service = ActivityService(repository, mediaService = media, notificationPublisher = notifications)
+
+            service.respondToAlbumAccessRequest(ownerUserId, eventId, approve = false)
+            assertEquals(emptyList(), repository.albumGrants)
+            assertEquals(emptyList(), notifications.events)
+
+            service.respondToAlbumAccessRequest(ownerUserId, eventId, approve = true)
+            assertEquals(listOf(ownerUserId to requesterUserId), repository.albumGrants)
+            assertEquals(NotificationKind.ALBUM_GRANTED, notifications.events.single().kind)
+            assertEquals(requesterUserId, notifications.events.single().recipientUserId)
+        }
+
+    @Test
     fun requestAlbumAccessRejectsSelfTarget() =
         runBlocking {
             val userId = UUID.randomUUID()
@@ -912,10 +938,21 @@ private class InMemoryActivityRepository(
         return true
     }
 
+    var albumRequestEvent: AlbumRequestEventRecord? = null
+    val albumGrants = mutableListOf<Pair<UUID, UUID>>()
+
     override suspend fun getAlbumRequestEvent(
         recipientUserId: UUID,
         eventId: UUID,
-    ): AlbumRequestEventRecord? = null
+    ): AlbumRequestEventRecord? = albumRequestEvent?.takeIf { it.eventId == eventId && it.ownerUserId == recipientUserId }
+
+    override suspend fun recordAlbumGranted(
+        ownerUserId: UUID,
+        requesterUserId: UUID,
+    ): Boolean {
+        albumGrants += ownerUserId to requesterUserId
+        return true
+    }
 
     override suspend fun listActivity(query: ActivityFeedQuery): List<ActivityEventRecord> {
         val cursor = query.cursor

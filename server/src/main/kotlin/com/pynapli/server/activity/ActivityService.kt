@@ -142,6 +142,7 @@ class ActivityService(
             ownerUserId = ownerUserId,
             eventId = eventId,
             approve = approve,
+            onGranted = { requesterUserId -> signalActions.recordAlbumGranted(ownerUserId, requesterUserId) },
         )
 
     suspend fun dismissActivityEvent(
