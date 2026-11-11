@@ -69,6 +69,14 @@ private class FakePsyncRepository : PsyncRepository {
         }
     }
 
+    // What a by-id read returns once the session is no longer the "current" one.
+    var ended: PsyncSessionDto? = null
+
+    override suspend fun loadSession(sessionId: String): AppResult<PsyncSessionDto> {
+        calls += "loadSession"
+        return resultOf(ended ?: session("cancelled"))
+    }
+
     override suspend fun loadCurrentSession(): AppResult<CurrentPsyncSessionDto> {
         calls += "loadCurrentSession"
         return resultOf(CurrentPsyncSessionDto(session = current))
@@ -205,6 +213,83 @@ class PsyncStateHolderTest {
             assertEquals("like", state.deck.single().viewerAction)
             assertEquals(1, state.recap!!.togetherMatchCount)
             assertTrue(repo.calls.contains("loadRecap"))
+            assertEquals(PsyncPhase.COMPLETED, state.phase)
+
+            // The server no longer reports a finished session as current. A refresh (e.g. the
+            // session_completed stream delta) must keep the recap on screen.
+            repo.current = null
+            holder.refresh()
+            assertEquals(PsyncPhase.COMPLETED, holder.state.value.phase)
+            assertEquals(
+                1,
+                holder.state.value.recap!!
+                    .togetherMatchCount,
+            )
+
+            // Dismissing the recap frees the screen for a new session.
+            holder.dismissFinished()
+            assertEquals(PsyncPhase.IDLE, holder.state.value.phase)
+        }
+
+    @Test
+    fun refreshFollowsASessionThatEndedElsewhereToItsRecap() =
+        runTest {
+            val repo =
+                FakePsyncRepository().apply {
+                    current = session("active")
+                    deck = listOf(deckCard("a"))
+                    recap =
+                        PsyncRecapDto(
+                            sessionId = "session-1",
+                            status = "completed",
+                            profilesReviewed = 1,
+                            bothLikedCount = 0,
+                            togetherMatchCount = 0,
+                            soloMatchCount = 0,
+                            filtersSummary = "25km",
+                            togetherMatches = emptyList(),
+                        )
+                }
+            val holder = holder(repo)
+            holder.refresh()
+            assertEquals(PsyncPhase.ACTIVE, holder.state.value.phase)
+
+            // The partner left (or finished): the session is resolved server-side.
+            repo.current = null
+            repo.ended = session("completed")
+            holder.refresh()
+
+            assertEquals(PsyncPhase.COMPLETED, holder.state.value.phase)
+            assertTrue(repo.calls.contains("loadSession"))
+            assertEquals(
+                1,
+                holder.state.value.recap!!
+                    .profilesReviewed,
+            )
+        }
+
+    @Test
+    fun aRefusedSwipePutsTheCardBack() =
+        runTest {
+            val repo =
+                FakePsyncRepository().apply {
+                    current = session("active")
+                    deck = listOf(deckCard("a"))
+                }
+            val holder = holder(repo)
+            holder.refresh()
+
+            repo.failNext = AppError("PINEAPPLE_LIKE_INVENTORY_REQUIRED", "You do not have a Pineapple Like available.")
+            holder.submitAction("a", "pineapple_like")
+
+            assertEquals(
+                null,
+                holder.state.value.deck
+                    .single()
+                    .viewerAction,
+            )
+            assertEquals(1, holder.state.value.remainingCards.size)
+            assertEquals("You do not have a Pineapple Like available.", holder.state.value.errorMessage)
         }
 
     @Test

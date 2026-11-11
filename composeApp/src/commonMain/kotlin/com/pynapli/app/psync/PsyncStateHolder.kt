@@ -22,6 +22,9 @@ import kotlinx.coroutines.flow.update
 interface PsyncRepository {
     suspend fun loadCurrentSession(): AppResult<CurrentPsyncSessionDto>
 
+    /** One session by id, whatever its status (the "current" read only returns a live one). */
+    suspend fun loadSession(sessionId: String): AppResult<PsyncSessionDto>
+
     suspend fun createSession(deckSize: Int): AppResult<PsyncSessionDto>
 
     suspend fun accept(sessionId: String): AppResult<PsyncSessionDto>
@@ -55,6 +58,8 @@ class ApiPsyncRepository(
     private val apiClient: PynapliApiClient,
 ) : PsyncRepository {
     override suspend fun loadCurrentSession() = apiClient.getCurrentPsyncSession()
+
+    override suspend fun loadSession(sessionId: String) = apiClient.getPsyncSession(sessionId)
 
     override suspend fun createSession(deckSize: Int) = apiClient.createPsyncSession(CreatePsyncSessionRequestDto(deckSize = deckSize))
 
@@ -110,7 +115,18 @@ class PsyncStateHolder(
         _state.update { it.copy(isLoading = true, errorMessage = null) }
         when (val result = repository.loadCurrentSession()) {
             is AppResult.Success -> {
-                applySession(result.value.session)
+                val live = result.value.session
+                val held = _state.value.session
+                when {
+                    live != null -> applySession(live)
+                    // The server only reports a LIVE session as current. Ours stopped being live
+                    // (finished, a partner left, it expired), so ask what became of it rather than
+                    // dropping back to the start screen and losing the recap.
+                    held != null && held.phase !in PsyncPhase.FINISHED -> followEndedSession(held.id)
+                    // Already showing a recap or an ended notice: keep it until the viewer leaves.
+                    held != null -> Unit
+                    else -> applySession(null)
+                }
                 _state.update { it.copy(isLoading = false) }
                 when (_state.value.session?.status) {
                     "active", "paused" -> loadDeck()
@@ -151,23 +167,44 @@ class PsyncStateHolder(
             }
         }
 
-    /** Record the viewer's private decision on a card; auto-completion loads the recap. */
+    /**
+     * Record the viewer's private decision on a card; auto-completion loads the recap.
+     *
+     * Optimistic: the card leaves the stack at once so swiping never waits on the network, and
+     * comes back if the server refuses the decision (no Pineapple Likes left, session ended).
+     * Retrying is safe because the server keeps the first decision per card.
+     */
     suspend fun submitAction(
         cardToken: String,
         action: String,
     ) = onSession { sessionId ->
+        val previous =
+            _state.value.deck
+                .firstOrNull { it.cardToken == cardToken }
+                ?.viewerAction
+        // The viewer's own choice only (private — never the partner's).
+        setViewerAction(cardToken, action)
+        _state.update { it.copy(errorMessage = null) }
         when (val result = repository.submitAction(sessionId, cardToken, action)) {
             is AppResult.Success -> {
-                // Reflect the viewer's own choice locally (private — never the partner's).
-                _state.update { current ->
-                    current.copy(
-                        deck = current.deck.map { if (it.cardToken == cardToken) it.copy(viewerAction = action) else it },
-                    )
+                if (result.value.sessionCompleted) {
+                    // That was the last decision of the deck: show the recap.
+                    _state.update { current -> current.copy(session = current.session?.copy(status = "completed")) }
+                    loadRecap()
                 }
-                if (result.value.sessionCompleted) loadRecap()
             }
-            is AppResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            is AppResult.Failure -> {
+                setViewerAction(cardToken, previous)
+                _state.update { it.copy(errorMessage = result.error.message) }
+            }
         }
+    }
+
+    private fun setViewerAction(
+        cardToken: String,
+        action: String?,
+    ) = _state.update { current ->
+        current.copy(deck = current.deck.map { if (it.cardToken == cardToken) it.copy(viewerAction = action) else it })
     }
 
     suspend fun complete() =
@@ -200,6 +237,19 @@ class PsyncStateHolder(
         }
 
     fun clearError() = _state.update { it.copy(errorMessage = null) }
+
+    /** Leave a finished session behind (recap or ended notice dismissed) so a new one can start. */
+    fun dismissFinished() {
+        if (_state.value.phase in PsyncPhase.FINISHED) _state.value = PsyncUiState()
+    }
+
+    private suspend fun followEndedSession(sessionId: String) {
+        when (val result = repository.loadSession(sessionId)) {
+            is AppResult.Success -> applySession(result.value)
+            // Can't tell what happened to it; fall back to the start screen.
+            is AppResult.Failure -> applySession(null)
+        }
+    }
 
     private suspend fun mutateSession(call: suspend () -> AppResult<PsyncSessionDto>) {
         _state.update { it.copy(isMutating = true, errorMessage = null) }

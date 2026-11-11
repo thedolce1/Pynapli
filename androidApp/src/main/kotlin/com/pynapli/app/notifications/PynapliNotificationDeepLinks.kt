@@ -71,6 +71,7 @@ object PynapliNotificationDeepLinks {
             "flirt" -> ActivityTabUi.Flirts.apiValue
             "album_request",
             "partner_chat_invite",
+            "psync_invite",
             -> ActivityTabUi.Requests.apiValue
             else -> null
         }

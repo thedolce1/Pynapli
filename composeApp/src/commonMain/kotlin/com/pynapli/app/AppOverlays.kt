@@ -5,6 +5,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
@@ -19,6 +22,7 @@ import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
 import com.pynapli.app.psync.PsyncSessionScreen
 import com.pynapli.app.psync.PsyncStateHolder
+import com.pynapli.app.swipe.toProfileCardUi
 import com.pynapli.app.tonight.PlayingTonightStateHolder
 import com.pynapli.shared.network.PsyncStreamClient
 import kotlinx.coroutines.CoroutineScope
@@ -58,6 +62,8 @@ internal fun PynapliOverlays(
     val profileLinksState by profileLinksStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
     val conversationShownInline = selectedTab == PynapliTab.Messages && conversationState.visible
+    // True while the profile peek on screen was opened from a Psync deck card.
+    var psyncProfileOpen by remember { mutableStateOf(false) }
 
     if (tonightVisible && playingTonightStateHolder != null) {
         // System back (gesture/hardware) closes the full-screen overlay instead of falling
@@ -116,21 +122,44 @@ internal fun PynapliOverlays(
                 client.connect().collect { psyncStateHolder.refresh() }
             }
         }
+        // A block or hide from the profile peek invalidates that card for both partners; the
+        // server already drops it from the deck, so refetch and close the peek.
+        LaunchedEffect(profileDetailState.blockedTargetUserId, profileDetailState.hiddenTargetUserId) {
+            if (psyncProfileOpen && (profileDetailState.blockedTargetUserId != null || profileDetailState.hiddenTargetUserId != null)) {
+                psyncProfileOpen = false
+                profileDetailStateHolder.dismiss()
+                psyncStateHolder.refresh()
+            }
+        }
         PsyncSessionScreen(
             stateHolder = psyncStateHolder,
             onBack = onPsyncDismiss,
             modifier = Modifier.fillMaxSize().closeOnEscape(onPsyncDismiss),
+            distanceUnit = appSettingsState.settings.distanceUnit,
+            onOpenProfile = { card ->
+                psyncProfileOpen = true
+                scope.launch { profileDetailStateHolder.open(card.toProfileCardUi()) }
+            },
         )
     }
 
-    if (selectedTab == PynapliTab.Messages && profileDetailState.visible) {
+    // The Psync deck sits over whichever tab is underneath, and that tab only shows the peek for
+    // profiles it opened itself, so the overlay hosts the peek for cards opened from the deck.
+    val psyncOwnsProfilePeek = psyncVisible && psyncProfileOpen
+    if ((selectedTab == PynapliTab.Messages || psyncOwnsProfilePeek) && profileDetailState.visible) {
         // Unified profile peek: Messages now shows the exact same ProfileDetailSheet as
         // Grid/Swipe/Activity (one profile experience app-wide), gaining block/report/hide and
         // the shared sheet chrome. "Message" simply closes the peek to return to the open thread.
         ProfileDetailSheet(
             state = profileDetailState,
-            onDismiss = profileDetailStateHolder::dismiss,
-            onMessage = profileDetailStateHolder::dismiss,
+            onDismiss = {
+                psyncProfileOpen = false
+                profileDetailStateHolder.dismiss()
+            },
+            onMessage = {
+                psyncProfileOpen = false
+                profileDetailStateHolder.dismiss()
+            },
             onSpark = {
                 scope.launch { profileDetailStateHolder.sendSpark() }
             },

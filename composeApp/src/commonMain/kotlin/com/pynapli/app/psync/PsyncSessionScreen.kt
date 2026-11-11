@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,7 +23,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +46,14 @@ import com.pynapli.app.design.SwipeCardTokens
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
+import com.pynapli.app.design.icons.filled.Close
+import com.pynapli.app.design.icons.filled.Favorite
+import com.pynapli.app.design.icons.filled.Star
+import com.pynapli.app.swipe.SwipeActionButton
+import com.pynapli.app.swipe.SwipeCardStack
+import com.pynapli.shared.network.dto.SwipeAction
+import com.pynapli.shared.network.dto.SwipeCardDto
+import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.launch
 
 /** Stable test tags for the Psync session surface (PS-5c). */
@@ -55,7 +67,6 @@ object PsyncSessionTags {
     const val LIKE_BUTTON = "psync_like_button"
     const val PINEAPPLE_BUTTON = "psync_pineapple_button"
     const val NUDGE_BUTTON = "psync_nudge_button"
-    const val CARD_NAME = "psync_card_name"
     const val PROGRESS = "psync_progress"
     const val RECAP = "psync_recap"
     const val WAITING = "psync_waiting"
@@ -71,6 +82,8 @@ fun PsyncSessionScreen(
     stateHolder: PsyncStateHolder,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    distanceUnit: String = AppSettings.UNIT_METRIC,
+    onOpenProfile: (SwipeCardDto) -> Unit = {},
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -97,15 +110,25 @@ fun PsyncSessionScreen(
                 PsyncPhase.IDLE -> IdlePhase(onStart = { scope.launch { stateHolder.createSession() } })
                 PsyncPhase.INVITED, PsyncPhase.CONFIGURING -> NegotiationPhase(state, stateHolder, scope)
                 PsyncPhase.READY -> ReadyPhase(state, onStart = { scope.launch { stateHolder.start() } })
-                PsyncPhase.ACTIVE -> ActivePhase(state, stateHolder, scope)
+                PsyncPhase.ACTIVE -> ActivePhase(state, stateHolder, scope, distanceUnit, onOpenProfile)
                 PsyncPhase.PAUSED ->
                     StatusPhase("Paused", "Resume when you're both back.") {
                         PrimaryButton("Resume", PsyncSessionTags.START_SESSION_BUTTON) { scope.launch { stateHolder.resume() } }
                     }
-                PsyncPhase.COMPLETED -> RecapPhase(state, onDone = onBack)
+                PsyncPhase.COMPLETED ->
+                    RecapPhase(
+                        state,
+                        onDone = {
+                            stateHolder.dismissFinished()
+                            onBack()
+                        },
+                    )
                 PsyncPhase.ENDED ->
                     StatusPhase("Session ended", "This Psync session is no longer active.") {
-                        PrimaryButton("Done", PsyncSessionTags.START_SESSION_BUTTON, onClick = onBack)
+                        PrimaryButton("Done", PsyncSessionTags.START_SESSION_BUTTON) {
+                            stateHolder.dismissFinished()
+                            onBack()
+                        }
                     }
             }
         }
@@ -155,13 +178,15 @@ private fun ReadyPhase(
 }
 
 @Composable
-private fun ActivePhase(
+private fun ColumnScope.ActivePhase(
     state: PsyncUiState,
     stateHolder: PsyncStateHolder,
     scope: kotlinx.coroutines.CoroutineScope,
+    distanceUnit: String,
+    onOpenProfile: (SwipeCardDto) -> Unit,
 ) {
-    val actedCount = state.deck.count { it.viewerAction != null }
-    val current = state.deck.firstOrNull { it.viewerAction == null }
+    val remaining = state.remainingCards
+    val actedCount = state.deck.size - remaining.size
 
     Text(
         text = "$actedCount of ${state.deck.size} reviewed",
@@ -171,7 +196,7 @@ private fun ActivePhase(
     )
     Spacer(Modifier.height(12.dp))
 
-    if (current == null) {
+    if (remaining.isEmpty()) {
         StatusPhase(title = "You're done", body = "Waiting for your partner to finish the deck.") {
             Box(Modifier.testTag(PsyncSessionTags.WAITING))
             SecondaryButton("Nudge partner", PsyncSessionTags.NUDGE_BUTTON) { scope.launch { stateHolder.nudge() } }
@@ -179,58 +204,64 @@ private fun ActivePhase(
         return
     }
 
-    DeckCard(current)
-    Spacer(Modifier.height(20.dp))
+    // The same card stack as the Swipe deck: photos, drag-to-decide, tap for the profile. The
+    // button taps go through `requestedAction` so the top card flies out before the decision lands.
+    var requestedAction by remember { mutableStateOf<String?>(null) }
+    val cards = remember(remaining) { remaining.map { it.card } }
+    val tokens = remember(remaining) { remaining.associate { it.userId to it.cardToken } }
+
+    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        SwipeCardStack(
+            cards = cards,
+            enabled = true,
+            requestedAction = requestedAction,
+            distanceUnit = distanceUnit,
+            onActionConsumed = { requestedAction = null },
+            onOpenProfile = onOpenProfile,
+            // A linked partner on a card is context, not a second profile to open from here.
+            onLinkedPartnerTap = onOpenProfile,
+            onSwiped = { card, action ->
+                tokens[card.userId]?.let { token -> scope.launch { stateHolder.submitAction(token, action) } }
+            },
+        )
+    }
+    Spacer(Modifier.height(16.dp))
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        CircleAction("✕", PynapliColors.Danger, PsyncSessionTags.PASS_BUTTON) {
-            scope.launch { stateHolder.submitAction(current.cardToken, "pass") }
-        }
-        CircleAction("🍍", PynapliColors.Accent, PsyncSessionTags.PINEAPPLE_BUTTON) {
-            scope.launch { stateHolder.submitAction(current.cardToken, "pineapple_like") }
-        }
-        CircleAction("♥", PynapliColors.Success, PsyncSessionTags.LIKE_BUTTON) {
-            scope.launch { stateHolder.submitAction(current.cardToken, "like") }
-        }
-    }
-}
-
-@Composable
-private fun DeckCard(card: PsyncDeckCardUi) {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(360.dp)
-                .clip(SwipeCardTokens.Shape)
-                .background(PynapliColors.SurfaceRaised)
-                .border(1.dp, PynapliColors.Border, SwipeCardTokens.Shape),
-    ) {
-        // PS-5c renders the bounded deck snapshot; the rich swipe-card carousel comes later.
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Cover photo (deck snapshot carries no photo URL in this slice; placeholder surface).
-        }
-        Row(
-            modifier =
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (card.online) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(PynapliColors.Success))
-                Spacer(Modifier.size(8.dp))
-            }
-            Text(
-                text = card.displayName,
-                color = PynapliColors.TextPrimary,
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.testTag(PsyncSessionTags.CARD_NAME),
-            )
-        }
+        SwipeActionButton(
+            enabled = true,
+            isSubmitting = false,
+            testTag = PsyncSessionTags.PASS_BUTTON,
+            icon = Icons.Filled.Close,
+            contentDescription = "Pass",
+            background = PynapliColors.Danger.copy(alpha = 0.20f),
+            iconTint = PynapliColors.Danger,
+            onClick = { requestedAction = SwipeAction.PASS },
+        )
+        // The only gold button, as in the Swipe deck: Pineapple Like is the premium action.
+        SwipeActionButton(
+            enabled = true,
+            isSubmitting = false,
+            testTag = PsyncSessionTags.PINEAPPLE_BUTTON,
+            icon = Icons.Filled.Star,
+            contentDescription = "Pineapple Like",
+            background = PynapliColors.Accent.copy(alpha = 0.20f),
+            iconTint = PynapliColors.Accent,
+            onClick = { requestedAction = SwipeAction.PINEAPPLE_LIKE },
+        )
+        SwipeActionButton(
+            enabled = true,
+            isSubmitting = false,
+            testTag = PsyncSessionTags.LIKE_BUTTON,
+            icon = Icons.Filled.Favorite,
+            contentDescription = "Like",
+            background = PynapliColors.Success.copy(alpha = 0.20f),
+            iconTint = PynapliColors.Success,
+            onClick = { requestedAction = SwipeAction.LIKE },
+        )
     }
 }
 
@@ -359,27 +390,6 @@ private fun SecondaryButton(
     tag: String,
     onClick: () -> Unit,
 ) = PynapliButton(label, onClick, Modifier.fillMaxWidth().testTag(tag), style = PynapliButtonStyle.Secondary)
-
-@Composable
-private fun CircleAction(
-    glyph: String,
-    tint: Color,
-    tag: String,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(PynapliColors.SurfaceRaised)
-                .border(1.dp, tint.copy(alpha = 0.5f), CircleShape)
-                .clickableTag(tag, onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(glyph, color = tint, fontSize = 22.sp)
-    }
-}
 
 private fun Modifier.clickableTag(
     tag: String,
