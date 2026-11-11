@@ -81,6 +81,7 @@ internal fun userSafeMessage(code: String): String =
         "PSYNC_NUDGE_COOLDOWN" -> "Give your partner a moment — you can nudge again shortly."
         "PSYNC_DECK_SIZE_NOT_ALLOWED" -> "Upgrade to review a larger Psync deck together."
         "PSYNC_ADVANCED_FILTERS_NOT_ALLOWED" -> "Upgrade to use advanced filters in Psync."
+        "PSYNC_SESSION_LIMIT_REACHED" -> "You've used today's Psync sessions. Upgrade for more, or come back tomorrow."
         "INVALID_PSYNC_FILTER" -> "Those Psync filters aren't valid."
         "INVALID_FLIRT_TARGET" -> "Spark could not be sent."
         "FLIRT_NOT_ALLOWED" -> "This profile is not accepting Sparks."

@@ -47,6 +47,9 @@ internal val PSYNC_EXPIRABLE_STATUS_LIST = PSYNC_EXPIRABLE_STATUSES.joinToString
 // PSYNC_SPEC Edge Cases: "Partner ignores invite -> Invite expires." 24h window.
 internal val PSYNC_INVITE_TTL: Duration = Duration.ofHours(24)
 
+// The rolling window the per-tier session limit (EntitlementPolicy.psyncDailySessionLimit) counts over.
+internal val PSYNC_SESSION_LIMIT_WINDOW: Duration = Duration.ofHours(24)
+
 internal fun requirePsyncDeckSize(deckSize: Int) {
     if (deckSize !in PSYNC_MIN_DECK_SIZE..PSYNC_MAX_DECK_SIZE) {
         throw PsyncException("INVALID_PSYNC_DECK_SIZE")

@@ -13,6 +13,9 @@ data class EntitlementPolicy(
     val gridResultDepthLimit: Int,
     // PSYNC_SPEC Monetization: Free has a limited deck size; Social/Select get larger decks.
     val psyncMaxDeckSize: Int,
+    // PSYNC_SPEC Monetization: "Limited Psync sessions" on Free, more on Social. How many sessions
+    // the user may START as initiator in a rolling 24 hours; an invite that never starts is free.
+    val psyncDailySessionLimit: Int = Int.MAX_VALUE,
 ) {
     val fullActivityReveal: Boolean
         get() = activityRevealLimit == Int.MAX_VALUE
@@ -34,6 +37,10 @@ data class EntitlementPolicy(
         const val PSYNC_MAX_DECK_SIZE = 50
         const val PSYNC_SOCIAL_DECK_SIZE = 25
         const val PSYNC_FREE_DECK_SIZE = 10
+
+        // Started sessions per rolling 24h, per initiator. Select is unlimited.
+        const val PSYNC_SOCIAL_DAILY_SESSIONS = 5
+        const val PSYNC_FREE_DAILY_SESSIONS = 1
     }
 }
 
@@ -60,6 +67,7 @@ fun SubscriptionEntitlementDto.toPolicy(): EntitlementPolicy =
                 gridPageLimit = 90,
                 gridResultDepthLimit = 600,
                 psyncMaxDeckSize = EntitlementPolicy.PSYNC_SOCIAL_DECK_SIZE,
+                psyncDailySessionLimit = EntitlementPolicy.PSYNC_SOCIAL_DAILY_SESSIONS,
             )
         else ->
             EntitlementPolicy(
@@ -71,5 +79,6 @@ fun SubscriptionEntitlementDto.toPolicy(): EntitlementPolicy =
                 gridPageLimit = 60,
                 gridResultDepthLimit = 60,
                 psyncMaxDeckSize = EntitlementPolicy.PSYNC_FREE_DECK_SIZE,
+                psyncDailySessionLimit = EntitlementPolicy.PSYNC_FREE_DAILY_SESSIONS,
             )
     }

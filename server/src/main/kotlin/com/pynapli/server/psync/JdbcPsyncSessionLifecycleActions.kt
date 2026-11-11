@@ -44,6 +44,26 @@ internal suspend fun DataSource.findPsyncActiveLink(userId: UUID): ActiveLink? =
         }
     }
 
+internal suspend fun DataSource.countStartedPsyncSessionsSince(
+    initiatorUserId: UUID,
+    since: Instant,
+): Int =
+    withContext(Dispatchers.IO) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    "SELECT COUNT(*) FROM psync_sessions WHERE initiator_user_id = ? AND started_at >= ?",
+                ).use { statement ->
+                    statement.setObject(1, initiatorUserId)
+                    statement.setTimestamp(2, Timestamp.from(since))
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getInt(1)
+                    }
+                }
+        }
+    }
+
 internal suspend fun DataSource.hasNonTerminalPsyncSessionForLink(linkId: UUID): Boolean =
     withContext(Dispatchers.IO) {
         connection.use { connection ->

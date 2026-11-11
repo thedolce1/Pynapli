@@ -158,6 +158,7 @@ internal fun psyncStatusFor(code: String): HttpStatusCode =
         "PSYNC_NOT_PARTICIPANT",
         "PSYNC_DECK_SIZE_NOT_ALLOWED",
         "PSYNC_ADVANCED_FILTERS_NOT_ALLOWED",
+        "PSYNC_SESSION_LIMIT_REACHED",
         -> HttpStatusCode.Forbidden
         "PSYNC_SESSION_NOT_FOUND",
         "PSYNC_INVALID_CARD",

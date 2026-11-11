@@ -42,6 +42,13 @@ internal class PsyncLifecycleActions(
                 throw PsyncException("PSYNC_DECK_SIZE_NOT_ALLOWED")
             }
             requirePsyncFiltersAllowed(request.filters, policy)
+            // "Limited Psync sessions": cap how many the initiator may start per rolling 24 hours.
+            if (policy.psyncDailySessionLimit != Int.MAX_VALUE) {
+                val startedToday = repository.countStartedSessionsSince(userId, clock.instant().minus(PSYNC_SESSION_LIMIT_WINDOW))
+                if (startedToday >= policy.psyncDailySessionLimit) {
+                    throw PsyncException("PSYNC_SESSION_LIMIT_REACHED")
+                }
+            }
         }
 
         val link =
