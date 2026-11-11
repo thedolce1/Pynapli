@@ -157,6 +157,7 @@ internal fun buildCoreDependencies(
             riskSignalPublisher = riskService,
             rateLimitService = rateLimitService,
             supportEmail = config.supportEmail,
+            hiddenProfileRepository = hiddenProfileRepository,
         )
     val appealService = AppealService(JdbcAppealRepository(database.dataSource))
     val adminAppealService =

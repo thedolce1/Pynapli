@@ -294,7 +294,8 @@ class ProfileDetailStateHolder(
                 _state.update { current ->
                     current.copy(
                         isReporting = false,
-                        reportFeedback = "Report submitted",
+                        reportFeedback = REPORT_CONFIRMATION,
+                        reportedTargetUserId = targetUserId,
                     )
                 }
             }
@@ -323,10 +324,14 @@ class ProfileDetailStateHolder(
     }
 
     fun dismiss() {
-        _state.value = ProfileDetailUiState()
+        // Closing after a report hands the reported person to the same "hidden" path the Hide
+        // action uses, so every surface drops their card.
+        val reported = _state.value.reportedTargetUserId
+        _state.value = ProfileDetailUiState(hiddenTargetUserId = reported)
     }
 
     companion object {
         const val PLAYING_TONIGHT_SOURCE = "playing_tonight"
+        const val REPORT_CONFIRMATION = "Thanks, we'll review it. You won't see them in discovery again."
     }
 }
