@@ -97,6 +97,8 @@ data class ActivityEventRecord(
     val matchId: String?,
     val conversationId: String?,
     val source: String? = null,
+    // The Psync session a psync_* item is about, so the client can open that session.
+    val psyncSessionId: String? = null,
 )
 
 fun ActivityEventRecord.toCursorAnchor(seenCount: Int): ActivityCursorAnchor =

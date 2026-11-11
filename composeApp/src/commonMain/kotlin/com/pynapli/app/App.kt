@@ -277,6 +277,15 @@ fun PynapliApp(
                 },
                 onOpenTonight = { tonightVisible = true },
                 onOpenPsync = psyncStateHolder?.let { { psyncVisible = true } },
+                // From an Activity card: open Psync on that exact session (an invite, a live deck,
+                // or a past recap), not just whatever is current.
+                onOpenPsyncSession =
+                    psyncStateHolder?.let { holder ->
+                        { sessionId: String ->
+                            psyncVisible = true
+                            scope.launch { holder.openSession(sessionId) }
+                        }
+                    },
                 onUseCurrentLocation = platform.onUseCurrentLocation,
                 onPickMediaForAlbum = platform.onPickMediaForAlbum,
                 onPickConversationPhoto = platform.onPickConversationPhoto,
@@ -343,6 +352,14 @@ fun PynapliApp(
             onTonightDismiss = { tonightVisible = false },
             psyncVisible = psyncVisible,
             onPsyncDismiss = { psyncVisible = false },
+            onPsyncOpenStore = {
+                psyncVisible = false
+                selectedTab = PynapliTab.Store
+            },
+            onPsyncOpenProfileHub = {
+                psyncVisible = false
+                profileSurface = ProfileSurface.Hub
+            },
             selectedTab = selectedTab,
             playingTonightStateHolder = graph.playingTonightStateHolder,
             psyncStateHolder = psyncStateHolder,

@@ -357,6 +357,31 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "a Psync Activity item names the session it is about" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                // The feed only lists items between users who both have discovery settings.
+                dataSource.setTogetherEnabled(initiator)
+                dataSource.setTogetherEnabled(partner)
+                val activity =
+                    com.pynapli.server.activity.ActivityService(
+                        repository =
+                            com.pynapli.server.activity
+                                .JdbcActivityRepository(dataSource),
+                    )
+                val svc =
+                    PsyncSessionService(
+                        repository = JdbcPsyncSessionRepository(dataSource),
+                        activityService = activity,
+                    )
+
+                val created = svc.create(initiator, CreatePsyncSessionRequestDto())
+
+                val invite = activity.listActivity(partner).items.single { it.type == "psync_invite" }
+                assertEquals(created.id, invite.psyncSessionId)
+            }
+        }
+
         // ---- Session limits per tier ---------------------------------------------------
 
         "a Free initiator can start one session per 24 hours; unstarted invites don't count" {

@@ -47,6 +47,7 @@ internal fun ActivityRow(
     onAlbumRequestDecision: (String, Boolean) -> Unit,
     onOpenMatch: (ActivityEventDto) -> Unit,
     onOpenPartnerChatInvite: (String) -> Unit,
+    onOpenPsync: (String) -> Unit,
     onDismissEvent: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -139,6 +140,7 @@ internal fun ActivityRow(
                 item = item,
                 onOpenMatch = onOpenMatch,
                 onOpenPartnerChatInvite = onOpenPartnerChatInvite,
+                onOpenPsync = onOpenPsync,
             )
         }
         IconButton(

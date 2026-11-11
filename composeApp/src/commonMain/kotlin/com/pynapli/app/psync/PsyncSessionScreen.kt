@@ -84,6 +84,13 @@ object PsyncSessionTags {
     const val KEEP_GOING_BUTTON = "psync_keep_going_button"
     const val FINISH_NOW_BUTTON = "psync_finish_now_button"
     const val NOTICE = "psync_notice"
+    const val SEE_PLANS_BUTTON = "psync_see_plans_button"
+    const val LINK_PARTNER_BUTTON = "psync_link_partner_button"
+    const val START_ANOTHER_BUTTON = "psync_start_another_button"
+    const val ENDED_EARLY = "psync_ended_early"
+
+    fun togetherMatchRow(userId: String) = "psync_together_match_$userId"
+
     const val PARTNER_FINISHED = "psync_partner_finished"
     const val SETUP_SUMMARY = "psync_setup_summary"
     const val EDIT_FILTERS_BUTTON = "psync_edit_filters_button"
@@ -91,6 +98,17 @@ object PsyncSessionTags {
 
     fun deckSizeChip(size: Int) = "psync_deck_size_$size"
 }
+
+private const val PSYNC_NO_LINKED_PARTNER = "PSYNC_NO_LINKED_PARTNER"
+
+/** Refusals that a higher tier lifts; the screen offers the Store next to them. */
+private val PSYNC_UPGRADE_CODES =
+    setOf(
+        "PSYNC_DECK_SIZE_NOT_ALLOWED",
+        "PSYNC_ADVANCED_FILTERS_NOT_ALLOWED",
+        "PSYNC_SESSION_LIMIT_REACHED",
+        "PINEAPPLE_LIKE_INVENTORY_REQUIRED",
+    )
 
 /** Deck sizes offered at setup. The server caps them by tier (Free 10, Social 25, Select 50). */
 private val PSYNC_DECK_SIZES = listOf(10, 25, 50)
@@ -107,6 +125,9 @@ fun PsyncSessionScreen(
     modifier: Modifier = Modifier,
     distanceUnit: String = AppSettings.UNIT_METRIC,
     onOpenProfile: (SwipeCardDto) -> Unit = {},
+    onOpenProfileById: (userId: String, displayName: String?) -> Unit = { _, _ -> },
+    onOpenStore: () -> Unit = {},
+    onOpenProfileHub: () -> Unit = {},
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -124,8 +145,19 @@ fun PsyncSessionScreen(
             PsyncHeader(title = "Psync", onBack = onBack)
             Spacer(Modifier.height(16.dp))
 
-            state.errorMessage?.let { message ->
+            val needsLinkedPartner = state.errorCode == PSYNC_NO_LINKED_PARTNER
+            state.errorMessage?.takeUnless { needsLinkedPartner }?.let { message ->
                 ErrorBanner(message)
+                if (state.errorCode in PSYNC_UPGRADE_CODES) {
+                    // A tier limit is a reason to upgrade, not a dead end.
+                    Spacer(Modifier.height(8.dp))
+                    PynapliPill(
+                        text = "See plans",
+                        selected = true,
+                        onClick = onOpenStore,
+                        modifier = Modifier.testTag(PsyncSessionTags.SEE_PLANS_BUTTON),
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
             }
             state.notice?.let { message ->
@@ -140,10 +172,22 @@ fun PsyncSessionScreen(
 
             when (state.phase) {
                 PsyncPhase.IDLE ->
-                    SetupPhase(
-                        distanceUnit = distanceUnit,
-                        onInvite = { deckSize, filters -> scope.launch { stateHolder.createSession(deckSize, filters.toSwipeDeckRequest()) } },
-                    )
+                    if (needsLinkedPartner) {
+                        StatusPhase(
+                            title = "Link your partner first",
+                            body = "Psync is for linked partners. Link profiles with your partner, then start a session together.",
+                        ) {
+                            PrimaryButton("Go to my profile", PsyncSessionTags.LINK_PARTNER_BUTTON) {
+                                stateHolder.clearError()
+                                onOpenProfileHub()
+                            }
+                        }
+                    } else {
+                        SetupPhase(
+                            distanceUnit = distanceUnit,
+                            onInvite = { deckSize, filters -> scope.launch { stateHolder.createSession(deckSize, filters.toSwipeDeckRequest()) } },
+                        )
+                    }
                 PsyncPhase.INVITED, PsyncPhase.CONFIGURING -> NegotiationPhase(state, stateHolder, scope, distanceUnit)
                 PsyncPhase.READY ->
                     ReadyPhase(
@@ -161,6 +205,8 @@ fun PsyncSessionScreen(
                 PsyncPhase.COMPLETED ->
                     RecapPhase(
                         state,
+                        onOpenMatch = onOpenProfileById,
+                        onStartAnother = stateHolder::startAnother,
                         onDone = {
                             stateHolder.dismissFinished()
                             onBack()
@@ -168,7 +214,9 @@ fun PsyncSessionScreen(
                     )
                 PsyncPhase.ENDED ->
                     StatusPhase("Session ended", "This Psync session is no longer active.") {
-                        PrimaryButton("Done", PsyncSessionTags.START_SESSION_BUTTON) {
+                        PrimaryButton("Start a new session", PsyncSessionTags.START_ANOTHER_BUTTON, onClick = stateHolder::startAnother)
+                        Spacer(Modifier.height(10.dp))
+                        SecondaryButton("Done", PsyncSessionTags.START_SESSION_BUTTON) {
                             stateHolder.dismissFinished()
                             onBack()
                         }
@@ -546,29 +594,55 @@ private fun EndSessionControl(onEnd: () -> Unit) {
 @Composable
 private fun RecapPhase(
     state: PsyncUiState,
+    onOpenMatch: (userId: String, displayName: String?) -> Unit,
+    onStartAnother: () -> Unit,
     onDone: () -> Unit,
 ) {
     val recap = state.recap
-    Column(modifier = Modifier.fillMaxWidth().testTag(PsyncSessionTags.RECAP)) {
+    val deckSize = state.session?.deckSize ?: 0
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag(PsyncSessionTags.RECAP)) {
         Text("Psync recap", color = PynapliColors.TextPrimary, style = MaterialTheme.typography.headlineSmall)
+        if (recap != null && deckSize > 0 && recap.profilesReviewed < deckSize) {
+            // Restrained on purpose (PSYNC_SPEC): it ended early, not who ended it or why.
+            Text(
+                text = "Ended after ${recap.profilesReviewed} of $deckSize profiles",
+                color = PynapliColors.TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 6.dp).testTag(PsyncSessionTags.ENDED_EARLY),
+            )
+        }
         Spacer(Modifier.height(16.dp))
         if (recap == null) {
             Text("Your recap is on the way.", color = PynapliColors.TextSecondary, style = MaterialTheme.typography.bodyMedium)
         } else {
-            RecapRow("Profiles reviewed", recap.profilesReviewed)
+            RecapRow("Profiles you reviewed", recap.profilesReviewed)
             RecapRow("Both liked", recap.bothLikedCount)
             RecapRow("Together matches", recap.togetherMatchCount)
             RecapRow("Your solo matches", recap.soloMatchCount)
+            recap.partnerSoloMatchCount?.let { RecapRow("Their solo matches", it) }
             if (recap.togetherMatches.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
                 Text("Together matches", color = PynapliColors.TextSecondary, style = MaterialTheme.typography.titleSmall)
                 recap.togetherMatches.forEach { match ->
-                    Text(
-                        text = match.displayName ?: "Pynapli User",
-                        color = PynapliColors.TextPrimary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
+                    // Opens the profile, where messaging follows the normal chat-consent rules.
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp)
+                                .clip(PynapliShape.CardShape)
+                                .clickableTag(PsyncSessionTags.togetherMatchRow(match.userId)) { onOpenMatch(match.userId, match.displayName) }
+                                .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = match.displayName ?: "Pynapli User",
+                            color = PynapliColors.TextPrimary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text("View", color = PynapliColors.Accent, style = MaterialTheme.typography.labelLarge)
+                    }
                 }
             }
             if (recap.filtersSummary.isNotBlank()) {
@@ -577,7 +651,9 @@ private fun RecapPhase(
             }
         }
         Spacer(Modifier.height(24.dp))
-        PrimaryButton("Done", PsyncSessionTags.START_SESSION_BUTTON, onClick = onDone)
+        PrimaryButton("Start another session", PsyncSessionTags.START_ANOTHER_BUTTON, onClick = onStartAnother)
+        Spacer(Modifier.height(10.dp))
+        SecondaryButton("Done", PsyncSessionTags.START_SESSION_BUTTON, onClick = onDone)
     }
 }
 

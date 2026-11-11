@@ -119,6 +119,7 @@ internal fun ActivityPrimaryAction(
     item: ActivityEventDto,
     onOpenMatch: (ActivityEventDto) -> Unit,
     onOpenPartnerChatInvite: (String) -> Unit,
+    onOpenPsync: (String) -> Unit,
 ) {
     when (item.type) {
         "match" -> {
@@ -148,6 +149,27 @@ internal fun ActivityPrimaryAction(
                     modifier = Modifier.handCursor(enabled = conversationId != null),
                 ) {
                     Text(text = "Open invite", maxLines = 1)
+                }
+            }
+        }
+
+        "psync_invite",
+        "psync_started",
+        "psync_recap",
+        -> {
+            val sessionId = item.psyncSessionId
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+            ) {
+                Button(
+                    onClick = { if (sessionId != null) onOpenPsync(sessionId) },
+                    enabled = sessionId != null,
+                    modifier = Modifier.handCursor(enabled = sessionId != null),
+                ) {
+                    Text(text = if (item.type == "psync_recap") "See recap" else "Open Psync", maxLines = 1)
                 }
             }
         }

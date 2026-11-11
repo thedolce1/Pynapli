@@ -425,6 +425,67 @@ class PsyncStateHolderTest {
         }
 
     @Test
+    fun openingASessionFromActivityShowsThatSessionsRecapEvenWithAnotherLive() =
+        runTest {
+            val repo =
+                FakePsyncRepository().apply {
+                    // A new invite is live, but the viewer tapped an older recap card.
+                    current = session("invited", id = "session-2")
+                    ended = session("completed")
+                    recap =
+                        PsyncRecapDto(
+                            sessionId = "session-1",
+                            status = "completed",
+                            profilesReviewed = 3,
+                            bothLikedCount = 1,
+                            togetherMatchCount = 0,
+                            soloMatchCount = 1,
+                            filtersSummary = "25km",
+                            togetherMatches = emptyList(),
+                        )
+                }
+            val holder = holder(repo)
+
+            holder.openSession("session-1")
+            assertEquals(PsyncPhase.COMPLETED, holder.state.value.phase)
+
+            // The screen's own refresh must not swap the recap for the live invite.
+            holder.refresh()
+            assertEquals(
+                "session-1",
+                holder.state.value.session!!
+                    .id,
+            )
+            assertEquals(
+                3,
+                holder.state.value.recap!!
+                    .profilesReviewed,
+            )
+
+            // Starting another clears the recap; the next refresh shows the live invite.
+            holder.startAnother()
+            holder.refresh()
+            assertEquals(
+                "session-2",
+                holder.state.value.session!!
+                    .id,
+            )
+        }
+
+    @Test
+    fun aRefusalKeepsTheServerCodeForTheScreen() =
+        runTest {
+            val repo = FakePsyncRepository().apply { failNext = AppError("PSYNC_SESSION_LIMIT_REACHED", "Upgrade for more.") }
+            val holder = holder(repo)
+
+            holder.createSession()
+
+            assertEquals("PSYNC_SESSION_LIMIT_REACHED", holder.state.value.errorCode)
+            holder.clearError()
+            assertEquals(null, holder.state.value.errorCode)
+        }
+
+    @Test
     fun aRefusedSwipePutsTheCardBack() =
         runTest {
             val repo =

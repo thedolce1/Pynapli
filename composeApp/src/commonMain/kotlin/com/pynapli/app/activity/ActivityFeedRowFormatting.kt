@@ -12,6 +12,10 @@ internal fun ActivityEventDto.activityText(): String =
         "intro_note" -> "sent an Intro Note"
         "match" -> "matched with you"
         "partner_chat_invite" -> "sent a chat invite"
+        "psync_invite" -> "invited you to Psync"
+        "psync_started" -> "started Psync with you"
+        "psync_recap" -> "finished Psync with you. Your recap is ready"
+        "psync_expired" -> "Psync session expired"
         else -> "interacted with you"
     }
 
@@ -24,6 +28,7 @@ internal fun ActivityEventDto.isUnreadBadgeActivity(): Boolean =
             "intro_note",
             "match",
             "partner_chat_invite",
+            "psync_invite",
             -> true
             "album_request" -> albumRequestStatus == null || albumRequestStatus == "pending"
             else -> false

@@ -16,6 +16,7 @@ import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.conversation.ConversationSheet
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.design.closeOnEscape
+import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.profileLinkActionFor
 import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
@@ -44,6 +45,8 @@ internal fun PynapliOverlays(
     onTonightDismiss: () -> Unit,
     psyncVisible: Boolean,
     onPsyncDismiss: () -> Unit,
+    onPsyncOpenStore: () -> Unit = {},
+    onPsyncOpenProfileHub: () -> Unit = {},
     selectedTab: PynapliTab,
     playingTonightStateHolder: PlayingTonightStateHolder?,
     psyncStateHolder: PsyncStateHolder?,
@@ -154,6 +157,12 @@ internal fun PynapliOverlays(
                 psyncProfileOpen = true
                 scope.launch { profileDetailStateHolder.open(card.toProfileCardUi()) }
             },
+            onOpenProfileById = { userId, displayName ->
+                psyncProfileOpen = true
+                scope.launch { profileDetailStateHolder.openLinkedPartner(GridLinkedPartnerUi(userId = userId, displayName = displayName)) }
+            },
+            onOpenStore = onPsyncOpenStore,
+            onOpenProfileHub = onPsyncOpenProfileHub,
         )
     }
 

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import com.pynapli.app.swipe.SwipeTestTags
+import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CurrentPsyncSessionDto
 import com.pynapli.shared.network.dto.PsyncActionResponseDto
@@ -227,6 +228,49 @@ class PsyncSessionScreenTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
+    fun withoutALinkedPartnerTheScreenPointsToTheProfile() =
+        runComposeUiTest {
+            var openedHub = false
+            val repo =
+                object : PsyncRepository by StaticPsyncRepository(current = null) {
+                    override suspend fun createSession(
+                        deckSize: Int,
+                        filters: SwipeDeckRequestDto,
+                    ): AppResult<PsyncSessionDto> = AppResult.Failure(AppError("PSYNC_NO_LINKED_PARTNER", "Link a partner first."))
+                }
+            setContent { PsyncSessionScreen(stateHolder = holder(repo), onBack = {}, onOpenProfileHub = { openedHub = true }) }
+            waitForIdle()
+
+            onNodeWithTag(PsyncSessionTags.START_PSYNC_BUTTON).performClick()
+            waitForIdle()
+            onNodeWithText("Link your partner first").assertIsDisplayed()
+            onNodeWithTag(PsyncSessionTags.LINK_PARTNER_BUTTON).performClick()
+            kotlin.test.assertTrue(openedHub)
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun aTierLimitOffersThePlans() =
+        runComposeUiTest {
+            var openedStore = false
+            val repo =
+                object : PsyncRepository by StaticPsyncRepository(current = null) {
+                    override suspend fun createSession(
+                        deckSize: Int,
+                        filters: SwipeDeckRequestDto,
+                    ): AppResult<PsyncSessionDto> = AppResult.Failure(AppError("PSYNC_SESSION_LIMIT_REACHED", "You've used today's Psync sessions."))
+                }
+            setContent { PsyncSessionScreen(stateHolder = holder(repo), onBack = {}, onOpenStore = { openedStore = true }) }
+            waitForIdle()
+
+            onNodeWithTag(PsyncSessionTags.START_PSYNC_BUTTON).performClick()
+            waitForIdle()
+            onNodeWithTag(PsyncSessionTags.SEE_PLANS_BUTTON).performClick()
+            kotlin.test.assertTrue(openedStore)
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
     fun completedSessionShowsRecap() =
         runComposeUiTest {
             val recap =
@@ -249,5 +293,8 @@ class PsyncSessionScreenTest {
             waitForIdle()
 
             onNodeWithTag(PsyncSessionTags.RECAP).assertIsDisplayed()
+            // The together match opens that person's profile.
+            onNodeWithTag(PsyncSessionTags.togetherMatchRow("t-a")).assertIsDisplayed()
+            onNodeWithTag(PsyncSessionTags.START_ANOTHER_BUTTON).assertExists()
         }
 }

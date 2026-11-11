@@ -21,6 +21,7 @@ internal object JdbcActivityRowMappers {
             matchId = rs.getString("match_id"),
             conversationId = rs.getString("conversation_id"),
             source = rs.getString("source"),
+            psyncSessionId = rs.getString("psync_session_id"),
         )
     }
 

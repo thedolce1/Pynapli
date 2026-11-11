@@ -97,6 +97,7 @@ internal fun ColumnScope.PynapliMainContent(
     onOpenAgeVerification: () -> Unit,
     onOpenTonight: () -> Unit,
     onOpenPsync: (() -> Unit)?,
+    onOpenPsyncSession: ((String) -> Unit)? = null,
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit,
     onPickConversationPhoto: () -> Unit,
@@ -184,6 +185,7 @@ internal fun ColumnScope.PynapliMainContent(
                         authStateHolder = authStateHolder,
                         scope = scope,
                         onOpenStore = onOpenStore,
+                        onOpenPsyncSession = onOpenPsyncSession,
                     )
                 PynapliTab.Swipe ->
                     SwipeTabContent(
@@ -510,6 +512,7 @@ private fun ColumnScope.ActivityTabContent(
     authStateHolder: AuthStateHolder,
     scope: CoroutineScope,
     onOpenStore: () -> Unit,
+    onOpenPsyncSession: ((String) -> Unit)?,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -549,6 +552,7 @@ private fun ColumnScope.ActivityTabContent(
         onOpenProfile = { event ->
             scope.launch { profileDetailStateHolder.open(event.toActivityProfileCardUi()) }
         },
+        onOpenPsync = { sessionId -> onOpenPsyncSession?.invoke(sessionId) },
     )
 }
 
