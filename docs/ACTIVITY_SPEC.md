@@ -792,6 +792,7 @@ Avoid:
 - [x] Partner chat invites require explicit action.
 - [x] Partner chat invite Activity rows can open the invite conversation context.
 - [x] Album requests can be granted/denied/ignored.
+- [x] A granted album request reaches the requester. (`album_granted` Activity item (V83) under Requests, one live card per owner and requester that re-surfaces on a re-grant, plus an `album_granted` push under the album-request notification setting, at most one per day per pair. A denial stays silent on purpose.)
 - [x] Album request rows use Review before grant/deny actions.
 - [x] Free/Social/Select gating is implemented.
 - [x] Viewed opt-out suppresses outgoing view events and disables the user's own Viewed feed/counts.

@@ -175,6 +175,34 @@ internal class ActivitySignalActions(
         }
     }
 
+    /**
+     * ACTIVITY_SPEC "Private Album Grant": the owner approved a request, so tell the requester they
+     * can now see the album. A denial stays silent on purpose: nobody is told they were turned down.
+     */
+    suspend fun recordAlbumGranted(
+        ownerUserId: UUID,
+        requesterUserId: UUID,
+    ) {
+        if (ownerUserId == requesterUserId) return
+        if (blockRepository?.isBlockedEitherWay(ownerUserId, requesterUserId) == true) return
+        if (!repository.recordAlbumGranted(ownerUserId, requesterUserId)) return
+        activityBroadcaster.publishActivityDelta(requesterUserId, "album_granted")
+        notificationPublisher?.enqueue(
+            NotificationEventDraft(
+                recipientUserId = requesterUserId,
+                actorUserId = ownerUserId,
+                kind = NotificationKind.ALBUM_GRANTED,
+                subjectId = ownerUserId,
+                idempotencyKey = "album_granted:$ownerUserId:$requesterUserId:${System.currentTimeMillis() / ALBUM_GRANT_PUSH_WINDOW_MILLIS}",
+                payload =
+                    activityNotificationPayload(
+                        eventType = "album_granted",
+                        extra = mapOf("ownerUserId" to ownerUserId.toString()),
+                    ),
+            ),
+        )
+    }
+
     suspend fun recordPsyncSessionEvent(
         recipientUserId: UUID,
         actorUserId: UUID,
@@ -188,3 +216,6 @@ internal class ActivitySignalActions(
         }
     }
 }
+
+// One album-shared push per owner -> requester per day, however often access is toggled.
+private const val ALBUM_GRANT_PUSH_WINDOW_MILLIS = 24L * 60 * 60 * 1000

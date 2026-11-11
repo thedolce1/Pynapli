@@ -15,6 +15,7 @@ internal class ActivityManagementActions(
         ownerUserId: UUID,
         eventId: UUID,
         approve: Boolean,
+        onGranted: suspend (requesterUserId: UUID) -> Unit = {},
     ): RespondAlbumAccessResponseDto {
         val event =
             repository.getAlbumRequestEvent(ownerUserId, eventId)
@@ -25,6 +26,7 @@ internal class ActivityManagementActions(
                 requesterUserId = event.requesterUserId,
                 approved = approve,
             ) ?: throw ActivityException("ALBUM_REQUEST_NOT_FOUND")
+        if (approve && status == "approved") onGranted(event.requesterUserId)
         return RespondAlbumAccessResponseDto(
             eventId = event.eventId.toString(),
             status = status,

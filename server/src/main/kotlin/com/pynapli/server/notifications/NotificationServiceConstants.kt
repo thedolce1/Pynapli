@@ -26,6 +26,7 @@ internal val NOTIFICATION_KINDS =
         NotificationKind.FLIRT,
         NotificationKind.PROFILE_VIEW,
         NotificationKind.ALBUM_REQUEST,
+        NotificationKind.ALBUM_GRANTED,
         NotificationKind.PROFILE_LINK_INVITE,
         NotificationKind.PROFILE_LINK_ACCEPTED,
         NotificationKind.PARTNER_CHAT_INVITE,

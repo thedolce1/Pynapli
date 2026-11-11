@@ -111,6 +111,33 @@ internal object JdbcActivitySignalSql {
         RETURNING id
         """.trimIndent()
 
+    // ACTIVITY_SPEC "Private Album Grant": the requester learns the owner shared their private album.
+    // One live card per owner -> requester; a re-grant re-surfaces it as new.
+    val UPSERT_ALBUM_GRANTED_QUERY =
+        """
+        INSERT INTO activity_events (
+            id,
+            recipient_user_id,
+            actor_user_id,
+            event_type,
+            target_user_id,
+            aggregate_count,
+            first_occurred_at,
+            last_counted_at,
+            occurred_at,
+            updated_at
+        )
+        SELECT ?, ?, ?, 'album_granted', ?, 1, now(), now(), now(), now()
+        WHERE EXISTS (
+            SELECT 1 FROM users requester
+            WHERE requester.id = ? AND requester.status = 'active' AND requester.deleted_at IS NULL
+        )
+        ON CONFLICT (recipient_user_id, actor_user_id)
+        WHERE event_type = 'album_granted' AND deleted_at IS NULL
+        DO UPDATE SET occurred_at = now(), updated_at = now(), seen_at = NULL
+        RETURNING id
+        """.trimIndent()
+
     // PS-4c: one Psync session-lifecycle card per recipient per session per type. The actor is
     // the OTHER partner (or the initiator for an invite); metadata.sessionId links to the session.
     val UPSERT_PSYNC_SESSION_EVENT_QUERY =

@@ -132,6 +132,7 @@ enum class ActivityFeedTab(
         "requests",
         setOf(
             "album_request",
+            "album_granted",
             "partner_chat_invite",
             "psync_invite",
             "psync_started",

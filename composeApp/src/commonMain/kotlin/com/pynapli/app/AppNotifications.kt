@@ -135,6 +135,7 @@ private fun ActivityEventDto.activityNotificationBody(): String =
         "intro_note" -> "sent an Intro Note"
         "match" -> "matched with you"
         "album_request" -> "requested album access"
+        "album_granted" -> "shared their private album"
         "partner_chat_invite" -> "sent a chat invite"
         else -> "new activity"
     }
@@ -144,6 +145,7 @@ private fun ActivityEventDto.activityTab(): ActivityTabUi =
         "profile_view", "viewed_profile" -> ActivityTabUi.Views
         "flirt", "swipe_like", "pineapple_like", "intro_note" -> ActivityTabUi.Flirts
         "album_request",
+        "album_granted",
         "partner_chat_invite",
         "psync_invite",
         "psync_started",

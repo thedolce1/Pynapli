@@ -171,6 +171,24 @@ class JdbcActivityRepository(
             }
         }
 
+    override suspend fun recordAlbumGranted(
+        ownerUserId: UUID,
+        requesterUserId: UUID,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            if (ownerUserId == requesterUserId) return@withContext false
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(JdbcActivitySignalSql.UPSERT_ALBUM_GRANTED_QUERY).use { statement ->
+                    statement.setObject(1, UUID.randomUUID())
+                    statement.setObject(2, requesterUserId)
+                    statement.setObject(3, ownerUserId)
+                    statement.setObject(4, requesterUserId)
+                    statement.setObject(5, requesterUserId)
+                    statement.executeQuery().use { rs -> rs.next() }
+                }
+            }
+        }
+
     override suspend fun recordPsyncSessionEvent(
         recipientUserId: UUID,
         actorUserId: UUID,

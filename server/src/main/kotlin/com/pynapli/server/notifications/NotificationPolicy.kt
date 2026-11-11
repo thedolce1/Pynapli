@@ -11,7 +11,9 @@ internal fun NotificationPreferencesRecord.allows(kind: String): Boolean =
         NotificationKind.MATCH -> matchesEnabled
         NotificationKind.FLIRT -> activityEnabled && flirtsEnabled
         NotificationKind.PROFILE_VIEW -> activityEnabled
-        NotificationKind.ALBUM_REQUEST -> activityEnabled && albumRequestsEnabled
+        NotificationKind.ALBUM_REQUEST,
+        NotificationKind.ALBUM_GRANTED,
+        -> activityEnabled && albumRequestsEnabled
         NotificationKind.PROFILE_LINK_INVITE,
         NotificationKind.PROFILE_LINK_ACCEPTED,
         NotificationKind.PARTNER_CHAT_INVITE,
@@ -43,6 +45,11 @@ internal fun notificationCopy(
             NotificationCopy(
                 "Private album request",
                 "Someone requested access to your private album.",
+            )
+        NotificationKind.ALBUM_GRANTED ->
+            NotificationCopy(
+                "Private album shared",
+                "Someone shared their private album with you.",
             )
         NotificationKind.PROFILE_LINK_INVITE ->
             NotificationCopy(

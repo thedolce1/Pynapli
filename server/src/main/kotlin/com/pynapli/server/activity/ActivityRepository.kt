@@ -38,6 +38,12 @@ interface ActivityRepository {
         conversationId: UUID,
     ): Boolean
 
+    /** The owner granted the requester access to their private album. True if a card was written. */
+    suspend fun recordAlbumGranted(
+        ownerUserId: UUID,
+        requesterUserId: UUID,
+    ): Boolean = false
+
     /**
      * Record a Psync session-lifecycle card (psync_invite/started/recap/expired) for [recipientUserId].
      * Idempotent per (recipient, eventType, sessionId). Returns true if a new row was inserted.
