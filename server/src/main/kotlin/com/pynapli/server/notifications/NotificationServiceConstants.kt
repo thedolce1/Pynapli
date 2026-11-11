@@ -32,6 +32,9 @@ internal val NOTIFICATION_KINDS =
         NotificationKind.PARTNER_CHAT_INVITE,
         NotificationKind.TONIGHT_INVITE,
         NotificationKind.TONIGHT_REMINDER,
+        NotificationKind.TONIGHT_ACCEPTED,
+        NotificationKind.TONIGHT_DECLINED,
+        NotificationKind.TONIGHT_ENDED,
         NotificationKind.PSYNC_INVITE,
         NotificationKind.SYSTEM_SAFETY,
     )

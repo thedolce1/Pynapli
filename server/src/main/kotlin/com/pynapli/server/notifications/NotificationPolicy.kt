@@ -18,6 +18,9 @@ internal fun NotificationPreferencesRecord.allows(kind: String): Boolean =
         NotificationKind.PROFILE_LINK_ACCEPTED,
         NotificationKind.PARTNER_CHAT_INVITE,
         NotificationKind.TONIGHT_INVITE,
+        NotificationKind.TONIGHT_ACCEPTED,
+        NotificationKind.TONIGHT_DECLINED,
+        NotificationKind.TONIGHT_ENDED,
         NotificationKind.PSYNC_INVITE,
         -> partnerInvitesEnabled
         NotificationKind.TONIGHT_REMINDER -> activityEnabled
@@ -75,6 +78,22 @@ internal fun notificationCopy(
             NotificationCopy(
                 "Psync invite",
                 "Your linked partner wants to swipe together.",
+            )
+        NotificationKind.TONIGHT_ACCEPTED ->
+            NotificationCopy(
+                "You're live tonight",
+                "Your partner joined. You're on Playing Tonight together.",
+            )
+        // Neutral on purpose (PLAYING_TONIGHT_SPEC: a decline is never a public signal).
+        NotificationKind.TONIGHT_DECLINED ->
+            NotificationCopy(
+                "Playing Tonight",
+                "Your partner can't join tonight.",
+            )
+        NotificationKind.TONIGHT_ENDED ->
+            NotificationCopy(
+                "Playing Tonight ended",
+                "Your partner ended tonight's session.",
             )
         NotificationKind.TONIGHT_REMINDER ->
             NotificationCopy(

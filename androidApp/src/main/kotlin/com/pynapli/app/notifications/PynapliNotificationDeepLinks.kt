@@ -62,6 +62,14 @@ object PynapliNotificationDeepLinks {
             "album_request",
             "partner_chat_invite",
             -> AppDeepLinkStateHolder.TARGET_ACTIVITY
+            // Pushes queued before the server sent an explicit target still land in the right place.
+            "tonight_invite",
+            "tonight_reminder",
+            "tonight_accepted",
+            "tonight_declined",
+            "tonight_ended",
+            -> AppDeepLinkStateHolder.TARGET_TONIGHT
+            "psync_invite" -> AppDeepLinkStateHolder.TARGET_PSYNC
             else -> AppDeepLinkStateHolder.TARGET_ACTIVITY
         }
 

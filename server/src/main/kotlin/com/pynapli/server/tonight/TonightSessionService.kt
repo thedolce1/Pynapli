@@ -1,5 +1,7 @@
 package com.pynapli.server.tonight
 
+import com.pynapli.server.notifications.NotificationEventDraft
+import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.RiskPolicyService
@@ -19,7 +21,7 @@ import java.util.UUID
 class TonightSessionService(
     private val repository: TonightSessionRepository,
     subscriptionService: SubscriptionService?,
-    notificationPublisher: NotificationPublisher? = null,
+    private val notificationPublisher: NotificationPublisher? = null,
     presenceService: PresenceService? = null,
     riskPolicyService: RiskPolicyService? = null,
     private val clock: Clock = Clock.systemUTC(),
@@ -51,7 +53,11 @@ class TonightSessionService(
         }
         val now = clock.instant()
         return when (val outcome = repository.approveParticipant(sessionId, userId, now)) {
-            is TonightSessionRepository.ApproveOutcome.Updated -> outcome.session.toDto()
+            is TonightSessionRepository.ApproveOutcome.Updated ->
+                outcome.session.toDto().also { session ->
+                    // The proposer was left on "Waiting for your partner" with no way to know.
+                    if (session.status == "active") tellOthers(session, userId, NotificationKind.TONIGHT_ACCEPTED)
+                }
             TonightSessionRepository.ApproveOutcome.SessionNotFound ->
                 throw TonightSessionException("TONIGHT_SESSION_NOT_FOUND")
             TonightSessionRepository.ApproveOutcome.NotParticipant ->
@@ -67,7 +73,8 @@ class TonightSessionService(
     ): TonightSessionDto {
         val now = clock.instant()
         return when (val outcome = repository.declineParticipant(sessionId, userId, now)) {
-            is TonightSessionRepository.MutateOutcome.Updated -> outcome.session.toDto()
+            is TonightSessionRepository.MutateOutcome.Updated ->
+                outcome.session.toDto().also { tellOthers(it, userId, NotificationKind.TONIGHT_DECLINED) }
             TonightSessionRepository.MutateOutcome.SessionNotFound ->
                 throw TonightSessionException("TONIGHT_SESSION_NOT_FOUND")
             TonightSessionRepository.MutateOutcome.NotParticipant ->
@@ -83,7 +90,11 @@ class TonightSessionService(
     ): TonightSessionDto {
         val now = clock.instant()
         return when (val outcome = repository.endSession(sessionId, userId, now)) {
-            is TonightSessionRepository.MutateOutcome.Updated -> outcome.session.toDto()
+            is TonightSessionRepository.MutateOutcome.Updated ->
+                outcome.session.toDto().also { session ->
+                    // Their partner would otherwise think they were still live together.
+                    if (session.mode == "together") tellOthers(session, userId, NotificationKind.TONIGHT_ENDED)
+                }
             // Not-a-participant and wrong-status both surface as not-found: an ender should
             // never learn a session exists if they cannot act on it.
             TonightSessionRepository.MutateOutcome.SessionNotFound,
@@ -91,6 +102,30 @@ class TonightSessionService(
             TonightSessionRepository.MutateOutcome.NotPending,
             -> throw TonightSessionException("TONIGHT_SESSION_NOT_FOUND")
         }
+    }
+
+    /** Push [kind] to every participant except the one who acted; opens Playing Tonight. */
+    private suspend fun tellOthers(
+        session: TonightSessionDto,
+        actorUserId: UUID,
+        kind: String,
+    ) {
+        val publisher = notificationPublisher ?: return
+        session.participants
+            .map { UUID.fromString(it.userId) }
+            .filter { it != actorUserId }
+            .forEach { recipient ->
+                publisher.enqueue(
+                    NotificationEventDraft(
+                        recipientUserId = recipient,
+                        actorUserId = actorUserId,
+                        kind = kind,
+                        subjectId = UUID.fromString(session.id),
+                        idempotencyKey = "$kind:${session.id}:$recipient",
+                        payload = mapOf("target" to "tonight", "sessionId" to session.id),
+                    ),
+                )
+            }
     }
 
     suspend fun current(userId: UUID): CurrentTonightSessionDto {

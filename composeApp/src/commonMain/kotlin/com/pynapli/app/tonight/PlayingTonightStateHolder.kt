@@ -144,6 +144,37 @@ class PlayingTonightStateHolder(
         _state.update { it.copy(errorMessage = null) }
     }
 
+    fun clearNotice() {
+        _state.update { it.copy(notice = null) }
+    }
+
+    /**
+     * Re-read only the viewer's own session, quietly. Playing Tonight has no realtime channel, so
+     * while a together session is waiting on the partner or live with them, the screen calls this
+     * on a timer to notice an approval, a decline or the partner ending it.
+     */
+    suspend fun refreshSession() {
+        val before = _state.value.currentSession ?: return
+        val result = repository.loadCurrentSession()
+        if (result !is AppResult.Success) return
+        val after = result.value
+        val notice =
+            when {
+                after != null && before.isProposed && after.status == "active" -> "Your partner joined. You're live together."
+                after == null && before.isProposed -> "Your partner can't join tonight."
+                after == null && before.status == "active" && before.mode == "together" -> "Tonight's session has ended."
+                else -> null
+            }
+        _state.update { it.copy(currentSession = after, notice = notice ?: it.notice) }
+    }
+
+    /** A together session where the next move may be the partner's: worth re-checking. */
+    fun shouldWatchPartner(viewerUserId: String?): Boolean {
+        val session = _state.value.currentSession ?: return false
+        if (session.mode != "together") return false
+        return (session.isProposed && !session.pendingApprovalFor(viewerUserId)) || session.status == "active"
+    }
+
     companion object {
         const val DEFAULT_RADIUS_METERS = 50_000
     }

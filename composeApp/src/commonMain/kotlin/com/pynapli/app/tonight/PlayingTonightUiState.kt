@@ -119,4 +119,6 @@ data class PlayingTonightUiState(
     val intentFilter: TonightIntent? = null,
     val photoOptions: List<TonightPhotoOptionUi> = emptyList(),
     val errorMessage: String? = null,
+    // A passing, non-error line ("Your partner can't join tonight.").
+    val notice: String? = null,
 )

@@ -337,6 +337,33 @@ class TonightSessionServiceIntegrationTest :
             }
         }
 
+        "the proposer is told when their partner approves, declines or ends" {
+            runBlocking {
+                val user = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                dataSource.insertUserWithProfile(user, "Inviting Ivy")
+                dataSource.insertUserWithProfile(partner, "Pending Pete")
+                dataSource.insertActiveLink(user, partner)
+                val publisher = RecordingPublisher()
+                val service = paidService(notificationPublisher = publisher)
+
+                val first = service.propose(user, ProposeTonightSessionRequestDto(mode = "together", intent = "together"))
+                service.approve(UUID.fromString(first.id), partner)
+                val accepted = publisher.drafts.single { it.kind == NotificationKind.TONIGHT_ACCEPTED }
+                assertEquals(user, accepted.recipientUserId)
+                assertEquals("tonight", accepted.payload["target"])
+
+                service.end(UUID.fromString(first.id), partner)
+                assertEquals(user, publisher.drafts.single { it.kind == NotificationKind.TONIGHT_ENDED }.recipientUserId)
+
+                val second = service.propose(user, ProposeTonightSessionRequestDto(mode = "together", intent = "together"))
+                service.decline(UUID.fromString(second.id), partner)
+                assertEquals(user, publisher.drafts.single { it.kind == NotificationKind.TONIGHT_DECLINED }.recipientUserId)
+                // Nobody is pushed about their own action.
+                assertTrue(publisher.drafts.none { it.recipientUserId == partner && it.kind != NotificationKind.TONIGHT_INVITE })
+            }
+        }
+
         "together propose enqueues exactly one TONIGHT_INVITE to the partner" {
             runBlocking {
                 val user = UUID.randomUUID()
