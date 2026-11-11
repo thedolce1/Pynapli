@@ -13,6 +13,7 @@ import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
 import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
+import com.pynapli.shared.network.dto.MessageDeltaType
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
@@ -72,6 +73,35 @@ class MessagingService(
             activityService = activityService,
             riskPolicyService = riskPolicyService,
         )
+
+    /** [MatchConversationOpener] backed by this service; see [openMatchConversation]. */
+    val matchConversationOpener: MatchConversationOpener = MatchConversationOpener { a, b -> openMatchConversation(a, b) }
+
+    /**
+     * Get or create the swipe-origin direct conversation for a new match and tell both people's
+     * Messages to refetch. A conversation that already exists (they talked from the Grid) is reused.
+     * Blocked pairs get nothing. Errors are swallowed: the match itself already stands.
+     */
+    suspend fun openMatchConversation(
+        userA: UUID,
+        userB: UUID,
+    ) {
+        if (userA == userB) return
+        runCatching {
+            val conversation =
+                repository.getOrCreateDirectConversation(
+                    viewerUserId = userA,
+                    targetUserId = userB,
+                    origin = MATCH_CONVERSATION_ORIGIN,
+                ) ?: return
+            realtimePublisher.publishDelta(
+                type = MessageDeltaType.CONVERSATION_UPDATED,
+                conversationId = conversation.conversationId,
+                participants = conversation.participants,
+                statuses = MessagingParticipantStatuses.visible,
+            )
+        }
+    }
 
     suspend fun listConversations(userId: UUID): ConversationListResponseDto = conversationActions.listConversations(userId)
 
@@ -189,3 +219,6 @@ class MessagingService(
 class MessagingException(
     val code: String,
 ) : RuntimeException(code)
+
+// The new-matches rail shows swipe-origin conversations that have no messages yet.
+private const val MATCH_CONVERSATION_ORIGIN = "swipe"

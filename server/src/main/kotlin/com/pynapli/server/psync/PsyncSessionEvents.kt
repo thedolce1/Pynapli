@@ -12,6 +12,7 @@ internal class PsyncSessionEvents(
     private val notificationPublisher: NotificationPublisher?,
     private val broadcaster: PsyncBroadcaster?,
     private val clock: Clock,
+    private val matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
 ) {
     /** Fan out a convenience realtime delta to [recipients] (no-op without a broadcaster). */
     suspend fun emitDelta(
@@ -95,6 +96,8 @@ internal class PsyncSessionEvents(
     suspend fun emitMatchActivity(matches: List<PsyncResolvedMatch>) {
         val activity = activityService ?: return
         for (match in matches) {
+            // Each partner's match is their own conversation (no silent partner adds, PSYNC_SPEC).
+            matchConversationOpener?.openForMatch(match.partnerUserId, match.targetUserId)
             activity.recordMatch(match.partnerUserId, match.targetUserId, match.matchId)
             notificationPublisher?.enqueue(
                 NotificationEventDraft(

@@ -26,6 +26,7 @@ class PsyncSessionService(
     presenceService: com.pynapli.server.presence.PresenceService? = null,
     mediaAssetUrlResolver: com.pynapli.server.media.MediaAssetUrlResolver? = null,
     travelLocationRepository: com.pynapli.server.location.TravelLocationRepository? = null,
+    matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
     activityService: com.pynapli.server.activity.ActivityService? = null,
     notificationPublisher: com.pynapli.server.notifications.NotificationPublisher? = null,
     broadcaster: PsyncBroadcaster? = null,
@@ -40,7 +41,7 @@ class PsyncSessionService(
     clock: Clock = Clock.systemUTC(),
     json: Json = Json,
 ) {
-    private val events = PsyncSessionEvents(activityService, notificationPublisher, broadcaster, clock)
+    private val events = PsyncSessionEvents(activityService, notificationPublisher, broadcaster, clock, matchConversationOpener)
     private val pineappleRefunds = PsyncPineappleRefunds(repository, pineappleInventory)
     private val deckCoordinator =
         PsyncDeckCoordinator(

@@ -465,6 +465,51 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "a together match opens each partner's own conversation with the target" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.setTogetherEnabled(target)
+                dataSource.insertSwipeLike(target, initiator)
+                val messaging =
+                    com.pynapli.server.messaging.MessagingService(
+                        com.pynapli.server.messaging
+                            .JdbcMessagingRepository(dataSource),
+                    )
+                val svc =
+                    PsyncSessionService(
+                        repository = JdbcPsyncSessionRepository(dataSource),
+                        deckGenerator =
+                            object : com.pynapli.server.psync.PsyncDeckGenerator {
+                                override suspend fun rankCandidates(
+                                    viewerUserId: UUID,
+                                    filters: com.pynapli.shared.network.dto.SwipeDeckRequestDto,
+                                    limit: Int,
+                                ) = listOf(
+                                    com.pynapli.shared.network.dto
+                                        .SwipeCardDto(userId = target.toString(), displayName = "Target", rankToken = "r"),
+                                )
+                            },
+                        activityService =
+                            com.pynapli.server.activity.ActivityService(
+                                repository =
+                                    com.pynapli.server.activity
+                                        .JdbcActivityRepository(dataSource),
+                            ),
+                        matchConversationOpener = messaging.matchConversationOpener,
+                    )
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "like")
+
+                // Each partner sees the match in Messages; the partner is never silently added.
+                assertEquals(1, dataSource.swipeConversationsBetween(initiator, target))
+                assertEquals(1, dataSource.swipeConversationsBetween(partner, target))
+                assertEquals(0, dataSource.swipeConversationsBetween(initiator, partner))
+            }
+        }
+
         // ---- Session limits per tier ---------------------------------------------------
 
         "a Free initiator can start one session per 24 hours; unstarted invites don't count" {
@@ -1874,6 +1919,30 @@ private fun DataSource.deliveredInventoryId(
                 statement.setObject(2, actorUserId)
                 statement.setObject(3, targetUserId)
                 statement.executeQuery().use { rs -> if (rs.next()) rs.getObject(1, UUID::class.java) else null }
+            }
+    }
+
+/** Direct conversations of swipe origin that both users are in. */
+private fun DataSource.swipeConversationsBetween(
+    userA: UUID,
+    userB: UUID,
+): Int =
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                SELECT COUNT(*) FROM conversations c
+                WHERE c.origin = 'swipe'
+                  AND EXISTS (SELECT 1 FROM conversation_participants p WHERE p.conversation_id = c.id AND p.user_id = ?)
+                  AND EXISTS (SELECT 1 FROM conversation_participants p WHERE p.conversation_id = c.id AND p.user_id = ?)
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userA)
+                statement.setObject(2, userB)
+                statement.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt(1)
+                }
             }
     }
 
