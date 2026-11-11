@@ -26,6 +26,7 @@ internal fun PsyncSessionParticipant.toDto(): PsyncParticipantDto =
         role = role,
         consentStatus = consentStatus,
         approved = approved,
+        started = started,
     )
 
 internal fun PsyncSessionDto.participantIds(): List<UUID> = participants.map { UUID.fromString(it.userId) }

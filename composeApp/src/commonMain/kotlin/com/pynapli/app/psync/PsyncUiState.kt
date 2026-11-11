@@ -45,8 +45,28 @@ data class PsyncUiState(
     val session: PsyncSessionUi? = null,
     val deck: List<PsyncDeckCardUi> = emptyList(),
     val recap: PsyncRecapUi? = null,
+    // A neutral, non-error line: "Nudge sent", "Pat is ready when you are".
+    val notice: String? = null,
+    // The partner has been through the whole deck (learned from the realtime channel; never which
+    // way they swiped).
+    val partnerFinished: Boolean = false,
 ) {
     val phase: PsyncPhase get() = session?.phase ?: PsyncPhase.IDLE
+
+    /**
+     * The next move is the partner's and nothing on this screen will change until they make it.
+     * While this holds the screen refetches on a slow timer, so a missed realtime update (a dropped
+     * socket, a backgrounded tab) can't leave the viewer waiting forever.
+     */
+    val waitingOnPartner: Boolean
+        get() =
+            when (phase) {
+                PsyncPhase.INVITED, PsyncPhase.CONFIGURING -> session?.awaitingViewerApproval == false
+                PsyncPhase.READY -> session?.viewerStarted == true
+                PsyncPhase.ACTIVE -> deck.isNotEmpty() && remainingCards.isEmpty()
+                PsyncPhase.PAUSED -> true
+                else -> false
+            }
 
     /** Cards the viewer has not decided on yet, in deck order. */
     val remainingCards: List<PsyncDeckCardUi> get() = deck.filter { it.viewerAction == null }
@@ -62,6 +82,9 @@ data class PsyncSessionUi(
     val partnerApproved: Boolean,
     // The setup both partners are agreeing to.
     val filters: SwipeDeckRequestDto = SwipeDeckRequestDto(),
+    // Who has tapped Start once both approved.
+    val viewerStarted: Boolean = false,
+    val partnerStarted: Boolean = false,
 ) {
     val phase: PsyncPhase
         get() =
@@ -146,6 +169,8 @@ fun PsyncSessionDto.toUi(viewerUserId: String?): PsyncSessionUi {
         viewerApproved = viewer?.approved ?: false,
         partnerApproved = partner?.approved ?: false,
         filters = filters,
+        viewerStarted = viewer?.started ?: false,
+        partnerStarted = partner?.started ?: false,
     )
 }
 

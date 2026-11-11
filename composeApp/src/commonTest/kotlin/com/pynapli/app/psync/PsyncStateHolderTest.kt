@@ -368,6 +368,63 @@ class PsyncStateHolderTest {
         }
 
     @Test
+    fun aNudgeIsSeenOnBothSidesAndPartnerFinishedIsRemembered() =
+        runTest {
+            val repo =
+                FakePsyncRepository().apply {
+                    current = session("active")
+                    deck = listOf(deckCard("a"), deckCard("b"))
+                }
+            val holder = holder(repo)
+            holder.refresh()
+
+            holder.nudge()
+            assertEquals("Nudge sent.", holder.state.value.notice)
+            holder.clearNotice()
+
+            val refetchesBefore = repo.calls.count { it == "loadCurrentSession" }
+            holder.onRealtimeDelta("session-1", "nudge")
+            assertTrue(
+                holder.state.value.notice!!
+                    .endsWith("is ready when you are."),
+            )
+            // A nudge changes nothing server-side, so it does not refetch.
+            assertEquals(refetchesBefore, repo.calls.count { it == "loadCurrentSession" })
+
+            holder.onRealtimeDelta("session-1", "partner_finished")
+            assertTrue(holder.state.value.partnerFinished)
+            // Any other delta is just "something changed": refetch.
+            holder.onRealtimeDelta("session-1", "session_updated")
+            assertTrue(repo.calls.count { it == "loadCurrentSession" } > refetchesBefore)
+            assertTrue(holder.state.value.partnerFinished)
+        }
+
+    @Test
+    fun waitingOnPartnerIsTrueOnlyWhenTheNextMoveIsTheirs() =
+        runTest {
+            val repo = FakePsyncRepository()
+            val holder = holder(repo)
+
+            // The viewer invited and is waiting for an answer.
+            repo.current = session("invited", viewerApproved = true, partnerApproved = false)
+            holder.refresh()
+            assertTrue(holder.state.value.waitingOnPartner)
+
+            // The viewer was invited: it is their move.
+            repo.current = session("invited", initiator = PARTNER, viewerApproved = false, partnerApproved = true)
+            holder.refresh()
+            assertTrue(!holder.state.value.waitingOnPartner)
+
+            // Mid-deck with cards left: their move. Deck finished: waiting.
+            repo.current = session("active")
+            repo.deck = listOf(deckCard("a"))
+            holder.refresh()
+            assertTrue(!holder.state.value.waitingOnPartner)
+            holder.submitAction("a", "pass")
+            assertTrue(holder.state.value.waitingOnPartner)
+        }
+
+    @Test
     fun aRefusedSwipePutsTheCardBack() =
         runTest {
             val repo =

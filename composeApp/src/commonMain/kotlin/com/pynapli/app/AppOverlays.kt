@@ -26,6 +26,7 @@ import com.pynapli.app.swipe.toProfileCardUi
 import com.pynapli.app.tonight.PlayingTonightStateHolder
 import com.pynapli.shared.network.PsyncStreamClient
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -119,7 +120,20 @@ internal fun PynapliOverlays(
             // Convenience realtime: refetch canonical state when the partner's side changes.
             // Scoped to the open overlay — leaving composition cancels the socket.
             LaunchedEffect(psyncStateHolder, client) {
-                client.connect().collect { psyncStateHolder.refresh() }
+                client.connect().collect { delta -> psyncStateHolder.onRealtimeDelta(delta.sessionId, delta.type) }
+            }
+        }
+        // Realtime is a convenience and the stream does not replay what it missed while the socket
+        // was down. While the viewer is waiting on their partner, refetch on a slow timer so the
+        // screen always catches up (CLAUDE.md: HTTP fetch is canonical).
+        val psyncWaiting =
+            psyncStateHolder.state
+                .collectAsState()
+                .value.waitingOnPartner
+        LaunchedEffect(psyncStateHolder, psyncWaiting) {
+            while (psyncWaiting) {
+                delay(PSYNC_WAITING_REFETCH_MILLIS)
+                psyncStateHolder.refresh()
             }
         }
         // A block or hide from the profile peek invalidates that card for both partners; the
@@ -215,3 +229,6 @@ internal fun PynapliOverlays(
         )
     }
 }
+
+// How often a Psync screen that is waiting on the partner refetches, in case a realtime update was missed.
+private const val PSYNC_WAITING_REFETCH_MILLIS = 15_000L

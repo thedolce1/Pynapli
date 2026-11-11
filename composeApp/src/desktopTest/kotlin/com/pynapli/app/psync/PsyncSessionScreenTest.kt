@@ -77,7 +77,12 @@ private class StaticPsyncRepository(
 
     override suspend fun deny(sessionId: String) = AppResult.Success(current ?: session("cancelled"))
 
-    override suspend fun leave(sessionId: String) = AppResult.Success(current ?: session("cancelled"))
+    var leaveCalls = 0
+
+    override suspend fun leave(sessionId: String): AppResult<PsyncSessionDto> {
+        leaveCalls += 1
+        return AppResult.Success(current ?: session("cancelled"))
+    }
 
     override suspend fun start(sessionId: String) = AppResult.Success(current ?: session("active"))
 
@@ -176,6 +181,47 @@ class PsyncSessionScreenTest {
             // After the last card the viewer waits for their partner.
             onNodeWithTag(PsyncSessionTags.PASS_BUTTON).performClick()
             waitForIdle()
+            onNodeWithTag(PsyncSessionTags.WAITING).assertExists()
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun endingASessionAsksOnceAndCanBeBackedOutOf() =
+        runComposeUiTest {
+            val repo = StaticPsyncRepository(current = session("active"), deck = listOf(card("a"), card("b")))
+            setContent { PsyncSessionScreen(stateHolder = holder(repo), onBack = {}) }
+            waitForIdle()
+
+            onNodeWithTag(PsyncSessionTags.PAUSE_BUTTON).assertIsDisplayed()
+            onNodeWithTag(PsyncSessionTags.END_SESSION_BUTTON).performClick()
+            waitForIdle()
+            onNodeWithTag(PsyncSessionTags.KEEP_GOING_BUTTON).performClick()
+            waitForIdle()
+            kotlin.test.assertEquals(0, repo.leaveCalls)
+
+            onNodeWithTag(PsyncSessionTags.END_SESSION_BUTTON).performClick()
+            waitForIdle()
+            onNodeWithTag(PsyncSessionTags.CONFIRM_END_BUTTON).performClick()
+            waitForIdle()
+            kotlin.test.assertEquals(1, repo.leaveCalls)
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun afterTappingStartTheViewerSeesTheyAreWaiting() =
+        runComposeUiTest {
+            val ready =
+                session("ready").copy(
+                    participants =
+                        listOf(
+                            PsyncParticipantDto(VIEWER, "Viewer", "initiator", "accepted", true, started = true),
+                            PsyncParticipantDto(PARTNER, "Pat", "partner", "accepted", true, started = false),
+                        ),
+                )
+            setContent { PsyncSessionScreen(stateHolder = holder(StaticPsyncRepository(current = ready)), onBack = {}) }
+            waitForIdle()
+
+            onNodeWithText("Waiting for Pat").assertIsDisplayed()
             onNodeWithTag(PsyncSessionTags.WAITING).assertExists()
         }
 

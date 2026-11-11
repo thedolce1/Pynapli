@@ -24,6 +24,8 @@ data class PsyncParticipantDto(
     val role: String, // 'initiator' | 'partner'
     val consentStatus: String, // 'pending' | 'accepted' | 'denied'
     val approved: Boolean,
+    // Tapped Start once both approved. The deck is dealt when every participant has.
+    val started: Boolean = false,
 )
 
 @Serializable
