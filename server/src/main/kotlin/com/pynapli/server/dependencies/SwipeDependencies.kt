@@ -52,6 +52,7 @@ internal fun buildSwipeDependencies(
     activityService: ActivityService,
     psyncBroadcaster: PsyncBroadcaster,
     productMetrics: com.pynapli.server.metrics.ProductMetrics,
+    matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
 ): SwipeDependencies {
     val swipeRepository = JdbcSwipeRepository(dataSource)
     val swipeService =
@@ -68,6 +69,7 @@ internal fun buildSwipeDependencies(
             deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret),
             activityService = activityService,
             productMetrics = productMetrics,
+            matchConversationOpener = matchConversationOpener,
         )
     val psyncSessionService =
         PsyncSessionService(
@@ -78,6 +80,7 @@ internal fun buildSwipeDependencies(
             presenceService = presenceService,
             mediaAssetUrlResolver = mediaAssetUrlResolver,
             travelLocationRepository = travelLocationRepository,
+            matchConversationOpener = matchConversationOpener,
             activityService = activityService,
             notificationPublisher = notificationService,
             broadcaster = psyncBroadcaster,

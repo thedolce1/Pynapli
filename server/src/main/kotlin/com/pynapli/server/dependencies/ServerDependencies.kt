@@ -359,6 +359,7 @@ class ServerDependencies(
                     activityService = activityService,
                     psyncBroadcaster = core.psyncBroadcaster,
                     productMetrics = core.productMetrics,
+                    matchConversationOpener = messaging.messagingService.matchConversationOpener,
                 )
             return ServerDependencies(
                 config = config,

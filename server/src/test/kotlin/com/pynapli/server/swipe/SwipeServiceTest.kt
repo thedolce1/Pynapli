@@ -90,6 +90,25 @@ class SwipeServiceTest {
         }
 
     @Test
+    fun aMatchOpensTheConversationForBoth() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000020")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000021")
+            val opened = mutableListOf<Pair<UUID, UUID>>()
+            val service =
+                SwipeService(
+                    InMemorySwipeRepository(),
+                    matchConversationOpener = { a, b -> opened += a to b },
+                )
+
+            service.submitAction(target, swipeActionRequest(target, viewer, SwipeAction.LIKE))
+            assertEquals(emptyList(), opened)
+            service.submitAction(viewer, swipeActionRequest(viewer, target, SwipeAction.LIKE))
+
+            assertEquals(listOf(viewer to target), opened)
+        }
+
+    @Test
     fun mutualLikeRecordsMatchProductMetric() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-0000000000a0")

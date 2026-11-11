@@ -11,6 +11,7 @@ import java.util.UUID
 internal class SwipeActionSideEffects(
     private val activityService: ActivityService?,
     private val notificationPublisher: NotificationPublisher?,
+    private val matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
 ) {
     suspend fun recordActivityForAction(
         viewerUserId: UUID,
@@ -41,6 +42,10 @@ internal class SwipeActionSideEffects(
         targetUserId: UUID,
         match: MatchRecord,
     ) {
+        // The match belongs in both people's Messages (new-matches rail) straight away.
+        profile("swipe.action.matchConversation") {
+            matchConversationOpener?.openForMatch(viewerUserId, targetUserId)
+        }
         profile("swipe.action.notify") {
             notificationPublisher?.enqueue(
                 NotificationEventDraft(

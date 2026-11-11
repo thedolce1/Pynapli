@@ -31,9 +31,10 @@ class SwipeService(
     private val clock: Clock = Clock.systemUTC(),
     activityService: ActivityService? = null,
     private val productMetrics: com.pynapli.server.metrics.ProductMetrics? = null,
+    matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
 ) {
     private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver)
-    private val sideEffects = SwipeActionSideEffects(activityService, notificationPublisher)
+    private val sideEffects = SwipeActionSideEffects(activityService, notificationPublisher, matchConversationOpener)
     private val deckPageBuilder = SwipeDeckPageBuilder(deckTokenCodec, dtoMapper)
     private val deckQuery =
         SwipeDeckQueryAction(

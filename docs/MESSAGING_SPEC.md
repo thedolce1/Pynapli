@@ -178,6 +178,7 @@ Current implementation note:
 - [x] Message expiry exists only with clear system messaging.
 - [x] Server owns message permissions.
 - [x] Message/conversation realtime refetches canonical HTTP state.
+- [x] A new match appears in both people's Messages straight away. (Swipe and Psync matches get-or-create the swipe-origin direct conversation (`MatchConversationOpener`, implemented by `MessagingService`) and push a `conversation_updated` delta to both, so the match shows in the new-matches rail without anyone tapping Message first. A conversation that already exists is reused; a blocked pair gets none; a Psync together match opens each partner's own conversation and never adds the partner.)
 
 ## Do Not Implement
 
