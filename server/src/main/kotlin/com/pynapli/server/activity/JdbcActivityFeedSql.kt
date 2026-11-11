@@ -18,6 +18,7 @@ internal object JdbcActivityFeedSql {
                (ae.seen_at IS NOT NULL) AS seen,
                ae.metadata->>'matchId' AS match_id,
                ae.metadata->>'conversationId' AS conversation_id,
+               ae.metadata->>'sessionId' AS psync_session_id,
                ae.metadata->>'source' AS source,
                album_request.status AS album_request_status,
                actor_settings.show_distance AS actor_show_distance,

@@ -131,19 +131,20 @@ class PsyncStateHolder(
 
     /** First load / pull-to-refresh: the viewer's current session (+ deck if it's live). */
     suspend fun refresh() {
-        _state.update { it.copy(isLoading = true, errorMessage = null) }
+        _state.update { it.copy(isLoading = true, errorMessage = null, errorCode = null) }
         when (val result = repository.loadCurrentSession()) {
             is AppResult.Success -> {
                 val live = result.value.session
                 val held = _state.value.session
                 when {
+                    // Looking at a finished session (a recap, or one opened from Activity): keep it
+                    // until the viewer leaves it, even if another session is live by now.
+                    held != null && held.phase in PsyncPhase.FINISHED -> Unit
                     live != null -> applySession(live)
                     // The server only reports a LIVE session as current. Ours stopped being live
                     // (finished, a partner left, it expired), so ask what became of it rather than
                     // dropping back to the start screen and losing the recap.
                     held != null && held.phase !in PsyncPhase.FINISHED -> followEndedSession(held.id)
-                    // Already showing a recap or an ended notice: keep it until the viewer leaves.
-                    held != null -> Unit
                     else -> applySession(null)
                 }
                 _state.update { it.copy(isLoading = false) }
@@ -154,7 +155,7 @@ class PsyncStateHolder(
                 }
             }
             is AppResult.Failure ->
-                _state.update { it.copy(isLoading = false, errorMessage = result.error.message) }
+                _state.update { it.copy(isLoading = false, errorMessage = result.error.message, errorCode = result.error.code) }
         }
     }
 
@@ -189,7 +190,7 @@ class PsyncStateHolder(
         onSession { sessionId ->
             when (val result = repository.loadDeck(sessionId)) {
                 is AppResult.Success -> _state.update { it.copy(deck = result.value.cards.map { card -> card.toUi() }) }
-                is AppResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+                is AppResult.Failure -> _state.update { it.copy(errorMessage = result.error.message, errorCode = result.error.code) }
             }
         }
 
@@ -210,7 +211,7 @@ class PsyncStateHolder(
                 ?.viewerAction
         // The viewer's own choice only (private — never the partner's).
         setViewerAction(cardToken, action)
-        _state.update { it.copy(errorMessage = null) }
+        _state.update { it.copy(errorMessage = null, errorCode = null) }
         when (val result = repository.submitAction(sessionId, cardToken, action)) {
             is AppResult.Success -> {
                 if (result.value.sessionCompleted) {
@@ -227,7 +228,7 @@ class PsyncStateHolder(
                     // dead deck with an error on it.
                     refresh()
                 } else {
-                    _state.update { it.copy(errorMessage = result.error.message) }
+                    _state.update { it.copy(errorMessage = result.error.message, errorCode = result.error.code) }
                 }
             }
         }
@@ -242,12 +243,12 @@ class PsyncStateHolder(
 
     suspend fun complete() =
         onSession { sessionId ->
-            _state.update { it.copy(isMutating = true, errorMessage = null) }
+            _state.update { it.copy(isMutating = true, errorMessage = null, errorCode = null) }
             when (val result = repository.complete(sessionId)) {
                 is AppResult.Success ->
                     _state.update { it.copy(isMutating = false, recap = result.value.toUi()) }
                 is AppResult.Failure ->
-                    _state.update { it.copy(isMutating = false, errorMessage = result.error.message) }
+                    _state.update { it.copy(isMutating = false, errorMessage = result.error.message, errorCode = result.error.code) }
             }
             refresh()
         }
@@ -256,7 +257,7 @@ class PsyncStateHolder(
         onSession { sessionId ->
             when (val result = repository.loadRecap(sessionId)) {
                 is AppResult.Success -> _state.update { it.copy(recap = result.value.toUi()) }
-                is AppResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+                is AppResult.Failure -> _state.update { it.copy(errorMessage = result.error.message, errorCode = result.error.code) }
             }
         }
 
@@ -265,8 +266,8 @@ class PsyncStateHolder(
         onSession { sessionId ->
             when (val result = repository.nudge(sessionId)) {
                 // Without this the button did nothing visible.
-                is AppResult.Success -> _state.update { it.copy(notice = "Nudge sent.", errorMessage = null) }
-                is AppResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+                is AppResult.Success -> _state.update { it.copy(notice = "Nudge sent.", errorMessage = null, errorCode = null) }
+                is AppResult.Failure -> _state.update { it.copy(errorMessage = result.error.message, errorCode = result.error.code) }
             }
         }
 
@@ -292,7 +293,34 @@ class PsyncStateHolder(
 
     fun clearNotice() = _state.update { it.copy(notice = null) }
 
-    fun clearError() = _state.update { it.copy(errorMessage = null) }
+    fun clearError() = _state.update { it.copy(errorMessage = null, errorCode = null) }
+
+    /**
+     * Open one session by id (from an Activity card or a push): an invite, a live deck, or a
+     * finished session's recap. A finished one stays on screen until the viewer leaves it.
+     */
+    suspend fun openSession(sessionId: String) {
+        _state.update { it.copy(isLoading = true, errorMessage = null, errorCode = null) }
+        when (val result = repository.loadSession(sessionId)) {
+            is AppResult.Success -> {
+                _state.update { it.copy(deck = emptyList(), recap = null, partnerFinished = false) }
+                applySession(result.value)
+                _state.update { it.copy(isLoading = false) }
+                when (result.value.status) {
+                    "active", "paused" -> loadDeck()
+                    "completed" -> loadRecap()
+                    else -> Unit
+                }
+            }
+            is AppResult.Failure ->
+                _state.update { it.copy(isLoading = false, errorMessage = result.error.message, errorCode = result.error.code) }
+        }
+    }
+
+    /** Leave a finished session's recap for the setup screen, to start another session. */
+    fun startAnother() {
+        if (_state.value.phase in PsyncPhase.FINISHED) _state.value = PsyncUiState()
+    }
 
     /** Leave a finished session behind (recap or ended notice dismissed) so a new one can start. */
     fun dismissFinished() {
@@ -308,14 +336,14 @@ class PsyncStateHolder(
     }
 
     private suspend fun mutateSession(call: suspend () -> AppResult<PsyncSessionDto>) {
-        _state.update { it.copy(isMutating = true, errorMessage = null) }
+        _state.update { it.copy(isMutating = true, errorMessage = null, errorCode = null) }
         when (val result = call()) {
             is AppResult.Success -> {
                 applySession(result.value)
                 _state.update { it.copy(isMutating = false) }
             }
             is AppResult.Failure ->
-                _state.update { it.copy(isMutating = false, errorMessage = result.error.message) }
+                _state.update { it.copy(isMutating = false, errorMessage = result.error.message, errorCode = result.error.code) }
         }
     }
 

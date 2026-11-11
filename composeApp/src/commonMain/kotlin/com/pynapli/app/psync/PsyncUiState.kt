@@ -42,6 +42,9 @@ data class PsyncUiState(
     val isLoading: Boolean = false,
     val isMutating: Boolean = false,
     val errorMessage: String? = null,
+    // The server's code for [errorMessage], so the screen can offer the right way out (upgrade,
+    // link a partner) instead of only showing text.
+    val errorCode: String? = null,
     val session: PsyncSessionUi? = null,
     val deck: List<PsyncDeckCardUi> = emptyList(),
     val recap: PsyncRecapUi? = null,
@@ -148,6 +151,8 @@ data class PsyncRecapUi(
     val bothLikedCount: Int,
     val togetherMatchCount: Int,
     val soloMatchCount: Int,
+    // The partner's solo matches, only when they chose to share them.
+    val partnerSoloMatchCount: Int? = null,
     val filtersSummary: String,
     val togetherMatches: List<PsyncMatchUi>,
 )
@@ -190,6 +195,7 @@ fun PsyncRecapDto.toUi(): PsyncRecapUi =
         bothLikedCount = bothLikedCount,
         togetherMatchCount = togetherMatchCount,
         soloMatchCount = soloMatchCount,
+        partnerSoloMatchCount = partnerSoloMatchCount,
         filtersSummary = filtersSummary,
         togetherMatches = togetherMatches.map { PsyncMatchUi(it.targetUserId, it.displayName) },
     )

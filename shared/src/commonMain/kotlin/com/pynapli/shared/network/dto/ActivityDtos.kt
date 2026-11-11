@@ -96,4 +96,6 @@ data class ActivityEventDto(
     val matchId: String? = null,
     val conversationId: String? = null,
     val source: String? = null,
+    // psync_invite / psync_started / psync_recap / psync_expired: the session it is about.
+    val psyncSessionId: String? = null,
 )

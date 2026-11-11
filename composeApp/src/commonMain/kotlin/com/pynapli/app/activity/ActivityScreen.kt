@@ -36,6 +36,7 @@ fun ActivityScreen(
     onOpenStore: () -> Unit = {},
     onOpenMatch: (ActivityEventDto) -> Unit = {},
     onOpenPartnerChatInvite: (String) -> Unit = {},
+    onOpenPsync: (String) -> Unit = {},
     onOpenProfile: (ActivityEventDto) -> Unit = {},
 ) {
     val state by stateHolder.state.collectAsState()
@@ -59,6 +60,7 @@ fun ActivityScreen(
         onDismissEvent = { eventId -> scope.launch { stateHolder.dismissActivityEvent(eventId) } },
         onOpenMatch = onOpenMatch,
         onOpenPartnerChatInvite = onOpenPartnerChatInvite,
+        onOpenPsync = onOpenPsync,
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onRefresh = { scope.launch { stateHolder.load() } },
         onOpenStore = onOpenStore,
@@ -78,6 +80,7 @@ private fun ActivityScreenContent(
     onDismissEvent: (String) -> Unit,
     onOpenMatch: (ActivityEventDto) -> Unit,
     onOpenPartnerChatInvite: (String) -> Unit,
+    onOpenPsync: (String) -> Unit,
     onLoadMore: () -> Unit,
     onRefresh: () -> Unit,
     onOpenStore: () -> Unit,
@@ -214,6 +217,7 @@ private fun ActivityScreenContent(
                             onAlbumRequestDecision = onAlbumRequestDecision,
                             onOpenMatch = onOpenMatch,
                             onOpenPartnerChatInvite = onOpenPartnerChatInvite,
+                            onOpenPsync = onOpenPsync,
                             onDismissEvent = onDismissEvent,
                             modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
                         )
