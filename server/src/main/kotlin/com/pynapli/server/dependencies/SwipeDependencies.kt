@@ -77,6 +77,7 @@ internal fun buildSwipeDependencies(
             hiddenProfileRepository = hiddenProfileRepository,
             presenceService = presenceService,
             mediaAssetUrlResolver = mediaAssetUrlResolver,
+            travelLocationRepository = travelLocationRepository,
             activityService = activityService,
             notificationPublisher = notificationService,
             broadcaster = psyncBroadcaster,

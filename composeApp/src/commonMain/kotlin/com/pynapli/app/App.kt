@@ -356,6 +356,13 @@ fun PynapliApp(
                 psyncVisible = false
                 selectedTab = PynapliTab.Store
             },
+            psyncTravelCityName =
+                graph.travelLocationStateHolder
+                    ?.state
+                    ?.collectAsState()
+                    ?.value
+                    ?.current
+                    ?.city,
             onPsyncOpenProfileHub = {
                 // Straight to the linked-partner panel, where linking is managed.
                 psyncVisible = false

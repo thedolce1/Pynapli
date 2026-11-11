@@ -23,6 +23,10 @@ data class PsyncSession(
     val expiresAt: Instant,
     val endedAt: Instant?,
     val participants: List<PsyncSessionParticipant>,
+    // The initiator's active Travel mode destination the deck is dealt around, or null for their
+    // home location. [locationLabel] is what both partners see ("Las Vegas, Nevada").
+    val travelLocationId: UUID? = null,
+    val locationLabel: String? = null,
 )
 
 /**

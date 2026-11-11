@@ -155,12 +155,34 @@ class PsyncSessionScreenTest {
             waitForIdle()
 
             onNodeWithText("Pat invited you to Psync").assertIsDisplayed()
+            // The deck is dealt around the inviter, and the invitee is told so.
+            onNodeWithText("Within 25 km of Pat").assertIsDisplayed()
             onNodeWithText("25 profiles").assertIsDisplayed()
             onNodeWithText("Ages 30 to 45").assertIsDisplayed()
             onNodeWithText("Verified only").assertIsDisplayed()
             onNodeWithTag(PsyncSessionTags.ACCEPT_BUTTON).assertIsDisplayed()
             onNodeWithTag(PsyncSessionTags.SUGGEST_CHANGES_BUTTON).assertIsDisplayed()
             onNodeWithTag(PsyncSessionTags.DECLINE_BUTTON).assertIsDisplayed()
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun theInviteeSeesWhenTheDeckIsInAnotherCity() =
+        runComposeUiTest {
+            val invited =
+                session("invited").copy(
+                    initiatorUserId = PARTNER,
+                    locationLabel = "Las Vegas, Nevada",
+                    participants =
+                        listOf(
+                            PsyncParticipantDto(VIEWER, "Viewer", "partner", "pending", false),
+                            PsyncParticipantDto(PARTNER, "Pat", "initiator", "accepted", true),
+                        ),
+                )
+            setContent { PsyncSessionScreen(stateHolder = holder(StaticPsyncRepository(current = invited)), onBack = {}) }
+            waitForIdle()
+
+            onNodeWithText("Within 25 km of Las Vegas, Nevada (Travel mode)").assertIsDisplayed()
         }
 
     @OptIn(ExperimentalTestApi::class)

@@ -108,6 +108,7 @@ private val PSYNC_UPGRADE_CODES =
         "PSYNC_ADVANCED_FILTERS_NOT_ALLOWED",
         "PSYNC_SESSION_LIMIT_REACHED",
         "PINEAPPLE_LIKE_INVENTORY_REQUIRED",
+        "PSYNC_TRAVEL_NOT_ALLOWED",
     )
 
 /** Deck sizes offered at setup. The server caps them by tier (Free 10, Social 25, Select 50). */
@@ -128,6 +129,8 @@ fun PsyncSessionScreen(
     onOpenProfileById: (userId: String, displayName: String?) -> Unit = { _, _ -> },
     onOpenStore: () -> Unit = {},
     onOpenProfileHub: () -> Unit = {},
+    // The viewer's own Travel mode destination, if on: a session they start is dealt there.
+    travelCityName: String? = null,
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -185,6 +188,7 @@ fun PsyncSessionScreen(
                     } else {
                         SetupPhase(
                             distanceUnit = distanceUnit,
+                            travelCityName = travelCityName,
                             onInvite = { deckSize, filters -> scope.launch { stateHolder.createSession(deckSize, filters.toSwipeDeckRequest()) } },
                         )
                     }
@@ -233,6 +237,7 @@ fun PsyncSessionScreen(
 @Composable
 private fun SetupPhase(
     distanceUnit: String,
+    travelCityName: String?,
     onInvite: (deckSize: Int, filters: SwipeFilters) -> Unit,
 ) {
     var deckSize by rememberSaveable { mutableStateOf(PSYNC_DECK_SIZES[1]) }
@@ -264,7 +269,15 @@ private fun SetupPhase(
         Spacer(Modifier.height(20.dp))
 
         SetupLabel("Who you'll see")
-        SetupSummaryCard(lines = filters.toSwipeDeckRequest().toSetupLines(distanceUnit))
+        SetupSummaryCard(lines = filters.toSwipeDeckRequest().toSetupLines(distanceUnit, travelCityName))
+        if (travelCityName != null) {
+            Text(
+                text = "You're in Travel mode, so the deck is dealt in $travelCityName. Turn it off in Swipe to swipe near home.",
+                color = PynapliColors.TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
         Spacer(Modifier.height(10.dp))
         SecondaryButton("Change filters", PsyncSessionTags.EDIT_FILTERS_BUTTON) { editingFilters = true }
 
@@ -385,7 +398,10 @@ private fun SetupSummaryCard(lines: List<String>) {
 }
 
 /** The filter half of [PsyncSessionUi.setupSummary], for the setup step before a session exists. */
-private fun SwipeDeckRequestDto.toSetupLines(distanceUnit: String): List<String> =
+private fun SwipeDeckRequestDto.toSetupLines(
+    distanceUnit: String,
+    travelCityName: String?,
+): List<String> =
     PsyncSessionUi(
         id = "",
         status = "",
@@ -395,6 +411,7 @@ private fun SwipeDeckRequestDto.toSetupLines(distanceUnit: String): List<String>
         viewerApproved = true,
         partnerApproved = false,
         filters = this,
+        locationLabel = travelCityName,
     ).setupSummary(distanceUnit).drop(1)
 
 @Composable

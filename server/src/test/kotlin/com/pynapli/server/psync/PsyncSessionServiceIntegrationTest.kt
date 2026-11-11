@@ -1,5 +1,6 @@
 package com.pynapli.server.psync
 
+import com.pynapli.server.grid.insertActiveTravelLocationReturningId
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.CreatePsyncSessionRequestDto
 import com.pynapli.shared.network.dto.SubmitPsyncActionRequestDto
@@ -82,6 +83,9 @@ class PsyncSessionServiceIntegrationTest :
                 broadcaster = broadcaster,
                 rateLimitService = rateLimitService,
                 pineappleInventory = pineappleInventory,
+                travelLocationRepository =
+                    com.pynapli.server.location
+                        .JdbcTravelLocationRepository(dataSource),
                 clock = clock,
             )
 
@@ -379,6 +383,85 @@ class PsyncSessionServiceIntegrationTest :
 
                 val invite = activity.listActivity(partner).items.single { it.type == "psync_invite" }
                 assertEquals(created.id, invite.psyncSessionId)
+            }
+        }
+
+        // ---- Where the deck is dealt ----------------------------------------------------
+
+        "a session set up in Travel mode names the destination and its likes carry the travel tail" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val travelId =
+                    dataSource.insertActiveTravelLocationReturningId(initiator, "Las Vegas", 36.17, -115.14)
+
+                val svc = deckService(listOf(target))
+                val created = svc.create(initiator, CreatePsyncSessionRequestDto())
+                assertEquals("Las Vegas", created.locationLabel)
+
+                val sessionId = UUID.fromString(created.id)
+                svc.accept(sessionId, partner)
+                svc.start(sessionId, initiator)
+                svc.start(sessionId, partner)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "pass")
+
+                assertEquals(travelId, dataSource.deliveredTravelLocationId(sessionId, initiator, target))
+            }
+        }
+
+        "a session set up at home has no location label" {
+            runBlocking {
+                val (initiator, _) = seedLinkedPair()
+                val created = deckService(emptyList()).create(initiator, CreatePsyncSessionRequestDto())
+                assertNull(created.locationLabel)
+            }
+        }
+
+        "turning Travel mode on after agreeing sends the session back to both partners" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val broadcaster = PsyncBroadcaster(replay = 32)
+                val svc = deckService(listOf(target), broadcaster = broadcaster)
+                val sessionId = svc.readyFor(initiator, partner)
+                svc.start(sessionId, partner)
+
+                dataSource.insertActiveTravelLocationReturningId(initiator, "Las Vegas", 36.17, -115.14)
+                val moved = assertFailsWith<PsyncException> { svc.start(sessionId, initiator) }
+                assertEquals("PSYNC_LOCATION_CHANGED", moved.code)
+
+                val session = svc.get(sessionId, partner)
+                assertEquals("configuring", session.status)
+                assertEquals("Las Vegas", session.locationLabel)
+                assertTrue(session.participants.none { it.approved || it.started })
+                assertTrue(
+                    broadcaster.deltas.replayCache.any { it.type == PsyncBroadcaster.SESSION_UPDATED && it.recipientUserId == partner },
+                )
+            }
+        }
+
+        "a Free initiator in Travel mode can't start a Travel-mode Psync" {
+            runBlocking {
+                val (initiator, _) = seedLinkedPair()
+                dataSource.insertActiveTravelLocationReturningId(initiator, "Las Vegas", 36.17, -115.14)
+                val svc =
+                    PsyncSessionService(
+                        repository = JdbcPsyncSessionRepository(dataSource),
+                        subscriptionService =
+                            com.pynapli.server.subscriptions.SubscriptionService(
+                                com.pynapli.server.subscriptions
+                                    .JdbcSubscriptionRepository(dataSource),
+                            ),
+                        travelLocationRepository =
+                            com.pynapli.server.location
+                                .JdbcTravelLocationRepository(dataSource),
+                    )
+
+                val refused = assertFailsWith<PsyncException> { svc.create(initiator, CreatePsyncSessionRequestDto(deckSize = 10)) }
+                assertEquals("PSYNC_TRAVEL_NOT_ALLOWED", refused.code)
             }
         }
 
@@ -1786,6 +1869,24 @@ private fun DataSource.deliveredInventoryId(
                 SELECT consumed_inventory_id FROM swipe_actions
                 WHERE psync_session_id = ? AND actor_user_id = ? AND target_user_id = ?
                 """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, sessionId)
+                statement.setObject(2, actorUserId)
+                statement.setObject(3, targetUserId)
+                statement.executeQuery().use { rs -> if (rs.next()) rs.getObject(1, UUID::class.java) else null }
+            }
+    }
+
+/** The travel row carried by the swipe like this session delivered, or null. */
+private fun DataSource.deliveredTravelLocationId(
+    sessionId: UUID,
+    actorUserId: UUID,
+    targetUserId: UUID,
+): UUID? =
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                "SELECT travel_location_id FROM swipe_actions WHERE psync_session_id = ? AND actor_user_id = ? AND target_user_id = ?",
             ).use { statement ->
                 statement.setObject(1, sessionId)
                 statement.setObject(2, actorUserId)

@@ -25,6 +25,7 @@ class PsyncSessionService(
     hiddenProfileRepository: com.pynapli.server.safety.HiddenProfileRepository? = null,
     presenceService: com.pynapli.server.presence.PresenceService? = null,
     mediaAssetUrlResolver: com.pynapli.server.media.MediaAssetUrlResolver? = null,
+    travelLocationRepository: com.pynapli.server.location.TravelLocationRepository? = null,
     activityService: com.pynapli.server.activity.ActivityService? = null,
     notificationPublisher: com.pynapli.server.notifications.NotificationPublisher? = null,
     broadcaster: PsyncBroadcaster? = null,
@@ -61,6 +62,8 @@ class PsyncSessionService(
             pineappleInventory = pineappleInventory,
             pineappleRefunds = pineappleRefunds,
             rateLimitService = rateLimitService,
+            travelLocationRepository = travelLocationRepository,
+            subscriptionService = subscriptionService,
             deckTokenCodec = deckTokenCodec,
             clock = clock,
         )
@@ -73,6 +76,7 @@ class PsyncSessionService(
             events = events,
             pineappleRefunds = pineappleRefunds,
             resolveOverdueStarted = { activeSessions.resolveOverdue() },
+            travelLocationRepository = travelLocationRepository,
             clock = clock,
             json = json,
         )

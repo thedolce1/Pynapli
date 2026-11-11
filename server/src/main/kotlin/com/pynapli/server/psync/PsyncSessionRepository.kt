@@ -97,6 +97,14 @@ interface PsyncSessionRepository {
      */
     suspend fun listOverdueStartedSessions(now: Instant): List<PsyncOverdueSession> = emptyList()
 
+    /** The initiator's location moved before the deck started: record it and ask both again. */
+    suspend fun resetLocation(
+        sessionId: UUID,
+        travelLocationId: UUID?,
+        locationLabel: String?,
+        now: Instant,
+    ): MutateOutcome = MutateOutcome.InvalidState
+
     // ---- PS-2: shared deck + private swipes --------------------------------------------
 
     /**

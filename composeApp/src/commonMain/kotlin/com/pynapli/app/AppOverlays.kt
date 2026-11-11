@@ -47,6 +47,7 @@ internal fun PynapliOverlays(
     onPsyncDismiss: () -> Unit,
     onPsyncOpenStore: () -> Unit = {},
     onPsyncOpenProfileHub: () -> Unit = {},
+    psyncTravelCityName: String? = null,
     selectedTab: PynapliTab,
     playingTonightStateHolder: PlayingTonightStateHolder?,
     psyncStateHolder: PsyncStateHolder?,
@@ -163,6 +164,7 @@ internal fun PynapliOverlays(
             },
             onOpenStore = onPsyncOpenStore,
             onOpenProfileHub = onPsyncOpenProfileHub,
+            travelCityName = psyncTravelCityName,
         )
     }
 

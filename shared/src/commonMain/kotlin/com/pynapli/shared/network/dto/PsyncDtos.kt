@@ -40,6 +40,9 @@ data class PsyncSessionDto(
     val startedAt: String? = null,
     val expiresAt: String,
     val participants: List<PsyncParticipantDto>,
+    // Where the deck is dealt: the initiator's Travel mode destination ("Las Vegas, Nevada"), or
+    // null for around the initiator's home location.
+    val locationLabel: String? = null,
 )
 
 @Serializable
