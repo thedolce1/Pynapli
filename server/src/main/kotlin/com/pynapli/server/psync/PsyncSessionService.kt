@@ -24,6 +24,7 @@ class PsyncSessionService(
     blockRepository: com.pynapli.server.safety.BlockRepository? = null,
     hiddenProfileRepository: com.pynapli.server.safety.HiddenProfileRepository? = null,
     presenceService: com.pynapli.server.presence.PresenceService? = null,
+    mediaAssetUrlResolver: com.pynapli.server.media.MediaAssetUrlResolver? = null,
     activityService: com.pynapli.server.activity.ActivityService? = null,
     notificationPublisher: com.pynapli.server.notifications.NotificationPublisher? = null,
     broadcaster: PsyncBroadcaster? = null,
@@ -47,6 +48,7 @@ class PsyncSessionService(
             blockRepository = blockRepository,
             hiddenProfileRepository = hiddenProfileRepository,
             presenceService = presenceService,
+            mediaAssetUrlResolver = mediaAssetUrlResolver,
             deckTokenCodec = deckTokenCodec,
             clock = clock,
         )
