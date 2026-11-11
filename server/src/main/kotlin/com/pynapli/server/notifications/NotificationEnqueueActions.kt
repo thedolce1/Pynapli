@@ -33,20 +33,35 @@ internal class NotificationEnqueueActions(
         val idempotencyKey =
             throttlePolicy?.bucketedIdempotencyKey(clock.instant().epochSecond)
                 ?: notification.idempotencyKey
-        return repository.insertOutboxNotification(
-            notification =
-                NotificationOutboxInsert(
-                    recipientUserId = notification.recipientUserId,
-                    actorUserId = notification.actorUserId,
-                    kind = kind,
-                    subjectId = notification.subjectId,
-                    idempotencyKey = idempotencyKey,
-                    throttleKey = throttlePolicy?.key,
-                    title = copy.title,
-                    body = copy.body,
-                    payloadJson = notification.payload.toPayloadJson(kind, gate.preferences.detailLevel),
-                ),
-            notificationIdFactory = UUID::randomUUID,
-        )
+        // A push is a courtesy on top of the action that caused it (a message, an invite, an
+        // approval). Failing to queue one must never fail that action, so a write error is logged
+        // and dropped. NotificationOutboxKindsIntegrationTest guards the known cause (kind check).
+        return try {
+            repository.insertOutboxNotification(
+                notification =
+                    NotificationOutboxInsert(
+                        recipientUserId = notification.recipientUserId,
+                        actorUserId = notification.actorUserId,
+                        kind = kind,
+                        subjectId = notification.subjectId,
+                        idempotencyKey = idempotencyKey,
+                        throttleKey = throttlePolicy?.key,
+                        title = copy.title,
+                        body = copy.body,
+                        payloadJson = notification.payload.toPayloadJson(kind, gate.preferences.detailLevel),
+                    ),
+                notificationIdFactory = UUID::randomUUID,
+            )
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            // Kind and error type only: never recipients, payloads or bodies (logging rule).
+            logger.warn("Notification outbox write failed for kind {}: {}", kind, error.javaClass.simpleName)
+            null
+        }
+    }
+
+    private companion object {
+        private val logger = org.slf4j.LoggerFactory.getLogger(NotificationEnqueueActions::class.java)
     }
 }

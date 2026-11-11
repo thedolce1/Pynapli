@@ -215,6 +215,7 @@ Server-side notification limits:
 - [x] Stale processing notification rows are recovered.
 - [x] In-app Activity notification banners route to the relevant Activity tab.
 - [x] OS notification deep links open the relevant Activity tab/row fallback path.
+- [x] Every notification kind can be stored. (V84 brings the `notification_outbox` kind check in line with `NOTIFICATION_KINDS`; it had drifted since V24, so for any user with a registered device the Playing Tonight, Psync and album-grant pushes violated it and failed the request that sent them. `NotificationOutboxKindsIntegrationTest` inserts one row per kind against the real schema so the two can't drift again, and an outbox write failure is now logged and dropped rather than failing the action that triggered it.)
 
 ## Do Not Implement
 
