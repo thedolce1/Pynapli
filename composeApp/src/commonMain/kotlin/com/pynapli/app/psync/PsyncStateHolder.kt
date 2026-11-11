@@ -9,6 +9,8 @@ import com.pynapli.shared.network.dto.PsyncDeckResponseDto
 import com.pynapli.shared.network.dto.PsyncRecapDto
 import com.pynapli.shared.network.dto.PsyncSessionDto
 import com.pynapli.shared.network.dto.SubmitPsyncActionRequestDto
+import com.pynapli.shared.network.dto.SuggestPsyncFiltersRequestDto
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +27,16 @@ interface PsyncRepository {
     /** One session by id, whatever its status (the "current" read only returns a live one). */
     suspend fun loadSession(sessionId: String): AppResult<PsyncSessionDto>
 
-    suspend fun createSession(deckSize: Int): AppResult<PsyncSessionDto>
+    suspend fun createSession(
+        deckSize: Int,
+        filters: SwipeDeckRequestDto,
+    ): AppResult<PsyncSessionDto>
+
+    /** Propose different filters. Resets both approvals except the suggester's. */
+    suspend fun suggestFilters(
+        sessionId: String,
+        filters: SwipeDeckRequestDto,
+    ): AppResult<PsyncSessionDto>
 
     suspend fun accept(sessionId: String): AppResult<PsyncSessionDto>
 
@@ -61,7 +72,15 @@ class ApiPsyncRepository(
 
     override suspend fun loadSession(sessionId: String) = apiClient.getPsyncSession(sessionId)
 
-    override suspend fun createSession(deckSize: Int) = apiClient.createPsyncSession(CreatePsyncSessionRequestDto(deckSize = deckSize))
+    override suspend fun createSession(
+        deckSize: Int,
+        filters: SwipeDeckRequestDto,
+    ) = apiClient.createPsyncSession(CreatePsyncSessionRequestDto(filters = filters, deckSize = deckSize))
+
+    override suspend fun suggestFilters(
+        sessionId: String,
+        filters: SwipeDeckRequestDto,
+    ) = apiClient.suggestPsyncFilters(sessionId, SuggestPsyncFiltersRequestDto(filters))
 
     override suspend fun accept(sessionId: String) = apiClient.acceptPsyncSession(sessionId)
 
@@ -139,7 +158,14 @@ class PsyncStateHolder(
         }
     }
 
-    suspend fun createSession(deckSize: Int = DEFAULT_DECK_SIZE) = mutateSession { repository.createSession(deckSize) }
+    /** Invite the linked partner to a session over [filters] with a deck of [deckSize]. */
+    suspend fun createSession(
+        deckSize: Int = DEFAULT_DECK_SIZE,
+        filters: SwipeDeckRequestDto = SwipeDeckRequestDto(),
+    ) = mutateSession { repository.createSession(deckSize, filters) }
+
+    /** Propose different filters before the deck starts; the partner must approve them again. */
+    suspend fun suggestFilters(filters: SwipeDeckRequestDto) = onSession { sessionId -> mutateSession { repository.suggestFilters(sessionId, filters) } }
 
     suspend fun accept() = onSession { mutateSession { repository.accept(it) } }
 
@@ -195,7 +221,14 @@ class PsyncStateHolder(
             }
             is AppResult.Failure -> {
                 setViewerAction(cardToken, previous)
-                _state.update { it.copy(errorMessage = result.error.message) }
+                if (result.error.code in SESSION_GONE_CODES) {
+                    // The session ended under us (partner left, link ended, deadline passed) and
+                    // the realtime update was missed. Follow it to the recap instead of leaving a
+                    // dead deck with an error on it.
+                    refresh()
+                } else {
+                    _state.update { it.copy(errorMessage = result.error.message) }
+                }
             }
         }
     }
@@ -284,5 +317,6 @@ class PsyncStateHolder(
 
     private companion object {
         const val DEFAULT_DECK_SIZE = 25
+        val SESSION_GONE_CODES = setOf("PSYNC_INVALID_STATE", "PSYNC_SESSION_NOT_FOUND")
     }
 }
