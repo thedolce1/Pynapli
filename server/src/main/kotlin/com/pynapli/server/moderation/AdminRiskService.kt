@@ -4,6 +4,7 @@ import java.util.UUID
 
 class AdminRiskService(
     private val repository: AdminRiskRepository,
+    private val travelEnforcement: com.pynapli.server.safety.TravelRiskEnforcement? = null,
 ) {
     suspend fun listRiskStates(
         tierFilterText: String?,
@@ -51,12 +52,17 @@ class AdminRiskService(
             tierText?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
                 ?: throw ModerationException("INVALID_RISK_TIER")
         if (tier !in RISK_TIERS) throw ModerationException("INVALID_RISK_TIER")
-        return repository.setRiskTier(
-            userId = userIdText.toUuidOrThrow(),
-            tier = tier,
-            actorId = actorId.normalizedActorIdOrThrow(),
-            reason = reason.normalizedReasonOrThrow(),
-        ) ?: throw ModerationException("RISK_REVIEW_NOT_FOUND")
+        val userId = userIdText.toUuidOrThrow()
+        val result =
+            repository.setRiskTier(
+                userId = userId,
+                tier = tier,
+                actorId = actorId.normalizedActorIdOrThrow(),
+                reason = reason.normalizedReasonOrThrow(),
+            ) ?: throw ModerationException("RISK_REVIEW_NOT_FOUND")
+        // An admin raising the tier is how Travel mode is "temporarily disabled" for an account.
+        travelEnforcement?.onTierChanged(userId, tier)
+        return result
     }
 
     suspend fun markRiskReviewed(
@@ -74,23 +80,35 @@ class AdminRiskService(
         userIdText: String,
         actorId: String,
         reason: String?,
-    ): AdminRiskActionRecord =
-        repository.lockAccount(
-            userId = userIdText.toUuidOrThrow(),
-            actorId = actorId.normalizedActorIdOrThrow(),
-            reason = reason.normalizedReasonOrThrow(),
-        ) ?: throw ModerationException("RISK_REVIEW_NOT_FOUND")
+    ): AdminRiskActionRecord {
+        val userId = userIdText.toUuidOrThrow()
+        val result =
+            repository.lockAccount(
+                userId = userId,
+                actorId = actorId.normalizedActorIdOrThrow(),
+                reason = reason.normalizedReasonOrThrow(),
+            ) ?: throw ModerationException("RISK_REVIEW_NOT_FOUND")
+        // A locked or banned account must not keep an active trip either.
+        travelEnforcement?.onTierChanged(userId, "terminate")
+        return result
+    }
 
     suspend fun banAccount(
         userIdText: String,
         actorId: String,
         reason: String?,
-    ): AdminRiskActionRecord =
-        repository.banAccount(
-            userId = userIdText.toUuidOrThrow(),
-            actorId = actorId.normalizedActorIdOrThrow(),
-            reason = reason.normalizedReasonOrThrow(),
-        ) ?: throw ModerationException("RISK_REVIEW_NOT_FOUND")
+    ): AdminRiskActionRecord {
+        val userId = userIdText.toUuidOrThrow()
+        val result =
+            repository.banAccount(
+                userId = userId,
+                actorId = actorId.normalizedActorIdOrThrow(),
+                reason = reason.normalizedReasonOrThrow(),
+            ) ?: throw ModerationException("RISK_REVIEW_NOT_FOUND")
+        // A locked or banned account must not keep an active trip either.
+        travelEnforcement?.onTierChanged(userId, "terminate")
+        return result
+    }
 
     private fun String?.toLimitOrThrow(): Int {
         val normalized = this?.takeIf { it.isNotBlank() } ?: return DEFAULT_LIMIT

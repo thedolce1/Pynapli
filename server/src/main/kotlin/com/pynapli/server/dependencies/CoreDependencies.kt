@@ -123,7 +123,13 @@ internal fun buildCoreDependencies(
     val blockService = BlockService(blockRepository)
     val hiddenProfileRepository = JdbcHiddenProfileRepository(database.dataSource)
     val hiddenProfileService = HiddenProfileService(hiddenProfileRepository)
-    val riskService = RiskService(JdbcRiskRepository(database.dataSource))
+    val riskService =
+        RiskService(
+            JdbcRiskRepository(database.dataSource),
+            travelEnforcement =
+                com.pynapli.server.safety
+                    .TravelRiskEnforcement(travelLocationRepository),
+        )
     val riskPolicyService = RiskPolicyService(riskService)
     val locationService =
         LocationService(
