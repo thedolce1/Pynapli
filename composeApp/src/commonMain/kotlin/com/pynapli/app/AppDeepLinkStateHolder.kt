@@ -54,6 +54,9 @@ class AppDeepLinkStateHolder {
 
     fun openPsync() = openSimpleTarget(TARGET_PSYNC)
 
+    /** The linked-partner panel in the profile hub (link invites and the current link). */
+    fun openPartner() = openSimpleTarget(TARGET_PARTNER)
+
     private fun openSimpleTarget(target: String) {
         _state.value =
             AppDeepLinkCommand(
@@ -75,5 +78,6 @@ class AppDeepLinkStateHolder {
         const val TARGET_PROFILE = "profile"
         const val TARGET_TONIGHT = "tonight"
         const val TARGET_PSYNC = "psync"
+        const val TARGET_PARTNER = "partner"
     }
 }

@@ -44,7 +44,8 @@ class ProfileLinkService(
                 kind = NotificationKind.PROFILE_LINK_INVITE,
                 subjectId = invitation.linkId,
                 idempotencyKey = "profile_link_invite:${invitation.linkId}:$targetUserId",
-                payload = mapOf("linkId" to invitation.linkId.toString()),
+                // Opens the linked-partner panel, where the invite is accepted or declined.
+                payload = mapOf("target" to "partner", "linkId" to invitation.linkId.toString()),
             ),
         )
         return getSummary(requesterUserId)
@@ -74,7 +75,7 @@ class ProfileLinkService(
                 kind = NotificationKind.PROFILE_LINK_ACCEPTED,
                 subjectId = linkId,
                 idempotencyKey = "profile_link_accepted:$linkId:${invitation.requesterUserId}",
-                payload = mapOf("linkId" to linkId.toString()),
+                payload = mapOf("target" to "partner", "linkId" to linkId.toString()),
             ),
         )
 

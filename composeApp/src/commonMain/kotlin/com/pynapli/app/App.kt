@@ -87,6 +87,10 @@ fun PynapliApp(
                 psyncVisible = false
             },
             onOpenProfileHub = { profileSurface = ProfileSurface.Hub },
+            onOpenPartnerPanel = {
+                profileSurface = ProfileSurface.Hub
+                graph.profileHubStateHolder.openPartner()
+            },
             onOpenTonight = { tonightVisible = true },
             onOpenPsync = { psyncVisible = true },
         )

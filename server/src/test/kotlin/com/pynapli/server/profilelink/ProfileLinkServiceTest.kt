@@ -85,6 +85,8 @@ class ProfileLinkServiceTest {
             assertEquals(outgoing.linkId, incoming.linkId)
             assertEquals(ProfileLinkDirection.INCOMING, incoming.direction)
             assertEquals(NotificationKind.PROFILE_LINK_INVITE, notifications.events.single().kind)
+            // Opens the linked-partner panel, where the invite is answered (it is not in Activity).
+            assertEquals("partner", notifications.events.single().payload["target"])
             assertEquals(target, notifications.events.single().recipientUserId)
         }
 
@@ -119,6 +121,7 @@ class ProfileLinkServiceTest {
             val requesterCurrent = assertNotNull(service.getSummary(requester).current)
             assertEquals(recipient.toString(), requesterCurrent.otherUserId)
             assertEquals(NotificationKind.PROFILE_LINK_ACCEPTED, notifications.events.last().kind)
+            assertEquals("partner", notifications.events.last().payload["target"])
             assertEquals(requester, notifications.events.last().recipientUserId)
         }
 

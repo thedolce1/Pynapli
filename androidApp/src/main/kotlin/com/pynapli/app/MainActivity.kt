@@ -221,6 +221,8 @@ class MainActivity : ComponentActivity() {
             AppDeepLinkStateHolder.TARGET_TONIGHT -> graph.deepLinkStateHolder.openTonight()
 
             AppDeepLinkStateHolder.TARGET_PSYNC -> graph.deepLinkStateHolder.openPsync()
+
+            AppDeepLinkStateHolder.TARGET_PARTNER -> graph.deepLinkStateHolder.openPartner()
         }
     }
 

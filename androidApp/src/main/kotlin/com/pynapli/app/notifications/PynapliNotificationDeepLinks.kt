@@ -70,6 +70,10 @@ object PynapliNotificationDeepLinks {
             "tonight_ended",
             -> AppDeepLinkStateHolder.TARGET_TONIGHT
             "psync_invite" -> AppDeepLinkStateHolder.TARGET_PSYNC
+            // Link invites are answered in the linked-partner panel; they never appear in Activity.
+            "profile_link_invite",
+            "profile_link_accepted",
+            -> AppDeepLinkStateHolder.TARGET_PARTNER
             else -> AppDeepLinkStateHolder.TARGET_ACTIVITY
         }
 
