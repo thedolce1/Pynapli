@@ -39,6 +39,7 @@ import com.pynapli.app.design.icons.filled.Search
 import com.pynapli.app.design.icons.filled.VerifiedUser
 import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.location.TravelLocationUiState
+import com.pynapli.shared.core.config.LegalLinks
 import com.pynapli.shared.network.dto.TravelPlaceDto
 import kotlinx.coroutines.delay
 
@@ -137,6 +138,15 @@ internal fun TravelModeSheet(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    }
+                    if (state.searchResults.isNotEmpty()) {
+                        // CC BY 4.0: attribute the data where it is shown.
+                        Text(
+                            text = LegalLinks.GEONAMES_ATTRIBUTION,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp).testTag(TravelModeTags.ATTRIBUTION),
                         )
                     }
                 }
@@ -270,6 +280,7 @@ private fun TravelVerificationBanner(onVerify: () -> Unit) {
 private const val SEARCH_DEBOUNCE_MILLIS = 300L
 
 internal object TravelModeTags {
+    const val ATTRIBUTION = "travel_mode_attribution"
     const val OPEN_SHEET: String = "travel-mode-open-sheet"
     const val SHEET: String = "travel-mode-sheet"
     const val CLEAR: String = "travel-mode-clear"

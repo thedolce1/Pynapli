@@ -13,6 +13,6 @@ Datasets bundled into the product, with their licenses and attribution obligatio
 - **Regeneration:** `scripts/generate-travel-places.sh <workdir>` (header comment documents the
   source download URLs). The TSV header carries a version stamp the server's startup loader uses
   to decide whether to reload `travel_places`.
-- **Follow-up (app stores):** surface the attribution line in the app's open-source/licenses
-  screen before public release; server-side bundling alone does not satisfy CC BY display
-  expectations for end users.
+- **In the app:** the attribution line is shown under Travel mode search results (where the data
+  is displayed) and as "Place data: GeoNames (CC BY 4.0)" in Settings > Legal, linking to
+  geonames.org (`LegalLinks.GEONAMES_ATTRIBUTION` / `LegalLinks.GEONAMES`).
