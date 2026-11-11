@@ -18,6 +18,11 @@ object NotificationKind {
     const val PARTNER_CHAT_INVITE = "partner_chat_invite"
     const val TONIGHT_INVITE = "tonight_invite"
     const val TONIGHT_REMINDER = "tonight_reminder"
+
+    // A together session's other partner answered or ended it (sent to the one who didn't act).
+    const val TONIGHT_ACCEPTED = "tonight_accepted"
+    const val TONIGHT_DECLINED = "tonight_declined"
+    const val TONIGHT_ENDED = "tonight_ended"
     const val PSYNC_INVITE = "psync_invite"
     const val SYSTEM_SAFETY = "system_safety"
 }

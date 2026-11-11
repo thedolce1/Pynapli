@@ -68,9 +68,7 @@ internal class PsyncSessionEvents(
                 idempotencyKey = "psync_invite:$sessionId:$inviteeUserId",
                 payload =
                     mapOf(
-                        "target" to "activity",
-                        "activityTab" to "requests",
-                        "activityEventType" to "psync_invite",
+                        "target" to "psync",
                         "sessionId" to sessionId.toString(),
                     ),
             ),

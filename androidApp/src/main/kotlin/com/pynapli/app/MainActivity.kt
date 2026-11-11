@@ -216,6 +216,11 @@ class MainActivity : ComponentActivity() {
                     conversationId = PynapliNotificationDeepLinks.conversationIdFromIntent(intent),
                 )
             }
+
+            // Partner invites open the screen where they are answered, not the Activity list.
+            AppDeepLinkStateHolder.TARGET_TONIGHT -> graph.deepLinkStateHolder.openTonight()
+
+            AppDeepLinkStateHolder.TARGET_PSYNC -> graph.deepLinkStateHolder.openPsync()
         }
     }
 

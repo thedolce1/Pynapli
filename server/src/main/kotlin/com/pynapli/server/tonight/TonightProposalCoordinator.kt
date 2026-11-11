@@ -49,7 +49,7 @@ internal class TonightProposalCoordinator(
                     kind = NotificationKind.TONIGHT_INVITE,
                     subjectId = sessionId,
                     idempotencyKey = "tonight_invite:$sessionId:$partnerId",
-                    payload = mapOf("sessionId" to sessionId.toString()),
+                    payload = mapOf("target" to "tonight", "sessionId" to sessionId.toString()),
                 ),
             )
         }

@@ -72,6 +72,7 @@ import com.pynapli.app.design.icons.automirrored.filled.Chat
 import com.pynapli.app.design.icons.filled.Add
 import com.pynapli.app.design.icons.filled.DarkMode
 import com.pynapli.app.design.pynapliIconButtonSize
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -97,6 +98,22 @@ fun PlayingTonightScreen(
 
     LaunchedEffect(Unit) { stateHolder.load() }
 
+    // No realtime channel for Playing Tonight: while a together session depends on the partner,
+    // re-check it on a slow timer so an approval, decline or end shows up without leaving.
+    val watchPartner = stateHolder.shouldWatchPartner(viewerUserId) && state.currentSession != null
+    LaunchedEffect(watchPartner, state.currentSession?.id) {
+        while (watchPartner) {
+            delay(TONIGHT_PARTNER_REFETCH_MILLIS)
+            stateHolder.refreshSession()
+        }
+    }
+    state.notice?.let { notice ->
+        LaunchedEffect(notice) {
+            delay(TONIGHT_NOTICE_VISIBLE_MILLIS)
+            stateHolder.clearNotice()
+        }
+    }
+
     val floater: @Composable (Modifier) -> Unit = { floaterModifier ->
         TonightTopFloater(
             session = state.currentSession,
@@ -120,6 +137,7 @@ fun PlayingTonightScreen(
     }
     val error: @Composable (Modifier) -> Unit = { errorModifier ->
         state.errorMessage?.let { message -> TonightError(message, stateHolder::clearError, errorModifier) }
+        state.notice?.let { message -> TonightError(message, stateHolder::clearNotice, errorModifier, isError = false) }
     }
 
     if (currentPynapliWindowSizeClass() == PynapliWindowSizeClass.Compact) {
@@ -251,6 +269,8 @@ private fun TonightError(
     message: String,
     onDismiss: () -> Unit,
     modifier: Modifier,
+    // False for a passing notice: same chip, quieter border, its own test tag.
+    isError: Boolean = true,
 ) {
     Text(
         text = message,
@@ -260,10 +280,10 @@ private fun TonightError(
             modifier
                 .clip(PynapliShape.CardShape)
                 .background(PynapliColors.TonightMapScrim)
-                .border(1.dp, PynapliColors.Warning.copy(alpha = 0.5f), PynapliShape.CardShape)
+                .border(1.dp, if (isError) PynapliColors.Warning.copy(alpha = 0.5f) else PynapliColors.Border, PynapliShape.CardShape)
                 .handCursor()
                 .clickable(onClick = onDismiss)
-                .testTag(PlayingTonightTags.ERROR)
+                .testTag(if (isError) PlayingTonightTags.ERROR else PlayingTonightTags.NOTICE)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
     )
 }
@@ -820,6 +840,7 @@ internal object PlayingTonightTags {
     const val APPROVE = "tonight-approve"
     const val DECLINE = "tonight-decline"
     const val WAITING = "tonight-waiting"
+    const val NOTICE = "tonight-notice"
     const val ERROR = "tonight-error"
 
     fun row(sessionId: String): String = "tonight-row-$sessionId"
@@ -828,3 +849,6 @@ internal object PlayingTonightTags {
 
     fun intentPill(label: String): String = "tonight-pill-$label"
 }
+
+private const val TONIGHT_PARTNER_REFETCH_MILLIS = 15_000L
+private const val TONIGHT_NOTICE_VISIBLE_MILLIS = 5_000L
