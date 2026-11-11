@@ -41,6 +41,7 @@ internal fun PynapliAppEffects(
     onSelectTab: (PynapliTab) -> Unit,
     onClearOverlays: () -> Unit,
     onOpenProfileHub: () -> Unit,
+    onOpenPartnerPanel: () -> Unit = onOpenProfileHub,
     onOpenTonight: () -> Unit,
     onOpenPsync: () -> Unit,
 ) {
@@ -144,6 +145,8 @@ internal fun PynapliAppEffects(
                 AppDeepLinkStateHolder.TARGET_STORE -> onSelectTab(PynapliTab.Store)
 
                 AppDeepLinkStateHolder.TARGET_PROFILE -> onOpenProfileHub()
+
+                AppDeepLinkStateHolder.TARGET_PARTNER -> onOpenPartnerPanel()
 
                 // Each overlay opens over the tab that owns its entry point, so closing it lands
                 // where the in-app button would have.
