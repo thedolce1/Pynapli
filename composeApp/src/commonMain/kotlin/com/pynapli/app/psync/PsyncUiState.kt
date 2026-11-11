@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.pynapli.shared.network.dto.PsyncDeckCardDto
 import com.pynapli.shared.network.dto.PsyncRecapDto
 import com.pynapli.shared.network.dto.PsyncSessionDto
+import com.pynapli.shared.network.dto.SwipeCardDto
 
 /**
  * Where the viewer sits in the Psync flow, derived from the server-owned session status.
@@ -18,6 +19,12 @@ enum class PsyncPhase {
     PAUSED, // a partner paused
     COMPLETED, // resolved, recap available
     ENDED, // expired or cancelled
+    ;
+
+    companion object {
+        /** Over, one way or another: nothing more to do in this session. */
+        val FINISHED = setOf(COMPLETED, ENDED)
+    }
 }
 
 /**
@@ -38,6 +45,9 @@ data class PsyncUiState(
     val recap: PsyncRecapUi? = null,
 ) {
     val phase: PsyncPhase get() = session?.phase ?: PsyncPhase.IDLE
+
+    /** Cards the viewer has not decided on yet, in deck order. */
+    val remainingCards: List<PsyncDeckCardUi> get() = deck.filter { it.viewerAction == null }
 }
 
 data class PsyncSessionUi(
@@ -72,6 +82,8 @@ data class PsyncDeckCardUi(
     val displayName: String,
     val online: Boolean,
     val viewerAction: String?,
+    // The full card as dealt (photos, age, distance, badges), rendered by the shared Swipe card.
+    val card: SwipeCardDto,
 )
 
 /** [Immutable] for the same reason as [PsyncUiState]: `togetherMatches` is a `List`. */
@@ -111,6 +123,7 @@ fun PsyncDeckCardDto.toUi(): PsyncDeckCardUi =
         displayName = card.displayName,
         online = card.online,
         viewerAction = viewerAction,
+        card = card,
     )
 
 fun PsyncRecapDto.toUi(): PsyncRecapUi =

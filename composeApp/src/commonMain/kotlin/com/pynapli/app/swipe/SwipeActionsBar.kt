@@ -106,8 +106,9 @@ internal fun SwipeActions(
     }
 }
 
+/** One round action under a card stack. Shared with the Psync deck so both decks read the same. */
 @Composable
-private fun SwipeActionButton(
+internal fun SwipeActionButton(
     enabled: Boolean,
     isSubmitting: Boolean,
     testTag: String,

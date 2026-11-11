@@ -3,8 +3,10 @@ package com.pynapli.app.psync
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
+import com.pynapli.app.swipe.SwipeTestTags
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CurrentPsyncSessionDto
 import com.pynapli.shared.network.dto.PsyncActionResponseDto
@@ -47,11 +49,14 @@ private fun card(token: String): PsyncDeckCardDto =
     )
 
 private class StaticPsyncRepository(
-    private val current: PsyncSessionDto?,
+    var current: PsyncSessionDto?,
     private val deck: List<PsyncDeckCardDto> = emptyList(),
     private val recap: PsyncRecapDto? = null,
 ) : PsyncRepository {
-    override suspend fun loadCurrentSession() = AppResult.Success(CurrentPsyncSessionDto(session = current))
+    // Like the server, only a live session is "current"; a finished one is read by id.
+    override suspend fun loadCurrentSession() = AppResult.Success(CurrentPsyncSessionDto(session = current?.takeIf { it.status !in setOf("completed", "expired", "cancelled") }))
+
+    override suspend fun loadSession(sessionId: String) = AppResult.Success(current ?: session("cancelled"))
 
     override suspend fun createSession(deckSize: Int) = AppResult.Success(current ?: session("invited"))
 
@@ -104,12 +109,18 @@ class PsyncSessionScreenTest {
             setContent { PsyncSessionScreen(stateHolder = holder(repo), onBack = {}) }
             waitForIdle()
 
-            onNodeWithTag(PsyncSessionTags.CARD_NAME).assertIsDisplayed()
-            onNodeWithTag(PsyncSessionTags.PROGRESS).assertIsDisplayed()
-            // Swiping the first card locally advances to the second (still a card on screen).
+            // The deck is the shared Swipe card stack, not a placeholder.
+            onNodeWithTag(SwipeTestTags.TOP_CARD).assertIsDisplayed()
+            onNodeWithText("0 of 2 reviewed").assertIsDisplayed()
+            // Liking the first card flies it out and advances to the second.
             onNodeWithTag(PsyncSessionTags.LIKE_BUTTON).performClick()
             waitForIdle()
-            onNodeWithTag(PsyncSessionTags.CARD_NAME).assertIsDisplayed()
+            onNodeWithText("1 of 2 reviewed").assertIsDisplayed()
+            onNodeWithTag(SwipeTestTags.TOP_CARD).assertIsDisplayed()
+            // After the last card the viewer waits for their partner.
+            onNodeWithTag(PsyncSessionTags.PASS_BUTTON).performClick()
+            waitForIdle()
+            onNodeWithTag(PsyncSessionTags.WAITING).assertExists()
         }
 
     @OptIn(ExperimentalTestApi::class)
@@ -127,8 +138,12 @@ class PsyncSessionScreenTest {
                     filtersSummary = "25km",
                     togetherMatches = listOf(PsyncMatchDto(targetUserId = "t-a", displayName = "Target a", kind = "together")),
                 )
-            val repo = StaticPsyncRepository(current = session("completed"), recap = recap)
-            setContent { PsyncSessionScreen(stateHolder = holder(repo), onBack = {}) }
+            // The viewer is in a live session that then finishes (their partner's last swipe).
+            val repo = StaticPsyncRepository(current = session("active"), recap = recap)
+            val stateHolder = holder(repo)
+            kotlinx.coroutines.runBlocking { stateHolder.refresh() }
+            repo.current = session("completed")
+            setContent { PsyncSessionScreen(stateHolder = stateHolder, onBack = {}) }
             waitForIdle()
 
             onNodeWithTag(PsyncSessionTags.RECAP).assertIsDisplayed()
