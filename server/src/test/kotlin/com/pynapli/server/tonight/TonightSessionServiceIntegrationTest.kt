@@ -337,6 +337,47 @@ class TonightSessionServiceIntegrationTest :
             }
         }
 
+        "unlinking ends a live together session, so the pair leaves the public feed" {
+            runBlocking {
+                val user = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                dataSource.insertUserWithProfile(user, "Inviting Ivy")
+                dataSource.insertUserWithProfile(partner, "Pending Pete")
+                dataSource.insertActiveLink(user, partner)
+                val service = paidService()
+                val together = service.propose(user, ProposeTonightSessionRequestDto(mode = "together", intent = "together"))
+                service.approve(UUID.fromString(together.id), partner)
+                assertEquals("active", service.current(user).session?.status)
+
+                assertTrue(
+                    com.pynapli.server.profilelink
+                        .JdbcProfileLinkRepository(dataSource)
+                        .unlinkCurrent(user),
+                )
+
+                assertEquals(null, service.current(user).session)
+                assertEquals(null, service.current(partner).session)
+            }
+        }
+
+        "unlinking leaves a solo session alone" {
+            runBlocking {
+                val user = UUID.randomUUID()
+                val partner = UUID.randomUUID()
+                dataSource.insertUserWithProfile(user, "Solo Sam")
+                dataSource.insertUserWithProfile(partner, "Partner Pat")
+                dataSource.insertActiveLink(user, partner)
+                val service = paidService()
+                service.propose(user, ProposeTonightSessionRequestDto(mode = "solo", intent = "solo"))
+
+                com.pynapli.server.profilelink
+                    .JdbcProfileLinkRepository(dataSource)
+                    .unlinkCurrent(user)
+
+                assertEquals("active", service.current(user).session?.status)
+            }
+        }
+
         "the proposer is told when their partner approves, declines or ends" {
             runBlocking {
                 val user = UUID.randomUUID()

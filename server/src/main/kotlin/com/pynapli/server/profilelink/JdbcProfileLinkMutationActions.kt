@@ -177,6 +177,24 @@ internal class JdbcProfileLinkMutationActions(
                         WHERE partner_link_id IN (SELECT id FROM unlinked)
                           AND status IN ('active', 'paused')
                         RETURNING id
+                    ),
+                    -- PLAYING_TONIGHT_SPEC: "Session ends if partner link ends." Without this a
+                    -- couple who unlinked could stay live on the public Tonight feed as a pair.
+                    ended_tonight AS (
+                        UPDATE tonight_sessions ts
+                        SET status = 'ended', ended_at = now()
+                        WHERE EXISTS (SELECT 1 FROM unlinked)
+                          AND ts.mode = 'together'
+                          AND ts.status IN ('proposed', 'active')
+                          AND EXISTS (
+                              SELECT 1 FROM tonight_session_participants p
+                              WHERE p.session_id = ts.id AND p.user_id = ?
+                          )
+                          AND EXISTS (
+                              SELECT 1 FROM tonight_session_participants p
+                              WHERE p.session_id = ts.id AND p.user_id = (SELECT partner_user_id FROM current_link)
+                          )
+                        RETURNING ts.id
                     )
                     SELECT count(*) AS unlinked_count FROM unlinked
                     """.trimIndent(),
@@ -184,6 +202,7 @@ internal class JdbcProfileLinkMutationActions(
                     statement.setObject(1, userId)
                     statement.setObject(2, userId)
                     statement.setObject(3, userId)
+                    statement.setObject(4, userId)
                     statement.executeQuery().use { rs ->
                         rs.next()
                         rs.getInt("unlinked_count") > 0
