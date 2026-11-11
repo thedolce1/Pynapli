@@ -61,17 +61,19 @@ class AppSettingsLegalLinksTest {
                 }
             }
 
-            onNodeWithTag(AppSettingsTestTags.LIST).performScrollToNode(hasText("Community Guidelines"))
+            onNodeWithTag(AppSettingsTestTags.LIST).performScrollToNode(hasText("Place data: GeoNames (CC BY 4.0)"))
             onNodeWithText("Legal").assertExists()
             onNodeWithText("Terms of Service").performClick()
             onNodeWithText("Privacy Policy").performClick()
             onNodeWithText("Community Guidelines").performClick()
+            onNodeWithText("Place data: GeoNames (CC BY 4.0)").performClick()
 
             assertEquals(
                 listOf(
                     LegalLinks.TERMS_OF_SERVICE,
                     LegalLinks.PRIVACY_POLICY,
                     LegalLinks.COMMUNITY_GUIDELINES,
+                    LegalLinks.GEONAMES,
                 ),
                 openedUris,
             )

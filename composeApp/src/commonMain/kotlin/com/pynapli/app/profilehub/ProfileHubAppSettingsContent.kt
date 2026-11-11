@@ -200,6 +200,8 @@ internal fun AppSettingsContent(
                     LegalLinkRow("Terms of Service") { uriHandler.openUri(LegalLinks.TERMS_OF_SERVICE) }
                     LegalLinkRow("Privacy Policy") { uriHandler.openUri(LegalLinks.PRIVACY_POLICY) }
                     LegalLinkRow("Community Guidelines") { uriHandler.openUri(LegalLinks.COMMUNITY_GUIDELINES) }
+                    // CC BY 4.0 attribution for the Travel mode place data.
+                    LegalLinkRow("Place data: GeoNames (CC BY 4.0)") { uriHandler.openUri(LegalLinks.GEONAMES) }
                 }
             }
         }

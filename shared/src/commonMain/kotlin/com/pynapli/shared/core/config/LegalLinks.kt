@@ -10,4 +10,9 @@ object LegalLinks {
     const val TERMS_OF_SERVICE: String = "https://pynapli.com/terms"
     const val PRIVACY_POLICY: String = "https://pynapli.com/privacy"
     const val COMMUNITY_GUIDELINES: String = "https://pynapli.com/guidelines"
+
+    // Travel mode destinations come from GeoNames, licensed CC BY 4.0, which requires attribution
+    // where people see the data (docs/THIRD_PARTY_DATA.md).
+    const val GEONAMES: String = "https://www.geonames.org"
+    const val GEONAMES_ATTRIBUTION: String = "Place data from GeoNames, licensed under CC BY 4.0."
 }
