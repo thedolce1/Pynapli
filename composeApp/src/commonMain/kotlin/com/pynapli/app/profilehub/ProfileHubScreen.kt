@@ -52,6 +52,7 @@ fun ProfileHubScreen(
     onSetDiscreetIcon: (Boolean) -> Unit = {},
     discreetIconSupported: Boolean = true,
     modifier: Modifier = Modifier,
+    onStartPsync: (() -> Unit)? = null,
 ) {
     val state by stateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -113,6 +114,7 @@ fun ProfileHubScreen(
             onPartnerVisibilityChanged = stateHolder::updatePartnerVisibility,
             onSave = { scope.launch { stateHolder.savePartner() } },
             modifier = modifier,
+            onStartPsync = onStartPsync,
         )
     } else if (state.activityVisible) {
         ActivityControlsContent(

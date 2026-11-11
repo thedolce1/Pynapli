@@ -17,9 +17,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.pynapli.app.design.PynapliButton
 import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.profilelink.ProfileLinkUi
@@ -45,6 +47,8 @@ internal fun PartnerManagementContent(
     onPartnerVisibilityChanged: (String) -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
+    // PSYNC_SPEC entry point: "Partner section in profile/settings". Null hides it.
+    onStartPsync: (() -> Unit)? = null,
 ) {
     val hasCurrentPartner = profileLinksState.current != null
     Column(
@@ -88,6 +92,17 @@ internal fun PartnerManagementContent(
                             actionLabel = "Unlink",
                             onAction = onUnlink,
                         )
+                        if (onStartPsync != null) {
+                            PynapliButton(
+                                text = "Swipe together with Psync",
+                                onClick = onStartPsync,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        .testTag(ProfileHubPartnerTags.START_PSYNC),
+                            )
+                        }
                     } else {
                         Text(
                             text = "No linked partner. Open a profile to send a link invite.",
@@ -238,4 +253,9 @@ private fun PartnerInviteRow(
             }
         }
     }
+}
+
+/** Stable test tags for the linked-partner panel. */
+object ProfileHubPartnerTags {
+    const val START_PSYNC = "profile_hub_partner_start_psync"
 }

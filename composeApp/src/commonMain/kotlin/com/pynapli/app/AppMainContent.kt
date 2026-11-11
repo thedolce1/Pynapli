@@ -122,6 +122,7 @@ internal fun ColumnScope.PynapliMainContent(
                 onOpenStore = onOpenStore,
                 onSetDiscreetIcon = onSetDiscreetIcon,
                 discreetIconSupported = discreetIconSupported,
+                onOpenPsync = onOpenPsync,
             )
         profileSurface == ProfileSurface.MediaAlbums -> {
             MediaAlbumsScreen(
@@ -225,6 +226,7 @@ private fun ColumnScope.ProfileHubSurface(
     onOpenStore: () -> Unit,
     onSetDiscreetIcon: (Boolean) -> Unit,
     discreetIconSupported: Boolean,
+    onOpenPsync: (() -> Unit)? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val messagesState by messagesStateHolder.state.collectAsState()
@@ -296,6 +298,13 @@ private fun ColumnScope.ProfileHubSurface(
         },
         onSetDiscreetIcon = onSetDiscreetIcon,
         discreetIconSupported = discreetIconSupported,
+        onStartPsync =
+            onOpenPsync?.let { open ->
+                {
+                    onProfileSurface(ProfileSurface.None)
+                    open()
+                }
+            },
         // Cap + center the settings column on wide windows so it reads as an
         // intentional column instead of stretching edge-to-edge (WEB_PWA_GAMEPLAN).
         modifier =
