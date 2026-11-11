@@ -357,8 +357,10 @@ fun PynapliApp(
                 selectedTab = PynapliTab.Store
             },
             onPsyncOpenProfileHub = {
+                // Straight to the linked-partner panel, where linking is managed.
                 psyncVisible = false
                 profileSurface = ProfileSurface.Hub
+                graph.profileHubStateHolder.openPartner()
             },
             selectedTab = selectedTab,
             playingTonightStateHolder = graph.playingTonightStateHolder,
