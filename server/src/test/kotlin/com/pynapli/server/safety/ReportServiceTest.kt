@@ -46,6 +46,47 @@ class ReportServiceTest {
         }
 
     @Test
+    fun reportingSomeoneHidesThemFromTheReporter() =
+        runBlocking {
+            val reporterId = UUID.randomUUID()
+            val reportedId = UUID.randomUUID()
+            val hidden = mutableListOf<Pair<UUID, UUID>>()
+            val hiddenRepository =
+                object : HiddenProfileRepository {
+                    override suspend fun hideProfile(
+                        hiderUserId: UUID,
+                        hiddenUserId: UUID,
+                        hideIdFactory: () -> UUID,
+                    ): HiddenProfileRecord {
+                        hidden += hiderUserId to hiddenUserId
+                        return HiddenProfileRecord(UUID.randomUUID(), hiderUserId, hiddenUserId, java.time.Instant.now())
+                    }
+
+                    override suspend fun unhideProfile(
+                        hiderUserId: UUID,
+                        hiddenUserId: UUID,
+                    ): Boolean = true
+
+                    override suspend fun listHiddenProfiles(hiderUserId: UUID) = emptyList<HiddenProfileSummaryRecord>()
+
+                    override suspend fun listHiddenProfileIds(hiderUserId: UUID) = emptySet<UUID>()
+                }
+            val service = ReportService(InMemoryReportRepository(), hiddenProfileRepository = hiddenRepository)
+
+            service.submitReport(
+                reporterUserId = reporterId,
+                request =
+                    CreateReportRequestDto(
+                        reportedUserId = reportedId.toString(),
+                        targetType = ReportTargetType.PROFILE,
+                        category = ReportCategory.SPAM_OR_FAKE_PROFILE,
+                    ),
+            )
+
+            assertEquals(listOf(reporterId to reportedId), hidden)
+        }
+
+    @Test
     fun submitReportRejectsSelfReport() =
         runBlocking {
             val viewerId = UUID.fromString("00000000-0000-0000-0000-000000000010")

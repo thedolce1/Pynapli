@@ -15,6 +15,9 @@ class ReportService(
     private val riskSignalPublisher: ReportRiskSignalPublisher? = null,
     private val rateLimitService: RateLimitService? = null,
     private val supportEmail: String = "support@pynapli.com",
+    // Reporting someone takes them out of the reporter's discovery straight away, as hiding does
+    // (undoable from the hidden list). Null leaves reports as record-only.
+    private val hiddenProfileRepository: HiddenProfileRepository? = null,
 ) {
     suspend fun submitReport(
         reporterUserId: UUID,
@@ -59,6 +62,13 @@ class ReportService(
             }.onFailure { error ->
                 logger.warn("Failed to record report risk signal for report {}", record.id, error)
             }
+        }
+
+        // Nobody should have to keep seeing someone they just reported: Grid, Swipe, Top Picks and
+        // live Psync decks all leave hidden profiles out. Best effort; the report already stands.
+        hiddenProfileRepository?.let { hidden ->
+            runCatching { hidden.hideProfile(hiderUserId = reporterUserId, hiddenUserId = reportedUserId) }
+                .onFailure { error -> logger.warn("Failed to hide reported profile for report {}", record.id, error) }
         }
 
         return ReportDto(

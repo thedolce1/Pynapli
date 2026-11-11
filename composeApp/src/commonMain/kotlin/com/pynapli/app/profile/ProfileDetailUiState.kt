@@ -20,6 +20,9 @@ data class ProfileDetailUiState(
     val flirtFeedback: String? = null,
     val albumFeedback: String? = null,
     val reportFeedback: String? = null,
+    // Reported in this sheet: the card leaves Grid/Swipe/Psync when the sheet is closed (the server
+    // has already hidden them), so the confirmation stays readable until then.
+    val reportedTargetUserId: String? = null,
     val blockedTargetUserId: String? = null,
     val hiddenTargetUserId: String? = null,
     val errorMessage: String? = null,

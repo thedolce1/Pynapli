@@ -28,6 +28,23 @@ class ProfileDetailStateHolderTest {
         }
 
     @Test
+    fun aReportIsConfirmedThenTheCardLeavesWhenTheSheetCloses() =
+        runTest {
+            val stateHolder = ProfileDetailStateHolder(RecordingPublicProfileRepository())
+            stateHolder.open(sampleCard("user-r"))
+
+            stateHolder.submitReport("spam_or_fake_profile")
+            // The confirmation stays readable while the sheet is open.
+            assertEquals(ProfileDetailStateHolder.REPORT_CONFIRMATION, stateHolder.state.value.reportFeedback)
+            assertEquals(null, stateHolder.state.value.hiddenTargetUserId)
+
+            // Closing hands them to the hide path every surface already handles.
+            stateHolder.dismiss()
+            assertEquals("user-r", stateHolder.state.value.hiddenTargetUserId)
+            assertEquals(false, stateHolder.state.value.visible)
+        }
+
+    @Test
     fun sendSparkFromNormalOpenLeavesSourceNull() =
         runTest {
             val repository = RecordingPublicProfileRepository()
