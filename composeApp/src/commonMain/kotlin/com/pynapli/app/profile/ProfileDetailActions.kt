@@ -112,17 +112,17 @@ internal fun ProfileActions(
                     text =
                         when {
                             privateAlbumAccessStatus == "granted" && isLoadingPrivateAlbum -> "Loading"
-                            privateAlbumAccessStatus == "granted" -> "View"
-                            privateAlbumAccessStatus == "pending" -> "Pending"
+                            privateAlbumAccessStatus == "granted" -> "View album"
+                            privateAlbumAccessStatus == "pending" -> "Album requested"
                             isRequestingAlbum -> "Requesting"
-                            else -> "Request"
+                            else -> "Request album"
                         },
                     modifier = Modifier.padding(start = 6.dp),
                     maxLines = 1,
                 )
             }
         }
-        profileLinkAction?.let { action ->
+        profileLinkAction?.takeUnless { it.offeredInMenu }?.let { action ->
             OutlinedButton(
                 onClick = onInviteProfileLink,
                 enabled = action.enabled && !action.isSubmitting,

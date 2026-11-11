@@ -124,8 +124,8 @@
       "requiredTexts": [
         "Message",
         "Spark",
-        "Request",
-        "Link"
+        "Request album",
+        "More options"
       ],
       "forbiddenTexts": [
         "Illegal input",

@@ -123,7 +123,9 @@ internal fun ConversationRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                ConversationOriginPill(label = inviteUi?.label ?: conversation.origin.originLabel())
+                (inviteUi?.label ?: conversation.origin.originLabel())?.let { label ->
+                    ConversationOriginPill(label = label)
+                }
                 if (conversation.kind == "group") {
                     ConversationOriginPill(label = "Group", muted = true)
                 }

@@ -529,6 +529,20 @@ private fun ColumnScope.ActivityTabContent(
     val authState by authStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
     val distanceUnit = appSettingsState.settings.distanceUnit
+    val profileDetailState by profileDetailStateHolder.state.collectAsState()
+
+    // Blocking or hiding someone from a profile opened here closes the sheet and refetches the feed,
+    // so their cards leave Activity straight away.
+    LaunchedEffect(profileDetailState.blockedTargetUserId, profileDetailState.hiddenTargetUserId) {
+        val removed =
+            profileDetailStateHolder.consumeBlockedTargetUserId()
+                ?: profileDetailStateHolder.consumeHiddenTargetUserId()
+                ?: return@LaunchedEffect
+        if (removed.isNotEmpty()) {
+            profileDetailStateHolder.dismiss()
+            activityStateHolder.load()
+        }
+    }
 
     ActivityScreen(
         modifier = Modifier.weight(1f),

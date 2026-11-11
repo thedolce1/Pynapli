@@ -46,11 +46,12 @@ internal fun ProfileLinksUiState.profileLinkActionFor(
 
         else ->
             ProfileLinkActionState(
-                label = if (isSubmitting) "Sending" else "Link",
+                label = if (isSubmitting) "Sending invite" else "Invite to link as partners",
                 enabled = true,
                 isSubmitting = isSubmitting,
                 feedbackMessage = targetFeedback,
                 errorMessage = targetError,
+                offeredInMenu = !isSubmitting,
             )
     }
 }

@@ -122,8 +122,23 @@ internal fun ActivityPrimaryAction(
     onOpenPsync: (String) -> Unit,
     onLikeBack: (ActivityEventDto) -> Unit,
     likedBackEventIds: Set<String>,
+    onOpenProfile: (ActivityEventDto) -> Unit,
 ) {
     when (item.type) {
+        "album_granted" -> {
+            // Their profile opens with the album already unlocked ("View album" there).
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+            ) {
+                Button(onClick = { onOpenProfile(item) }, modifier = Modifier.handCursor()) {
+                    Text(text = "View album", maxLines = 1)
+                }
+            }
+        }
+
         "match" -> {
             Row(
                 modifier =

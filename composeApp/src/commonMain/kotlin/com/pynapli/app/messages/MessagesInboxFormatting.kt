@@ -68,11 +68,12 @@ internal fun ConversationDto.partnerInviteUiState(viewerUserId: String?): Partne
     }
 }
 
-internal fun String.originLabel(): String =
+// Only origins worth calling out get a chip; a plain Grid chat (most of the inbox) gets none.
+internal fun String.originLabel(): String? =
     when (this) {
         "swipe" -> "Match"
         "intro_note" -> "Intro"
-        else -> "Grid"
+        else -> null
     }
 
 internal fun MessageDto.previewText(
