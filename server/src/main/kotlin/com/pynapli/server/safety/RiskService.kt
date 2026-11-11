@@ -49,6 +49,12 @@ interface LocationRiskSignalPublisher {
         elapsedSeconds: Long,
         speedKmh: Double,
     )
+
+    /** Hit the daily cap on Travel mode destination switches (TRUST_AND_SAFETY_SPEC). */
+    suspend fun recordRepeatedTravelSwitching(
+        userId: UUID,
+        switchesInDay: Int,
+    ) = Unit
 }
 
 interface VerificationRiskSignalPublisher {
@@ -191,6 +197,21 @@ class RiskService(
         )
     }
 
+    override suspend fun recordRepeatedTravelSwitching(
+        userId: UUID,
+        switchesInDay: Int,
+    ) {
+        repository.recordEvent(
+            userId = userId,
+            actorUserId = null,
+            source = SOURCE_LOCATION,
+            reason = "location.repeated_travel_switching",
+            delta = REPEATED_TRAVEL_SWITCHING_DELTA,
+            // Count only, never destinations (sensitive-data logging rule).
+            metadataJson = mapOf("switchesInDay" to switchesInDay.toString()).toJsonObjectString(),
+        )
+    }
+
     override suspend fun recordAgeVerificationPassed(userId: UUID) {
         repository.recordEvent(
             userId = userId,
@@ -231,6 +252,7 @@ class RiskService(
         const val SOURCE_DEVICE = "device"
 
         const val IMPOSSIBLE_TRAVEL_DELTA = 25
+        const val REPEATED_TRAVEL_SWITCHING_DELTA = 10
 
         // Account-farm signal: meaningful but not auto-quarantine on its own; it compounds with
         // other signals toward review/quarantine.

@@ -11,10 +11,14 @@ class RiskPolicyService(
 
     suspend fun shouldHideFromDiscovery(userId: UUID): Boolean = loadRiskState(userId)?.tier in DISCOVERY_SUPPRESSED_TIERS
 
+    /** TRUST_AND_SAFETY_SPEC "Location Spoofing": temporarily disable Travel mode from friction up. */
+    suspend fun isTravelRestricted(userId: UUID): Boolean = loadRiskState(userId)?.tier in TRAVEL_RESTRICTED_TIERS
+
     suspend fun shouldSuppressPassiveActivity(userId: UUID): Boolean = shouldHideFromDiscovery(userId)
 
     companion object {
         val SOCIAL_ACTION_RESTRICTED_TIERS = setOf("quarantine", "terminate")
         val DISCOVERY_SUPPRESSED_TIERS = SOCIAL_ACTION_RESTRICTED_TIERS
+        val TRAVEL_RESTRICTED_TIERS = setOf("friction", "quarantine", "terminate")
     }
 }

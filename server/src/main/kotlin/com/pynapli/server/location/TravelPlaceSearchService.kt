@@ -19,6 +19,7 @@ import java.util.UUID
 class TravelPlaceSearchService(
     private val repository: TravelPlaceRepository,
     private val rateLimitService: RateLimitService? = null,
+    private val regionPolicy: TravelRegionPolicy = EmptyTravelRegionPolicy,
 ) {
     suspend fun search(
         viewerUserId: UUID,
@@ -37,7 +38,13 @@ class TravelPlaceSearchService(
                 CA_POSTAL_PATTERN.matches(query) -> repository.searchPostal(query.take(3), RESULT_LIMIT)
                 else -> repository.searchCities(query, RESULT_LIMIT)
             }
-        return TravelPlaceSearchResponseDto(items = places.map { it.toDto() })
+        // Don't offer a destination Travel mode would refuse.
+        val offered =
+            places.filterNot { place ->
+                regionPolicy.requirementFor(TravelRegionRef(place.name, place.region, place.countryCode, place.countryCode)) ==
+                    TravelRegionRequirement.Blocked
+            }
+        return TravelPlaceSearchResponseDto(items = offered.map { it.toDto() })
     }
 
     private fun TravelPlaceRecord.toDto(): TravelPlaceDto {

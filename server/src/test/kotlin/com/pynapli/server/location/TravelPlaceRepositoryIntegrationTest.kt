@@ -74,4 +74,18 @@ class TravelPlaceRepositoryIntegrationTest :
                 assertEquals(version, repository.loadedDatasetVersion())
             }
         }
+
+        "the nearest country is resolved from coordinates, including near a border" {
+            runBlocking {
+                val repository = JdbcTravelPlaceRepository(dataSource)
+                TravelPlaceDatasetLoader(repository).loadIfStale()
+
+                assertEquals("US", repository.nearestCountryCode(36.17, -115.14)) // Las Vegas
+                assertEquals("AE", repository.nearestCountryCode(25.2, 55.27)) // Dubai
+                assertEquals("CA", repository.nearestCountryCode(43.65, -79.38)) // Toronto
+                assertEquals("MX", repository.nearestCountryCode(32.53, -117.02)) // Tijuana, 20 km from San Diego
+                // Mid-Pacific: nothing within range, so no country.
+                assertEquals(null, repository.nearestCountryCode(0.0, -150.0))
+            }
+        }
     })

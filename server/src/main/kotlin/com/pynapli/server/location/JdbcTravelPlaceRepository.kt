@@ -30,6 +30,40 @@ class JdbcTravelPlaceRepository(
                 }
         }
 
+    override suspend fun nearestCountryCode(
+        latitude: Double,
+        longitude: Double,
+    ): String? =
+        dataSource.withConnection { connection ->
+            // A bounding box keeps this to the rows near the point; the planar ordering inside it is
+            // close enough to pick a country. Rare call (only when Travel mode is set).
+            connection
+                .prepareStatement(
+                    """
+                    SELECT country_code
+                    FROM travel_places
+                    WHERE kind = 'city'
+                      AND latitude BETWEEN ? AND ?
+                      AND longitude BETWEEN ? AND ?
+                    ORDER BY (latitude - ?) * (latitude - ?)
+                           + ((longitude - ?) * cos(radians(?))) * ((longitude - ?) * cos(radians(?)))
+                    LIMIT 1
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setDouble(1, latitude - NEAREST_COUNTRY_BOX_DEGREES)
+                    statement.setDouble(2, latitude + NEAREST_COUNTRY_BOX_DEGREES)
+                    statement.setDouble(3, longitude - NEAREST_COUNTRY_BOX_DEGREES)
+                    statement.setDouble(4, longitude + NEAREST_COUNTRY_BOX_DEGREES)
+                    statement.setDouble(5, latitude)
+                    statement.setDouble(6, latitude)
+                    statement.setDouble(7, longitude)
+                    statement.setDouble(8, latitude)
+                    statement.setDouble(9, longitude)
+                    statement.setDouble(10, latitude)
+                    statement.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else null }
+                }
+        }
+
     override suspend fun searchPostal(
         postalPrefix: String,
         limit: Int,
@@ -135,3 +169,6 @@ class JdbcTravelPlaceRepository(
         private const val BATCH_SIZE = 1_000
     }
 }
+
+// About 200 km of latitude either side of the point.
+private const val NEAREST_COUNTRY_BOX_DEGREES = 1.8

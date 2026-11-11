@@ -85,8 +85,11 @@ internal fun travelLocationStatusFor(code: String): HttpStatusCode =
     when (code) {
         "ENTITLEMENT_REQUIRED",
         "AGE_VERIFICATION_REQUIRED",
+        "TRAVEL_REGION_UNAVAILABLE",
+        "RISK_RESTRICTED",
         -> HttpStatusCode.Forbidden
         "TRAVEL_PREVIEW_RATE_LIMITED",
+        "TRAVEL_SWITCH_LIMITED",
         "RATE_LIMITED",
         -> HttpStatusCode.TooManyRequests
         "INVALID_TRAVEL_CITY",

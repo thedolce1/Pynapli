@@ -36,6 +36,9 @@ data class TravelRegionRef(
     val city: String,
     val region: String?,
     val country: String?,
+    // ISO 3166-1 alpha-2 country of the destination, resolved by the server from the coordinates
+    // (never trusted from the client's `country` label). Null over open water or outside the data.
+    val countryCode: String? = null,
 )
 
 sealed interface TravelRegionRequirement {
@@ -49,6 +52,13 @@ sealed interface TravelRegionRequirement {
      * the lifestyle filter gate uses can route the user into verification.
      */
     data object AgeVerified : TravelRegionRequirement
+
+    /**
+     * Travel mode can't be set to this destination at all (for example where the lifestyle is
+     * dangerous for users). Surfaced as `TRAVEL_REGION_UNAVAILABLE`; such places are also left out
+     * of destination search.
+     */
+    data object Blocked : TravelRegionRequirement
 }
 
 /**
@@ -57,4 +67,49 @@ sealed interface TravelRegionRequirement {
  */
 object EmptyTravelRegionPolicy : TravelRegionPolicy {
     override fun requirementFor(destination: TravelRegionRef): TravelRegionRequirement = TravelRegionRequirement.None
+}
+
+/**
+ * Ops-configured policy, keyed on the destination's country code. Set with
+ * `PYNAPLI_TRAVEL_REGION_POLICY`, a comma-separated list of `CC=requirement` where requirement is
+ * `blocked` or `age_verified`, e.g. `AE=blocked,QA=age_verified`. Countries not listed need nothing
+ * extra. A destination whose country can't be resolved needs nothing extra either.
+ */
+class ConfiguredTravelRegionPolicy(
+    private val rules: Map<String, TravelRegionRequirement>,
+) : TravelRegionPolicy {
+    override fun requirementFor(destination: TravelRegionRef): TravelRegionRequirement = destination.countryCode?.uppercase()?.let { rules[it] } ?: TravelRegionRequirement.None
+
+    companion object {
+        /**
+         * Parses the env value; blank means [EmptyTravelRegionPolicy]. A malformed entry fails
+         * startup rather than silently allowing a destination ops meant to restrict.
+         */
+        fun parse(spec: String?): TravelRegionPolicy {
+            val entries =
+                spec
+                    ?.split(',')
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotEmpty() }
+                    .orEmpty()
+            if (entries.isEmpty()) return EmptyTravelRegionPolicy
+            val rules =
+                entries.associate { entry ->
+                    val parts = entry.split('=').map { it.trim() }
+                    require(parts.size == 2 && parts[0].length == 2 && parts[0].all { it.isLetter() }) {
+                        "PYNAPLI_TRAVEL_REGION_POLICY entry '$entry' must look like CC=blocked or CC=age_verified"
+                    }
+                    val requirement =
+                        when (parts[1].lowercase()) {
+                            "blocked" -> TravelRegionRequirement.Blocked
+                            "age_verified" -> TravelRegionRequirement.AgeVerified
+                            else -> throw IllegalArgumentException(
+                                "PYNAPLI_TRAVEL_REGION_POLICY entry '$entry': requirement must be blocked or age_verified",
+                            )
+                        }
+                    parts[0].uppercase() to requirement
+                }
+            return ConfiguredTravelRegionPolicy(rules)
+        }
+    }
 }

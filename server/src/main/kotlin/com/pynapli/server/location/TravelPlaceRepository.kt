@@ -13,6 +13,15 @@ interface TravelPlaceRepository {
         limit: Int,
     ): List<TravelPlaceRecord>
 
+    /**
+     * Country code of the nearest known city to a point, or null when none is within ~200 km
+     * (open water, uncovered areas). Used to apply the region policy to the real destination.
+     */
+    suspend fun nearestCountryCode(
+        latitude: Double,
+        longitude: Double,
+    ): String? = null
+
     /** Version string of the currently loaded dataset, or null when never loaded. */
     suspend fun loadedDatasetVersion(): String?
 

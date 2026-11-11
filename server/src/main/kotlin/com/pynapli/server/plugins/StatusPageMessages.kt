@@ -82,6 +82,8 @@ internal fun userSafeMessage(code: String): String =
         "PSYNC_DECK_SIZE_NOT_ALLOWED" -> "Upgrade to review a larger Psync deck together."
         "PSYNC_ADVANCED_FILTERS_NOT_ALLOWED" -> "Upgrade to use advanced filters in Psync."
         "PSYNC_LOCATION_CHANGED" -> "Where you're swiping changed since you both agreed. Take another look and agree again."
+        "TRAVEL_REGION_UNAVAILABLE" -> "Travel mode isn't available for that destination."
+        "TRAVEL_SWITCH_LIMITED" -> "You've changed your Travel mode destination a lot today. Try again tomorrow."
         "PSYNC_TRAVEL_NOT_ALLOWED" -> "Psync in Travel mode is part of Select. Turn Travel mode off or upgrade."
         "PSYNC_SESSION_LIMIT_REACHED" -> "You've used today's Psync sessions. Upgrade for more, or come back tomorrow."
         "INVALID_PSYNC_FILTER" -> "Those Psync filters aren't valid."
