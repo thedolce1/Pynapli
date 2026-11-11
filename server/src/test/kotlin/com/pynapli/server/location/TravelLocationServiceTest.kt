@@ -349,6 +349,72 @@ class TravelLocationServiceTest {
             assertEquals("Tokyo", response.city)
         }
 
+    @Test
+    fun aBlockedCountryIsRefusedWhateverTheClientCallsIt() =
+        runBlocking {
+            val viewer = UUID.randomUUID()
+            val service =
+                TravelLocationService(
+                    repository = InMemoryTravelLocationRepository(),
+                    subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SELECT),
+                    regionPolicy = ConfiguredTravelRegionPolicy.parse("AE=blocked"),
+                    clock = clock,
+                    placeRepository = FixedCountryPlaceRepository("AE"),
+                )
+
+            // The client labels it as somewhere else; the coordinates are what count.
+            val spoofed = validRequest("Somewhere", 25.2, 55.27).copy(country = "US")
+            val error = assertFailsWith<TravelLocationException> { service.set(viewer, spoofed) }
+            assertEquals("TRAVEL_REGION_UNAVAILABLE", error.code)
+        }
+
+    @Test
+    fun everyTierIsCappedOnDailySwitchesAndHittingTheCapIsARiskSignalOnce() =
+        runBlocking {
+            val viewer = UUID.randomUUID()
+            val signals = RecordingLocationSignals()
+            val service =
+                TravelLocationService(
+                    repository = InMemoryTravelLocationRepository(),
+                    subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SELECT),
+                    clock = clock,
+                    riskSignals = signals,
+                )
+
+            repeat(TravelLocationService.DAILY_ACTIVATION_LIMIT) { i ->
+                service.set(viewer, validRequest("City $i", 10.0 + i, 10.0))
+            }
+            assertEquals(listOf(TravelLocationService.DAILY_ACTIVATION_LIMIT), signals.switches)
+
+            repeat(2) {
+                val error = assertFailsWith<TravelLocationException> { service.set(viewer, validRequest("One more", 1.0, 1.0)) }
+                assertEquals("TRAVEL_SWITCH_LIMITED", error.code)
+            }
+            assertEquals(1, signals.switches.size)
+            // Turning it off is never limited.
+            service.clear(viewer)
+        }
+
+    @Test
+    fun aRiskRestrictedAccountCannotTurnTravelOn() =
+        runBlocking {
+            val viewer = UUID.randomUUID()
+            val service =
+                TravelLocationService(
+                    repository = InMemoryTravelLocationRepository(),
+                    subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SELECT),
+                    clock = clock,
+                    riskPolicyService =
+                        com.pynapli.server.safety.RiskPolicyService { userId ->
+                            com.pynapli.server.safety
+                                .AccountRiskStateRecord(userId, 55, "friction", now, null, now)
+                        },
+                )
+
+            val error = assertFailsWith<TravelLocationException> { service.set(viewer, validRequest("Tokyo", 35.6762, 139.6503)) }
+            assertEquals("RISK_RESTRICTED", error.code)
+        }
+
     private fun validRequest(
         city: String,
         latitude: Double,
@@ -464,4 +530,48 @@ private class StaticViewerTrustRepository(
     private val ageVerifiedUserIds: Set<UUID>,
 ) : com.pynapli.server.grid.GridViewerTrustRepository {
     override suspend fun isAgeVerified(userId: UUID): Boolean = userId in ageVerifiedUserIds
+}
+
+private class FixedCountryPlaceRepository(
+    private val countryCode: String,
+) : TravelPlaceRepository {
+    override suspend fun searchCities(
+        namePrefix: String,
+        limit: Int,
+    ): List<TravelPlaceRecord> = emptyList()
+
+    override suspend fun searchPostal(
+        postalPrefix: String,
+        limit: Int,
+    ): List<TravelPlaceRecord> = emptyList()
+
+    override suspend fun nearestCountryCode(
+        latitude: Double,
+        longitude: Double,
+    ): String = countryCode
+
+    override suspend fun loadedDatasetVersion(): String? = null
+
+    override suspend fun replaceDataset(
+        version: String,
+        rows: Sequence<TravelPlaceRow>,
+    ): Int = 0
+}
+
+private class RecordingLocationSignals : com.pynapli.server.safety.LocationRiskSignalPublisher {
+    val switches = mutableListOf<Int>()
+
+    override suspend fun recordImpossibleTravel(
+        userId: UUID,
+        distanceKm: Double,
+        elapsedSeconds: Long,
+        speedKmh: Double,
+    ) = Unit
+
+    override suspend fun recordRepeatedTravelSwitching(
+        userId: UUID,
+        switchesInDay: Int,
+    ) {
+        switches += switchesInDay
+    }
 }

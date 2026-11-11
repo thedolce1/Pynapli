@@ -13,10 +13,10 @@ import java.util.UUID
 /**
  * Passport / travel mode (SWIPE_IMPLEMENTATION_SPEC L339-354).
  *
- * Gating in this MVP slice: Select tier only. Social-tier "basic travel preview"
- * (MONETIZATION_SPEC L186) is deferred to a later slice — for now, Free and
- * Social both get ENTITLEMENT_REQUIRED. The hardcoded gate lives here so the
- * Social-preview slice only has to widen this single check.
+ * Gating: Free has no travel mode; Social gets a one-activation-per-30-days preview; Select is
+ * unlimited (see [requireTravelTier]). Every tier is capped at [DAILY_ACTIVATION_LIMIT] switches a
+ * day, and accounts at the friction risk tier or above can't turn it on (TRUST_AND_SAFETY_SPEC
+ * "Location Spoofing": temporarily disable Travel mode).
  *
  * One active location per user is enforced by the partial unique index on
  * `travel_locations`. Setting a new location atomically clears the prior active
@@ -28,6 +28,10 @@ class TravelLocationService(
     private val regionPolicy: TravelRegionPolicy = EmptyTravelRegionPolicy,
     private val viewerTrustRepository: GridViewerTrustRepository? = null,
     private val clock: Clock = Clock.systemUTC(),
+    // Resolves the destination's real country for the region policy.
+    private val placeRepository: TravelPlaceRepository? = null,
+    private val riskPolicyService: com.pynapli.server.safety.RiskPolicyService? = null,
+    private val riskSignals: com.pynapli.server.safety.LocationRiskSignalPublisher? = null,
 ) {
     /**
      * Returns the viewer's current travel location, or null if none active.
@@ -44,7 +48,11 @@ class TravelLocationService(
         viewerUserId: UUID,
         request: SetTravelLocationRequestDto,
     ): TravelLocationDto {
+        if (riskPolicyService?.isTravelRestricted(viewerUserId) == true) {
+            throw TravelLocationException("RISK_RESTRICTED")
+        }
         requireTravelTier(viewerUserId, applyRateLimit = true)
+        val switchesToday = requireDailySwitchAllowance(viewerUserId)
         val city = request.city.trim()
         if (city.isEmpty() || city.length > MAX_CITY_LENGTH) {
             throw TravelLocationException("INVALID_TRAVEL_CITY")
@@ -66,8 +74,13 @@ class TravelLocationService(
         // age_verified_at signal the lifestyle filter gate uses
         // (SavedGridFilterService) so the client routes through the existing
         // verification flow on AGE_VERIFICATION_REQUIRED.
-        when (regionPolicy.requirementFor(TravelRegionRef(city, region, country))) {
+        // The policy is applied to where the coordinates really are, not to the client's label.
+        val countryCode =
+            placeRepository?.nearestCountryCode(request.latitude, request.longitude)
+                ?: country?.takeIf { it.length == 2 && it.all(Char::isLetter) }?.uppercase()
+        when (regionPolicy.requirementFor(TravelRegionRef(city, region, country, countryCode))) {
             TravelRegionRequirement.None -> Unit
+            TravelRegionRequirement.Blocked -> throw TravelLocationException("TRAVEL_REGION_UNAVAILABLE")
             TravelRegionRequirement.AgeVerified -> {
                 val verified = viewerTrustRepository?.isAgeVerified(viewerUserId) ?: true
                 if (!verified) throw TravelLocationException("AGE_VERIFICATION_REQUIRED")
@@ -86,6 +99,10 @@ class TravelLocationService(
                     ),
                 now = clock.instant(),
             )
+        if (switchesToday + 1 == DAILY_ACTIVATION_LIMIT) {
+            // Reached the day's cap: a risk signal, recorded once (refused retries add no rows).
+            runCatching { riskSignals?.recordRepeatedTravelSwitching(viewerUserId, DAILY_ACTIVATION_LIMIT) }
+        }
         return record.toDto()
     }
 
@@ -134,6 +151,17 @@ class TravelLocationService(
         }
     }
 
+    /**
+     * TRUST_AND_SAFETY_SPEC "Repeated travel-mode abuse": hopping cities all day is how location
+     * spoofers and spammers use passport modes. Every tier, Select included, gets
+     * [DAILY_ACTIVATION_LIMIT] switches per rolling day; reaching the limit is also a risk signal.
+     */
+    private suspend fun requireDailySwitchAllowance(viewerUserId: UUID): Int {
+        val today = repository.countActivationsSince(viewerUserId, clock.instant().minus(Duration.ofHours(24)))
+        if (today >= DAILY_ACTIVATION_LIMIT) throw TravelLocationException("TRAVEL_SWITCH_LIMITED")
+        return today
+    }
+
     private fun TravelLocationRecord.toDto(): TravelLocationDto =
         TravelLocationDto(
             city = city,
@@ -155,6 +183,9 @@ class TravelLocationService(
          */
         val SOCIAL_PREVIEW_WINDOW: Duration = Duration.ofDays(30)
         const val SOCIAL_PREVIEW_ACTIVATIONS_PER_WINDOW: Int = 1
+
+        /** Travel destinations any account can switch to in a rolling 24 hours. */
+        const val DAILY_ACTIVATION_LIMIT: Int = 6
         const val MAX_CITY_LENGTH = 120
         const val MAX_REGION_LENGTH = 120
         const val MAX_COUNTRY_LENGTH = 120

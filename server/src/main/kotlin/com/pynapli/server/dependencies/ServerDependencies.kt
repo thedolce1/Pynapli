@@ -204,6 +204,8 @@ class ServerDependencies(
                     travelLocationRepository = core.travelLocationRepository,
                     rateLimitService = core.rateLimitService,
                     productMetrics = core.productMetrics,
+                    riskService = core.riskService,
+                    riskPolicyService = core.riskPolicyService,
                 )
             val activityService =
                 ActivityService(

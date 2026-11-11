@@ -2,6 +2,7 @@ package com.pynapli.server.dependencies
 
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.grid.JdbcGridViewerTrustRepository
+import com.pynapli.server.location.ConfiguredTravelRegionPolicy
 import com.pynapli.server.location.JdbcTravelPlaceRepository
 import com.pynapli.server.location.TravelLocationRepository
 import com.pynapli.server.location.TravelLocationService
@@ -28,6 +29,8 @@ internal fun buildCommerceTravelDependencies(
     travelLocationRepository: TravelLocationRepository,
     rateLimitService: RateLimitService,
     productMetrics: com.pynapli.server.metrics.ProductMetrics,
+    riskService: com.pynapli.server.safety.RiskService? = null,
+    riskPolicyService: com.pynapli.server.safety.RiskPolicyService? = null,
 ): CommerceTravelDependencies {
     val subscriptionService =
         SubscriptionService(
@@ -39,21 +42,27 @@ internal fun buildCommerceTravelDependencies(
             rateLimitService = rateLimitService,
             productMetrics = productMetrics,
         )
+    // Destination rules come from PYNAPLI_TRAVEL_REGION_POLICY (empty = none); a malformed value
+    // fails startup instead of silently allowing a destination ops meant to restrict.
+    val travelRegionPolicy = ConfiguredTravelRegionPolicy.parse(config.travelRegionPolicy)
+    val travelPlaceRepository = JdbcTravelPlaceRepository(dataSource)
     val travelLocationService =
         TravelLocationService(
             repository = travelLocationRepository,
             subscriptionService = subscriptionService,
-            // Production default is EmptyTravelRegionPolicy (no destinations require extra
-            // verification). Ops swaps via DI when the region safety review is in place.
+            regionPolicy = travelRegionPolicy,
             viewerTrustRepository = JdbcGridViewerTrustRepository(dataSource),
+            placeRepository = travelPlaceRepository,
+            riskPolicyService = riskPolicyService,
+            riskSignals = riskService,
         )
-    val travelPlaceRepository = JdbcTravelPlaceRepository(dataSource)
     // One-time per dataset version (~77k rows, a few seconds); steady restarts skip it.
     TravelPlaceDatasetLoader(travelPlaceRepository).loadIfStale()
     val travelPlaceSearchService =
         TravelPlaceSearchService(
             repository = travelPlaceRepository,
             rateLimitService = rateLimitService,
+            regionPolicy = travelRegionPolicy,
         )
     val playStoreSubscriptionSyncWorker =
         if (config.playStoreVerificationEnabled && config.playStoreSubscriptionSyncEnabled) {

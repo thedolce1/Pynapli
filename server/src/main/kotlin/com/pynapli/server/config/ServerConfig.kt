@@ -82,6 +82,9 @@ data class ServerConfig(
     val ageVerificationProvider: String? = null,
     val ageVerificationProviderLabel: String = "Identity provider",
     val ageVerificationProviderRedirectBaseUrl: String? = null,
+    // Travel mode destination rules by country, e.g. "AE=blocked,QA=age_verified"
+    // (PYNAPLI_TRAVEL_REGION_POLICY). Empty: no destination needs anything extra.
+    val travelRegionPolicy: String? = null,
     val adminApiToken: String? = null,
     // Optional admin role map (PYNAPLI_ADMIN_ROLES = "id:role,id:role"). When empty, role enforcement
     // is off and every authenticated admin is treated as senior (pre-roles behavior). When set, an
@@ -357,6 +360,11 @@ data class ServerConfig(
                         .getenv("PYNAPLI_PLAY_STORE_SANDBOX_ENABLED")
                         ?.toBooleanStrictOrNull()
                         ?: false,
+                travelRegionPolicy =
+                    System
+                        .getenv("PYNAPLI_TRAVEL_REGION_POLICY")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() },
                 ageVerificationProvider =
                     System
                         .getenv("PYNAPLI_AGE_VERIFICATION_PROVIDER")
