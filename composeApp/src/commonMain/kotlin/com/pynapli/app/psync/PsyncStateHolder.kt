@@ -264,10 +264,33 @@ class PsyncStateHolder(
     suspend fun nudge() =
         onSession { sessionId ->
             when (val result = repository.nudge(sessionId)) {
-                is AppResult.Success -> Unit
+                // Without this the button did nothing visible.
+                is AppResult.Success -> _state.update { it.copy(notice = "Nudge sent.", errorMessage = null) }
                 is AppResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
             }
         }
+
+    /**
+     * A realtime delta arrived for [sessionId]. Deltas only say that something changed, never what
+     * was swiped, so most just trigger a refetch of the canonical session.
+     */
+    suspend fun onRealtimeDelta(
+        sessionId: String,
+        type: String,
+    ) {
+        val partner = _state.value.session?.partnerDisplayName ?: "Your partner"
+        when (type) {
+            // A nudge changes nothing server-side; it only needs to be seen.
+            DELTA_NUDGE -> _state.update { it.copy(notice = "$partner is ready when you are.") }
+            DELTA_PARTNER_FINISHED -> {
+                if (sessionId == currentSessionId) _state.update { it.copy(partnerFinished = true) }
+                refresh()
+            }
+            else -> refresh()
+        }
+    }
+
+    fun clearNotice() = _state.update { it.copy(notice = null) }
 
     fun clearError() = _state.update { it.copy(errorMessage = null) }
 
@@ -308,15 +331,22 @@ class PsyncStateHolder(
     private fun applySession(session: PsyncSessionDto?) {
         _state.update { current ->
             if (session == null) {
-                current.copy(session = null, deck = emptyList())
+                current.copy(session = null, deck = emptyList(), partnerFinished = false, notice = null)
             } else {
-                current.copy(session = session.toUi(viewerUserId))
+                val sameLiveSession = current.session?.id == session.id && session.status == "active"
+                current.copy(
+                    session = session.toUi(viewerUserId),
+                    // "Partner finished" only means something for the deck it was said about.
+                    partnerFinished = current.partnerFinished && sameLiveSession,
+                )
             }
         }
     }
 
     private companion object {
         const val DEFAULT_DECK_SIZE = 25
+        const val DELTA_NUDGE = "nudge"
+        const val DELTA_PARTNER_FINISHED = "partner_finished"
         val SESSION_GONE_CODES = setOf("PSYNC_INVALID_STATE", "PSYNC_SESSION_NOT_FOUND")
     }
 }

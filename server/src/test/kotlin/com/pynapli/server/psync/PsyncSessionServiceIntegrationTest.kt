@@ -341,6 +341,22 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "the session says who has tapped Start while waiting for the other" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val svc = deckService(listOf(target))
+                val sessionId = svc.readyFor(initiator, partner)
+
+                val afterFirst = svc.start(sessionId, initiator)
+
+                assertEquals("ready", afterFirst.status)
+                assertEquals(true, afterFirst.participants.single { it.userId == initiator.toString() }.started)
+                assertEquals(false, afterFirst.participants.single { it.userId == partner.toString() }.started)
+            }
+        }
+
         // ---- Session limits per tier ---------------------------------------------------
 
         "a Free initiator can start one session per 24 hours; unstarted invites don't count" {

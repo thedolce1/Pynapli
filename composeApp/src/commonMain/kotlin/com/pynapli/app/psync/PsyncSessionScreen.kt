@@ -61,6 +61,7 @@ import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.settings.AppSettings
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Stable test tags for the Psync session surface (PS-5c). */
@@ -77,6 +78,13 @@ object PsyncSessionTags {
     const val PROGRESS = "psync_progress"
     const val RECAP = "psync_recap"
     const val WAITING = "psync_waiting"
+    const val PAUSE_BUTTON = "psync_pause_button"
+    const val END_SESSION_BUTTON = "psync_end_session_button"
+    const val CONFIRM_END_BUTTON = "psync_confirm_end_button"
+    const val KEEP_GOING_BUTTON = "psync_keep_going_button"
+    const val FINISH_NOW_BUTTON = "psync_finish_now_button"
+    const val NOTICE = "psync_notice"
+    const val PARTNER_FINISHED = "psync_partner_finished"
     const val SETUP_SUMMARY = "psync_setup_summary"
     const val EDIT_FILTERS_BUTTON = "psync_edit_filters_button"
     const val SUGGEST_CHANGES_BUTTON = "psync_suggest_changes_button"
@@ -120,6 +128,15 @@ fun PsyncSessionScreen(
                 ErrorBanner(message)
                 Spacer(Modifier.height(12.dp))
             }
+            state.notice?.let { message ->
+                NoticeBanner(message)
+                Spacer(Modifier.height(12.dp))
+                // A notice is a passing remark; it clears itself.
+                LaunchedEffect(message) {
+                    delay(NOTICE_VISIBLE_MILLIS)
+                    stateHolder.clearNotice()
+                }
+            }
 
             when (state.phase) {
                 PsyncPhase.IDLE ->
@@ -128,11 +145,18 @@ fun PsyncSessionScreen(
                         onInvite = { deckSize, filters -> scope.launch { stateHolder.createSession(deckSize, filters.toSwipeDeckRequest()) } },
                     )
                 PsyncPhase.INVITED, PsyncPhase.CONFIGURING -> NegotiationPhase(state, stateHolder, scope, distanceUnit)
-                PsyncPhase.READY -> ReadyPhase(state, onStart = { scope.launch { stateHolder.start() } })
+                PsyncPhase.READY ->
+                    ReadyPhase(
+                        state,
+                        onStart = { scope.launch { stateHolder.start() } },
+                        onCancel = { scope.launch { stateHolder.leave() } },
+                    )
                 PsyncPhase.ACTIVE -> ActivePhase(state, stateHolder, scope, distanceUnit, onOpenProfile)
                 PsyncPhase.PAUSED ->
-                    StatusPhase("Paused", "Resume when you're both back.") {
+                    StatusPhase("Paused", "Your places are saved. Resume when you're both back.") {
                         PrimaryButton("Resume", PsyncSessionTags.START_SESSION_BUTTON) { scope.launch { stateHolder.resume() } }
+                        Spacer(Modifier.height(10.dp))
+                        EndSessionControl(onEnd = { scope.launch { stateHolder.leave() } })
                     }
                 PsyncPhase.COMPLETED ->
                     RecapPhase(
@@ -329,10 +353,28 @@ private fun SwipeDeckRequestDto.toSetupLines(distanceUnit: String): List<String>
 private fun ReadyPhase(
     state: PsyncUiState,
     onStart: () -> Unit,
+    onCancel: () -> Unit,
 ) {
-    val partner = state.session?.partnerDisplayName ?: "your partner"
-    StatusPhase(title = "You're both in", body = "Tap Start. The shared deck appears once you and $partner have both started.") {
-        PrimaryButton("Start", PsyncSessionTags.START_SESSION_BUTTON, onClick = onStart)
+    val session = state.session
+    val partner = session?.partnerDisplayName ?: "your partner"
+    if (session?.viewerStarted == true) {
+        // The viewer has tapped Start; say so instead of offering the same button again.
+        StatusPhase(title = "Waiting for $partner", body = "The deck appears as soon as they tap Start too.") {
+            Box(Modifier.testTag(PsyncSessionTags.WAITING))
+            SecondaryButton("Cancel", PsyncSessionTags.DECLINE_BUTTON, onClick = onCancel)
+        }
+    } else {
+        val body =
+            if (session?.partnerStarted == true) {
+                "${partner.replaceFirstChar { it.uppercase() }} is ready. Tap Start to see the deck."
+            } else {
+                "Tap Start. The deck appears once you and $partner have both started."
+            }
+        StatusPhase(title = "You're both in", body = body) {
+            PrimaryButton("Start", PsyncSessionTags.START_SESSION_BUTTON, onClick = onStart)
+            Spacer(Modifier.height(10.dp))
+            SecondaryButton("Cancel", PsyncSessionTags.DECLINE_BUTTON, onClick = onCancel)
+        }
     }
 }
 
@@ -347,18 +389,43 @@ private fun ColumnScope.ActivePhase(
     val remaining = state.remainingCards
     val actedCount = state.deck.size - remaining.size
 
-    Text(
-        text = "$actedCount of ${state.deck.size} reviewed",
-        color = PynapliColors.TextSecondary,
-        style = MaterialTheme.typography.bodySmall,
-        modifier = Modifier.testTag(PsyncSessionTags.PROGRESS),
-    )
+    val partner = state.session?.partnerDisplayName ?: "Your partner"
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "$actedCount of ${state.deck.size} reviewed",
+                color = PynapliColors.TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag(PsyncSessionTags.PROGRESS),
+            )
+            if (state.partnerFinished && remaining.isNotEmpty()) {
+                // Only that they are through the deck, never which way they swiped.
+                Text(
+                    text = "$partner has finished",
+                    color = PynapliColors.TextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.testTag(PsyncSessionTags.PARTNER_FINISHED),
+                )
+            }
+        }
+        if (remaining.isNotEmpty()) {
+            PynapliPill(
+                text = "Pause",
+                onClick = { scope.launch { stateHolder.pause() } },
+                modifier = Modifier.testTag(PsyncSessionTags.PAUSE_BUTTON),
+            )
+        }
+    }
     Spacer(Modifier.height(12.dp))
 
     if (remaining.isEmpty()) {
-        StatusPhase(title = "You're done", body = "Waiting for your partner to finish the deck.") {
+        StatusPhase(title = "You're done", body = "Waiting for $partner to finish the deck.") {
             Box(Modifier.testTag(PsyncSessionTags.WAITING))
-            SecondaryButton("Nudge partner", PsyncSessionTags.NUDGE_BUTTON) { scope.launch { stateHolder.nudge() } }
+            SecondaryButton("Nudge", PsyncSessionTags.NUDGE_BUTTON) { scope.launch { stateHolder.nudge() } }
+            Spacer(Modifier.height(10.dp))
+            // Don't hold the viewer hostage to a partner who has wandered off: what both have
+            // decided so far is resolved now.
+            SecondaryButton("See results now", PsyncSessionTags.FINISH_NOW_BUTTON) { scope.launch { stateHolder.leave() } }
         }
         return
     }
@@ -421,6 +488,58 @@ private fun ColumnScope.ActivePhase(
             iconTint = PynapliColors.Success,
             onClick = { requestedAction = SwipeAction.LIKE },
         )
+    }
+    Spacer(Modifier.height(8.dp))
+    EndSessionControl(onEnd = { scope.launch { stateHolder.leave() } })
+}
+
+/**
+ * Ending is always available and never paywalled (PSYNC_SPEC). It ends the session for both
+ * partners, so it asks once; what each has decided so far still counts.
+ */
+@Composable
+private fun EndSessionControl(onEnd: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+    if (!confirming) {
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Text(
+                text = "End session",
+                color = PynapliColors.TextSecondary,
+                style = MaterialTheme.typography.labelLarge,
+                modifier =
+                    Modifier
+                        .clip(PynapliShape.PillShape)
+                        .clickableTag(PsyncSessionTags.END_SESSION_BUTTON) { confirming = true }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "End for both of you? Your swipes so far still count.",
+                color = PynapliColors.TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PynapliPill(
+                    text = "Keep going",
+                    onClick = { confirming = false },
+                    modifier = Modifier.testTag(PsyncSessionTags.KEEP_GOING_BUTTON),
+                )
+                PynapliPill(
+                    text = "End session",
+                    selected = true,
+                    accent = PynapliColors.Danger,
+                    onClick = {
+                        confirming = false
+                        onEnd()
+                    },
+                    modifier = Modifier.testTag(PsyncSessionTags.CONFIRM_END_BUTTON),
+                )
+            }
+        }
     }
 }
 
@@ -521,6 +640,25 @@ private fun PsyncHeader(
         Text(title, color = PynapliColors.TextPrimary, style = MaterialTheme.typography.titleLarge)
     }
 }
+
+/** A passing, non-error remark ("Nudge sent."). */
+@Composable
+private fun NoticeBanner(message: String) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(PynapliShape.CardShape)
+                .background(PynapliColors.Surface)
+                .border(1.dp, PynapliColors.Border, PynapliShape.CardShape)
+                .padding(12.dp)
+                .testTag(PsyncSessionTags.NOTICE),
+    ) {
+        Text(message, color = PynapliColors.TextPrimary, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+private const val NOTICE_VISIBLE_MILLIS = 4_000L
 
 @Composable
 private fun ErrorBanner(message: String) {
