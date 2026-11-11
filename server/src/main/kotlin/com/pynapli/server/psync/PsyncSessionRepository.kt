@@ -16,6 +16,15 @@ interface PsyncSessionRepository {
      */
     suspend fun findActiveLink(userId: UUID): ActiveLink?
 
+    /**
+     * Sessions [initiatorUserId] initiated that actually started (a deck was dealt) at or after
+     * [since]. Invites that were declined, cancelled or expired before starting don't count.
+     */
+    suspend fun countStartedSessionsSince(
+        initiatorUserId: UUID,
+        since: Instant,
+    ): Int = 0
+
     /** True if a non-terminal Psync session already exists for [linkId]. */
     suspend fun hasNonTerminalSessionForLink(linkId: UUID): Boolean
 

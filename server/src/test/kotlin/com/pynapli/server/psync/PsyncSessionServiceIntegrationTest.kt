@@ -314,6 +314,40 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        // ---- Session limits per tier ---------------------------------------------------
+
+        "a Free initiator can start one session per 24 hours; unstarted invites don't count" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val svc = freeTierService()
+
+                // An invite that is declined never started, so it costs nothing.
+                val declined = svc.create(initiator, CreatePsyncSessionRequestDto(deckSize = 10))
+                svc.deny(UUID.fromString(declined.id), partner)
+
+                val first = svc.create(initiator, CreatePsyncSessionRequestDto(deckSize = 10))
+                dataSource.markStartedAndCompleted(UUID.fromString(first.id), startedHoursAgo = 2)
+
+                val refused =
+                    assertFailsWith<PsyncException> { svc.create(initiator, CreatePsyncSessionRequestDto(deckSize = 10)) }
+                assertEquals("PSYNC_SESSION_LIMIT_REACHED", refused.code)
+                // The limit is the initiator's: the partner can still start one.
+                assertEquals("invited", svc.create(partner, CreatePsyncSessionRequestDto(deckSize = 10)).status)
+            }
+        }
+
+        "a session started more than 24 hours ago no longer counts against the limit" {
+            runBlocking {
+                val (initiator, _) = seedLinkedPair()
+                val svc = freeTierService()
+
+                val old = svc.create(initiator, CreatePsyncSessionRequestDto(deckSize = 10))
+                dataSource.markStartedAndCompleted(UUID.fromString(old.id), startedHoursAgo = 25)
+
+                assertEquals("invited", svc.create(initiator, CreatePsyncSessionRequestDto(deckSize = 10)).status)
+            }
+        }
+
         "create without an active link is rejected" {
             runBlocking {
                 val lonely = UUID.randomUUID()
@@ -1620,6 +1654,23 @@ private class TestPineappleInventory(
                 }
             }
         }
+}
+
+/** Stand in for a session that was started [startedHoursAgo] and has since finished. */
+private fun DataSource.markStartedAndCompleted(
+    sessionId: UUID,
+    startedHoursAgo: Int,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                "UPDATE psync_sessions SET status = 'completed', started_at = now() - make_interval(hours => ?), ended_at = now() WHERE id = ?",
+            ).use { statement ->
+                statement.setInt(1, startedHoursAgo)
+                statement.setObject(2, sessionId)
+                statement.executeUpdate()
+            }
+    }
 }
 
 private fun DataSource.insertMatch(

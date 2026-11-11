@@ -18,6 +18,11 @@ class JdbcPsyncSessionRepository(
 
     override suspend fun hasNonTerminalSessionForLink(linkId: UUID): Boolean = dataSource.hasNonTerminalPsyncSessionForLink(linkId)
 
+    override suspend fun countStartedSessionsSince(
+        initiatorUserId: UUID,
+        since: Instant,
+    ): Int = dataSource.countStartedPsyncSessionsSince(initiatorUserId, since)
+
     override suspend fun insertSession(
         session: PsyncSession,
         participants: List<PsyncSessionParticipant>,
