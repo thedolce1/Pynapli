@@ -3,6 +3,7 @@ package com.pynapli.app.auth
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
+import com.pynapli.shared.network.dto.APPEAL_REASON_MAX_LENGTH
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,11 +62,11 @@ class AuthStateHolder(
     }
 
     fun updateEmail(value: String) {
-        _state.update { current -> current.copy(email = value, errorMessage = null) }
+        _state.update { current -> current.copy(email = value, errorMessage = null, accountSuspended = false, appealSent = false) }
     }
 
     fun updatePassword(value: String) {
-        _state.update { current -> current.copy(password = value, errorMessage = null) }
+        _state.update { current -> current.copy(password = value, errorMessage = null, accountSuspended = false, appealSent = false) }
     }
 
     fun updateBirthdate(value: String) {
@@ -74,6 +75,33 @@ class AuthStateHolder(
 
     fun updateAcceptedAgeAndTerms(value: Boolean) {
         _state.update { current -> current.copy(acceptedAgeAndTerms = value, errorMessage = null) }
+    }
+
+    fun updateAppealReason(value: String) {
+        _state.update { current -> current.copy(appealReason = value.take(APPEAL_REASON_MAX_LENGTH), errorMessage = null) }
+    }
+
+    suspend fun submitAccountAppeal() {
+        val current = state.value
+        if (current.isSubmitting || current.appealSent) return
+        val reason = current.appealReason.trim()
+        if (reason.length < MIN_APPEAL_REASON) {
+            _state.update { it.copy(errorMessage = "Tell us a little about what happened.") }
+            return
+        }
+        _state.update { it.copy(isSubmitting = true, errorMessage = null) }
+        when (val result = authRepository.submitAccountAppeal(current.email.trim(), current.password, reason, deviceIdOrNull)) {
+            is AppResult.Success -> _state.update { it.copy(isSubmitting = false, appealSent = true) }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        isSubmitting = false,
+                        // An appeal already in review counts as sent.
+                        appealSent = result.error.code == "APPEAL_ALREADY_OPEN",
+                        errorMessage = result.error.message.takeUnless { _ -> result.error.code == "APPEAL_ALREADY_OPEN" },
+                    )
+                }
+        }
     }
 
     fun updateResetCode(value: String) {
@@ -316,6 +344,7 @@ class AuthStateHolder(
                     it.copy(
                         isSubmitting = false,
                         errorMessage = result.error.message,
+                        accountSuspended = mode == AuthMode.SignIn && result.error.code == "ACCOUNT_NOT_ACTIVE",
                     )
                 }
             }
@@ -338,6 +367,7 @@ class AuthStateHolder(
 
     private companion object {
         private const val RESET_CODE_LENGTH = 6
+        private const val MIN_APPEAL_REASON = 10
         private val birthdatePattern = Regex("""\d{4}-\d{2}-\d{2}""")
     }
 }

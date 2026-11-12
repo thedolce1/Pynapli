@@ -128,6 +128,7 @@ fun authStatusFor(code: String): HttpStatusCode =
         "EMAIL_ALREADY_EXISTS" -> HttpStatusCode.Conflict
         "INVALID_CREDENTIALS", "INVALID_REFRESH_TOKEN", "UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
         "ACCOUNT_NOT_ACTIVE" -> HttpStatusCode.Forbidden
+        "ACCOUNT_NOT_RESTRICTED" -> HttpStatusCode.Conflict
         "PASSWORD_RESET_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
         "WRONG_CURRENT_PASSWORD" -> HttpStatusCode.Forbidden
         "SESSION_NOT_FOUND" -> HttpStatusCode.NotFound

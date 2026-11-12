@@ -1,6 +1,8 @@
 package com.pynapli.shared.network
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.AccountAppealRequestDto
+import com.pynapli.shared.network.dto.AppealDto
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
@@ -38,4 +40,6 @@ internal class KtorAuthApi(
     override suspend fun signOutDevice(sessionId: String): AppResult<SignedOutDevicesDto> = support.authDelete("/v1/auth/sessions/$sessionId")
 
     override suspend fun signOutOtherDevices(): AppResult<SignedOutDevicesDto> = support.authPost("/v1/auth/sessions/sign-out-others")
+
+    override suspend fun submitAccountAppeal(request: AccountAppealRequestDto): AppResult<AppealDto> = support.postJson("/v1/auth/account-appeal", request)
 }

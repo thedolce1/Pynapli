@@ -2,6 +2,8 @@ package com.pynapli.shared.network
 
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.AccountAppealRequestDto
+import com.pynapli.shared.network.dto.AppealDto
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
@@ -40,6 +42,9 @@ interface AuthApi {
     suspend fun signOutDevice(sessionId: String): AppResult<SignedOutDevicesDto> = notSupported()
 
     suspend fun signOutOtherDevices(): AppResult<SignedOutDevicesDto> = notSupported()
+
+    /** Appeal from a suspended or banned account, which can't sign in. */
+    suspend fun submitAccountAppeal(request: AccountAppealRequestDto): AppResult<AppealDto> = notSupported()
 }
 
 private fun notSupported(): AppResult.Failure = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))

@@ -14,6 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -47,6 +48,8 @@ fun AuthScreen(
     onSubmit: () -> Unit,
     onResetCodeChanged: (String) -> Unit = {},
     onResendResetCode: () -> Unit = {},
+    onAppealReasonChanged: (String) -> Unit = {},
+    onSubmitAppeal: () -> Unit = {},
     onDevLogin: (() -> Unit)? = null,
     // When provided, "Create account" leaves this screen for the onboarding stepper
     // instead of switching to the legacy inline signup form.
@@ -210,6 +213,37 @@ fun AuthScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+
+        if (state.accountSuspended && state.mode == AuthMode.SignIn) {
+            Spacer(modifier = Modifier.height(16.dp))
+            if (state.appealSent) {
+                Text(
+                    text = "Your appeal is with our safety team. Try signing in again in a few days; nothing else is needed from you.",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                OutlinedTextField(
+                    value = state.appealReason,
+                    onValueChange = onAppealReasonChanged,
+                    label = { Text("Why should we take another look?") },
+                    minLines = 3,
+                    enabled = !state.isSubmitting,
+                    colors = authTextFieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onSubmitAppeal,
+                    enabled = !state.isSubmitting,
+                    modifier = Modifier.fillMaxWidth().handCursor(enabled = !state.isSubmitting),
+                ) {
+                    Text("Send appeal")
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(22.dp))

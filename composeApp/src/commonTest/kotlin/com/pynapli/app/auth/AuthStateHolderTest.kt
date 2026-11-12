@@ -7,6 +7,8 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.AuthApi
 import com.pynapli.shared.network.ProfileApi
+import com.pynapli.shared.network.dto.AccountAppealRequestDto
+import com.pynapli.shared.network.dto.AppealDto
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
@@ -32,6 +34,49 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AuthStateHolderTest {
+    @Test
+    fun aSuspendedAccountCanAppealFromSignIn() =
+        runTest {
+            val api = FakeAuthApi(loginResult = AppResult.Failure(AppError("ACCOUNT_NOT_ACTIVE", "This account is suspended.")))
+            val holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                )
+            holder.updateEmail("kai@pynapli.local")
+            holder.updatePassword("kai-password-123")
+            holder.submit()
+            assertTrue(holder.state.value.accountSuspended)
+
+            holder.updateAppealReason("short")
+            holder.submitAccountAppeal()
+            assertEquals("Tell us a little about what happened.", holder.state.value.errorMessage)
+
+            holder.updateAppealReason("I was reported by someone I had blocked.")
+            holder.submitAccountAppeal()
+            assertEquals(listOf("kai@pynapli.local"), api.appeals.map { it.email })
+            assertEquals("kai-password-123", api.appeals.single().password)
+            assertTrue(holder.state.value.appealSent)
+        }
+
+    @Test
+    fun aWrongPasswordDoesNotOfferAnAppeal() =
+        runTest {
+            val api = FakeAuthApi(loginResult = AppResult.Failure(AppError("INVALID_CREDENTIALS", "Invalid email or password.")))
+            val holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                )
+            holder.updateEmail("kai@pynapli.local")
+            holder.updatePassword("wrong-password-123")
+            holder.submit()
+
+            assertFalse(holder.state.value.accountSuspended)
+        }
+
     @Test
     fun forgotPasswordSendsACodeThenSignsInWithTheNewPassword() =
         runTest {
@@ -180,6 +225,12 @@ private class FakeAuthApi(
     val logins = mutableListOf<EmailLoginRequestDto>()
     val resetRequests = mutableListOf<String>()
     val resets = mutableListOf<PasswordResetDto>()
+    val appeals = mutableListOf<AccountAppealRequestDto>()
+
+    override suspend fun submitAccountAppeal(request: AccountAppealRequestDto): AppResult<AppealDto> {
+        appeals += request
+        return AppResult.Success(AppealDto("appeal-1", "account_suspension", "account", status = "open", userReason = request.reason, createdAt = "", updatedAt = ""))
+    }
 
     override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> {
         logins += request
