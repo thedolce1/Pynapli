@@ -4,6 +4,7 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.SessionRecord
 import com.pynapli.server.auth.security.Sha256
 import com.pynapli.server.testsupport.SingleSessionAuthRepository
+import com.pynapli.server.testsupport.receiveWhileEmitting
 import com.pynapli.shared.network.dto.ActivityDeltaDto
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.header
@@ -53,17 +54,16 @@ class ActivityStreamRouteTest {
                 client.webSocket("/v1/activity/stream", request = {
                     header(HttpHeaders.Authorization, "Bearer $viewerToken")
                 }) {
-                    delay(50)
-
-                    broadcaster.emit(
-                        ActivityRealtimeDelta(
-                            recipientUserId = viewerId,
-                            type = "match",
-                            occurredAt = Instant.parse("2026-05-20T16:00:00Z"),
-                        ),
-                    )
-
-                    val frame = withTimeout(1_000) { incoming.receive() }
+                    val frame =
+                        receiveWhileEmitting {
+                            broadcaster.emit(
+                                ActivityRealtimeDelta(
+                                    recipientUserId = viewerId,
+                                    type = "match",
+                                    occurredAt = Instant.parse("2026-05-20T16:00:00Z"),
+                                ),
+                            )
+                        }
                     val text = (frame as? Frame.Text)?.readText() ?: fail("Expected text frame")
                     val delta = streamJson.decodeFromString(ActivityDeltaDto.serializer(), text)
                     assertEquals("match", delta.type)
@@ -95,27 +95,27 @@ class ActivityStreamRouteTest {
                 client.webSocket("/v1/activity/stream", request = {
                     header(HttpHeaders.Authorization, "Bearer $viewerToken")
                 }) {
-                    delay(50)
+                    val first =
+                        receiveWhileEmitting {
+                            broadcaster.emit(
+                                ActivityRealtimeDelta(
+                                    recipientUserId = otherUserId,
+                                    type = "flirt",
+                                    occurredAt = Instant.parse("2026-05-20T16:00:00Z"),
+                                ),
+                            )
 
-                    broadcaster.emit(
-                        ActivityRealtimeDelta(
-                            recipientUserId = otherUserId,
-                            type = "flirt",
-                            occurredAt = Instant.parse("2026-05-20T16:00:00Z"),
-                        ),
-                    )
-
-                    broadcaster.emit(
-                        ActivityRealtimeDelta(
-                            recipientUserId = viewerId,
-                            type = "match",
-                            occurredAt = Instant.parse("2026-05-20T16:00:01Z"),
-                        ),
-                    )
-                    // Sentinel pattern: a delta that must arrive is emitted right after the one that must not.
-                    // The first frame must be the sentinel; if the earlier delta leaked, it would arrive first.
-                    // (A tryReceive() check returns immediately and could never fail.)
-                    val first = withTimeout(1_000) { incoming.receive() }
+                            broadcaster.emit(
+                                ActivityRealtimeDelta(
+                                    recipientUserId = viewerId,
+                                    type = "match",
+                                    occurredAt = Instant.parse("2026-05-20T16:00:01Z"),
+                                ),
+                            )
+                            // Sentinel pattern: a delta that must arrive is emitted right after the one that must not.
+                            // The first frame must be the sentinel; if the earlier delta leaked, it would arrive first.
+                            // (A tryReceive() check returns immediately and could never fail.)
+                        }
                     val text = (first as? Frame.Text)?.readText() ?: fail("Expected text frame")
                     assertTrue("\"match\"" in text, "Expected the sentinel delta first, got: $text")
                     assertFalse("\"flirt\"" in text, "Activity deltas must only be delivered to their recipient")

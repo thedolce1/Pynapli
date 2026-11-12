@@ -7,6 +7,7 @@ import com.pynapli.server.safety.BlockRecord
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockSummaryRecord
 import com.pynapli.server.testsupport.SingleSessionAuthRepository
+import com.pynapli.server.testsupport.receiveWhileEmitting
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import com.pynapli.shared.network.dto.PresenceStreamSubscribeDto
 import io.ktor.client.plugins.websocket.webSocket
@@ -68,18 +69,16 @@ class PresenceStreamRouteTest {
                             ),
                         ),
                     )
-                    // Give the route's emitterJob time to install the subscription before broadcasting.
-                    delay(50)
-
-                    broadcaster.emit(
-                        PresenceDeltaDto(
-                            userId = targetId.toString(),
-                            online = true,
-                            lastActiveAt = Instant.parse("2026-05-09T12:00:00Z").toString(),
-                        ),
-                    )
-
-                    val frame = withTimeout(1_000) { incoming.receive() }
+                    val frame =
+                        receiveWhileEmitting {
+                            broadcaster.emit(
+                                PresenceDeltaDto(
+                                    userId = targetId.toString(),
+                                    online = true,
+                                    lastActiveAt = Instant.parse("2026-05-09T12:00:00Z").toString(),
+                                ),
+                            )
+                        }
                     val text = (frame as? Frame.Text)?.readText() ?: fail("Expected text frame")
                     val delta = streamJson.decodeFromString(PresenceDeltaDto.serializer(), text)
                     assertEquals(targetId.toString(), delta.userId)
@@ -121,27 +120,27 @@ class PresenceStreamRouteTest {
                             ),
                         ),
                     )
-                    delay(50)
+                    val first =
+                        receiveWhileEmitting {
+                            broadcaster.emit(
+                                PresenceDeltaDto(
+                                    userId = unsubscribedId.toString(),
+                                    online = true,
+                                    lastActiveAt = Instant.parse("2026-05-09T12:00:00Z").toString(),
+                                ),
+                            )
 
-                    broadcaster.emit(
-                        PresenceDeltaDto(
-                            userId = unsubscribedId.toString(),
-                            online = true,
-                            lastActiveAt = Instant.parse("2026-05-09T12:00:00Z").toString(),
-                        ),
-                    )
-
-                    broadcaster.emit(
-                        PresenceDeltaDto(
-                            userId = subscribedId.toString(),
-                            online = true,
-                            lastActiveAt = Instant.parse("2026-05-09T12:00:01Z").toString(),
-                        ),
-                    )
-                    // Sentinel pattern: a delta that must arrive is emitted right after the one that must not.
-                    // The first frame must be the sentinel; if the earlier delta leaked, it would arrive first.
-                    // (A tryReceive() check returns immediately and could never fail.)
-                    val first = withTimeout(1_000) { incoming.receive() }
+                            broadcaster.emit(
+                                PresenceDeltaDto(
+                                    userId = subscribedId.toString(),
+                                    online = true,
+                                    lastActiveAt = Instant.parse("2026-05-09T12:00:01Z").toString(),
+                                ),
+                            )
+                            // Sentinel pattern: a delta that must arrive is emitted right after the one that must not.
+                            // The first frame must be the sentinel; if the earlier delta leaked, it would arrive first.
+                            // (A tryReceive() check returns immediately and could never fail.)
+                        }
                     val text = (first as? Frame.Text)?.readText() ?: fail("Expected text frame")
                     assertTrue(subscribedId.toString() in text, "Expected the sentinel delta first, got: $text")
                     assertFalse(unsubscribedId.toString() in text, "No frame should arrive for an unsubscribed target")
@@ -182,25 +181,25 @@ class PresenceStreamRouteTest {
                             ),
                         ),
                     )
-                    delay(50)
+                    val first =
+                        receiveWhileEmitting {
+                            broadcaster.emit(
+                                PresenceDeltaDto(
+                                    userId = blockedTargetId.toString(),
+                                    online = true,
+                                    lastActiveAt = Instant.parse("2026-05-09T12:00:00Z").toString(),
+                                ),
+                            )
 
-                    broadcaster.emit(
-                        PresenceDeltaDto(
-                            userId = blockedTargetId.toString(),
-                            online = true,
-                            lastActiveAt = Instant.parse("2026-05-09T12:00:00Z").toString(),
-                        ),
-                    )
-
-                    broadcaster.emit(
-                        PresenceDeltaDto(
-                            userId = visibleTargetId.toString(),
-                            online = true,
-                            lastActiveAt = Instant.parse("2026-05-09T12:00:01Z").toString(),
-                        ),
-                    )
-                    // Sentinel pattern (see above): the unblocked target's delta must be the first frame.
-                    val first = withTimeout(1_000) { incoming.receive() }
+                            broadcaster.emit(
+                                PresenceDeltaDto(
+                                    userId = visibleTargetId.toString(),
+                                    online = true,
+                                    lastActiveAt = Instant.parse("2026-05-09T12:00:01Z").toString(),
+                                ),
+                            )
+                            // Sentinel pattern (see above): the unblocked target's delta must be the first frame.
+                        }
                     val text = (first as? Frame.Text)?.readText() ?: fail("Expected text frame")
                     assertTrue(visibleTargetId.toString() in text, "Expected the sentinel delta first, got: $text")
                     assertFalse(blockedTargetId.toString() in text, "Blocked targets must not leak presence to viewer")
