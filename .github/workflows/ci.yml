@@ -72,28 +72,36 @@ jobs:
           ./gradlew
           :androidApp:lintRelease
           :androidApp:assembleRelease
+      # Reports are only worth keeping when something failed, and an upload problem (e.g. the
+      # account's artifact storage quota being full) must never turn a passing gate red.
       - name: Upload lint report
-        if: always()
+        if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: android-lint-release
           path: androidApp/build/reports/lint-results-release.*
           if-no-files-found: ignore
+          retention-days: 7
       - name: Upload test reports
-        if: always()
+        if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
           path: '**/build/reports/tests/**'
           if-no-files-found: ignore
+          retention-days: 7
+      # The APK is the bulk of artifact storage; main-branch builds are the ones testers use.
       - name: Upload debug APK
-        if: success()
+        if: success() && github.ref == 'refs/heads/main'
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: pynapli-debug-preview-apk
           path: androidApp/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 5
 
   web:
     name: Web (Wasm compile)
