@@ -122,6 +122,7 @@ data class AdminReportItemDto(
     val createdAt: String,
     val updatedAt: String,
     val reviewedAt: String? = null,
+    val evidence: String? = null,
 )
 
 @Serializable
@@ -150,6 +151,7 @@ private fun AdminReportRecord.toDto(): AdminReportItemDto =
         createdAt = createdAt.toString(),
         updatedAt = updatedAt.toString(),
         reviewedAt = reviewedAt?.toString(),
+        evidence = evidence,
     )
 
 private fun AdminReportActionRecord.toDto(): AdminReportActionDto =

@@ -472,6 +472,7 @@ private fun ColumnScope.MessagesTabContent(
             onDeclineInvite = conversationActions.onDeclineInvite,
             onLeaveConversation = conversationActions.onLeave,
             onDeleteMessage = conversationActions.onDeleteMessage,
+            onReportMessage = conversationActions.onReportMessage,
             onSetExpiry = conversationActions.onSetExpiry,
             onRevealMedia = conversationActions.onRevealMedia,
             onPickPhoto = onPickConversationPhoto,

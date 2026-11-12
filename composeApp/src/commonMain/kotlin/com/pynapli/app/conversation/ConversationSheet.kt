@@ -11,6 +11,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -18,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliBottomSheet
 import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
+import com.pynapli.app.profile.ReportCategoryDialog
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 
 @Composable
@@ -33,6 +38,7 @@ fun ConversationSheet(
     onDeclineInvite: () -> Unit = {},
     onLeaveConversation: () -> Unit = {},
     onDeleteMessage: (String) -> Unit = {},
+    onReportMessage: (messageId: String, category: String) -> Unit = { _, _ -> },
     onSetExpiry: (Int?) -> Unit = {},
     onRevealMedia: (String) -> Unit = {},
     onPickPhoto: () -> Unit = {},
@@ -72,6 +78,7 @@ fun ConversationSheet(
                 onDeclineInvite = onDeclineInvite,
                 onLeaveConversation = onLeaveConversation,
                 onDeleteMessage = onDeleteMessage,
+                onReportMessage = onReportMessage,
                 onSetExpiry = onSetExpiry,
                 onRevealMedia = onRevealMedia,
                 onPickPhoto = onPickPhoto,
@@ -98,6 +105,7 @@ fun ConversationScreen(
     onDeclineInvite: () -> Unit = {},
     onLeaveConversation: () -> Unit = {},
     onDeleteMessage: (String) -> Unit = {},
+    onReportMessage: (messageId: String, category: String) -> Unit = { _, _ -> },
     onSetExpiry: (Int?) -> Unit = {},
     onRevealMedia: (String) -> Unit = {},
     onPickPhoto: () -> Unit = {},
@@ -125,6 +133,7 @@ fun ConversationScreen(
             onDeclineInvite = onDeclineInvite,
             onLeaveConversation = onLeaveConversation,
             onDeleteMessage = onDeleteMessage,
+            onReportMessage = onReportMessage,
             onSetExpiry = onSetExpiry,
             onRevealMedia = onRevealMedia,
             onPickPhoto = onPickPhoto,
@@ -149,6 +158,7 @@ private fun ColumnScope.ConversationContent(
     onDeclineInvite: () -> Unit,
     onLeaveConversation: () -> Unit,
     onDeleteMessage: (String) -> Unit,
+    onReportMessage: (messageId: String, category: String) -> Unit,
     onSetExpiry: (Int?) -> Unit,
     onRevealMedia: (String) -> Unit,
     onPickPhoto: () -> Unit,
@@ -158,6 +168,8 @@ private fun ColumnScope.ConversationContent(
     modifier: Modifier = Modifier,
     onEscape: (() -> Unit)? = null,
 ) {
+    // The message whose "Report" flag was tapped; the reason dialog shows while it is set.
+    var reportingMessageId by remember { mutableStateOf<String?>(null) }
     when {
         state.isOpening -> {
             Box(
@@ -225,6 +237,8 @@ private fun ColumnScope.ConversationContent(
                     revealingMessageIds = state.revealingMessageIds,
                     onLoadOlder = onLoadOlder,
                     onDeleteMessage = onDeleteMessage,
+                    reportedMessageIds = state.reportedMessageIds,
+                    onReportMessage = { messageId -> reportingMessageId = messageId },
                     onRevealMedia = onRevealMedia,
                     modifier =
                         Modifier
@@ -232,6 +246,24 @@ private fun ColumnScope.ConversationContent(
                             .then(if (fillAvailableHeight) Modifier.weight(1f) else Modifier.heightIn(min = 220.dp, max = 430.dp)),
                 )
                 TypingIndicator(participants = state.typingParticipants)
+                state.reportFeedback?.let { feedback ->
+                    Text(
+                        text = feedback,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                reportingMessageId?.let { messageId ->
+                    ReportCategoryDialog(
+                        isSubmitting = false,
+                        title = "Report this message",
+                        onSubmit = { category, _ ->
+                            reportingMessageId = null
+                            onReportMessage(messageId, category)
+                        },
+                        onDismiss = { reportingMessageId = null },
+                    )
+                }
                 if (!state.isViewerInvited) {
                     Composer(
                         draft = state.draft,

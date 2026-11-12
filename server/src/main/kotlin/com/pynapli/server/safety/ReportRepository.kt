@@ -14,6 +14,12 @@ interface ReportRepository {
         reportIdFactory: () -> UUID = UUID::randomUUID,
     ): ReportRecord
 
+    /** Stores what the report is about (e.g. the reported message's text). No-op where unsupported. */
+    suspend fun attachEvidence(
+        reportId: UUID,
+        evidence: String,
+    ) = Unit
+
     suspend fun createSystemReport(
         reportedUserId: UUID,
         targetType: String,

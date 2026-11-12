@@ -41,7 +41,8 @@ private fun Connection.selectReports(
                status,
                created_at,
                updated_at,
-               reviewed_at
+               reviewed_at,
+               evidence_text
         FROM safety_reports
         WHERE (? = 'all' OR status = ?)
         ORDER BY

@@ -39,6 +39,7 @@ import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Check
 import com.pynapli.app.design.icons.filled.Delete
 import com.pynapli.app.design.icons.filled.DoneAll
+import com.pynapli.app.design.icons.filled.Flag
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.pynapliIconButtonSize
 import com.pynapli.shared.network.dto.MessageDto
@@ -57,6 +58,8 @@ internal fun MessageList(
     onDeleteMessage: (String) -> Unit,
     onRevealMedia: (String) -> Unit,
     modifier: Modifier = Modifier,
+    reportedMessageIds: Set<String> = emptySet(),
+    onReportMessage: (String) -> Unit = {},
 ) {
     // Lazy so a long thread composes only the visible bubbles. Keyed rows also keep the reading
     // position when "Older messages" prepends a page.
@@ -133,6 +136,8 @@ internal fun MessageList(
                                 isRevealing = message.messageId in revealingMessageIds,
                                 onDeleteMessage = onDeleteMessage,
                                 onRevealMedia = onRevealMedia,
+                                reported = message.messageId in reportedMessageIds,
+                                onReportMessage = onReportMessage,
                             )
                         }
                     }
@@ -299,6 +304,8 @@ private fun MessageBubble(
     isRevealing: Boolean,
     onDeleteMessage: (String) -> Unit,
     onRevealMedia: (String) -> Unit,
+    reported: Boolean = false,
+    onReportMessage: (String) -> Unit = {},
 ) {
     val deleted = message.deletedAt != null
     val timeLabel = message.createdAt.messageTimeLabel()
@@ -386,6 +393,28 @@ private fun MessageBubble(
                 }
                 if (mine && showDeliveryStatus && !deleted) {
                     DeliveryReceipt(deliveryStatus = message.deliveryStatus)
+                }
+                // Someone else's message can be reported on its own, with its text kept for moderators.
+                if (!mine && !deleted) {
+                    if (reported) {
+                        Text(
+                            text = "Reported",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    } else {
+                        IconButton(
+                            onClick = { onReportMessage(message.messageId) },
+                            modifier = Modifier.size(pynapliIconButtonSize(32.dp)).handCursor(),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Flag,
+                                contentDescription = "Report message",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
                 if (mine && !deleted) {
                     IconButton(

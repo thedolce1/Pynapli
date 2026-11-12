@@ -64,6 +64,33 @@ class ConversationStateHolderTest {
         }
 
     @Test
+    fun reportingTheirMessageSendsItOnceAndSaysWhatHappens() =
+        runTest {
+            val repository = FakeConversationRepository(initialMessage = message(senderUserId = "target"))
+            val stateHolder = ConversationStateHolder(repository)
+            stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+            stateHolder.reportMessage("message-1", "harassment_or_threats")
+            stateHolder.reportMessage("message-1", "harassment_or_threats")
+
+            assertEquals(listOf(Triple("target", "message-1", "harassment_or_threats")), repository.reportedMessages)
+            assertEquals(setOf("message-1"), stateHolder.state.value.reportedMessageIds)
+            assertEquals("Thanks, we'll review that message. You can also block them from their profile.", stateHolder.state.value.reportFeedback)
+        }
+
+    @Test
+    fun yourOwnMessageCannotBeReported() =
+        runTest {
+            val repository = FakeConversationRepository()
+            val stateHolder = ConversationStateHolder(repository)
+            stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+            stateHolder.reportMessage("message-1", "other")
+
+            assertEquals(emptyList(), repository.reportedMessages)
+        }
+
+    @Test
     fun deleteMessageIgnoresMessageFromOtherParticipant() =
         runTest {
             val repository =
@@ -310,6 +337,17 @@ private class FakeConversationRepository(
             updatedAt = "2026-05-22T18:00:00Z",
         )
     var deletedMessageId: String? = null
+    val reportedMessages = mutableListOf<Triple<String, String, String>>()
+
+    override suspend fun reportMessage(
+        reportedUserId: String,
+        messageId: String,
+        category: String,
+    ): AppResult<Unit> {
+        reportedMessages += Triple(reportedUserId, messageId, category)
+        return AppResult.Success(Unit)
+    }
+
     var detailMessage: MessageDto = initialMessage
     var detailConversation: ConversationDto = conversation
     var acceptResult: AppResult<ConversationDetailDto> = AppResult.Failure(AppError("UNUSED", "Unused."))

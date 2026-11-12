@@ -30,6 +30,9 @@ data class ConversationUiState(
     val isSendingPhoto: Boolean = false,
     val isLoadingOlder: Boolean = false,
     val isDeletingMessageIds: Set<String> = emptySet(),
+    // Messages reported from this device; their flag button is replaced by "Reported".
+    val reportedMessageIds: Set<String> = emptySet(),
+    val reportFeedback: String? = null,
     val revealingMessageIds: Set<String> = emptySet(),
     val typingParticipants: List<TypingParticipantUi> = emptyList(),
     val partnerInviteFeedback: String? = null,
