@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliMaxWidthColumn
+import com.pynapli.shared.network.dto.PremiumInventoryType
 import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubscriptionTierDto
 import kotlinx.coroutines.launch
@@ -45,6 +46,7 @@ fun StoreScreen(
         onPurchaseTier = { tier -> scope.launch { stateHolder.purchase(tier) } },
         onPurchaseProduct = { product -> scope.launch { stateHolder.purchaseProduct(product) } },
         onRestorePurchases = { scope.launch { stateHolder.restorePurchases() } },
+        onUseBoost = { scope.launch { stateHolder.useBoost() } },
         modifier = modifier,
         purchasesAvailable = purchasesAvailable,
     )
@@ -58,6 +60,7 @@ private fun StoreScreenContent(
     onRestorePurchases: () -> Unit,
     modifier: Modifier = Modifier,
     purchasesAvailable: Boolean = true,
+    onUseBoost: () -> Unit = {},
 ) {
     // The flagship paid plan (highest monthly price) gets the "Recommended" hero emphasis.
     val heroTier =
@@ -181,6 +184,9 @@ private fun StoreScreenContent(
                             isRestoringPurchases = state.isRestoringPurchases,
                             onPurchaseProduct = onPurchaseProduct,
                             purchasesAvailable = purchasesAvailable,
+                            activeBoostEndsAt = state.activeBoostEndsAt.takeIf { product.inventoryType == PremiumInventoryType.BOOST },
+                            isActivatingBoost = state.isActivatingBoost,
+                            onUseBoost = onUseBoost.takeIf { product.inventoryType == PremiumInventoryType.BOOST },
                         )
                     }
                 }

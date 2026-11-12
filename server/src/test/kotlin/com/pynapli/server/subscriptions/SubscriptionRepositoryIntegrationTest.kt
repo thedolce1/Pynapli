@@ -253,6 +253,9 @@ class SubscriptionRepositoryIntegrationTest {
             assertEquals(false, second.consumedInventory)
             assertEquals(first.activation.activationId, second.activation.activationId)
             assertEquals(0, dataSource.inventoryQuantity(user, "boost"))
+            // The running Boost is visible (for the app's countdown) until it ends.
+            assertEquals(first.activation.activationId, repository.findActiveBoost(user, now.plusSeconds(600))?.activationId)
+            assertEquals(null, repository.findActiveBoost(user, now.plusSeconds(1_801)))
         }
 
     @Test

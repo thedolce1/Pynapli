@@ -19,6 +19,9 @@ data class StoreUiState(
     val isRestoringPurchases: Boolean = false,
     val purchaseMessage: String? = null,
     val errorMessage: String? = null,
+    // When the running Boost ends (ISO-8601); null when none is on.
+    val activeBoostEndsAt: String? = null,
+    val isActivatingBoost: Boolean = false,
 ) {
     val currentTier: String get() = entitlement?.tier ?: SubscriptionTier.FREE
 
@@ -37,6 +40,7 @@ data class StoreUi(
     val premiumProducts: List<PremiumProductDto>,
     val balances: List<PremiumInventoryBalanceDto>,
     val entitlement: SubscriptionEntitlementDto,
+    val activeBoostEndsAt: String? = null,
 )
 
 internal fun String.sortOrder(): Int =

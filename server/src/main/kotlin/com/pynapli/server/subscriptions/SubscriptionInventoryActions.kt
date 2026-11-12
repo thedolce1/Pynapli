@@ -18,6 +18,7 @@ internal class SubscriptionInventoryActions(
         val now = clock.instant()
         return SubscriptionCatalog.inventory().copy(
             balances = repository.listPremiumInventoryBalances(userId, now).map { it.toDto() },
+            activeBoostEndsAt = repository.findActiveBoost(userId, now)?.endsAt?.toString(),
         )
     }
 

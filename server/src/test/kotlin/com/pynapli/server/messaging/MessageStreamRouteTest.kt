@@ -4,6 +4,7 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.SessionRecord
 import com.pynapli.server.auth.security.Sha256
 import com.pynapli.server.testsupport.SingleSessionAuthRepository
+import com.pynapli.server.testsupport.receiveWhileEmitting
 import com.pynapli.shared.network.dto.MessageDeltaDto
 import com.pynapli.shared.network.dto.MessageDeltaType
 import io.ktor.client.plugins.websocket.webSocket
@@ -57,22 +58,21 @@ class MessageStreamRouteTest {
                 client.webSocket("/v1/messages/stream", request = {
                     header(HttpHeaders.Authorization, "Bearer $viewerToken")
                 }) {
-                    delay(50)
-
-                    broadcaster.emit(
-                        MessageRealtimeDelta(
-                            recipientUserId = viewerId,
-                            type = MessageDeltaType.MESSAGE_CREATED,
-                            conversationId = conversationId,
-                            occurredAt = Instant.parse("2026-05-22T16:00:00Z"),
-                            messageId = messageId,
-                            actorUserId = actorId,
-                            actorDisplayName = "Maya",
-                            expiresAt = Instant.parse("2026-05-22T16:00:06Z"),
-                        ),
-                    )
-
-                    val frame = withTimeout(1_000) { incoming.receive() }
+                    val frame =
+                        receiveWhileEmitting {
+                            broadcaster.emit(
+                                MessageRealtimeDelta(
+                                    recipientUserId = viewerId,
+                                    type = MessageDeltaType.MESSAGE_CREATED,
+                                    conversationId = conversationId,
+                                    occurredAt = Instant.parse("2026-05-22T16:00:00Z"),
+                                    messageId = messageId,
+                                    actorUserId = actorId,
+                                    actorDisplayName = "Maya",
+                                    expiresAt = Instant.parse("2026-05-22T16:00:06Z"),
+                                ),
+                            )
+                        }
                     val text = (frame as? Frame.Text)?.readText() ?: fail("Expected text frame")
                     val delta = streamJson.decodeFromString(MessageDeltaDto.serializer(), text)
                     assertEquals(MessageDeltaType.MESSAGE_CREATED, delta.type)
@@ -108,18 +108,17 @@ class MessageStreamRouteTest {
                 // No Authorization header — browsers cannot set WebSocket headers.
                 client.webSocket("/v1/messages/stream") {
                     send(Frame.Text("""{"type":"auth","token":"$viewerToken"}"""))
-                    delay(50)
-
-                    broadcaster.emit(
-                        MessageRealtimeDelta(
-                            recipientUserId = viewerId,
-                            type = MessageDeltaType.MESSAGE_CREATED,
-                            conversationId = conversationId,
-                            occurredAt = Instant.parse("2026-05-22T16:00:00Z"),
-                        ),
-                    )
-
-                    val frame = withTimeout(1_000) { incoming.receive() }
+                    val frame =
+                        receiveWhileEmitting {
+                            broadcaster.emit(
+                                MessageRealtimeDelta(
+                                    recipientUserId = viewerId,
+                                    type = MessageDeltaType.MESSAGE_CREATED,
+                                    conversationId = conversationId,
+                                    occurredAt = Instant.parse("2026-05-22T16:00:00Z"),
+                                ),
+                            )
+                        }
                     val text = (frame as? Frame.Text)?.readText() ?: fail("Expected text frame")
                     val delta = streamJson.decodeFromString(MessageDeltaDto.serializer(), text)
                     assertEquals(MessageDeltaType.MESSAGE_CREATED, delta.type)
@@ -175,30 +174,30 @@ class MessageStreamRouteTest {
                 client.webSocket("/v1/messages/stream", request = {
                     header(HttpHeaders.Authorization, "Bearer $viewerToken")
                 }) {
-                    delay(50)
-
-                    broadcaster.emit(
-                        MessageRealtimeDelta(
-                            recipientUserId = otherUserId,
-                            type = MessageDeltaType.MESSAGE_DELETED,
-                            conversationId = UUID.randomUUID(),
-                            occurredAt = Instant.parse("2026-05-22T16:00:00Z"),
-                        ),
-                    )
-
                     val sentinelConversationId = UUID.randomUUID()
-                    broadcaster.emit(
-                        MessageRealtimeDelta(
-                            recipientUserId = viewerId,
-                            type = MessageDeltaType.MESSAGE_DELETED,
-                            conversationId = sentinelConversationId,
-                            occurredAt = Instant.parse("2026-05-22T16:00:01Z"),
-                        ),
-                    )
-                    // Sentinel pattern: a delta that must arrive is emitted right after the one that must not.
-                    // The first frame must be the sentinel; if the earlier delta leaked, it would arrive first.
-                    // (A tryReceive() check returns immediately and could never fail.)
-                    val first = withTimeout(1_000) { incoming.receive() }
+                    val first =
+                        receiveWhileEmitting {
+                            broadcaster.emit(
+                                MessageRealtimeDelta(
+                                    recipientUserId = otherUserId,
+                                    type = MessageDeltaType.MESSAGE_DELETED,
+                                    conversationId = UUID.randomUUID(),
+                                    occurredAt = Instant.parse("2026-05-22T16:00:00Z"),
+                                ),
+                            )
+
+                            broadcaster.emit(
+                                MessageRealtimeDelta(
+                                    recipientUserId = viewerId,
+                                    type = MessageDeltaType.MESSAGE_DELETED,
+                                    conversationId = sentinelConversationId,
+                                    occurredAt = Instant.parse("2026-05-22T16:00:01Z"),
+                                ),
+                            )
+                            // Sentinel pattern: a delta that must arrive is emitted right after the one that must not.
+                            // The first frame must be the sentinel; if the earlier delta leaked, it would arrive first.
+                            // (A tryReceive() check returns immediately and could never fail.)
+                        }
                     val text = (first as? Frame.Text)?.readText() ?: fail("Expected text frame")
                     assertTrue(sentinelConversationId.toString() in text, "Expected the sentinel delta first, got: $text")
                     assertFalse("16:00:00Z" in text, "Message deltas must only be delivered to their recipient")

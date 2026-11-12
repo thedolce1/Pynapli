@@ -91,6 +91,11 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
             }
         }
 
+    suspend fun findActiveBoost(
+        userId: UUID,
+        now: Instant,
+    ): BoostActivationRecord? = dataSource.withConnection { connection -> connection.findActiveBoostActivation(userId, now) }
+
     private suspend fun consumePremiumInventory(
         userId: UUID,
         inventoryType: String,

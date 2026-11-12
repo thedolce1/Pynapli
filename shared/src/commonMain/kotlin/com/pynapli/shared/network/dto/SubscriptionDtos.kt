@@ -51,6 +51,8 @@ data class SubscriptionInventoryResponseDto(
     val tiers: List<SubscriptionTierDto>,
     val premiumProducts: List<PremiumProductDto> = emptyList(),
     val balances: List<PremiumInventoryBalanceDto> = emptyList(),
+    // When a Boost is running, when it ends (ISO-8601). Null when none is active.
+    val activeBoostEndsAt: String? = null,
 )
 
 @Serializable

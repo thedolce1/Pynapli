@@ -16,6 +16,32 @@ import kotlin.test.assertNull
 
 class StoreStateHolderTest {
     @Test
+    fun usingABoostTurnsItOnAndRefreshesTheBalance() =
+        runTest {
+            val repository = FakeStoreRepository(firstEntitlementTier = SubscriptionTier.FREE, refreshedEntitlementTier = SubscriptionTier.FREE)
+            val stateHolder = StoreStateHolder(repository = repository)
+            stateHolder.load()
+
+            stateHolder.useBoost()
+
+            assertEquals(1, repository.boostActivations)
+            assertEquals("Boost on: you're shown first to people nearby for the next 30 minutes.", stateHolder.state.value.purchaseMessage)
+            assertEquals(2, repository.loadCount)
+
+            stateHolder.useBoost()
+            assertEquals("Your Boost is already on.", stateHolder.state.value.purchaseMessage)
+        }
+
+    @Test
+    fun aBoostEndTimeReadsAsAClockTimeAndDisappearsOnceOver() {
+        @OptIn(kotlin.time.ExperimentalTime::class)
+        val now = kotlin.time.Instant.parse("2026-11-12T20:00:00Z")
+        assertEquals(null, "2026-11-12T19:59:00Z".boostEndsLabel(now))
+        assertEquals(null, "not a time".boostEndsLabel(now))
+        assertEquals(5, "2026-11-12T20:30:00Z".boostEndsLabel(now)?.length)
+    }
+
+    @Test
     fun purchaseClearsPendingAndRefreshesEntitlement() =
         runTest {
             val repository =
@@ -89,6 +115,21 @@ private class FakeStoreRepository(
 ) : StoreRepository {
     var loadCount = 0
         private set
+    var boostActivations = 0
+        private set
+
+    override suspend fun activateBoost(): AppResult<com.pynapli.shared.network.dto.BoostActivationDto> {
+        boostActivations += 1
+        return AppResult.Success(
+            com.pynapli.shared.network.dto.BoostActivationDto(
+                activationId = "boost-1",
+                boostType = "boost",
+                startsAt = "2026-11-12T20:00:00Z",
+                endsAt = "2026-11-12T20:30:00Z",
+                alreadyActive = boostActivations > 1,
+            ),
+        )
+    }
 
     override suspend fun loadStore(): AppResult<StoreUi> {
         loadCount += 1

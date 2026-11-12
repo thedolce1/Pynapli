@@ -103,6 +103,12 @@ interface SubscriptionRepository {
         duration: Duration,
     ): BoostActivationResult? = null
 
+    /** The Boost running right now, if any (so the app can show its countdown after a restart). */
+    suspend fun findActiveBoost(
+        userId: UUID,
+        now: Instant,
+    ): BoostActivationRecord? = null
+
     suspend fun upsertDevSubscriptionPurchase(
         userId: UUID,
         productId: String,
