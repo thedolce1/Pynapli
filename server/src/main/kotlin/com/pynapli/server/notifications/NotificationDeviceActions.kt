@@ -11,6 +11,7 @@ internal class NotificationDeviceActions(
     suspend fun registerPushDevice(
         userId: UUID,
         request: RegisterPushDeviceRequestDto,
+        sessionId: UUID? = null,
     ): PushDeviceRegistrationResponseDto {
         val platform = request.platform.trim().lowercase()
         if (platform !in PUSH_PLATFORMS) throw NotificationException("INVALID_PUSH_PLATFORM")
@@ -31,6 +32,7 @@ internal class NotificationDeviceActions(
                         locale = request.locale.cleaned(MAX_LOCALE_LENGTH),
                         timezone = request.timezone.cleaned(MAX_TIMEZONE_LENGTH),
                         notificationsEnabled = request.notificationsEnabled,
+                        sessionId = sessionId,
                     ),
                 deviceIdFactory = UUID::randomUUID,
             )

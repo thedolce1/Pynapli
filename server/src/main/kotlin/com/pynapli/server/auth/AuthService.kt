@@ -111,6 +111,9 @@ class AuthService(
 
     suspend fun authenticate(accessToken: String): UserRecord = sessionManager.authenticate(accessToken)
 
+    /** The session behind an access token (one lookup; used where a row must follow the session, e.g. push devices). */
+    suspend fun sessionIdFor(accessToken: String): UUID? = repository.findSessionByAccessTokenHash(Sha256.hash(accessToken))?.id
+
     suspend fun logout(accessToken: String): Boolean = sessionManager.logout(accessToken)
 
     fun invalidateCachedSessionsForUser(userId: UUID) {

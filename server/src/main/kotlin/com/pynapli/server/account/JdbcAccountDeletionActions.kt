@@ -30,6 +30,7 @@ internal class JdbcAccountDeletionActions(
                 val endedBenefitCount = endLinkedPartnerBenefits(connection, userId)
                 val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                 val revokedSessionCount = revokeSessions(connection, userId)
+                disablePushDevices(connection, userId)
                 recordDeletionEvent(connection, userId, revokedSessionCount)
 
                 connection.commit()
@@ -272,6 +273,27 @@ internal class JdbcAccountDeletionActions(
             ).use { statement ->
                 statement.setObject(1, userId)
                 return statement.executeUpdate()
+            }
+    }
+
+    // Includes devices registered before push devices followed sessions (session_id NULL).
+    private fun disablePushDevices(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection
+            .prepareStatement(
+                """
+                UPDATE push_devices
+                SET disabled_at = now(),
+                    notifications_enabled = false,
+                    updated_at = now()
+                WHERE user_id = ?
+                  AND disabled_at IS NULL
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeUpdate()
             }
     }
 
