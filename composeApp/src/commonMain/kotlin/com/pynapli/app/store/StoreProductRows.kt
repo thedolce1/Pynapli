@@ -25,6 +25,7 @@ import com.pynapli.app.design.handCursor
 import com.pynapli.shared.network.dto.PremiumProductDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
+import kotlinx.datetime.toLocalDateTime
 
 @Composable
 internal fun StoreTierRow(
@@ -154,6 +155,10 @@ internal fun StoreProductRow(
     isRestoringPurchases: Boolean,
     onPurchaseProduct: (PremiumProductDto) -> Unit,
     purchasesAvailable: Boolean = true,
+    // Boost row only: when the running Boost ends, and how to turn one on from the balance.
+    activeBoostEndsAt: String? = null,
+    isActivatingBoost: Boolean = false,
+    onUseBoost: (() -> Unit)? = null,
 ) {
     val purchaseInFlight = pendingPurchaseProductId != null || pendingPurchaseTier != null || isRestoringPurchases
     val isPurchasing = pendingPurchaseProductId == product.productId
@@ -222,11 +227,47 @@ internal fun StoreProductRow(
             }
         }
 
+        if (onUseBoost != null) {
+            val endsAt = activeBoostEndsAt?.boostEndsLabel()
+            when {
+                endsAt != null ->
+                    Text(
+                        text = "Boost on until $endsAt",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+
+                balance > 0 ->
+                    OutlinedButton(
+                        onClick = onUseBoost,
+                        enabled = !isActivatingBoost,
+                        modifier = Modifier.fillMaxWidth().handCursor(enabled = !isActivatingBoost),
+                    ) {
+                        Text(if (isActivatingBoost) "Turning on" else "Use a Boost now")
+                    }
+            }
+        }
+
         product.features.forEach { feature ->
             StoreFeatureRow(label = feature)
         }
     }
 }
+
+/** The local "21:40" a Boost ends at, or null once it has ended (or the time can't be read). */
+@OptIn(kotlin.time.ExperimentalTime::class)
+internal fun String.boostEndsLabel(
+    now: kotlin.time.Instant =
+        kotlin.time.Clock.System
+            .now(),
+): String? =
+    runCatching {
+        val instant = kotlin.time.Instant.parse(this)
+        if (instant <= now) return null
+        val dt = instant.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+        "${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}"
+    }.getOrNull()
 
 private fun Int.monthlyPriceLabel(): String {
     if (this <= 0) return "${'$'}0/mo"

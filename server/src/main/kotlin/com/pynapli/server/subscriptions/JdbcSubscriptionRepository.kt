@@ -93,6 +93,11 @@ class JdbcSubscriptionRepository(
         duration: Duration,
     ): BoostActivationResult? = inventory.activateBoost(userId, now, duration)
 
+    override suspend fun findActiveBoost(
+        userId: UUID,
+        now: Instant,
+    ): BoostActivationRecord? = inventory.findActiveBoost(userId, now)
+
     override suspend fun upsertDevSubscriptionPurchase(
         userId: UUID,
         productId: String,

@@ -26,6 +26,7 @@ class StoreStateHolder(
                         premiumProducts = result.value.premiumProducts,
                         balances = result.value.balances,
                         entitlement = result.value.entitlement,
+                        activeBoostEndsAt = result.value.activeBoostEndsAt,
                         isLoading = false,
                         errorMessage = null,
                     )
@@ -115,6 +116,37 @@ class StoreStateHolder(
                         pendingPurchaseProductId = null,
                         errorMessage = result.error.message,
                         purchaseMessage = null,
+                    )
+                }
+        }
+    }
+
+    /** Turns on a Boost from the balance: shown first to people nearby for 30 minutes. */
+    suspend fun useBoost() {
+        if (_state.value.isActivatingBoost) return
+        _state.update { it.copy(isActivatingBoost = true, purchaseMessage = null, errorMessage = null) }
+        when (val result = repository.activateBoost()) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(
+                        isActivatingBoost = false,
+                        activeBoostEndsAt = result.value.endsAt,
+                        purchaseMessage =
+                            if (result.value.alreadyActive) {
+                                "Your Boost is already on."
+                            } else {
+                                "Boost on: you're shown first to people nearby for the next 30 minutes."
+                            },
+                    )
+                }
+                load()
+            }
+
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        isActivatingBoost = false,
+                        errorMessage = if (result.error.code == "BOOST_INVENTORY_REQUIRED") "You don't have a Boost to use. Get one below." else result.error.message,
                     )
                 }
         }

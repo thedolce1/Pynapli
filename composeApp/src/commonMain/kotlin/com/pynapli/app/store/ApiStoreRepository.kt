@@ -23,7 +23,10 @@ class ApiStoreRepository(
                 premiumProducts = inventory.premiumProducts,
                 balances = inventory.balances,
                 entitlement = entitlement,
+                activeBoostEndsAt = inventory.activeBoostEndsAt,
             ),
         )
     }
+
+    override suspend fun activateBoost(): AppResult<com.pynapli.shared.network.dto.BoostActivationDto> = apiClient.activateBoost()
 }
