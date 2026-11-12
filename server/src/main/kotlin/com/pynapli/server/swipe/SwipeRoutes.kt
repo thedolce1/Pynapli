@@ -84,6 +84,12 @@ fun Application.configureSwipeRoutes(
             call.respond(response)
         }
 
+        post("/v1/swipe/like-back") {
+            val user = call.authenticatedUser(authService)
+            val request = call.receive<com.pynapli.shared.network.dto.LikeBackRequestDto>()
+            call.respond(swipeService.likeBack(user.id, request))
+        }
+
         get("/v1/matches") {
             val user = call.authenticatedUser(authService)
             call.respond(swipeService.listMatches(user.id))

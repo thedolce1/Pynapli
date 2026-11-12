@@ -791,6 +791,7 @@ Avoid:
 - [x] Partner chat invites appear in invited partner Activity.
 - [x] Partner chat invites require explicit action.
 - [x] Partner chat invite Activity rows can open the invite conversation context.
+- [x] A like can be answered from Activity. (`swipe_like` / `pineapple_like` items offer Like back, `POST /v1/swipe/like-back`: same rules as a Swipe like (blocks, risk, rate limit, 24h travel like tail), replaces an earlier pass, and makes the match with its activity, push and Messages conversation. Without it a received like, including one delivered from Psync, only became a match if that person came up in the viewer's Swipe deck.)
 - [x] Album requests can be granted/denied/ignored.
 - [x] A granted album request reaches the requester. (`album_granted` Activity item (V83) under Requests, one live card per owner and requester that re-surfaces on a re-grant, plus an `album_granted` push under the album-request notification setting, at most one per day per pair. A denial stays silent on purpose.)
 - [x] Album request rows use Review before grant/deny actions.

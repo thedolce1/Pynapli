@@ -14,6 +14,22 @@ import kotlin.test.assertNull
 
 class ActivityStateHolderTest {
     @Test
+    fun likingBackFromActivityNamesTheMatchAndCannotBeRepeated() =
+        runTest {
+            val like = activityEvent(eventId = "like-1", type = "swipe_like")
+            val repository = FakeActivityFeedRepository(result = AppResult.Success(ActivityFeedUi(items = listOf(like))))
+            val stateHolder = ActivityStateHolder(repository)
+            stateHolder.load()
+
+            stateHolder.likeBack(like)
+            stateHolder.likeBack(like)
+
+            assertEquals(listOf("actor-1"), repository.likedBack)
+            assertEquals(setOf("like-1"), stateHolder.state.value.likedBackEventIds)
+            assertEquals("It's a match with Maya. Say hi in Messages.", stateHolder.state.value.actionFeedback)
+        }
+
+    @Test
     fun silentRefreshKeepsExistingFeedWhenRefreshFails() =
         runTest {
             val event = activityEvent(eventId = "event-1")
@@ -277,6 +293,23 @@ private class FakeActivityFeedRepository(
         ),
     private val results: MutableList<AppResult<ActivityFeedUi>> = mutableListOf(),
 ) : ActivityFeedRepository {
+    val likedBack = mutableListOf<String>()
+
+    override suspend fun likeBack(userId: String): com.pynapli.shared.core.result.AppResult<com.pynapli.shared.network.dto.SwipeActionResponseDto> {
+        likedBack += userId
+        return com.pynapli.shared.core.result.AppResult.Success(
+            com.pynapli.shared.network.dto.SwipeActionResponseDto(
+                recorded = true,
+                match =
+                    com.pynapli.shared.network.dto.MatchDto(
+                        matchId = "m-$userId",
+                        matchedUserId = userId,
+                        createdAt = "2026-11-11T00:00:00Z",
+                    ),
+            ),
+        )
+    }
+
     val loadCalls = mutableListOf<ActivityLoadCall>()
     val dismissCalls = mutableListOf<String>()
     val markSeenCalls = mutableListOf<List<String>>()

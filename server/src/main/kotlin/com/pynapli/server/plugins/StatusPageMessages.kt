@@ -120,6 +120,7 @@ internal fun userSafeMessage(code: String): String =
         "MEDIA_ALBUM_NOT_FOUND" -> "Album was not found."
         "MEDIA_GRANT_NOT_FOUND" -> "Album access was not found."
         "INVALID_SWIPE_TARGET" -> "That profile could not be swiped."
+        "LIKE_BACK_NOT_AVAILABLE" -> "That like is no longer active, so there's nothing to like back."
         "INVALID_SWIPE_ACTION" -> "Choose a valid swipe action."
         "INVALID_SWIPE_ACTION_ID" -> "Swipe action could not be synced."
         "INVALID_SWIPE_FILTER" -> "Swipe filters are not valid."

@@ -36,6 +36,41 @@ internal fun Connection.recordSwipeActionTransaction(
     }
 }
 
+/**
+ * Like back someone who liked the viewer, outside the Swipe deck (from Activity). Null when the
+ * target has no live like toward the viewer (rewound, or a travel like past its 24h tail), so
+ * there is nothing to like back. A pass the viewer made earlier is replaced: they changed their
+ * mind. Both likes are now positive, so the match is made in the same transaction.
+ */
+internal fun Connection.likeBackTransaction(
+    actionId: UUID,
+    viewerUserId: UUID,
+    targetUserId: UUID,
+    travelLocationId: UUID?,
+    matchIdFactory: () -> UUID,
+): SwipeActionResult? {
+    inTransaction {
+        if (!targetHasActivePositiveSwipe(targetUserId, viewerUserId)) {
+            rollback()
+            return null
+        }
+        prepareStatement(
+            """
+            UPDATE swipe_actions SET rewound_at = now()
+            WHERE actor_user_id = ? AND target_user_id = ? AND rewound_at IS NULL AND action = 'pass'
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, viewerUserId)
+            statement.setObject(2, targetUserId)
+            statement.executeUpdate()
+        }
+        val inserted = insertSwipeAction(actionId, viewerUserId, targetUserId, "like", null, null, travelLocationId)
+        val match = upsertMatch(viewerUserId, targetUserId, matchIdFactory)
+        commit()
+        return SwipeActionResult(recorded = true, match = match, newlyRecorded = inserted)
+    }
+}
+
 internal fun Connection.findSwipeActionById(
     actionId: UUID,
     actorUserId: UUID,
