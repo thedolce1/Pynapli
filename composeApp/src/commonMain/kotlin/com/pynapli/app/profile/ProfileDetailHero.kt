@@ -45,6 +45,7 @@ import com.pynapli.app.design.icons.filled.Block
 import com.pynapli.app.design.icons.filled.Close
 import com.pynapli.app.design.icons.filled.Flag
 import com.pynapli.app.design.icons.filled.MoreVert
+import com.pynapli.app.design.icons.filled.PersonAdd
 import com.pynapli.app.design.icons.filled.VisibilityOff
 
 @Composable
@@ -62,6 +63,7 @@ internal fun ProfileHero(
     onBlockClick: () -> Unit,
     onReportClick: () -> Unit,
     isOwnProfile: Boolean = false,
+    onInviteProfileLink: (() -> Unit)? = null,
 ) {
     val photos =
         remember(photoUrls, profilePhotoUrl) {
@@ -140,6 +142,7 @@ internal fun ProfileHero(
                     onHideClick = onHideClick,
                     onBlockClick = onBlockClick,
                     onReportClick = onReportClick,
+                    onInviteProfileLink = onInviteProfileLink,
                 )
             }
 
@@ -262,6 +265,7 @@ private fun ProfileOverflowMenu(
     onHideClick: () -> Unit,
     onBlockClick: () -> Unit,
     onReportClick: () -> Unit,
+    onInviteProfileLink: (() -> Unit)?,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -284,6 +288,23 @@ private fun ProfileOverflowMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
+            onInviteProfileLink?.let { invite ->
+                DropdownMenuItem(
+                    text = { Text("Invite to link as partners") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.PersonAdd,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        invite()
+                    },
+                    modifier = Modifier.handCursor(),
+                )
+            }
             DropdownMenuItem(
                 text = { Text("Hide") },
                 leadingIcon = {

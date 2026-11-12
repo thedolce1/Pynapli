@@ -41,6 +41,9 @@ data class ProfileLinkActionState(
     val isSubmitting: Boolean,
     val feedbackMessage: String? = null,
     val errorMessage: String? = null,
+    // The plain "invite to link" offer: shown in the profile's More menu rather than next to
+    // Message/Spark, since almost nobody you browse is your partner.
+    val offeredInMenu: Boolean = false,
 )
 
 @Composable
@@ -153,6 +156,10 @@ fun ProfileDetailSheet(
                 onBlockClick = { showBlockConfirm = true },
                 onReportClick = { showReportDialog = true },
                 isOwnProfile = state.isOwnProfile,
+                onInviteProfileLink =
+                    profileLinkAction
+                        ?.takeIf { it.offeredInMenu && it.enabled && !it.isSubmitting && actionMode == ProfileDetailActionMode.Grid }
+                        ?.let { onInviteProfileLink },
             )
 
             when {

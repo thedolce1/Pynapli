@@ -51,6 +51,7 @@ internal fun ActivityRow(
     onLikeBack: (ActivityEventDto) -> Unit,
     likedBackEventIds: Set<String>,
     onDismissEvent: (String) -> Unit,
+    onOpenProfile: (ActivityEventDto) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val distanceLabel =
@@ -145,6 +146,7 @@ internal fun ActivityRow(
                 onOpenPsync = onOpenPsync,
                 onLikeBack = onLikeBack,
                 likedBackEventIds = likedBackEventIds,
+                onOpenProfile = onOpenProfile,
             )
         }
         IconButton(

@@ -37,6 +37,7 @@ import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleTag
 import com.pynapli.app.grid.LogisticsTag
+import com.pynapli.app.grid.discoveryTagLabel
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 import com.pynapli.shared.profile.ProfileTaxonomies
 
@@ -48,7 +49,7 @@ internal fun ProfileFacts(profileState: ProfileDetailUiState) {
         remember(profile, card.linkedPartner) {
             buildList {
                 // Age now lives next to the name in the hero; keep it out of the chip row.
-                add(profile.discoveryStyle.toDisplayLabel())
+                add(discoveryTagLabel(profile.discoveryStyle))
                 profile.relationshipContext?.let { add(it.toDisplayLabel()) }
                 profile.gender?.let { add(selfDescribableLabel(it, profile.genderDetail)) }
                 profile.orientation?.let { add(selfDescribableLabel(it, profile.orientationDetail)) }

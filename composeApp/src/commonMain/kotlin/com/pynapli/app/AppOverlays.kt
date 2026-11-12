@@ -171,10 +171,13 @@ internal fun PynapliOverlays(
     // The Psync deck sits over whichever tab is underneath, and that tab only shows the peek for
     // profiles it opened itself, so the overlay hosts the peek for cards opened from the deck.
     val psyncOwnsProfilePeek = psyncVisible && psyncProfileOpen
-    if ((selectedTab == PynapliTab.Messages || psyncOwnsProfilePeek) && profileDetailState.visible) {
-        // Unified profile peek: Messages now shows the exact same ProfileDetailSheet as
-        // Grid/Swipe/Activity (one profile experience app-wide), gaining block/report/hide and
-        // the shared sheet chrome. "Message" simply closes the peek to return to the open thread.
+    // Grid and Swipe host the peek themselves; Messages and Activity have no sheet of their own, so
+    // without this a profile opened from an Activity tile, "View album" or a Messages avatar would
+    // set the sheet state with nothing on screen (and pop up later on the Grid).
+    val overlayOwnsProfilePeek = selectedTab == PynapliTab.Messages || selectedTab == PynapliTab.Activity
+    if ((overlayOwnsProfilePeek || psyncOwnsProfilePeek) && profileDetailState.visible) {
+        // Unified profile peek: the exact same ProfileDetailSheet as Grid/Swipe (one profile
+        // experience app-wide), with block/report/hide and the shared sheet chrome.
         ProfileDetailSheet(
             state = profileDetailState,
             onDismiss = {
@@ -182,8 +185,15 @@ internal fun PynapliOverlays(
                 profileDetailStateHolder.dismiss()
             },
             onMessage = {
+                val openedFromPsync = psyncProfileOpen
                 psyncProfileOpen = false
+                val card = profileDetailState.selectedCard
                 profileDetailStateHolder.dismiss()
+                // From Messages, "Message" just returns to the open thread; from Activity it starts
+                // (or reopens) the conversation, as it does on the Grid.
+                if (selectedTab == PynapliTab.Activity && !openedFromPsync && card != null) {
+                    scope.launch { conversationStateHolder.openDirect(card = card, viewerUserId = authState.session?.userId) }
+                }
             },
             onSpark = {
                 scope.launch { profileDetailStateHolder.sendSpark() }

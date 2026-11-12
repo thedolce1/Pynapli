@@ -225,6 +225,7 @@ private fun ActivityScreenContent(
                             onLikeBack = onLikeBack,
                             likedBackEventIds = likedBackEventIds,
                             onDismissEvent = onDismissEvent,
+                            onOpenProfile = onOpenProfile,
                             modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
