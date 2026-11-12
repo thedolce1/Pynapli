@@ -53,6 +53,7 @@ internal fun ProfileHubSafetyCenterContent(
     onContactSupport: (SupportContactDto) -> Unit,
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier,
+    onAppealRestriction: (String) -> Unit = {},
 ) {
     LazyColumn(
         modifier =
@@ -201,6 +202,11 @@ internal fun ProfileHubSafetyCenterContent(
         profileHubSafetyReportsSection(
             state = state,
             onContactSupport = onContactSupport,
+        )
+
+        profileHubSafetyAppealsSection(
+            state = state,
+            onAppealRestriction = onAppealRestriction,
         )
     }
 }

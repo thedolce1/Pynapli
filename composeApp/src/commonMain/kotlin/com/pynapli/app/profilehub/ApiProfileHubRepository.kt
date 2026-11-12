@@ -45,6 +45,10 @@ class ApiProfileHubRepository(
 
     override suspend fun listReportHistory(): AppResult<ReportHistoryListDto> = apiClient.listReports()
 
+    override suspend fun listAppeals(): AppResult<com.pynapli.shared.network.dto.AppealListDto> = apiClient.listAppeals()
+
+    override suspend fun submitAppeal(request: com.pynapli.shared.network.dto.CreateAppealRequestDto): AppResult<com.pynapli.shared.network.dto.AppealDto> = apiClient.submitAppeal(request)
+
     override suspend fun getSupportContact(): AppResult<SupportContactDto> = apiClient.getSupportContact()
 
     override suspend fun latestDataExportRequest(): AppResult<AccountDataExportDto?> = apiClient.getLatestDataExportRequest()

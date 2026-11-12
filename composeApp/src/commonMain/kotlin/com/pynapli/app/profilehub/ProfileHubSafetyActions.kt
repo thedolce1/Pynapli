@@ -148,11 +148,63 @@ internal class ProfileHubSafetyActions(
             val hidden = async { loadHiddenProfiles() }
             val reports = async { loadReportHistory() }
             val support = async { loadSupportContact() }
+            val appeals = async { loadAppeals() }
             blocks.await()
             hidden.await()
             reports.await()
             support.await()
+            appeals.await()
         }
+
+    suspend fun loadAppeals() {
+        // Quiet on failure: the section just shows no appeals.
+        (repository.listAppeals() as? AppResult.Success)?.let { result ->
+            state.update { it.copy(appeals = result.value.appeals) }
+        }
+    }
+
+    /** Appeals a restriction on the account (limited Sparks, messages, Tonight...). Returns true when filed. */
+    suspend fun appealRestriction(reason: String): Boolean {
+        if (state.value.isSubmittingAppeal) return false
+        state.update { it.copy(isSubmittingAppeal = true, appealMessage = null) }
+        val result =
+            repository.submitAppeal(
+                com.pynapli.shared.network.dto.CreateAppealRequestDto(
+                    actionType = "risk_restriction",
+                    targetType = "account",
+                    reason = reason.trim(),
+                ),
+            )
+        return when (result) {
+            is AppResult.Success -> {
+                state.update {
+                    it.copy(
+                        isSubmittingAppeal = false,
+                        appeals = listOf(result.value) + it.appeals,
+                        appealMessage = "Appeal sent. Our safety team will review it.",
+                        appealMessageIsError = false,
+                    )
+                }
+                true
+            }
+
+            is AppResult.Failure -> {
+                state.update {
+                    it.copy(
+                        isSubmittingAppeal = false,
+                        appealMessageIsError = true,
+                        appealMessage =
+                            when (result.error.code) {
+                                "APPEAL_TARGET_NOT_APPEALABLE" -> "There's no restriction on your account to appeal."
+                                "APPEAL_ALREADY_OPEN" -> "Your appeal is already being reviewed."
+                                else -> result.error.message
+                            },
+                    )
+                }
+                false
+            }
+        }
+    }
 
     suspend fun unblockUser(userId: String) {
         val current = state.value

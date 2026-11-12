@@ -517,6 +517,7 @@ Rules:
 - Appeals are available for account/risk/media/message/other decisions where the server can verify an appealable target; one open appeal per target is allowed.
 - Appeal admin reasons and audit metadata must not be exposed to normal clients.
 - A suspended or banned account can't sign in, so it appeals through `POST /v1/auth/account-appeal` with its email and password (rate-limited like login). The password is checked before the account's status, both there and at sign-in, so a wrong password never reveals that an account exists or is suspended. The sign-in screen offers this when sign-in answers `ACCOUNT_NOT_ACTIVE`; an active account gets `ACCOUNT_NOT_RESTRICTED` (409).
+- Profile › Safety center lists the user's appeals with plain status (In review / Restored / Reduced / Upheld with the admin note) and offers "Appeal a restriction" (`risk_restriction` on `account`); `RISK_RESTRICTED` tells people they can appeal there.
 - Support contact is never premium and returns server-configured contact details with a user-safe account reference.
 
 ## Verification API

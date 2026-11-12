@@ -1,9 +1,13 @@
 package com.pynapli.shared.network
 
+import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.AppealDto
+import com.pynapli.shared.network.dto.AppealListDto
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlockUserRequestDto
 import com.pynapli.shared.network.dto.BlocksListDto
+import com.pynapli.shared.network.dto.CreateAppealRequestDto
 import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfilesListDto
@@ -37,4 +41,9 @@ interface SafetyApi {
     suspend fun listReports(limit: Int? = null): AppResult<ReportHistoryListDto>
 
     suspend fun getSupportContact(): AppResult<SupportContactDto>
+
+    // Defaults keep test doubles compiling; the Ktor client implements both.
+    suspend fun listAppeals(): AppResult<AppealListDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
+    suspend fun submitAppeal(request: CreateAppealRequestDto): AppResult<AppealDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
 }

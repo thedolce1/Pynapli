@@ -1,9 +1,12 @@
 package com.pynapli.shared.network
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.AppealDto
+import com.pynapli.shared.network.dto.AppealListDto
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlockUserRequestDto
 import com.pynapli.shared.network.dto.BlocksListDto
+import com.pynapli.shared.network.dto.CreateAppealRequestDto
 import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfilesListDto
@@ -65,4 +68,8 @@ internal class KtorSafetyApi(
         }
 
     override suspend fun getSupportContact(): AppResult<SupportContactDto> = support.authGet("/v1/support/contact")
+
+    override suspend fun listAppeals(): AppResult<AppealListDto> = support.authGet("/v1/appeals")
+
+    override suspend fun submitAppeal(request: CreateAppealRequestDto): AppResult<AppealDto> = support.authSend(HttpMethod.Post, "/v1/appeals", request)
 }

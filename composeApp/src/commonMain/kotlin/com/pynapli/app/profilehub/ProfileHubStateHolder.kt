@@ -136,6 +136,8 @@ class ProfileHubStateHolder(
 
     suspend fun loadSafetyLists() = safety.loadSafetyLists()
 
+    suspend fun appealRestriction(reason: String): Boolean = safety.appealRestriction(reason)
+
     suspend fun unblockUser(userId: String) = safety.unblockUser(userId)
 
     suspend fun unhideProfile(userId: String) = safety.unhideProfile(userId)
