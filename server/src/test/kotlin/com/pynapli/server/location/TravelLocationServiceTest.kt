@@ -370,7 +370,7 @@ class TravelLocationServiceTest {
 
     @Test
     fun everyTierIsCappedOnDailySwitchesAndHittingTheCapIsARiskSignalOnce() =
-        runBlocking {
+        runBlocking<Unit> {
             val viewer = UUID.randomUUID()
             val signals = RecordingLocationSignals()
             val service =
