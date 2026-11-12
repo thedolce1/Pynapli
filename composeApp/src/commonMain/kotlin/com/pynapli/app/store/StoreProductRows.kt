@@ -35,6 +35,7 @@ internal fun StoreTierRow(
     pendingPurchaseProductId: String?,
     isRestoringPurchases: Boolean,
     onPurchaseTier: (SubscriptionTierDto) -> Unit,
+    localizedPrices: Map<String, String> = emptyMap(),
     isHero: Boolean = false,
     // Web is read-only (founder-locked): plans stay visible, buy buttons don't render;
     // StoreManageOnMobileRow explains where purchases live.
@@ -99,7 +100,7 @@ internal fun StoreTierRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = tier.monthlyPriceUsdCents.monthlyPriceLabel(),
+                    text = tier.playStoreProductId?.let { localizedPrices[it] }?.let { "$it / month" } ?: tier.monthlyPriceUsdCents.monthlyPriceLabel(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -159,7 +160,10 @@ internal fun StoreProductRow(
     activeBoostEndsAt: String? = null,
     isActivatingBoost: Boolean = false,
     onUseBoost: (() -> Unit)? = null,
+    // When the soonest of these items expires (ISO-8601), shown so expiry is never a surprise.
+    nextExpiresAt: String? = null,
 ) {
+    val expiresOn = nextExpiresAt?.storeDateLabel()
     val purchaseInFlight = pendingPurchaseProductId != null || pendingPurchaseTier != null || isRestoringPurchases
     val isPurchasing = pendingPurchaseProductId == product.productId
     Column(
@@ -203,6 +207,14 @@ internal fun StoreProductRow(
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                 )
+                expiresOn?.let { date ->
+                    Text(
+                        text = "Expires $date",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                    )
+                }
             }
             if (purchasesAvailable) {
                 Button(
@@ -282,3 +294,16 @@ private fun Int.storePriceLabel(quantity: Int): String {
     val price = "${'$'}$dollars.$cents"
     return if (quantity > 1) "$quantity for $price" else price
 }
+
+/** "Dec 12" from an ISO instant, in local time; null when it can't be read. */
+@OptIn(kotlin.time.ExperimentalTime::class)
+internal fun String.storeDateLabel(): String? =
+    runCatching {
+        val date =
+            kotlin.time.Instant
+                .parse(this)
+                .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+                .date
+        val month = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")[date.month.ordinal]
+        "$month ${date.day}"
+    }.getOrNull()

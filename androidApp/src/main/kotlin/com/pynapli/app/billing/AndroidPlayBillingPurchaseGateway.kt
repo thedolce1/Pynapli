@@ -292,6 +292,48 @@ class AndroidPlayBillingPurchaseGateway(
         }
     }
 
+    /**
+     * Play's own formatted price for each subscription's base plan ("CA$12.99"), so people see their
+     * currency and the price Play will charge. Empty when Play can't answer; the Store then falls
+     * back to the catalog's USD price.
+     */
+    override suspend fun localizedPrices(productIds: List<String>): Map<String, String> {
+        if (productIds.isEmpty()) return emptyMap()
+        if (ensureConnected().responseCode != BillingClient.BillingResponseCode.OK) return emptyMap()
+        return suspendCancellableCoroutine { continuation ->
+            val query =
+                QueryProductDetailsParams
+                    .newBuilder()
+                    .setProductList(
+                        productIds.map { id ->
+                            QueryProductDetailsParams.Product
+                                .newBuilder()
+                                .setProductId(id)
+                                .setProductType(BillingClient.ProductType.SUBS)
+                                .build()
+                        },
+                    ).build()
+            billingClient.queryProductDetailsAsync(query) { billingResult, result ->
+                if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
+                    continuation.resume(emptyMap())
+                    return@queryProductDetailsAsync
+                }
+                val prices =
+                    result.productDetailsList
+                        .mapNotNull { details ->
+                            details.subscriptionOfferDetails
+                                ?.firstOrNull { it.offerId == null }
+                                ?.pricingPhases
+                                ?.pricingPhaseList
+                                ?.lastOrNull()
+                                ?.formattedPrice
+                                ?.let { price -> details.productId to price }
+                        }.toMap()
+                continuation.resume(prices)
+            }
+        }
+    }
+
     private suspend fun queryProductDetails(productId: String): AppResult<ProductDetails> =
         suspendCancellableCoroutine { continuation ->
             val query =
