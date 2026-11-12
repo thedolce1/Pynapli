@@ -29,8 +29,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.application.install
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.httpMethod
+import io.ktor.server.request.path
 import io.ktor.server.request.uri
 import io.ktor.server.response.respond
 import org.slf4j.LoggerFactory
@@ -311,6 +313,27 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
+                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                    ),
+            )
+        }
+
+        // A body that isn't valid JSON, or is missing a required field, is the caller's mistake, not
+        // an outage: answer 400 instead of falling through to the 500 below (which also alerts).
+        // The body itself is never logged.
+        exception<BadRequestException> { call, cause ->
+            statusPagesLogger.warn(
+                "Rejected malformed request: {} {} ({})",
+                call.request.httpMethod.value,
+                call.request.path(),
+                (cause.cause ?: cause).javaClass.simpleName,
+            )
+            call.respond(
+                status = HttpStatusCode.BadRequest,
+                message =
+                    ApiErrorDto(
+                        code = "INVALID_REQUEST",
+                        message = "That request wasn't valid. Update the app and try again.",
                         requestId = call.request.headers["X-Request-Id"] ?: "unknown",
                     ),
             )
