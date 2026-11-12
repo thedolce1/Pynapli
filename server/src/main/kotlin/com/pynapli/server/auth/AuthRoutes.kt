@@ -9,11 +9,14 @@ import com.pynapli.shared.network.dto.PasswordResetDto
 import com.pynapli.shared.network.dto.PasswordResetRequestDto
 import com.pynapli.shared.network.dto.PasswordResetRequestedDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
+import com.pynapli.shared.network.dto.SignedOutDevicesDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.routing.delete
+import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
@@ -21,6 +24,7 @@ import io.ktor.server.routing.routing
 fun Application.configureAuthRoutes(
     authService: AuthService,
     passwordRecoveryService: PasswordRecoveryService? = null,
+    signedInDevicesService: SignedInDevicesService? = null,
 ) {
     routing {
         route("/v1/auth") {
@@ -48,6 +52,27 @@ fun Application.configureAuthRoutes(
             post("/logout") {
                 val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
                 call.respond(LogoutResponseDto(loggedOut = authService.logout(token)))
+            }
+
+            signedInDevicesService?.let { devices ->
+                get("/sessions") {
+                    val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
+                    val user = authService.authenticate(token)
+                    call.respond(devices.list(user.id, token))
+                }
+
+                delete("/sessions/{sessionId}") {
+                    val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
+                    val user = authService.authenticate(token)
+                    devices.signOut(user.id, token, call.parameters["sessionId"].orEmpty())
+                    call.respond(SignedOutDevicesDto(signedOut = 1))
+                }
+
+                post("/sessions/sign-out-others") {
+                    val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
+                    val user = authService.authenticate(token)
+                    call.respond(SignedOutDevicesDto(signedOut = devices.signOutOthers(user.id, token)))
+                }
             }
 
             passwordRecoveryService?.let { recovery ->
@@ -105,6 +130,8 @@ fun authStatusFor(code: String): HttpStatusCode =
         "ACCOUNT_NOT_ACTIVE" -> HttpStatusCode.Forbidden
         "PASSWORD_RESET_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
         "WRONG_CURRENT_PASSWORD" -> HttpStatusCode.Forbidden
+        "SESSION_NOT_FOUND" -> HttpStatusCode.NotFound
+        "CANNOT_SIGN_OUT_CURRENT_SESSION" -> HttpStatusCode.Conflict
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "INVALID_EMAIL",
         "PASSWORD_TOO_SHORT",

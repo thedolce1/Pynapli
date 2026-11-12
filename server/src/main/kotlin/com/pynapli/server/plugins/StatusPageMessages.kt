@@ -7,6 +7,8 @@ internal fun userSafeMessage(code: String): String =
         "INVALID_RESET_CODE" -> "That code isn't right or has expired. Request a new one."
         "PASSWORD_RESET_UNAVAILABLE" -> "Password reset by email isn't available right now. Contact support@pynapli.com."
         "WRONG_CURRENT_PASSWORD" -> "Your current password isn't right."
+        "SESSION_NOT_FOUND" -> "That device is already signed out."
+        "CANNOT_SIGN_OUT_CURRENT_SESSION" -> "Use Log out to sign out of this device."
         "PASSWORD_CHANGE_NOT_AVAILABLE" -> "This account doesn't sign in with a password."
         "INVALID_REFRESH_TOKEN", "UNAUTHENTICATED" -> "Please sign in again."
         "ACCOUNT_NOT_ACTIVE" -> "This account is not active."

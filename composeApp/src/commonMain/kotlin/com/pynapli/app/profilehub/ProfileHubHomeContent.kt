@@ -54,6 +54,7 @@ internal fun ProfileHubContent(
     onRequestDataExport: () -> Unit,
     onDeleteAccountClick: () -> Unit,
     onChangePasswordClick: () -> Unit = {},
+    onSignedInDevicesClick: () -> Unit = {},
     onLogoutClick: () -> Unit,
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier,
@@ -246,6 +247,15 @@ internal fun ProfileHubContent(
                     label = "Data export",
                     value = dataExportSummary(state),
                     onClick = onRequestDataExport,
+                )
+                ProfileHubRow(
+                    icon = Icons.Filled.Security,
+                    label = "Where you're signed in",
+                    value =
+                        state.signedInDevices?.size?.let { count ->
+                            if (count <= 1) "This device only" else "$count devices"
+                        } ?: "Devices",
+                    onClick = onSignedInDevicesClick,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.Lock,

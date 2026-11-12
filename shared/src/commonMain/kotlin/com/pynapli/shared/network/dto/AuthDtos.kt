@@ -75,3 +75,24 @@ data class PasswordChangeDto(
 data class PasswordChangedDto(
     val changed: Boolean,
 )
+
+/** One live session. Platform is what the app reported at sign-in ("android", "ios", "web", "desktop"). */
+@Serializable
+data class SignedInDeviceDto(
+    val sessionId: String,
+    val platform: String? = null,
+    val appVersion: String? = null,
+    val signedInAt: String,
+    val lastActiveAt: String,
+    val current: Boolean = false,
+)
+
+@Serializable
+data class SignedInDevicesDto(
+    val devices: List<SignedInDeviceDto>,
+)
+
+@Serializable
+data class SignedOutDevicesDto(
+    val signedOut: Int,
+)

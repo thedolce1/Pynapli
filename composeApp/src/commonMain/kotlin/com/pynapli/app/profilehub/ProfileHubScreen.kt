@@ -64,6 +64,7 @@ fun ProfileHubScreen(
     var showDeleteAccountConfirm by remember { mutableStateOf(false) }
     var deleteAccountConfirmation by remember { mutableStateOf("") }
     var showChangePassword by remember { mutableStateOf(false) }
+    var showSignedInDevices by remember { mutableStateOf(false) }
 
     LaunchedEffect(stateHolder) {
         stateHolder.load()
@@ -214,6 +215,11 @@ fun ProfileHubScreen(
             onOpenPartner = stateHolder::openPartner,
             onOpenStore = onOpenStore,
             onRequestDataExport = { scope.launch { stateHolder.onDataExportTapped()?.let(uriHandler::openUri) } },
+            onSignedInDevicesClick = {
+                stateHolder.clearMessage()
+                showSignedInDevices = true
+                scope.launch { stateHolder.loadSignedInDevices() }
+            },
             onChangePasswordClick = {
                 stateHolder.clearMessage()
                 showChangePassword = true
@@ -247,6 +253,15 @@ fun ProfileHubScreen(
                 onLogout()
             },
             onDismiss = { showLogoutConfirm = false },
+        )
+    }
+
+    if (showSignedInDevices) {
+        SignedInDevicesSheet(
+            state = state,
+            onDismiss = { showSignedInDevices = false },
+            onSignOut = { sessionId -> scope.launch { stateHolder.signOutDevice(sessionId) } },
+            onSignOutOthers = { scope.launch { stateHolder.signOutOtherDevices() } },
         )
     }
 

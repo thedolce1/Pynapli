@@ -52,4 +52,10 @@ interface ProfileHubRepository {
     suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto>
 
     suspend fun changePassword(request: PasswordChangeDto): AppResult<PasswordChangedDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
+    suspend fun listSignedInDevices(): AppResult<com.pynapli.shared.network.dto.SignedInDevicesDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
+    suspend fun signOutDevice(sessionId: String): AppResult<com.pynapli.shared.network.dto.SignedOutDevicesDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
+    suspend fun signOutOtherDevices(): AppResult<com.pynapli.shared.network.dto.SignedOutDevicesDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
 }

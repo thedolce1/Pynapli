@@ -120,6 +120,12 @@ class ProfileHubStateHolder(
         newPassword: String,
     ): Boolean = account.changePassword(currentPassword, newPassword)
 
+    suspend fun loadSignedInDevices() = account.loadSignedInDevices()
+
+    suspend fun signOutDevice(sessionId: String) = account.signOutDevice(sessionId)
+
+    suspend fun signOutOtherDevices() = account.signOutOtherDevices()
+
     suspend fun loadBlocks() = safety.loadBlocks()
 
     suspend fun loadHiddenProfiles() = safety.loadHiddenProfiles()

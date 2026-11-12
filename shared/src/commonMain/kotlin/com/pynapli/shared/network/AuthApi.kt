@@ -12,6 +12,8 @@ import com.pynapli.shared.network.dto.PasswordResetDto
 import com.pynapli.shared.network.dto.PasswordResetRequestDto
 import com.pynapli.shared.network.dto.PasswordResetRequestedDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
+import com.pynapli.shared.network.dto.SignedInDevicesDto
+import com.pynapli.shared.network.dto.SignedOutDevicesDto
 
 /**
  * Authentication slice of the API surface, split out of the monolithic [PynapliApiClient]
@@ -32,6 +34,12 @@ interface AuthApi {
     suspend fun resetPassword(request: PasswordResetDto): AppResult<PasswordChangedDto> = notSupported()
 
     suspend fun changePassword(request: PasswordChangeDto): AppResult<PasswordChangedDto> = notSupported()
+
+    suspend fun listSignedInDevices(): AppResult<SignedInDevicesDto> = notSupported()
+
+    suspend fun signOutDevice(sessionId: String): AppResult<SignedOutDevicesDto> = notSupported()
+
+    suspend fun signOutOtherDevices(): AppResult<SignedOutDevicesDto> = notSupported()
 }
 
 private fun notSupported(): AppResult.Failure = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
