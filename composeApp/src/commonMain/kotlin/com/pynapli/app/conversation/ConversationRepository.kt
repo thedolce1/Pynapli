@@ -56,4 +56,15 @@ interface ConversationRepository {
     suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
 
     suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
+
+    /** Reports one message; the server keeps its text for moderators. */
+    suspend fun reportMessage(
+        reportedUserId: String,
+        messageId: String,
+        category: String,
+    ): AppResult<Unit> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError(code = "NOT_SUPPORTED", message = "Not available."),
+        )
 }

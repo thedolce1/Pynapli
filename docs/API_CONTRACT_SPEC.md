@@ -509,6 +509,7 @@ Rules:
 - Blocks apply across Grid, Swipe, Activity, Messages.
 - Hidden profiles are never premium.
 - Hidden profiles remove the target from the viewer's discovery surfaces without treating the target as blocked.
+- A `message` report needs `targetId` = a message the reported person sent into a conversation the reporter belongs to (left or not); anything else answers `REPORT_TARGET_NOT_FOUND`. The message text is copied into the report (`evidence_text`, V87) so moderators see what was said even if it is later deleted; the admin report list returns it as `evidence`. In the app, every message from someone else has a Report flag.
 - Report history is reporter-scoped and returns only user-safe status, category, target type, display name, and timestamps.
 - Report history must not expose moderator notes, internal risk state, admin reasons, or private reported-user data.
 - Appeal history is owner-scoped and returns only user-safe status, user reason, optional admin note, target metadata, and timestamps.

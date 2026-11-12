@@ -71,11 +71,12 @@ internal fun ReportCategoryDialog(
     isSubmitting: Boolean,
     onSubmit: (category: String, note: String?) -> Unit,
     onDismiss: () -> Unit,
+    title: String = "Report this profile",
 ) {
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Report this profile") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(

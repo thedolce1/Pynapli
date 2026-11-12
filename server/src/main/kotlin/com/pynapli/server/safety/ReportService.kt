@@ -18,6 +18,9 @@ class ReportService(
     // Reporting someone takes them out of the reporter's discovery straight away, as hiding does
     // (undoable from the hidden list). Null leaves reports as record-only.
     private val hiddenProfileRepository: HiddenProfileRepository? = null,
+    // Validates message reports and captures the message text for moderators. Null records the
+    // message id only.
+    private val evidenceLookup: ReportEvidenceLookup? = null,
 ) {
     suspend fun submitReport(
         reporterUserId: UUID,
@@ -39,6 +42,13 @@ class ReportService(
         if (rateLimitService?.check(reporterUserId, RateLimitedAction.REPORT)?.allowed == false) {
             throw SafetyException("RATE_LIMITED")
         }
+        val evidence =
+            if (targetType == "message" && evidenceLookup != null) {
+                val messageId = targetId?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: throw SafetyException("REPORT_TARGET_NOT_FOUND")
+                evidenceLookup.messageEvidence(messageId, reporterUserId, reportedUserId) ?: throw SafetyException("REPORT_TARGET_NOT_FOUND")
+            } else {
+                null
+            }
 
         val record =
             repository.createReport(
@@ -49,6 +59,11 @@ class ReportService(
                 category = category,
                 note = note,
             )
+
+        evidence?.let { text ->
+            runCatching { repository.attachEvidence(record.id, text) }
+                .onFailure { error -> logger.warn("Failed to attach evidence to report {}", record.id, error) }
+        }
 
         riskSignalPublisher?.let { publisher ->
             runCatching {

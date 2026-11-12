@@ -229,6 +229,11 @@ class ConversationStateHolder(
 
     suspend fun deleteMessage(messageId: String) = messageActions.deleteMessage(messageId)
 
+    suspend fun reportMessage(
+        messageId: String,
+        category: String,
+    ) = messageActions.reportMessage(messageId, category)
+
     fun dismiss() {
         typingCoordinator.reset()
         messageActions.reset()

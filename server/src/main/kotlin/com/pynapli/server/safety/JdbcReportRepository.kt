@@ -8,6 +8,19 @@ import javax.sql.DataSource
 class JdbcReportRepository(
     private val dataSource: DataSource,
 ) : ReportRepository {
+    override suspend fun attachEvidence(
+        reportId: UUID,
+        evidence: String,
+    ) {
+        dataSource.withConnection { connection ->
+            connection.prepareStatement("UPDATE safety_reports SET evidence_text = ? WHERE id = ?").use { statement ->
+                statement.setString(1, evidence)
+                statement.setObject(2, reportId)
+                statement.executeUpdate()
+            }
+        }
+    }
+
     override suspend fun createReport(
         reporterUserId: UUID,
         reportedUserId: UUID,

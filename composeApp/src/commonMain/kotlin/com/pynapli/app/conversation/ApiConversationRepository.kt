@@ -102,4 +102,24 @@ class ApiConversationRepository(
     override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = apiClient.declineConversationPartnerInvite(conversationId)
 
     override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = apiClient.leaveConversation(conversationId)
+
+    override suspend fun reportMessage(
+        reportedUserId: String,
+        messageId: String,
+        category: String,
+    ): AppResult<Unit> =
+        apiClient
+            .submitReport(
+                com.pynapli.shared.network.dto.CreateReportRequestDto(
+                    reportedUserId = reportedUserId,
+                    targetType = com.pynapli.shared.network.dto.ReportTargetType.MESSAGE,
+                    targetId = messageId,
+                    category = category,
+                ),
+            ).let { result ->
+                when (result) {
+                    is AppResult.Success -> AppResult.Success(Unit)
+                    is AppResult.Failure -> result
+                }
+            }
 }

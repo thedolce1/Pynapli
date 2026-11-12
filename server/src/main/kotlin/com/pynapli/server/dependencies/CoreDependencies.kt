@@ -46,6 +46,7 @@ import com.pynapli.server.safety.HiddenProfileService
 import com.pynapli.server.safety.JdbcAppealRepository
 import com.pynapli.server.safety.JdbcBlockRepository
 import com.pynapli.server.safety.JdbcHiddenProfileRepository
+import com.pynapli.server.safety.JdbcReportEvidenceLookup
 import com.pynapli.server.safety.JdbcReportRepository
 import com.pynapli.server.safety.JdbcRiskRepository
 import com.pynapli.server.safety.RateLimitService
@@ -184,6 +185,7 @@ internal fun buildCoreDependencies(
             rateLimitService = rateLimitService,
             supportEmail = config.supportEmail,
             hiddenProfileRepository = hiddenProfileRepository,
+            evidenceLookup = JdbcReportEvidenceLookup(database.dataSource),
         )
     val appealService = AppealService(JdbcAppealRepository(database.dataSource))
     val adminAppealService =

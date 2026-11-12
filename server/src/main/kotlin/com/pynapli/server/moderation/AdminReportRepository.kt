@@ -38,6 +38,8 @@ data class AdminReportRecord(
     val createdAt: Instant,
     val updatedAt: Instant,
     val reviewedAt: Instant?,
+    // What was reported, captured at report time (e.g. the message text).
+    val evidence: String? = null,
 )
 
 data class AdminReportActionRecord(

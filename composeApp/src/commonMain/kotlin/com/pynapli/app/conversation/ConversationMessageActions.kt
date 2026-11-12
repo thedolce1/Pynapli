@@ -170,6 +170,28 @@ internal class ConversationMessageActions(
         }
     }
 
+    suspend fun reportMessage(
+        messageId: String,
+        category: String,
+    ) {
+        val current = state.current
+        val message = current.detail?.messages?.firstOrNull { it.messageId == messageId } ?: return
+        // Only someone else's message, once.
+        if (message.senderUserId == current.viewerUserId || messageId in current.reportedMessageIds) return
+        when (val result = repository.reportMessage(message.senderUserId, messageId, category)) {
+            is AppResult.Success ->
+                state.update { existing ->
+                    existing.copy(
+                        reportedMessageIds = existing.reportedMessageIds + messageId,
+                        reportFeedback = "Thanks, we'll review that message. You can also block them from their profile.",
+                        errorMessage = null,
+                    )
+                }
+
+            is AppResult.Failure -> state.update { existing -> existing.copy(errorMessage = result.error.message) }
+        }
+    }
+
     fun reset() {
         pendingSendKey = null
     }

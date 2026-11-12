@@ -17,6 +17,7 @@ internal fun ResultSet.toAdminReportRecord(): AdminReportRecord =
         createdAt = getTimestamp("created_at").toInstant(),
         updatedAt = getTimestamp("updated_at").toInstant(),
         reviewedAt = getTimestamp("reviewed_at")?.toInstant(),
+        evidence = getString("evidence_text"),
     )
 
 internal data class LockedReportTarget(
