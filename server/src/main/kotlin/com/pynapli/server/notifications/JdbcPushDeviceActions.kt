@@ -24,15 +24,17 @@ internal class JdbcPushDeviceActions(
                         app_version,
                         locale,
                         timezone,
-                        notifications_enabled
+                        notifications_enabled,
+                        session_id
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (platform, device_token) DO UPDATE
                     SET user_id = EXCLUDED.user_id,
                         app_version = EXCLUDED.app_version,
                         locale = EXCLUDED.locale,
                         timezone = EXCLUDED.timezone,
                         notifications_enabled = EXCLUDED.notifications_enabled,
+                        session_id = EXCLUDED.session_id,
                         disabled_at = NULL,
                         last_seen_at = now(),
                         updated_at = now()
@@ -47,6 +49,7 @@ internal class JdbcPushDeviceActions(
                     statement.setString(6, registration.locale)
                     statement.setString(7, registration.timezone)
                     statement.setBoolean(8, registration.notificationsEnabled)
+                    statement.setObject(9, registration.sessionId)
                     statement.executeQuery().use { rs ->
                         require(rs.next()) { "push device upsert returned no rows" }
                         rs.toPushDeviceRecord()
@@ -108,6 +111,15 @@ internal class JdbcPushDeviceActions(
                     WHERE user_id = ?
                       AND disabled_at IS NULL
                       AND notifications_enabled = true
+                      AND (
+                          session_id IS NULL
+                          OR EXISTS (
+                              SELECT 1 FROM user_sessions s
+                              WHERE s.id = push_devices.session_id
+                                AND s.revoked_at IS NULL
+                                AND s.refresh_expires_at > now()
+                          )
+                      )
                     ORDER BY last_seen_at DESC, id ASC
                     """.trimIndent(),
                 ).use { statement ->

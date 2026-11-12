@@ -2,6 +2,7 @@ package com.pynapli.server.notifications
 
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.authenticatedUser
+import com.pynapli.server.auth.requiredBearerToken
 import com.pynapli.shared.network.dto.RegisterPushDeviceRequestDto
 import com.pynapli.shared.network.dto.UnregisterPushDeviceRequestDto
 import com.pynapli.shared.network.dto.UpdateNotificationPreferencesRequestDto
@@ -34,9 +35,10 @@ fun Application.configureNotificationRoutes(
             }
 
             post("/devices") {
-                val user = call.authenticatedUser(authService)
+                val token = call.requiredBearerToken()
+                val user = authService.authenticate(token)
                 val request = call.receive<RegisterPushDeviceRequestDto>()
-                call.respond(notificationService.registerPushDevice(user.id, request))
+                call.respond(notificationService.registerPushDevice(user.id, request, authService.sessionIdFor(token)))
             }
 
             post("/devices/unregister") {

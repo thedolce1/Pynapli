@@ -38,10 +38,12 @@ class NotificationService(
     suspend fun registerPushDevice(
         userId: UUID,
         request: RegisterPushDeviceRequestDto,
+        sessionId: UUID? = null,
     ): PushDeviceRegistrationResponseDto =
         deviceActions.registerPushDevice(
             userId = userId,
             request = request,
+            sessionId = sessionId,
         )
 
     suspend fun unregisterPushDevice(

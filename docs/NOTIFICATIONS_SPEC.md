@@ -139,6 +139,8 @@ Do not include:
 
 Ktor owns notification eligibility, copy, and queueing. Product actions enqueue rows in `notification_outbox`; the dispatch worker claims pending rows, sends to active push devices, and marks each row `sent`, `skipped`, `pending` for retry, or `failed`.
 
+A push device follows the session that registered it (`push_devices.session_id`, V86). A device counts as active only while that session is unrevoked and unexpired, so a remote sign-out, password reset, ban or account deletion silences the phone even though the app never unregistered. Devices registered before V86 have no session and stay active until the app re-registers on its next start; account deletion disables every device outright.
+
 Before each claim cycle, the dispatch worker recovers stale `processing` rows that have not been updated for 10 minutes. Recovered rows return to `pending` with `last_error = STALE_PROCESSING_RECOVERED`, which prevents a crash or forced stop from permanently stranding notifications.
 
 Local development uses `PYNAPLI_NOTIFICATION_PUSH_PROVIDER=local`, which exercises the full dispatcher without contacting Firebase. Production/staging can switch to `PYNAPLI_NOTIFICATION_PUSH_PROVIDER=firebase` when `PYNAPLI_FIREBASE_SERVICE_ACCOUNT_PATH` or `PYNAPLI_FIREBASE_SERVICE_ACCOUNT_JSON` is configured.

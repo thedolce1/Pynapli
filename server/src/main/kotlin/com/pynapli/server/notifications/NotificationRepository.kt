@@ -110,6 +110,8 @@ data class PushDeviceRegistration(
     val locale: String?,
     val timezone: String?,
     val notificationsEnabled: Boolean,
+    // The session that registered the device; delivery stops when it ends.
+    val sessionId: UUID? = null,
 )
 
 data class PushDeviceRecord(

@@ -23,18 +23,13 @@ internal class JdbcNotificationPreferencesActions(
 
     suspend fun getDeliveryGate(userId: UUID): NotificationDeliveryGate? =
         dataSource.withConnection { connection ->
+            // Create the default row first, as its own statement: a row inserted by a CTE is not
+            // visible to the SELECT in the same statement, so the first notification to someone
+            // who never opened notification settings used to be dropped.
+            connection.ensureNotificationPreferences(userId)
             connection
                 .prepareStatement(
                     """
-                    WITH ensured_preferences AS (
-                        INSERT INTO notification_preferences (user_id)
-                        SELECT id
-                        FROM users
-                        WHERE id = ?
-                          AND deleted_at IS NULL
-                        ON CONFLICT (user_id) DO NOTHING
-                        RETURNING user_id
-                    )
                     SELECT np.user_id,
                            np.detail_level,
                            np.messages_enabled,
@@ -51,6 +46,15 @@ internal class JdbcNotificationPreferencesActions(
                            COUNT(pd.id) FILTER (
                                WHERE pd.disabled_at IS NULL
                                  AND pd.notifications_enabled = true
+                                 AND (
+                                     pd.session_id IS NULL
+                                     OR EXISTS (
+                                         SELECT 1 FROM user_sessions s
+                                         WHERE s.id = pd.session_id
+                                           AND s.revoked_at IS NULL
+                                           AND s.refresh_expires_at > now()
+                                     )
+                                 )
                            ) AS active_device_count
                     FROM notification_preferences np
                     LEFT JOIN push_devices pd
@@ -72,7 +76,6 @@ internal class JdbcNotificationPreferencesActions(
                     """.trimIndent(),
                 ).use { statement ->
                     statement.setObject(1, userId)
-                    statement.setObject(2, userId)
                     statement.executeQuery().use { rs ->
                         if (!rs.next()) return@withConnection null
                         NotificationDeliveryGate(
