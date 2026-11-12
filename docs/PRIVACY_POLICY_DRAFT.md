@@ -220,7 +220,7 @@ Security contact placeholder:
 - [x] Privacy controls exist in settings.
 - [x] Account deletion exists as a server-authoritative soft-delete path.
 - [x] Account deletion erases/anonymizes PII (identity hashes, credentials, profile fields, exact location, owned media) and ends partner links + linked-partner benefits, while preserving safety/legal audit rows.
-- [ ] Partial: data export request exists; production archive generation/download process is not complete.
+- [ ] Partial: data export generates and serves a JSON archive covering account, profile, settings, sent messages, received activity, photos/albums and album access, likes/passes, matches, conversations, blocks/hides, reports filed, appeals, partner links, subscriptions/premium items, travel, Playing Tonight, Psync, sign-ins and push devices (secrets, exact location geometry, moderator-internal fields and others' message text excluded). Production download storage (GCS signed URLs) is founder provisioning.
 - [ ] Analytics redaction rules implemented.
 - [ ] Crash reporting redaction rules implemented.
 - [x] Location retention minimized.
