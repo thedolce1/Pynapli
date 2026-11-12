@@ -227,6 +227,10 @@ internal fun ConversationContextStrip(conversation: ConversationDto?) {
 internal fun ConversationHeader(
     title: String,
     onDismiss: () -> Unit,
+    // The one other person in a direct chat: tapping their name opens their profile (block,
+    // report, hide live there). Null for groups and while loading.
+    participant: ConversationParticipantDto? = null,
+    onOpenParticipantProfile: (ConversationParticipantDto) -> Unit = {},
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -240,8 +244,27 @@ internal fun ConversationHeader(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .then(
+                        if (participant != null) {
+                            Modifier.handCursor().clickable { onOpenParticipantProfile(participant) }
+                        } else {
+                            Modifier
+                        },
+                    ),
         )
+        if (participant != null) {
+            IconButton(onClick = { onOpenParticipantProfile(participant) }, modifier = Modifier.handCursor()) {
+                Icon(
+                    imageVector = Icons.Filled.Person,
+                    contentDescription = "Open profile",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
         IconButton(onClick = onDismiss, modifier = Modifier.handCursor()) {
             Icon(
                 imageVector = Icons.Filled.Close,
