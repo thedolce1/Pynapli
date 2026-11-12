@@ -43,6 +43,10 @@ interface ProfileHubRepository {
 
     suspend fun listReportHistory(): AppResult<ReportHistoryListDto>
 
+    suspend fun listAppeals(): AppResult<com.pynapli.shared.network.dto.AppealListDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
+    suspend fun submitAppeal(request: com.pynapli.shared.network.dto.CreateAppealRequestDto): AppResult<com.pynapli.shared.network.dto.AppealDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
     suspend fun getSupportContact(): AppResult<SupportContactDto>
 
     suspend fun latestDataExportRequest(): AppResult<AccountDataExportDto?>

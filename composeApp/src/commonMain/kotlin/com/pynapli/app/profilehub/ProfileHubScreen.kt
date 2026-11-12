@@ -183,6 +183,7 @@ fun ProfileHubScreen(
             onBack = stateHolder::dismissSafetyCenter,
             onUnblockUser = { userId -> scope.launch { stateHolder.unblockUser(userId) } },
             onUnhideProfile = { userId -> scope.launch { stateHolder.unhideProfile(userId) } },
+            onAppealRestriction = { reason -> scope.launch { stateHolder.appealRestriction(reason) } },
             onContactSupport = { contact -> runCatching { uriHandler.openUri(contact.toMailtoUri()) } },
             onClearMessage = stateHolder::clearMessage,
             modifier = modifier,

@@ -181,7 +181,7 @@ internal fun userSafeMessage(code: String): String =
         "APPEAL_REPORT_NOT_FOUND" -> "Appeal report reference was not found."
         "APPEAL_NOT_FOUND" -> "Appeal was not found."
         "RATE_LIMITED" -> "Too many actions. Try again later."
-        "RISK_RESTRICTED" -> "This action is unavailable right now."
+        "RISK_RESTRICTED" -> "Your account is limited while we review recent activity. If you think that's a mistake, appeal in Profile > Safety center."
         "APP_CHECK_REQUIRED" -> "App verification failed. Please update the app and try again."
         "ADMIN_UNAUTHENTICATED" -> "Admin authentication is required."
         "ADMIN_FORBIDDEN" -> "Admin access was denied."
