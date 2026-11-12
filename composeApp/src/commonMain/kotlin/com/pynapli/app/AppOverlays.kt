@@ -245,6 +245,7 @@ internal fun PynapliOverlays(
             onLeaveConversation = conversationActions.onLeave,
             onDeleteMessage = conversationActions.onDeleteMessage,
             onReportMessage = conversationActions.onReportMessage,
+            onOpenStore = conversationActions.onOpenStore,
             onSetExpiry = conversationActions.onSetExpiry,
             onRevealMedia = conversationActions.onRevealMedia,
             onPickPhoto = onPickConversationPhoto,

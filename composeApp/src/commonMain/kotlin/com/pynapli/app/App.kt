@@ -224,6 +224,7 @@ fun PynapliApp(
                 scope = scope,
                 conversationStateHolder = graph.conversationStateHolder,
                 messagesStateHolder = graph.messagesStateHolder,
+                onOpenStore = { selectedTab = PynapliTab.Store },
             )
 
         LaunchedEffect(selectedTab, profileDetailState.blockedTargetUserId) {
