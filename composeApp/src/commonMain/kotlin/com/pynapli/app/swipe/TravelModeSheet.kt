@@ -87,8 +87,22 @@ internal fun TravelModeSheet(
             if (state.ageVerificationRequired) {
                 TravelVerificationBanner(onVerify = onOpenAgeVerification)
             } else if (state.entitlementRequired) {
+                if (state.previewUsed) {
+                    Text(
+                        text = "You've used this month's Travel preview.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 TravelPaywallBanner(onSubscribe = onOpenStore)
             } else {
+                state.errorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 state.current?.let { dto ->
                     Text(
                         text = "Currently in ${dto.city}",

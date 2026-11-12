@@ -79,7 +79,8 @@ class TravelLocationStateHolder(
         }
     }
 
-    suspend fun setActive(place: TravelPlaceDto) {
+    /** Returns true when the trip is on; on failure the sheet stays open and says why. */
+    suspend fun setActive(place: TravelPlaceDto): Boolean {
         _state.update { it.copy(isSaving = true, errorCode = null, errorMessage = null) }
         val request =
             SetTravelLocationRequestDto(
@@ -89,8 +90,8 @@ class TravelLocationStateHolder(
                 region = place.region,
                 country = place.country,
             )
-        when (val result = repository.setActive(request)) {
-            is AppResult.Success ->
+        return when (val result = repository.setActive(request)) {
+            is AppResult.Success -> {
                 _state.update {
                     it.copy(
                         isSaving = false,
@@ -99,16 +100,20 @@ class TravelLocationStateHolder(
                         searchResults = emptyList(),
                     )
                 }
-            is AppResult.Failure ->
+                true
+            }
+            is AppResult.Failure -> {
                 _state.update {
-                    val verification = result.error.code == "AGE_VERIFICATION_REQUIRED"
+                    val bannerHandled = result.error.code in BANNER_CODES
                     it.copy(
                         isSaving = false,
                         errorCode = result.error.code,
-                        // Age-verification is surfaced via the sheet's verify prompt, not a raw error.
-                        errorMessage = if (verification) null else result.error.message,
+                        // Verify and paywall cases get their own banner, not a raw error line.
+                        errorMessage = if (bannerHandled) null else result.error.message,
                     )
                 }
+                false
+            }
         }
     }
 
@@ -151,7 +156,9 @@ data class TravelLocationUiState(
     val errorCode: String? = null,
     val errorMessage: String? = null,
 ) {
-    val entitlementRequired: Boolean get() = errorCode == "ENTITLEMENT_REQUIRED"
+    // Free has no Travel; Social's monthly preview is used up. Both lead to the Select paywall.
+    val entitlementRequired: Boolean get() = errorCode == "ENTITLEMENT_REQUIRED" || previewUsed
+    val previewUsed: Boolean get() = errorCode == "TRAVEL_PREVIEW_RATE_LIMITED"
     val ageVerificationRequired: Boolean get() = errorCode == "AGE_VERIFICATION_REQUIRED"
     val isActive: Boolean get() = current != null
 }
@@ -177,3 +184,5 @@ class ApiTravelLocationRepository(
 
     override suspend fun searchPlaces(query: String): AppResult<TravelPlaceSearchResponseDto> = apiClient.searchTravelPlaces(query)
 }
+
+private val BANNER_CODES = setOf("AGE_VERIFICATION_REQUIRED", "ENTITLEMENT_REQUIRED", "TRAVEL_PREVIEW_RATE_LIMITED")

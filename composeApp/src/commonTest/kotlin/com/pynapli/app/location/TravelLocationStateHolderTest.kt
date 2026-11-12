@@ -63,6 +63,40 @@ class TravelLocationStateHolderTest {
         }
 
     @Test
+    fun aUsedSocialPreviewLeadsToTheSelectPaywallAndKeepsTheSheetOpen() =
+        runTest {
+            val repository =
+                FakeRepository(
+                    setResult = AppResult.Failure(AppError("TRAVEL_PREVIEW_RATE_LIMITED", "Preview used")),
+                )
+            val stateHolder = TravelLocationStateHolder(repository)
+
+            val activated = stateHolder.setActive(vegas)
+
+            assertFalse(activated)
+            val state = stateHolder.state.value
+            assertTrue(state.entitlementRequired)
+            assertTrue(state.previewUsed)
+            assertNull(state.errorMessage, "the paywall banner explains it")
+        }
+
+    @Test
+    fun otherRefusalsKeepTheSheetOpenWithTheReason() =
+        runTest {
+            val repository =
+                FakeRepository(
+                    setResult = AppResult.Failure(AppError("TRAVEL_SWITCH_LIMITED", "You've changed destination a lot today.")),
+                )
+            val stateHolder = TravelLocationStateHolder(repository)
+
+            val activated = stateHolder.setActive(vegas)
+
+            assertFalse(activated)
+            assertEquals("You've changed destination a lot today.", stateHolder.state.value.errorMessage)
+            assertFalse(stateHolder.state.value.entitlementRequired)
+        }
+
+    @Test
     fun typingThenSearchingReturnsPlacesAndPickingSendsTheirCoordinates() =
         runTest {
             val active =
