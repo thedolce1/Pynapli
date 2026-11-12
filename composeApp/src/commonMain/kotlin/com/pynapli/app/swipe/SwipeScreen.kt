@@ -274,12 +274,15 @@ fun SwipeScreen(
             },
             onPickPlace = { place ->
                 scope.launch {
-                    travelLocationStateHolder?.setActive(place)
-                    // Refresh the deck so the new travel location takes effect
-                    // immediately rather than waiting for the next manual reload.
-                    stateHolder.load(ownerUserId = viewerUserId)
+                    // Close only once the trip is on: a refusal (plan, verification, region, switch
+                    // limit) stays in the sheet with its reason instead of silently reloading home.
+                    if (travelLocationStateHolder?.setActive(place) == true) {
+                        travelSheetVisible = false
+                        // Refresh the deck so the new travel location takes effect
+                        // immediately rather than waiting for the next manual reload.
+                        stateHolder.load(ownerUserId = viewerUserId)
+                    }
                 }
-                travelSheetVisible = false
             },
             onClear = {
                 scope.launch {
