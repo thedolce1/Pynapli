@@ -45,7 +45,10 @@ class AccountDataExportContentsIntegrationTest {
             val myId = UUID.fromString(me.user.userId)
             val otherId = UUID.fromString(other.user.userId)
             sql("INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action) VALUES (?, ?, ?, 'like')", UUID.randomUUID(), myId, otherId)
-            sql("INSERT INTO matches (id, user_a, user_b) VALUES (?, ?, ?)", UUID.randomUUID(), minOf(myId, otherId), maxOf(myId, otherId))
+            // Postgres orders uuids by their bytes (= the hex text), not by java.util.UUID.compareTo
+            // (signed longs), so pick the canonical pair the way the matches check constraint does.
+            val (first, second) = listOf(myId, otherId).sortedBy { it.toString() }
+            sql("INSERT INTO matches (id, user_a, user_b) VALUES (?, ?, ?)", UUID.randomUUID(), first, second)
             sql("INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id, reason) VALUES (?, ?, ?, 'qa')", UUID.randomUUID(), myId, otherId)
             sql(
                 "INSERT INTO push_devices (id, user_id, platform, device_token) VALUES (?, ?, 'android', 'secret-push-token-123')",
