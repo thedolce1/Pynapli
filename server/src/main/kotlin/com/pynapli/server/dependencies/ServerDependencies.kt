@@ -20,6 +20,7 @@ import com.pynapli.server.admin.JdbcAdminRequestAuditRecorder
 import com.pynapli.server.admin.JdbcAdminSubscriptionSupportRepository
 import com.pynapli.server.admin.JdbcAdminUserLookupRepository
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.PasswordRecoveryService
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.config.startupSummary
 import com.pynapli.server.config.validateForStartup
@@ -86,6 +87,7 @@ class ServerDependencies(
     val database: Database,
     private val redisCache: RedisCache,
     val authService: AuthService,
+    val passwordRecoveryService: PasswordRecoveryService? = null,
     val profileService: ProfileService,
     val profileLinkService: ProfileLinkService,
     val adminUserLookupService: AdminUserLookupService,
@@ -367,6 +369,7 @@ class ServerDependencies(
                 database = database,
                 redisCache = redisCache,
                 authService = core.authService,
+                passwordRecoveryService = core.passwordRecoveryService,
                 profileService = profileService,
                 profileLinkService = profileLinkService,
                 adminUserLookupService = adminUserLookupService,

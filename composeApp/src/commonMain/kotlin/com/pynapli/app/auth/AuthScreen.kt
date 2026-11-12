@@ -45,6 +45,8 @@ fun AuthScreen(
     onAcceptedAgeAndTermsChanged: (Boolean) -> Unit,
     onModeSelected: (AuthMode) -> Unit,
     onSubmit: () -> Unit,
+    onResetCodeChanged: (String) -> Unit = {},
+    onResendResetCode: () -> Unit = {},
     onDevLogin: (() -> Unit)? = null,
     // When provided, "Create account" leaves this screen for the onboarding stepper
     // instead of switching to the legacy inline signup form.
@@ -70,8 +72,14 @@ fun AuthScreen(
             fontWeight = FontWeight.SemiBold,
         )
         Spacer(modifier = Modifier.height(8.dp))
+        val resetting = state.mode == AuthMode.ResetPassword
         Text(
-            text = if (state.mode == AuthMode.SignIn) "Sign in" else "Create account",
+            text =
+                when (state.mode) {
+                    AuthMode.SignIn -> "Sign in"
+                    AuthMode.CreateAccount -> "Create account"
+                    AuthMode.ResetPassword -> "Reset password"
+                },
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Medium,
@@ -94,29 +102,64 @@ fun AuthScreen(
             onValueChange = onEmailChanged,
             label = { Text("Email") },
             singleLine = true,
-            enabled = !state.isSubmitting,
+            enabled = !state.isSubmitting && !(resetting && state.resetCodeSent),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             colors = authTextFieldColors(),
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        if (resetting) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = state.resetNotice ?: "Enter the email you signed up with and we'll send you a 6-digit code.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (resetting && state.resetCodeSent) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = state.resetCode,
+                onValueChange = onResetCodeChanged,
+                label = { Text("6-digit code") },
+                singleLine = true,
+                enabled = !state.isSubmitting,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                colors = authTextFieldColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
-        var passwordVisible by rememberSaveable { mutableStateOf(false) }
-        OutlinedTextField(
-            value = state.password,
-            onValueChange = onPasswordChanged,
-            label = { Text("Password") },
-            singleLine = true,
-            enabled = !state.isSubmitting,
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                PynapliPasswordVisibilityToggle(visible = passwordVisible) { passwordVisible = !passwordVisible }
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            colors = authTextFieldColors(),
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (!resetting || state.resetCodeSent) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            var passwordVisible by rememberSaveable { mutableStateOf(false) }
+            OutlinedTextField(
+                value = state.password,
+                onValueChange = onPasswordChanged,
+                label = { Text(if (resetting) "New password" else "Password") },
+                singleLine = true,
+                enabled = !state.isSubmitting,
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    PynapliPasswordVisibilityToggle(visible = passwordVisible) { passwordVisible = !passwordVisible }
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                colors = authTextFieldColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        if (state.mode == AuthMode.SignIn) {
+            TextButton(
+                onClick = { onModeSelected(AuthMode.ResetPassword) },
+                enabled = !state.isSubmitting,
+                modifier = Modifier.align(Alignment.End).handCursor(enabled = !state.isSubmitting),
+            ) {
+                Text("Forgot password?")
+            }
+        }
 
         if (state.mode == AuthMode.CreateAccount) {
             Spacer(modifier = Modifier.height(12.dp))
@@ -183,7 +226,24 @@ fun AuthScreen(
                     modifier = Modifier.padding(vertical = 2.dp),
                 )
             } else {
-                Text(if (state.mode == AuthMode.SignIn) "Sign in" else "Create account")
+                Text(
+                    when {
+                        state.mode == AuthMode.SignIn -> "Sign in"
+                        state.mode == AuthMode.CreateAccount -> "Create account"
+                        state.resetCodeSent -> "Set new password"
+                        else -> "Send code"
+                    },
+                )
+            }
+        }
+
+        if (resetting && state.resetCodeSent) {
+            TextButton(
+                onClick = onResendResetCode,
+                enabled = !state.isSubmitting,
+                modifier = Modifier.handCursor(enabled = !state.isSubmitting),
+            ) {
+                Text("Send a new code")
             }
         }
 
@@ -196,7 +256,9 @@ fun AuthScreen(
         ) {
             TextButton(
                 onClick = {
-                    if (state.mode == AuthMode.SignIn && onStartCreateAccount != null) {
+                    if (resetting) {
+                        onModeSelected(AuthMode.SignIn)
+                    } else if (state.mode == AuthMode.SignIn && onStartCreateAccount != null) {
                         onStartCreateAccount()
                     } else {
                         onModeSelected(
@@ -207,7 +269,13 @@ fun AuthScreen(
                 enabled = !state.isSubmitting,
                 modifier = Modifier.handCursor(enabled = !state.isSubmitting),
             ) {
-                Text(if (state.mode == AuthMode.SignIn) "Create account" else "Sign in")
+                Text(
+                    when (state.mode) {
+                        AuthMode.SignIn -> "Create account"
+                        AuthMode.CreateAccount -> "Sign in"
+                        AuthMode.ResetPassword -> "Back to sign in"
+                    },
+                )
             }
         }
 

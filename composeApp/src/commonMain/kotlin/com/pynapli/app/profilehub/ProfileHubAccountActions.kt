@@ -2,6 +2,7 @@ package com.pynapli.app.profilehub
 
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.DeleteAccountRequestDto
+import com.pynapli.shared.network.dto.PasswordChangeDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
@@ -114,6 +115,31 @@ internal class ProfileHubAccountActions(
                         errorMessage = result.error.message,
                     )
                 }
+                false
+            }
+        }
+    }
+
+    /** Returns true when the password changed; other devices are signed out by the server. */
+    suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+    ): Boolean {
+        if (state.value.isChangingPassword) return false
+        state.update { it.copy(isChangingPassword = true, errorMessage = null, feedbackMessage = null) }
+        return when (val result = repository.changePassword(PasswordChangeDto(currentPassword = currentPassword, newPassword = newPassword))) {
+            is AppResult.Success -> {
+                state.update {
+                    it.copy(
+                        isChangingPassword = false,
+                        feedbackMessage = "Password changed. Any other devices were signed out.",
+                    )
+                }
+                true
+            }
+
+            is AppResult.Failure -> {
+                state.update { it.copy(isChangingPassword = false, errorMessage = result.error.message) }
                 false
             }
         }

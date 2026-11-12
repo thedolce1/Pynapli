@@ -95,6 +95,20 @@ Indexes:
 
 - unique `(provider, provider_subject)`
 
+### password_reset_codes
+
+Forgot-password codes (V85). Only `SHA-256(userId:code)` is stored.
+
+Fields:
+
+- `id`
+- `user_id`
+- `code_hash`
+- `expires_at` (30 minutes)
+- `failed_attempts` (code refused at 5)
+- `consumed_at` (set on use, or when a newer code or a password change retires it)
+- `created_at`
+
 ### user_sessions
 
 Active auth sessions/devices. Access and refresh tokens are opaque, server-issued random values (not

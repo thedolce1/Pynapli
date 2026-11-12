@@ -53,6 +53,7 @@ internal fun ProfileHubContent(
     onOpenStore: () -> Unit,
     onRequestDataExport: () -> Unit,
     onDeleteAccountClick: () -> Unit,
+    onChangePasswordClick: () -> Unit = {},
     onLogoutClick: () -> Unit,
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier,
@@ -245,6 +246,12 @@ internal fun ProfileHubContent(
                     label = "Data export",
                     value = dataExportSummary(state),
                     onClick = onRequestDataExport,
+                )
+                ProfileHubRow(
+                    icon = Icons.Filled.Lock,
+                    label = "Change password",
+                    value = if (state.isChangingPassword) "Saving" else "Signs out other devices",
+                    onClick = onChangePasswordClick,
                 )
                 ProfileHubRow(
                     icon = Icons.Filled.Delete,

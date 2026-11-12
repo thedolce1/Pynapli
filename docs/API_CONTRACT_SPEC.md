@@ -113,6 +113,9 @@ POST /v1/auth/social/apple
 POST /v1/auth/social/google
 POST /v1/auth/refresh
 POST /v1/auth/logout
+POST /v1/auth/password/reset-request   # { email } -> always { sent: true }
+POST /v1/auth/password/reset           # { email, code, newPassword }
+POST /v1/auth/password/change          # bearer; { currentPassword, newPassword }
 GET  /v1/auth/sessions
 DELETE /v1/auth/sessions/{sessionId}
 ```
@@ -124,6 +127,8 @@ Rules:
 - Refresh tokens rotate.
 - Email signup requires `birthdate`, `confirmedAdult=true`, `acceptedTerms=true`, and `acceptedPrivacy=true`.
 - Ktor validates adult age from DOB, then records acceptance timestamps and server-controlled terms/privacy versions.
+- Forgot password emails a 6-digit code to the address typed (emails are stored only as hashes). The request answers `{ sent: true }` whether or not an account exists. A code lasts 30 minutes, works once, dies after 5 wrong guesses, and a new request retires older codes. Errors: `INVALID_RESET_CODE` (400), `PASSWORD_RESET_UNAVAILABLE` (503, no email provider configured; the app points to support), `RATE_LIMITED`.
+- A reset revokes every session; a change keeps the calling session and revokes the rest (`WRONG_CURRENT_PASSWORD` 403 on a bad current password). The reset screen signs in with the new password straight away.
 
 ## Account Lifecycle API
 

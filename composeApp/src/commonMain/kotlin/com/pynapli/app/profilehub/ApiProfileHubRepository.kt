@@ -9,6 +9,8 @@ import com.pynapli.shared.network.dto.DeleteAccountRequestDto
 import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import com.pynapli.shared.network.dto.HiddenProfilesListDto
 import com.pynapli.shared.network.dto.MeDto
+import com.pynapli.shared.network.dto.PasswordChangeDto
+import com.pynapli.shared.network.dto.PasswordChangedDto
 import com.pynapli.shared.network.dto.ReportHistoryListDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
@@ -50,4 +52,6 @@ class ApiProfileHubRepository(
     override suspend fun requestDataExport(): AppResult<AccountDataExportDto> = apiClient.requestDataExport()
 
     override suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto> = apiClient.deleteAccount(request)
+
+    override suspend fun changePassword(request: PasswordChangeDto): AppResult<PasswordChangedDto> = apiClient.changePassword(request)
 }

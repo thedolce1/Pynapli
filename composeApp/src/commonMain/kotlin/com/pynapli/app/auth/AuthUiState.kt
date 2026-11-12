@@ -14,6 +14,10 @@ data class AuthUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val session: StoredSession? = null,
+    // Forgot password: after "Send code", the screen asks for the emailed code and a new password.
+    val resetCodeSent: Boolean = false,
+    val resetCode: String = "",
+    val resetNotice: String? = null,
 ) {
     val authenticated: Boolean
         get() = session != null
@@ -22,6 +26,7 @@ data class AuthUiState(
 enum class AuthMode {
     SignIn,
     CreateAccount,
+    ResetPassword,
 }
 
 @Immutable

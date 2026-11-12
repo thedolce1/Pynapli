@@ -46,3 +46,32 @@ data class AuthUserDto(
 data class LogoutResponseDto(
     val loggedOut: Boolean,
 )
+
+@Serializable
+data class PasswordResetRequestDto(
+    val email: String,
+    val deviceId: String? = null,
+)
+
+@Serializable
+data class PasswordResetRequestedDto(
+    val sent: Boolean,
+)
+
+@Serializable
+data class PasswordResetDto(
+    val email: String,
+    val code: String,
+    val newPassword: String,
+)
+
+@Serializable
+data class PasswordChangeDto(
+    val currentPassword: String,
+    val newPassword: String,
+)
+
+@Serializable
+data class PasswordChangedDto(
+    val changed: Boolean,
+)

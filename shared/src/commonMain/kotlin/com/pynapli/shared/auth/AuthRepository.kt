@@ -7,6 +7,9 @@ import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
+import com.pynapli.shared.network.dto.PasswordResetDto
+import com.pynapli.shared.network.dto.PasswordResetRequestDto
+import com.pynapli.shared.network.dto.PasswordResetRequestedDto
 
 class AuthRepository(
     private val authApi: AuthApi,
@@ -85,6 +88,25 @@ class AuthRepository(
             )
         return result.persistSession()
     }
+
+    suspend fun requestPasswordReset(
+        email: String,
+        deviceId: String? = null,
+    ): AppResult<PasswordResetRequestedDto> = authApi.requestPasswordReset(PasswordResetRequestDto(email = email, deviceId = deviceId))
+
+    /** Sets the new password with the emailed code, then signs in with it (the reset signed out every device). */
+    suspend fun resetPasswordAndSignIn(
+        email: String,
+        code: String,
+        newPassword: String,
+        platform: String,
+        appVersion: String,
+        deviceId: String? = null,
+    ): AppResult<StoredSession> =
+        when (val reset = authApi.resetPassword(PasswordResetDto(email = email, code = code, newPassword = newPassword))) {
+            is AppResult.Success -> loginEmail(email, newPassword, platform, appVersion, deviceId)
+            is AppResult.Failure -> reset
+        }
 
     suspend fun logout() {
         authApi.logout()

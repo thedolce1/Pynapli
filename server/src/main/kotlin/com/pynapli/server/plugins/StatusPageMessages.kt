@@ -4,6 +4,10 @@ internal fun userSafeMessage(code: String): String =
     when (code) {
         "EMAIL_ALREADY_EXISTS" -> "An account already exists for this email."
         "INVALID_CREDENTIALS" -> "Invalid email or password."
+        "INVALID_RESET_CODE" -> "That code isn't right or has expired. Request a new one."
+        "PASSWORD_RESET_UNAVAILABLE" -> "Password reset by email isn't available right now. Contact support@pynapli.com."
+        "WRONG_CURRENT_PASSWORD" -> "Your current password isn't right."
+        "PASSWORD_CHANGE_NOT_AVAILABLE" -> "This account doesn't sign in with a password."
         "INVALID_REFRESH_TOKEN", "UNAUTHENTICATED" -> "Please sign in again."
         "ACCOUNT_NOT_ACTIVE" -> "This account is not active."
         "INVALID_EMAIL" -> "Enter a valid email address."
