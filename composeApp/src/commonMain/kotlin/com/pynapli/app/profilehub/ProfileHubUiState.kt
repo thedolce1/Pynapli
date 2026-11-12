@@ -35,6 +35,10 @@ data class ProfileHubUiState(
     val isDataExportMutating: Boolean = false,
     val isDeletingAccount: Boolean = false,
     val isChangingPassword: Boolean = false,
+    // "Where you're signed in": null until first loaded.
+    val signedInDevices: List<com.pynapli.shared.network.dto.SignedInDeviceDto>? = null,
+    val isLoadingDevices: Boolean = false,
+    val signingOutDeviceIds: Set<String> = emptySet(),
     val isBlocksLoading: Boolean = false,
     val isHiddenProfilesLoading: Boolean = false,
     val isReportHistoryLoading: Boolean = false,

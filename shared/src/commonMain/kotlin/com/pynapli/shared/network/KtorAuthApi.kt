@@ -11,6 +11,8 @@ import com.pynapli.shared.network.dto.PasswordResetDto
 import com.pynapli.shared.network.dto.PasswordResetRequestDto
 import com.pynapli.shared.network.dto.PasswordResetRequestedDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
+import com.pynapli.shared.network.dto.SignedInDevicesDto
+import com.pynapli.shared.network.dto.SignedOutDevicesDto
 import io.ktor.http.HttpMethod
 
 /** Ktor implementation of [AuthApi], composed into `KtorPynapliApiClient` via interface delegation. */
@@ -30,4 +32,10 @@ internal class KtorAuthApi(
     override suspend fun resetPassword(request: PasswordResetDto): AppResult<PasswordChangedDto> = support.postJson("/v1/auth/password/reset", request)
 
     override suspend fun changePassword(request: PasswordChangeDto): AppResult<PasswordChangedDto> = support.authSend(HttpMethod.Post, "/v1/auth/password/change", request)
+
+    override suspend fun listSignedInDevices(): AppResult<SignedInDevicesDto> = support.authGet("/v1/auth/sessions")
+
+    override suspend fun signOutDevice(sessionId: String): AppResult<SignedOutDevicesDto> = support.authDelete("/v1/auth/sessions/$sessionId")
+
+    override suspend fun signOutOtherDevices(): AppResult<SignedOutDevicesDto> = support.authPost("/v1/auth/sessions/sign-out-others")
 }

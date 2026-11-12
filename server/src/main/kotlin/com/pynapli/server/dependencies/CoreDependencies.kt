@@ -10,8 +10,10 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.JdbcDeviceFarmRepository
 import com.pynapli.server.auth.JdbcPasswordRecoveryRepository
+import com.pynapli.server.auth.JdbcSignedInDevicesRepository
 import com.pynapli.server.auth.LocalFilePasswordResetMailer
 import com.pynapli.server.auth.PasswordRecoveryService
+import com.pynapli.server.auth.SignedInDevicesService
 import com.pynapli.server.auth.UnconfiguredPasswordResetMailer
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.location.JdbcLocationRepository
@@ -71,6 +73,7 @@ internal class CoreDependencies(
     val productMetrics: ProductMetrics,
     val authService: AuthService,
     val passwordRecoveryService: PasswordRecoveryService,
+    val signedInDevicesService: SignedInDevicesService,
     val reportService: ReportService,
     val appealService: AppealService,
     val adminAppealService: AdminAppealService,
@@ -169,6 +172,11 @@ internal fun buildCoreDependencies(
             rateLimitService = rateLimitService,
             onSessionsRevoked = authService::invalidateCachedSessionsForUser,
         )
+    val signedInDevicesService =
+        SignedInDevicesService(
+            repository = JdbcSignedInDevicesRepository(database.dataSource),
+            onSessionsRevoked = authService::invalidateCachedSessionsForUser,
+        )
     val reportService =
         ReportService(
             repository = JdbcReportRepository(database.dataSource),
@@ -224,6 +232,7 @@ internal fun buildCoreDependencies(
         productMetrics = productMetrics,
         authService = authService,
         passwordRecoveryService = passwordRecoveryService,
+        signedInDevicesService = signedInDevicesService,
         reportService = reportService,
         appealService = appealService,
         adminAppealService = adminAppealService,

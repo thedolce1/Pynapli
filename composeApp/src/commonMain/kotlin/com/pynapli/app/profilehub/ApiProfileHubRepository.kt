@@ -54,4 +54,10 @@ class ApiProfileHubRepository(
     override suspend fun deleteAccount(request: DeleteAccountRequestDto): AppResult<DeleteAccountResponseDto> = apiClient.deleteAccount(request)
 
     override suspend fun changePassword(request: PasswordChangeDto): AppResult<PasswordChangedDto> = apiClient.changePassword(request)
+
+    override suspend fun listSignedInDevices(): AppResult<com.pynapli.shared.network.dto.SignedInDevicesDto> = apiClient.listSignedInDevices()
+
+    override suspend fun signOutDevice(sessionId: String): AppResult<com.pynapli.shared.network.dto.SignedOutDevicesDto> = apiClient.signOutDevice(sessionId)
+
+    override suspend fun signOutOtherDevices(): AppResult<com.pynapli.shared.network.dto.SignedOutDevicesDto> = apiClient.signOutOtherDevices()
 }
