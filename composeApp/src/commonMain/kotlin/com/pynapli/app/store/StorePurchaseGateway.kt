@@ -14,6 +14,13 @@ interface StorePurchaseGateway {
 
     /** Store-formatted prices ("CA$12.99") keyed by store product id; empty where unavailable. */
     suspend fun localizedPrices(productIds: List<String>): Map<String, String> = emptyMap()
+
+    /**
+     * Quietly sends the server any purchase the store completed but the app never confirmed (the app
+     * was closed mid-checkout, or a pending payment cleared later). Returns true when something was
+     * synced, so the caller can refresh the entitlement.
+     */
+    suspend fun syncUnfinishedPurchases(): Boolean = false
 }
 
 class UnavailableStorePurchaseGateway : StorePurchaseGateway {

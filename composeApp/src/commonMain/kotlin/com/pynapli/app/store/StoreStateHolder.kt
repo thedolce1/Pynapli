@@ -36,6 +36,8 @@ class StoreStateHolder(
                     val prices = purchaseGateway.localizedPrices(productIds)
                     if (prices.isNotEmpty()) _state.update { it.copy(localizedPrices = prices) }
                 }
+                // A purchase finished while the app was away shows up as soon as the Store opens.
+                if (purchaseGateway.syncUnfinishedPurchases()) refreshAfterSync()
             }
 
             is AppResult.Failure ->
@@ -45,6 +47,21 @@ class StoreStateHolder(
                         errorMessage = result.error.message,
                     )
                 }
+        }
+    }
+
+    private suspend fun refreshAfterSync() {
+        when (val result = repository.loadStore()) {
+            is AppResult.Success ->
+                _state.update {
+                    it.copy(
+                        balances = result.value.balances,
+                        entitlement = result.value.entitlement,
+                        activeBoostEndsAt = result.value.activeBoostEndsAt,
+                        purchaseMessage = "Your purchase is active.",
+                    )
+                }
+            is AppResult.Failure -> Unit
         }
     }
 

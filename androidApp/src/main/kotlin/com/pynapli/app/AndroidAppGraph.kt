@@ -200,6 +200,9 @@ class AndroidAppGraph(
         playBillingPurchaseGateway.attachActivity(activity)
     }
 
+    /** Confirms purchases finished while the app was away; see StorePurchaseGateway.syncUnfinishedPurchases. */
+    suspend fun syncUnfinishedPurchases(): Boolean = playBillingPurchaseGateway.syncUnfinishedPurchases()
+
     fun detachBillingActivity(activity: Activity) {
         playBillingPurchaseGateway.detachActivity(activity)
     }
