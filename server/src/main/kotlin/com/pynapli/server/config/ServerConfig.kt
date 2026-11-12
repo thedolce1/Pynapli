@@ -108,6 +108,9 @@ data class ServerConfig(
     // deploy that forgets the env var still admits the PWA (override to add/replace origins).
     val corsAllowedOrigins: List<String> = emptyList(),
     val supportEmail: String = "support@pynapli.com",
+    // How forgot-password codes are delivered: "log" (local only — code in the server log) or
+    // "none" (reset answers PASSWORD_RESET_UNAVAILABLE). A real email provider is a founder setup item.
+    val passwordResetMailer: String = "none",
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
     val activityCursorSecret: String = "pynapli-local-dev-activity-cursor-secret",
     val swipeDeckTokenSecret: String = "pynapli-local-dev-swipe-deck-token-secret",
@@ -429,6 +432,9 @@ data class ServerConfig(
                         ?.takeIf { it.isNotEmpty() },
                 corsAllowedOrigins =
                     corsAllowedOriginsFromEnvironment(environmentVariables, environment),
+                passwordResetMailer =
+                    System.getenv("PYNAPLI_PASSWORD_RESET_MAILER")?.trim()?.takeIf { it.isNotEmpty() }
+                        ?: if (environment == "local") "log" else "none",
                 supportEmail =
                     System
                         .getenv("PYNAPLI_SUPPORT_EMAIL")

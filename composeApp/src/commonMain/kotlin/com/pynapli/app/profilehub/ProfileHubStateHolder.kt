@@ -115,6 +115,11 @@ class ProfileHubStateHolder(
 
     suspend fun deleteAccount(confirmation: String): Boolean = account.deleteAccount(confirmation)
 
+    suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+    ): Boolean = account.changePassword(currentPassword, newPassword)
+
     suspend fun loadBlocks() = safety.loadBlocks()
 
     suspend fun loadHiddenProfiles() = safety.loadHiddenProfiles()

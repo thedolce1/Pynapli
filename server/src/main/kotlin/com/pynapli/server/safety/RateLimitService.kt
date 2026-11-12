@@ -76,6 +76,11 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AUTH_REFRESH, limit = 120, windowSeconds = ONE_HOUR_SECONDS),
+                // Each request sends an email; a handful an hour covers a mistyped inbox.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_PASSWORD_RESET, limit = 5, windowSeconds = ONE_HOUR_SECONDS),
+                // Guessing a 6-digit code: each code also dies after 5 wrong tries.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_PASSWORD_RESET_VERIFY, limit = 15, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.AUTH_PASSWORD_CHANGE, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.REPORT, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.FLIRT, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.ALBUM_REQUEST, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
@@ -105,6 +110,9 @@ object RateLimitedAction {
     const val AUTH_SIGNUP = "auth_signup"
     const val AUTH_LOGIN = "auth_login"
     const val AUTH_REFRESH = "auth_refresh"
+    const val AUTH_PASSWORD_RESET = "auth_password_reset"
+    const val AUTH_PASSWORD_RESET_VERIFY = "auth_password_reset_verify"
+    const val AUTH_PASSWORD_CHANGE = "auth_password_change"
     const val REPORT = "report"
     const val FLIRT = "flirt"
     const val ALBUM_REQUEST = "album_request"

@@ -3,6 +3,11 @@ package com.pynapli.server.auth
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
+import com.pynapli.shared.network.dto.PasswordChangeDto
+import com.pynapli.shared.network.dto.PasswordChangedDto
+import com.pynapli.shared.network.dto.PasswordResetDto
+import com.pynapli.shared.network.dto.PasswordResetRequestDto
+import com.pynapli.shared.network.dto.PasswordResetRequestedDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -13,7 +18,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 
-fun Application.configureAuthRoutes(authService: AuthService) {
+fun Application.configureAuthRoutes(
+    authService: AuthService,
+    passwordRecoveryService: PasswordRecoveryService? = null,
+) {
     routing {
         route("/v1/auth") {
             post("/email/signup") {
@@ -40,6 +48,29 @@ fun Application.configureAuthRoutes(authService: AuthService) {
             post("/logout") {
                 val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
                 call.respond(LogoutResponseDto(loggedOut = authService.logout(token)))
+            }
+
+            passwordRecoveryService?.let { recovery ->
+                // Same answer whether or not the email has an account.
+                post("/password/reset-request") {
+                    val request = call.receive<PasswordResetRequestDto>()
+                    recovery.requestReset(request.email, request.deviceId)
+                    call.respond(PasswordResetRequestedDto(sent = true))
+                }
+
+                post("/password/reset") {
+                    val request = call.receive<PasswordResetDto>()
+                    recovery.resetPassword(request.email, request.code, request.newPassword)
+                    call.respond(PasswordChangedDto(changed = true))
+                }
+
+                post("/password/change") {
+                    val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
+                    val user = authService.authenticate(token)
+                    val request = call.receive<PasswordChangeDto>()
+                    recovery.changePassword(user.id, token, request.currentPassword, request.newPassword)
+                    call.respond(PasswordChangedDto(changed = true))
+                }
             }
         }
     }
@@ -72,6 +103,8 @@ fun authStatusFor(code: String): HttpStatusCode =
         "EMAIL_ALREADY_EXISTS" -> HttpStatusCode.Conflict
         "INVALID_CREDENTIALS", "INVALID_REFRESH_TOKEN", "UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
         "ACCOUNT_NOT_ACTIVE" -> HttpStatusCode.Forbidden
+        "PASSWORD_RESET_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
+        "WRONG_CURRENT_PASSWORD" -> HttpStatusCode.Forbidden
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "INVALID_EMAIL",
         "PASSWORD_TOO_SHORT",

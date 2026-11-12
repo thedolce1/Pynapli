@@ -9,6 +9,10 @@ import com.pynapli.server.activity.ActivityBroadcaster
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.JdbcDeviceFarmRepository
+import com.pynapli.server.auth.JdbcPasswordRecoveryRepository
+import com.pynapli.server.auth.LocalLogPasswordResetMailer
+import com.pynapli.server.auth.PasswordRecoveryService
+import com.pynapli.server.auth.UnconfiguredPasswordResetMailer
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.location.JdbcLocationRepository
 import com.pynapli.server.location.JdbcTravelLocationRepository
@@ -66,6 +70,7 @@ internal class CoreDependencies(
     val rateLimitService: RateLimitService,
     val productMetrics: ProductMetrics,
     val authService: AuthService,
+    val passwordRecoveryService: PasswordRecoveryService,
     val reportService: ReportService,
     val appealService: AppealService,
     val adminAppealService: AdminAppealService,
@@ -151,6 +156,19 @@ internal fun buildCoreDependencies(
             deviceRiskSignalPublisher = riskService,
             productMetrics = productMetrics,
         )
+    val passwordRecoveryService =
+        PasswordRecoveryService(
+            repository = JdbcPasswordRecoveryRepository(database.dataSource),
+            // The log mailer prints codes, so it is refused anywhere but local.
+            mailer =
+                if (config.passwordResetMailer == "log" && config.environment == "local") {
+                    LocalLogPasswordResetMailer()
+                } else {
+                    UnconfiguredPasswordResetMailer
+                },
+            rateLimitService = rateLimitService,
+            onSessionsRevoked = authService::invalidateCachedSessionsForUser,
+        )
     val reportService =
         ReportService(
             repository = JdbcReportRepository(database.dataSource),
@@ -205,6 +223,7 @@ internal fun buildCoreDependencies(
         rateLimitService = rateLimitService,
         productMetrics = productMetrics,
         authService = authService,
+        passwordRecoveryService = passwordRecoveryService,
         reportService = reportService,
         appealService = appealService,
         adminAppealService = adminAppealService,

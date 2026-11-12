@@ -13,6 +13,10 @@ import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.MeDto
+import com.pynapli.shared.network.dto.PasswordChangedDto
+import com.pynapli.shared.network.dto.PasswordResetDto
+import com.pynapli.shared.network.dto.PasswordResetRequestDto
+import com.pynapli.shared.network.dto.PasswordResetRequestedDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
@@ -28,6 +32,63 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AuthStateHolderTest {
+    @Test
+    fun forgotPasswordSendsACodeThenSignsInWithTheNewPassword() =
+        runTest {
+            val api = FakeAuthApi(loginResult = AppResult.Success(session()))
+            val holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                )
+
+            holder.switchMode(AuthMode.ResetPassword)
+            holder.updateEmail(" maya@pynapli.local ")
+            holder.submit()
+            assertTrue(holder.state.value.resetCodeSent)
+            assertEquals("maya@pynapli.local", api.resetRequests.single())
+
+            holder.updateResetCode("12-34 56x")
+            holder.updatePassword("short")
+            holder.submit()
+            assertEquals("Password must be at least 12 characters.", holder.state.value.errorMessage)
+
+            holder.updatePassword("a-new-password-123")
+            holder.submit()
+            assertEquals(PasswordResetDto("maya@pynapli.local", "123456", "a-new-password-123"), api.resets.single())
+            assertEquals("a-new-password-123", api.logins.single().password)
+            assertTrue(holder.state.value.authenticated)
+            assertEquals(AuthMode.SignIn, holder.state.value.mode)
+        }
+
+    @Test
+    fun aWrongCodeKeepsTheResetScreenWithTheServerMessage() =
+        runTest {
+            val api =
+                FakeAuthApi(
+                    loginResult = AppResult.Success(session()),
+                    resetResult = AppResult.Failure(AppError("INVALID_RESET_CODE", "That code isn't right or has expired. Request a new one.")),
+                )
+            val holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                )
+            holder.switchMode(AuthMode.ResetPassword)
+            holder.updateEmail("maya@pynapli.local")
+            holder.submit()
+            holder.updateResetCode("000000")
+            holder.updatePassword("a-new-password-123")
+            holder.submit()
+
+            assertFalse(holder.state.value.authenticated)
+            assertTrue(holder.state.value.resetCodeSent)
+            assertEquals("That code isn't right or has expired. Request a new one.", holder.state.value.errorMessage)
+            assertTrue(api.logins.isEmpty())
+        }
+
     @Test
     fun sessionInvalidationDropsBackToSignIn() =
         runTest {
@@ -114,8 +175,26 @@ private class InMemoryStore : SessionStore {
 
 private class FakeAuthApi(
     private val loginResult: AppResult<AuthSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "no")),
+    private val resetResult: AppResult<PasswordChangedDto> = AppResult.Success(PasswordChangedDto(changed = true)),
 ) : AuthApi {
-    override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> = loginResult
+    val logins = mutableListOf<EmailLoginRequestDto>()
+    val resetRequests = mutableListOf<String>()
+    val resets = mutableListOf<PasswordResetDto>()
+
+    override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> {
+        logins += request
+        return loginResult
+    }
+
+    override suspend fun requestPasswordReset(request: PasswordResetRequestDto): AppResult<PasswordResetRequestedDto> {
+        resetRequests += request.email
+        return AppResult.Success(PasswordResetRequestedDto(sent = true))
+    }
+
+    override suspend fun resetPassword(request: PasswordResetDto): AppResult<PasswordChangedDto> {
+        resets += request
+        return resetResult
+    }
 
     override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> = fail()
 

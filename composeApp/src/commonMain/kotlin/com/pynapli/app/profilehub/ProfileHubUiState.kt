@@ -34,6 +34,7 @@ data class ProfileHubUiState(
     val isAgeVerificationMutating: Boolean = false,
     val isDataExportMutating: Boolean = false,
     val isDeletingAccount: Boolean = false,
+    val isChangingPassword: Boolean = false,
     val isBlocksLoading: Boolean = false,
     val isHiddenProfilesLoading: Boolean = false,
     val isReportHistoryLoading: Boolean = false,
