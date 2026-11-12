@@ -15,6 +15,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ConversationStateHolderTest {
     @Test
@@ -131,7 +132,7 @@ class ConversationStateHolderTest {
         }
 
     @Test
-    fun setExpiryFailureSurfacesErrorAndLeavesTimerUnchanged() =
+    fun disappearingMessagesWithoutAPlanOfferThePlansInsteadOfAnError() =
         runTest {
             val repository =
                 FakeConversationRepository().apply {
@@ -142,8 +143,25 @@ class ConversationStateHolderTest {
 
             stateHolder.setExpiry(3_600)
 
-            assertEquals("Upgrade is required for this feature.", stateHolder.state.value.errorMessage)
+            assertTrue(stateHolder.state.value.expiryNeedsUpgrade)
+            assertNull(stateHolder.state.value.errorMessage)
             assertFalse(stateHolder.state.value.isSettingExpiry)
+        }
+
+    @Test
+    fun otherExpiryFailuresStillShowTheError() =
+        runTest {
+            val repository =
+                FakeConversationRepository().apply {
+                    expiryResult = AppResult.Failure(AppError("NETWORK_ERROR", "Check your connection."))
+                }
+            val stateHolder = ConversationStateHolder(repository)
+            stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+            stateHolder.setExpiry(3_600)
+
+            assertFalse(stateHolder.state.value.expiryNeedsUpgrade)
+            assertEquals("Check your connection.", stateHolder.state.value.errorMessage)
         }
 
     @Test

@@ -30,6 +30,8 @@ data class ConversationUiState(
     val isSendingPhoto: Boolean = false,
     val isLoadingOlder: Boolean = false,
     val isDeletingMessageIds: Set<String> = emptySet(),
+    // Turning on disappearing messages needs Social or Select; the chat shows a way to the plans.
+    val expiryNeedsUpgrade: Boolean = false,
     // Messages reported from this device; their flag button is replaced by "Reported".
     val reportedMessageIds: Set<String> = emptySet(),
     val reportFeedback: String? = null,

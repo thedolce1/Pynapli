@@ -167,10 +167,12 @@ internal class ConversationPartnerActionCoordinator(
             }
 
             is AppResult.Failure -> {
+                val needsPlan = result.error.code == "ENTITLEMENT_REQUIRED"
                 state.update { existing ->
                     existing.copy(
                         isSettingExpiry = false,
-                        errorMessage = result.error.message,
+                        expiryNeedsUpgrade = needsPlan,
+                        errorMessage = if (needsPlan) null else result.error.message,
                     )
                 }
             }

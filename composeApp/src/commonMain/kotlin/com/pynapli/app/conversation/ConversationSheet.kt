@@ -4,12 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliBottomSheet
 import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.profile.ReportCategoryDialog
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 
@@ -39,6 +42,7 @@ fun ConversationSheet(
     onLeaveConversation: () -> Unit = {},
     onDeleteMessage: (String) -> Unit = {},
     onReportMessage: (messageId: String, category: String) -> Unit = { _, _ -> },
+    onOpenStore: () -> Unit = {},
     onSetExpiry: (Int?) -> Unit = {},
     onRevealMedia: (String) -> Unit = {},
     onPickPhoto: () -> Unit = {},
@@ -79,6 +83,7 @@ fun ConversationSheet(
                 onLeaveConversation = onLeaveConversation,
                 onDeleteMessage = onDeleteMessage,
                 onReportMessage = onReportMessage,
+                onOpenStore = onOpenStore,
                 onSetExpiry = onSetExpiry,
                 onRevealMedia = onRevealMedia,
                 onPickPhoto = onPickPhoto,
@@ -106,6 +111,7 @@ fun ConversationScreen(
     onLeaveConversation: () -> Unit = {},
     onDeleteMessage: (String) -> Unit = {},
     onReportMessage: (messageId: String, category: String) -> Unit = { _, _ -> },
+    onOpenStore: () -> Unit = {},
     onSetExpiry: (Int?) -> Unit = {},
     onRevealMedia: (String) -> Unit = {},
     onPickPhoto: () -> Unit = {},
@@ -134,6 +140,7 @@ fun ConversationScreen(
             onLeaveConversation = onLeaveConversation,
             onDeleteMessage = onDeleteMessage,
             onReportMessage = onReportMessage,
+            onOpenStore = onOpenStore,
             onSetExpiry = onSetExpiry,
             onRevealMedia = onRevealMedia,
             onPickPhoto = onPickPhoto,
@@ -159,6 +166,7 @@ private fun ColumnScope.ConversationContent(
     onLeaveConversation: () -> Unit,
     onDeleteMessage: (String) -> Unit,
     onReportMessage: (messageId: String, category: String) -> Unit,
+    onOpenStore: () -> Unit,
     onSetExpiry: (Int?) -> Unit,
     onRevealMedia: (String) -> Unit,
     onPickPhoto: () -> Unit,
@@ -246,6 +254,22 @@ private fun ColumnScope.ConversationContent(
                             .then(if (fillAvailableHeight) Modifier.weight(1f) else Modifier.heightIn(min = 220.dp, max = 430.dp)),
                 )
                 TypingIndicator(participants = state.typingParticipants)
+                if (state.expiryNeedsUpgrade) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = "Disappearing messages come with Social and Select.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = onOpenStore, modifier = Modifier.handCursor()) {
+                            Text("See plans")
+                        }
+                    }
+                }
                 state.reportFeedback?.let { feedback ->
                     Text(
                         text = feedback,

@@ -28,6 +28,7 @@ internal data class ConversationActions(
     val onSetExpiry: (Int?) -> Unit,
     val onRevealMedia: (String) -> Unit,
     val onReportMessage: (messageId: String, category: String) -> Unit = { _, _ -> },
+    val onOpenStore: () -> Unit = {},
 )
 
 @Composable
@@ -35,6 +36,7 @@ internal fun rememberConversationActions(
     scope: CoroutineScope,
     conversationStateHolder: ConversationStateHolder,
     messagesStateHolder: MessagesStateHolder,
+    onOpenStore: () -> Unit = {},
 ): ConversationActions =
     remember(scope, conversationStateHolder, messagesStateHolder) {
         ConversationActions(
@@ -81,6 +83,10 @@ internal fun rememberConversationActions(
                     conversationStateHolder.deleteMessage(messageId)
                     messagesStateHolder.refreshSilently()
                 }
+            },
+            onOpenStore = {
+                conversationStateHolder.dismiss()
+                onOpenStore()
             },
             onReportMessage = { messageId, category ->
                 scope.launch { conversationStateHolder.reportMessage(messageId, category) }
