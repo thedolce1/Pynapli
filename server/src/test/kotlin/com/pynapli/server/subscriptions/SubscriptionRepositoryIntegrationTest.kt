@@ -358,6 +358,28 @@ class SubscriptionRepositoryIntegrationTest {
 
             assertEquals(true, repository.insertPlayStoreRtdnEvent(event))
             assertEquals(false, repository.insertPlayStoreRtdnEvent(event))
+
+            // A delivery whose verification was unavailable asked for a retry: the redelivery is
+            // processed again (it used to be answered "duplicate" and lost for good).
+            repository.updatePlayStoreRtdnEventStatus(event.messageId, "retry", "RTDN_VERIFICATION_UNAVAILABLE")
+            assertEquals(true, repository.insertPlayStoreRtdnEvent(event))
+            // ...and while that attempt runs, another redelivery is still a duplicate.
+            assertEquals(false, repository.insertPlayStoreRtdnEvent(event))
+
+            // An attempt that died mid-way (still 'received' minutes later) is picked up again.
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement("UPDATE play_store_rtdn_events SET updated_at = now() - INTERVAL '5 minutes' WHERE message_id = ?")
+                    .use {
+                        it.setString(1, event.messageId)
+                        it.executeUpdate()
+                    }
+            }
+            assertEquals(true, repository.insertPlayStoreRtdnEvent(event))
+
+            // A processed event never runs twice.
+            repository.updatePlayStoreRtdnEventStatus(event.messageId, "processed")
+            assertEquals(false, repository.insertPlayStoreRtdnEvent(event))
             repository.updatePlayStoreRtdnEventStatus("rtdn-message-501", "processed", null)
 
             val status = dataSource.rtdnEventStatus("rtdn-message-501")
