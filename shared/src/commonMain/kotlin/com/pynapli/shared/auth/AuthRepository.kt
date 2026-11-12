@@ -89,6 +89,17 @@ class AuthRepository(
         return result.persistSession()
     }
 
+    suspend fun submitAccountAppeal(
+        email: String,
+        password: String,
+        reason: String,
+        deviceId: String? = null,
+    ): AppResult<com.pynapli.shared.network.dto.AppealDto> =
+        authApi.submitAccountAppeal(
+            com.pynapli.shared.network.dto
+                .AccountAppealRequestDto(email = email, password = password, reason = reason, deviceId = deviceId),
+        )
+
     suspend fun requestPasswordReset(
         email: String,
         deviceId: String? = null,

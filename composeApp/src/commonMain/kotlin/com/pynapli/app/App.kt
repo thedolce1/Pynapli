@@ -204,6 +204,8 @@ fun PynapliApp(
                 },
                 onResetCodeChanged = graph.authStateHolder::updateResetCode,
                 onResendResetCode = { scope.launch { graph.authStateHolder.requestPasswordReset() } },
+                onAppealReasonChanged = graph.authStateHolder::updateAppealReason,
+                onSubmitAppeal = { scope.launch { graph.authStateHolder.submitAccountAppeal() } },
                 onDevLogin =
                     platform.devLoginCredentials?.let { credentials ->
                         { scope.launch { graph.authStateHolder.submitDevLogin(credentials) } }

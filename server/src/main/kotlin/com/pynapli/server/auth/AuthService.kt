@@ -90,18 +90,31 @@ class AuthService(
         platform: String?,
         appVersion: String?,
     ): AuthSessionDto {
+        val identity = verifyCredentials(email, password, deviceId)
+        if (identity.userStatus != "active") throw AuthException("ACCOUNT_NOT_ACTIVE")
+
+        val session = sessionManager.createSession(UserRecord(identity.userId, identity.userStatus), deviceId, platform, appVersion)
+        productMetrics?.record(ProductMetrics.LOGIN)
+        return session
+    }
+
+    /**
+     * Checks an email + password without signing in. The password is checked before the account's
+     * status, so a wrong password never reveals whether an account exists or is suspended.
+     * Used by sign-in and by the suspended-account appeal (which can't have a session).
+     */
+    suspend fun verifyCredentials(
+        email: String,
+        password: String,
+        deviceId: String?,
+    ): EmailIdentityRecord {
         rateLimitGuard.enforce(RateLimitedAction.AUTH_LOGIN, email, deviceId)
         validator.validateEmailPassword(email, password)
         val identity =
             repository.findEmailIdentity(Sha256.hash(normalizeEmail(email)))
                 ?: throw AuthException("INVALID_CREDENTIALS")
-
-        if (identity.userStatus != "active") throw AuthException("ACCOUNT_NOT_ACTIVE")
         if (!passwordHasher.verify(password, identity.passwordHash)) throw AuthException("INVALID_CREDENTIALS")
-
-        val session = sessionManager.createSession(UserRecord(identity.userId, identity.userStatus), deviceId, platform, appVersion)
-        productMetrics?.record(ProductMetrics.LOGIN)
-        return session
+        return identity
     }
 
     suspend fun refresh(refreshToken: String): AuthSessionDto {

@@ -1,7 +1,9 @@
 package com.pynapli.server.safety
 
+import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.authenticatedUser
+import com.pynapli.shared.network.dto.AccountAppealRequestDto
 import com.pynapli.shared.network.dto.CreateAppealRequestDto
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -26,6 +28,25 @@ fun Application.configureAppealRoutes(
             val user = call.authenticatedUser(authService)
             val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 25
             call.respond(appealService.listAppeals(user.id, limit))
+        }
+
+        // A suspended or banned account can't sign in, so it appeals with its email and password
+        // instead of a session. Only account-level appeals go through here.
+        post("/v1/auth/account-appeal") {
+            val request = call.receive<AccountAppealRequestDto>()
+            val identity = authService.verifyCredentials(request.email, request.password, request.deviceId)
+            val actionType =
+                when (identity.userStatus) {
+                    "suspended" -> "account_suspension"
+                    "banned" -> "account_ban"
+                    else -> throw AuthException("ACCOUNT_NOT_RESTRICTED")
+                }
+            call.respond(
+                appealService.submitAppeal(
+                    identity.userId,
+                    CreateAppealRequestDto(actionType = actionType, targetType = "account", reason = request.reason),
+                ),
+            )
         }
 
         post("/v1/appeals/{appealId}/withdraw") {

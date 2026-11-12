@@ -109,6 +109,15 @@ data class SupportContactDto(
 
 const val APPEAL_REASON_MAX_LENGTH = 2_000
 
+/** Appeal from a suspended or banned account, which has no session: proves ownership with its password. */
+@Serializable
+data class AccountAppealRequestDto(
+    val email: String,
+    val password: String,
+    val reason: String,
+    val deviceId: String? = null,
+)
+
 @Serializable
 data class CreateAppealRequestDto(
     val actionType: String,

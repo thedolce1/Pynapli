@@ -18,6 +18,11 @@ data class AuthUiState(
     val resetCodeSent: Boolean = false,
     val resetCode: String = "",
     val resetNotice: String? = null,
+    // Sign-in said the account is suspended or banned: the screen offers an appeal with the
+    // email and password just typed (a suspended account can't get a session to appeal from).
+    val accountSuspended: Boolean = false,
+    val appealReason: String = "",
+    val appealSent: Boolean = false,
 ) {
     val authenticated: Boolean
         get() = session != null
