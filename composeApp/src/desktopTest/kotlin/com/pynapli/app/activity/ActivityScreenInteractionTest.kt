@@ -302,6 +302,23 @@ class ActivityScreenInteractionTest {
 private class StaticActivityScreenRepository(
     private val responses: Map<ActivityRequest, ActivityFeedUi>,
 ) : ActivityFeedRepository {
+    val likedBack = mutableListOf<String>()
+
+    override suspend fun likeBack(userId: String): com.pynapli.shared.core.result.AppResult<com.pynapli.shared.network.dto.SwipeActionResponseDto> {
+        likedBack += userId
+        return com.pynapli.shared.core.result.AppResult.Success(
+            com.pynapli.shared.network.dto.SwipeActionResponseDto(
+                recorded = true,
+                match =
+                    com.pynapli.shared.network.dto.MatchDto(
+                        matchId = "m-$userId",
+                        matchedUserId = userId,
+                        createdAt = "2026-11-11T00:00:00Z",
+                    ),
+            ),
+        )
+    }
+
     val loadCalls = mutableListOf<ActivityRequest>()
     val dismissCalls = mutableListOf<String>()
     val respondCalls = mutableListOf<Pair<String, Boolean>>()

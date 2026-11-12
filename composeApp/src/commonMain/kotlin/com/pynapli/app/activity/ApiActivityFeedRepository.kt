@@ -46,6 +46,8 @@ class ApiActivityFeedRepository(
 
     override suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto> = apiClient.dismissActivityEvent(eventId)
 
+    override suspend fun likeBack(userId: String) = apiClient.likeBack(userId)
+
     override suspend fun respondToAlbumRequest(
         eventId: String,
         approve: Boolean,

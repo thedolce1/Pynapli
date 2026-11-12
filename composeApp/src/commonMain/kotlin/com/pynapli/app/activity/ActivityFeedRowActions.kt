@@ -120,6 +120,8 @@ internal fun ActivityPrimaryAction(
     onOpenMatch: (ActivityEventDto) -> Unit,
     onOpenPartnerChatInvite: (String) -> Unit,
     onOpenPsync: (String) -> Unit,
+    onLikeBack: (ActivityEventDto) -> Unit,
+    likedBackEventIds: Set<String>,
 ) {
     when (item.type) {
         "match" -> {
@@ -149,6 +151,27 @@ internal fun ActivityPrimaryAction(
                     modifier = Modifier.handCursor(enabled = conversationId != null),
                 ) {
                     Text(text = "Open invite", maxLines = 1)
+                }
+            }
+        }
+
+        "swipe_like",
+        "pineapple_like",
+        -> {
+            // The like is answered here, without hoping they turn up in the Swipe deck.
+            val done = item.eventId in likedBackEventIds
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+            ) {
+                Button(
+                    onClick = { onLikeBack(item) },
+                    enabled = !done,
+                    modifier = Modifier.handCursor(enabled = !done),
+                ) {
+                    Text(text = if (done) "Liked back" else "Like back", maxLines = 1)
                 }
             }
         }

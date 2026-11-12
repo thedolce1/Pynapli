@@ -93,6 +93,17 @@ internal class JdbcSwipeActionPersistenceActions(
             )
         }
 
+    suspend fun likeBack(
+        actionId: UUID,
+        viewerUserId: UUID,
+        targetUserId: UUID,
+        travelLocationId: UUID?,
+        matchIdFactory: () -> UUID,
+    ): SwipeActionResult? =
+        dataSource.withConnection { connection ->
+            connection.likeBackTransaction(actionId, viewerUserId, targetUserId, travelLocationId, matchIdFactory)
+        }
+
     suspend fun recordSwipeActionAndMarkCard(
         actionId: UUID,
         actorUserId: UUID,

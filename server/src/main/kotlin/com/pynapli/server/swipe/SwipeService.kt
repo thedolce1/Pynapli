@@ -26,7 +26,7 @@ class SwipeService(
     private val riskPolicyService: RiskPolicyService? = null,
     private val subscriptionService: SubscriptionService? = null,
     private val presenceService: PresenceService? = null,
-    @Suppress("unused") private val travelLocationRepository: com.pynapli.server.location.TravelLocationRepository? = null,
+    private val travelLocationRepository: com.pynapli.server.location.TravelLocationRepository? = null,
     private val deckTokenCodec: SwipeDeckTokenCodec = SwipeDeckTokenCodec(),
     private val clock: Clock = Clock.systemUTC(),
     activityService: ActivityService? = null,
@@ -92,6 +92,40 @@ class SwipeService(
     }
 
     suspend fun rewind(viewerUserId: UUID): SwipeRewindResponseDto = rewindAction.rewind(viewerUserId)
+
+    /**
+     * Like back someone who liked the viewer, from Activity. Without this a received like could
+     * only become a match if that person happened to come up in the viewer's Swipe deck, so likes
+     * (including ones delivered from Psync) often went nowhere. Same rules as a Swipe like: blocks,
+     * risk, rate limit, the 24h travel like tail, activity, match push and match conversation.
+     */
+    suspend fun likeBack(
+        viewerUserId: UUID,
+        request: com.pynapli.shared.network.dto.LikeBackRequestDto,
+    ): SwipeActionResponseDto {
+        val targetUserId =
+            runCatching { UUID.fromString(request.targetUserId.trim()) }.getOrNull()
+                ?: throw SwipeException("INVALID_SWIPE_TARGET")
+        if (targetUserId == viewerUserId) throw SwipeException("INVALID_SWIPE_TARGET")
+        if (riskPolicyService?.isSocialActionRestricted(viewerUserId) == true) throw SwipeException("RISK_RESTRICTED")
+        if (rateLimitService?.check(viewerUserId, com.pynapli.server.safety.RateLimitedAction.SWIPE_ACTION)?.allowed == false) {
+            throw SwipeException("RATE_LIMITED")
+        }
+        if (blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) == true) throw SwipeException("INVALID_SWIPE_TARGET")
+        val travelLocationId = travelLocationRepository?.findActive(viewerUserId)?.id
+        val result =
+            repository.likeBack(UUID.randomUUID(), viewerUserId, targetUserId, travelLocationId)
+                ?: throw SwipeException("LIKE_BACK_NOT_AVAILABLE")
+        if (result.newlyRecorded) {
+            sideEffects.recordActivityForAction(viewerUserId, targetUserId, com.pynapli.shared.network.dto.SwipeAction.LIKE, result.match)
+        }
+        val match = result.match
+        if (match != null) {
+            sideEffects.notifyMatch(viewerUserId, targetUserId, match)
+            if (result.newlyRecorded) productMetrics?.record(com.pynapli.server.metrics.ProductMetrics.MATCH_CREATED)
+        }
+        return SwipeActionResponseDto(recorded = true, match = match?.toDto(viewerUserId))
+    }
 
     suspend fun listMatches(viewerUserId: UUID): MatchesListResponseDto = matchList.listMatches(viewerUserId)
 }

@@ -5,6 +5,8 @@ import com.pynapli.shared.network.dto.ActivityEventDto
 
 @Immutable
 data class ActivityUiState(
+    // Likes the viewer has answered from Activity (event ids), so the button shows it's done.
+    val likedBackEventIds: Set<String> = emptySet(),
     val items: List<ActivityEventDto> = emptyList(),
     val selectedTab: ActivityTabUi = ActivityTabUi.Flirts,
     val summary: ActivitySummaryUi = ActivitySummaryUi.Empty,

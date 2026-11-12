@@ -127,6 +127,15 @@ interface SwipeRepository {
         matchIdFactory: () -> UUID = UUID::randomUUID,
     ): SwipeActionResult
 
+    /** See likeBackTransaction. Null when the target has no live like toward the viewer. */
+    suspend fun likeBack(
+        actionId: UUID,
+        viewerUserId: UUID,
+        targetUserId: UUID,
+        travelLocationId: UUID?,
+        matchIdFactory: () -> UUID = UUID::randomUUID,
+    ): SwipeActionResult? = null
+
     suspend fun recordSwipeActionAndMarkCard(
         actionId: UUID,
         actorUserId: UUID,

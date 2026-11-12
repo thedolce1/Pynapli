@@ -20,5 +20,8 @@ interface SwipeApi {
 
     suspend fun rewindSwipeAction(): AppResult<SwipeRewindResponseDto>
 
+    /** Like back [targetUserId], who has liked the viewer. A match comes back when it makes one. */
+    suspend fun likeBack(targetUserId: String): AppResult<SwipeActionResponseDto>
+
     suspend fun listMatches(): AppResult<MatchesListResponseDto>
 }

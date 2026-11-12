@@ -251,6 +251,7 @@ Rules:
 POST /v1/swipe/deck/query
 POST /v1/swipe/actions
 POST /v1/swipe/rewind
+POST /v1/swipe/like-back
 GET  /v1/swipe/likes-you
 GET  /v1/swipe/picks
 ```

@@ -18,6 +18,9 @@ interface ActivityFeedRepository {
 
     suspend fun dismissActivityEvent(eventId: String): AppResult<DismissActivityEventResponseDto>
 
+    /** Like back someone who liked the viewer; carries the match when it makes one. */
+    suspend fun likeBack(userId: String): AppResult<com.pynapli.shared.network.dto.SwipeActionResponseDto>
+
     suspend fun respondToAlbumRequest(
         eventId: String,
         approve: Boolean,
