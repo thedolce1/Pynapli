@@ -36,6 +36,7 @@ fun ConversationSheet(
     onSetExpiry: (Int?) -> Unit = {},
     onRevealMedia: (String) -> Unit = {},
     onPickPhoto: () -> Unit = {},
+    onOpenParticipantProfile: ((ConversationParticipantDto) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     if (!state.visible) return
@@ -56,6 +57,8 @@ fun ConversationSheet(
             ConversationHeader(
                 title = title,
                 onDismiss = onDismiss,
+                participant = onOpenParticipantProfile?.let { state.detail?.conversation?.primaryOtherParticipant(state.viewerUserId) },
+                onOpenParticipantProfile = onOpenParticipantProfile ?: {},
             )
 
             ConversationContent(
