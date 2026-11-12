@@ -265,7 +265,19 @@ private val INSERT_PLAY_STORE_RTDN_EVENT_QUERY =
             ?,
             'received'
         )
-        ON CONFLICT (message_id) DO NOTHING
+        -- A redelivered message is processed again when the first attempt asked for a retry
+        -- (verification was unavailable) or died mid-way (still 'received' minutes later); Pub/Sub
+        -- redelivers exactly because the earlier attempt didn't succeed. Finished events and a
+        -- delivery that is still being handled stay duplicates.
+        ON CONFLICT (message_id) DO UPDATE
+        SET processing_status = 'received',
+            error_code = NULL,
+            updated_at = now()
+        WHERE play_store_rtdn_events.processing_status = 'retry'
+           OR (
+               play_store_rtdn_events.processing_status = 'received'
+               AND play_store_rtdn_events.updated_at < now() - INTERVAL '2 minutes'
+           )
         RETURNING 1
     )
     SELECT EXISTS(SELECT 1 FROM inserted)
