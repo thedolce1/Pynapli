@@ -10,7 +10,7 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.JdbcDeviceFarmRepository
 import com.pynapli.server.auth.JdbcPasswordRecoveryRepository
-import com.pynapli.server.auth.LocalLogPasswordResetMailer
+import com.pynapli.server.auth.LocalFilePasswordResetMailer
 import com.pynapli.server.auth.PasswordRecoveryService
 import com.pynapli.server.auth.UnconfiguredPasswordResetMailer
 import com.pynapli.server.config.ServerConfig
@@ -159,10 +159,10 @@ internal fun buildCoreDependencies(
     val passwordRecoveryService =
         PasswordRecoveryService(
             repository = JdbcPasswordRecoveryRepository(database.dataSource),
-            // The log mailer prints codes, so it is refused anywhere but local.
+            // The local mailer writes codes to a file on this machine, so it is refused anywhere but local.
             mailer =
                 if (config.passwordResetMailer == "log" && config.environment == "local") {
-                    LocalLogPasswordResetMailer()
+                    LocalFilePasswordResetMailer()
                 } else {
                     UnconfiguredPasswordResetMailer
                 },

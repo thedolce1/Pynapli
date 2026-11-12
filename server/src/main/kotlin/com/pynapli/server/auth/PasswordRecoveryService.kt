@@ -58,7 +58,7 @@ class PasswordRecoveryService(
         try {
             mailer.sendResetCode(email = email.trim(), code = code)
         } catch (error: Exception) {
-            logger.error("Password reset email could not be sent ({})", error.javaClass.simpleName)
+            logger.error("Reset email could not be sent ({})", error.javaClass.simpleName)
             throw AuthException("PASSWORD_RESET_UNAVAILABLE")
         }
     }
@@ -185,21 +185,23 @@ interface PasswordResetMailer {
 }
 
 /**
- * Local development only: writes the code to the server log so the flow can be exercised without
- * an email provider. Never wired outside PYNAPLI_ENV=local.
+ * Local development only: appends each code to a git-ignored file (default
+ * `.pynapli-local-mail/reset-codes.txt`) so the flow can be exercised without an email provider.
+ * Codes never go to the server log. Never wired outside PYNAPLI_ENV=local.
  */
-class LocalLogPasswordResetMailer : PasswordResetMailer {
+class LocalFilePasswordResetMailer(
+    private val file: java.io.File = java.io.File(".pynapli-local-mail/reset-codes.txt"),
+) : PasswordResetMailer {
     override val isConfigured: Boolean = true
 
     override suspend fun sendResetCode(
         email: String,
         code: String,
     ) {
-        logger.warn("[local only] password reset code: {}", code)
-    }
-
-    private companion object {
-        private val logger = LoggerFactory.getLogger(LocalLogPasswordResetMailer::class.java)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            file.parentFile?.mkdirs()
+            file.appendText("${Instant.now()} $email $code" + System.lineSeparator())
+        }
     }
 }
 

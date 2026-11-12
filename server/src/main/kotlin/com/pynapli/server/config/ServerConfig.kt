@@ -108,7 +108,8 @@ data class ServerConfig(
     // deploy that forgets the env var still admits the PWA (override to add/replace origins).
     val corsAllowedOrigins: List<String> = emptyList(),
     val supportEmail: String = "support@pynapli.com",
-    // How forgot-password codes are delivered: "log" (local only — code in the server log) or
+    // How forgot-password codes are delivered: "log" (local only — codes go to the git-ignored
+    // .pynapli-local-mail/reset-codes.txt, never the server log) or
     // "none" (reset answers PASSWORD_RESET_UNAVAILABLE). A real email provider is a founder setup item.
     val passwordResetMailer: String = "none",
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",

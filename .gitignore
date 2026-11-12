@@ -54,3 +54,4 @@ service-account*.json
 # OS
 .DS_Store
 Thumbs.db
+.pynapli-local-mail/
