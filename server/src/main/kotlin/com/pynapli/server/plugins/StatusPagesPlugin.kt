@@ -48,7 +48,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -60,7 +60,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -72,7 +72,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -84,7 +84,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -96,7 +96,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -108,7 +108,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -120,7 +120,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -132,7 +132,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -144,7 +144,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -156,7 +156,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -168,7 +168,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -180,7 +180,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -192,7 +192,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -204,7 +204,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -216,7 +216,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -228,7 +228,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -241,7 +241,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -253,7 +253,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -265,7 +265,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -277,7 +277,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -289,7 +289,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -301,7 +301,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -313,7 +313,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = cause.code,
                         message = userSafeMessage(cause.code),
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
@@ -334,14 +334,15 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = "INVALID_REQUEST",
                         message = "That request wasn't valid. Update the app and try again.",
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
 
         exception<Throwable> { call, cause ->
             statusPagesLogger.error(
-                "Unhandled request failure: ${call.request.httpMethod.value} ${call.request.uri}",
+                // path() has no query string: cursors and filter values stay out of the error log.
+                "Unhandled request failure: ${call.request.httpMethod.value} ${call.request.path()}",
                 cause,
             )
             call.respond(
@@ -350,7 +351,7 @@ fun Application.configureStatusPages() {
                     ApiErrorDto(
                         code = "INTERNAL_ERROR",
                         message = "Something went wrong.",
-                        requestId = call.request.headers["X-Request-Id"] ?: "unknown",
+                        requestId = call.requestIdOrUnknown(),
                     ),
             )
         }
