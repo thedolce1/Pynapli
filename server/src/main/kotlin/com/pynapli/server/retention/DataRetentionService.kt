@@ -211,11 +211,12 @@ class DataRetentionWorker(
                         jobLock.runExclusive("data-retention") {
                             val summary = service.runOnce()
                             if (summary.total > 0) {
+                                val resetCodes = summary.passwordResetCodes // a count, not a secret
                                 logger.info(
                                     "Data retention removed expiredMessages={} deadSessions={} resetCodes={} rtdnPayloads={}",
                                     summary.expiredMessages,
                                     summary.deadSessions,
-                                    summary.passwordResetCodes,
+                                    resetCodes,
                                     summary.rtdnPayloads,
                                 )
                             }
