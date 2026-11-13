@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliBottomSheet
+import com.pynapli.app.design.PynapliConfirmDialog
 import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.handCursor
@@ -178,6 +179,35 @@ private fun ColumnScope.ConversationContent(
 ) {
     // The message whose "Report" flag was tapped; the reason dialog shows while it is set.
     var reportingMessageId by remember { mutableStateOf<String?>(null) }
+    // Deleting a message (for everyone) and leaving a chat can't be undone: confirm first.
+    var confirmDeleteMessageId by remember { mutableStateOf<String?>(null) }
+    var confirmLeave by remember { mutableStateOf(false) }
+    confirmDeleteMessageId?.let { messageId ->
+        PynapliConfirmDialog(
+            title = "Delete this message?",
+            body = "It will be removed for everyone in this chat.",
+            confirmLabel = "Delete",
+            destructive = true,
+            onConfirm = {
+                confirmDeleteMessageId = null
+                onDeleteMessage(messageId)
+            },
+            onDismiss = { confirmDeleteMessageId = null },
+        )
+    }
+    if (confirmLeave) {
+        PynapliConfirmDialog(
+            title = "Leave this chat?",
+            body = "You won't see new messages here. Someone would need to invite you back.",
+            confirmLabel = "Leave",
+            destructive = true,
+            onConfirm = {
+                confirmLeave = false
+                onLeaveConversation()
+            },
+            onDismiss = { confirmLeave = false },
+        )
+    }
     when {
         state.isOpening -> {
             Box(
@@ -218,7 +248,7 @@ private fun ColumnScope.ConversationContent(
                     onInvitePartner = onInvitePartner,
                     onAcceptInvite = onAcceptInvite,
                     onDeclineInvite = onDeclineInvite,
-                    onLeaveConversation = onLeaveConversation,
+                    onLeaveConversation = { confirmLeave = true },
                     showLeaveAction = showLeaveAction,
                     showPartnerStatusFeedback = showPartnerStatusFeedback,
                 )
@@ -244,7 +274,7 @@ private fun ColumnScope.ConversationContent(
                     isDeletingMessageIds = state.isDeletingMessageIds,
                     revealingMessageIds = state.revealingMessageIds,
                     onLoadOlder = onLoadOlder,
-                    onDeleteMessage = onDeleteMessage,
+                    onDeleteMessage = { messageId -> confirmDeleteMessageId = messageId },
                     reportedMessageIds = state.reportedMessageIds,
                     onReportMessage = { messageId -> reportingMessageId = messageId },
                     onRevealMedia = onRevealMedia,

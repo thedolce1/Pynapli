@@ -106,6 +106,66 @@ class ConversationScreenInteractionTest {
             onNodeWithContentDescription("Send message").performClick()
             assertEquals(1, sendCount)
         }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun deletingAMessageAsksFirstAndOnlyDeletesOnConfirm() =
+        runComposeUiTest {
+            val deleted = mutableListOf<String>()
+            val state =
+                ConversationUiState(
+                    viewerUserId = "viewer",
+                    detail =
+                        ConversationDetailDto(
+                            conversation =
+                                ConversationDto(
+                                    conversationId = "conversation-1",
+                                    kind = "direct",
+                                    origin = "grid",
+                                    participants = listOf(ConversationParticipantDto("viewer", "You"), ConversationParticipantDto("mira", "Mira")),
+                                    unreadCount = 0,
+                                    updatedAt = "2026-04-24T18:10:00Z",
+                                ),
+                            messages =
+                                listOf(
+                                    MessageDto(
+                                        messageId = "mine-1",
+                                        conversationId = "conversation-1",
+                                        senderUserId = "viewer",
+                                        body = "Oops, wrong chat",
+                                        createdAt = "2026-04-24T18:08:00Z",
+                                        status = "visible",
+                                        deliveryStatus = "read",
+                                    ),
+                                ),
+                        ),
+                )
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        ConversationScreen(
+                            state = state,
+                            onBack = {},
+                            onDraftChanged = {},
+                            onSend = {},
+                            onLoadOlder = {},
+                            onDeleteMessage = { deleted += it },
+                        )
+                    }
+                }
+            }
+
+            onNodeWithContentDescription("Delete message").performClick()
+            onNodeWithText("Delete this message?").assertExists()
+            assertTrue(deleted.isEmpty(), "nothing is deleted before confirming")
+
+            onNodeWithText("Cancel").performClick()
+            assertTrue(deleted.isEmpty())
+
+            onNodeWithContentDescription("Delete message").performClick()
+            onNodeWithText("Delete").performClick()
+            assertEquals(listOf("mine-1"), deleted)
+        }
 }
 
 private fun ImageBitmap.assertConversationVisualSignature() {

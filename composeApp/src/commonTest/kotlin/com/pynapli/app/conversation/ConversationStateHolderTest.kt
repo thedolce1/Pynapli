@@ -45,6 +45,24 @@ class ConversationStateHolderTest {
         }
 
     @Test
+    fun editingTheDraftAfterAFailedSendSendsTheEditNotTheOldText() =
+        runTest {
+            val repository = FakeConversationRepository()
+            repository.sendResults.addLast(AppResult.Failure(AppError("NETWORK_ERROR", "Check your connection.")))
+            repository.sendResults.addLast(AppResult.Success(message(senderUserId = "viewer", messageId = "m-1")))
+            val keys = ArrayDeque(listOf("key-A", "key-B"))
+            val stateHolder = ConversationStateHolder(repository, idempotencyKeyFactory = { keys.removeFirst() })
+            stateHolder.openConversation(repository.conversation, viewerUserId = "viewer")
+
+            stateHolder.updateDraft("Drinks Thursday?")
+            stateHolder.sendDraft() // fails; it may still have reached the server under key-A
+            stateHolder.updateDraft("Drinks Friday?")
+            stateHolder.sendDraft() // the edited text is a new message, so it needs a new key
+
+            assertEquals(listOf<String?>("key-A", "key-B"), repository.sendIdempotencyKeys.toList())
+        }
+
+    @Test
     fun deleteOwnMessageReplacesBodyWithPlaceholderState() =
         runTest {
             val repository = FakeConversationRepository()

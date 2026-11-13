@@ -11,7 +11,10 @@ internal class ConversationMessageActions(
     private val sendTypingStopped: suspend (String?) -> Unit,
 ) {
     // Reused after a failed send so a retry of the same draft collapses to one server-side message.
+    // Tied to the text it was made for: if the person edits the draft before retrying, the edit is
+    // a new message (reusing the key would make the server return the old text and drop the edit).
     private var pendingSendKey: String? = null
+    private var pendingSendBody: String? = null
 
     fun updateDraft(value: String) {
         state.update { current ->
@@ -41,12 +44,18 @@ internal class ConversationMessageActions(
             }
         }
 
-        val idempotencyKey = pendingSendKey ?: idempotencyKeyFactory().also { pendingSendKey = it }
+        val idempotencyKey =
+            pendingSendKey?.takeIf { pendingSendBody == body }
+                ?: idempotencyKeyFactory().also {
+                    pendingSendKey = it
+                    pendingSendBody = body
+                }
 
         state.update { it.copy(isSending = true, partnerInviteFeedback = null, errorMessage = null) }
         when (val result = repository.sendMessage(conversationId, body, idempotencyKey)) {
             is AppResult.Success -> {
                 pendingSendKey = null
+                pendingSendBody = null
                 sendTypingStopped(conversationId)
                 state.update { existing ->
                     existing.copy(
@@ -194,5 +203,6 @@ internal class ConversationMessageActions(
 
     fun reset() {
         pendingSendKey = null
+        pendingSendBody = null
     }
 }
