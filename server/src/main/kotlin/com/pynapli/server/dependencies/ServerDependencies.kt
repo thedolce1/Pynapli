@@ -25,6 +25,7 @@ import com.pynapli.server.auth.SignedInDevicesService
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.config.startupSummary
 import com.pynapli.server.config.validateForStartup
+import com.pynapli.server.db.PostgresJobLock
 import com.pynapli.server.grid.GridService
 import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.location.LocationService
@@ -232,6 +233,7 @@ class ServerDependencies(
                                 repository = JdbcActivityRetentionRepository(database.dataSource),
                             ),
                         intervalMillis = config.activityRetentionIntervalMillis,
+                        jobLock = PostgresJobLock(database.dataSource),
                     )
                 } else {
                     null
@@ -241,6 +243,7 @@ class ServerDependencies(
                     MediaCleanupWorker(
                         service = MediaCleanupService(JdbcMediaCleanupRepository(database.dataSource)),
                         intervalMillis = config.mediaCleanupIntervalMillis,
+                        jobLock = PostgresJobLock(database.dataSource),
                     )
                 } else {
                     null

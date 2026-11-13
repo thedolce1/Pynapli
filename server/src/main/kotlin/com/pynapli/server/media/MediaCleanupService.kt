@@ -1,5 +1,7 @@
 package com.pynapli.server.media
 
+import com.pynapli.server.db.JobLock
+import com.pynapli.server.db.UnlockedJobs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -59,6 +61,7 @@ data class MediaCleanupSummary(
 class MediaCleanupWorker(
     private val service: MediaCleanupService,
     private val intervalMillis: Long,
+    private val jobLock: JobLock = UnlockedJobs,
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(MediaCleanupWorker::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -70,15 +73,18 @@ class MediaCleanupWorker(
             scope.launch {
                 while (isActive) {
                     runCatching {
-                        val summary = service.purgeStaleAssets()
-                        if (summary.total > 0) {
-                            logger.info(
-                                "Media cleanup removed total={} abandoned={} rejected={} softDeleted={}",
-                                summary.total,
-                                summary.abandonedUploads,
-                                summary.rejectedAssets,
-                                summary.softDeletedAssets,
-                            )
+                        // One replica per tick; the others skip it (see JobLock).
+                        jobLock.runExclusive("media-cleanup") {
+                            val summary = service.purgeStaleAssets()
+                            if (summary.total > 0) {
+                                logger.info(
+                                    "Media cleanup removed total={} abandoned={} rejected={} softDeleted={}",
+                                    summary.total,
+                                    summary.abandonedUploads,
+                                    summary.rejectedAssets,
+                                    summary.softDeletedAssets,
+                                )
+                            }
                         }
                     }.onFailure { error ->
                         logger.warn("Media cleanup failed", error)

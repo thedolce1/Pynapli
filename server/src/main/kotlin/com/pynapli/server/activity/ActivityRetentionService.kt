@@ -1,5 +1,7 @@
 package com.pynapli.server.activity
 
+import com.pynapli.server.db.JobLock
+import com.pynapli.server.db.UnlockedJobs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +32,7 @@ data class ActivityRetentionSummary(
 class ActivityRetentionWorker(
     private val service: ActivityRetentionService,
     private val intervalMillis: Long,
+    private val jobLock: JobLock = UnlockedJobs,
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(ActivityRetentionWorker::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -41,13 +44,16 @@ class ActivityRetentionWorker(
             scope.launch {
                 while (isActive) {
                     runCatching {
-                        val summary = service.applyProductVisibleRetention()
-                        if (summary.hiddenTotal > 0) {
-                            logger.info(
-                                "Activity retention hid product-visible events total={} byType={}",
-                                summary.hiddenTotal,
-                                summary.hiddenByType,
-                            )
+                        // One replica per tick; the others skip it (see JobLock).
+                        jobLock.runExclusive("activity-retention") {
+                            val summary = service.applyProductVisibleRetention()
+                            if (summary.hiddenTotal > 0) {
+                                logger.info(
+                                    "Activity retention hid product-visible events total={} byType={}",
+                                    summary.hiddenTotal,
+                                    summary.hiddenByType,
+                                )
+                            }
                         }
                     }.onFailure { error ->
                         logger.warn("Activity retention failed", error)

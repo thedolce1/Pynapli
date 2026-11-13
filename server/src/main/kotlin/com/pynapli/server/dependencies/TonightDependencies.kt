@@ -1,5 +1,6 @@
 package com.pynapli.server.dependencies
 
+import com.pynapli.server.db.PostgresJobLock
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.notifications.NotificationService
 import com.pynapli.server.presence.PresenceService
@@ -57,7 +58,9 @@ internal fun buildTonightDependencies(
         )
     // Hygiene sweep so elapsed sessions move to 'expired' (reads already filter on
     // expires_at, so this is not load-bearing for correctness). Default every 5 minutes.
-    val tonightSessionExpiryWorker = TonightSessionExpiryWorker(tonightSessionService, intervalMillis = 5 * 60 * 1000L)
+    // One replica per tick (PostgresJobLock).
+    val tonightSessionExpiryWorker =
+        TonightSessionExpiryWorker(tonightSessionService, intervalMillis = 5 * 60 * 1000L, jobLock = PostgresJobLock(dataSource))
     return TonightDependencies(
         tonightAvailabilityService = tonightAvailabilityService,
         tonightSessionService = tonightSessionService,
