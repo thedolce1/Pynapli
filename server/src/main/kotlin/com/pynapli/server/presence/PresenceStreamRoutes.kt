@@ -1,6 +1,7 @@
 package com.pynapli.server.presence
 
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.realtime.RealtimeFanout
 import com.pynapli.server.realtime.authenticateStream
 import com.pynapli.server.realtime.installRealtimeWebSocketsIfNeeded
 import com.pynapli.server.realtime.streamJson
@@ -13,7 +14,9 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
@@ -38,6 +41,9 @@ fun Application.configurePresenceStreamRoutes(
             val emitterJob =
                 launch {
                     broadcaster.deltas
+                        // Own bounded buffer: the block check below is a DB read, and a slow socket
+                        // must drop its oldest presence deltas rather than hold up everyone else's.
+                        .buffer(RealtimeFanout.PER_CONNECTION_BUFFER, BufferOverflow.DROP_OLDEST)
                         .filter { delta ->
                             val targetId = runCatching { UUID.fromString(delta.userId) }.getOrNull() ?: return@filter false
                             targetId in subscription.get() &&

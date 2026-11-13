@@ -1,9 +1,13 @@
 package com.pynapli.server.psync
 
+import com.pynapli.server.realtime.InstantAsString
+import com.pynapli.server.realtime.LocalOnlyRealtimeRelay
+import com.pynapli.server.realtime.RealtimeFanout
+import com.pynapli.server.realtime.RealtimeRelay
+import com.pynapli.server.realtime.UuidAsString
 import com.pynapli.shared.network.dto.PsyncRealtimeDeltaDto
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.util.UUID
 
@@ -16,16 +20,20 @@ import java.util.UUID
 class PsyncBroadcaster(
     extraBufferCapacity: Int = DEFAULT_BUFFER_CAPACITY,
     replay: Int = 0,
+    relay: RealtimeRelay = LocalOnlyRealtimeRelay,
 ) {
-    private val _deltas =
-        MutableSharedFlow<PsyncRealtimeDelta>(
-            replay = replay,
+    private val fanout =
+        RealtimeFanout(
+            topic = "psync",
+            serializer = PsyncRealtimeDelta.serializer(),
+            relay = relay,
             extraBufferCapacity = extraBufferCapacity,
+            replay = replay,
         )
-    val deltas: SharedFlow<PsyncRealtimeDelta> = _deltas.asSharedFlow()
+    val deltas: SharedFlow<PsyncRealtimeDelta> = fanout.deltas
 
     suspend fun emit(delta: PsyncRealtimeDelta) {
-        _deltas.emit(delta)
+        fanout.emit(delta)
     }
 
     companion object {
@@ -46,10 +54,14 @@ class PsyncBroadcaster(
     }
 }
 
+@Serializable
 data class PsyncRealtimeDelta(
+    @Serializable(with = UuidAsString::class)
     val recipientUserId: UUID,
+    @Serializable(with = UuidAsString::class)
     val sessionId: UUID,
     val type: String,
+    @Serializable(with = InstantAsString::class)
     val occurredAt: Instant = Instant.now(),
 ) {
     fun toDto(): PsyncRealtimeDeltaDto =
