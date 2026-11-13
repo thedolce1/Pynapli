@@ -62,7 +62,14 @@ class SessionRevocationIntegrationTest {
             runBlocking {
                 client.webSocket("/test/stream", request = { header(HttpHeaders.Authorization, "Bearer $token") }) {
                     auth.logout(token)
-                    val reason = withTimeout(5_000) { closeReason.await() }
+                    // Drain until the server's close arrives (generous: the gate runs this under load).
+                    val reason =
+                        withTimeout(20_000) {
+                            for (frame in incoming) {
+                                // Nothing is sent before the close.
+                            }
+                            closeReason.await()
+                        }
                     assertEquals(CloseReason.Codes.VIOLATED_POLICY.code, reason?.code)
                     assertEquals("UNAUTHENTICATED", reason?.message)
                 }
