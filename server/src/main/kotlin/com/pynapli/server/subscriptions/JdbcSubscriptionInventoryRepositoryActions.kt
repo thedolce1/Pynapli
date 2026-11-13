@@ -91,6 +91,53 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
             }
         }
 
+    suspend fun creditPlayStoreProductPurchase(
+        purchaseToken: String,
+        userId: UUID,
+        productId: String,
+        orderId: String?,
+        inventoryType: String,
+        quantity: Int,
+        now: Instant,
+    ): ProductPurchaseCredit =
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                val inserted =
+                    prepareStatement(
+                        """
+                        INSERT INTO play_store_product_purchases (purchase_token, user_id, product_id, order_id, inventory_type, quantity)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (purchase_token) DO NOTHING
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setString(1, purchaseToken)
+                        statement.setObject(2, userId)
+                        statement.setString(3, productId)
+                        statement.setString(4, orderId)
+                        statement.setString(5, inventoryType)
+                        statement.setInt(6, quantity)
+                        statement.executeUpdate() > 0
+                    }
+                if (!inserted) {
+                    val owner =
+                        prepareStatement("SELECT user_id FROM play_store_product_purchases WHERE purchase_token = ?").use { statement ->
+                            statement.setString(1, purchaseToken)
+                            statement.executeQuery().use { rs -> if (rs.next()) rs.getObject(1, UUID::class.java) else null }
+                        }
+                    return@inTransaction if (owner == userId) ProductPurchaseCredit.AlreadyCredited else ProductPurchaseCredit.OwnedByAnotherAccount
+                }
+                grantPremiumInventoryRecord(
+                    userId = userId,
+                    inventoryType = inventoryType,
+                    quantity = quantity,
+                    source = "purchase",
+                    expiresAt = null,
+                    now = now,
+                )
+                ProductPurchaseCredit.Credited
+            }
+        }
+
     suspend fun findActiveBoost(
         userId: UUID,
         now: Instant,

@@ -26,4 +26,8 @@ internal class KtorSubscriptionApi(
     override suspend fun submitDevStorePurchase(request: SubmitDevStorePurchaseRequestDto): AppResult<StorePurchaseResponseDto> = support.authSend(HttpMethod.Post, "/v1/subscriptions/dev/purchases", request)
 
     override suspend fun activateBoost(): AppResult<BoostActivationDto> = support.authPost("/v1/boosts")
+
+    override suspend fun submitPlayStoreProductPurchase(
+        request: com.pynapli.shared.network.dto.SubmitPlayStoreProductPurchaseRequestDto,
+    ): AppResult<com.pynapli.shared.network.dto.StorePurchaseResponseDto> = support.authSend(HttpMethod.Post, "/v1/store/play-store/purchases/one-time", request)
 }

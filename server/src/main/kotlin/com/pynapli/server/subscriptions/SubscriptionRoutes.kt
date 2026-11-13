@@ -46,6 +46,12 @@ fun Application.configureSubscriptionRoutes(
             call.respond(subscriptionService.recordPlayStoreSubscriptionPurchase(user.id, request))
         }
 
+        post("/v1/store/play-store/purchases/one-time") {
+            val user = call.authenticatedUser(authService)
+            val request = call.receive<com.pynapli.shared.network.dto.SubmitPlayStoreProductPurchaseRequestDto>()
+            call.respond(subscriptionService.recordPlayStoreProductPurchase(user.id, request))
+        }
+
         post("/v1/subscriptions/dev/purchases") {
             if (!config.devStorePurchasesEnabled) throw SubscriptionException("DEV_STORE_PURCHASES_DISABLED")
             val user = call.authenticatedUser(authService)

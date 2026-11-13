@@ -103,6 +103,17 @@ interface SubscriptionRepository {
         duration: Duration,
     ): BoostActivationResult? = null
 
+    /** Credits a one-time Play purchase once per purchase token (see V88). */
+    suspend fun creditPlayStoreProductPurchase(
+        purchaseToken: String,
+        userId: UUID,
+        productId: String,
+        orderId: String?,
+        inventoryType: String,
+        quantity: Int,
+        now: Instant,
+    ): ProductPurchaseCredit = ProductPurchaseCredit.AlreadyCredited
+
     /** The Boost running right now, if any (so the app can show its countdown after a restart). */
     suspend fun findActiveBoost(
         userId: UUID,
