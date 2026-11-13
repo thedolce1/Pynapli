@@ -44,6 +44,7 @@ internal fun PynapliAppEffects(
     onOpenPartnerPanel: () -> Unit = onOpenProfileHub,
     onOpenTonight: () -> Unit,
     onOpenPsync: () -> Unit,
+    onOpenActivityProfile: (com.pynapli.shared.network.dto.ActivityEventDto) -> Unit = {},
 ) {
     val authState by authStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -124,6 +125,11 @@ internal fun PynapliAppEffects(
                         activityStateHolder.load()
                     }
                     activityStateHolder.focusEvent(command.activityEventId)
+                    command.openActorUserId?.let { actorUserId ->
+                        activityStateHolder.state.value.items
+                            .firstOrNull { it.actorUserId == actorUserId && it.type == "album_granted" }
+                            ?.let(onOpenActivityProfile)
+                    }
                 }
 
                 AppDeepLinkStateHolder.TARGET_MESSAGES -> {
