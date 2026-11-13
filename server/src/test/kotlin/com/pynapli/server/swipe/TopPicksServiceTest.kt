@@ -81,6 +81,29 @@ class TopPicksServiceTest {
         }
 
     @Test
+    fun picksWhoseDeckSessionExpiredAreRebuiltInsteadOfFailing() =
+        runBlocking<Unit> {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000a05")
+            val swipeRepo = StubSwipeRepository(seededCards = listOf(swipeCardRecord(uuid(50), "Maya")))
+            val topPicksRepo = InMemoryTopPicksRepository()
+            val service =
+                TopPicksService(
+                    topPicksRepository = topPicksRepo,
+                    swipeRepository = swipeRepo,
+                    subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SELECT),
+                    clock = clock,
+                )
+            val first = service.getCurrentPicks(viewer)
+
+            // The backing swipe deck session is gone while the Top Picks session is still current.
+            swipeRepo.dropDeckSessions()
+            val second = service.getCurrentPicks(viewer)
+
+            assertNotEquals(first.sessionId, second.sessionId)
+            assertEquals(1, second.picks.size)
+        }
+
+    @Test
     fun expiredSessionTriggersFreshGeneration() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000a04")
@@ -212,6 +235,8 @@ private class StubSwipeRepository(
 ) : SwipeRepository {
     val queryDeckFilters = mutableListOf<DiscoveryFilters>()
     private val deckSessions = mutableMapOf<UUID, SwipeDeckSessionRecord>()
+
+    fun dropDeckSessions() = deckSessions.clear()
 
     override suspend fun queryDeck(
         viewerUserId: UUID,
