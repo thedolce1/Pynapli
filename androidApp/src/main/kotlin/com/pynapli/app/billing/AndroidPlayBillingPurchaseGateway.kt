@@ -185,11 +185,32 @@ class AndroidPlayBillingPurchaseGateway(
         )
     }
 
+    override suspend fun syncUnfinishedPurchases(): Boolean {
+        if (pendingPurchase != null) return false
+        if (ensureConnected().responseCode != BillingClient.BillingResponseCode.OK) return false
+        val purchases = (querySubscriptionPurchases() as? AppResult.Success)?.value.orEmpty()
+        var synced = false
+        purchases
+            .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED && !it.isAcknowledged }
+            .forEach { purchase -> if (handlePurchase(purchase) is AppResult.Success) synced = true }
+        return synced
+    }
+
     override fun onPurchasesUpdated(
         billingResult: BillingResult,
         purchases: MutableList<Purchase>?,
     ) {
-        val pending = pendingPurchase ?: return
+        val pending = pendingPurchase
+        if (pending == null) {
+            // Play delivers purchases outside a checkout too (a pending payment that cleared, a
+            // purchase finished after the app was closed). Confirm them instead of dropping them.
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                purchases
+                    ?.filter { it.purchaseState == Purchase.PurchaseState.PURCHASED && !it.isAcknowledged }
+                    ?.forEach { purchase -> scope.launch { handlePurchase(purchase) } }
+            }
+            return
+        }
         when (billingResult.responseCode) {
             BillingClient.BillingResponseCode.OK -> {
                 val purchase =

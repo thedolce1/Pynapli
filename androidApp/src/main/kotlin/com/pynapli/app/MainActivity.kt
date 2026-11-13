@@ -72,6 +72,8 @@ class MainActivity : ComponentActivity() {
             ActivityResultContracts.RequestPermission(),
         ) {
             activityScope.launch { appGraph?.pushRegistrationSync?.syncNow() }
+            // A purchase that completed while the app was in the background is confirmed on return.
+            activityScope.launch { appGraph?.syncUnfinishedPurchases() }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {

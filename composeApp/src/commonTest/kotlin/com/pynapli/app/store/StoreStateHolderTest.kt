@@ -16,6 +16,19 @@ import kotlin.test.assertNull
 
 class StoreStateHolderTest {
     @Test
+    fun aPurchaseFinishedWhileTheAppWasAwayIsConfirmedWhenTheStoreOpens() =
+        runTest {
+            val repository = FakeStoreRepository(firstEntitlementTier = SubscriptionTier.FREE, refreshedEntitlementTier = SubscriptionTier.SELECT)
+            val gateway = FakeStorePurchaseGateway().apply { unfinishedPurchase = true }
+            val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = gateway)
+
+            stateHolder.load()
+
+            assertEquals(SubscriptionTier.SELECT, stateHolder.state.value.currentTier)
+            assertEquals("Your purchase is active.", stateHolder.state.value.purchaseMessage)
+        }
+
+    @Test
     fun plansShowThePriceTheStoreWillCharge() =
         runTest {
             val repository = FakeStoreRepository(firstEntitlementTier = SubscriptionTier.FREE, refreshedEntitlementTier = SubscriptionTier.FREE)
@@ -169,6 +182,10 @@ private class FakeStoreRepository(
 
 private class FakeStorePurchaseGateway : StorePurchaseGateway {
     override suspend fun localizedPrices(productIds: List<String>): Map<String, String> = productIds.associateWith { "CA$15.99" }
+
+    var unfinishedPurchase = false
+
+    override suspend fun syncUnfinishedPurchases(): Boolean = unfinishedPurchase.also { unfinishedPurchase = false }
 
     var purchaseCount = 0
         private set
