@@ -26,4 +26,13 @@ interface SubscriptionApi {
     suspend fun submitDevStorePurchase(request: SubmitDevStorePurchaseRequestDto): AppResult<StorePurchaseResponseDto>
 
     suspend fun activateBoost(): AppResult<BoostActivationDto>
+
+    /** Verifies and credits a one-time Google Play purchase; answers already_granted on repeats. */
+    suspend fun submitPlayStoreProductPurchase(
+        request: com.pynapli.shared.network.dto.SubmitPlayStoreProductPurchaseRequestDto,
+    ): AppResult<com.pynapli.shared.network.dto.StorePurchaseResponseDto> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError(code = "NOT_SUPPORTED", message = "Not available."),
+        )
 }

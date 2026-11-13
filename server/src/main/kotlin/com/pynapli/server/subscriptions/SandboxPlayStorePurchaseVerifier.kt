@@ -36,6 +36,17 @@ class SandboxPlayStorePurchaseVerifier(
         purchaseToken: String,
     ): PlayStorePurchaseVerificationResult = evaluate(purchaseToken, productIdFromToken(purchaseToken))
 
+    override suspend fun verifyProductPurchase(
+        packageName: String,
+        productId: String,
+        purchaseToken: String,
+    ): PlayStoreProductVerificationResult =
+        when {
+            !purchaseToken.startsWith(SANDBOX_PREFIX) -> PlayStoreProductVerificationResult.VerificationUnavailable
+            purchaseToken.startsWith(INVALID_PREFIX) -> PlayStoreProductVerificationResult.Invalid("INVALID_PURCHASE_TOKEN")
+            else -> PlayStoreProductVerificationResult.Verified(orderId = "SANDBOX.${purchaseToken.takeLast(12)}")
+        }
+
     private fun evaluate(
         purchaseToken: String,
         productId: String?,

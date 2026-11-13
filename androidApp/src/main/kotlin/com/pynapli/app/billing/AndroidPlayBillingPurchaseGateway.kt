@@ -6,6 +6,7 @@ import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.ConsumeParams
 import com.android.billingclient.api.PendingPurchasesParams
 import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
@@ -18,7 +19,9 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.PremiumProductDto
+import com.pynapli.shared.network.dto.SubmitPlayStoreProductPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubmitPlayStoreSubscriptionPurchaseRequestDto
+import com.pynapli.shared.network.dto.SubscriptionProductId
 import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncStatus
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
@@ -129,7 +132,47 @@ class AndroidPlayBillingPurchaseGateway(
         return deferred.await()
     }
 
-    override suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult> = billingFailure("BILLING_PRODUCT_UNAVAILABLE", "This item is not available in Google Play yet.")
+    override suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult> {
+        val productId =
+            product.playStoreProductId
+                ?: return billingFailure("BILLING_PRODUCT_UNAVAILABLE", "This item is not available in Google Play yet.")
+        val activity =
+            activityRef.get()
+                ?: return billingFailure("BILLING_ACTIVITY_UNAVAILABLE", "Purchases are not available right now.")
+        if (pendingPurchase != null) {
+            return billingFailure("BILLING_PURCHASE_IN_PROGRESS", "A purchase is already in progress.")
+        }
+        val connection = ensureConnected()
+        if (connection.responseCode != BillingClient.BillingResponseCode.OK) {
+            return billingFailure("BILLING_UNAVAILABLE", connection.debugMessage.ifBlank { "Google Play Billing is unavailable." })
+        }
+        val detailsResult = queryProductDetails(productId, BillingClient.ProductType.INAPP)
+        if (detailsResult is AppResult.Failure) return detailsResult
+        val productDetails = (detailsResult as AppResult.Success).value
+        if (productDetails.oneTimePurchaseOfferDetails == null) {
+            return billingFailure("BILLING_PRODUCT_UNAVAILABLE", "This item is not available in Google Play yet.")
+        }
+
+        val deferred = CompletableDeferred<AppResult<StorePurchaseResult>>()
+        pendingPurchase = PendingPurchase(tier = ONE_TIME_PURCHASE, productId = productId, deferred = deferred)
+        val params =
+            BillingFlowParams
+                .newBuilder()
+                .setProductDetailsParamsList(
+                    listOf(
+                        BillingFlowParams.ProductDetailsParams
+                            .newBuilder()
+                            .setProductDetails(productDetails)
+                            .build(),
+                    ),
+                ).build()
+        val launchResult = withContext(Dispatchers.Main.immediate) { billingClient.launchBillingFlow(activity, params) }
+        if (launchResult.responseCode != BillingClient.BillingResponseCode.OK) {
+            pendingPurchase = null
+            return billingFailure("BILLING_LAUNCH_FAILED", launchResult.debugMessage.ifBlank { "Google Play checkout could not be opened." })
+        }
+        return deferred.await()
+    }
 
     override suspend fun restorePurchases(): AppResult<StorePurchaseResult> {
         if (pendingPurchase != null) {
@@ -188,10 +231,15 @@ class AndroidPlayBillingPurchaseGateway(
     override suspend fun syncUnfinishedPurchases(): Boolean {
         if (pendingPurchase != null) return false
         if (ensureConnected().responseCode != BillingClient.BillingResponseCode.OK) return false
-        val purchases = (querySubscriptionPurchases() as? AppResult.Success)?.value.orEmpty()
+        val subscriptions = (querySubscriptionPurchases() as? AppResult.Success)?.value.orEmpty()
+        val oneTimeItems = (querySubscriptionPurchases(BillingClient.ProductType.INAPP) as? AppResult.Success)?.value.orEmpty()
         var synced = false
-        purchases
+        subscriptions
             .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED && !it.isAcknowledged }
+            .forEach { purchase -> if (handlePurchase(purchase) is AppResult.Success) synced = true }
+        // An unconsumed one-time item was paid for but never credited (or credited but not consumed).
+        oneTimeItems
+            .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
             .forEach { purchase -> if (handlePurchase(purchase) is AppResult.Success) synced = true }
         return synced
     }
@@ -254,6 +302,7 @@ class AndroidPlayBillingPurchaseGateway(
         val productId =
             purchase.products.firstOrNull()
                 ?: return billingFailure("BILLING_PURCHASE_NOT_FOUND", "Purchase details were not returned.")
+        if (productId in ONE_TIME_PRODUCT_IDS) return handleOneTimePurchase(purchase, productId)
         return when (
             val result =
                 apiClient.submitPlayStoreSubscriptionPurchase(
@@ -281,6 +330,40 @@ class AndroidPlayBillingPurchaseGateway(
             is AppResult.Failure -> result
         }
     }
+
+    private suspend fun handleOneTimePurchase(
+        purchase: Purchase,
+        productId: String,
+    ): AppResult<StorePurchaseResult> =
+        when (
+            val result =
+                apiClient.submitPlayStoreProductPurchase(
+                    SubmitPlayStoreProductPurchaseRequestDto(
+                        productId = productId,
+                        purchaseToken = purchase.purchaseToken,
+                        packageName = packageNameProvider(),
+                    ),
+                )
+        ) {
+            is AppResult.Success -> {
+                if (result.value.status == "pending_verification") {
+                    AppResult.Success(StorePurchaseResult(message = "Payment pending in Google Play.", refreshEntitlement = false))
+                } else {
+                    // Credited (now or before): consume so it can be bought again. A failed consume
+                    // is retried by the next sync, and the server won't credit the token twice.
+                    consume(purchase.purchaseToken)
+                    AppResult.Success(StorePurchaseResult(message = "Added to your balance.", refreshEntitlement = true))
+                }
+            }
+            is AppResult.Failure -> result
+        }
+
+    private suspend fun consume(purchaseToken: String): Boolean =
+        suspendCancellableCoroutine { continuation ->
+            billingClient.consumeAsync(ConsumeParams.newBuilder().setPurchaseToken(purchaseToken).build()) { result, _ ->
+                continuation.resume(result.responseCode == BillingClient.BillingResponseCode.OK)
+            }
+        }
 
     private suspend fun ensureConnected(): BillingResult {
         if (billingClient.isReady) {
@@ -355,7 +438,10 @@ class AndroidPlayBillingPurchaseGateway(
         }
     }
 
-    private suspend fun queryProductDetails(productId: String): AppResult<ProductDetails> =
+    private suspend fun queryProductDetails(
+        productId: String,
+        productType: String = BillingClient.ProductType.SUBS,
+    ): AppResult<ProductDetails> =
         suspendCancellableCoroutine { continuation ->
             val query =
                 QueryProductDetailsParams
@@ -365,7 +451,7 @@ class AndroidPlayBillingPurchaseGateway(
                             QueryProductDetailsParams.Product
                                 .newBuilder()
                                 .setProductId(productId)
-                                .setProductType(BillingClient.ProductType.SUBS)
+                                .setProductType(productType)
                                 .build(),
                         ),
                     ).build()
@@ -391,12 +477,12 @@ class AndroidPlayBillingPurchaseGateway(
             }
         }
 
-    private suspend fun querySubscriptionPurchases(): AppResult<List<Purchase>> =
+    private suspend fun querySubscriptionPurchases(productType: String = BillingClient.ProductType.SUBS): AppResult<List<Purchase>> =
         suspendCancellableCoroutine { continuation ->
             val query =
                 QueryPurchasesParams
                     .newBuilder()
-                    .setProductType(BillingClient.ProductType.SUBS)
+                    .setProductType(productType)
                     .build()
 
             billingClient.queryPurchasesAsync(query) { billingResult, purchases ->
@@ -449,4 +535,14 @@ class AndroidPlayBillingPurchaseGateway(
         val productId: String,
         val deferred: CompletableDeferred<AppResult<StorePurchaseResult>>,
     )
+
+    private companion object {
+        private const val ONE_TIME_PURCHASE = "one_time"
+        private val ONE_TIME_PRODUCT_IDS =
+            setOf(
+                SubscriptionProductId.BOOST_SINGLE,
+                SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
+                SubscriptionProductId.INTRO_NOTES_THREE,
+            )
+    }
 }

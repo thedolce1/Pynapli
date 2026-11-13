@@ -74,6 +74,16 @@ class SubscriptionService(
             productMetrics = productMetrics,
             getEntitlement = ::getEntitlement,
         )
+    private val playStoreProductPurchaseActions =
+        SubscriptionPlayStoreProductPurchaseActions(
+            repository = repository,
+            clock = clock,
+            playStorePackageName = playStorePackageName,
+            playStorePurchaseVerifier = playStorePurchaseVerifier,
+            rateLimitService = rateLimitService,
+            getEntitlement = ::getEntitlement,
+            getInventory = ::getInventory,
+        )
     private val playStoreSyncActions =
         SubscriptionPlayStoreSyncActions(
             repository = repository,
@@ -171,6 +181,11 @@ class SubscriptionService(
     suspend fun refundPineappleLikeInventory(inventoryId: UUID): Boolean = inventoryActions.refundPineappleLikeInventory(inventoryId)
 
     suspend fun activateBoost(userId: UUID): BoostActivationDto = inventoryActions.activateBoost(userId)
+
+    suspend fun recordPlayStoreProductPurchase(
+        userId: UUID,
+        request: com.pynapli.shared.network.dto.SubmitPlayStoreProductPurchaseRequestDto,
+    ): com.pynapli.shared.network.dto.StorePurchaseResponseDto = playStoreProductPurchaseActions.recordProductPurchase(userId, request)
 
     private companion object {
         private const val PLAY_STORE_SYNC_DEFAULT_LIMIT = 100

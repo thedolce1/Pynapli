@@ -33,6 +33,13 @@ interface PlayStorePurchaseVerifier {
         packageName: String,
         purchaseToken: String,
     ): PlayStorePurchaseVerificationResult = PlayStorePurchaseVerificationResult.VerificationUnavailable
+
+    /** A one-time product (Boost, Pineapple Likes, Intro Notes); unavailable unless implemented. */
+    suspend fun verifyProductPurchase(
+        packageName: String,
+        productId: String,
+        purchaseToken: String,
+    ): PlayStoreProductVerificationResult = PlayStoreProductVerificationResult.VerificationUnavailable
 }
 
 data object DisabledPlayStorePurchaseVerifier : PlayStorePurchaseVerifier {
@@ -105,6 +112,46 @@ class GooglePlayStorePurchaseVerifier private constructor(
                 expectedProductId = null,
                 purchaseToken = purchaseToken,
             )
+        }
+
+    override suspend fun verifyProductPurchase(
+        packageName: String,
+        productId: String,
+        purchaseToken: String,
+    ): PlayStoreProductVerificationResult =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val response =
+                    sendAuthorized(
+                        HttpRequest
+                            .newBuilder()
+                            .uri(
+                                URI.create(
+                                    "$developerApiBaseUrl/androidpublisher/v3/applications/${packageName.pathSegment()}" +
+                                        "/purchases/products/${productId.pathSegment()}/tokens/${purchaseToken.pathSegment()}",
+                                ),
+                            ).GET(),
+                    )
+                when (response.statusCode()) {
+                    in 200..299 -> {
+                        val root = json.parseToJsonElement(response.body()).jsonObject
+                        // purchaseState: 0 purchased, 1 canceled, 2 pending.
+                        when (root.stringOrNull("purchaseState")?.toIntOrNull() ?: 0) {
+                            0 -> PlayStoreProductVerificationResult.Verified(orderId = root.stringOrNull("orderId"))
+                            2 -> PlayStoreProductVerificationResult.Pending
+                            else -> PlayStoreProductVerificationResult.Invalid("INVALID_PURCHASE_TOKEN")
+                        }
+                    }
+                    400, 404 -> PlayStoreProductVerificationResult.Invalid("INVALID_PURCHASE_TOKEN")
+                    else -> {
+                        logger.warn("Google Play product verification was unavailable: status={}", response.statusCode())
+                        PlayStoreProductVerificationResult.VerificationUnavailable
+                    }
+                }
+            }.getOrElse { error ->
+                logger.warn("Google Play product verification failed.", error)
+                PlayStoreProductVerificationResult.VerificationUnavailable
+            }
         }
 
     private fun verifySubscriptionPurchaseInternal(

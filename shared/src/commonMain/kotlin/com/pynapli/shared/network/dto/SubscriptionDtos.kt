@@ -105,6 +105,14 @@ data class SubmitDevStorePurchaseRequestDto(
     val productId: String,
 )
 
+/** A one-time Google Play purchase (Boost, Pineapple Likes, Intro Notes) to verify and credit. */
+@Serializable
+data class SubmitPlayStoreProductPurchaseRequestDto(
+    val productId: String,
+    val purchaseToken: String,
+    val packageName: String,
+)
+
 @Serializable
 data class StorePurchaseResponseDto(
     val status: String,
