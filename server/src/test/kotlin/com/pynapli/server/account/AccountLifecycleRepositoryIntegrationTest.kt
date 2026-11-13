@@ -400,6 +400,51 @@ class AccountLifecycleRepositoryIntegrationTest {
         }
     }
 
+    @Test
+    fun deleteAccountEndsTheirLiveTonightSessionAndDropsPushesAboutThem() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000931")
+            val friendId = UUID.fromString("00000000-0000-0000-0000-000000000932")
+            dataSource.insertUserWithProfile(userId, "Leaving")
+            dataSource.insertUserWithProfile(friendId, "Friend")
+            val sessionId = UUID.randomUUID()
+            connectionExecute(
+                "INSERT INTO tonight_sessions (id, created_by_user_id, mode, intent, host_mode, status, expires_at) VALUES (?, ?, 'solo', 'solo', 'hosting', 'active', now() + interval '2 hours')",
+                sessionId,
+                userId,
+            )
+            connectionExecute("INSERT INTO tonight_session_participants (session_id, user_id, role, approval_status) VALUES (?, ?, 'owner', 'approved')", sessionId, userId)
+            val aboutThem = UUID.randomUUID()
+            val unrelated = UUID.randomUUID()
+            connectionExecute(
+                "INSERT INTO notification_outbox (id, recipient_user_id, actor_user_id, kind, idempotency_key, title, body) VALUES " +
+                    "(?, ?, ?, 'flirt', 'k1', 'Pynapli', 'x'), (?, ?, NULL, 'flirt', 'k2', 'Pynapli', 'x')",
+                aboutThem,
+                friendId,
+                userId,
+                unrelated,
+                friendId,
+            )
+
+            JdbcAccountLifecycleRepository(dataSource).deleteAccount(userId)
+
+            assertEquals("ended", dataSource.stringValue("SELECT status FROM tonight_sessions WHERE id = ?", sessionId))
+            assertEquals("skipped", dataSource.stringValue("SELECT status FROM notification_outbox WHERE id = ?", aboutThem))
+            assertEquals("pending", dataSource.stringValue("SELECT status FROM notification_outbox WHERE id = ?", unrelated))
+        }
+
+    private fun connectionExecute(
+        sql: String,
+        vararg args: Any?,
+    ) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(sql).use { statement ->
+                args.forEachIndexed { index, value -> statement.setObject(index + 1, value) }
+                statement.executeUpdate()
+            }
+        }
+    }
+
     private fun DataSource.stringValue(
         sql: String,
         userId: UUID,

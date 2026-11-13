@@ -179,7 +179,12 @@ private val CONVERSATION_QUERY =
            cp.invitation_status,
            cp.invited_by_user_id,
            cp.message_expiry_seconds,
-           COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+           -- A thread outlives an account: say so instead of showing a blank "Pynapli User".
+           CASE
+               WHEN u.status = 'deleted' OR u.deleted_at IS NOT NULL THEN 'Deleted member'
+               WHEN u.status <> 'active' THEN 'Unavailable member'
+               ELSE COALESCE(NULLIF(p.display_name, ''), 'Pynapli User')
+           END AS display_name,
            profile_photo.media_asset_id AS profile_photo_media_asset_id
     FROM conversations c
     JOIN conversation_participants viewer_cp

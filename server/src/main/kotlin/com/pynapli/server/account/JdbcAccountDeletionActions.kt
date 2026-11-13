@@ -31,6 +31,11 @@ internal class JdbcAccountDeletionActions(
                 val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                 val revokedSessionCount = revokeSessions(connection, userId)
                 disablePushDevices(connection, userId)
+                // Nothing they started keeps running for other people: live Tonight sessions end,
+                // Psync sessions are cancelled (their likes are never delivered), and pushes still
+                // queued to or about them are dropped.
+                endLiveSessions(connection, userId)
+                dropPendingNotifications(connection, userId)
                 recordDeletionEvent(connection, userId, revokedSessionCount)
 
                 connection.commit()
@@ -44,6 +49,55 @@ internal class JdbcAccountDeletionActions(
                 )
             }
         }
+
+    private fun endLiveSessions(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection
+            .prepareStatement(
+                """
+                UPDATE tonight_sessions
+                SET status = 'ended', ended_at = COALESCE(ended_at, now())
+                WHERE status IN ('proposed', 'active')
+                  AND id IN (SELECT session_id FROM tonight_session_participants WHERE user_id = ?)
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeUpdate()
+            }
+        connection
+            .prepareStatement(
+                """
+                UPDATE psync_sessions
+                SET status = 'cancelled', ended_at = COALESCE(ended_at, now())
+                WHERE status IN ('invited', 'configuring', 'ready', 'active', 'paused')
+                  AND id IN (SELECT session_id FROM psync_session_participants WHERE user_id = ?)
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeUpdate()
+            }
+    }
+
+    private fun dropPendingNotifications(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection
+            .prepareStatement(
+                """
+                UPDATE notification_outbox
+                SET status = 'skipped', last_error = 'ACCOUNT_DELETED', updated_at = now()
+                WHERE status = 'pending'
+                  AND (recipient_user_id = ? OR actor_user_id = ?)
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+    }
 
     private fun markUserDeleted(
         connection: Connection,
