@@ -41,6 +41,8 @@ data class ServerConfig(
     val notificationDispatchBatchSize: Int = 50,
     val notificationMaxAttempts: Int = 5,
     val notificationPushProvider: String = "local",
+    /** Proxies in front of the API that append to X-Forwarded-For (Cloud Run: 1). */
+    val trustedProxyHops: Int = 1,
     val activityRetentionEnabled: Boolean = false,
     val activityRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
     val mediaCleanupEnabled: Boolean = false,
@@ -230,6 +232,12 @@ data class ServerConfig(
                         ?.lowercase()
                         ?.takeIf { it.isNotEmpty() }
                         ?: "local",
+                trustedProxyHops =
+                    System
+                        .getenv("PYNAPLI_TRUSTED_PROXY_HOPS")
+                        ?.toIntOrNull()
+                        ?.coerceIn(0, 5)
+                        ?: 1,
                 activityRetentionEnabled =
                     System.getenv("PYNAPLI_ACTIVITY_RETENTION_ENABLED")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),

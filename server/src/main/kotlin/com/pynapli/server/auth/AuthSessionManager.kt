@@ -26,9 +26,10 @@ internal class AuthSessionManager(
             userId = user.id,
             accessTokenHash = Sha256.hash(accessToken),
             refreshTokenHash = Sha256.hash(refreshToken),
-            deviceId = deviceId,
-            platform = platform,
-            appVersion = appVersion,
+            // Client-supplied labels: trimmed and capped so a client can't store arbitrary blobs.
+            deviceId = deviceId.capped(128),
+            platform = platform.capped(32),
+            appVersion = appVersion.capped(64),
             accessExpiresAt = now.plus(AUTH_ACCESS_TOKEN_TTL),
             refreshExpiresAt = now.plus(AUTH_REFRESH_TOKEN_TTL),
         )
@@ -107,3 +108,9 @@ internal class AuthSessionManager(
         cache.removeUser(userId)
     }
 }
+
+private fun String?.capped(maxLength: Int): String? =
+    this
+        ?.trim()
+        ?.take(maxLength)
+        ?.takeIf { it.isNotEmpty() }
