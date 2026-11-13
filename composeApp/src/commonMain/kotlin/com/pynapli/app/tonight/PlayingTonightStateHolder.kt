@@ -78,6 +78,32 @@ class PlayingTonightStateHolder(
 
     suspend fun refresh() = load()
 
+    /** Set by the screen while it is showing, so a resume refetch only runs when someone is looking. */
+    var isOnScreen: Boolean = false
+
+    /** A quiet refetch of the feed and the viewer's own session: no spinner, keeps content on failure. */
+    suspend fun refreshSilently() {
+        val intent = _state.value.intentFilter
+        coroutineScope {
+            val feedDeferred = async { repository.loadFeed(radiusMeters, intent?.serverValue) }
+            val sessionDeferred = async { repository.loadCurrentSession() }
+            val feedResult = feedDeferred.await()
+            val sessionResult = sessionDeferred.await()
+            // A filter change while this was in flight wins: its own load already set the feed.
+            if (_state.value.intentFilter != intent) return@coroutineScope
+            _state.update { current ->
+                current.copy(
+                    feedItems = (feedResult as? AppResult.Success)?.value ?: current.feedItems,
+                    currentSession = (sessionResult as? AppResult.Success)?.value ?: current.currentSession,
+                )
+            }
+        }
+    }
+
+    suspend fun refreshIfOnScreen() {
+        if (isOnScreen) refreshSilently()
+    }
+
     /** End the viewer's live session; clears the floater on success. Never gated (spec). */
     suspend fun endCurrentSession() {
         val sessionId = _state.value.currentSession?.id ?: return

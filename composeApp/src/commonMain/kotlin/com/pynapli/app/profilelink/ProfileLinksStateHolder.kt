@@ -78,6 +78,15 @@ class ProfileLinksStateHolder(
         }
     }
 
+    /** Refetches links in the background (app resume); a failure keeps what is on screen. */
+    suspend fun refreshSilently() {
+        if (state.value.isLoading) return
+        val result = repository.loadSummary()
+        if (result is AppResult.Success) {
+            _state.update { existing -> existing.withSummary(result.value) }
+        }
+    }
+
     suspend fun createInvitation(targetUserId: String) {
         val cleanTargetUserId = targetUserId.trim()
         if (cleanTargetUserId.isEmpty() || cleanTargetUserId in state.value.submittingTargetUserIds) return

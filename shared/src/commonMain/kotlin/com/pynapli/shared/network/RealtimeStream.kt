@@ -78,6 +78,9 @@ fun interface StreamSessionFactory {
  * [backoff] whenever the socket ends, until the collector cancels. Frames that don't decode are
  * skipped. [outgoing], when given, is sent up the socket for the life of each session (presence
  * uses it to resubscribe).
+ *
+ * [onReconnected] runs after every successful connect except the first: deltas sent while the
+ * socket was down are gone, so the collector refetches canonical HTTP state there.
  */
 class JsonStreamClient<T>(
     private val deserializer: DeserializationStrategy<T>,
@@ -86,9 +89,13 @@ class JsonStreamClient<T>(
     private val backoff: StreamBackoff = StreamBackoff(),
     private val json: Json = PynapliJson,
 ) {
-    fun connect(outgoing: Flow<String>? = null): Flow<T> =
+    fun connect(
+        outgoing: Flow<String>? = null,
+        onReconnected: suspend () -> Unit = {},
+    ): Flow<T> =
         flow {
             var attempt = 0
+            var connectedBefore = false
             while (currentCoroutineContext().isActive) {
                 val token = tokenProvider.accessToken()
                 if (token.isNullOrEmpty()) {
@@ -108,6 +115,16 @@ class JsonStreamClient<T>(
                     }
                 val connectedAt = TimeSource.Monotonic.markNow()
                 var receivedFrame = false
+                if (connectedBefore) {
+                    try {
+                        onReconnected()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Throwable) {
+                        // A failed refetch must not take the stream down; the next delta retries it.
+                    }
+                }
+                connectedBefore = true
                 try {
                     coroutineScope {
                         val senderJob = outgoing?.let { frames -> launch { frames.collect { session.send(it) } } }

@@ -20,6 +20,9 @@ class ProfileHubStateHolder(
 
     suspend fun load() = loader.load()
 
+    /** Background refetch on app resume: plan, age verification and export status may have moved on. */
+    suspend fun refreshSilently() = loader.load(quiet = true)
+
     fun openEditor() = panels.openEditor()
 
     fun dismissEditor() = panels.dismissEditor()

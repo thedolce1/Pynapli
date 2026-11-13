@@ -183,12 +183,10 @@ internal fun PynapliAppEffects(
         }
     }
 
-    LaunchedEffect(
-        authState.authenticated,
-        appSettingsState.settings.activityNotifications,
-        activityStateHolder,
-    ) {
-        if (authState.authenticated && appSettingsState.settings.activityNotifications) {
+    // Activity stays current whatever the in-app notification setting: that setting only decides
+    // whether a new event shows a banner (below), not whether the tab shows it.
+    LaunchedEffect(authState.authenticated, activityStateHolder) {
+        if (authState.authenticated) {
             activityStateHolder.refreshSilently()
             while (true) {
                 delay(ACTIVITY_REFRESH_INTERVAL_MS)

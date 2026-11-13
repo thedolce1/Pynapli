@@ -20,7 +20,12 @@ class MessagesRealtimeCoordinator(
                     conversationStateHolder.clearExpiredTypingIndicators()
                 }
             }
-            client.connect().collect { delta ->
+            // Back after a drop: messages sent meanwhile had no delta, so refetch the inbox and thread.
+            val onReconnected: suspend () -> Unit = {
+                messagesStateHolder.refreshSilently()
+                conversationStateHolder.refreshOpenConversation()
+            }
+            client.connect(onReconnected = onReconnected).collect { delta ->
                 when (delta.type) {
                     MessageDeltaType.TYPING_STARTED ->
                         conversationStateHolder.applyTypingStarted(

@@ -53,7 +53,9 @@ import com.pynapli.shared.network.PsyncStreamClient
 import com.pynapli.shared.network.PynapliApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Every state holder that is built from the API client and nothing platform-specific.
@@ -154,6 +156,37 @@ class PynapliCommonGraph(
             purchaseGateway = storePurchaseGateway,
         )
 
+    /** Refetches canonical state when the app returns to the foreground; each shell calls [onAppForegrounded]. */
+    val appResumeRefresher =
+        AppResumeRefresher(
+            refreshAll = {
+                // Every refetch is silent: nothing flashes a spinner or an error over what the user
+                // is reading, and a failure keeps the content on screen.
+                coroutineScope {
+                    launch { messagesStateHolder.refreshSilently() }
+                    launch { conversationStateHolder.refreshOpenConversation() }
+                    launch {
+                        activityStateHolder.refreshSummarySilently()
+                        activityStateHolder.refreshSilently()
+                    }
+                    launch { profileLinksStateHolder.refreshSilently() }
+                    // Plan, age verification and export status can all change while away.
+                    launch { profileHubStateHolder.refreshSilently() }
+                    launch { playingTonightStateHolder.refreshIfOnScreen() }
+                    // The Grid reorders only when the user asks or its results have expired, so a
+                    // quick app switch never reshuffles the cards (composeApp/CLAUDE.md).
+                    if (gridStateHolder.state.value.cards
+                            .isNotEmpty() && gridStateHolder.resultsOlderThan(GRID_RESULTS_EXPIRE_AFTER)
+                    ) {
+                        launch { gridStateHolder.load(quiet = true) }
+                    }
+                }
+            },
+        )
+
+    /** The app is visible again (Android onStart, iOS foreground, browser tab shown). */
+    suspend fun onAppForegrounded(signedIn: Boolean) = appResumeRefresher.onForeground(signedIn)
+
     val gridPresenceStreamCoordinator = GridPresenceStreamCoordinator(presenceStreamClient, gridStateHolder)
 
     val activityRealtimeCoordinator = ActivityRealtimeCoordinator(activityStreamClient, activityStateHolder)
@@ -217,3 +250,6 @@ class PynapliCommonGraph(
             scope.launch { runCatchingCancellable { messagesRealtimeCoordinator.run() } },
         )
 }
+
+/** Grid results older than this are refetched (quietly, keeping scroll) when the app returns. */
+private val GRID_RESULTS_EXPIRE_AFTER = 15.minutes

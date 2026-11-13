@@ -203,6 +203,9 @@ class AndroidAppGraph(
     /** Confirms purchases finished while the app was away; see StorePurchaseGateway.syncUnfinishedPurchases. */
     suspend fun syncUnfinishedPurchases(): Boolean = playBillingPurchaseGateway.syncUnfinishedPurchases()
 
+    /** Refetches every surface after the app was away; see [PynapliCommonGraph.onAppForegrounded]. */
+    suspend fun onAppForegrounded() = common.onAppForegrounded(signedIn = authStateHolder.state.value.authenticated)
+
     fun detachBillingActivity(activity: Activity) {
         playBillingPurchaseGateway.detachActivity(activity)
     }

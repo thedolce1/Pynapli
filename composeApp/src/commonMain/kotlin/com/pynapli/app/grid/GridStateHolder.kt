@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlin.time.Duration
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 class GridStateHolder(
     private val repository: GridFeedRepository,
@@ -45,6 +48,11 @@ class GridStateHolder(
         load()
     }
 
+    private var loadedAt: TimeMark? = null
+
+    /** True when the cards on screen came from the server longer than [age] ago (or never did). */
+    fun resultsOlderThan(age: Duration): Boolean = loadedAt?.let { it.elapsedNow() >= age } ?: true
+
     suspend fun load(quiet: Boolean = false) {
         val before = _state.value
         val keepCardsVisible = quiet && before.cards.isNotEmpty()
@@ -59,6 +67,7 @@ class GridStateHolder(
         }
         runCatchingCancellable { repository.loadGrid(_state.value.filters) }
             .onSuccess { feed ->
+                loadedAt = TimeSource.Monotonic.markNow()
                 _state.update { current ->
                     current.copy(
                         cards = feed.cards,

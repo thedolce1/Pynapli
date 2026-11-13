@@ -99,6 +99,30 @@ class ActivityStreamClientTest {
             assertEquals(2, factory.connectInvocations)
         }
 
+    @Test
+    fun runsTheReconnectRefetchOnEveryReconnectButNotTheFirstConnect() =
+        runTest {
+            val dropped = ScriptedActivitySession(scriptedReceives = emptyList())
+            val factory = ScriptedActivitySessionFactory(sessions = listOf(dropped))
+            val client =
+                JsonStreamClient(
+                    deserializer = ActivityDeltaDto.serializer(),
+                    sessionFactory = factory,
+                    tokenProvider = StaticAccessTokenProvider("test-token"),
+                    backoff = StreamBackoff(initialDelayMillis = 100, maxDelayMillis = 100, factor = 1.0),
+                    json = json,
+                )
+            var refetches = 0
+
+            // Connects at t = 0, 100 and 200 ms; only the second and third are reconnects.
+            val job = launch { client.connect(onReconnected = { refetches += 1 }).collect { } }
+            advanceTimeBy(250)
+            job.cancelAndJoin()
+
+            assertEquals(3, factory.connectInvocations)
+            assertEquals(2, refetches)
+        }
+
     // Regression: the server authenticates after the WebSocket upgrade and closes normally on
     // rejection (e.g. an expired access token). The client used to treat the successful upgrade as
     // healthy, reset its backoff, and reconnect with no delay — a tight loop. Every session end must
