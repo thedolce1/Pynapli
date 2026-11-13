@@ -92,6 +92,10 @@ internal fun travelLocationStatusFor(code: String): HttpStatusCode =
         "TRAVEL_SWITCH_LIMITED",
         "RATE_LIMITED",
         -> HttpStatusCode.TooManyRequests
+        "TRIP_OVERLAPS",
+        "TRIP_LIMIT_REACHED",
+        -> HttpStatusCode.Conflict
+        "TRIP_NOT_FOUND" -> HttpStatusCode.NotFound
         "INVALID_TRAVEL_CITY",
         "INVALID_TRAVEL_REGION",
         "INVALID_TRAVEL_COUNTRY",

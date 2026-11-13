@@ -49,6 +49,35 @@ data class TravelLocationDto(
     val status: String,
 )
 
+/** Plan Travel mode ahead: it switches on at local midnight on [startsOn] and off after [endsOn]. */
+@Serializable
+data class PlanTravelTripRequestDto(
+    val latitude: Double,
+    val longitude: Double,
+    val city: String,
+    val region: String? = null,
+    val country: String? = null,
+    val startsOn: String, // yyyy-MM-dd
+    val endsOn: String, // yyyy-MM-dd, inclusive
+    val timezone: String, // the planner's IANA zone, e.g. "America/Toronto"
+)
+
+@Serializable
+data class TravelTripDto(
+    val tripId: String,
+    val city: String,
+    val region: String? = null,
+    val country: String? = null,
+    val startsOn: String,
+    val endsOn: String,
+    val status: String, // planned | active
+)
+
+@Serializable
+data class TravelTripsDto(
+    val trips: List<TravelTripDto>,
+)
+
 object TravelLocationStatus {
     const val ACTIVE = "active"
     const val CLEARED = "cleared"

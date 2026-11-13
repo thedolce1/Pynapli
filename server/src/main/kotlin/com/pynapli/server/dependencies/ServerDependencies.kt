@@ -99,6 +99,8 @@ class ServerDependencies(
     val adminRequestAuditRecorder: AdminRequestAuditRecorder?,
     val locationService: LocationService,
     val travelLocationService: TravelLocationService,
+    val travelTripService: com.pynapli.server.location.TravelTripService? = null,
+    val travelTripWorker: com.pynapli.server.location.TravelTripWorker? = null,
     val travelPlaceSearchService: TravelPlaceSearchService,
     val presenceService: PresenceService,
     val gridService: GridService,
@@ -157,6 +159,7 @@ class ServerDependencies(
         runCatching { tonightSessionExpiryWorker.close() }
         runCatching { psyncSessionExpiryWorker?.close() }
         runCatching { psyncPresenceWatcher?.close() }
+        runCatching { travelTripWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
         runCatching { profileActivityScope.cancel() }
         probes.asReversed().forEach { probe ->
@@ -384,6 +387,10 @@ class ServerDependencies(
                 adminRequestAuditRecorder = adminRequestAuditRecorder,
                 locationService = core.locationService,
                 travelLocationService = commerceTravel.travelLocationService,
+                travelTripService = commerceTravel.travelTripService,
+                travelTripWorker =
+                    com.pynapli.server.location
+                        .TravelTripWorker(commerceTravel.travelTripService),
                 travelPlaceSearchService = commerceTravel.travelPlaceSearchService,
                 presenceService = core.presenceService,
                 gridService = grid.gridService,

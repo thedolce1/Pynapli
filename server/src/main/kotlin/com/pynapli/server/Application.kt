@@ -78,6 +78,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.tonightSessionExpiryWorker.start()
     dependencies.psyncSessionExpiryWorker?.start()
     dependencies.psyncPresenceWatcher?.start()
+    dependencies.travelTripWorker?.start()
     dependencies.accountDataExportWorker?.start()
     dependencies.playStoreSubscriptionSyncWorker?.start()
     dependencies.presenceOfflineScanner.start()
@@ -112,6 +113,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         dependencies.authService,
         dependencies.travelLocationService,
         dependencies.travelPlaceSearchService,
+        dependencies.travelTripService,
     )
     configurePresenceRoutes(dependencies.authService, dependencies.presenceService, dependencies.requestProfilerFactory)
     configurePresenceStreamRoutes(

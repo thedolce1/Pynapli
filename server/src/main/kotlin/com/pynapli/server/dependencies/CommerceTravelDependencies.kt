@@ -21,6 +21,7 @@ internal class CommerceTravelDependencies(
     val travelLocationService: TravelLocationService,
     val travelPlaceSearchService: TravelPlaceSearchService,
     val playStoreSubscriptionSyncWorker: PlayStoreSubscriptionSyncWorker?,
+    val travelTripService: com.pynapli.server.location.TravelTripService,
 )
 
 internal fun buildCommerceTravelDependencies(
@@ -80,5 +81,8 @@ internal fun buildCommerceTravelDependencies(
         travelLocationService = travelLocationService,
         travelPlaceSearchService = travelPlaceSearchService,
         playStoreSubscriptionSyncWorker = playStoreSubscriptionSyncWorker,
+        travelTripService =
+            com.pynapli.server.location
+                .TravelTripService(dataSource, travelLocationService),
     )
 }
