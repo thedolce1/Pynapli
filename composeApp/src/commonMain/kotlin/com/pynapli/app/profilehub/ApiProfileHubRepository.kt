@@ -47,6 +47,8 @@ class ApiProfileHubRepository(
 
     override suspend fun listAppeals(): AppResult<com.pynapli.shared.network.dto.AppealListDto> = apiClient.listAppeals()
 
+    override suspend fun withdrawAppeal(appealId: String): AppResult<com.pynapli.shared.network.dto.AppealDto> = apiClient.withdrawAppeal(appealId)
+
     override suspend fun submitAppeal(request: com.pynapli.shared.network.dto.CreateAppealRequestDto): AppResult<com.pynapli.shared.network.dto.AppealDto> = apiClient.submitAppeal(request)
 
     override suspend fun getSupportContact(): AppResult<SupportContactDto> = apiClient.getSupportContact()

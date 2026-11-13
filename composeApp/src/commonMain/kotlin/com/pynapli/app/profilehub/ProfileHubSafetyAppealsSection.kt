@@ -34,6 +34,7 @@ private const val MIN_APPEAL_REASON = 10
 internal fun LazyListScope.profileHubSafetyAppealsSection(
     state: ProfileHubUiState,
     onAppealRestriction: (String) -> Unit,
+    onWithdrawAppeal: (String) -> Unit = {},
 ) {
     item {
         var showDialog by remember { mutableStateOf(false) }
@@ -51,6 +52,12 @@ internal fun LazyListScope.profileHubSafetyAppealsSection(
                         label = appeal.actionLabel(),
                         value = appeal.statusLabel(),
                     )
+                    // An appeal still waiting for review can be taken back (e.g. sent by mistake).
+                    if (appeal.status == "open") {
+                        TextButton(onClick = { onWithdrawAppeal(appeal.appealId) }, modifier = Modifier.handCursor()) {
+                            Text("Withdraw this appeal")
+                        }
+                    }
                 }
             }
             state.appealMessage?.let { message ->
