@@ -184,7 +184,7 @@ internal fun userSafeMessage(code: String): String =
         "INVALID_HIDDEN_PROFILE_TARGET" -> "That profile could not be hidden."
         "HIDE_SELF_FORBIDDEN" -> "You cannot hide yourself."
         "INVALID_REPORT_TARGET" -> "That target could not be reported."
-        "REPORT_TARGET_NOT_FOUND" -> "That message can't be reported. It may have been removed."
+        "REPORT_TARGET_NOT_FOUND" -> "That can't be reported. It may have been removed or was never shared with you."
         "INVALID_REPORT_CATEGORY" -> "Choose a valid report reason."
         "REPORT_SELF_FORBIDDEN" -> "You cannot report yourself."
         "REPORT_NOTE_TOO_LONG" -> "Report note is too long."

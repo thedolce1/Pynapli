@@ -15,6 +15,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.PhotoLibrary
 import com.pynapli.app.media.MediaAlbumItemUi
@@ -32,6 +34,7 @@ import com.pynapli.app.media.MediaAlbumItemUi
 internal fun PrivateAlbumPreview(
     items: List<MediaAlbumItemUi>,
     isLoading: Boolean,
+    onReportAlbum: ((albumId: String) -> Unit)? = null,
 ) {
     when {
         isLoading -> {
@@ -67,6 +70,12 @@ internal fun PrivateAlbumPreview(
             ) {
                 items.forEach { item ->
                     PrivateAlbumTile(item = item)
+                }
+            }
+            if (onReportAlbum != null) {
+                val albumId = items.first().albumId
+                TextButton(onClick = { onReportAlbum(albumId) }, modifier = Modifier.handCursor()) {
+                    Text("Report this album")
                 }
             }
         }

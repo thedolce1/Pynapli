@@ -311,6 +311,26 @@ class ProfileDetailStateHolder(
         }
     }
 
+    /**
+     * Reports a private album the owner shared with this viewer. The server checks the grant and
+     * attaches the album's media ids as evidence for moderators. Reporting the album does not hide
+     * the person: the viewer may only object to some photos.
+     */
+    suspend fun submitAlbumReport(
+        albumId: String,
+        category: String,
+    ) {
+        val targetUserId = _state.value.profile?.userId ?: _state.value.selectedCard?.id ?: return
+        if (_state.value.isReporting) return
+        _state.update { it.copy(isReporting = true, reportFeedback = null, errorMessage = null) }
+        when (val result = repository.submitReport(targetUserId, ReportTargetType.ALBUM, category, null, targetId = albumId)) {
+            is AppResult.Success ->
+                _state.update { it.copy(isReporting = false, reportFeedback = ALBUM_REPORT_CONFIRMATION) }
+            is AppResult.Failure ->
+                _state.update { it.copy(isReporting = false, errorMessage = result.error.message) }
+        }
+    }
+
     fun consumeBlockedTargetUserId(): String? {
         val current = _state.value.blockedTargetUserId ?: return null
         _state.update { it.copy(blockedTargetUserId = null) }
@@ -332,6 +352,7 @@ class ProfileDetailStateHolder(
 
     companion object {
         const val PLAYING_TONIGHT_SOURCE = "playing_tonight"
+        const val ALBUM_REPORT_CONFIRMATION = "Thanks, we'll review these photos."
         const val REPORT_CONFIRMATION = "Thanks, we'll review it. You won't see them in discovery again."
     }
 }

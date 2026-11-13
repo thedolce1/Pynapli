@@ -210,6 +210,7 @@ internal fun PynapliOverlays(
             onBlock = { reason ->
                 scope.launch { profileDetailStateHolder.blockUser(reason) }
             },
+            onReportAlbum = { albumId, category -> scope.launch { profileDetailStateHolder.submitAlbumReport(albumId, category) } },
             onReport = { category, note ->
                 scope.launch { profileDetailStateHolder.submitReport(category, note) }
             },

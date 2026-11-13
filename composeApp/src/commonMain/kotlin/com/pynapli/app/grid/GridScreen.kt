@@ -164,6 +164,7 @@ fun GridScreen(
             onHide = {
                 scope.launch { profileDetailStateHolder.hideProfile() }
             },
+            onReportAlbum = { albumId, category -> scope.launch { profileDetailStateHolder.submitAlbumReport(albumId, category) } },
             onReport = { category, note ->
                 scope.launch { profileDetailStateHolder.submitReport(category, note) }
             },

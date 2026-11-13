@@ -18,6 +18,16 @@ interface ReportEvidenceLookup {
         reporterUserId: UUID,
         reportedUserId: UUID,
     ): String?
+
+    /**
+     * A private album the reported person owns and shared with the reporter (now or before): the
+     * evidence lists its photos' media ids so moderators can review exactly what was shown.
+     */
+    suspend fun albumEvidence(
+        albumId: UUID,
+        reporterUserId: UUID,
+        reportedUserId: UUID,
+    ): String? = null
 }
 
 class JdbcReportEvidenceLookup(
@@ -32,7 +42,11 @@ class JdbcReportEvidenceLookup(
             connection
                 .prepareStatement(
                     """
-                    SELECT m.body
+                    SELECT CASE
+                               WHEN m.media_asset_id IS NOT NULL AND btrim(m.body) = '' THEN '[photo ' || m.media_asset_id || ']'
+                               WHEN m.media_asset_id IS NOT NULL THEN m.body || ' [photo ' || m.media_asset_id || ']'
+                               ELSE m.body
+                           END
                     FROM messages m
                     JOIN conversation_participants reporter
                       ON reporter.conversation_id = m.conversation_id
@@ -43,6 +57,37 @@ class JdbcReportEvidenceLookup(
                 ).use { statement ->
                     statement.setObject(1, reporterUserId)
                     statement.setObject(2, messageId)
+                    statement.setObject(3, reportedUserId)
+                    statement.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else null }
+                }
+        }
+
+    override suspend fun albumEvidence(
+        albumId: UUID,
+        reporterUserId: UUID,
+        reportedUserId: UUID,
+    ): String? =
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT 'private album ' || a.id || ': ' ||
+                           COALESCE(string_agg(i.media_asset_id::text, ', ' ORDER BY i.sort_order), 'no photos')
+                    FROM media_albums a
+                    JOIN media_album_access_grants g
+                      ON g.album_id = a.id
+                     AND g.grantee_user_id = ?
+                    LEFT JOIN media_album_items i
+                      ON i.album_id = a.id
+                     AND i.removed_at IS NULL
+                    WHERE a.id = ?
+                      AND a.owner_user_id = ?
+                      AND a.kind = 'private'
+                    GROUP BY a.id
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, reporterUserId)
+                    statement.setObject(2, albumId)
                     statement.setObject(3, reportedUserId)
                     statement.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else null }
                 }

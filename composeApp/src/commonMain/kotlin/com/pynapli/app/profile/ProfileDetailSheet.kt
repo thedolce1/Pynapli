@@ -65,6 +65,7 @@ fun ProfileDetailSheet(
     onInviteProfileLink: () -> Unit = {},
     onOpenLinkedPartner: (GridLinkedPartnerUi) -> Unit = {},
     distanceUnit: String = AppSettings.UNIT_METRIC,
+    onReportAlbum: ((albumId: String, category: String) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val card = state.selectedCard ?: return
@@ -80,6 +81,7 @@ fun ProfileDetailSheet(
     var showBlockConfirm by remember { mutableStateOf(false) }
     var showHideConfirm by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
+    var reportAlbumId by remember { mutableStateOf<String?>(null) }
 
     PynapliBottomSheet(
         onDismiss = onDismiss,
@@ -214,6 +216,7 @@ fun ProfileDetailSheet(
                     PrivateAlbumPreview(
                         items = state.privateAlbumItems,
                         isLoading = state.isLoadingPrivateAlbum,
+                        onReportAlbum = onReportAlbum?.let { { albumId -> reportAlbumId = albumId } },
                     )
                 }
             }
@@ -241,6 +244,18 @@ fun ProfileDetailSheet(
                 onHide()
             },
             onDismiss = { showHideConfirm = false },
+        )
+    }
+
+    reportAlbumId?.let { albumId ->
+        ReportCategoryDialog(
+            isSubmitting = state.isReporting,
+            title = "Report this album",
+            onSubmit = { category, _ ->
+                reportAlbumId = null
+                onReportAlbum?.invoke(albumId, category)
+            },
+            onDismiss = { reportAlbumId = null },
         )
     }
 

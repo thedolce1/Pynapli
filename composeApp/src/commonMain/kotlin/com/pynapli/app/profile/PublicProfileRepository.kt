@@ -33,5 +33,6 @@ interface PublicProfileRepository {
         targetType: String,
         category: String,
         note: String?,
+        targetId: String? = null,
     ): AppResult<ReportDto>
 }

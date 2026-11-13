@@ -68,6 +68,7 @@ class SamplePublicProfileRepository : PublicProfileRepository {
         targetType: String,
         category: String,
         note: String?,
+        targetId: String?,
     ): AppResult<ReportDto> =
         AppResult.Success(
             ReportDto(
