@@ -59,7 +59,14 @@ class TopPicksService(
 
         val cached = topPicksRepository.findCurrentSession(viewerUserId, now)
         if (cached != null) {
-            return cachedResponse.toResponse(cached, viewerUserId, tierLimit)
+            try {
+                return cachedResponse.toResponse(cached, viewerUserId, tierLimit)
+            } catch (stale: TopPicksException) {
+                // The cached picks point at a deck session that has expired: answering 409 left a
+                // paying user stuck on an error until the cache aged out. Build fresh picks instead;
+                // the new session is the newest, so later reads use it.
+                if (stale.code != "STALE_TOP_PICK_SESSION") throw stale
+            }
         }
         return generator.generateFreshSession(viewerUserId, now, tierLimit)
     }
