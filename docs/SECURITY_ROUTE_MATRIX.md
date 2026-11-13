@@ -31,6 +31,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `AdminRiskRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Requires admin actor/reason. |
 | `AdminMetricsRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. |
 | `ProductMetricsRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Counts-only KPI snapshot via `requireAdminActor`. |
+| `PrometheusMetricsRoutes.kt` | Scrape-token-authenticated | `GET /metrics`; not installed unless `PYNAPLI_METRICS_TOKEN` (16+ chars) is set, bearer compared in constant time. Counts and gauges only, no user data. |
 | `AdminUserLookupRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Consolidated user lookup via `requireAdminActor`; additionally requires `X-Admin-Reason` and writes a `user_lookup` audit row. |
 | `AdminPartnerLinkReviewRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Partner-link review via `requireAdminActor`; additionally requires `X-Admin-Reason` and writes a `partner_link_review` audit row. |
 | `AdminSubscriptionSupportRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Read-only subscription support view via `requireAdminActor`; additionally requires `X-Admin-Reason` and writes a `subscription_support_view` audit row. Excludes raw purchase tokens/order ids. |
