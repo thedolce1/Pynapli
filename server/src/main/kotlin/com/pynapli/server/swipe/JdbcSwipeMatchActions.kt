@@ -10,8 +10,9 @@ internal class JdbcSwipeMatchActions(
     suspend fun listMatches(
         viewerUserId: UUID,
         limit: Int,
+        after: MatchPageCursor? = null,
     ): List<MatchSummaryRecord> =
         dataSource.withConnection { connection ->
-            connection.listMatchSummaries(viewerUserId, limit)
+            connection.listMatchSummaries(viewerUserId, limit, after)
         }
 }

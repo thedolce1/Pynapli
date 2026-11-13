@@ -320,6 +320,7 @@ private class StubSwipeRepository(
     override suspend fun listMatches(
         viewerUserId: UUID,
         limit: Int,
+        after: MatchPageCursor?,
     ): List<MatchSummaryRecord> = emptyList()
 }
 

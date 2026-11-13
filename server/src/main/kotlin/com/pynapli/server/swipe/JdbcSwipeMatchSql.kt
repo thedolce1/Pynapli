@@ -33,9 +33,16 @@ internal fun Connection.upsertMatch(
     }
 }
 
+/** Position in the match list: the last match shown (newest first, id breaks ties). */
+data class MatchPageCursor(
+    val createdAt: java.time.Instant,
+    val matchId: UUID,
+)
+
 internal fun Connection.listMatchSummaries(
     viewerUserId: UUID,
     limit: Int,
+    after: MatchPageCursor? = null,
 ): List<MatchSummaryRecord> =
     prepareStatement(
         """
@@ -76,6 +83,7 @@ internal fun Connection.listMatchSummaries(
         ) profile_photo ON true
         WHERE (m.user_a = ? OR m.user_b = ?)
           AND COALESCE(matched_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+          AND (?::timestamptz IS NULL OR m.created_at < ?::timestamptz OR (m.created_at = ?::timestamptz AND m.id > ?::uuid))
         ORDER BY m.created_at DESC, m.id ASC
         LIMIT ?
         """.trimIndent(),
@@ -83,7 +91,12 @@ internal fun Connection.listMatchSummaries(
         statement.setObject(1, viewerUserId)
         statement.setObject(2, viewerUserId)
         statement.setObject(3, viewerUserId)
-        statement.setInt(4, limit)
+        val afterTime = after?.createdAt?.let { java.sql.Timestamp.from(it) }
+        statement.setTimestamp(4, afterTime)
+        statement.setTimestamp(5, afterTime)
+        statement.setTimestamp(6, afterTime)
+        statement.setObject(7, after?.matchId)
+        statement.setInt(8, limit)
         statement.executeQuery().use { rs ->
             buildList {
                 while (rs.next()) {

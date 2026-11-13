@@ -191,6 +191,7 @@ interface SwipeRepository {
     suspend fun listMatches(
         viewerUserId: UUID,
         limit: Int,
+        after: MatchPageCursor? = null,
     ): List<MatchSummaryRecord>
 }
 

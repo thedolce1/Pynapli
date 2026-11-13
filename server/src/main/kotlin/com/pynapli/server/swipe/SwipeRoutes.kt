@@ -92,7 +92,7 @@ fun Application.configureSwipeRoutes(
 
         get("/v1/matches") {
             val user = call.authenticatedUser(authService)
-            call.respond(swipeService.listMatches(user.id))
+            call.respond(swipeService.listMatches(user.id, call.request.queryParameters["cursor"]))
         }
     }
 }

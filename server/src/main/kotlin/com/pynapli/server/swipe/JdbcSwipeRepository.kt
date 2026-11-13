@@ -223,9 +223,11 @@ class JdbcSwipeRepository(
     override suspend fun listMatches(
         viewerUserId: UUID,
         limit: Int,
+        after: MatchPageCursor?,
     ): List<MatchSummaryRecord> =
         matchActions.listMatches(
             viewerUserId = viewerUserId,
             limit = limit,
+            after = after,
         )
 }
