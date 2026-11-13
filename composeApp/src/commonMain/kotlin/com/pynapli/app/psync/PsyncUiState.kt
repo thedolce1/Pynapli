@@ -90,6 +90,8 @@ data class PsyncSessionUi(
     val partnerStarted: Boolean = false,
     // The initiator's Travel mode destination the deck is dealt at, or null for around their home.
     val locationLabel: String? = null,
+    // Paused because the partner's connection dropped (resumes when they're back).
+    val pausedForPartnerAway: Boolean = false,
 ) {
     val phase: PsyncPhase
         get() =
@@ -187,6 +189,7 @@ fun PsyncSessionDto.toUi(viewerUserId: String?): PsyncSessionUi {
         viewerStarted = viewer?.started ?: false,
         partnerStarted = partner?.started ?: false,
         locationLabel = locationLabel,
+        pausedForPartnerAway = autoPausedUserId != null && autoPausedUserId == partner?.userId,
     )
 }
 

@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory
 fun Application.configurePsyncStreamRoutes(
     authService: AuthService,
     broadcaster: PsyncBroadcaster,
+    presenceWatcher: PsyncPresenceWatcher? = null,
 ) {
     installRealtimeWebSocketsIfNeeded()
     val logger = LoggerFactory.getLogger("PsyncStreamRoutes")
@@ -28,6 +29,17 @@ fun Application.configurePsyncStreamRoutes(
             toDto = { it.toDto() },
             dtoSerializer = PsyncRealtimeDeltaDto.serializer(),
             logger = logger,
+            // While the Psync screen is open, keep the viewer marked present (auto-pause watches this).
+            onOpen =
+                presenceWatcher?.let { watcher ->
+                    { viewerId ->
+                        while (true) {
+                            runCatching { watcher.onSeen(viewerId) }
+                                .onFailure { error -> logger.debug("Psync presence mark failed: {}", error.message) }
+                            kotlinx.coroutines.delay(watcher.heartbeat.toMillis())
+                        }
+                    }
+                },
         )
     }
 }

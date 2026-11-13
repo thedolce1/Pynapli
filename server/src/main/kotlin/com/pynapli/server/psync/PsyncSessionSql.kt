@@ -39,6 +39,7 @@ internal fun ResultSet.toSession(json: Json): PsyncSession =
         participants = emptyList(),
         travelLocationId = getObject("travel_location_id", UUID::class.java),
         locationLabel = getString("location_label"),
+        autoPausedUserId = runCatching { getObject("auto_paused_user_id", UUID::class.java) }.getOrNull(),
     )
 
 internal fun ResultSet.toDeckCard(json: Json): PsyncSessionCard =

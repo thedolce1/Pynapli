@@ -43,6 +43,8 @@ data class PsyncSessionDto(
     // Where the deck is dealt: the initiator's Travel mode destination ("Las Vegas, Nevada"), or
     // null for around the initiator's home location.
     val locationLabel: String? = null,
+    // Paused because this participant's connection dropped; it resumes when they're back.
+    val autoPausedUserId: String? = null,
 )
 
 @Serializable
