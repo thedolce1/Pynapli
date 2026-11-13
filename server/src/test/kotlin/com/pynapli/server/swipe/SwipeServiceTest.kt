@@ -2103,6 +2103,7 @@ private class RecordingActivityRepository : ActivityRepository {
         actorUserId: UUID,
         targetUserId: UUID,
         eventType: String,
+        metadataJson: String,
     ): Boolean {
         swipeInterests += Triple(actorUserId, targetUserId, eventType)
         return true

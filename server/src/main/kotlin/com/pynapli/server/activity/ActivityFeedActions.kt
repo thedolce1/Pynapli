@@ -100,12 +100,36 @@ internal class ActivityFeedActions(
                 0
             }
         return ActivityFeedResponseDto(
-            items = revealed.map { it.toDto(mediaAssetUrlResolver) },
+            items = revealed.foldPairLikes(blockedRelatedIds).map { it.toDto(mediaAssetUrlResolver) },
             nextCursor = nextCursor,
             adSupported = policy.adSupported,
             entitlementTier = policy.tier,
             revealLimit = if (policy.fullActivityReveal) null else policy.activityRevealLimit,
             gatedCount = gatedCount,
         )
+    }
+}
+
+/**
+ * A Psync couple who both liked the recipient produce two like events (each is a real like the
+ * recipient can answer). Shown once: "Maya & Alex liked you together" on the first, the second
+ * dropped. If the partner is blocked, gone, or their own like isn't on this page, the row stays an
+ * ordinary single like.
+ */
+internal fun List<ActivityEventRecord>.foldPairLikes(blockedRelatedIds: Set<java.util.UUID>): List<ActivityEventRecord> {
+    val shown = mutableSetOf<Pair<String, java.util.UUID>>()
+    return mapNotNull { event ->
+        val partner = event.pairUserId?.takeIf { it !in blockedRelatedIds && event.pairDisplayName != null }
+        val session = event.pairSessionId
+        if (partner == null || session == null) return@mapNotNull event.copy(pairUserId = null, pairDisplayName = null)
+        val partnerAlsoListed = any { it.actorUserId == partner && it.pairSessionId == session }
+        when {
+            !partnerAlsoListed -> event.copy(pairUserId = null, pairDisplayName = null)
+            (session to partner) in shown -> null
+            else -> {
+                shown += session to event.actorUserId
+                event
+            }
+        }
     }
 }

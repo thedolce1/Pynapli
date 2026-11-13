@@ -915,6 +915,7 @@ private class InMemoryActivityRepository(
         actorUserId: UUID,
         targetUserId: UUID,
         eventType: String,
+        metadataJson: String,
     ): Boolean {
         swipeInterests += Triple(actorUserId, targetUserId, eventType)
         return true

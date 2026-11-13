@@ -20,6 +20,9 @@ internal object JdbcActivityFeedSql {
                ae.metadata->>'conversationId' AS conversation_id,
                ae.metadata->>'sessionId' AS psync_session_id,
                ae.metadata->>'source' AS source,
+               pair_profile.user_id AS pair_user_id,
+               NULLIF(pair_profile.display_name, '') AS pair_display_name,
+               ae.metadata->>'pairSessionId' AS pair_session_id,
                album_request.status AS album_request_status,
                actor_settings.show_distance AS actor_show_distance,
                CASE
@@ -44,6 +47,13 @@ internal object JdbcActivityFeedSql {
         LEFT JOIN account_risk_states actor_risk
           ON actor_risk.user_id = actor.id
         LEFT JOIN recipient_location ON true
+        LEFT JOIN users pair_user
+          ON pair_user.id = (ae.metadata->>'pairUserId')::uuid
+         AND pair_user.status = 'active'
+         AND pair_user.deleted_at IS NULL
+        LEFT JOIN profiles pair_profile
+          ON pair_profile.user_id = pair_user.id
+         AND pair_profile.visibility_status = 'visible'
         LEFT JOIN user_locations actor_location ON actor_location.user_id = actor.id
         LEFT JOIN LATERAL (
             SELECT r.status

@@ -13,9 +13,10 @@ internal object JdbcActivitySignalSql {
             first_occurred_at,
             last_counted_at,
             occurred_at,
-            updated_at
+            updated_at,
+            metadata
         )
-        SELECT ?, ?, ?, ?, ?, 1, now(), now(), now(), now()
+        SELECT ?, ?, ?, ?, ?, 1, now(), now(), now(), now(), ?::jsonb
         WHERE EXISTS (
             SELECT 1
             FROM users actor

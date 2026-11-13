@@ -83,15 +83,27 @@ class ActivityService(
             targetUserId = targetUserId,
         )
 
+    /**
+     * [pairUserId]/[pairSessionId]: a like the actor made together with their linked partner in a
+     * Psync session, where the partner liked the same person; the feed shows the two as one.
+     */
     suspend fun recordSwipeInterest(
         actorUserId: UUID,
         targetUserId: UUID,
         eventType: String,
+        pairUserId: UUID? = null,
+        pairSessionId: UUID? = null,
     ) {
         signalActions.recordSwipeInterest(
             actorUserId = actorUserId,
             targetUserId = targetUserId,
             eventType = eventType,
+            metadataJson =
+                if (pairUserId != null && pairSessionId != null) {
+                    "{\"pairUserId\":\"$pairUserId\",\"pairSessionId\":\"$pairSessionId\"}"
+                } else {
+                    "{}"
+                },
         )
     }
 

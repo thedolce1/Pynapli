@@ -109,6 +109,7 @@ class JdbcActivityRepository(
         actorUserId: UUID,
         targetUserId: UUID,
         eventType: String,
+        metadataJson: String,
     ): Boolean =
         withContext(Dispatchers.IO) {
             if (actorUserId == targetUserId || eventType !in JdbcActivitySql.SWIPE_INTEREST_EVENT_TYPES) return@withContext false
@@ -120,8 +121,9 @@ class JdbcActivityRepository(
                     statement.setObject(3, actorUserId)
                     statement.setString(4, eventType)
                     statement.setObject(5, targetUserId)
-                    statement.setObject(6, actorUserId)
-                    statement.setObject(7, targetUserId)
+                    statement.setString(6, metadataJson)
+                    statement.setObject(7, actorUserId)
+                    statement.setObject(8, targetUserId)
                     statement.executeQuery().use { rs -> rs.next() }
                 }
             }

@@ -24,6 +24,7 @@ interface ActivityRepository {
         actorUserId: UUID,
         targetUserId: UUID,
         eventType: String,
+        metadataJson: String = "{}",
     ): Boolean
 
     suspend fun recordMatch(
@@ -105,6 +106,10 @@ data class ActivityEventRecord(
     val source: String? = null,
     // The Psync session a psync_* item is about, so the client can open that session.
     val psyncSessionId: String? = null,
+    // A like made together in Psync: the actor's linked partner, who liked the recipient too.
+    val pairUserId: UUID? = null,
+    val pairDisplayName: String? = null,
+    val pairSessionId: String? = null,
 )
 
 fun ActivityEventRecord.toCursorAnchor(seenCount: Int): ActivityCursorAnchor =

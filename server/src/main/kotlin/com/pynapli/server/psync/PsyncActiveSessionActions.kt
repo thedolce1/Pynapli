@@ -163,7 +163,7 @@ internal class PsyncActiveSessionActions(
     /** Post-commit fan-out for a resolved session. Every step is idempotent on a re-complete. */
     private suspend fun announceResolved(completed: PsyncSessionRepository.CompleteOutcome.Completed) {
         events.emitMatchActivity(completed.resolvedMatches)
-        events.emitDeliveredLikes(completed.deliveredLikes)
+        events.emitDeliveredLikes(completed.deliveredLikes, completed.session.id)
         pineappleRefunds.sweep()
         events.emitDelta(completed.session.id, PsyncBroadcaster.SESSION_COMPLETED, completed.session.allParticipantIds())
         // Idempotent per (recipient, type, session).

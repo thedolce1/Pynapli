@@ -137,12 +137,13 @@ internal class ActivitySignalActions(
         actorUserId: UUID,
         targetUserId: UUID,
         eventType: String,
+        metadataJson: String = "{}",
     ) {
         if (actorUserId == targetUserId) return
         if (eventType !in ACTIVITY_SWIPE_INTEREST_EVENT_TYPES) throw ActivityException("INVALID_ACTIVITY_EVENT_TYPE")
         if (blockRepository?.isBlockedEitherWay(actorUserId, targetUserId) == true) return
         if (riskPolicyService?.isSocialActionRestricted(actorUserId) == true) return
-        if (repository.recordSwipeInterest(actorUserId, targetUserId, eventType)) {
+        if (repository.recordSwipeInterest(actorUserId, targetUserId, eventType, metadataJson)) {
             activityBroadcaster.publishActivityDelta(targetUserId, eventType)
         }
     }

@@ -172,17 +172,25 @@ class ActivityStateHolder(
         if (item.eventId in _state.value.likedBackEventIds) return
         _state.update { it.copy(likedBackEventIds = it.likedBackEventIds + item.eventId, actionFeedback = null, errorMessage = null) }
         when (val result = repository.likeBack(item.actorUserId)) {
-            is AppResult.Success ->
+            is AppResult.Success -> {
+                // A couple who liked you together: answering the card likes both of them back.
+                // Each match is still its own conversation (PSYNC_SPEC: no silent partner adds).
+                val partnerMatched =
+                    item.pairUserId?.let { partnerId ->
+                        (repository.likeBack(partnerId) as? AppResult.Success)?.value?.match != null
+                    } ?: false
+                val matched = result.value.match != null || partnerMatched
                 _state.update {
                     it.copy(
                         actionFeedback =
-                            if (result.value.match != null) {
-                                "It's a match with ${item.actorDisplayName}. Say hi in Messages."
+                            if (matched) {
+                                "It's a match with ${item.displayNames()}. Say hi in Messages."
                             } else {
-                                "You liked ${item.actorDisplayName} back."
+                                "You liked ${item.displayNames()} back."
                             },
                     )
                 }
+            }
             is AppResult.Failure ->
                 _state.update {
                     it.copy(likedBackEventIds = it.likedBackEventIds - item.eventId, errorMessage = result.error.message)

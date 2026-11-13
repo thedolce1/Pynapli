@@ -22,4 +22,6 @@ internal fun ActivityEventRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
         conversationId = conversationId,
         source = source,
         psyncSessionId = psyncSessionId,
+        pairUserId = pairUserId?.toString(),
+        pairDisplayName = pairDisplayName,
     )
