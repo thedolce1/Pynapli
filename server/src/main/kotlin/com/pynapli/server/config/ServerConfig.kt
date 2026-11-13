@@ -41,6 +41,10 @@ data class ServerConfig(
     val notificationDispatchBatchSize: Int = 50,
     val notificationMaxAttempts: Int = 5,
     val notificationPushProvider: String = "local",
+    // On everywhere by default: it backs the disappearing-messages promise (DataRetentionService).
+    val dataRetentionEnabled: Boolean = true,
+    val dataRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
+    val expiredMessageGraceDays: Long = 30,
     val activityRetentionEnabled: Boolean = false,
     val activityRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
     val mediaCleanupEnabled: Boolean = false,
@@ -230,6 +234,21 @@ data class ServerConfig(
                         ?.lowercase()
                         ?.takeIf { it.isNotEmpty() }
                         ?: "local",
+                dataRetentionEnabled =
+                    System.getenv("PYNAPLI_DATA_RETENTION_ENABLED")?.toBooleanStrictOrNull() ?: true,
+                dataRetentionIntervalMillis =
+                    System
+                        .getenv("PYNAPLI_DATA_RETENTION_INTERVAL_MS")
+                        ?.toLongOrNull()
+                        ?.coerceAtLeast(60_000L)
+                        ?: 60 * 60 * 1_000L,
+                // How long an expired disappearing message stays (hidden) for moderation before it is deleted.
+                expiredMessageGraceDays =
+                    System
+                        .getenv("PYNAPLI_EXPIRED_MESSAGE_GRACE_DAYS")
+                        ?.toLongOrNull()
+                        ?.coerceIn(0L, 365L)
+                        ?: 30,
                 activityRetentionEnabled =
                     System.getenv("PYNAPLI_ACTIVITY_RETENTION_ENABLED")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),
