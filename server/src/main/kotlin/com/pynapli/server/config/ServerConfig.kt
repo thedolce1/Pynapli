@@ -41,6 +41,8 @@ data class ServerConfig(
     val notificationDispatchBatchSize: Int = 50,
     val notificationMaxAttempts: Int = 5,
     val notificationPushProvider: String = "local",
+    /** Bearer token for GET /metrics; unset = endpoint not installed. */
+    val metricsToken: String? = null,
     val activityRetentionEnabled: Boolean = false,
     val activityRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
     val mediaCleanupEnabled: Boolean = false,
@@ -230,6 +232,7 @@ data class ServerConfig(
                         ?.lowercase()
                         ?.takeIf { it.isNotEmpty() }
                         ?: "local",
+                metricsToken = System.getenv("PYNAPLI_METRICS_TOKEN")?.trim()?.takeIf { it.length >= 16 },
                 activityRetentionEnabled =
                     System.getenv("PYNAPLI_ACTIVITY_RETENTION_ENABLED")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),
