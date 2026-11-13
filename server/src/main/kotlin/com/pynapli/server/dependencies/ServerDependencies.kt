@@ -248,6 +248,7 @@ class ServerDependencies(
             val profileService =
                 ProfileService(
                     repository = JdbcProfileRepository(database.dataSource),
+                    bioScanner = com.pynapli.server.profile.ContactAndSolicitationBioScanner,
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     activityService = activityService,
                     blockRepository = core.blockRepository,
