@@ -297,13 +297,13 @@ fun SwipeScreen(
                 onOpenStore()
             },
             onSelectPlace = { place -> travelLocationStateHolder?.selectPlace(place) },
-            onPlanTrip = { place, startsOn, endsOn ->
+            onPlanTrip = { place, startsOn, endsOn, announce ->
                 scope.launch {
                     val zone =
                         kotlinx.datetime.TimeZone
                             .currentSystemDefault()
                             .id
-                    if (travelLocationStateHolder?.planTrip(place, startsOn, endsOn, zone) == true) {
+                    if (travelLocationStateHolder?.planTrip(place, startsOn, endsOn, zone, announce) == true) {
                         // A trip starting today is already on: refresh the deck for the new place.
                         stateHolder.load(ownerUserId = viewerUserId)
                     }

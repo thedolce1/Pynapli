@@ -17,6 +17,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDateRangePickerState
@@ -77,7 +78,7 @@ internal fun TravelModeSheet(
     onOpenStore: () -> Unit,
     onOpenAgeVerification: () -> Unit = {},
     onSelectPlace: ((TravelPlaceDto?) -> Unit)? = null,
-    onPlanTrip: (place: TravelPlaceDto, startsOn: String, endsOn: String) -> Unit = { _, _, _ -> },
+    onPlanTrip: (place: TravelPlaceDto, startsOn: String, endsOn: String, announce: Boolean) -> Unit = { _, _, _, _ -> },
     onCancelTrip: (tripId: String) -> Unit = {},
 ) {
     // Debounced type-ahead: re-query when the user pauses typing.
@@ -133,7 +134,7 @@ internal fun TravelModeSheet(
                         place = selected,
                         isSaving = state.isSaving,
                         onGoNow = { onPickPlace(selected) },
-                        onPlan = { startsOn, endsOn -> onPlanTrip(selected, startsOn, endsOn) },
+                        onPlan = { startsOn, endsOn, announce -> onPlanTrip(selected, startsOn, endsOn, announce) },
                         onBack = { onSelectPlace(null) },
                     )
                 }
@@ -224,7 +225,10 @@ private fun TravelTripsList(
         trips.forEach { trip ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "${trip.city} · ${tripDateRange(trip.startsOn, trip.endsOn)}" + if (trip.status == "active") " · now" else "",
+                    text =
+                        "${trip.city} · ${tripDateRange(trip.startsOn, trip.endsOn)}" +
+                            (if (trip.status == "active") " · now" else "") +
+                            (if (trip.announce && trip.status != "active") " · locals can see" else ""),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
@@ -244,10 +248,12 @@ private fun TravelGoOrPlan(
     place: TravelPlaceDto,
     isSaving: Boolean,
     onGoNow: () -> Unit,
-    onPlan: (startsOn: String, endsOn: String) -> Unit,
+    onPlan: (startsOn: String, endsOn: String, announce: Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     var picking by remember { mutableStateOf(false) }
+    // Off by default: a trip is private unless the traveller chooses to be seen before arriving.
+    var announce by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag(TravelModeTags.GO_OR_PLAN)) {
         Text(text = place.displayName, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
         Text(
@@ -255,6 +261,18 @@ private fun TravelGoOrPlan(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().testTag(TravelModeTags.ANNOUNCE),
+        ) {
+            Text(
+                text = "Let people in ${place.city} see I'm coming (shown up to 2 weeks before a planned trip)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(checked = announce, onCheckedChange = { announce = it }, modifier = Modifier.handCursor())
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onGoNow, enabled = !isSaving, modifier = Modifier.handCursor(enabled = !isSaving)) { Text("Go now") }
             OutlinedButton(onClick = { picking = true }, enabled = !isSaving, modifier = Modifier.handCursor(enabled = !isSaving)) { Text("Plan dates") }
@@ -270,7 +288,7 @@ private fun TravelGoOrPlan(
                 val end = rangeState.selectedEndDateMillis ?: start
                 TextButton(
                     onClick = {
-                        if (start != null && end != null) onPlan(start.toIsoDate(), end.toIsoDate())
+                        if (start != null && end != null) onPlan(start.toIsoDate(), end.toIsoDate(), announce)
                         picking = false
                     },
                     enabled = start != null,
@@ -424,6 +442,7 @@ internal object TravelModeTags {
     const val ATTRIBUTION = "travel_mode_attribution"
     const val TRIPS = "travel_mode_trips"
     const val GO_OR_PLAN = "travel_mode_go_or_plan"
+    const val ANNOUNCE = "travel_mode_announce"
     const val OPEN_SHEET: String = "travel-mode-open-sheet"
     const val SHEET: String = "travel-mode-sheet"
     const val CLEAR: String = "travel-mode-clear"

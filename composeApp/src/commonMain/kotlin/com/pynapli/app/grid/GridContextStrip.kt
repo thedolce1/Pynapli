@@ -44,7 +44,8 @@ internal fun GridContextStrip(
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = "NEARBY",
+            // Upcoming visitors aren't nearby yet, so the strip says what the list is.
+            text = if (cards.isNotEmpty() && cards.all { it.visitingDates != null }) "VISITING SOON" else "NEARBY",
             color = PynapliColors.TextTertiary,
             style = MaterialTheme.typography.labelSmall,
             letterSpacing = 0.4.sp,

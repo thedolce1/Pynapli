@@ -52,6 +52,8 @@ data class GridFilters(
     // FILTERS_SPEC "Recently joined" / "Traveling here" (Presence, grid-only).
     val recentlyJoined: Boolean = false,
     val travelingHere: Boolean = false,
+    // People whose announced planned trip brings them here in the next two weeks.
+    val visitingSoon: Boolean = false,
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
     val maximumAge: Int? = null,
@@ -78,6 +80,7 @@ data class GridFilters(
             if (activeToday) count += 1
             if (recentlyJoined) count += 1
             if (travelingHere) count += 1
+            if (visitingSoon) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
             return count
@@ -115,6 +118,7 @@ data class GridFilters(
             activeTodayOnly = activeToday,
             recentlyJoinedOnly = recentlyJoined,
             travelingHereOnly = travelingHere,
+            visitingSoonOnly = visitingSoon,
             withPhotosOnly = withPhotos,
             hasPrivateAlbumOnly = hasPrivateAlbum,
             intents = intents.map { it.serverValue },
@@ -166,6 +170,7 @@ data class GridFilters(
                 activeToday = request.activeTodayOnly,
                 recentlyJoined = request.recentlyJoinedOnly,
                 travelingHere = request.travelingHereOnly,
+                visitingSoon = request.visitingSoonOnly,
                 radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
                 minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
                 maximumAge = request.maximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
@@ -277,6 +282,8 @@ data class GridProfileCardUi(
     val visiting: Boolean = false,
     // PLAYING_TONIGHT_SPEC: this individual has a live Playing Tonight session.
     val tonightActive: Boolean = false,
+    // "Visiting 14–17 Nov": an announced planned trip bringing them here soon.
+    val visitingDates: String? = null,
 )
 
 @Immutable
@@ -325,6 +332,11 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi =
         distanceMeters = distanceMeters,
         visiting = visiting,
         tonightActive = tonightActive,
+        visitingDates =
+            visitingFrom?.let { from ->
+                com.pynapli.app.swipe
+                    .tripDateRange(from, visitingUntil ?: from)
+            },
     )
 
 internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi =

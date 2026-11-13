@@ -11,6 +11,13 @@ interface GridRepository {
         filters: DiscoveryFilters = DiscoveryFilters(),
         cursor: GridCursorAnchor? = null,
     ): GridQueryResult
+
+    /** People whose announced planned trip reaches the viewer's area within two weeks, soonest first. */
+    suspend fun queryVisitingSoon(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+    ): GridQueryResult = GridQueryResult(viewerHadLocation = true, cards = emptyList())
 }
 
 interface GridViewerTrustRepository {
@@ -40,6 +47,9 @@ data class GridCardRecord(
      * the person is browsing their area in passport mode, not local.
      */
     val visiting: Boolean = false,
+    // An announced planned trip bringing this person to the viewer's area ("Visiting soon").
+    val visitingFrom: java.time.LocalDate? = null,
+    val visitingUntil: java.time.LocalDate? = null,
     /**
      * Individual has a live Playing Tonight session (PLAYING_TONIGHT_SPEC). Drives a
      * subtle per-tile indicator; hydrated per page (not part of the shared rank cache)
