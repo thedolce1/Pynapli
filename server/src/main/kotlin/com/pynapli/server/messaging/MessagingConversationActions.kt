@@ -19,13 +19,30 @@ internal class MessagingConversationActions(
     private val featureAccess: MessagingFeatureAccess,
     private val riskPolicyService: RiskPolicyService?,
 ) {
-    suspend fun listConversations(userId: UUID): ConversationListResponseDto {
-        val conversations = repository.listConversations(userId, MessagingServiceDefaults.ThreadLimit)
-        val visible = conversationGuard.filterBlockedConversations(userId, conversations)
+    /**
+     * One page of the inbox, newest activity first. [cursorText] continues after the previous
+     * page; `nextCursor` is null on the last page. Blocked threads are filtered after paging, so a
+     * page can be short without being the last.
+     */
+    suspend fun listConversations(
+        userId: UUID,
+        cursorText: String? = null,
+    ): ConversationListResponseDto {
+        val after = cursorText?.takeIf { it.isNotBlank() }?.toConversationCursorOrThrow()
+        val limit = MessagingServiceDefaults.ThreadLimit
+        val fetched = repository.listConversations(userId, limit + 1, after)
+        val page = fetched.take(limit)
+        val nextCursor =
+            if (fetched.size > limit) {
+                page.last().let { ConversationPageCursor(it.updatedAt, it.conversationId).toToken() }
+            } else {
+                null
+            }
+        val visible = conversationGuard.filterBlockedConversations(userId, page)
         val readReceiptCache = mutableMapOf<UUID, Boolean>()
         return ConversationListResponseDto(
             items = visible.map { dtoMapper.toDto(it, userId, readReceiptCache) },
-            nextCursor = null,
+            nextCursor = nextCursor,
         )
     }
 

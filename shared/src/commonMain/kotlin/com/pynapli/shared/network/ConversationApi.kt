@@ -23,6 +23,13 @@ interface ConversationApi {
 
     suspend fun listConversations(): AppResult<ConversationListResponseDto>
 
+    /** The inbox page after [cursor] (a previous page's `nextCursor`). */
+    suspend fun listConversationsAfter(cursor: String): AppResult<ConversationListResponseDto> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError(code = "NOT_SUPPORTED", message = "Not available."),
+        )
+
     suspend fun getConversationDetail(
         conversationId: String,
         before: String? = null,

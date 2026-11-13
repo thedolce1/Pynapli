@@ -2,12 +2,15 @@ package com.pynapli.app.messages
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -57,6 +61,7 @@ fun MessagesScreen(
         onProfileIconClick = onProfileIconClick,
         profileImageUrl = profileImageUrl,
         onRefresh = { scope.launch { stateHolder.load() } },
+        onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onAcceptPartnerInvite = { conversationId ->
             scope.launch { stateHolder.acceptPartnerInvite(conversationId) }
         },
@@ -78,6 +83,7 @@ private fun MessagesScreenContent(
     onAcceptPartnerInvite: (String) -> Unit,
     onDeclinePartnerInvite: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onLoadMore: () -> Unit = {},
 ) {
     Column(
         modifier =
@@ -164,6 +170,25 @@ private fun MessagesScreenContent(
                                 modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
                             )
                             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                        }
+                        // Older threads: this footer loads the next page as soon as it scrolls into view.
+                        if (state.nextCursor != null) {
+                            item(key = "load-more", contentType = "load-more") {
+                                LaunchedEffect(state.nextCursor) { onLoadMore() }
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 20.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
                         }
                         if (listConversations.isEmpty() && newMatches.isNotEmpty()) {
                             item(

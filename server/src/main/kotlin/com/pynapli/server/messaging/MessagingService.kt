@@ -103,7 +103,10 @@ class MessagingService(
         }
     }
 
-    suspend fun listConversations(userId: UUID): ConversationListResponseDto = conversationActions.listConversations(userId)
+    suspend fun listConversations(
+        userId: UUID,
+        cursorText: String? = null,
+    ): ConversationListResponseDto = conversationActions.listConversations(userId, cursorText)
 
     suspend fun createDirectConversation(
         viewerUserId: UUID,

@@ -32,6 +32,8 @@ internal class KtorConversationApi(
 
     override suspend fun listConversations(): AppResult<ConversationListResponseDto> = support.authGet("/v1/messages/threads")
 
+    override suspend fun listConversationsAfter(cursor: String): AppResult<ConversationListResponseDto> = support.authGet("/v1/messages/threads") { parameter("cursor", cursor) }
+
     override suspend fun getConversationDetail(
         conversationId: String,
         before: String?,

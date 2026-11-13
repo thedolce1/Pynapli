@@ -18,6 +18,10 @@ data class MessagesUiState(
     val conversations: List<ConversationDto> = emptyList(),
     val mutatingPartnerInviteConversationIds: Set<String> = emptySet(),
     val isLoading: Boolean = false,
+    // Paging: the server returns the inbox newest-first in pages; null when everything is loaded.
+    val nextCursor: String? = null,
+    val isLoadingMore: Boolean = false,
+    val pagesLoaded: Int = 0,
     val errorMessage: String? = null,
 ) {
     val unreadCount: Int
@@ -53,13 +57,7 @@ class MessagesStateHolder(
         try {
             when (val result = repository.listConversations()) {
                 is AppResult.Success -> {
-                    _state.update {
-                        it.copy(
-                            conversations = result.value.items,
-                            isLoading = false,
-                            errorMessage = null,
-                        )
-                    }
+                    _state.update { current -> current.withFirstPage(result.value) }
                 }
 
                 is AppResult.Failure -> {
@@ -78,6 +76,27 @@ class MessagesStateHolder(
             }
         } finally {
             refreshInFlight = false
+        }
+    }
+
+    /** Loads the next inbox page (the list's footer calls this when it scrolls into view). */
+    suspend fun loadMore() {
+        val cursor = _state.value.nextCursor ?: return
+        if (_state.value.isLoadingMore) return
+        _state.update { it.copy(isLoadingMore = true) }
+        when (val result = repository.listConversationsAfter(cursor)) {
+            is AppResult.Success ->
+                _state.update { current ->
+                    val known = current.conversations.mapTo(mutableSetOf()) { it.conversationId }
+                    current.copy(
+                        conversations = current.conversations + result.value.items.filter { it.conversationId !in known },
+                        nextCursor = result.value.nextCursor,
+                        isLoadingMore = false,
+                        pagesLoaded = current.pagesLoaded + 1,
+                    )
+                }
+            // Keep the cursor: scrolling back to the footer tries again.
+            is AppResult.Failure -> _state.update { it.copy(isLoadingMore = false) }
         }
     }
 
@@ -186,6 +205,8 @@ class MessagesStateHolder(
 interface MessagesRepository {
     suspend fun listConversations(): AppResult<ConversationListResponseDto>
 
+    suspend fun listConversationsAfter(cursor: String): AppResult<ConversationListResponseDto> = AppResult.Success(ConversationListResponseDto(items = emptyList()))
+
     suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto>
 
     suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
@@ -195,6 +216,8 @@ class ApiMessagesRepository(
     private val apiClient: PynapliApiClient,
 ) : MessagesRepository {
     override suspend fun listConversations(): AppResult<ConversationListResponseDto> = apiClient.listConversations()
+
+    override suspend fun listConversationsAfter(cursor: String): AppResult<ConversationListResponseDto> = apiClient.listConversationsAfter(cursor)
 
     override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> = apiClient.acceptConversationPartnerInvite(conversationId)
 
@@ -214,3 +237,27 @@ private fun List<ConversationDto>.upsert(conversation: ConversationDto): List<Co
     } else {
         listOf(conversation) + this
     }
+
+/**
+ * A refresh brings back the first page. Pages the user already scrolled to stay (otherwise every
+ * refresh would snap a long inbox back to its top 50): older threads not in the new first page are
+ * kept after it, and the cursor continues from where they end.
+ */
+private fun MessagesUiState.withFirstPage(page: ConversationListResponseDto): MessagesUiState {
+    val keepOlderPages = pagesLoaded > 1 && page.nextCursor != null
+    val firstIds = page.items.mapTo(mutableSetOf()) { it.conversationId }
+    val oldest = page.items.lastOrNull()?.updatedAt
+    val older =
+        if (keepOlderPages && oldest != null) {
+            conversations.filter { it.conversationId !in firstIds && it.updatedAt <= oldest }
+        } else {
+            emptyList()
+        }
+    return copy(
+        conversations = page.items + older,
+        nextCursor = if (older.isNotEmpty()) nextCursor else page.nextCursor,
+        pagesLoaded = if (older.isNotEmpty()) pagesLoaded else 1,
+        isLoading = false,
+        errorMessage = null,
+    )
+}

@@ -10,7 +10,8 @@ class JdbcMessagingRepository(
     override suspend fun listConversations(
         userId: UUID,
         limit: Int,
-    ): List<ConversationRecord> = dataSource.listMessagingConversations(userId, limit)
+        after: ConversationPageCursor?,
+    ): List<ConversationRecord> = dataSource.listMessagingConversations(userId, limit, after)
 
     override suspend fun getOrCreateDirectConversation(
         viewerUserId: UUID,

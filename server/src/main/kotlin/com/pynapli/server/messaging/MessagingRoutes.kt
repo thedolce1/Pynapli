@@ -44,7 +44,7 @@ fun Application.configureMessagingRoutes(
         route("/v1/messages/threads") {
             get {
                 val user = call.authenticatedUser(authService)
-                call.respond(messagingService.listConversations(user.id))
+                call.respond(messagingService.listConversations(user.id, call.request.queryParameters["cursor"]))
             }
 
             post {

@@ -30,3 +30,20 @@ internal fun String?.toClientIdempotencyKeyOrThrow(): String? {
     if (key.length > MESSAGE_IDEMPOTENCY_KEY_MAX_LENGTH) throw MessagingException("INVALID_IDEMPOTENCY_KEY")
     return key
 }
+
+internal fun String.toConversationCursorOrThrow(): ConversationPageCursor =
+    runCatching {
+        val decoded = String(Base64.getUrlDecoder().decode(this), StandardCharsets.UTF_8)
+        val separator = decoded.indexOf('|')
+        if (separator <= 0 || separator == decoded.lastIndex) throw IllegalArgumentException("Invalid cursor")
+        ConversationPageCursor(
+            updatedAt = Instant.parse(decoded.substring(0, separator)),
+            conversationId = UUID.fromString(decoded.substring(separator + 1)),
+        )
+    }.getOrElse { throw MessagingException("INVALID_CONVERSATION_CURSOR") }
+
+internal fun ConversationPageCursor.toToken(): String =
+    Base64
+        .getUrlEncoder()
+        .withoutPadding()
+        .encodeToString("$updatedAt|$conversationId".toByteArray(StandardCharsets.UTF_8))
