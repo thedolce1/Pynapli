@@ -10,6 +10,7 @@ import io.ktor.websocket.close
 import io.ktor.websocket.send
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.filter
@@ -25,23 +26,47 @@ internal val streamJson =
         encodeDefaults = true
     }
 
+/** How often an open stream re-checks that its session is still valid. */
+const val STREAM_SESSION_RECHECK_MS: Long = 60_000L
+
 /**
  * Authenticates a realtime socket: the Authorization header for native clients, or a first
  * StreamAuthFrameDto for browsers (see [awaitStreamToken]). On failure it closes the socket with
  * VIOLATED_POLICY and the reason, and returns null.
+ *
+ * Once open, the socket re-checks its session every [recheckEveryMillis] and closes the same way
+ * when it is no longer valid: signed out (here or on "sign out other devices"), expired, or the
+ * account suspended, banned or deleted. Without this a socket opened before a ban kept receiving
+ * deltas until the client happened to disconnect. The client reconnects with its current token.
  */
-suspend fun DefaultWebSocketServerSession.authenticateStream(authService: AuthService): UUID? {
+suspend fun DefaultWebSocketServerSession.authenticateStream(
+    authService: AuthService,
+    recheckEveryMillis: Long = STREAM_SESSION_RECHECK_MS,
+): UUID? {
     val token = awaitStreamToken()
     if (token == null) {
         close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "UNAUTHENTICATED"))
         return null
     }
-    return try {
-        authService.authenticate(token).id
-    } catch (e: AuthException) {
-        close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, e.code))
-        null
+    val viewerId =
+        try {
+            authService.authenticate(token).id
+        } catch (e: AuthException) {
+            close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, e.code))
+            return null
+        }
+    launch {
+        while (true) {
+            delay(recheckEveryMillis)
+            try {
+                authService.authenticate(token)
+            } catch (e: AuthException) {
+                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, e.code))
+                return@launch
+            }
+        }
     }
+    return viewerId
 }
 
 /**

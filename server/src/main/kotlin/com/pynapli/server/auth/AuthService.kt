@@ -4,6 +4,8 @@ import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.auth.security.Sha256
 import com.pynapli.server.auth.security.normalizeEmail
 import com.pynapli.server.metrics.ProductMetrics
+import com.pynapli.server.realtime.LocalOnlyRealtimeRelay
+import com.pynapli.server.realtime.RealtimeRelay
 import com.pynapli.server.safety.DeviceRiskSignalPublisher
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
@@ -23,6 +25,7 @@ class AuthService(
     deviceFarmRepository: DeviceFarmRepository? = null,
     deviceRiskSignalPublisher: DeviceRiskSignalPublisher? = null,
     private val productMetrics: ProductMetrics? = null,
+    private val revocationRelay: RealtimeRelay = LocalOnlyRealtimeRelay,
 ) {
     private val validator = AuthRequestValidator(clock)
     private val rateLimitGuard = AuthRateLimitGuard(rateLimitService)
@@ -33,6 +36,20 @@ class AuthService(
             clock = clock,
             cache = AuthAccessSessionCache(accessSessionCacheTtl, accessSessionCacheMaxSize),
         )
+
+    // Other replicas cache sessions for a few seconds too: tell them about every sign-out and
+    // account-wide revocation so a revoked token stops working everywhere at once.
+    init {
+        revocationRelay.subscribe(REVOCATION_CHANNEL) { message ->
+            when {
+                message.startsWith(REVOKED_TOKEN_PREFIX) -> sessionManager.forgetCachedAccessTokenHash(message.removePrefix(REVOKED_TOKEN_PREFIX))
+                message.startsWith(REVOKED_USER_PREFIX) ->
+                    runCatching { UUID.fromString(message.removePrefix(REVOKED_USER_PREFIX)) }
+                        .getOrNull()
+                        ?.let(sessionManager::invalidateCachedSessionsForUser)
+            }
+        }
+    }
 
     suspend fun signupEmail(
         email: String,
@@ -127,9 +144,13 @@ class AuthService(
     /** The session behind an access token (one lookup; used where a row must follow the session, e.g. push devices). */
     suspend fun sessionIdFor(accessToken: String): UUID? = repository.findSessionByAccessTokenHash(Sha256.hash(accessToken))?.id
 
-    suspend fun logout(accessToken: String): Boolean = sessionManager.logout(accessToken)
+    suspend fun logout(accessToken: String): Boolean {
+        revocationRelay.publish(REVOCATION_CHANNEL, REVOKED_TOKEN_PREFIX + Sha256.hash(accessToken))
+        return sessionManager.logout(accessToken)
+    }
 
     fun invalidateCachedSessionsForUser(userId: UUID) {
+        revocationRelay.publish(REVOCATION_CHANNEL, REVOKED_USER_PREFIX + userId)
         sessionManager.invalidateCachedSessionsForUser(userId)
     }
 }
@@ -137,3 +158,7 @@ class AuthService(
 class AuthException(
     val code: String,
 ) : RuntimeException(code)
+
+private const val REVOCATION_CHANNEL = "pynapli:auth:revocations"
+private const val REVOKED_TOKEN_PREFIX = "token:"
+private const val REVOKED_USER_PREFIX = "user:"
