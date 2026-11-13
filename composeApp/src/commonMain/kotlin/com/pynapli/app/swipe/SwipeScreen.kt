@@ -10,6 +10,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.pynapli.app.conversation.ConversationStateHolder
+import com.pynapli.app.grid.profileLinkActionFor
 import com.pynapli.app.grid.toUi
 import com.pynapli.app.profile.ProfileDetailActionMode
 import com.pynapli.app.profile.ProfileDetailSheet
@@ -34,8 +35,11 @@ fun SwipeScreen(
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
     modifier: Modifier = Modifier,
+    profileLinksStateHolder: com.pynapli.app.profilelink.ProfileLinksStateHolder? = null,
 ) {
     val state by stateHolder.state.collectAsState()
+    val profileLinksState by profileLinksStateHolder?.state?.collectAsState()
+        ?: remember { mutableStateOf(null) }
     val profileState by profileDetailStateHolder.state.collectAsState()
     val savedSwipeFiltersState by savedSwipeFilterStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf(SavedSwipeFiltersUiState()) }
@@ -206,6 +210,18 @@ fun SwipeScreen(
                 selectedProfileCard = null
                 profileActionMode = ProfileDetailActionMode.Grid
                 scope.launch { profileDetailStateHolder.openLinkedPartner(partner) }
+            },
+            // Someone may find their partner in the deck: offer the link invite here too.
+            profileLinkAction =
+                profileLinksState?.profileLinkActionFor(
+                    targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id,
+                    viewerUserId = viewerUserId,
+                ),
+            onInviteProfileLink = {
+                val targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id
+                if (targetUserId != null) {
+                    scope.launch { profileLinksStateHolder?.createInvitation(targetUserId) }
+                }
             },
             distanceUnit = distanceUnit,
         )
