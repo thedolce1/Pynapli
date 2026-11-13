@@ -16,6 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -140,50 +141,76 @@ private fun StoreIconBadge() {
 }
 
 @Composable
-internal fun CurrentPlanRow(entitlement: SubscriptionEntitlementDto?) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(PynapliShape.CardShape)
-                .background(PynapliColors.SurfaceRaised)
-                .border(
-                    width = 1.dp,
-                    color = PynapliColors.Border,
-                    shape = PynapliShape.CardShape,
-                ).padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
+internal fun CurrentPlanRow(
+    entitlement: SubscriptionEntitlementDto?,
+    onManageSubscription: () -> Unit = {},
+) {
+    val ownPaid = entitlement?.source == EntitlementSource.OWN_SUBSCRIPTION && entitlement.tier != SubscriptionTier.FREE
+    val renewal =
+        entitlement?.endsAt?.storeDateLabel()?.let { date ->
+            when (entitlement.source) {
+                EntitlementSource.LINKED_PARTNER_BENEFIT -> "Through your partner's plan · renews $date"
+                EntitlementSource.OWN_SUBSCRIPTION -> "Renews $date unless cancelled"
+                else -> "Ends $date"
+            }
+        }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(PynapliShape.CardShape)
+                    .background(PynapliColors.SurfaceRaised)
+                    .border(
+                        width = 1.dp,
+                        color = PynapliColors.Border,
+                        shape = PynapliShape.CardShape,
+                    ).padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = entitlement?.displayName ?: "Pynapli Free",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text =
+                        if (entitlement?.linkedPartnerIncluded == true) {
+                            "Linked partner included"
+                        } else {
+                            "Core discovery and safety included"
+                        },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
-                text = entitlement?.displayName ?: "Pynapli Free",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
+                text = (entitlement?.tier ?: SubscriptionTier.FREE).tierLabel(),
+                color = PynapliColors.Accent,
+                style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text =
-                    if (entitlement?.linkedPartnerIncluded == true) {
-                        "Linked partner included"
-                    } else {
-                        "Core discovery and safety included"
-                    },
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(
-            text = (entitlement?.tier ?: SubscriptionTier.FREE).tierLabel(),
-            color = PynapliColors.Accent,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
+        renewal?.let { line ->
+            Text(
+                text = line,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (ownPaid) {
+            TextButton(onClick = onManageSubscription, modifier = Modifier.handCursor()) {
+                Text("Manage or cancel subscription")
+            }
+        }
     }
 }
 

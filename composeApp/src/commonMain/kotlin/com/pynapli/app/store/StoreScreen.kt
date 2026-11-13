@@ -35,6 +35,7 @@ fun StoreScreen(
     purchasesAvailable: Boolean = true,
 ) {
     val state by stateHolder.state.collectAsState()
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(stateHolder) {
@@ -47,6 +48,7 @@ fun StoreScreen(
         onPurchaseProduct = { product -> scope.launch { stateHolder.purchaseProduct(product) } },
         onRestorePurchases = { scope.launch { stateHolder.restorePurchases() } },
         onUseBoost = { scope.launch { stateHolder.useBoost() } },
+        onManageSubscription = { uriHandler.openUri(MANAGE_SUBSCRIPTIONS_URL) },
         modifier = modifier,
         purchasesAvailable = purchasesAvailable,
     )
@@ -61,6 +63,7 @@ private fun StoreScreenContent(
     modifier: Modifier = Modifier,
     purchasesAvailable: Boolean = true,
     onUseBoost: () -> Unit = {},
+    onManageSubscription: () -> Unit = {},
 ) {
     // The flagship paid plan (highest monthly price) gets the "Recommended" hero emphasis.
     val heroTier =
@@ -125,7 +128,7 @@ private fun StoreScreenContent(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item(key = "current-plan") {
-                        CurrentPlanRow(entitlement = state.entitlement)
+                        CurrentPlanRow(entitlement = state.entitlement, onManageSubscription = onManageSubscription)
                     }
 
                     if (!purchasesAvailable) {
@@ -154,6 +157,7 @@ private fun StoreScreenContent(
                             isRestoringPurchases = state.isRestoringPurchases,
                             onPurchaseTier = onPurchaseTier,
                             purchasesAvailable = purchasesAvailable,
+                            localizedPrices = state.localizedPrices,
                         )
                     }
 
@@ -187,6 +191,7 @@ private fun StoreScreenContent(
                             activeBoostEndsAt = state.activeBoostEndsAt.takeIf { product.inventoryType == PremiumInventoryType.BOOST },
                             isActivatingBoost = state.isActivatingBoost,
                             onUseBoost = onUseBoost.takeIf { product.inventoryType == PremiumInventoryType.BOOST },
+                            nextExpiresAt = state.balances.firstOrNull { it.inventoryType == product.inventoryType }?.nextExpiresAt,
                         )
                     }
                 }
@@ -194,3 +199,6 @@ private fun StoreScreenContent(
         }
     }
 }
+
+// Google Play's subscription management page for this app (cancel, change plan, payment method).
+internal const val MANAGE_SUBSCRIPTIONS_URL = "https://play.google.com/store/account/subscriptions?package=com.pynapli.app"

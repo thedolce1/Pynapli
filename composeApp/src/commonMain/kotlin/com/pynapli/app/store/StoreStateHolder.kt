@@ -19,7 +19,7 @@ class StoreStateHolder(
     suspend fun load() {
         _state.update { it.copy(isLoading = true, errorMessage = null) }
         when (val result = repository.loadStore()) {
-            is AppResult.Success ->
+            is AppResult.Success -> {
                 _state.update {
                     it.copy(
                         tiers = result.value.tiers.sortedBy { tier -> tier.tier.sortOrder() },
@@ -31,6 +31,12 @@ class StoreStateHolder(
                         errorMessage = null,
                     )
                 }
+                val productIds = result.value.tiers.mapNotNull { it.playStoreProductId }
+                if (productIds.isNotEmpty()) {
+                    val prices = purchaseGateway.localizedPrices(productIds)
+                    if (prices.isNotEmpty()) _state.update { it.copy(localizedPrices = prices) }
+                }
+            }
 
             is AppResult.Failure ->
                 _state.update {

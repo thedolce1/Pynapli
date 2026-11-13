@@ -22,6 +22,8 @@ data class StoreUiState(
     // When the running Boost ends (ISO-8601); null when none is on.
     val activeBoostEndsAt: String? = null,
     val isActivatingBoost: Boolean = false,
+    // Play's localized subscription prices by store product id (falls back to the USD catalog price).
+    val localizedPrices: Map<String, String> = emptyMap(),
 ) {
     val currentTier: String get() = entitlement?.tier ?: SubscriptionTier.FREE
 

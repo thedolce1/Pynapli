@@ -16,6 +16,23 @@ import kotlin.test.assertNull
 
 class StoreStateHolderTest {
     @Test
+    fun plansShowThePriceTheStoreWillCharge() =
+        runTest {
+            val repository = FakeStoreRepository(firstEntitlementTier = SubscriptionTier.FREE, refreshedEntitlementTier = SubscriptionTier.FREE)
+            val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = FakeStorePurchaseGateway())
+
+            stateHolder.load()
+
+            assertEquals(mapOf("pynapli_select_monthly" to "CA$15.99"), stateHolder.state.value.localizedPrices)
+        }
+
+    @Test
+    fun storeDatesReadAsShortMonthAndDay() {
+        assertEquals(true, "2026-12-12T12:00:00Z".storeDateLabel()?.startsWith("Dec "))
+        assertEquals(null, "not a date".storeDateLabel())
+    }
+
+    @Test
     fun usingABoostTurnsItOnAndRefreshesTheBalance() =
         runTest {
             val repository = FakeStoreRepository(firstEntitlementTier = SubscriptionTier.FREE, refreshedEntitlementTier = SubscriptionTier.FREE)
@@ -151,6 +168,8 @@ private class FakeStoreRepository(
 }
 
 private class FakeStorePurchaseGateway : StorePurchaseGateway {
+    override suspend fun localizedPrices(productIds: List<String>): Map<String, String> = productIds.associateWith { "CA$15.99" }
+
     var purchaseCount = 0
         private set
     var productPurchaseCount = 0

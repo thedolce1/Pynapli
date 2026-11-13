@@ -11,6 +11,9 @@ interface StorePurchaseGateway {
     suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult>
 
     suspend fun restorePurchases(): AppResult<StorePurchaseResult>
+
+    /** Store-formatted prices ("CA$12.99") keyed by store product id; empty where unavailable. */
+    suspend fun localizedPrices(productIds: List<String>): Map<String, String> = emptyMap()
 }
 
 class UnavailableStorePurchaseGateway : StorePurchaseGateway {
