@@ -78,6 +78,19 @@ internal class KtorGridApi(
 
     override suspend fun setTravelLocation(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto> = support.authSend(HttpMethod.Post, "/v1/location/travel", request)
 
+    override suspend fun listTravelTrips(): AppResult<com.pynapli.shared.network.dto.TravelTripsDto> = support.authGet("/v1/location/travel/trips")
+
+    override suspend fun planTravelTrip(request: com.pynapli.shared.network.dto.PlanTravelTripRequestDto): AppResult<com.pynapli.shared.network.dto.TravelTripDto> = support.authSend(HttpMethod.Post, "/v1/location/travel/trips", request)
+
+    override suspend fun cancelTravelTrip(tripId: String): AppResult<Unit> =
+        support.authenticated { token ->
+            val response =
+                support.httpClient.delete(support.endpoint("/v1/location/travel/trips/$tripId")) {
+                    bearerAuth(token)
+                }
+            if (response.status.value in 200..299) AppResult.Success(Unit) else response.toAppResult<Unit>(support.json)
+        }
+
     override suspend fun clearTravelLocation(): AppResult<Unit> =
         support.authenticated { token ->
             val response =

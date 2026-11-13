@@ -265,6 +265,7 @@ fun SwipeScreen(
     }
 
     if (travelSheetVisible) {
+        LaunchedEffect(Unit) { travelLocationStateHolder?.loadTrips() }
         TravelModeSheet(
             state = travelLocationState,
             onDismiss = { travelSheetVisible = false },
@@ -294,6 +295,25 @@ fun SwipeScreen(
             onOpenStore = {
                 travelSheetVisible = false
                 onOpenStore()
+            },
+            onSelectPlace = { place -> travelLocationStateHolder?.selectPlace(place) },
+            onPlanTrip = { place, startsOn, endsOn ->
+                scope.launch {
+                    val zone =
+                        kotlinx.datetime.TimeZone
+                            .currentSystemDefault()
+                            .id
+                    if (travelLocationStateHolder?.planTrip(place, startsOn, endsOn, zone) == true) {
+                        // A trip starting today is already on: refresh the deck for the new place.
+                        stateHolder.load(ownerUserId = viewerUserId)
+                    }
+                }
+            },
+            onCancelTrip = { tripId ->
+                scope.launch {
+                    travelLocationStateHolder?.cancelTrip(tripId)
+                    stateHolder.load(ownerUserId = viewerUserId)
+                }
             },
             onOpenAgeVerification = {
                 travelSheetVisible = false
