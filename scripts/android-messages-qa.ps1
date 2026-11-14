@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$PackageName = "com.pynapli.app",
     [string]$LaunchActivity = ".DefaultLauncherAlias",
@@ -432,6 +432,10 @@ Assert-TextPresent $messageSentXml "qa" "Message send"
 Assert-TextPresent $messageSentXml "Sent" "Message send"
 
 Tap-Text "Delete message"
+# Deleting asks first ("Delete this message? It will be removed for everyone in this chat.").
+Wait-ForAnyText @("Delete this message?") 15 | Out-Null
+# Exact match: plain Tap-Text "Delete" would hit the dialog title "Delete this message?".
+Tap-ContentText "Delete"
 Wait-ForAnyText @("You deleted a message") 30 | Out-Null
 $messageDeletedXml = Capture-MessagesStage "messageDeleted" "06_messages_deleted"
 Assert-TextPresent $messageDeletedXml "You deleted a message" "Message delete"
