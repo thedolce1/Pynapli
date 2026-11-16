@@ -88,24 +88,30 @@ internal class PsyncActiveSessionActions(
             repository.findCardByTokenHash(sessionId, deckTokenCodec.tokenHash(request.cardToken))
                 ?: throw PsyncException("PSYNC_INVALID_CARD")
         val spentInventoryId = spendPineappleLikeIfNew(sessionId, userId, card.targetUserId, request.action)
+        // Non-cancellable: a request cancelled mid-write still commits the row, which then owns the
+        // spend. Cancellation surfaces after the refund decision, never in place of the outcome.
         val outcome =
-            try {
-                repository.recordAction(
-                    sessionId = sessionId,
-                    actorUserId = userId,
-                    targetUserId = card.targetUserId,
-                    action = request.action,
-                    now = clock.instant(),
-                    consumedInventoryId = spentInventoryId,
-                )
-            } catch (error: Throwable) {
-                // Nothing recorded the spend, so no sweep could ever find it: give it back now.
-                refundSpent(spentInventoryId)
-                throw error
+            withContext(NonCancellable) {
+                val recorded =
+                    try {
+                        repository.recordAction(
+                            sessionId = sessionId,
+                            actorUserId = userId,
+                            targetUserId = card.targetUserId,
+                            action = request.action,
+                            now = clock.instant(),
+                            consumedInventoryId = spentInventoryId,
+                        )
+                    } catch (error: Throwable) {
+                        // Nothing recorded the spend, so no sweep could ever find it: give it back now.
+                        refundSpent(spentInventoryId)
+                        throw error
+                    }
+                // Lost a race with a concurrent submit for the same card (that decision stands), or
+                // the session ended before this swipe was written: give back what this call spent.
+                if (!recorded.newlyRecorded) refundSpent(spentInventoryId)
+                recorded
             }
-        // Lost a race with a concurrent submit for the same card (that decision stands), or the
-        // session ended before this swipe was written: give back what this call spent.
-        if (!outcome.newlyRecorded) refundSpent(spentInventoryId)
         if (!outcome.sessionActive) throw PsyncException("PSYNC_INVALID_STATE")
 
         val deckCount = repository.countDeckCards(sessionId)

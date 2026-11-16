@@ -7,9 +7,14 @@ import com.pynapli.shared.network.dto.SubmitPsyncActionRequestDto
 import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import io.kotest.core.spec.style.StringSpec
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 import javax.sql.DataSource
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -151,10 +156,9 @@ class PsyncSessionRaceIntegrationTest :
                         )
                     val recorded = submit.getOrNull()?.recorded == true
                     val delivered = dataSource.deliveredLikes(sessionId, initiator, target) > 0
-                    // A like the caller was told is recorded must have reached resolution.
-                    if (recorded && !delivered) dropped++
-                    // And nothing sits on the completed session that resolution never saw.
-                    if (dataSource.countSessionActions(sessionId) > 0 && !delivered) dropped++
+                    // A like the caller was told is recorded must have reached resolution, and
+                    // nothing may sit on the completed session that resolution never saw.
+                    if ((recorded || dataSource.countSessionActions(sessionId) > 0) && !delivered) dropped++
                 }
                 assertEquals(0, dropped, "likes left on a completed session without being resolved")
             }
@@ -214,6 +218,53 @@ class PsyncSessionRaceIntegrationTest :
                 assertEquals("PSYNC_INVALID_STATE", refused.code)
                 assertEquals(1, inventory.remaining())
                 assertEquals(0, dataSource.countSessionActions(sessionId))
+            }
+        }
+
+        "a Pineapple Like whose swipe committed stays spent when the request is cancelled" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = seedTarget()
+                val inventory = RacePineappleInventory(dataSource, initiator, quantity = 1)
+                val jdbc = JdbcPsyncSessionRepository(dataSource)
+                val request = AtomicReference<Job>()
+                val cancelsMidWrite =
+                    object : PsyncSessionRepository by jdbc {
+                        override suspend fun recordAction(
+                            sessionId: UUID,
+                            actorUserId: UUID,
+                            targetUserId: UUID,
+                            action: String,
+                            now: Instant,
+                            actionIdFactory: () -> UUID,
+                            consumedInventoryId: UUID?,
+                        ): PsyncSessionRepository.RecordActionOutcome =
+                            // The client goes away while the transaction is open; it still commits.
+                            jdbc.recordAction(sessionId, actorUserId, targetUserId, action, now, {
+                                request.get().cancel()
+                                UUID.randomUUID()
+                            }, consumedInventoryId)
+                    }
+                val service = deckService(listOf(target), cancelsMidWrite, inventory)
+                val sessionId = service.activeSession(initiator, partner)
+                val token =
+                    service
+                        .getDeck(sessionId, initiator)
+                        .cards
+                        .single()
+                        .cardToken
+
+                val job =
+                    launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                        service.submitAction(sessionId, initiator, SubmitPsyncActionRequestDto(token, "pineapple_like"))
+                    }
+                request.set(job)
+                job.start()
+                job.join()
+
+                assertEquals(1, dataSource.countSessionActions(sessionId))
+                // The recorded like owns the spend; refunding it here would pay it back twice.
+                assertEquals(0, inventory.remaining())
             }
         }
     })
