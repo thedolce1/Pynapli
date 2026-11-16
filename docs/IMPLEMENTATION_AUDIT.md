@@ -1,6 +1,6 @@
 # Pynapli Implementation Status
 
-Updated: 2026-11-11
+Updated: 2026-11-15
 
 What is built and what is still open, per area, against the specs. The specs stay the source of
 truth; this page is the current status snapshot only.
@@ -20,7 +20,7 @@ remain), **Partial** (real slices shipped; material gaps), **Not started**.
 | Product model | Done | Keep avoiding couple-owned accounts and couple cards (every adult has their own account; partner is optional context). | [PYNAPLI_PRODUCT_SPEC](PYNAPLI_PRODUCT_SPEC.md) |
 | Language and positioning | Mostly done | Ongoing UI copy review as screens mature. | [LANGUAGE_AND_TAXONOMY_SPEC](LANGUAGE_AND_TAXONOMY_SPEC.md) |
 | Frontend design | Mostly done | Real-device screenshot review; wider flow coverage. The Swipe filters-sheet golden needs scroll-before-dump (or trimmed below-fold `requiredTexts`) since the sheet grew. | [FRONTEND_DESIGN_DIRECTION_SPEC](FRONTEND_DESIGN_DIRECTION_SPEC.md), [DESIGN_AND_NAVIGATION_SPEC](DESIGN_AND_NAVIGATION_SPEC.md) |
-| Auth and onboarding | Partial | Forgot password (emailed 6-digit code), change password, and "Where you're signed in" (list and sign out devices) exist; production needs an email provider for the codes (founder setup; until then reset answers "unavailable" and points to support). Social auth; live age-verification provider handshake/webhook (ops); iOS Keychain token cipher (iOS phase); legal drafts published at pynapli.com (founder/legal). | [ONBOARDING_AUTH_SPEC](ONBOARDING_AUTH_SPEC.md) |
+| Auth and onboarding | Partial | Forgot password (emailed 6-digit code), change password, and "Where you're signed in" (list and sign out devices) exist; production needs an email provider for the codes (founder setup; until then reset answers "unavailable" and points to support). Social auth; live age-verification provider handshake/webhook (ops); iOS Keychain token cipher (iOS phase); legal drafts published at pynapli.com (founder/legal). On web, a refresh whose response is lost, or a tab that loses a refresh race by more than 1.5 s, still signs the user out. | [ONBOARDING_AUTH_SPEC](ONBOARDING_AUTH_SPEC.md) |
 | Profile and settings | Mostly done | Risk middleware; safety-center polish. Data export is complete end to end (worker, stale-claim retry, local or GCS storage, in-app download). | [PROFILE_SETTINGS_SPEC](PROFILE_SETTINGS_SPEC.md) |
 | Location and presence | Mostly done | Physical-device battery profiling; founder/legal to supply the Travel mode region list (`PYNAPLI_TRAVEL_REGION_POLICY`). (Impossible-travel and repeated-travel-switching signals, daily switch cap, and risk-tier Travel lockout shipped.) | [GRID_IMPLEMENTATION_SPEC](GRID_IMPLEMENTATION_SPEC.md) |
 | Grid | Mostly done | Larger dense-metro load runs and physical-device battery/location QA; Redis cache hit rate under real multi-instance load is unmeasured. Spatial candidate lookup is index-backed (2026-11). | [GRID_IMPLEMENTATION_SPEC](GRID_IMPLEMENTATION_SPEC.md), [FILTERS_SPEC](FILTERS_SPEC.md) |
