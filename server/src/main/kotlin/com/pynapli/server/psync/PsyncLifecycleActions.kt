@@ -103,7 +103,10 @@ internal class PsyncLifecycleActions(
                 ),
             )
 
-        val created = repository.insertSession(session, participants)
+        // The partner may have created one in the moments since the check above.
+        val created =
+            repository.insertSession(session, participants)
+                ?: throw PsyncException("PSYNC_SESSION_ALREADY_ACTIVE")
         // PS-4c: the invitee sees a Psync invite card in Activity.
         activityService?.recordPsyncSessionEvent(
             recipientUserId = link.partnerUserId,

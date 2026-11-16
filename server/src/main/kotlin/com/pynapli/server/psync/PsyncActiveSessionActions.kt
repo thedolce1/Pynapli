@@ -9,8 +9,13 @@ import com.pynapli.shared.network.dto.PsyncNudgeResponseDto
 import com.pynapli.shared.network.dto.PsyncRecapDto
 import com.pynapli.shared.network.dto.PsyncSessionDto
 import com.pynapli.shared.network.dto.SubmitPsyncActionRequestDto
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.util.UUID
+
+private val logger = LoggerFactory.getLogger(PsyncActiveSessionActions::class.java)
 
 internal class PsyncActiveSessionActions(
     private val repository: PsyncSessionRepository,
@@ -84,17 +89,24 @@ internal class PsyncActiveSessionActions(
                 ?: throw PsyncException("PSYNC_INVALID_CARD")
         val spentInventoryId = spendPineappleLikeIfNew(sessionId, userId, card.targetUserId, request.action)
         val outcome =
-            repository.recordAction(
-                sessionId = sessionId,
-                actorUserId = userId,
-                targetUserId = card.targetUserId,
-                action = request.action,
-                now = clock.instant(),
-                consumedInventoryId = spentInventoryId,
-            )
-        // Lost a race with a concurrent submit for the same card: that decision stands, so give
-        // back what this call spent.
-        if (!outcome.newlyRecorded && spentInventoryId != null) pineappleInventory?.refund(spentInventoryId)
+            try {
+                repository.recordAction(
+                    sessionId = sessionId,
+                    actorUserId = userId,
+                    targetUserId = card.targetUserId,
+                    action = request.action,
+                    now = clock.instant(),
+                    consumedInventoryId = spentInventoryId,
+                )
+            } catch (error: Throwable) {
+                // Nothing recorded the spend, so no sweep could ever find it: give it back now.
+                refundSpent(spentInventoryId)
+                throw error
+            }
+        // Lost a race with a concurrent submit for the same card (that decision stands), or the
+        // session ended before this swipe was written: give back what this call spent.
+        if (!outcome.newlyRecorded) refundSpent(spentInventoryId)
+        if (!outcome.sessionActive) throw PsyncException("PSYNC_INVALID_STATE")
 
         val deckCount = repository.countDeckCards(sessionId)
         val completed =
@@ -229,6 +241,22 @@ internal class PsyncActiveSessionActions(
         val alreadyDecided = repository.listActionsForActor(sessionId, userId).any { it.targetUserId == targetUserId }
         if (alreadyDecided) return null
         return inventory.consume(userId) ?: throw PsyncException("PINEAPPLE_LIKE_INVENTORY_REQUIRED")
+    }
+
+    /**
+     * Return a Pineapple Like this call spent but did not record. Runs even if the request was
+     * cancelled, and a failed refund never replaces the error or outcome the caller gets.
+     */
+    private suspend fun refundSpent(inventoryId: UUID?) {
+        val inventory = pineappleInventory ?: return
+        if (inventoryId == null) return
+        withContext(NonCancellable) {
+            try {
+                inventory.refund(inventoryId)
+            } catch (refundError: Exception) {
+                logger.warn("Psync Pineapple Like refund failed", refundError)
+            }
+        }
     }
 
     private suspend fun bothPartnersFinished(

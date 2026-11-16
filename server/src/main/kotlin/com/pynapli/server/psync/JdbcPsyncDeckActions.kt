@@ -161,6 +161,7 @@ internal suspend fun DataSource.findPsyncCardByTokenHash(
     }
 
 internal suspend fun DataSource.recordPsyncAction(
+    json: Json,
     sessionId: UUID,
     actorUserId: UUID,
     targetUserId: UUID,
@@ -172,6 +173,13 @@ internal suspend fun DataSource.recordPsyncAction(
     withContext(Dispatchers.IO) {
         connection.use { connection ->
             connection.inTransaction {
+                // The partner's last swipe, leaving or the expiry worker can complete the session
+                // after the service's check. Completion takes this row lock too, so either this
+                // swipe lands before it resolves, or it sees the session has ended and writes nothing.
+                val session = connection.lockSession(json, sessionId)
+                if (session == null || session.status != PSYNC_STATUS_ACTIVE || !session.expiresAt.isAfter(now)) {
+                    return@inTransaction RecordActionOutcome(newlyRecorded = false, actedCount = 0, sessionActive = false)
+                }
                 val inserted =
                     connection
                         .prepareStatement(
