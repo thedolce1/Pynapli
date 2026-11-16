@@ -113,8 +113,8 @@ internal class JdbcSwipeActionPersistenceActions(
         cardTokenHash: String,
         now: Instant,
         noteText: String?,
-        consumedInventoryId: UUID?,
         travelLocationId: UUID?,
+        spendInventory: SwipeInventorySpend?,
         matchIdFactory: () -> UUID,
     ): SwipeActionResult =
         dataSource.withConnection { connection ->
@@ -124,9 +124,11 @@ internal class JdbcSwipeActionPersistenceActions(
                 targetUserId = targetUserId,
                 action = action,
                 noteText = noteText,
-                consumedInventoryId = consumedInventoryId,
+                consumedInventoryId = null,
                 travelLocationId = travelLocationId,
                 matchIdFactory = matchIdFactory,
+                spendInventory = spendInventory,
+                now = now,
             ) {
                 markDeckCardActionRecorded(
                     sessionId = sessionId,

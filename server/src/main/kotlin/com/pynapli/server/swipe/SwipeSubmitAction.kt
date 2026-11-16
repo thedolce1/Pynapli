@@ -98,25 +98,15 @@ internal class SwipeSubmitAction(
             throw SwipeException("INVALID_SWIPE_TARGET")
         }
 
-        if (action == SwipeAction.INTRO_NOTE) {
-            val consumed =
-                profile("swipe.action.inventory.intro") {
-                    subscriptionService?.consumeIntroNoteInventory(viewerUserId) ?: true
-                }
-            if (!consumed) throw SwipeException("INTRO_NOTE_INVENTORY_REQUIRED")
-        }
-        val pineappleInventoryId: UUID? =
-            if (action == SwipeAction.PINEAPPLE_LIKE) {
-                profile("swipe.action.inventory.pineapple") {
-                    if (subscriptionService == null) {
-                        null
-                    } else {
-                        subscriptionService.consumePineappleLikeInventoryReturningId(viewerUserId)
-                            ?: throw SwipeException("PINEAPPLE_LIKE_INVENTORY_REQUIRED")
-                    }
-                }
-            } else {
-                null
+        // Paid swipes spend their unit inside the record transaction, so a retry, a second request
+        // for the same person, or a failed insert can never cost the user a unit for nothing.
+        // Without a subscription service nothing is metered, as before.
+        val spendInventory =
+            when {
+                subscriptionService == null -> null
+                action == SwipeAction.INTRO_NOTE -> SwipeInventorySpend.INTRO_NOTE
+                action == SwipeAction.PINEAPPLE_LIKE -> SwipeInventorySpend.PINEAPPLE_LIKE
+                else -> null
             }
 
         val result =
@@ -130,10 +120,19 @@ internal class SwipeSubmitAction(
                     cardTokenHash = actionTokens.cardTokenHash,
                     now = clock.instant(),
                     noteText = noteText,
-                    consumedInventoryId = pineappleInventoryId,
                     travelLocationId = preconditions.viewerTravelLocationId,
+                    spendInventory = spendInventory,
                 )
             }
+        if (result.inventoryUnavailable) {
+            throw SwipeException(
+                if (spendInventory == SwipeInventorySpend.INTRO_NOTE) {
+                    "INTRO_NOTE_INVENTORY_REQUIRED"
+                } else {
+                    "PINEAPPLE_LIKE_INVENTORY_REQUIRED"
+                },
+            )
+        }
         if (result.newlyRecorded) {
             sideEffects.recordActivityForAction(
                 viewerUserId = viewerUserId,

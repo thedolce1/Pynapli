@@ -17,8 +17,16 @@ suspend fun <A, B> raceTogether(
 ): Pair<Result<A>, Result<B>> =
     coroutineScope {
         val gate = CompletableDeferred<Unit>()
-        val a = async(Dispatchers.IO) { gate.await(); runCatching { first() } }
-        val b = async(Dispatchers.IO) { gate.await(); runCatching { second() } }
+        val a =
+            async(Dispatchers.IO) {
+                gate.await()
+                runCatching { first() }
+            }
+        val b =
+            async(Dispatchers.IO) {
+                gate.await()
+                runCatching { second() }
+            }
         gate.complete(Unit)
         a.await() to b.await()
     }

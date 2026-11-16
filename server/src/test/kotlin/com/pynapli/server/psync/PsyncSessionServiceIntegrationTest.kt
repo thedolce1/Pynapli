@@ -930,7 +930,7 @@ class PsyncSessionServiceIntegrationTest :
                 val swipeRepository =
                     com.pynapli.server.swipe
                         .JdbcSwipeRepository(dataSource)
-                val iterations = 30
+                val iterations = 50
                 var wrong = 0
                 repeat(iterations) {
                     val (initiator, partner) = seedLinkedPair()

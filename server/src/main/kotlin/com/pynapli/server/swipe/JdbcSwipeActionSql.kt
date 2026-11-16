@@ -1,6 +1,8 @@
 package com.pynapli.server.swipe
 
 import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.lockPairForTransaction
+import com.pynapli.server.subscriptions.consumePremiumInventoryRecordReturningId
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
@@ -15,10 +17,34 @@ internal fun Connection.recordSwipeActionTransaction(
     consumedInventoryId: UUID?,
     travelLocationId: UUID?,
     matchIdFactory: () -> UUID,
+    spendInventory: SwipeInventorySpend? = null,
+    now: Instant = Instant.now(),
     afterInsert: Connection.() -> Unit = {},
 ): SwipeActionResult {
     inTransaction {
-        if (!insertSwipeAction(actionId, actorUserId, targetUserId, action, noteText, consumedInventoryId, travelLocationId)) {
+        // A likes B and B likes A at the same moment: each insert-then-check would miss the other's
+        // uncommitted like and neither would make the match. Both directions take this one lock.
+        lockPairForTransaction(SWIPE_PAIR_LOCK_NAMESPACE, actorUserId, targetUserId)
+        var inventoryId = consumedInventoryId
+        if (spendInventory != null) {
+            // A replay of an action that already went through spends nothing. This must come
+            // before the spend: a retry that spent first could find nothing left and report an
+            // inventory error for an action that succeeded.
+            findSwipeActionById(actionId, actorUserId)?.let { existing ->
+                rollback()
+                return SwipeActionResult(recorded = existing.rewoundAt == null, match = existing.match, newlyRecorded = false)
+            }
+            val spentId =
+                consumePremiumInventoryRecordReturningId(actorUserId, spendInventory.inventoryType, now)
+                    ?: run {
+                        rollback()
+                        return SwipeActionResult(recorded = false, match = null, newlyRecorded = false, inventoryUnavailable = true)
+                    }
+            if (spendInventory.storesInventoryId) inventoryId = spentId
+        }
+        // On a conflict the rollback also undoes the spend above, so a swipe that did not land
+        // costs nothing.
+        if (!insertSwipeAction(actionId, actorUserId, targetUserId, action, noteText, inventoryId, travelLocationId)) {
             val existing = findSwipeActionById(actionId, actorUserId)
             rollback()
             return SwipeActionResult(
@@ -50,6 +76,7 @@ internal fun Connection.likeBackTransaction(
     matchIdFactory: () -> UUID,
 ): SwipeActionResult? {
     inTransaction {
+        lockPairForTransaction(SWIPE_PAIR_LOCK_NAMESPACE, viewerUserId, targetUserId)
         if (!targetHasActivePositiveSwipe(targetUserId, viewerUserId)) {
             rollback()
             return null
@@ -297,3 +324,10 @@ private fun Connection.targetHasActivePositiveSwipe(
     }
 
 private val POSITIVE_SWIPE_ACTIONS = setOf("like", "pineapple_like")
+
+/**
+ * Advisory-lock namespace for a pair of users' swipe decisions on each other. Every transaction
+ * that writes a like between two people and then checks for the like back (Swipe, like-back, Psync
+ * resolve) takes it, so overlapping likes can't each miss the other.
+ */
+internal const val SWIPE_PAIR_LOCK_NAMESPACE = "swipe-pair"

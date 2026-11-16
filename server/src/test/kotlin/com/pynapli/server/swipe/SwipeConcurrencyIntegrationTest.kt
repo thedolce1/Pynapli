@@ -16,6 +16,8 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * Two requests that land at the same moment must leave the same database state as if they had
@@ -96,6 +98,38 @@ class SwipeConcurrencyIntegrationTest :
                     if (left != 4 || recorded != 1) wrong++
                 }
                 assertEquals(0, wrong, "iterations out of $iterations that did not spend exactly one Pineapple Like")
+            }
+        }
+
+        "a Pineapple Like with none left is refused, records nothing, and leaves the card to act on" {
+            runBlocking {
+                val service = swipeService()
+                val (viewer, target) = seedPair(0)
+                val request = service.dealtRequest(viewer, target, SwipeAction.PINEAPPLE_LIKE, UUID.randomUUID())
+
+                val refused = assertFailsWith<SwipeException> { service.submitAction(viewer, request) }
+
+                assertEquals("PINEAPPLE_LIKE_INVENTORY_REQUIRED", refused.code)
+                assertEquals(0, dataSource.liveActionCount(viewer, target))
+                // The refused swipe did not use up the card: a plain Like on it still lands.
+                val like = request.copy(actionId = UUID.randomUUID().toString(), action = SwipeAction.LIKE)
+                assertTrue(service.submitAction(viewer, like).recorded)
+            }
+        }
+
+        "a Pineapple Like spent in the record transaction is refunded when it is rewound" {
+            runBlocking {
+                val service = swipeService()
+                val (viewer, target) = seedPair(0)
+                dataSource.insertSocialSubscription(viewer) // Rewind is a paid feature
+                dataSource.grantInventory(viewer, "pineapple_like", 5)
+                val request = service.dealtRequest(viewer, target, SwipeAction.PINEAPPLE_LIKE, UUID.randomUUID())
+
+                assertTrue(service.submitAction(viewer, request).recorded)
+                assertEquals(4, dataSource.inventoryQuantity(viewer, "pineapple_like"))
+                assertTrue(service.rewind(viewer).rewound)
+
+                assertEquals(5, dataSource.inventoryQuantity(viewer, "pineapple_like"))
             }
         }
 
