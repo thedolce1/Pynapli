@@ -4,6 +4,7 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.AuthApi
 import com.pynapli.shared.network.SessionRefresher
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -26,6 +27,13 @@ class StoredSessionRefresher(
     // looping on a dead session. Null where no observer exists (e.g. unit tests that only assert the
     // token result).
     private val invalidationBus: SessionInvalidationBus? = null,
+    // Only for stores shared across processes (web tabs on one localStorage). The tab that loses a
+    // refresh race usually hears its rejection *before* the winning tab has saved the rotated
+    // session, so a terminal rejection re-reads the store up to [settleAttempts] more times,
+    // [settleDelayMillis] apart, before concluding the session is dead. The default (no settling)
+    // keeps single-process stores signing out immediately.
+    private val settleAttempts: Int = 0,
+    private val settleDelayMillis: Long = 0,
 ) : SessionRefresher {
     private val mutex = Mutex()
 
@@ -54,9 +62,14 @@ class StoredSessionRefresher(
                     // token, so a rejection may only mean another tab won the race and has already
                     // stored the rotated session. Re-read before clearing: only a rejection of the
                     // token that is *still* stored means the session is dead. (An emptied store —
-                    // another tab signed out — is dead too, so it still signals invalidation.)
-                    val latest = sessionStore.currentSession()
-                    if (latest != null && latest.refreshToken != current.refreshToken) return@withLock latest.accessToken
+                    // another tab signed out — is dead too, so it signals invalidation at once.)
+                    var attempt = 0
+                    while (true) {
+                        val latest = sessionStore.currentSession() ?: break
+                        if (latest.refreshToken != current.refreshToken) return@withLock latest.accessToken
+                        if (attempt++ >= settleAttempts) break
+                        delay(settleDelayMillis)
+                    }
                     sessionStore.clear()
                     invalidationBus?.notifyInvalidated()
                     null

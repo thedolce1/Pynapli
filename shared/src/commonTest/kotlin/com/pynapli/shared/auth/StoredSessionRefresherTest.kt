@@ -13,7 +13,9 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -72,6 +74,74 @@ class StoredSessionRefresherTest {
             // A dead session is cleared so the HTTP layer stops sending the revoked token...
             assertNull(store.currentSession())
             // ...and the app is signalled to return to sign-in.
+            invalidated.await()
+            // Without settle config (single-process stores) there is no waiting at all.
+            assertEquals(0L, testScheduler.currentTime)
+        }
+
+    @Test
+    fun terminalRejectionWaitsForTheWinningTabsSaveBeforeSigningOut() =
+        runTest {
+            // The losing tab usually hears its rejection before the winning tab has saved: the store
+            // still holds the rejected token at first, and the rotated session lands a bit later.
+            val store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
+            val api = FakeRefreshApi(refreshResult = AppResult.Failure(AppError("INVALID_REFRESH_TOKEN", "already rotated")))
+            val bus = SessionInvalidationBus()
+            val invalidated = async(start = CoroutineStart.UNDISPATCHED) { bus.events.first() }
+            launch {
+                delay(450)
+                store.save(session("other-tab-fresh", "refresh-2"))
+            }
+
+            val token =
+                StoredSessionRefresher(api, store, bus, settleAttempts = 5, settleDelayMillis = 300)
+                    .refreshAccessToken("expired")
+
+            assertEquals("other-tab-fresh", token)
+            // Picked up on the re-read after the second delay, not after all five.
+            assertEquals(600L, testScheduler.currentTime)
+            assertEquals("refresh-2", store.currentSession()?.refreshToken)
+            assertTrue(invalidated.isActive)
+            invalidated.cancel()
+        }
+
+    @Test
+    fun terminalRejectionSignsOutAfterTheSettleAttemptsWhenNoTabRotated() =
+        runTest {
+            val store = seededStore(accessToken = "expired", refreshToken = "revoked")
+            val api = FakeRefreshApi(refreshResult = AppResult.Failure(AppError("INVALID_REFRESH_TOKEN", "nope")))
+            val bus = SessionInvalidationBus()
+            val invalidated = async(start = CoroutineStart.UNDISPATCHED) { bus.events.first() }
+
+            assertNull(
+                StoredSessionRefresher(api, store, bus, settleAttempts = 5, settleDelayMillis = 300)
+                    .refreshAccessToken("expired"),
+            )
+
+            assertEquals(1_500L, testScheduler.currentTime)
+            assertNull(store.currentSession())
+            invalidated.await()
+        }
+
+    @Test
+    fun terminalRejectionWithAnEmptiedStoreSignsOutWithoutWaiting() =
+        runTest {
+            // Another tab signed out while this refresh was in flight.
+            val store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
+            val api =
+                FakeRefreshApi(
+                    refreshResult = AppResult.Failure(AppError("INVALID_REFRESH_TOKEN", "nope")),
+                    onRefresh = { store.clear() },
+                )
+            val bus = SessionInvalidationBus()
+            val invalidated = async(start = CoroutineStart.UNDISPATCHED) { bus.events.first() }
+
+            assertNull(
+                StoredSessionRefresher(api, store, bus, settleAttempts = 5, settleDelayMillis = 300)
+                    .refreshAccessToken("expired"),
+            )
+
+            assertEquals(0L, testScheduler.currentTime)
             invalidated.await()
         }
 

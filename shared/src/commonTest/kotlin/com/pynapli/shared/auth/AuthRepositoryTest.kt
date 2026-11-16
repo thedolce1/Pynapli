@@ -201,6 +201,26 @@ class AuthRepositoryTest {
         }
 
     @Test
+    fun currentSessionValidatedKeepsASessionAnotherTabRotatedMeanwhile() =
+        runTest {
+            val sessionStore = InMemorySessionStore()
+            sessionStore.save(testSession("stale-access", "stale-refresh"))
+            val apiClient =
+                FakeApiClient(
+                    meResult = AppResult.Failure(AppError("UNAUTHENTICATED", "Please sign in again.")),
+                    // Another tab sharing the store rotates the session while this check is in flight.
+                    onGetMe = { sessionStore.save(testSession("other-tab-access", "other-tab-refresh")) },
+                )
+            val repository = AuthRepository(apiClient, sessionStore)
+
+            val restored = repository.currentSessionValidated()
+
+            // The rejection was for the token this call validated with, not the one now stored.
+            assertEquals("other-tab-access", restored?.accessToken)
+            assertEquals("other-tab-refresh", sessionStore.currentSession()?.refreshToken)
+        }
+
+    @Test
     fun currentSessionValidatedKeepsSessionOnRecoverableFailure() =
         runTest {
             val sessionStore = InMemorySessionStore()
@@ -253,6 +273,7 @@ private class FakeApiClient(
     private val loginResult: AppResult<AuthSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented.")),
     private val logoutResult: AppResult<LogoutResponseDto> = AppResult.Success(LogoutResponseDto(loggedOut = true)),
     private val meResult: AppResult<MeDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented.")),
+    private val onGetMe: suspend () -> Unit = {},
 ) : PynapliApiClient {
     var lastSignupRequest: EmailSignupRequestDto? = null
         private set
@@ -385,7 +406,10 @@ private class FakeApiClient(
 
     override suspend fun nudgePsyncSession(sessionId: String): AppResult<com.pynapli.shared.network.dto.PsyncNudgeResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
-    override suspend fun getMe(): AppResult<MeDto> = meResult
+    override suspend fun getMe(): AppResult<MeDto> {
+        onGetMe()
+        return meResult
+    }
 
     override suspend fun getAgeVerificationRequirements(): AppResult<AgeVerificationRequirementsDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
