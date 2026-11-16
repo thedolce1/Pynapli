@@ -40,6 +40,14 @@ class MessagesStateHolder(
     val state: StateFlow<MessagesUiState> = _state.asStateFlow()
     private var refreshInFlight = false
 
+    // A refresh asked for while one is in flight runs once more after it (requests coalesce into
+    // that one trailing run): the in-flight fetch may have been served before the message that
+    // triggered the new request landed. The flags OR together, so a loud load() queued behind a
+    // silent refresh still shows loading and surfaces its error.
+    private var refreshQueued = false
+    private var queuedShowLoading = false
+    private var queuedSurfaceErrors = false
+
     suspend fun load() = refresh(showLoading = true, surfaceErrors = true)
 
     suspend fun refreshSilently() = refresh(showLoading = false, surfaceErrors = false)
@@ -48,34 +56,58 @@ class MessagesStateHolder(
         showLoading: Boolean,
         surfaceErrors: Boolean,
     ) {
-        if (refreshInFlight) return
+        if (refreshInFlight) {
+            refreshQueued = true
+            queuedShowLoading = queuedShowLoading || showLoading
+            queuedSurfaceErrors = queuedSurfaceErrors || surfaceErrors
+            return
+        }
         refreshInFlight = true
+        var runShowLoading = showLoading
+        var runSurfaceErrors = surfaceErrors
+        try {
+            do {
+                fetchFirstPage(showLoading = runShowLoading, surfaceErrors = runSurfaceErrors)
+                val again = refreshQueued
+                runShowLoading = queuedShowLoading
+                runSurfaceErrors = queuedSurfaceErrors
+                refreshQueued = false
+                queuedShowLoading = false
+                queuedSurfaceErrors = false
+            } while (again)
+        } finally {
+            refreshInFlight = false
+            refreshQueued = false
+            queuedShowLoading = false
+            queuedSurfaceErrors = false
+        }
+    }
+
+    private suspend fun fetchFirstPage(
+        showLoading: Boolean,
+        surfaceErrors: Boolean,
+    ) {
         if (showLoading) {
             _state.update { it.copy(isLoading = true, errorMessage = null) }
         }
+        when (val result = repository.listConversations()) {
+            is AppResult.Success -> {
+                _state.update { current -> current.withFirstPage(result.value) }
+            }
 
-        try {
-            when (val result = repository.listConversations()) {
-                is AppResult.Success -> {
-                    _state.update { current -> current.withFirstPage(result.value) }
-                }
-
-                is AppResult.Failure -> {
-                    _state.update { current ->
-                        current.copy(
-                            isLoading = false,
-                            errorMessage =
-                                if (surfaceErrors || current.conversations.isEmpty()) {
-                                    result.error.message
-                                } else {
-                                    current.errorMessage
-                                },
-                        )
-                    }
+            is AppResult.Failure -> {
+                _state.update { current ->
+                    current.copy(
+                        isLoading = false,
+                        errorMessage =
+                            if (surfaceErrors || current.conversations.isEmpty()) {
+                                result.error.message
+                            } else {
+                                current.errorMessage
+                            },
+                    )
                 }
             }
-        } finally {
-            refreshInFlight = false
         }
     }
 

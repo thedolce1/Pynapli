@@ -1,5 +1,6 @@
 package com.pynapli.app.messages
 
+import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
@@ -9,6 +10,9 @@ import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
 import com.pynapli.shared.network.dto.PartnerChatInviteStatus
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,6 +47,76 @@ class MessagesStateHolderTest {
                 holder.state.value.conversations
                     .map { it.conversationId },
             )
+        }
+
+    @Test
+    fun aRefreshRequestedWhileOneIsInFlightRunsOnceMoreAfterIt() =
+        runTest {
+            val stale = listOf(conversation("c1", ConversationParticipantStatus.ACTIVE))
+            val repository = FakeMessagesRepository(stale)
+            val gate = CompletableDeferred<Unit>()
+            repository.nextListGate = gate
+            val holder = MessagesStateHolder(repository)
+
+            // The first fetch is served (stale) and then held in flight...
+            val first = launch { holder.refreshSilently() }
+            runCurrent()
+            assertEquals(1, repository.listCalls)
+
+            // ...when a new message lands and its delta asks for another refresh.
+            repository.listResult = listOf(conversation("c0", ConversationParticipantStatus.ACTIVE), stale.single())
+            holder.refreshSilently()
+            gate.complete(Unit)
+            first.join()
+
+            assertEquals(2, repository.listCalls)
+            assertEquals(
+                listOf("c0", "c1"),
+                holder.state.value.conversations
+                    .map { it.conversationId },
+            )
+        }
+
+    @Test
+    fun aLoudLoadQueuedBehindASilentRefreshStillSurfacesItsError() =
+        runTest {
+            val repository = FakeMessagesRepository(listOf(conversation("c1", ConversationParticipantStatus.ACTIVE)))
+            val holder = MessagesStateHolder(repository)
+            holder.load()
+
+            val gate = CompletableDeferred<Unit>()
+            repository.nextListGate = gate
+            val silent = launch { holder.refreshSilently() }
+            runCurrent()
+            repository.listFailure = AppError(code = "NETWORK", message = "Offline")
+            holder.load()
+            gate.complete(Unit)
+            silent.join()
+
+            assertEquals(3, repository.listCalls)
+            assertEquals("Offline", holder.state.value.errorMessage)
+            assertFalse(holder.state.value.isLoading)
+        }
+
+    @Test
+    fun aQueuedSilentRefreshDoesNotSurfaceErrors() =
+        runTest {
+            val repository = FakeMessagesRepository(listOf(conversation("c1", ConversationParticipantStatus.ACTIVE)))
+            val holder = MessagesStateHolder(repository)
+            holder.load()
+
+            val gate = CompletableDeferred<Unit>()
+            repository.nextListGate = gate
+            val silent = launch { holder.refreshSilently() }
+            runCurrent()
+            repository.listFailure = AppError(code = "NETWORK", message = "Offline")
+            holder.refreshSilently()
+            gate.complete(Unit)
+            silent.join()
+
+            assertEquals(3, repository.listCalls)
+            assertEquals(null, holder.state.value.errorMessage)
+            assertFalse(holder.state.value.isLoading)
         }
 
     @Test
@@ -146,7 +220,27 @@ private class FakeMessagesRepository(
     var firstPageCursor: String? = null
     var pagesAfter: Map<String, ConversationListResponseDto> = emptyMap()
 
-    override suspend fun listConversations(): AppResult<ConversationListResponseDto> = AppResult.Success(ConversationListResponseDto(items = listResult, nextCursor = firstPageCursor))
+    var listCalls = 0
+
+    /** When set, the next listConversations() is served immediately but held until this completes. */
+    var nextListGate: CompletableDeferred<Unit>? = null
+    var listFailure: AppError? = null
+
+    override suspend fun listConversations(): AppResult<ConversationListResponseDto> {
+        listCalls += 1
+        val failure = listFailure
+        val served: AppResult<ConversationListResponseDto> =
+            if (failure != null) {
+                AppResult.Failure(failure)
+            } else {
+                AppResult.Success(ConversationListResponseDto(items = listResult, nextCursor = firstPageCursor))
+            }
+        nextListGate?.let { gate ->
+            nextListGate = null
+            gate.await()
+        }
+        return served
+    }
 
     override suspend fun listConversationsAfter(cursor: String): AppResult<ConversationListResponseDto> = AppResult.Success(pagesAfter.getValue(cursor))
 

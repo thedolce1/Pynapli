@@ -197,11 +197,24 @@ class KtorStreamSessionFactory(
                 } catch (e: Throwable) {
                     if (!ready.isCompleted) ready.completeExceptionally(e)
                 } finally {
+                    // A job that ends before the socket opened (cancelled mid-handshake) must still
+                    // release the caller. Not a CancellationException: the stream client would take
+                    // that as its own cancellation and stop reconnecting.
+                    if (!ready.isCompleted) {
+                        ready.completeExceptionally(IllegalStateException("Stream session ended before it connected."))
+                    }
                     outgoing.close()
                     incoming.close()
                 }
             }
-        ready.await()
+        try {
+            ready.await()
+        } catch (e: Throwable) {
+            // The caller gave up (or the handshake failed): the socket job is detached in
+            // [sessionScope], so nothing else would ever close it.
+            sessionJob.cancel()
+            throw e
+        }
         return ChannelStreamSession(outgoing = outgoing, incoming = incoming, job = sessionJob)
     }
 }
