@@ -163,6 +163,10 @@ internal fun Connection.rewindSwipeActionTransaction(
     rewoundAt: Instant,
 ): Boolean {
     inTransaction {
+        // Same lock as recording a swipe: the target's like can't make a match from a like that is
+        // being rewound, and a rewind can't deadlock against a paid swipe on the same person (which
+        // locks the inventory row before the action row, the reverse of the order below).
+        lockPairForTransaction(SWIPE_PAIR_LOCK_NAMESPACE, actorUserId, targetUserId)
         val rewoundAction =
             markSwipeActionRewound(actionId, actorUserId, targetUserId, rewoundAt)
                 ?: run {
