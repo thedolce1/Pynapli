@@ -1,6 +1,6 @@
 # Pynapli Implementation Status
 
-Updated: 2026-11-11
+Updated: 2026-11-15
 
 What is built and what is still open, per area, against the specs. The specs stay the source of
 truth; this page is the current status snapshot only.
@@ -30,7 +30,7 @@ remain), **Partial** (real slices shipped; material gaps), **Not started**.
 | Partner links | Mostly done | Support/admin review and a forced-unlink workflow (needs moderation tooling). | [PYNAPLI_PRODUCT_SPEC](PYNAPLI_PRODUCT_SPEC.md) |
 | Private albums and media | Partial | GCS bucket lifecycle rules + IAM, Cloud CDN backend bucket + signing key, live end-to-end run against a real bucket/CDN and Cloud Vision, SafeSearch threshold tuning on real content (all need founder-provisioned credentials). | [PROFILE_SETTINGS_SPEC](PROFILE_SETTINGS_SPEC.md), [MODERATION_AND_AGE_VERIFICATION_SPEC](MODERATION_AND_AGE_VERIFICATION_SPEC.md) |
 | Notifications | Partial | Native iOS shell + live APNs round-trip (needs a Mac); live FCM round-trip from a real device; metrics exporter/scrape endpoint. | [NOTIFICATIONS_SPEC](NOTIFICATIONS_SPEC.md) |
-| Monetization | Partial | StoreKit 2 (iOS). Google Play is code-complete and sandbox-proven; real Play Console service account + products remain (ops). Final paywall copy. | [MONETIZATION_SPEC](MONETIZATION_SPEC.md) |
+| Monetization | Partial | StoreKit 2 (iOS). Google Play is code-complete and sandbox-proven; real Play Console service account + products remain (ops). Final paywall copy. Emulator QA of the Android purchase lock (double-tap Buy; cancel mid-checkout, then buy again). | [MONETIZATION_SPEC](MONETIZATION_SPEC.md) |
 | Trust and safety | Partial | App Check rollout and staging enforcement; risk middleware; device/account-farm signals; verification provider/market integration; CSAM hash-matching provider; support review workflow; false-positive metrics; legal retention policy; senior-review separation; account notices. | [TRUST_AND_SAFETY_SPEC](TRUST_AND_SAFETY_SPEC.md) |
 | Admin moderation | Partial | Roles/permissions, MFA, appeal UI and senior-review separation, subscription support view, partner-link review, unified dashboard, sensitive-reveal reason flow outside held messages, separated admin API (E1b–E1d, E2). | [ADMIN_MODERATION_CONSOLE_SPEC](ADMIN_MODERATION_CONSOLE_SPEC.md) |
 | API contract | Mostly done | Cursor pagination on the remaining list surfaces; production notification delivery. (Mutation retry-safety audit complete.) | [API_CONTRACT_SPEC](API_CONTRACT_SPEC.md) |
