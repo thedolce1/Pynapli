@@ -68,6 +68,26 @@ class KtorStreamSessionFactoryTest {
                 handshake.client.close()
             }
         }
+
+    @Test
+    fun connectingThroughAnAlreadyCancelledScopeFailsInsteadOfHanging() =
+        runTest {
+            val handshake = HandshakeGate()
+            val sessionScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
+            sessionScope.cancel()
+            val factory = KtorStreamSessionFactory(handshake.client, STREAM_URL, sessionScope = sessionScope)
+            val connect = async { runCatching { factory.connect("token") } }
+            try {
+                advanceUntilIdle()
+
+                assertTrue(connect.isCompleted, "connect() hangs when its session job never started")
+                val failure = connect.await().exceptionOrNull()
+                assertTrue(failure != null && failure !is CancellationException, "unexpected outcome: $failure")
+            } finally {
+                connect.cancel()
+                handshake.client.close()
+            }
+        }
 }
 
 /** An HttpClient whose WebSocket handshake parks forever once it starts, until the test cancels it. */
