@@ -52,6 +52,7 @@ internal class SingleSessionAuthRepository(
 
     override suspend fun rotateSession(
         sessionId: UUID,
+        presentedRefreshTokenHash: String,
         accessTokenHash: String,
         refreshTokenHash: String,
         accessExpiresAt: Instant,

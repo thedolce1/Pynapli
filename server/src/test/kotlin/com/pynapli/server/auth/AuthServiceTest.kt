@@ -376,12 +376,14 @@ private class InMemoryAuthRepository : AuthRepository {
 
     override suspend fun rotateSession(
         sessionId: UUID,
+        presentedRefreshTokenHash: String,
         accessTokenHash: String,
         refreshTokenHash: String,
         accessExpiresAt: Instant,
         refreshExpiresAt: Instant,
     ): SessionRecord? {
         val current = sessions[sessionId] ?: return null
+        if (current.revokedAt != null || current.refreshTokenHash != presentedRefreshTokenHash) return null
         val rotated =
             current.copy(
                 accessTokenHash = accessTokenHash,

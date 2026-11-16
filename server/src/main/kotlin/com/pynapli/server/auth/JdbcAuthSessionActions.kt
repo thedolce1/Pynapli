@@ -65,6 +65,7 @@ internal class JdbcAuthSessionActions(
 
     suspend fun rotateSession(
         sessionId: UUID,
+        presentedRefreshTokenHash: String,
         accessTokenHash: String,
         refreshTokenHash: String,
         accessExpiresAt: Instant,
@@ -82,6 +83,7 @@ internal class JdbcAuthSessionActions(
                             refresh_expires_at = ?,
                             last_seen_at = now()
                         WHERE id = ?
+                          AND refresh_token_hash = ?
                           AND revoked_at IS NULL
                         """.trimIndent(),
                     ).use { statement ->
@@ -90,6 +92,7 @@ internal class JdbcAuthSessionActions(
                         statement.setTimestamp(3, Timestamp.from(accessExpiresAt))
                         statement.setTimestamp(4, Timestamp.from(refreshExpiresAt))
                         statement.setObject(5, sessionId)
+                        statement.setString(6, presentedRefreshTokenHash)
                         if (statement.executeUpdate() == 0) return@withContext null
                     }
             }

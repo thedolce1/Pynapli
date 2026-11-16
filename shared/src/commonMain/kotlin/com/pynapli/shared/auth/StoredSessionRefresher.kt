@@ -16,7 +16,8 @@ import kotlinx.coroutines.sync.withLock
  * refresh token on each call, so when several requests 401 at once only the first may actually
  * refresh; the rest would otherwise present a token the server just invalidated and get signed out.
  * Waiters therefore re-read the store after acquiring the lock and, if the access token has already
- * moved on, return that instead of refreshing again.
+ * moved on, return that instead of refreshing again. Across processes sharing one store (web tabs)
+ * the mutex cannot help, so a terminal rejection re-reads the store before signing out.
  */
 class StoredSessionRefresher(
     private val authApi: AuthApi,
@@ -47,10 +48,17 @@ class StoredSessionRefresher(
                     // A terminal rejection means the session is dead — revoked, or the account is no
                     // longer active. Clear it and signal the app to drop back to sign-in. A transient
                     // failure (network, 5xx) leaves the session intact so a later retry can succeed.
-                    if (result.error.code in terminalAuthErrorCodes) {
-                        sessionStore.clear()
-                        invalidationBus?.notifyInvalidated()
-                    }
+                    if (result.error.code !in terminalAuthErrorCodes) return@withLock null
+                    // The mutex is per process, but some stores are shared across processes (web
+                    // tabs share localStorage). The server lets exactly one caller exchange a refresh
+                    // token, so a rejection may only mean another tab won the race and has already
+                    // stored the rotated session. Re-read before clearing: only a rejection of the
+                    // token that is *still* stored means the session is dead. (An emptied store —
+                    // another tab signed out — is dead too, so it still signals invalidation.)
+                    val latest = sessionStore.currentSession()
+                    if (latest != null && latest.refreshToken != current.refreshToken) return@withLock latest.accessToken
+                    sessionStore.clear()
+                    invalidationBus?.notifyInvalidated()
                     null
                 }
             }

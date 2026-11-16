@@ -40,8 +40,14 @@ interface AuthRepository {
 
     suspend fun findSessionByRefreshTokenHash(tokenHash: String): SessionRecord?
 
+    /**
+     * Compare-and-swap rotation: succeeds only while [presentedRefreshTokenHash] is still the
+     * session's current refresh token, so a refresh token is exchangeable exactly once even under
+     * concurrent requests. Returns null when the session was revoked or already rotated.
+     */
     suspend fun rotateSession(
         sessionId: UUID,
+        presentedRefreshTokenHash: String,
         accessTokenHash: String,
         refreshTokenHash: String,
         accessExpiresAt: Instant,

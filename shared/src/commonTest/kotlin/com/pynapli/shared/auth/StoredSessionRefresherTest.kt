@@ -76,6 +76,32 @@ class StoredSessionRefresherTest {
         }
 
     @Test
+    fun terminalRejectionAfterAnotherTabRotatedKeepsTheirSessionAndDoesNotSignOut() =
+        runTest {
+            // Two browser tabs share one localStorage session but each has its own mutex, so both can
+            // present the same refresh token. The server lets exactly one win; the loser gets
+            // INVALID_REFRESH_TOKEN *after* the winner has already stored the rotated session.
+            val store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
+            val api =
+                FakeRefreshApi(
+                    refreshResult = AppResult.Failure(AppError("INVALID_REFRESH_TOKEN", "already rotated")),
+                    // The other tab's write lands while this call is in flight.
+                    onRefresh = { store.save(session("other-tab-fresh", "refresh-2")) },
+                )
+            val bus = SessionInvalidationBus()
+            val invalidated = async(start = CoroutineStart.UNDISPATCHED) { bus.events.first() }
+
+            val token = StoredSessionRefresher(api, store, bus).refreshAccessToken("expired")
+
+            // The rejection was for a token that is no longer ours: adopt the other tab's session...
+            assertEquals("other-tab-fresh", token)
+            assertEquals("refresh-2", store.currentSession()?.refreshToken)
+            // ...and do not sign every tab out.
+            assertTrue(invalidated.isActive)
+            invalidated.cancel()
+        }
+
+    @Test
     fun transientFailureLeavesTheSessionIntactAndDoesNotSignOut() =
         runTest {
             val store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
@@ -138,11 +164,13 @@ private class InMemoryRefreshSessionStore : SessionStore {
 
 private class FakeRefreshApi(
     private val refreshResult: AppResult<AuthSessionDto>,
+    private val onRefresh: suspend () -> Unit = {},
 ) : AuthApi {
     val requests = mutableListOf<RefreshSessionRequestDto>()
 
     override suspend fun refreshSession(request: RefreshSessionRequestDto): AppResult<AuthSessionDto> {
         requests += request
+        onRefresh()
         return refreshResult
     }
 
