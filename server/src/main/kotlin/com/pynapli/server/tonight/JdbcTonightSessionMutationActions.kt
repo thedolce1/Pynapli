@@ -1,7 +1,9 @@
 package com.pynapli.server.tonight
 
 import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.lockForTransaction
 import com.pynapli.server.tonight.TonightSessionRepository.ApproveOutcome
+import com.pynapli.server.tonight.TonightSessionRepository.InsertOutcome
 import com.pynapli.server.tonight.TonightSessionRepository.MutateOutcome
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -10,10 +12,32 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
-internal suspend fun DataSource.insertTonightSession(session: TonightSession): TonightSession =
+internal suspend fun DataSource.insertTonightSessionIfAllowed(
+    session: TonightSession,
+    now: Instant,
+    weeklyCap: TonightSessionRepository.WeeklyCap?,
+): InsertOutcome =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
             connection.inTransaction {
+                // One lock per participant, in a fixed order: two proposals by the same user, or
+                // by both partners of a together session, queue here instead of both passing the
+                // checks below (there is no row to lock until one of them inserts it).
+                session.participants
+                    .map { it.userId.toString() }
+                    .distinct()
+                    .sorted()
+                    .forEach { connection.lockForTransaction(TONIGHT_PROPOSE_LOCK, it) }
+
+                if (connection.hasActiveOrProposedTonightSession(session.createdByUserId, now)) {
+                    return@inTransaction InsertOutcome.AlreadyActive
+                }
+                if (weeklyCap != null &&
+                    connection.countTonightSessionsCreatedSince(session.createdByUserId, weeklyCap.since) >= weeklyCap.limit
+                ) {
+                    return@inTransaction InsertOutcome.WeeklyLimitReached
+                }
+
                 connection
                     .prepareStatement(
                         """
@@ -44,10 +68,12 @@ internal suspend fun DataSource.insertTonightSession(session: TonightSession): T
                 session.participants.forEach { participant ->
                     connection.insertTonightParticipant(session.id, participant)
                 }
+                InsertOutcome.Inserted(session)
             }
-            session
         }
     }
+
+private const val TONIGHT_PROPOSE_LOCK = "tonight-propose"
 
 internal suspend fun DataSource.approveTonightParticipant(
     sessionId: UUID,

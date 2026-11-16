@@ -27,7 +27,11 @@ class JdbcTonightSessionRepository(
 
     override suspend fun findActiveLinkedPartner(userId: UUID): UUID? = dataSource.findActiveTonightLinkedPartner(userId)
 
-    override suspend fun insertSession(session: TonightSession): TonightSession = dataSource.insertTonightSession(session)
+    override suspend fun insertSessionIfAllowed(
+        session: TonightSession,
+        now: Instant,
+        weeklyCap: TonightSessionRepository.WeeklyCap?,
+    ): TonightSessionRepository.InsertOutcome = dataSource.insertTonightSessionIfAllowed(session, now, weeklyCap)
 
     override suspend fun approveParticipant(
         sessionId: UUID,
@@ -66,12 +70,12 @@ class JdbcTonightSessionRepository(
     override suspend fun pauseSession(
         sessionId: UUID,
         now: Instant,
-    ) = dataSource.pauseTonightSession(sessionId, now)
+    ): Boolean = dataSource.pauseTonightSession(sessionId, now)
 
-    override suspend fun resumeSession(sessionId: UUID) = dataSource.resumeTonightSession(sessionId)
+    override suspend fun resumeSession(sessionId: UUID): Boolean = dataSource.resumeTonightSession(sessionId)
 
     override suspend fun systemEndSession(
         sessionId: UUID,
         now: Instant,
-    ) = dataSource.systemEndTonightSession(sessionId, now)
+    ): Boolean = dataSource.systemEndTonightSession(sessionId, now)
 }

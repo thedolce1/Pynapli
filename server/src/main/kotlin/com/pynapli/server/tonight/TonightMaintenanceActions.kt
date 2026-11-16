@@ -51,19 +51,18 @@ internal class TonightPresenceReconciler(
         for (session in sessions) {
             val anyOffline = session.participantUserIds.any { it !in online }
             when {
+                // Each write is a no-op (false) when the session stopped being active after it was
+                // listed (a user ended it, or it expired), so only count the ones that landed.
                 !anyOffline && session.pausedAt != null -> {
-                    repository.resumeSession(session.sessionId)
-                    resumed++
+                    if (repository.resumeSession(session.sessionId)) resumed++
                 }
                 anyOffline && session.pausedAt == null -> {
-                    repository.pauseSession(session.sessionId, now)
-                    paused++
+                    if (repository.pauseSession(session.sessionId, now)) paused++
                 }
                 anyOffline &&
                     session.pausedAt != null &&
                     !now.isBefore(session.pausedAt.plus(TONIGHT_PAUSE_GRACE)) -> {
-                    repository.systemEndSession(session.sessionId, now)
-                    ended++
+                    if (repository.systemEndSession(session.sessionId, now)) ended++
                 }
                 // else: still online & running, or paused but within grace -> no change.
             }

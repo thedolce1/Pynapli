@@ -30,16 +30,27 @@ internal class TonightProposalCoordinator(
 
         val proposal = request.toValidatedProposal(userId)
         val now = clock.instant()
+        // Fast path: reject the common case before building anything. The insert re-runs both
+        // checks under a lock, which is what actually holds against concurrent proposals.
         if (repository.hasActiveOrProposedSession(userId, now)) {
             throw TonightSessionException("TONIGHT_ALREADY_ACTIVE")
         }
 
-        enforceWeeklyCap(userId, now)
+        val weeklyCap = weeklyCapFor(userId, now)
+        if (weeklyCap != null && repository.countSessionsCreatedSince(userId, weeklyCap.since) >= weeklyCap.limit) {
+            throw TonightSessionException("TONIGHT_WEEKLY_LIMIT_REACHED")
+        }
 
         val sessionId = UUID.randomUUID()
         val expiresAt = now.plus(Duration.ofHours(proposal.durationHours.toLong()))
         val session = buildSession(userId, sessionId, proposal, now, expiresAt)
-        val persisted = repository.insertSession(session.value)
+        val persisted =
+            when (val outcome = repository.insertSessionIfAllowed(session.value, now, weeklyCap)) {
+                is TonightSessionRepository.InsertOutcome.Inserted -> outcome.session
+                TonightSessionRepository.InsertOutcome.AlreadyActive -> throw TonightSessionException("TONIGHT_ALREADY_ACTIVE")
+                TonightSessionRepository.InsertOutcome.WeeklyLimitReached ->
+                    throw TonightSessionException("TONIGHT_WEEKLY_LIMIT_REACHED")
+            }
 
         session.partnerToNotify?.let { partnerId ->
             notificationPublisher?.enqueue(
@@ -182,16 +193,14 @@ internal class TonightProposalCoordinator(
             }
         }
 
-    private suspend fun enforceWeeklyCap(
+    /** The free-tier weekly cap for [userId], or null when their tier is uncapped. */
+    private suspend fun weeklyCapFor(
         userId: UUID,
         now: Instant,
-    ) {
+    ): TonightSessionRepository.WeeklyCap? {
         val tier = subscriptionService?.getPolicy(userId)?.tier ?: SubscriptionTier.SELECT
-        if (tier != SubscriptionTier.FREE) return
-        val createdInWindow = repository.countSessionsCreatedSince(userId, now.minus(TONIGHT_WEEKLY_WINDOW))
-        if (createdInWindow >= TONIGHT_FREE_WEEKLY_LIMIT) {
-            throw TonightSessionException("TONIGHT_WEEKLY_LIMIT_REACHED")
-        }
+        if (tier != SubscriptionTier.FREE) return null
+        return TonightSessionRepository.WeeklyCap(since = now.minus(TONIGHT_WEEKLY_WINDOW), limit = TONIGHT_FREE_WEEKLY_LIMIT)
     }
 }
 
