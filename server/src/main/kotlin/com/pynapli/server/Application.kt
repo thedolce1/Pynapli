@@ -37,7 +37,6 @@ import com.pynapli.server.plugins.configureSecurityHeaders
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.plugins.selectAppCheckVerifier
-import com.pynapli.server.presence.configurePresenceRoutes
 import com.pynapli.server.presence.configurePresenceStreamRoutes
 import com.pynapli.server.profile.configureProfileRoutes
 import com.pynapli.server.profile.configureTonightAvailabilityRoutes
@@ -154,7 +153,6 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         dependencies.travelPlaceSearchService,
         dependencies.travelTripService,
     )
-    configurePresenceRoutes(dependencies.authService, dependencies.presenceService, dependencies.requestProfilerFactory)
     configurePresenceStreamRoutes(
         authService = dependencies.authService,
         broadcaster = dependencies.presenceBroadcaster,

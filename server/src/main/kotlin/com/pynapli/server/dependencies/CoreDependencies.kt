@@ -119,7 +119,6 @@ internal fun buildCoreDependencies(
     val presenceService =
         PresenceService(
             repository = presenceRepository,
-            broadcaster = presenceBroadcaster,
             onlineTracker = onlinePresenceTracker,
         )
     val presenceOfflineScanner =

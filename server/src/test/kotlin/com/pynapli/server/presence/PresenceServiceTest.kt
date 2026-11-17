@@ -4,20 +4,17 @@ import kotlinx.coroutines.runBlocking
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class PresenceServiceTest {
     @Test
-    fun heartbeatMarksUserOnline() =
+    fun refreshOnlineMarksUserOnline() =
         runBlocking {
             val repository = InMemoryPresenceRepository()
             val service = PresenceService(repository)
             val userId = UUID.randomUUID()
 
-            val response = service.heartbeat(userId)
+            service.refreshOnline(userId)
 
-            assertTrue(response.online)
-            assertEquals(300, response.expiresInSeconds)
             assertEquals(setOf(userId), service.onlineUserIds(listOf(userId)))
         }
 }

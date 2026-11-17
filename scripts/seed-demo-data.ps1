@@ -13,7 +13,7 @@ param(
     [string]$Password = "PynapliDevPass123!",
     [int]$PerCity = 50,
     # Presence lives in Redis with a short TTL, so online dots fade between demo sessions.
-    # -RefreshPresence re-heartbeats the online subset (plus viewers) without reseeding.
+    # -RefreshPresence marks the online subset online again (plus viewers) without reseeding.
     [switch]$RefreshPresence
 )
 
@@ -429,8 +429,9 @@ function Publish-DemoAccount {
     Assert-Success -Response $location -Action "Location update $($Account.Email)"
 
     if ($Online) {
-        $presence = Invoke-PynapliJson -Method POST -Path "/v1/presence/heartbeat" -AccessToken $session.accessToken
-        Assert-Success -Response $presence -Action "Presence heartbeat $($Account.Email)"
+        # A Grid query marks the caller online; there is no separate heartbeat endpoint.
+        $presence = Invoke-PynapliJson -Method POST -Path "/v1/grid/query" -AccessToken $session.accessToken -Body @{ radiusMeters = 100000; limit = 1 }
+        Assert-Success -Response $presence -Action "Presence refresh $($Account.Email)"
     }
 
     Set-ProfilePhoto -Session $session -DisplayName $Account.DisplayName -Email $Account.Email -Index $PhotoIndex
@@ -699,14 +700,14 @@ if ($RefreshPresence) {
     Write-Host "Refreshing presence for the online subset at $BaseUrl..."
     foreach ($viewer in $viewers) {
         $session = Get-DemoSession -Email $viewer.Email
-        Invoke-PynapliJson -Method POST -Path "/v1/presence/heartbeat" -AccessToken $session.accessToken | Out-Null
+        Invoke-PynapliJson -Method POST -Path "/v1/grid/query" -AccessToken $session.accessToken -Body @{ radiusMeters = 100000; limit = 1 } | Out-Null
     }
     foreach ($cityInfo in $cities) {
         for ($i = 1; $i -le $onlinePerCity; $i++) {
             $email = "demo-{0}-{1:d2}@pynapli.local" -f $cityInfo.Code, $i
             try {
                 $session = Get-DemoSession -Email $email
-                Invoke-PynapliJson -Method POST -Path "/v1/presence/heartbeat" -AccessToken $session.accessToken | Out-Null
+                Invoke-PynapliJson -Method POST -Path "/v1/grid/query" -AccessToken $session.accessToken -Body @{ radiusMeters = 100000; limit = 1 } | Out-Null
             } catch {
                 Write-Host "  [skip] $email (not seeded yet?)"
             }

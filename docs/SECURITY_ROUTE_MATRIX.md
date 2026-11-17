@@ -37,7 +37,6 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `AdminSubscriptionSupportRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Read-only subscription support view via `requireAdminActor`; additionally requires `X-Admin-Reason` and writes a `subscription_support_view` audit row. Excludes raw purchase tokens/order ids. |
 | `AdminDashboardRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Counts-only backlog dashboard across the reports/appeals/held-message/risk queues via `requireAdminActor`; aggregate counts only, so no `X-Admin-Reason`/audit (the metrics pattern). |
 | `NotificationRoutes.kt` | User-authenticated | Preferences and device tokens are token-derived. |
-| `PresenceRoutes.kt` | User-authenticated | Heartbeat is token-derived. |
 | `PresenceStreamRoutes.kt` | User-authenticated | SSE stream authenticates bearer token and block-filters target updates. |
 | `ProfileRoutes.kt` | User-authenticated | Profile reads/editing use token-derived viewer/owner and block checks. |
 | `TonightAvailabilityRoutes.kt` | User-authenticated | Availability belongs to token-derived user. |

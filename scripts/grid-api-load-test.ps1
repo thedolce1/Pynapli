@@ -483,7 +483,6 @@ function Write-ScenarioSummary {
     param([array]$Results)
 
     $budgets = @{
-        presence_heartbeat = 300
         grid_initial = $GridInitialBudgetP95Ms
         grid_filter = $GridFilterBudgetP95Ms
         grid_page2 = $GridPageBudgetP95Ms
@@ -795,9 +794,6 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
 
     $records = New-Object System.Collections.Generic.List[object]
 
-    $presence = Invoke-LoadRequest -Scenario "presence_heartbeat" -Method POST -Path "/v1/presence/heartbeat"
-    $records.Add($presence.Record)
-
     $initial = Invoke-LoadRequest `
         -Scenario "grid_initial" `
         -Method POST `
@@ -892,7 +888,6 @@ $parameters = [pscustomobject]@{
         gridFilterP95Ms = $GridFilterBudgetP95Ms
         gridPageP95Ms = $GridPageBudgetP95Ms
         profileOpenP95Ms = $ProfileOpenBudgetP95Ms
-        presenceHeartbeatP95Ms = 300
     }
 }
 

@@ -320,11 +320,14 @@ function Refresh-DevPresence {
         [string]$Email
     )
 
+    # A Grid query marks the caller online (the server refreshes the viewer's presence on every
+    # query); there is no separate heartbeat endpoint.
     $presence = Invoke-PynapliJson `
         -Method POST `
-        -Path "/v1/presence/heartbeat" `
-        -AccessToken $Session.accessToken
-    Assert-Success -Response $presence -Action "Presence heartbeat $Email"
+        -Path "/v1/grid/query" `
+        -AccessToken $Session.accessToken `
+        -Body @{ radiusMeters = 100000; limit = 1 }
+    Assert-Success -Response $presence -Action "Presence refresh $Email"
 }
 
 function Seed-Account {

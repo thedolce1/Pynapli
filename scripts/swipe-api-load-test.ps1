@@ -636,7 +636,6 @@ function Write-ScenarioSummary {
     param([array]$Results)
 
     $budgets = @{
-        presence_heartbeat = 300
         swipe_deck_initial = $DeckInitialBudgetP95Ms
         swipe_deck_filtered = $DeckFilterBudgetP95Ms
         swipe_deck_filtered_relaxed = $DeckFilterRelaxedBudgetP95Ms
@@ -1161,9 +1160,6 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
 
     $records = New-Object System.Collections.Generic.List[object]
 
-    $presence = Invoke-LoadRequest -Scenario "presence_heartbeat" -Method POST -Path "/v1/presence/heartbeat"
-    $records.Add($presence.Record)
-
     # Initial deck — no filters beyond defaults.
     $initial = Invoke-LoadRequest `
         -Scenario "swipe_deck_initial" `
@@ -1404,7 +1400,6 @@ $parameters = [pscustomobject]@{
         travelDeckP95Ms = $TravelDeckBudgetP95Ms
         actionP95Ms = $ActionBudgetP95Ms
         rewindP95Ms = $RewindBudgetP95Ms
-        presenceHeartbeatP95Ms = 300
     }
 }
 
