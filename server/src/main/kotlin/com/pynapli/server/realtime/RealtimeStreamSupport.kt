@@ -10,11 +10,12 @@ import io.ktor.websocket.close
 import io.ktor.websocket.send
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import org.slf4j.Logger
@@ -38,6 +39,7 @@ const val STREAM_SESSION_RECHECK_MS: Long = 60_000L
  * when it is no longer valid: signed out (here or on "sign out other devices"), expired, or the
  * account suspended, banned or deleted. Without this a socket opened before a ban kept receiving
  * deltas until the client happened to disconnect. The client reconnects with its current token.
+ * When the account's sessions are revoked ([AuthService.sessionRevocations]) it re-checks at once.
  */
 suspend fun DefaultWebSocketServerSession.authenticateStream(
     authService: AuthService,
@@ -55,9 +57,12 @@ suspend fun DefaultWebSocketServerSession.authenticateStream(
             close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, e.code))
             return null
         }
+    // An account-wide revocation (ban, lock, sign out everywhere) re-checks at once, on any replica.
+    val recheckNow = Channel<Unit>(Channel.CONFLATED)
+    launch { authService.sessionRevocations.collect { userId -> if (userId == viewerId) recheckNow.trySend(Unit) } }
     launch {
         while (true) {
-            delay(recheckEveryMillis)
+            withTimeoutOrNull(recheckEveryMillis) { recheckNow.receive() }
             try {
                 authService.authenticate(token)
             } catch (e: AuthException) {

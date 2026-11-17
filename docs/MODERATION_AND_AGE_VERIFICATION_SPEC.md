@@ -41,7 +41,7 @@ Current MVP slice:
 - Signup writes DOB/display age to the profile and writes acceptance timestamps/version markers to the account.
 - Profile Hub exposes an Age verification entry.
 - Ktor exposes requirements/status/start endpoints for authenticated users.
-- Admin/provider paths can review or callback verification results.
+- Admin/provider paths can review or callback verification results. The provider callback is signed with its own secret (`PYNAPLI_AGE_VERIFICATION_CALLBACK_SECRET`, HMAC-SHA256 over `<timestamp>.<body>`, 5-minute window); it never uses the admin token.
 - Results are stored in `age_verifications`; successful verification also sets `profiles.age_verified_at`.
 - Raw ID, selfie, and biometric payloads are not stored by this slice.
 - Still required before beta: provider selection, market-specific rules, legal review, social-auth parity, and production admin controls.

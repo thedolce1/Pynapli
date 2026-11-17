@@ -1,5 +1,7 @@
 package com.pynapli.server.moderation
 
+import com.pynapli.server.admin.requireAdminMfa
+import com.pynapli.server.admin.requireSeniorAdmin
 import com.pynapli.server.config.ServerConfig
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -10,10 +12,18 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
+import java.util.UUID
 
+/**
+ * Admin risk review. Changing an account's tier, locking or banning it needs a senior admin and a
+ * step-up MFA code (like reported-media removal), not just the shared admin token and a self-declared
+ * X-Admin-Id. Lock and ban also call [revokeSessions] (AuthService.invalidateCachedSessionsForUser)
+ * so cached sessions stop working and open sockets close at once, on every replica.
+ */
 fun Application.configureAdminRiskRoutes(
     config: ServerConfig,
     adminRiskService: AdminRiskService,
+    revokeSessions: (UUID) -> Unit,
 ) {
     val adminApiToken = config.adminApiToken ?: return
 
@@ -64,6 +74,8 @@ fun Application.configureAdminRiskRoutes(
 
             post("/users/{userId}/set-tier") {
                 val actor = call.requireAdminActor(adminApiToken)
+                requireSeniorAdmin(config, actor.actorId)
+                call.requireAdminMfa(config, actor.actorId)
                 val userId = call.parameters["userId"] ?: throw ModerationException("INVALID_ID")
                 val request =
                     call.receiveNullable<AdminRiskSetTierRequestDto>()
@@ -97,34 +109,29 @@ fun Application.configureAdminRiskRoutes(
 
             post("/users/{userId}/lock") {
                 val actor = call.requireAdminActor(adminApiToken)
+                requireSeniorAdmin(config, actor.actorId)
+                call.requireAdminMfa(config, actor.actorId)
                 val userId = call.parameters["userId"] ?: throw ModerationException("INVALID_ID")
                 val request =
                     call.receiveNullable<AdminRiskActionRequestDto>()
                         ?: throw ModerationException("MODERATION_REASON_REQUIRED")
-                call.respond(
-                    adminRiskService
-                        .lockAccount(
-                            userIdText = userId,
-                            actorId = actor.actorId,
-                            reason = request.reason,
-                        ).toDto(),
-                )
+                val result = adminRiskService.lockAccount(userIdText = userId, actorId = actor.actorId, reason = request.reason)
+                // Sessions were revoked in the same transaction; drop cached ones and close open sockets now.
+                revokeSessions(result.userId)
+                call.respond(result.toDto())
             }
 
             post("/users/{userId}/ban") {
                 val actor = call.requireAdminActor(adminApiToken)
+                requireSeniorAdmin(config, actor.actorId)
+                call.requireAdminMfa(config, actor.actorId)
                 val userId = call.parameters["userId"] ?: throw ModerationException("INVALID_ID")
                 val request =
                     call.receiveNullable<AdminRiskActionRequestDto>()
                         ?: throw ModerationException("MODERATION_REASON_REQUIRED")
-                call.respond(
-                    adminRiskService
-                        .banAccount(
-                            userIdText = userId,
-                            actorId = actor.actorId,
-                            reason = request.reason,
-                        ).toDto(),
-                )
+                val result = adminRiskService.banAccount(userIdText = userId, actorId = actor.actorId, reason = request.reason)
+                revokeSessions(result.userId)
+                call.respond(result.toDto())
             }
         }
     }

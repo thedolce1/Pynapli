@@ -10,6 +10,10 @@ import com.pynapli.server.safety.DeviceRiskSignalPublisher
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.shared.network.dto.AuthSessionDto
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import java.sql.SQLException
 import java.time.Clock
 import java.time.Duration
@@ -37,6 +41,12 @@ class AuthService(
             cache = AuthAccessSessionCache(accessSessionCacheTtl, accessSessionCacheMaxSize),
         )
 
+    // Accounts whose sessions were just revoked (here or on another replica): open realtime sockets
+    // re-check at once instead of at their next periodic check. Never suspends; on overflow the
+    // oldest is dropped and those sockets fall back to the periodic check.
+    private val revokedUsers = MutableSharedFlow<UUID>(extraBufferCapacity = 256, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val sessionRevocations: SharedFlow<UUID> = revokedUsers.asSharedFlow()
+
     // Other replicas cache sessions for a few seconds too: tell them about every sign-out and
     // account-wide revocation so a revoked token stops working everywhere at once.
     init {
@@ -46,7 +56,10 @@ class AuthService(
                 message.startsWith(REVOKED_USER_PREFIX) ->
                     runCatching { UUID.fromString(message.removePrefix(REVOKED_USER_PREFIX)) }
                         .getOrNull()
-                        ?.let(sessionManager::invalidateCachedSessionsForUser)
+                        ?.let { userId ->
+                            sessionManager.invalidateCachedSessionsForUser(userId)
+                            revokedUsers.tryEmit(userId)
+                        }
             }
         }
     }
@@ -155,6 +168,7 @@ class AuthService(
     fun invalidateCachedSessionsForUser(userId: UUID) {
         revocationRelay.publish(REVOCATION_CHANNEL, REVOKED_USER_PREFIX + userId)
         sessionManager.invalidateCachedSessionsForUser(userId)
+        revokedUsers.tryEmit(userId)
     }
 }
 

@@ -95,6 +95,21 @@ class ServerConfigValidationTest {
     }
 
     @Test
+    fun anAgeVerificationProviderNeedsItsOwnStrongCallbackSecret() {
+        val withProvider = validStagingConfig().copy(ageVerificationProvider = "persona")
+        assertEquals(listOf("AGE_VERIFICATION_CALLBACK_SECRET_REQUIRED"), withProvider.startupValidationIssues().map { it.code })
+        assertEquals(
+            listOf("AGE_VERIFICATION_CALLBACK_SECRET_REQUIRED"),
+            withProvider.copy(ageVerificationCallbackSecret = withProvider.adminApiToken).startupValidationIssues().map { it.code },
+            "reusing the admin token defeats the point",
+        )
+        assertEquals(
+            emptyList(),
+            withProvider.copy(ageVerificationCallbackSecret = "provider-callback-signing-secret-0123456789").startupValidationIssues(),
+        )
+    }
+
+    @Test
     fun emptyCorsOriginsStayValidForAMobileOnlyDeployment() {
         // CORS gates browser requests only, so a deployment with no web client is legitimate.
         assertEquals(emptyList(), validStagingConfig(corsAllowedOrigins = emptyList()).startupValidationIssues())

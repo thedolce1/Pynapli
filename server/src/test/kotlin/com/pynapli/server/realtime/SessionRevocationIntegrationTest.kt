@@ -4,6 +4,8 @@ import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.security.PasswordHasher
+import com.pynapli.server.moderation.AdminRiskService
+import com.pynapli.server.moderation.JdbcAdminRiskRepository
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.header
@@ -15,6 +17,7 @@ import io.ktor.websocket.CloseReason
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.time.Duration
+import java.util.UUID
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -72,6 +75,44 @@ class SessionRevocationIntegrationTest {
                         }
                     assertEquals(CloseReason.Codes.VIOLATED_POLICY.code, reason?.code)
                     assertEquals("UNAUTHENTICATED", reason?.message)
+                }
+            }
+        }
+
+    @Test
+    fun aBanClosesTheAccountsOpenStreamsAtOnceNotAtTheNextPeriodicCheck() =
+        testApplication {
+            val auth = authService()
+            val session = runBlocking { auth.signupEmail("banned-socket@example.com", "revocation-pass-1", "1990-01-01", true, true, true, null, "android", "1.0") }
+            val userId = UUID.fromString(session.user.userId)
+            application {
+                installRealtimeWebSocketsIfNeeded()
+                routing {
+                    webSocket("/test/stream") {
+                        // The default periodic re-check is a minute away; only the revocation can close this in time.
+                        authenticateStream(auth) ?: return@webSocket
+                        for (frame in incoming) {
+                            // Server-driven; nothing to read.
+                        }
+                    }
+                }
+            }
+            val client = createClient { install(ClientWebSockets) }
+
+            runBlocking {
+                client.webSocket("/test/stream", request = { header(HttpHeaders.Authorization, "Bearer ${session.accessToken}") }) {
+                    // Let the server finish authenticating before the ban lands.
+                    kotlinx.coroutines.delay(300)
+                    AdminRiskService(JdbcAdminRiskRepository(dataSource)).banAccount(userId.toString(), "senior-1", "confirmed abuse")
+                    auth.invalidateCachedSessionsForUser(userId)
+                    val reason =
+                        withTimeout(10_000) {
+                            for (frame in incoming) {
+                                // Nothing is sent before the close.
+                            }
+                            closeReason.await()
+                        }
+                    assertEquals(CloseReason.Codes.VIOLATED_POLICY.code, reason?.code)
                 }
             }
         }

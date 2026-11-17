@@ -55,6 +55,7 @@ import com.pynapli.server.swipe.configureTopPicksRoutes
 import com.pynapli.server.tonight.configureTonightFeedRoutes
 import com.pynapli.server.tonight.configureTonightSessionRoutes
 import com.pynapli.server.verification.configureAgeVerificationAdminRoutes
+import com.pynapli.server.verification.configureAgeVerificationCallbackRoute
 import com.pynapli.server.verification.configureAgeVerificationRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.engine.embeddedServer
@@ -139,7 +140,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAdminAppealRoutes(dependencies.config, dependencies.adminAppealService)
     configureAdminModerationRoutes(dependencies.config, dependencies.messageModerationService)
     configureAdminReportRoutes(dependencies.config, dependencies.adminReportService)
-    configureAdminRiskRoutes(dependencies.config, dependencies.adminRiskService)
+    configureAdminRiskRoutes(dependencies.config, dependencies.adminRiskService, dependencies.authService::invalidateCachedSessionsForUser)
     configureAdminMetricsRoutes(dependencies.config, dependencies.notificationDispatchWorker)
     configureProductMetricsRoutes(dependencies.config, dependencies.productMetrics)
     configureAdminUserLookupRoutes(dependencies.config, dependencies.adminUserLookupService)
@@ -147,6 +148,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAdminSubscriptionSupportRoutes(dependencies.config, dependencies.adminSubscriptionSupportService)
     configureAdminDashboardRoutes(dependencies.config, dependencies.adminDashboardService)
     configureAgeVerificationAdminRoutes(dependencies.config, dependencies.ageVerificationService)
+    configureAgeVerificationCallbackRoute(dependencies.config, dependencies.ageVerificationService)
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)
     configureAuthRoutes(

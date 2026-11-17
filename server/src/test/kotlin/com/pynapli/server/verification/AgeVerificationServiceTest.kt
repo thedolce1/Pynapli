@@ -1,6 +1,16 @@
 package com.pynapli.server.verification
 
+import com.pynapli.server.plugins.configureSerialization
+import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.testsupport.denyingRateLimitService
+import com.pynapli.server.testsupport.testServerConfig
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.server.testing.testApplication
 import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import kotlinx.coroutines.runBlocking
@@ -157,6 +167,69 @@ class AgeVerificationServiceTest {
             assertEquals("rejected", status.status)
             assertEquals(null, status.verifiedAt)
             assertEquals(null, repository.profileState.ageVerifiedAt)
+        }
+
+    @Test
+    fun providerCallbacksAuthenticateWithTheirOwnSignedSecretNotTheAdminToken() =
+        testApplication {
+            val userId = UUID.randomUUID()
+            val repository = InMemoryAgeVerificationRepository(profile(userId, birthdate = LocalDate.parse("1990-01-01")))
+            val secret = "callback-secret-for-tests-0123456789abcdef"
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureAgeVerificationCallbackRoute(
+                    testServerConfig().copy(adminApiToken = "test-admin-token", ageVerificationCallbackSecret = secret),
+                    AgeVerificationService(repository, clock),
+                    nowSeconds = { now.epochSecond },
+                )
+            }
+            val body = """{"userId":"$userId","provider":"persona","providerReference":"ref-1","status":"verified"}"""
+            suspend fun callback(
+                timestamp: Long?,
+                signature: String?,
+                adminToken: String? = null,
+            ) = client.post("/v1/verification/callback") {
+                timestamp?.let { header(AGE_VERIFICATION_TIMESTAMP_HEADER, it.toString()) }
+                signature?.let { header(AGE_VERIFICATION_SIGNATURE_HEADER, it) }
+                adminToken?.let {
+                    header("X-Admin-Token", it)
+                    header("X-Admin-Id", "provider")
+                    header("X-Admin-Reason", "callback")
+                }
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+
+            val ts = now.epochSecond
+            assertEquals(HttpStatusCode.Unauthorized, callback(null, null, adminToken = "test-admin-token").status, "the admin token is no longer accepted")
+            assertEquals(HttpStatusCode.Unauthorized, callback(ts, AgeVerificationCallbackSignature.sign("some-other-secret", ts, body)).status)
+            assertEquals(HttpStatusCode.Unauthorized, callback(ts - 600, AgeVerificationCallbackSignature.sign(secret, ts - 600, body)).status, "stale")
+            assertEquals(0, repository.records.size)
+
+            val ok = callback(ts, AgeVerificationCallbackSignature.sign(secret, ts, body))
+            assertEquals(HttpStatusCode.OK, ok.status)
+            assertEquals("provider_callback", repository.records.single().method)
+        }
+
+    @Test
+    fun withoutACallbackSecretTheCallbackRouteIsNotServed() =
+        testApplication {
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureAgeVerificationCallbackRoute(testServerConfig().copy(adminApiToken = "test-admin-token"), AgeVerificationService(InMemoryAgeVerificationRepository(profile(UUID.randomUUID(), birthdate = LocalDate.parse("1990-01-01"))), clock))
+                configureAgeVerificationAdminRoutes(testServerConfig().copy(adminApiToken = "test-admin-token"), AgeVerificationService(InMemoryAgeVerificationRepository(profile(UUID.randomUUID(), birthdate = LocalDate.parse("1990-01-01"))), clock))
+            }
+            val response =
+                client.post("/v1/verification/callback") {
+                    header("X-Admin-Token", "test-admin-token")
+                    header("X-Admin-Id", "provider")
+                    header("X-Admin-Reason", "callback")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"status":"verified"}""")
+                }
+            assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
     @Test

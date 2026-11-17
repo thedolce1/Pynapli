@@ -28,7 +28,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `AdminAppealRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Requires admin actor/reason. |
 | `AdminModerationRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Requires admin actor/reason and writes audit rows. |
 | `AdminReportRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Requires admin actor/reason. |
-| `AdminRiskRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Requires admin actor/reason. |
+| `AdminRiskRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Requires admin actor/reason. `set-tier`, `lock` and `ban` also require a senior admin and step-up MFA (`X-Admin-MFA`); lock and ban drop cached sessions and close open sockets on every replica at once. |
 | `AdminMetricsRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. |
 | `ProductMetricsRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Counts-only KPI snapshot via `requireAdminActor`. |
 | `PrometheusMetricsRoutes.kt` | Scrape-token-authenticated | `GET /metrics`; not installed unless `PYNAPLI_METRICS_TOKEN` (16+ chars) is set, bearer compared in constant time. Counts and gauges only, no user data. |
@@ -51,7 +51,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `TopPicksRoutes.kt` | User-authenticated | Picks are token-derived and backed by persisted swipe deck sessions. |
 | `TonightFeedRoutes.kt` | User-authenticated | Feed is token-derived and discovery-scoped. |
 | `TonightSessionRoutes.kt` | User-authenticated | Session lifecycle is token-derived and participant-scoped. |
-| `AgeVerificationRoutes.kt` | User/admin mixed | Requirements/status/start require bearer token; start is rate-limited; callback/review require admin auth. |
+| `AgeVerificationRoutes.kt` | User/admin mixed | Requirements/status/start require bearer token; start is rate-limited; review requires admin auth. The provider callback is authenticated only by an HMAC-SHA256 signature with its own secret (`PYNAPLI_AGE_VERIFICATION_CALLBACK_SECRET`, 5-minute timestamp window) and is not served without one; the admin token is not accepted there. |
 
 ## Current Security Coverage
 
