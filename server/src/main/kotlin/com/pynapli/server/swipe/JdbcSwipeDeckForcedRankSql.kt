@@ -23,7 +23,7 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
         forced_locations AS MATERIALIZED (
             SELECT ul.user_id,
                    ul.geom,
-                   ST_Distance(v.geom, ul.geom) AS distance_meters,
+                   pynapli_coarse_distance_m(v.geom, ul.geom) AS distance_meters,
                    v.geom <-> ul.geom AS distance_order
             FROM viewer_location v
             JOIN user_locations ul
@@ -227,7 +227,7 @@ internal fun Connection.queryDeckRankForcedTargets(
                COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
                p.verified_at IS NOT NULL AS verified,
                ds.show_distance,
-               ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
+               pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
                EXISTS (
                    SELECT 1
                    FROM boost_activations ba

@@ -207,8 +207,8 @@ class ProfileServiceTest {
             assertEquals(35, profile.displayAge)
             assertEquals("linked", profile.relationshipContext)
             assertEquals("both", profile.discoveryStyle)
-            assertEquals("1.2 km", profile.distanceLabel)
-            assertEquals(1_200, profile.distanceMeters)
+            assertEquals("1.0 km", profile.distanceLabel)
+            assertEquals(1_000, profile.distanceMeters)
             assertEquals(true, profile.allowGridMessages)
             assertEquals(true, profile.allowFlirts)
         }

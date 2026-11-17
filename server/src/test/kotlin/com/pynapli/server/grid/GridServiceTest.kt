@@ -68,8 +68,9 @@ class GridServiceTest {
             assertEquals(1, response.items.size)
             assertEquals(targetId.toString(), response.items.first().userId)
             assertEquals("Alex", response.items.first().displayName)
-            assertEquals("1.2 km", response.items.first().distanceLabel)
-            assertEquals(1_200, response.items.first().distanceMeters)
+            // AUDIT-10: anything under 2 km reads as the coarse "1 km" bucket.
+            assertEquals("1.0 km", response.items.first().distanceLabel)
+            assertEquals(1_000, response.items.first().distanceMeters)
             assertEquals(false, response.items.first().online)
             assertNull(response.items.first().thumbnailUrl)
         }

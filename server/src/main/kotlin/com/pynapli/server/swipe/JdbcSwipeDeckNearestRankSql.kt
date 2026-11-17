@@ -23,7 +23,7 @@ internal fun Connection.queryDeckRankNearestWindow(
         nearest_locations AS MATERIALIZED (
             SELECT near.user_id,
                    near.geom,
-                   ST_Distance(v.geom, near.geom) AS distance_meters,
+                   pynapli_coarse_distance_m(v.geom, near.geom) AS distance_meters,
                    v.geom <-> near.geom AS distance_order
             FROM viewer_location v
             JOIN LATERAL (

@@ -76,7 +76,8 @@ internal fun Connection.queryDeckRank(
                ds.show_distance,
                -- Distance shown to the viewer reflects where the target *appears*
                -- to be - their travel point if active, else their real GPS.
-               ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
+               -- Cell-to-cell distance (AUDIT-10): never the raw GPS distance.
+               pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
                EXISTS (
                    SELECT 1
                    FROM boost_activations ba
