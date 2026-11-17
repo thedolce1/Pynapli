@@ -7,6 +7,7 @@ import com.pynapli.server.realtime.RealtimeRelay
 import com.pynapli.server.realtime.UuidAsString
 import com.pynapli.shared.network.dto.ActivityDeltaDto
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.util.UUID
@@ -24,6 +25,9 @@ class ActivityBroadcaster(
             replay = 0,
         )
     val deltas: SharedFlow<ActivityRealtimeDelta> = fanout.deltas
+
+    /** Open sockets on this replica reading the stream (for /metrics). */
+    val subscriptionCount: StateFlow<Int> = fanout.subscriptionCount
 
     suspend fun emit(delta: ActivityRealtimeDelta) {
         fanout.emit(delta)

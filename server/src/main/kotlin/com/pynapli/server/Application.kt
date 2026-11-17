@@ -19,13 +19,16 @@ import com.pynapli.server.media.configureMediaRoutes
 import com.pynapli.server.media.configureRequestMediaBaseUrl
 import com.pynapli.server.messaging.configureMessageStreamRoutes
 import com.pynapli.server.messaging.configureMessagingRoutes
+import com.pynapli.server.metrics.OperationalMetricsSources
 import com.pynapli.server.metrics.configureProductMetricsRoutes
+import com.pynapli.server.metrics.configurePrometheusMetrics
 import com.pynapli.server.moderation.configureAdminAppealRoutes
 import com.pynapli.server.moderation.configureAdminModerationRoutes
 import com.pynapli.server.moderation.configureAdminReportRoutes
 import com.pynapli.server.moderation.configureAdminRiskRoutes
 import com.pynapli.server.notifications.configureAdminMetricsRoutes
 import com.pynapli.server.notifications.configureNotificationRoutes
+import com.pynapli.server.plugins.LogFormat
 import com.pynapli.server.plugins.configureAdminAudit
 import com.pynapli.server.plugins.configureAppCheck
 import com.pynapli.server.plugins.configureHTTP
@@ -58,6 +61,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 
 fun main() {
+    LogFormat.apply()
     val config = ServerConfig.fromEnvironment()
     val dependencies = ServerDependencies.fromEnvironment(config)
 
@@ -88,6 +92,21 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAppCheck(dependencies.config.appCheckEnforced, selectAppCheckVerifier(dependencies.config))
     configureAdminAudit(dependencies.adminRequestAuditRecorder)
     configureHealthRoutes(dependencies.config.environment, dependencies::checkAll)
+    configurePrometheusMetrics(
+        token = dependencies.config.metricsToken,
+        sources =
+            OperationalMetricsSources(
+                poolSnapshot = dependencies.database::poolSnapshot,
+                realtimeSubscribers =
+                    mapOf(
+                        "messages" to { dependencies.messageBroadcaster.subscriptionCount.value },
+                        "activity" to { dependencies.activityBroadcaster.subscriptionCount.value },
+                        "presence" to { dependencies.presenceBroadcaster.subscriptionCount.value },
+                        "psync" to { dependencies.psyncBroadcaster.subscriptionCount.value },
+                    ),
+                dataSource = dependencies.database.dataSource,
+            ),
+    )
     configureAdminAppealRoutes(dependencies.config, dependencies.adminAppealService)
     configureAdminModerationRoutes(dependencies.config, dependencies.messageModerationService)
     configureAdminReportRoutes(dependencies.config, dependencies.adminReportService)
