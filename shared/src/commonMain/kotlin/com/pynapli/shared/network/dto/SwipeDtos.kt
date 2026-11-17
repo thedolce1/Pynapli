@@ -77,7 +77,9 @@ data class SwipeDeckResponseDto(
     val generatedAt: String? = null,
     val items: List<SwipeCardDto>,
     val nextCursor: String? = null,
-    val adSupported: Boolean = false,
+    // False on Free: the Linked / Age chips show as locked. Defaults open so a response
+    // without it never locks a paid user out.
+    val advancedFiltersAllowed: Boolean = true,
     val advancedFiltersApplied: Boolean = false,
 )
 

@@ -16,11 +16,11 @@ import kotlin.test.assertTrue
 
 class SwipeStateHolderTest {
     @Test
-    fun loadLocksPaidFiltersWhenDeckIsAdSupported() =
+    fun loadLocksPaidFiltersWhenAdvancedFiltersAreNotAllowed() =
         runTest {
             val repository =
                 FakeSwipeRepository(
-                    deck = SwipeDeckUi(cards = emptyList(), adSupported = true),
+                    deck = SwipeDeckUi(cards = emptyList(), advancedFiltersAllowed = false),
                 )
             val stateHolder = SwipeStateHolder(repository)
 
@@ -30,7 +30,6 @@ class SwipeStateHolderTest {
             assertFalse(filters.first { it.type == SwipeFilterType.ForYou }.locked)
             assertTrue(filters.first { it.type == SwipeFilterType.Linked }.locked)
             assertTrue(filters.first { it.type == SwipeFilterType.Age }.locked)
-            assertTrue(stateHolder.state.value.adSupported)
         }
 
     @Test
@@ -39,7 +38,7 @@ class SwipeStateHolderTest {
             val card = swipeCard(userId = "target-1")
             val repository =
                 FakeSwipeRepository(
-                    deck = SwipeDeckUi(cards = listOf(card), adSupported = false),
+                    deck = SwipeDeckUi(cards = listOf(card)),
                 )
             val stateHolder = SwipeStateHolder(repository)
 

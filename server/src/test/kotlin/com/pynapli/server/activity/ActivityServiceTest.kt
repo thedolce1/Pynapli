@@ -572,7 +572,6 @@ class ActivityServiceTest {
             assertEquals(1, response.revealLimit)
             assertEquals(1, response.gatedCount)
             assertEquals(SubscriptionTier.FREE, response.entitlementTier)
-            assertEquals(true, response.adSupported)
         }
 
     @Test
@@ -600,7 +599,6 @@ class ActivityServiceTest {
             assertEquals(null, response.revealLimit)
             assertEquals(0, response.gatedCount)
             assertEquals(SubscriptionTier.SELECT, response.entitlementTier)
-            assertEquals(false, response.adSupported)
         }
 
     @Test

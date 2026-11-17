@@ -5,7 +5,6 @@ import com.pynapli.shared.network.dto.SubscriptionTier
 
 data class EntitlementPolicy(
     val tier: String,
-    val adSupported: Boolean,
     val activityRevealLimit: Int,
     val advancedFiltersAllowed: Boolean,
     val introNoteInventoryRequired: Boolean,
@@ -24,7 +23,6 @@ data class EntitlementPolicy(
         fun unrestricted(): EntitlementPolicy =
             EntitlementPolicy(
                 tier = SubscriptionTier.SELECT,
-                adSupported = false,
                 activityRevealLimit = Int.MAX_VALUE,
                 advancedFiltersAllowed = true,
                 introNoteInventoryRequired = true,
@@ -49,7 +47,6 @@ fun SubscriptionEntitlementDto.toPolicy(): EntitlementPolicy =
         SubscriptionTier.SELECT ->
             EntitlementPolicy(
                 tier = tier,
-                adSupported = adSupported,
                 activityRevealLimit = Int.MAX_VALUE,
                 advancedFiltersAllowed = true,
                 introNoteInventoryRequired = true,
@@ -60,7 +57,6 @@ fun SubscriptionEntitlementDto.toPolicy(): EntitlementPolicy =
         SubscriptionTier.SOCIAL ->
             EntitlementPolicy(
                 tier = tier,
-                adSupported = adSupported,
                 activityRevealLimit = 10,
                 advancedFiltersAllowed = true,
                 introNoteInventoryRequired = true,
@@ -72,7 +68,6 @@ fun SubscriptionEntitlementDto.toPolicy(): EntitlementPolicy =
         else ->
             EntitlementPolicy(
                 tier = SubscriptionTier.FREE,
-                adSupported = true,
                 activityRevealLimit = 1,
                 advancedFiltersAllowed = false,
                 introNoteInventoryRequired = true,

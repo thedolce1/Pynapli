@@ -247,7 +247,6 @@ class AdminSubscriptionSupportRoutesTest {
             tier = "select",
             source = "own_subscription",
             displayName = "Select",
-            adSupported = false,
             linkedPartnerIncluded = true,
         )
 

@@ -315,7 +315,6 @@ class GridServiceTest {
                 )
 
             assertEquals(listOf(targetId.toString()), response.items.map { it.userId })
-            assertEquals(true, response.adSupported)
             assertEquals(false, response.advancedFiltersApplied)
         }
 
@@ -345,7 +344,6 @@ class GridServiceTest {
             val response = service.queryGrid(viewerId, GridQueryRequestDto(onlineOnly = true))
 
             assertEquals(listOf(onlineTarget.toString()), response.items.map { it.userId })
-            assertEquals(false, response.adSupported)
             assertEquals(false, response.advancedFiltersApplied)
         }
 

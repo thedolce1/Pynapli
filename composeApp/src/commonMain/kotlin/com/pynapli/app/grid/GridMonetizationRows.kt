@@ -106,23 +106,3 @@ internal object GridVerificationTags {
     const val ROW: String = "grid-verification-row"
     const val CTA: String = "grid-verification-cta"
 }
-
-@Composable
-internal fun GridAdSlot() {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clip(PynapliShape.CardShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
-                .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Sponsored",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelSmall,
-        )
-    }
-}

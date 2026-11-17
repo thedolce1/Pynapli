@@ -152,7 +152,6 @@ private class StaticSwipeVisualRepository(
                 deckSessionId = "visual-session",
                 cards = cards,
                 nextCursor = null,
-                adSupported = false,
             ),
         )
 
@@ -162,7 +161,6 @@ private class StaticSwipeVisualRepository(
                 deckSessionId = "visual-picks",
                 cards = cards,
                 nextCursor = null,
-                adSupported = false,
             ),
         )
 

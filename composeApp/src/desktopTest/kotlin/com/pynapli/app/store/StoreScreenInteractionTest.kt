@@ -100,7 +100,6 @@ private fun freeTier(): SubscriptionTierDto =
         tier = SubscriptionTier.FREE,
         displayName = "Pynapli Free",
         monthlyPriceUsdCents = 0,
-        adSupported = true,
         linkedPartnerIncluded = false,
         features = listOf("Grid browsing", "Swipe matching"),
     )
@@ -110,9 +109,8 @@ private fun socialTier(): SubscriptionTierDto =
         tier = SubscriptionTier.SOCIAL,
         displayName = "Pynapli Social",
         monthlyPriceUsdCents = 499,
-        adSupported = false,
         linkedPartnerIncluded = true,
-        features = listOf("No ads", "Saved filters"),
+        features = listOf("Expanded grid", "Saved filters"),
         playStoreProductId = SubscriptionProductId.PLAY_SOCIAL_MONTHLY,
     )
 
@@ -121,7 +119,6 @@ private fun selectTier(): SubscriptionTierDto =
         tier = SubscriptionTier.SELECT,
         displayName = "Pynapli Select",
         monthlyPriceUsdCents = 999,
-        adSupported = false,
         linkedPartnerIncluded = true,
         features = listOf("Full Activity reveal", "Intro Notes"),
         playStoreProductId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
@@ -143,6 +140,5 @@ private fun entitlement(): SubscriptionEntitlementDto =
         tier = SubscriptionTier.FREE,
         source = EntitlementSource.FREE,
         displayName = "Pynapli Free",
-        adSupported = true,
         linkedPartnerIncluded = false,
     )

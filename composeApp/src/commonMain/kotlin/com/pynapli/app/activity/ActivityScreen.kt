@@ -169,7 +169,6 @@ private fun ActivityScreenContent(
                 ActivityFomoGrid(
                     items = state.visibleItems,
                     gatedCount = state.gatedCount,
-                    adSupported = state.adSupported,
                     nextCursor = state.nextCursor,
                     isLoadingMore = state.isLoadingMore,
                     focusedEventId = state.focusedEventId,
@@ -236,11 +235,6 @@ private fun ActivityScreenContent(
                                 loading = state.isLoadingMore,
                                 onLoadMore = onLoadMore,
                             )
-                        }
-                    }
-                    if (state.adSupported) {
-                        item(key = "activity-ad-slot") {
-                            ActivityAdSlot()
                         }
                     }
                 }

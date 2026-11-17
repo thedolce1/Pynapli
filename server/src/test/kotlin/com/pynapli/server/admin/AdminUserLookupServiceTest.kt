@@ -78,7 +78,6 @@ class AdminUserLookupServiceTest {
         tier = tier,
         source = source,
         displayName = tier.replaceFirstChar { it.uppercase() },
-        adSupported = tier == "free",
         linkedPartnerIncluded = tier != "free",
     )
 

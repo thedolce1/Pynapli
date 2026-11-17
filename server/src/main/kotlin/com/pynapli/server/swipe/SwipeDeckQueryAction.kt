@@ -201,7 +201,7 @@ internal class SwipeDeckQueryAction(
             generatedAt = deckSession.generatedAt.toString(),
             items = pageItems.map { it.dto },
             nextCursor = nextCursor,
-            adSupported = policy.adSupported,
+            advancedFiltersAllowed = policy.advancedFiltersAllowed,
             advancedFiltersApplied = filters.requiresAdvancedEntitlement,
         )
     }

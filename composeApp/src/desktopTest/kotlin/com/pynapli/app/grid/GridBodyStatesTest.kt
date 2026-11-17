@@ -89,5 +89,5 @@ private class EmptyGridFeedRepository : GridFeedRepository {
     override suspend fun loadGrid(
         filters: GridFilters,
         cursor: String?,
-    ): GridFeedUi = GridFeedUi(cards = emptyList(), adSupported = false)
+    ): GridFeedUi = GridFeedUi(cards = emptyList())
 }

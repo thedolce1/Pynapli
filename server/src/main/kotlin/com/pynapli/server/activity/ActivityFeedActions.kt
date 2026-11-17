@@ -47,7 +47,6 @@ internal class ActivityFeedActions(
             return ActivityFeedResponseDto(
                 items = emptyList(),
                 nextCursor = null,
-                adSupported = policy.adSupported,
                 entitlementTier = policy.tier,
                 revealLimit = policy.activityRevealLimit,
                 gatedCount = 0,
@@ -102,7 +101,6 @@ internal class ActivityFeedActions(
         return ActivityFeedResponseDto(
             items = revealed.foldPairLikes(blockedRelatedIds).map { it.toDto(mediaAssetUrlResolver) },
             nextCursor = nextCursor,
-            adSupported = policy.adSupported,
             entitlementTier = policy.tier,
             revealLimit = if (policy.fullActivityReveal) null else policy.activityRevealLimit,
             gatedCount = gatedCount,

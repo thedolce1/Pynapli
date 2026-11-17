@@ -914,7 +914,7 @@ class SwipeServiceTest {
             val deck = service.queryDeck(viewer, SwipeDeckRequestDto(minimumAge = 35))
 
             assertEquals(listOf(target.toString()), deck.items.map { it.userId })
-            assertEquals(false, deck.adSupported)
+            assertEquals(true, deck.advancedFiltersAllowed)
             // Age is a basic filter (FILTERS_SPEC L432-440) so advancedFiltersApplied stays false
             // even for paid tier. The advanced flag should only flip when lifestyle/logistics
             // tags or other gated filters are present (currently exposed via Grid, not Swipe).

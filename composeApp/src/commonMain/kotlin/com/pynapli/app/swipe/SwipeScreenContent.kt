@@ -34,8 +34,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.pynapli.app.ads.AdPlacement
-import com.pynapli.app.ads.AdPlacementPolicy
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.icons.Icons
@@ -144,9 +142,6 @@ internal fun SwipeScreenContent(
                     message = message,
                     onOpenStore = onOpenStore,
                 )
-            }
-            if (AdPlacementPolicy.canShowAds(state.adSupported, AdPlacement.SwipeBetweenBatches)) {
-                SwipeAdSlot()
             }
             if (state.topPicksMode) {
                 // Make the curated mode legible on the deck itself (the chip alone is easy to miss)

@@ -10,9 +10,9 @@ import com.pynapli.shared.network.dto.SubscriptionTierDto
 /**
  * The plan catalog the Store renders. A tier's [SubscriptionTierDto.features] lists what the plan
  * adds; it must NOT repeat what the structured flags already say. Every client renders
- * `adSupported` ("Ad-supported" / "No ads") and `linkedPartnerIncluded` ("Linked partner included" /
- * "Single account entitlement") as rows of their own, so repeating them here showed them twice
- * (Social listed both twice until 2026-11-10). SubscriptionCatalogTest pins this.
+ * `linkedPartnerIncluded` ("Linked partner included" / "Single account entitlement") as a row of
+ * its own, so repeating it here showed it twice (Social listed it twice until 2026-11-10).
+ * SubscriptionCatalogTest pins this.
  */
 internal object SubscriptionCatalog {
     fun inventory(): SubscriptionInventoryResponseDto =
@@ -27,7 +27,6 @@ internal object SubscriptionCatalog {
                 tier = SubscriptionTier.FREE,
                 displayName = "Pynapli Free",
                 monthlyPriceUsdCents = 0,
-                adSupported = true,
                 linkedPartnerIncluded = false,
                 features =
                     listOf(
@@ -43,7 +42,6 @@ internal object SubscriptionCatalog {
                 tier = SubscriptionTier.SOCIAL,
                 displayName = "Pynapli Social",
                 monthlyPriceUsdCents = 499,
-                adSupported = false,
                 linkedPartnerIncluded = true,
                 playStoreProductId = SubscriptionProductId.PLAY_SOCIAL_MONTHLY,
                 features =
@@ -60,7 +58,6 @@ internal object SubscriptionCatalog {
                 tier = SubscriptionTier.SELECT,
                 displayName = "Pynapli Select",
                 monthlyPriceUsdCents = 999,
-                adSupported = false,
                 linkedPartnerIncluded = true,
                 playStoreProductId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
                 features =

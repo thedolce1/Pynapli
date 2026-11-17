@@ -711,7 +711,6 @@ private fun DataSource.statusOf(sessionId: UUID): String? =
 private fun policy(tier: String): EntitlementPolicy =
     EntitlementPolicy(
         tier = tier,
-        adSupported = tier == SubscriptionTier.FREE,
         activityRevealLimit = if (tier == SubscriptionTier.FREE) 1 else Int.MAX_VALUE,
         advancedFiltersAllowed = tier != SubscriptionTier.FREE,
         introNoteInventoryRequired = true,

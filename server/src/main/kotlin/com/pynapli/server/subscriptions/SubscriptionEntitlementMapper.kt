@@ -23,7 +23,6 @@ internal object SubscriptionEntitlementMapper {
             tier = SubscriptionTier.FREE,
             source = EntitlementSource.FREE,
             displayName = displayNameFor(SubscriptionTier.FREE),
-            adSupported = true,
             linkedPartnerIncluded = false,
         )
 
@@ -40,7 +39,6 @@ internal object SubscriptionEntitlementMapper {
             tier = tier,
             source = source,
             displayName = displayNameFor(tier),
-            adSupported = false,
             linkedPartnerIncluded = true,
             sourceSubscriptionId = sourceSubscriptionId?.toString(),
             sourceUserId = sourceUserId.toString(),

@@ -35,7 +35,6 @@ data class GridQueryRequestDto(
 data class GridQueryResponseDto(
     val items: List<GridCardDto>,
     val nextCursor: String? = null,
-    val adSupported: Boolean = false,
     val advancedFiltersApplied: Boolean = false,
     val resultLimitReached: Boolean = false,
     val resultLimitTier: String? = null,

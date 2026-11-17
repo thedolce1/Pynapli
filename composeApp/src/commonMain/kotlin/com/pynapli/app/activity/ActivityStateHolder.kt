@@ -78,7 +78,6 @@ class ActivityStateHolder(
                         current.copy(
                             items = result.value.items,
                             nextCursor = result.value.nextCursor,
-                            adSupported = result.value.adSupported,
                             entitlementTier = result.value.entitlementTier,
                             revealLimit = result.value.revealLimit,
                             gatedCount = result.value.gatedCount,
@@ -138,7 +137,6 @@ class ActivityStateHolder(
                         existing.copy(
                             items = existing.items + appended,
                             nextCursor = result.value.nextCursor,
-                            adSupported = result.value.adSupported,
                             entitlementTier = result.value.entitlementTier,
                             revealLimit = result.value.revealLimit,
                             gatedCount = result.value.gatedCount,

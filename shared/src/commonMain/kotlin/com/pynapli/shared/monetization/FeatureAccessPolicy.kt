@@ -20,7 +20,6 @@ enum class PynapliFeature(
     IntroNote(true),
     PineappleLike(true),
     Boost(true),
-    RemoveAds(true),
 }
 
 object FeatureAccessPolicy {

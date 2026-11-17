@@ -5,9 +5,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SubscriptionCatalogTest {
-    // Clients render these from the tier's adSupported / linkedPartnerIncluded flags, so a feature
-    // line with the same words shows twice on the Store's plan card.
-    private val flagRows = setOf("No ads", "Ad-supported", "Linked partner included", "Single account entitlement")
+    // Clients render these from the tier's linkedPartnerIncluded flag, so a feature line with the
+    // same words shows twice on the Store's plan card.
+    private val flagRows = setOf("Linked partner included", "Single account entitlement")
 
     @Test
     fun featureListsNeverRepeatWhatTheFlagsSay() {

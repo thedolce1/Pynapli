@@ -85,26 +85,6 @@ internal fun ActivityGateRow(
 }
 
 @Composable
-internal fun ActivityAdSlot() {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-                .clip(PynapliShape.CardShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
-                .padding(vertical = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Sponsored",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelMedium,
-        )
-    }
-}
-
-@Composable
 internal fun ActivityInlineMessage(
     message: String?,
     isError: Boolean,

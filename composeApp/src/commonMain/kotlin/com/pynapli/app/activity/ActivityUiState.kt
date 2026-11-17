@@ -13,7 +13,6 @@ data class ActivityUiState(
     val nextCursor: String? = null,
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
-    val adSupported: Boolean = false,
     val entitlementTier: String? = null,
     val revealLimit: Int? = null,
     val gatedCount: Int = 0,
@@ -79,7 +78,6 @@ internal fun ActivityTabUi.isFomoGridTab(): Boolean = this == ActivityTabUi.Flir
 data class ActivityFeedUi(
     val items: List<ActivityEventDto>,
     val nextCursor: String? = null,
-    val adSupported: Boolean = false,
     val entitlementTier: String? = null,
     val revealLimit: Int? = null,
     val gatedCount: Int = 0,

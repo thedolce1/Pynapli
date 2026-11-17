@@ -76,7 +76,6 @@ class ActivityStateHolderTest {
                             ActivityFeedUi(
                                 items = listOf(event),
                                 nextCursor = "cursor-2",
-                                adSupported = true,
                                 entitlementTier = "free",
                                 revealLimit = 1,
                                 gatedCount = 4,
@@ -90,7 +89,6 @@ class ActivityStateHolderTest {
             val state = stateHolder.state.value
             assertEquals(listOf(event), state.items)
             assertEquals("cursor-2", state.nextCursor)
-            assertEquals(true, state.adSupported)
             assertEquals("free", state.entitlementTier)
             assertEquals(1, state.revealLimit)
             assertEquals(4, state.gatedCount)

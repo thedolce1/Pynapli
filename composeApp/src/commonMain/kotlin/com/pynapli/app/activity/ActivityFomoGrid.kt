@@ -74,7 +74,6 @@ private const val MAX_LOCKED_TILES = 6
 internal fun ActivityFomoGrid(
     items: List<ActivityEventDto>,
     gatedCount: Int,
-    adSupported: Boolean,
     nextCursor: String?,
     isLoadingMore: Boolean,
     focusedEventId: String?,
@@ -139,9 +138,6 @@ internal fun ActivityFomoGrid(
                 fullSpanItem(key = "fomo-load-more") {
                     ActivityLoadMoreRow(loading = isLoadingMore, onLoadMore = onLoadMore)
                 }
-            }
-            if (adSupported) {
-                fullSpanItem(key = "fomo-ad") { ActivityAdSlot() }
             }
         }
     }

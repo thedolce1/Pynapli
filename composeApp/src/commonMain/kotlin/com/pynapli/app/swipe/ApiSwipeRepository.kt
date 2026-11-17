@@ -16,7 +16,7 @@ class ApiSwipeRepository(
                 deckSessionId = value.deckSessionId,
                 cards = value.items,
                 nextCursor = value.nextCursor,
-                adSupported = value.adSupported,
+                advancedFiltersAllowed = value.advancedFiltersAllowed,
                 advancedFiltersApplied = value.advancedFiltersApplied,
             )
         }
@@ -27,7 +27,6 @@ class ApiSwipeRepository(
                 deckSessionId = value.deckSessionId.takeIf { it.isNotBlank() },
                 cards = value.picks.map { it.card },
                 nextCursor = null,
-                adSupported = false,
                 advancedFiltersApplied = false,
             )
         }

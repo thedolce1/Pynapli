@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 data class ActivityFeedResponseDto(
     val items: List<ActivityEventDto>,
     val nextCursor: String? = null,
-    val adSupported: Boolean = false,
     val entitlementTier: String? = null,
     val revealLimit: Int? = null,
     val gatedCount: Int = 0,

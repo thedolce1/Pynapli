@@ -16,7 +16,6 @@ data class SwipeUiState(
     val isRewinding: Boolean = false,
     val isPaging: Boolean = false,
     val nextCursor: String? = null,
-    val adSupported: Boolean = false,
     val pendingActionCount: Int = 0,
     val pendingActionLimit: Int = MAX_PENDING_ACTIONS,
     val paywallMessage: String? = null,

@@ -21,7 +21,6 @@ class ApiActivityFeedRepository(
             ActivityFeedUi(
                 items = value.items,
                 nextCursor = value.nextCursor,
-                adSupported = value.adSupported,
                 entitlementTier = value.entitlementTier,
                 revealLimit = value.revealLimit,
                 gatedCount = value.gatedCount,

@@ -2,7 +2,6 @@ package com.pynapli.app.swipe
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,26 +17,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.handCursor
-
-@Composable
-internal fun SwipeAdSlot() {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .clip(PynapliShape.CardShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
-                .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Sponsored",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelSmall,
-        )
-    }
-}
 
 @Composable
 internal fun SwipeInlineError(message: String) {

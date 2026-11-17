@@ -141,9 +141,6 @@ internal fun StoreTierRow(
                     "Single account entitlement"
                 },
         )
-        StoreFeatureRow(
-            label = if (tier.adSupported) "Ad-supported" else "No ads",
-        )
     }
 }
 

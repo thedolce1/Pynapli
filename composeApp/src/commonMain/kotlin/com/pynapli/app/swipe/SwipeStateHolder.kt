@@ -48,8 +48,7 @@ class SwipeStateHolder(
                         deckSessionId = result.value.deckSessionId,
                         cards = result.value.cards.filterNotPending(),
                         nextCursor = result.value.nextCursor,
-                        filters = it.filters.withPaidLocks(result.value.adSupported),
-                        adSupported = result.value.adSupported,
+                        filters = it.filters.withPaidLocks(result.value.advancedFiltersAllowed),
                         paywallMessage = null,
                         isLoading = false,
                     )
@@ -63,7 +62,7 @@ class SwipeStateHolder(
                         topPicksMode = if (entitlementRequired) false else it.topPicksMode,
                         filters =
                             if (entitlementRequired) {
-                                it.filters.withPaidLocks(adSupported = true).withActiveFilter(SwipeFilterType.ForYou)
+                                it.filters.withPaidLocks(advancedFiltersAllowed = false).withActiveFilter(SwipeFilterType.ForYou)
                             } else {
                                 it.filters
                             },

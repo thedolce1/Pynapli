@@ -64,7 +64,6 @@ class ProfileHubStateHolderTest {
                                 tier = "select",
                                 source = EntitlementSource.OWN_SUBSCRIPTION,
                                 displayName = "Pynapli Select",
-                                adSupported = false,
                                 linkedPartnerIncluded = true,
                             ),
                         ),
@@ -672,7 +671,6 @@ private fun testEntitlement(): SubscriptionEntitlementDto =
         tier = "free",
         source = EntitlementSource.FREE,
         displayName = "Free",
-        adSupported = true,
         linkedPartnerIncluded = false,
     )
 

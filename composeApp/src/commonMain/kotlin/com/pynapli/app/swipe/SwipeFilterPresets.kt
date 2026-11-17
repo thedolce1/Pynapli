@@ -27,7 +27,7 @@ internal val defaultSwipeFilters =
 
 internal fun List<SwipeFilterUi>.withActiveFilter(type: SwipeFilterType): List<SwipeFilterUi> = map { filter -> filter.copy(active = filter.type == type) }
 
-internal fun List<SwipeFilterUi>.withPaidLocks(adSupported: Boolean): List<SwipeFilterUi> =
+internal fun List<SwipeFilterUi>.withPaidLocks(advancedFiltersAllowed: Boolean): List<SwipeFilterUi> =
     map { filter ->
         filter.copy(
             locked =
@@ -39,7 +39,7 @@ internal fun List<SwipeFilterUi>.withPaidLocks(adSupported: Boolean): List<Swipe
                     -> false
                     SwipeFilterType.Linked,
                     SwipeFilterType.Age,
-                    -> adSupported
+                    -> !advancedFiltersAllowed
                 },
         )
     }

@@ -72,7 +72,6 @@ class GridStateHolder(
                     current.copy(
                         cards = feed.cards,
                         nextCursor = feed.nextCursor,
-                        adSupported = feed.adSupported,
                         paywallMessage = feed.resultLimitPaywallMessage,
                         verificationMessage = null,
                         isRefreshing = false,
@@ -207,7 +206,6 @@ class GridStateHolder(
                     existing.copy(
                         cards = existing.cards + appended,
                         nextCursor = feed.nextCursor,
-                        adSupported = feed.adSupported,
                         paywallMessage = feed.resultLimitPaywallMessage,
                         isLoadingMore = false,
                         errorCode = null,
@@ -294,7 +292,6 @@ class ApiGridFeedRepository(
                             card.toGridProfileCardUi(index)
                         },
                     nextCursor = result.value.nextCursor,
-                    adSupported = result.value.adSupported,
                     advancedFiltersApplied = result.value.advancedFiltersApplied,
                     resultLimitReached = result.value.resultLimitReached,
                     resultLimitTier = result.value.resultLimitTier,
@@ -321,7 +318,6 @@ class ApiGridFeedRepository(
 data class GridFeedUi(
     val cards: List<GridProfileCardUi>,
     val nextCursor: String? = null,
-    val adSupported: Boolean = false,
     val advancedFiltersApplied: Boolean = false,
     val resultLimitReached: Boolean = false,
     val resultLimitTier: String? = null,

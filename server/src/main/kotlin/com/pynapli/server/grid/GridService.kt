@@ -102,7 +102,6 @@ class GridService(
             return GridQueryResponseDto(
                 items = emptyList(),
                 nextCursor = null,
-                adSupported = policy.adSupported,
                 advancedFiltersApplied = advancedFiltersApplied,
                 resultLimitReached = policy.gridResultDepthLimit != Int.MAX_VALUE,
                 resultLimitTier = policy.tier.takeIf { policy.gridResultDepthLimit != Int.MAX_VALUE },
@@ -221,7 +220,6 @@ class GridService(
                 effectiveNextAnchor
                     ?.takeUnless { resultLimitReached }
                     ?.let { cursorCodec.encodeGridCursor(cursorScopeHash, it.copy(seenCount = seenCount)) },
-            adSupported = policy.adSupported,
             advancedFiltersApplied = advancedFiltersApplied,
             resultLimitReached = resultLimitReached,
             resultLimitTier = policy.tier.takeIf { resultLimitReached },

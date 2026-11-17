@@ -14,7 +14,6 @@ data class GridUiState(
     val isRefreshing: Boolean = false,
     val isLoadingMore: Boolean = false,
     val nextCursor: String? = null,
-    val adSupported: Boolean = false,
     val paywallMessage: String? = null,
     // Set when the server rejects a gated action with AGE_VERIFICATION_REQUIRED. Drives the
     // "Verify your age" prompt row; its CTA routes into the Profile-Hub age-verification flow.

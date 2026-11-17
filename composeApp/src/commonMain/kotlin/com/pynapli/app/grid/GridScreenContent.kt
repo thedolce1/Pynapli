@@ -89,9 +89,6 @@ internal fun GridScreenContent(
                 onOpenAgeVerification = onOpenAgeVerification,
             )
         }
-        if (state.adSupported) {
-            GridAdSlot()
-        }
         GridPullToRefresh(
             // Show the indicator for an explicit refresh, but not for the very first cold load
             // (which renders the body's own centered spinner) or background quiet refreshes.

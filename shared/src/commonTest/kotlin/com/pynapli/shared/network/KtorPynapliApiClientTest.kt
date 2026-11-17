@@ -491,7 +491,6 @@ class KtorPynapliApiClientTest {
                               "tier": "select",
                               "source": "linked_partner_benefit",
                               "displayName": "Pynapli Select",
-                              "adSupported": false,
                               "linkedPartnerIncluded": true,
                               "sourceSubscriptionId": "sub-1",
                               "sourceUserId": "partner-1",
@@ -538,7 +537,6 @@ class KtorPynapliApiClientTest {
                                   "tier": "free",
                                   "displayName": "Pynapli Free",
                                   "monthlyPriceUsdCents": 0,
-                                  "adSupported": true,
                                   "linkedPartnerIncluded": false,
                                   "features": ["Basic grid"]
                                 },
@@ -546,15 +544,13 @@ class KtorPynapliApiClientTest {
                                   "tier": "social",
                                   "displayName": "Pynapli Social",
                                   "monthlyPriceUsdCents": 499,
-                                  "adSupported": false,
                                   "linkedPartnerIncluded": true,
-                                  "features": ["No ads"]
+                                  "features": ["Expanded grid"]
                                 },
                                 {
                                   "tier": "select",
                                   "displayName": "Pynapli Select",
                                   "monthlyPriceUsdCents": 999,
-                                  "adSupported": false,
                                   "linkedPartnerIncluded": true,
                                   "features": ["Advanced filters"]
                                 }
@@ -597,7 +593,6 @@ class KtorPynapliApiClientTest {
                                 "tier": "free",
                                 "source": "free",
                                 "displayName": "Pynapli Free",
-                                "adSupported": true,
                                 "linkedPartnerIncluded": false
                               }
                             }
@@ -646,7 +641,6 @@ class KtorPynapliApiClientTest {
                                 "tier": "select",
                                 "source": "own_subscription",
                                 "displayName": "Pynapli Select",
-                                "adSupported": false,
                                 "linkedPartnerIncluded": true
                               },
                               "inventory": {

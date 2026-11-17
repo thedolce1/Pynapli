@@ -42,7 +42,6 @@ class FeatureAccessPolicyTest {
                 PynapliFeature.IntroNote,
                 PynapliFeature.PineappleLike,
                 PynapliFeature.Boost,
-                PynapliFeature.RemoveAds,
             )
 
         monetizedFeatures.forEach { feature ->

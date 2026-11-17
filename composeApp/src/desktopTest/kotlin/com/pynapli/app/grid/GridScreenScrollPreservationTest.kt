@@ -260,5 +260,5 @@ private class StaticGridFeedRepository(
     override suspend fun loadGrid(
         filters: GridFilters,
         cursor: String?,
-    ): GridFeedUi = GridFeedUi(cards = cards, adSupported = false)
+    ): GridFeedUi = GridFeedUi(cards = cards)
 }

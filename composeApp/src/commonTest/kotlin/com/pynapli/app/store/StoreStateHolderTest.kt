@@ -215,7 +215,6 @@ private fun selectTier(): SubscriptionTierDto =
         tier = SubscriptionTier.SELECT,
         displayName = "Pynapli Select",
         monthlyPriceUsdCents = 999,
-        adSupported = false,
         linkedPartnerIncluded = true,
         features = listOf("Intro Notes"),
         playStoreProductId = "pynapli_select_monthly",
@@ -237,6 +236,5 @@ private fun entitlement(tier: String): SubscriptionEntitlementDto =
         tier = tier,
         source = if (tier == SubscriptionTier.FREE) EntitlementSource.FREE else EntitlementSource.OWN_SUBSCRIPTION,
         displayName = if (tier == SubscriptionTier.FREE) "Pynapli Free" else "Pynapli Select",
-        adSupported = tier == SubscriptionTier.FREE,
         linkedPartnerIncluded = tier != SubscriptionTier.FREE,
     )

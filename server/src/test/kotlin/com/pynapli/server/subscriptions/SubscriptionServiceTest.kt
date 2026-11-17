@@ -32,7 +32,6 @@ class SubscriptionServiceTest {
 
             assertEquals(SubscriptionTier.FREE, entitlement.tier)
             assertEquals(EntitlementSource.FREE, entitlement.source)
-            assertTrue(entitlement.adSupported)
             assertFalse(entitlement.linkedPartnerIncluded)
         }
 

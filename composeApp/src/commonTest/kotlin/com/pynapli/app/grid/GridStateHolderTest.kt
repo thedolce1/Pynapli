@@ -531,8 +531,8 @@ class GridStateHolderTest {
                 GatedGridFeedRepository(
                     feeds =
                         listOf(
-                            GridFeedUi(cards = listOf(firstCard), adSupported = false),
-                            GridFeedUi(cards = listOf(secondCard), adSupported = false),
+                            GridFeedUi(cards = listOf(firstCard)),
+                            GridFeedUi(cards = listOf(secondCard)),
                         ),
                     gateBeforeIndex = 1,
                     gate = gate,
