@@ -552,6 +552,19 @@ class AuthLoginRateLimitTest {
             assertEquals(1, slowdowns.size, "other accounts are not slowed")
         }
 
+    @Test
+    fun whileRedisIsDownSignUpSignInAndRefreshStillWorkUnderAnInProcessLimit() =
+        runBlocking {
+            limits.down = true
+
+            val session = signup()
+            assertEquals(false, service.refresh(session.refreshToken).accessToken.isEmpty())
+            assertEquals(false, login(PASSWORD, REAL_USER_IP).accessToken.isEmpty())
+            // Still bounded: guessing from one address stops on the in-process counters.
+            repeat(10) { runCatching { login("wrong password guess", ATTACKER_IP) } }
+            assertEquals("RATE_LIMITED", assertFailsWith<AuthException> { login(PASSWORD, ATTACKER_IP) }.code)
+        }
+
     private companion object {
         const val EMAIL = "alex@example.com"
         const val PASSWORD = "correct horse battery"

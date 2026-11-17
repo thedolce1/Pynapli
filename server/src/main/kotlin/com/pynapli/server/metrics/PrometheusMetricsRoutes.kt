@@ -24,6 +24,8 @@ class OperationalMetricsSources(
     val poolSnapshot: () -> DatabasePoolSnapshot? = { null },
     val realtimeSubscribers: Map<String, () -> Int> = emptyMap(),
     val dataSource: DataSource? = null,
+    /** Extra single-value gauges from other components: name to (help, value). */
+    val gauges: Map<String, Pair<String, () -> Number>> = emptyMap(),
 )
 
 /**
@@ -102,6 +104,7 @@ internal suspend fun renderMetrics(
                     .append('\n')
             }
         }
+        sources.gauges.forEach { (name, gauge) -> gauge(name, gauge.first, gauge.second()) }
         val runtime = Runtime.getRuntime()
         gauge("pynapli_jvm_heap_used_bytes", "Heap in use.", runtime.totalMemory() - runtime.freeMemory())
         gauge("pynapli_jvm_heap_max_bytes", "Heap limit.", runtime.maxMemory())

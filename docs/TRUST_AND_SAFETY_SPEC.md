@@ -446,6 +446,12 @@ Rules that must hold (implemented; numbers live in `RateLimitService.POLICIES`):
   the real user on another network still signs in. Past 100 failures per hour per account from all
   addresses, each attempt is delayed 3 s and a warning is logged with an account-hash prefix; it is
   never refused. Successful sign-ins spend nothing. The suspended-account appeal shares this budget.
+- **Auth keeps working when Redis is down.** Sign-up, sign-in, refresh and password reset/change
+  limits fall back to bounded in-process counters (`RateLimitOutageFallback`: 50,000 keys, LRU,
+  per replica) only while Redis fails; a warning is logged when it takes over and an info line when
+  Redis is back (fallback counters are then dropped). `/metrics` exports
+  `pynapli_rate_limit_fallback_active` and `pynapli_rate_limit_fallback_checks`. Other per-feature
+  limits still fail as before; request-level limits fail open.
 
 ## Recovery And Appeals
 

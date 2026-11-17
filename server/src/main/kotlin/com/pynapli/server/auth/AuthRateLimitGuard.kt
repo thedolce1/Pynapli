@@ -7,6 +7,10 @@ import com.pynapli.server.safety.RateLimitedAction
 import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
 
+/**
+ * Rate limits for the auth flows. Every check here keeps working while Redis is down, on the
+ * in-process [com.pynapli.server.safety.RateLimitOutageFallback]: sign-in must not depend on it.
+ */
 internal class AuthRateLimitGuard(
     private val rateLimitService: RateLimitService?,
     // How a sign-in past the per-account ceiling is slowed; tests pass a recorder.
@@ -18,12 +22,12 @@ internal class AuthRateLimitGuard(
         secondarySubject: String? = null,
     ) {
         val limiter = rateLimitService ?: return
-        if (limiter.checkSubject(primarySubject, action).allowed == false) throw AuthException("RATE_LIMITED")
+        if (limiter.checkSubject(primarySubject, action, fallbackOnOutage = true).allowed == false) throw AuthException("RATE_LIMITED")
         secondarySubject
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
             ?.let { subject ->
-                if (limiter.checkSubject("$action:$subject", action).allowed == false) {
+                if (limiter.checkSubject("$action:$subject", action, fallbackOnOutage = true).allowed == false) {
                     throw AuthException("RATE_LIMITED")
                 }
             }
@@ -42,10 +46,10 @@ internal class AuthRateLimitGuard(
     ) {
         val limiter = rateLimitService ?: return
         val account = normalizeEmail(email)
-        if (!limiter.peekSubject(loginFailureSubject(account, clientIp), RateLimitedAction.AUTH_LOGIN_FAILURE).allowed) {
+        if (!limiter.peekSubject(loginFailureSubject(account, clientIp), RateLimitedAction.AUTH_LOGIN_FAILURE, fallbackOnOutage = true).allowed) {
             throw AuthException("RATE_LIMITED")
         }
-        if (!limiter.peekSubject(account, RateLimitedAction.AUTH_LOGIN_FAILURE_ACCOUNT).allowed) {
+        if (!limiter.peekSubject(account, RateLimitedAction.AUTH_LOGIN_FAILURE_ACCOUNT, fallbackOnOutage = true).allowed) {
             slowdown(LOGIN_SLOWDOWN_MILLIS)
         }
     }
@@ -57,8 +61,8 @@ internal class AuthRateLimitGuard(
     ) {
         val limiter = rateLimitService ?: return
         val account = normalizeEmail(email)
-        limiter.checkSubject(loginFailureSubject(account, clientIp), RateLimitedAction.AUTH_LOGIN_FAILURE)
-        val perAccount = limiter.checkSubject(account, RateLimitedAction.AUTH_LOGIN_FAILURE_ACCOUNT)
+        limiter.checkSubject(loginFailureSubject(account, clientIp), RateLimitedAction.AUTH_LOGIN_FAILURE, fallbackOnOutage = true)
+        val perAccount = limiter.checkSubject(account, RateLimitedAction.AUTH_LOGIN_FAILURE_ACCOUNT, fallbackOnOutage = true)
         if (perAccount.count == perAccount.limit + 1) {
             // Logged once per window. The account is identified by a hash prefix, never the email.
             logger.warn(

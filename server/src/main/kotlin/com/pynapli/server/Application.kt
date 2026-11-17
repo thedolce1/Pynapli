@@ -127,6 +127,13 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
                         "psync" to { dependencies.psyncBroadcaster.subscriptionCount.value },
                     ),
                 dataSource = dependencies.database.dataSource,
+                gauges =
+                    dependencies.rateLimitService?.outageFallback?.let { fallback ->
+                        mapOf(
+                            "pynapli_rate_limit_fallback_active" to ("1 while Redis rate limiting is down and in-process limits apply." to { if (fallback.active) 1 else 0 }),
+                            "pynapli_rate_limit_fallback_checks" to ("Rate-limit checks answered in-process since start." to { fallback.fallbackChecks }),
+                        )
+                    }.orEmpty(),
             ),
     )
     configureAdminAppealRoutes(dependencies.config, dependencies.adminAppealService)

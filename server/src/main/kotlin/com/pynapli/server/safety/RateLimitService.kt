@@ -1,5 +1,6 @@
 package com.pynapli.server.safety
 
+import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
 import java.security.MessageDigest
 import java.util.Base64
@@ -8,6 +9,8 @@ import java.util.UUID
 class RateLimitService(
     private val repository: RateLimitRepository,
     private val riskSignalPublisher: RateLimitRiskSignalPublisher? = null,
+    /** Answers checks made with `fallbackOnOutage` while [repository] (Redis) is unreachable. */
+    val outageFallback: RateLimitOutageFallback = RateLimitOutageFallback(),
 ) {
     suspend fun check(
         userId: UUID,
@@ -48,16 +51,20 @@ class RateLimitService(
         return decision
     }
 
+    /**
+     * Counts one [action] for [subject]. With [fallbackOnOutage], a Redis failure is answered by the
+     * in-process [outageFallback] instead of throwing: for flows that must keep working (sign-in).
+     */
     suspend fun checkSubject(
         subject: String,
         action: String,
+        fallbackOnOutage: Boolean = false,
     ): RateLimitDecision {
         val policy = POLICIES[action] ?: throw SafetyException("INVALID_RATE_LIMIT_ACTION")
         val counter =
-            repository.increment(
-                key = policy.subjectKeyFor(subject),
-                windowSeconds = policy.windowSeconds,
-            )
+            withOutageFallback(fallbackOnOutage) { store ->
+                store.increment(key = policy.subjectKeyFor(subject), windowSeconds = policy.windowSeconds)
+            }
         return RateLimitDecision(
             allowed = counter.count <= policy.limit,
             action = policy.action,
@@ -76,9 +83,10 @@ class RateLimitService(
     suspend fun peekSubject(
         subject: String,
         action: String,
+        fallbackOnOutage: Boolean = false,
     ): RateLimitDecision {
         val policy = POLICIES[action] ?: throw SafetyException("INVALID_RATE_LIMIT_ACTION")
-        val counter = repository.current(policy.subjectKeyFor(subject))
+        val counter = withOutageFallback(fallbackOnOutage) { store -> store.current(policy.subjectKeyFor(subject)) }
         val count = counter?.count ?: 0
         return RateLimitDecision(
             allowed = count < policy.limit,
@@ -88,6 +96,21 @@ class RateLimitService(
             ttlSeconds = counter?.ttlSeconds ?: 0,
             windowSeconds = policy.windowSeconds,
         )
+    }
+
+    private suspend fun <T> withOutageFallback(
+        enabled: Boolean,
+        block: suspend (RateLimitRepository) -> T,
+    ): T {
+        if (!enabled) return block(repository)
+        return try {
+            block(repository).also { outageFallback.recovered() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            outageFallback.failedOver(error)
+            block(outageFallback.repository)
+        }
     }
 
     companion object {

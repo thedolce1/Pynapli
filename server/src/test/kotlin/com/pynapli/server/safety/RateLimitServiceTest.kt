@@ -1,13 +1,47 @@
 package com.pynapli.server.safety
 
+import com.pynapli.server.testsupport.CountingRateLimitRepository
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class RateLimitServiceTest {
+    @Test
+    fun outageFallbackAnswersOnlyOptedInChecksWhileRedisIsDownAndStepsAsideWhenItIsBack() =
+        runBlocking {
+            val redis = CountingRateLimitRepository()
+            val service = RateLimitService(redis)
+            redis.down = true
+
+            assertFailsWith<IllegalStateException> { service.checkSubject("someone", RateLimitedAction.AUTH_SIGNUP) }
+            assertFalse(service.outageFallback.active, "checks that didn't opt in still fail as before")
+
+            repeat(10) { assertTrue(service.checkSubject("someone", RateLimitedAction.AUTH_SIGNUP, fallbackOnOutage = true).allowed) }
+            assertFalse(service.checkSubject("someone", RateLimitedAction.AUTH_SIGNUP, fallbackOnOutage = true).allowed)
+            assertTrue(service.outageFallback.active)
+            assertEquals(11, service.outageFallback.fallbackChecks)
+
+            redis.down = false
+            assertTrue(service.checkSubject("someone", RateLimitedAction.AUTH_SIGNUP, fallbackOnOutage = true).allowed)
+            assertFalse(service.outageFallback.active)
+            assertEquals(0, service.outageFallback.repository.size(), "in-process counters are dropped once Redis is back")
+        }
+
+    @Test
+    fun inProcessCountersStayBounded() =
+        runBlocking {
+            val repository = InProcessRateLimitRepository(maxKeys = 3)
+            listOf("a", "b", "c", "d").forEach { repository.increment(it, 60) }
+
+            assertEquals(3, repository.size())
+            assertEquals(null, repository.current("a"), "least recently used goes first")
+            assertEquals(1, repository.current("d")?.count)
+        }
+
     @Test
     fun checkAllowsActionsWithinPolicyLimit() =
         runBlocking {
