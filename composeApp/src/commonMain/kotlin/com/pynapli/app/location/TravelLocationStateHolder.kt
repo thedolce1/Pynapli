@@ -3,10 +3,13 @@ package com.pynapli.app.location
 import androidx.compose.runtime.Immutable
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.PlanTravelTripRequestDto
 import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
 import com.pynapli.shared.network.dto.TravelLocationDto
 import com.pynapli.shared.network.dto.TravelPlaceDto
 import com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto
+import com.pynapli.shared.network.dto.TravelTripDto
+import com.pynapli.shared.network.dto.TravelTripsDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -117,6 +120,67 @@ class TravelLocationStateHolder(
         }
     }
 
+    /** Upcoming and running planned trips (Select); a refusal just leaves the list empty. */
+    suspend fun loadTrips() {
+        val result = repository.listTrips()
+        if (result is AppResult.Success) _state.update { it.copy(trips = result.value.trips) }
+    }
+
+    /** Picked a place: the sheet asks "Go now" or "Plan dates" before anything switches. */
+    fun selectPlace(place: TravelPlaceDto?) {
+        _state.update { it.copy(selectedPlace = place, errorCode = null, errorMessage = null) }
+    }
+
+    /** Plans a trip to the selected place; true when it's saved (and on now, if it starts today). */
+    suspend fun planTrip(
+        place: TravelPlaceDto,
+        startsOn: String,
+        endsOn: String,
+        timezone: String,
+    ): Boolean {
+        _state.update { it.copy(isSaving = true, errorCode = null, errorMessage = null) }
+        val request =
+            PlanTravelTripRequestDto(
+                latitude = place.latitude,
+                longitude = place.longitude,
+                city = place.city,
+                region = place.region,
+                country = place.country,
+                startsOn = startsOn,
+                endsOn = endsOn,
+                timezone = timezone,
+            )
+        return when (val result = repository.planTrip(request)) {
+            is AppResult.Success -> {
+                _state.update {
+                    it.copy(isSaving = false, selectedPlace = null, searchQuery = "", searchResults = emptyList())
+                }
+                loadTrips()
+                // A trip that starts today is already on: show it as the current destination.
+                if (result.value.status == "active") load()
+                true
+            }
+            is AppResult.Failure -> {
+                _state.update {
+                    val bannerHandled = result.error.code in BANNER_CODES
+                    it.copy(isSaving = false, errorCode = result.error.code, errorMessage = if (bannerHandled) null else result.error.message)
+                }
+                false
+            }
+        }
+    }
+
+    suspend fun cancelTrip(tripId: String) {
+        when (val result = repository.cancelTrip(tripId)) {
+            is AppResult.Success -> {
+                val wasRunning = _state.value.trips.any { it.tripId == tripId && it.status == "active" }
+                _state.update { current -> current.copy(trips = current.trips.filterNot { it.tripId == tripId }) }
+                if (wasRunning) load()
+            }
+            is AppResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+        }
+    }
+
     suspend fun clear() {
         _state.update { it.copy(isSaving = true, errorCode = null, errorMessage = null) }
         when (val result = repository.clear()) {
@@ -155,6 +219,9 @@ data class TravelLocationUiState(
     val isSearching: Boolean = false,
     val errorCode: String? = null,
     val errorMessage: String? = null,
+    // Planned trips (upcoming and running) and the place picked but not yet confirmed.
+    val trips: List<TravelTripDto> = emptyList(),
+    val selectedPlace: TravelPlaceDto? = null,
 ) {
     // Free has no Travel; Social's monthly preview is used up. Both lead to the Select paywall.
     val entitlementRequired: Boolean get() = errorCode == "ENTITLEMENT_REQUIRED" || previewUsed
@@ -171,6 +238,16 @@ interface TravelLocationRepository {
     suspend fun clear(): AppResult<Unit>
 
     suspend fun searchPlaces(query: String): AppResult<TravelPlaceSearchResponseDto>
+
+    suspend fun listTrips(): AppResult<TravelTripsDto> = AppResult.Success(TravelTripsDto(emptyList()))
+
+    suspend fun planTrip(request: PlanTravelTripRequestDto): AppResult<TravelTripDto> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError("NOT_SUPPORTED", "Not available."),
+        )
+
+    suspend fun cancelTrip(tripId: String): AppResult<Unit> = AppResult.Success(Unit)
 }
 
 class ApiTravelLocationRepository(
@@ -183,6 +260,12 @@ class ApiTravelLocationRepository(
     override suspend fun clear(): AppResult<Unit> = apiClient.clearTravelLocation()
 
     override suspend fun searchPlaces(query: String): AppResult<TravelPlaceSearchResponseDto> = apiClient.searchTravelPlaces(query)
+
+    override suspend fun listTrips(): AppResult<TravelTripsDto> = apiClient.listTravelTrips()
+
+    override suspend fun planTrip(request: PlanTravelTripRequestDto): AppResult<TravelTripDto> = apiClient.planTravelTrip(request)
+
+    override suspend fun cancelTrip(tripId: String): AppResult<Unit> = apiClient.cancelTravelTrip(tripId)
 }
 
 private val BANNER_CODES = setOf("AGE_VERIFICATION_REQUIRED", "ENTITLEMENT_REQUIRED", "TRAVEL_PREVIEW_RATE_LIMITED")

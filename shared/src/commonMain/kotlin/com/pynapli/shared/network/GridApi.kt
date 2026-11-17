@@ -42,6 +42,25 @@ interface GridApi {
 
     suspend fun clearTravelLocation(): AppResult<Unit>
 
+    /** Planned trips (Select): Travel mode scheduled ahead. */
+    suspend fun listTravelTrips(): AppResult<com.pynapli.shared.network.dto.TravelTripsDto> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError("NOT_SUPPORTED", "Not available."),
+        )
+
+    suspend fun planTravelTrip(request: com.pynapli.shared.network.dto.PlanTravelTripRequestDto): AppResult<com.pynapli.shared.network.dto.TravelTripDto> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError("NOT_SUPPORTED", "Not available."),
+        )
+
+    suspend fun cancelTravelTrip(tripId: String): AppResult<Unit> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError("NOT_SUPPORTED", "Not available."),
+        )
+
     /** Type-ahead place search for the free-text travel picker (city name or ZIP/postal code). */
     suspend fun searchTravelPlaces(query: String): AppResult<TravelPlaceSearchResponseDto>
 }

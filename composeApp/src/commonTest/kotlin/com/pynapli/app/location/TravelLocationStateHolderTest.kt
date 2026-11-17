@@ -25,6 +25,43 @@ class TravelLocationStateHolderTest {
         )
 
     @Test
+    fun aPickedPlaceCanBePlannedForDatesAndThenCancelled() =
+        runTest {
+            val repository = FakeRepository()
+            val stateHolder = TravelLocationStateHolder(repository)
+
+            stateHolder.selectPlace(vegas)
+            assertEquals(vegas, stateHolder.state.value.selectedPlace)
+            assertTrue(stateHolder.planTrip(vegas, "2026-11-14", "2026-11-17", "America/Toronto"))
+
+            val sent = repository.planned.single()
+            assertEquals(listOf("Las Vegas", "2026-11-14", "2026-11-17", "America/Toronto"), listOf(sent.city, sent.startsOn, sent.endsOn, sent.timezone))
+            assertNull(stateHolder.state.value.selectedPlace, "the picker closes once the trip is saved")
+            assertEquals(
+                listOf("Las Vegas"),
+                stateHolder.state.value.trips
+                    .map { it.city },
+            )
+            assertTrue(repository.setRequests.isEmpty(), "planning never switches Travel mode on by itself")
+
+            stateHolder.cancelTrip("trip-1")
+            assertTrue(
+                stateHolder.state.value.trips
+                    .isEmpty(),
+            )
+            assertEquals(
+                "14–17 Nov",
+                com.pynapli.app.swipe
+                    .tripDateRange("2026-11-14", "2026-11-17"),
+            )
+            assertEquals(
+                "28 Nov – 2 Dec",
+                com.pynapli.app.swipe
+                    .tripDateRange("2026-11-28", "2026-12-02"),
+            )
+        }
+
+    @Test
     fun setActiveAgeVerificationRequiredFlagsPromptAndSuppressesRawError() =
         runTest {
             // TravelLocationService throws AGE_VERIFICATION_REQUIRED for restricted regions when the
@@ -197,5 +234,28 @@ private class FakeRepository(
     override suspend fun searchPlaces(query: String): AppResult<TravelPlaceSearchResponseDto> {
         searchQueries += query
         return searchResult
+    }
+
+    val planned = mutableListOf<com.pynapli.shared.network.dto.PlanTravelTripRequestDto>()
+    private var trips = listOf<com.pynapli.shared.network.dto.TravelTripDto>()
+
+    override suspend fun listTrips(): AppResult<com.pynapli.shared.network.dto.TravelTripsDto> =
+        AppResult.Success(
+            com.pynapli.shared.network.dto
+                .TravelTripsDto(trips),
+        )
+
+    override suspend fun planTrip(request: com.pynapli.shared.network.dto.PlanTravelTripRequestDto): AppResult<com.pynapli.shared.network.dto.TravelTripDto> {
+        planned += request
+        val trip =
+            com.pynapli.shared.network.dto
+                .TravelTripDto("trip-1", request.city, request.region, request.country, request.startsOn, request.endsOn, "planned")
+        trips = trips + trip
+        return AppResult.Success(trip)
+    }
+
+    override suspend fun cancelTrip(tripId: String): AppResult<Unit> {
+        trips = trips.filterNot { it.tripId == tripId }
+        return AppResult.Success(Unit)
     }
 }
