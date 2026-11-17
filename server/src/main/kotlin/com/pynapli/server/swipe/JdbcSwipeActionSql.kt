@@ -310,7 +310,7 @@ private fun Connection.targetHasActivePositiveSwipe(
               ON tl.id = sa.travel_location_id
             WHERE sa.actor_user_id = ?
               AND sa.target_user_id = ?
-              AND sa.action IN ('like', 'pineapple_like')
+              AND sa.action IN ('like', 'pineapple_like', 'intro_note')
               AND sa.rewound_at IS NULL
               AND (
                   sa.travel_location_id IS NULL
@@ -328,7 +328,11 @@ private fun Connection.targetHasActivePositiveSwipe(
         }
     }
 
-private val POSITIVE_SWIPE_ACTIONS = setOf("like", "pineapple_like")
+/**
+ * Swipe actions that count as liking someone: a match needs one from each side. An Intro Note is a
+ * like with a note attached (SWIPE_IMPLEMENTATION_SPEC "Intro Notes"), so it counts too.
+ */
+private val POSITIVE_SWIPE_ACTIONS = setOf("like", "pineapple_like", "intro_note")
 
 /**
  * Advisory-lock namespace for a pair of users' swipe decisions on each other. Every transaction

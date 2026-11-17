@@ -582,7 +582,7 @@ Do not experiment with:
 - [x] Rewind is gated to Social/Select for latest eligible Like/Pass.
 - [x] Boost inventory exists.
 - [x] Pineapple Like inventory exists.
-- [x] Intro Note inventory exists.
+- [x] Intro Note inventory exists. Intro Notes are sold to every tier, so the server gates sending one only on held inventory, never on tier (2026-11-16, AUDIT-03); each spend records its `premium_inventory.id` and is refunded if the note is rewound (AUDIT-02).
 - [x] Ads are excluded from sensitive surfaces.
 - [x] Safety features remain free.
 - [x] Paywall copy uses Social/Select naming.

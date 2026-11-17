@@ -164,6 +164,8 @@ internal fun Connection.likedTargetsByActor(
         """
         SELECT target_user_id, action, consumed_inventory_id
         FROM psync_session_actions
+        -- psync_session_actions can't hold an Intro Note (V64 check), so a partner's deck like is
+        -- one of these two; the target's side (targetLikesPartner) does count Intro Notes.
         WHERE session_id = ? AND actor_user_id = ? AND action IN ('like', 'pineapple_like')
         """.trimIndent(),
     ).use { statement ->
@@ -199,8 +201,8 @@ internal fun Connection.targetLikesPartner(
             SELECT 1 FROM swipe_actions
             WHERE actor_user_id = ? AND target_user_id = ?
               -- Same definition of a live like as the Swipe match query (JdbcSwipeActionSql):
-              -- a Pineapple Like counts, a rewound like does not.
-              AND action IN ('like', 'pineapple_like')
+              -- a Pineapple Like or an Intro Note counts, a rewound like does not.
+              AND action IN ('like', 'pineapple_like', 'intro_note')
               AND rewound_at IS NULL
         )
         """.trimIndent(),

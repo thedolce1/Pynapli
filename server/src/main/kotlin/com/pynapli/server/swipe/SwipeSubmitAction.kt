@@ -4,9 +4,7 @@ import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.server.safety.RiskPolicyService
-import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
-import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
@@ -79,13 +77,8 @@ internal class SwipeSubmitAction(
         if (profile("swipe.action.risk") { riskPolicyService?.isSocialActionRestricted(viewerUserId) == true }) {
             throw SwipeException("RISK_RESTRICTED")
         }
-        val policy =
-            profile("swipe.action.policy") {
-                subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
-            }
-        if (action == SwipeAction.INTRO_NOTE && policy.tier == SubscriptionTier.FREE) {
-            throw SwipeException("ENTITLEMENT_REQUIRED")
-        }
+        // No tier gate on Intro Notes: anyone may buy them (SubscriptionCatalog), so anyone holding
+        // one may spend it. The inventory spend below is the only gate.
 
         if (profile("swipe.action.rateLimit") {
                 rateLimitService?.check(viewerUserId, RateLimitedAction.SWIPE_ACTION)?.allowed == false

@@ -381,7 +381,7 @@ class SwipeServiceTest {
         }
 
     @Test
-    fun introNoteRequiresPaidEntitlement() =
+    fun freeIntroNoteWithoutInventoryIsRefusedForInventoryNotTier() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000150")
             val target = UUID.fromString("00000000-0000-0000-0000-000000000151")
@@ -405,7 +405,8 @@ class SwipeServiceTest {
                     )
                 }
 
-            assertEquals("ENTITLEMENT_REQUIRED", error.code)
+            // Intro Notes are sold to every tier, so a Free user is stopped only by having none.
+            assertEquals("INTRO_NOTE_INVENTORY_REQUIRED", error.code)
             assertEquals(emptyMap(), repository.actionsSnapshot())
         }
 
