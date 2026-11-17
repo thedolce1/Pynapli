@@ -10,10 +10,12 @@ internal class ProfileHubLoader(
     private val repository: ProfileHubRepository,
     private val state: MutableStateFlow<ProfileHubUiState>,
 ) {
-    suspend fun load() =
+    /** [quiet]: a background refetch (app resume) that shows no spinner and no error. */
+    suspend fun load(quiet: Boolean = false) =
         coroutineScope {
             if (state.value.isLoading) return@coroutineScope
-            state.update { it.copy(isLoading = true, errorMessage = null) }
+            if (quiet && state.value.me == null) return@coroutineScope
+            if (!quiet) state.update { it.copy(isLoading = true, errorMessage = null) }
 
             val meDeferred = async { repository.loadMe() }
             val ageVerificationDeferred = async { repository.loadAgeVerificationStatus() }
@@ -68,11 +70,13 @@ internal class ProfileHubLoader(
                     ageVerificationDeferred.cancel()
                     latestDataExportDeferred.cancel()
                     entitlementDeferred.cancel()
-                    state.update {
-                        it.copy(
-                            isLoading = false,
-                            errorMessage = result.error.message,
-                        )
+                    if (!quiet) {
+                        state.update {
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = result.error.message,
+                            )
+                        }
                     }
                 }
             }

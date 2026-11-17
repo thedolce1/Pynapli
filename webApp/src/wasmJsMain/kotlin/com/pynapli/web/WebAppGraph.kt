@@ -141,6 +141,9 @@ class WebAppGraph {
     /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */
     fun startRealtime(scope: CoroutineScope): List<Job> = common.startRealtime(scope)
 
+    /** Refetches every surface after the app was away; see [PynapliCommonGraph.onAppForegrounded]. */
+    suspend fun onAppForegrounded() = common.onAppForegrounded(signedIn = authStateHolder.state.value.authenticated)
+
     val devLoginCredentials: DevLoginCredentials? =
         if (pynapliConfig.environment == PynapliEnvironment.Local) {
             DevLoginCredentials(

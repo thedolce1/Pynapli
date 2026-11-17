@@ -29,6 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import platform.Foundation.NSBundle
 
@@ -193,6 +194,8 @@ class IosAppGraph(
     fun startRealtime() {
         if (realtimeJobs.isNotEmpty()) return
         realtimeJobs = common.startRealtime(realtimeScope)
+        // Coming back from the background: the sockets were down, so refetch what they missed.
+        realtimeScope.launch { common.onAppForegrounded(signedIn = authStateHolder.state.value.authenticated) }
     }
 
     /**

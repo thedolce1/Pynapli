@@ -58,10 +58,7 @@ fun main() {
     // state the throttled socket may have missed (the stream clients reconnect on
     // their own backoff).
     onDocumentVisible {
-        if (graph.authStateHolder.state.value.authenticated) {
-            appScope.launch { graph.pynapliAppGraph.messagesStateHolder.refreshSilently() }
-            appScope.launch { graph.pynapliAppGraph.activityStateHolder.refreshSummarySilently() }
-        }
+        appScope.launch { graph.onAppForegrounded() }
     }
 
     // A direct /signup link starts the create-account stepper — but only once the

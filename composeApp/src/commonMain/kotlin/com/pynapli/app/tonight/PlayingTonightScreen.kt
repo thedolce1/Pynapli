@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -97,6 +98,18 @@ fun PlayingTonightScreen(
     var showStartSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { stateHolder.load() }
+    // The feed is live (people start and end sessions all evening) and has no socket: refetch it
+    // quietly while the screen is up, and let an app resume refetch it too (AppResumeRefresher).
+    DisposableEffect(stateHolder) {
+        stateHolder.isOnScreen = true
+        onDispose { stateHolder.isOnScreen = false }
+    }
+    LaunchedEffect(stateHolder) {
+        while (true) {
+            delay(TONIGHT_FEED_REFETCH_MILLIS)
+            stateHolder.refreshSilently()
+        }
+    }
 
     // No realtime channel for Playing Tonight: while a together session depends on the partner,
     // re-check it on a slow timer so an approval, decline or end shows up without leaving.
@@ -852,3 +865,5 @@ internal object PlayingTonightTags {
 
 private const val TONIGHT_PARTNER_REFETCH_MILLIS = 15_000L
 private const val TONIGHT_NOTICE_VISIBLE_MILLIS = 5_000L
+
+private const val TONIGHT_FEED_REFETCH_MILLIS = 60_000L

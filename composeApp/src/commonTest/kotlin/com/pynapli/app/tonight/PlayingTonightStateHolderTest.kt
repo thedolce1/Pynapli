@@ -8,10 +8,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private class FakeTonightRepository(
-    private val feed: List<TonightFeedItemUi>,
+    var feed: List<TonightFeedItemUi>,
     private val current: TonightSessionUi?,
 ) : TonightRepository {
     var lastIntent: String? = "<unset>"
+    var feedError: com.pynapli.shared.core.result.AppError? = null
     var endedSessionId: String? = null
 
     override suspend fun loadFeed(
@@ -19,6 +20,7 @@ private class FakeTonightRepository(
         intent: String?,
     ): AppResult<List<TonightFeedItemUi>> {
         lastIntent = intent
+        feedError?.let { return AppResult.Failure(it) }
         return AppResult.Success(if (intent == null) feed else feed.filter { it.intentRaw == intent })
     }
 
@@ -80,6 +82,41 @@ private fun item(
     )
 
 class PlayingTonightStateHolderTest {
+    @Test
+    fun aResumeRefetchOnlyRunsWhileTheScreenIsShowingAndKeepsTheFeedOnFailure() =
+        runTest {
+            val repository = FakeTonightRepository(feed = listOf(item("a", "drinks")), current = null)
+            val holder = PlayingTonightStateHolder(repository)
+            holder.load()
+
+            repository.feed = listOf(item("a", "drinks"), item("b", "drinks"))
+            holder.refreshIfOnScreen()
+            assertEquals(
+                listOf("a"),
+                holder.state.value.feedItems
+                    .map { it.sessionId },
+            )
+
+            holder.isOnScreen = true
+            holder.refreshIfOnScreen()
+            assertEquals(
+                listOf("a", "b"),
+                holder.state.value.feedItems
+                    .map { it.sessionId },
+            )
+
+            repository.feedError =
+                com.pynapli.shared.core.result
+                    .AppError(code = "NETWORK", message = "Offline")
+            holder.refreshIfOnScreen()
+            assertEquals(
+                listOf("a", "b"),
+                holder.state.value.feedItems
+                    .map { it.sessionId },
+            )
+            assertNull(holder.state.value.errorMessage)
+        }
+
     @Test
     fun loadPopulatesFeedAndCurrentSession() =
         runTest {

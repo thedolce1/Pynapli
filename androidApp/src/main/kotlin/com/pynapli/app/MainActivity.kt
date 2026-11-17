@@ -160,6 +160,9 @@ class MainActivity : ComponentActivity() {
         // Re-sync push on every foreground so a rotated FCM token is re-registered (see
         // PushRegistrationSync.syncNow); fingerprint-guarded, so a no-op when nothing changed.
         activityScope.launch { appGraph?.pushRegistrationSync?.syncNow() }
+        // The sockets were closed while stopped, so nothing that happened meanwhile arrived:
+        // refetch the inbox, open chat, Activity, links, hub and an open Tonight feed.
+        activityScope.launch { appGraph?.onAppForegrounded() }
     }
 
     // runCatchingCancellable, not runCatching: onStop() cancels all three of these jobs, and plain
