@@ -56,7 +56,7 @@ internal fun userSafeMessage(code: String): String =
         "INVALID_ORIENTATION" -> "Choose an orientation option; self-describe needs a short label."
         "INVALID_BIO" -> "Bio can be up to 500 characters."
         "INVALID_NEIGHBORHOOD" -> "Neighborhood can be up to 50 characters."
-        "BIO_REJECTED" -> "This bio can't be used. Edit it and try again."
+        "BIO_REJECTED" -> "Bios can't include links, contact details, other apps, or payment requests. Edit it and try again."
         "INVALID_PROFILE_TAG" -> "One or more selected tags are not recognized."
         "INVALID_PARTNER_VISIBILITY" -> "Choose a valid partner visibility option."
         "INVALID_PROFILE_LINK_TARGET" -> "Request could not be completed."
