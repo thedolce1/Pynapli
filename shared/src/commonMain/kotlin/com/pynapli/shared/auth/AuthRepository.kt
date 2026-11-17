@@ -32,6 +32,10 @@ class AuthRepository(
             is AppResult.Success -> session
             is AppResult.Failure -> {
                 if (result.error.code in terminalAuthErrorCodes) {
+                    // A store shared across processes (web tabs) may have been rotated by another
+                    // tab meanwhile; only a rejection of the session still stored means it is dead.
+                    val latest = sessionStore.currentSession()
+                    if (latest != null && latest.refreshToken != session.refreshToken) return latest
                     sessionStore.clear()
                     null
                 } else {

@@ -43,8 +43,9 @@ internal class AuthSessionManager(
 
     suspend fun refresh(refreshToken: String): AuthSessionDto {
         val now = clock.instant()
+        val presentedRefreshTokenHash = Sha256.hash(refreshToken)
         val session =
-            repository.findSessionByRefreshTokenHash(Sha256.hash(refreshToken))
+            repository.findSessionByRefreshTokenHash(presentedRefreshTokenHash)
                 ?: throw AuthException("INVALID_REFRESH_TOKEN")
 
         if (session.revokedAt != null || session.refreshExpiresAt <= now) {
@@ -60,11 +61,15 @@ internal class AuthSessionManager(
         val rotated =
             repository.rotateSession(
                 sessionId = session.id,
+                presentedRefreshTokenHash = presentedRefreshTokenHash,
                 accessTokenHash = Sha256.hash(newAccessToken),
                 refreshTokenHash = Sha256.hash(newRefreshToken),
                 accessExpiresAt = accessExpiresAt,
                 refreshExpiresAt = refreshExpiresAt,
             ) ?: throw AuthException("INVALID_REFRESH_TOKEN")
+        // Evict again now the rotation has committed: an authenticate() racing the window above can
+        // re-cache the still-valid old access token, which would otherwise keep working for the TTL.
+        cache.remove(session.accessTokenHash)
 
         return AuthSessionDto(
             accessToken = newAccessToken,

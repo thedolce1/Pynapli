@@ -63,6 +63,10 @@ class WebAppGraph {
                     authApi = client,
                     sessionStore = sessionStore,
                     invalidationBus = sessionInvalidationBus,
+                    // Tabs share the localStorage session but not the refresh mutex: give a tab that
+                    // lost a refresh race time to see the winning tab's saved session.
+                    settleAttempts = 5,
+                    settleDelayMillis = 300,
                 )
         }
     private val authRepository =

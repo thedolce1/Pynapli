@@ -72,6 +72,7 @@ class JdbcAuthRepository(
 
     override suspend fun rotateSession(
         sessionId: UUID,
+        presentedRefreshTokenHash: String,
         accessTokenHash: String,
         refreshTokenHash: String,
         accessExpiresAt: Instant,
@@ -79,6 +80,7 @@ class JdbcAuthRepository(
     ): SessionRecord? =
         sessions.rotateSession(
             sessionId = sessionId,
+            presentedRefreshTokenHash = presentedRefreshTokenHash,
             accessTokenHash = accessTokenHash,
             refreshTokenHash = refreshTokenHash,
             accessExpiresAt = accessExpiresAt,

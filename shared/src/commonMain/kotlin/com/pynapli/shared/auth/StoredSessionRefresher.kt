@@ -4,6 +4,7 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.AuthApi
 import com.pynapli.shared.network.SessionRefresher
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -16,7 +17,8 @@ import kotlinx.coroutines.sync.withLock
  * refresh token on each call, so when several requests 401 at once only the first may actually
  * refresh; the rest would otherwise present a token the server just invalidated and get signed out.
  * Waiters therefore re-read the store after acquiring the lock and, if the access token has already
- * moved on, return that instead of refreshing again.
+ * moved on, return that instead of refreshing again. Across processes sharing one store (web tabs)
+ * the mutex cannot help, so a terminal rejection re-reads the store before signing out.
  */
 class StoredSessionRefresher(
     private val authApi: AuthApi,
@@ -25,6 +27,13 @@ class StoredSessionRefresher(
     // looping on a dead session. Null where no observer exists (e.g. unit tests that only assert the
     // token result).
     private val invalidationBus: SessionInvalidationBus? = null,
+    // Only for stores shared across processes (web tabs on one localStorage). The tab that loses a
+    // refresh race usually hears its rejection *before* the winning tab has saved the rotated
+    // session, so a terminal rejection re-reads the store up to [settleAttempts] more times,
+    // [settleDelayMillis] apart, before concluding the session is dead. The default (no settling)
+    // keeps single-process stores signing out immediately.
+    private val settleAttempts: Int = 0,
+    private val settleDelayMillis: Long = 0,
 ) : SessionRefresher {
     private val mutex = Mutex()
 
@@ -47,10 +56,22 @@ class StoredSessionRefresher(
                     // A terminal rejection means the session is dead — revoked, or the account is no
                     // longer active. Clear it and signal the app to drop back to sign-in. A transient
                     // failure (network, 5xx) leaves the session intact so a later retry can succeed.
-                    if (result.error.code in terminalAuthErrorCodes) {
-                        sessionStore.clear()
-                        invalidationBus?.notifyInvalidated()
+                    if (result.error.code !in terminalAuthErrorCodes) return@withLock null
+                    // The mutex is per process, but some stores are shared across processes (web
+                    // tabs share localStorage). The server lets exactly one caller exchange a refresh
+                    // token, so a rejection may only mean another tab won the race and has already
+                    // stored the rotated session. Re-read before clearing: only a rejection of the
+                    // token that is *still* stored means the session is dead. (An emptied store —
+                    // another tab signed out — is dead too, so it signals invalidation at once.)
+                    var attempt = 0
+                    while (true) {
+                        val latest = sessionStore.currentSession() ?: break
+                        if (latest.refreshToken != current.refreshToken) return@withLock latest.accessToken
+                        if (attempt++ >= settleAttempts) break
+                        delay(settleDelayMillis)
                     }
+                    sessionStore.clear()
+                    invalidationBus?.notifyInvalidated()
                     null
                 }
             }
