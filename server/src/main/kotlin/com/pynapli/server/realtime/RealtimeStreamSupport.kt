@@ -8,8 +8,10 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.close
 import io.ktor.websocket.send
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
@@ -62,6 +64,7 @@ internal fun <D, Dto> Route.recipientStream(
         val emitterJob =
             launch {
                 deltas
+                    .buffer(RealtimeFanout.PER_CONNECTION_BUFFER, BufferOverflow.DROP_OLDEST)
                     .filter { delta -> recipientOf(delta) == viewerId }
                     .collect { delta ->
                         runCatching {

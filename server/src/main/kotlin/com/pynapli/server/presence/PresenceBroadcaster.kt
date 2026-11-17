@@ -1,26 +1,31 @@
 package com.pynapli.server.presence
 
+import com.pynapli.server.realtime.LocalOnlyRealtimeRelay
+import com.pynapli.server.realtime.RealtimeFanout
+import com.pynapli.server.realtime.RealtimeRelay
 import com.pynapli.shared.network.dto.PresenceDeltaDto
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 
 class PresenceBroadcaster(
     extraBufferCapacity: Int = DEFAULT_BUFFER_CAPACITY,
+    relay: RealtimeRelay = LocalOnlyRealtimeRelay,
 ) {
-    private val _deltas =
-        MutableSharedFlow<PresenceDeltaDto>(
-            replay = 0,
+    private val fanout =
+        RealtimeFanout(
+            topic = "presence",
+            serializer = PresenceDeltaDto.serializer(),
+            relay = relay,
             extraBufferCapacity = extraBufferCapacity,
+            replay = 0,
         )
-    val deltas: SharedFlow<PresenceDeltaDto> = _deltas.asSharedFlow()
+    val deltas: SharedFlow<PresenceDeltaDto> = fanout.deltas
 
     /** Live count of active subscribers — useful for connection metrics and for tests to await readiness. */
-    val subscriptionCount: StateFlow<Int> = _deltas.subscriptionCount
+    val subscriptionCount: StateFlow<Int> = fanout.subscriptionCount
 
     suspend fun emit(delta: PresenceDeltaDto) {
-        _deltas.emit(delta)
+        fanout.emit(delta)
     }
 
     companion object {

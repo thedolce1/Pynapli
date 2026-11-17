@@ -114,7 +114,7 @@ internal fun buildCoreDependencies(
         }
     val travelLocationRepository = JdbcTravelLocationRepository(database.dataSource)
     val presenceRepository = RedisPresenceRepository(redisCache)
-    val presenceBroadcaster = PresenceBroadcaster()
+    val presenceBroadcaster = PresenceBroadcaster(relay = redisCache.realtimeRelay)
     val onlinePresenceTracker = OnlinePresenceTracker()
     val presenceService =
         PresenceService(
@@ -196,9 +196,10 @@ internal fun buildCoreDependencies(
         )
     val notificationRepository = JdbcNotificationRepository(database.dataSource)
     val notificationService = NotificationService(notificationRepository)
-    val activityBroadcaster = ActivityBroadcaster()
-    val psyncBroadcaster = PsyncBroadcaster()
-    val messageBroadcaster = MessageBroadcaster()
+    // Every replica publishes its deltas to Redis and delivers the others' to its own sockets.
+    val activityBroadcaster = ActivityBroadcaster(relay = redisCache.realtimeRelay)
+    val psyncBroadcaster = PsyncBroadcaster(relay = redisCache.realtimeRelay)
+    val messageBroadcaster = MessageBroadcaster(relay = redisCache.realtimeRelay)
     val notificationDispatchWorker =
         if (config.notificationDispatchEnabled) {
             val pushNotificationSender = createPushNotificationSender(config)

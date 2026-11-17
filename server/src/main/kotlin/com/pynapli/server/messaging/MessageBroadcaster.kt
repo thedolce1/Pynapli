@@ -1,24 +1,32 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.realtime.InstantAsString
+import com.pynapli.server.realtime.LocalOnlyRealtimeRelay
+import com.pynapli.server.realtime.RealtimeFanout
+import com.pynapli.server.realtime.RealtimeRelay
+import com.pynapli.server.realtime.UuidAsString
 import com.pynapli.shared.network.dto.MessageDeltaDto
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.util.UUID
 
 class MessageBroadcaster(
     extraBufferCapacity: Int = DEFAULT_BUFFER_CAPACITY,
+    relay: RealtimeRelay = LocalOnlyRealtimeRelay,
 ) {
-    private val _deltas =
-        MutableSharedFlow<MessageRealtimeDelta>(
-            replay = 0,
+    private val fanout =
+        RealtimeFanout(
+            topic = "messages",
+            serializer = MessageRealtimeDelta.serializer(),
+            relay = relay,
             extraBufferCapacity = extraBufferCapacity,
+            replay = 0,
         )
-    val deltas: SharedFlow<MessageRealtimeDelta> = _deltas.asSharedFlow()
+    val deltas: SharedFlow<MessageRealtimeDelta> = fanout.deltas
 
     suspend fun emit(delta: MessageRealtimeDelta) {
-        _deltas.emit(delta)
+        fanout.emit(delta)
     }
 
     companion object {
@@ -26,14 +34,21 @@ class MessageBroadcaster(
     }
 }
 
+@Serializable
 data class MessageRealtimeDelta(
+    @Serializable(with = UuidAsString::class)
     val recipientUserId: UUID,
     val type: String,
+    @Serializable(with = UuidAsString::class)
     val conversationId: UUID,
+    @Serializable(with = InstantAsString::class)
     val occurredAt: Instant = Instant.now(),
+    @Serializable(with = UuidAsString::class)
     val messageId: UUID? = null,
+    @Serializable(with = UuidAsString::class)
     val actorUserId: UUID? = null,
     val actorDisplayName: String? = null,
+    @Serializable(with = InstantAsString::class)
     val expiresAt: Instant? = null,
 ) {
     fun toDto(): MessageDeltaDto =
