@@ -159,6 +159,7 @@ internal fun buildCoreDependencies(
             deviceFarmRepository = JdbcDeviceFarmRepository(database.dataSource),
             deviceRiskSignalPublisher = riskService,
             productMetrics = productMetrics,
+            revocationRelay = redisCache.realtimeRelay,
         )
     val passwordRecoveryService =
         PasswordRecoveryService(

@@ -103,6 +103,10 @@ internal class AuthSessionManager(
         return repository.revokeSession(session.id)
     }
 
+    fun forgetCachedAccessTokenHash(accessTokenHash: String) {
+        cache.remove(accessTokenHash)
+    }
+
     fun invalidateCachedSessionsForUser(userId: UUID) {
         cache.removeUser(userId)
     }
