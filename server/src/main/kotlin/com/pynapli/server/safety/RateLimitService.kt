@@ -116,7 +116,17 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.DATA_EXPORT, limit = 5, windowSeconds = ONE_DAY_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.APPEAL, limit = 10, windowSeconds = ONE_DAY_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.PUSH_REGISTER, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
+                // A private-album fetch per owner id; walking ids would enumerate who has albums.
+                RateLimitPolicy(action = RateLimitedAction.PRIVATE_ALBUM_FETCH, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
+                // Global abuse ceilings (RequestRateLimitPlugin), per minute so a burst is caught fast.
+                // Per user: ten requests a second, sustained, is a script. Per client IP: room for a
+                // venue's shared Wi-Fi. Without a session (sign-in, sign-up, reset): much lower.
+                RateLimitPolicy(action = RateLimitedAction.GLOBAL_USER, limit = 600, windowSeconds = ONE_MINUTE_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.GLOBAL_IP, limit = 1_200, windowSeconds = ONE_MINUTE_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.GLOBAL_ANONYMOUS_IP, limit = 120, windowSeconds = ONE_MINUTE_SECONDS),
             ).associateBy { it.action }
+
+        private const val ONE_MINUTE_SECONDS = 60L
 
         private const val ONE_HOUR_SECONDS = 3_600L
         private const val ONE_DAY_SECONDS = 86_400L
@@ -159,6 +169,10 @@ object RateLimitedAction {
     const val DATA_EXPORT = "data_export"
     const val APPEAL = "appeal"
     const val PUSH_REGISTER = "push_register"
+    const val PRIVATE_ALBUM_FETCH = "private_album_fetch"
+    const val GLOBAL_USER = "global_user"
+    const val GLOBAL_IP = "global_ip"
+    const val GLOBAL_ANONYMOUS_IP = "global_anonymous_ip"
 }
 
 data class RateLimitDecision(
