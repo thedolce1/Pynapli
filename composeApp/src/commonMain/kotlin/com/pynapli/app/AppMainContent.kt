@@ -33,7 +33,6 @@ import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.grid.GridScreen
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.SavedGridFilterStateHolder
-import com.pynapli.app.grid.TonightAvailabilityStateHolder
 import com.pynapli.app.location.LocationStateHolder
 import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.media.MediaAlbumKindUi
@@ -54,6 +53,7 @@ import com.pynapli.app.store.StoreStateHolder
 import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SwipeScreen
 import com.pynapli.app.swipe.SwipeStateHolder
+import com.pynapli.app.tonight.PlayingTonightStateHolder
 import com.pynapli.shared.network.dto.MatchDto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -88,7 +88,7 @@ internal fun ColumnScope.PynapliMainContent(
     savedGridFilterStateHolder: SavedGridFilterStateHolder?,
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder?,
     travelLocationStateHolder: TravelLocationStateHolder?,
-    tonightAvailabilityStateHolder: TonightAvailabilityStateHolder?,
+    playingTonightStateHolder: PlayingTonightStateHolder?,
     onboardingStateHolder: OnboardingStateHolder?,
     conversationActions: ConversationActions,
     scope: CoroutineScope,
@@ -154,7 +154,7 @@ internal fun ColumnScope.PynapliMainContent(
                         appSettingsStateHolder = appSettingsStateHolder,
                         authStateHolder = authStateHolder,
                         savedGridFilterStateHolder = savedGridFilterStateHolder,
-                        tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
+                        playingTonightStateHolder = playingTonightStateHolder,
                         onboardingStateHolder = onboardingStateHolder,
                         scope = scope,
                         onProfileSurface = onProfileSurface,
@@ -348,7 +348,7 @@ private fun ColumnScope.GridTabContent(
     appSettingsStateHolder: AppSettingsStateHolder,
     authStateHolder: AuthStateHolder,
     savedGridFilterStateHolder: SavedGridFilterStateHolder?,
-    tonightAvailabilityStateHolder: TonightAvailabilityStateHolder?,
+    playingTonightStateHolder: PlayingTonightStateHolder?,
     onboardingStateHolder: OnboardingStateHolder?,
     scope: CoroutineScope,
     onProfileSurface: (ProfileSurface) -> Unit,
@@ -403,7 +403,7 @@ private fun ColumnScope.GridTabContent(
         profileImageUrl = profileImageUrl,
         profileLinksStateHolder = profileLinksStateHolder,
         savedGridFilterStateHolder = savedGridFilterStateHolder,
-        tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
+        playingTonightStateHolder = playingTonightStateHolder,
         lifestyleFiltersAllowed = profileHubState.me?.profile?.ageVerified == true,
         distanceUnit = distanceUnit,
         onUseCurrentLocation = onUseCurrentLocation,

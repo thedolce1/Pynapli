@@ -5,7 +5,6 @@ import com.pynapli.server.activity.ActivityException
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.authStatusFor
 import com.pynapli.server.grid.GridException
-import com.pynapli.server.grid.SavedGridFilterException
 import com.pynapli.server.location.LocationException
 import com.pynapli.server.location.TravelLocationException
 import com.pynapli.server.media.MediaException
@@ -13,13 +12,12 @@ import com.pynapli.server.messaging.MessagingException
 import com.pynapli.server.moderation.ModerationException
 import com.pynapli.server.notifications.NotificationException
 import com.pynapli.server.profile.ProfileException
-import com.pynapli.server.profile.TonightAvailabilityException
 import com.pynapli.server.profilelink.ProfileLinkException
 import com.pynapli.server.psync.PsyncException
 import com.pynapli.server.safety.AppCheckException
 import com.pynapli.server.safety.SafetyException
+import com.pynapli.server.savedfilters.SavedFilterException
 import com.pynapli.server.subscriptions.SubscriptionException
-import com.pynapli.server.swipe.SavedSwipeFilterException
 import com.pynapli.server.swipe.SwipeException
 import com.pynapli.server.swipe.TopPicksException
 import com.pynapli.server.tonight.TonightSessionException
@@ -113,21 +111,11 @@ fun Application.configureStatusPages() {
             )
         }
 
-        exception<SavedGridFilterException> { call, cause ->
+        // One handler for both surfaces' saved filters (SavedGridFilterException and
+        // SavedSwipeFilterException are aliases of SavedFilterException).
+        exception<SavedFilterException> { call, cause ->
             call.respond(
-                status = savedGridFilterStatusFor(cause.code),
-                message =
-                    ApiErrorDto(
-                        code = cause.code,
-                        message = userSafeMessage(cause.code),
-                        requestId = call.requestIdOrUnknown(),
-                    ),
-            )
-        }
-
-        exception<SavedSwipeFilterException> { call, cause ->
-            call.respond(
-                status = savedSwipeFilterStatusFor(cause.code),
+                status = savedFilterStatusFor(cause.code),
                 message =
                     ApiErrorDto(
                         code = cause.code,
@@ -152,18 +140,6 @@ fun Application.configureStatusPages() {
         exception<TravelLocationException> { call, cause ->
             call.respond(
                 status = travelLocationStatusFor(cause.code),
-                message =
-                    ApiErrorDto(
-                        code = cause.code,
-                        message = userSafeMessage(cause.code),
-                        requestId = call.requestIdOrUnknown(),
-                    ),
-            )
-        }
-
-        exception<TonightAvailabilityException> { call, cause ->
-            call.respond(
-                status = tonightAvailabilityStatusFor(cause.code),
                 message =
                     ApiErrorDto(
                         code = cause.code,

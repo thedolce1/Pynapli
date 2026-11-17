@@ -20,7 +20,7 @@ import com.pynapli.shared.network.dto.SavedGridFilterDto
 internal fun GridScreenContent(
     state: GridUiState,
     savedFiltersState: SavedGridFiltersUiState,
-    tonightState: TonightAvailabilityUiState,
+    tonightSessionActive: Boolean,
     lifestyleFiltersAllowed: Boolean,
     locationState: LocationUiState,
     profileImageUrl: String?,
@@ -32,8 +32,6 @@ internal fun GridScreenContent(
     onSavePreset: (String, GridFilters) -> Unit,
     onApplySavedPreset: (SavedGridFilterDto) -> Unit,
     onDeleteSavedPreset: (String) -> Unit,
-    onSetTonightAvailable: () -> Unit,
-    onClearTonightAvailable: () -> Unit,
     onLoadMore: () -> Unit,
     onRefresh: () -> Unit,
     onProfileSelected: (GridProfileCardUi) -> Unit,
@@ -115,7 +113,7 @@ internal fun GridScreenContent(
         GridFiltersSheet(
             initial = state.filters,
             savedState = savedFiltersState,
-            tonightState = tonightState,
+            tonightSessionActive = tonightSessionActive,
             lifestyleFiltersAllowed = lifestyleFiltersAllowed,
             onDismiss = { sheetVisible = false },
             onApply = { applied ->
@@ -135,8 +133,10 @@ internal fun GridScreenContent(
                 )
             },
             onDeleteSavedPreset = onDeleteSavedPreset,
-            onSetTonightAvailable = onSetTonightAvailable,
-            onClearTonightAvailable = onClearTonightAvailable,
+            onOpenTonight = {
+                sheetVisible = false
+                onOpenTonight()
+            },
         )
     }
 }

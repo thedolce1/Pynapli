@@ -14,6 +14,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.handCursor
 import com.pynapli.shared.profile.ProfileTaxonomies
@@ -97,7 +98,7 @@ internal fun PresenceSection(
         SheetToggleChip(label = "Recently joined", active = recentlyJoined, onClick = onRecentlyJoinedToggle)
         SheetToggleChip(label = "Traveling here", active = travelingHere, onClick = onTravelingHereToggle)
         SheetToggleChip(label = "Visiting soon", active = visitingSoon, onClick = onVisitingSoonToggle)
-        SheetToggleChip(label = "Available tonight", active = tonightAvailable, onClick = onTonightToggle)
+        SheetToggleChip(label = "Playing tonight", active = tonightAvailable, onClick = onTonightToggle)
     }
 }
 
@@ -118,34 +119,30 @@ internal fun PhotosSection(
     }
 }
 
+/**
+ * Entry into Playing Tonight from the filter sheet (PLAYING_TONIGHT_SPEC): sessions are the only
+ * Tonight model, so this opens the existing start/manage flow instead of toggling a profile flag.
+ */
 @Composable
-internal fun TonightAvailabilityRow(
-    state: TonightAvailabilityUiState,
-    onSet: () -> Unit,
-    onClear: () -> Unit,
+internal fun TonightSessionEntryRow(
+    sessionActive: Boolean,
+    onOpenTonight: () -> Unit,
 ) {
-    val label =
-        when {
-            state.isMutating -> "Updating…"
-            state.isCurrentlyAvailable -> "You're marked available tonight"
-            else -> "Mark me available tonight (12h)"
-        }
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = label,
+            text = if (sessionActive) "You're playing tonight" else "Playing tonight? Start a session",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
-        if (state.isCurrentlyAvailable) {
-            TextButton(onClick = onClear, enabled = !state.isMutating, modifier = Modifier.handCursor(enabled = !state.isMutating)) { Text(text = "Clear") }
-        } else {
-            TextButton(onClick = onSet, enabled = !state.isMutating, modifier = Modifier.handCursor(enabled = !state.isMutating)) { Text(text = "Set") }
-        }
+        TextButton(
+            onClick = onOpenTonight,
+            modifier = Modifier.testTag(GridFilterTags.OPEN_TONIGHT).handCursor(),
+        ) { Text(text = if (sessionActive) "View" else "Start") }
     }
 }
 

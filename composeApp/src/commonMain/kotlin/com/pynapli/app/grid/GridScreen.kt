@@ -17,6 +17,8 @@ import com.pynapli.app.location.TravelLocationUiState
 import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
+import com.pynapli.app.tonight.PlayingTonightStateHolder
+import com.pynapli.app.tonight.PlayingTonightUiState
 import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.launch
 
@@ -31,7 +33,7 @@ fun GridScreen(
     profileImageUrl: String? = null,
     profileLinksStateHolder: ProfileLinksStateHolder? = null,
     savedGridFilterStateHolder: SavedGridFilterStateHolder? = null,
-    tonightAvailabilityStateHolder: TonightAvailabilityStateHolder? = null,
+    playingTonightStateHolder: PlayingTonightStateHolder? = null,
     lifestyleFiltersAllowed: Boolean = true,
     distanceUnit: String = AppSettings.UNIT_METRIC,
     gridState: LazyGridState = rememberLazyGridState(),
@@ -50,8 +52,9 @@ fun GridScreen(
         ?: remember { mutableStateOf(null) }
     val savedFiltersState by savedGridFilterStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf(SavedGridFiltersUiState()) }
-    val tonightState by tonightAvailabilityStateHolder?.state?.collectAsState()
-        ?: remember { mutableStateOf(TonightAvailabilityUiState()) }
+    // PLAYING_TONIGHT_SPEC: sessions are the only Tonight model; the filter sheet only links to them.
+    val tonightState by playingTonightStateHolder?.state?.collectAsState()
+        ?: remember { mutableStateOf(PlayingTonightUiState()) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(stateHolder) {
@@ -62,8 +65,8 @@ fun GridScreen(
         savedGridFilterStateHolder?.load()
     }
 
-    LaunchedEffect(tonightAvailabilityStateHolder) {
-        tonightAvailabilityStateHolder?.load()
+    LaunchedEffect(playingTonightStateHolder) {
+        playingTonightStateHolder?.refreshCurrentSession()
     }
 
     // Travel mode moves the Grid too, so the Grid has to know when it is on (it was only loaded by
@@ -75,7 +78,7 @@ fun GridScreen(
     GridScreenContent(
         state = state,
         savedFiltersState = savedFiltersState,
-        tonightState = tonightState,
+        tonightSessionActive = tonightState.currentSession != null,
         lifestyleFiltersAllowed = lifestyleFiltersAllowed,
         locationState = locationState,
         profileImageUrl = profileImageUrl,
@@ -92,12 +95,6 @@ fun GridScreen(
         },
         onDeleteSavedPreset = { id ->
             savedGridFilterStateHolder?.let { holder -> scope.launch { holder.delete(id) } }
-        },
-        onSetTonightAvailable = {
-            tonightAvailabilityStateHolder?.let { holder -> scope.launch { holder.setAvailable() } }
-        },
-        onClearTonightAvailable = {
-            tonightAvailabilityStateHolder?.let { holder -> scope.launch { holder.clear() } }
         },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onRefresh = { scope.launch { stateHolder.refresh() } },

@@ -4,7 +4,6 @@ import com.pynapli.server.db.PostgresJobLock
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.notifications.NotificationService
 import com.pynapli.server.presence.PresenceService
-import com.pynapli.server.profile.TonightAvailabilityService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.HiddenProfileRepository
 import com.pynapli.server.safety.RiskPolicyService
@@ -23,7 +22,6 @@ import javax.sql.DataSource
  * dependencies are threaded in as parameters. Behavior matches the original inline construction.
  */
 internal class TonightDependencies(
-    val tonightAvailabilityService: TonightAvailabilityService,
     val tonightSessionService: TonightSessionService,
     val tonightFeedService: TonightFeedService,
     val tonightSessionExpiryWorker: TonightSessionExpiryWorker,
@@ -39,7 +37,6 @@ internal fun buildTonightDependencies(
     hiddenProfileRepository: HiddenProfileRepository,
     riskPolicyService: RiskPolicyService,
 ): TonightDependencies {
-    val tonightAvailabilityService = TonightAvailabilityService(dataSource)
     val tonightSessionService =
         TonightSessionService(
             repository = JdbcTonightSessionRepository(dataSource),
@@ -62,7 +59,6 @@ internal fun buildTonightDependencies(
     val tonightSessionExpiryWorker =
         TonightSessionExpiryWorker(tonightSessionService, intervalMillis = 5 * 60 * 1000L, jobLock = PostgresJobLock(dataSource))
     return TonightDependencies(
-        tonightAvailabilityService = tonightAvailabilityService,
         tonightSessionService = tonightSessionService,
         tonightFeedService = tonightFeedService,
         tonightSessionExpiryWorker = tonightSessionExpiryWorker,

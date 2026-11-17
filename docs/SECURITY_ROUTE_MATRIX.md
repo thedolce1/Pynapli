@@ -39,7 +39,6 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `NotificationRoutes.kt` | User-authenticated | Preferences and device tokens are token-derived. |
 | `PresenceStreamRoutes.kt` | User-authenticated | SSE stream authenticates bearer token and block-filters target updates. |
 | `ProfileRoutes.kt` | User-authenticated | Profile reads/editing use token-derived viewer/owner and block checks. |
-| `TonightAvailabilityRoutes.kt` | User-authenticated | Availability belongs to token-derived user. |
 | `ProfileLinkRoutes.kt` | User-authenticated | Invite/accept/decline/unlink are token-derived and self/block guarded. |
 | `PsyncSessionRoutes.kt` | User-authenticated | Session participant checks happen in service/repository layer. |
 | `PsyncStreamRoutes.kt` | User-authenticated | Stream authenticates bearer token before subscription. |

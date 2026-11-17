@@ -39,7 +39,6 @@ import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.plugins.selectAppCheckVerifier
 import com.pynapli.server.presence.configurePresenceStreamRoutes
 import com.pynapli.server.profile.configureProfileRoutes
-import com.pynapli.server.profile.configureTonightAvailabilityRoutes
 import com.pynapli.server.profilelink.configureProfileLinkRoutes
 import com.pynapli.server.psync.configurePsyncRoutes
 import com.pynapli.server.psync.configurePsyncStreamRoutes
@@ -160,7 +159,6 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     )
     configureGridRoutes(dependencies.authService, dependencies.gridService, dependencies.requestProfilerFactory)
     configureSavedGridFilterRoutes(dependencies.authService, dependencies.savedGridFilterService)
-    configureTonightAvailabilityRoutes(dependencies.authService, dependencies.tonightAvailabilityService)
     configureTonightSessionRoutes(dependencies.authService, dependencies.tonightSessionService)
     configureTonightFeedRoutes(dependencies.authService, dependencies.tonightFeedService)
     configurePsyncRoutes(dependencies.authService, dependencies.psyncSessionService)

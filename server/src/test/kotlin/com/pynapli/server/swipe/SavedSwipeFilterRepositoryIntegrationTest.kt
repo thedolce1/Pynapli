@@ -1,5 +1,7 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.savedfilters.JdbcSavedFilterRepository
+import com.pynapli.server.savedfilters.SavedFilterSurface
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.runBlocking
@@ -22,7 +24,7 @@ class SavedSwipeFilterRepositoryIntegrationTest :
             runBlocking {
                 val user = UUID.fromString("00000000-0000-0000-0000-000000000301")
                 dataSource.insertActiveUser(user)
-                val repository = JdbcSavedSwipeFilterRepository(dataSource)
+                val repository = JdbcSavedFilterRepository(dataSource, SavedFilterSurface.Swipe)
 
                 val created =
                     repository.create(
@@ -47,7 +49,7 @@ class SavedSwipeFilterRepositoryIntegrationTest :
             runBlocking {
                 val user = UUID.fromString("00000000-0000-0000-0000-000000000302")
                 dataSource.insertActiveUser(user)
-                val repository = JdbcSavedSwipeFilterRepository(dataSource)
+                val repository = JdbcSavedFilterRepository(dataSource, SavedFilterSurface.Swipe)
                 repository.create(
                     id = UUID.randomUUID(),
                     userId = user,
@@ -74,7 +76,7 @@ class SavedSwipeFilterRepositoryIntegrationTest :
                 val intruder = UUID.fromString("00000000-0000-0000-0000-000000000304")
                 dataSource.insertActiveUser(owner)
                 dataSource.insertActiveUser(intruder)
-                val repository = JdbcSavedSwipeFilterRepository(dataSource)
+                val repository = JdbcSavedFilterRepository(dataSource, SavedFilterSurface.Swipe)
                 val created =
                     repository.create(
                         id = UUID.randomUUID(),

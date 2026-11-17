@@ -3,7 +3,12 @@ package com.pynapli.server.swipe
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.discoveryFiltersFrom
 import com.pynapli.server.grid.GridViewerTrustRepository
-import com.pynapli.server.subscriptions.EntitlementPolicy
+import com.pynapli.server.savedfilters.SavedFilter
+import com.pynapli.server.savedfilters.SavedFilterDuplicateNameException
+import com.pynapli.server.savedfilters.SavedFilterException
+import com.pynapli.server.savedfilters.SavedFilterRecord
+import com.pynapli.server.savedfilters.SavedFilterRepository
+import com.pynapli.server.savedfilters.SavedFilterService
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.CreateSavedSwipeFilterRequestDto
 import com.pynapli.shared.network.dto.SavedSwipeFilterDto
@@ -13,140 +18,86 @@ import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
+typealias SavedSwipeFilterRepository = SavedFilterRepository
+typealias SavedSwipeFilterRecord = SavedFilterRecord
+typealias SavedSwipeFilterDuplicateNameException = SavedFilterDuplicateNameException
+typealias SavedSwipeFilterException = SavedFilterException
+
 /**
- * Saved swipe filter presets (FILTERS_SPEC L463-477). Mirrors `SavedGridFilterService`
- * so the two presets surfaces have matching semantics — entitlement gate, payload
- * re-validation, age-verified gate for lifestyle tags, name/cap rules. Payload is
- * the verbatim `SwipeDeckRequestDto` minus cursor (request-time only); validation
- * runs through the same `discoveryFiltersFrom` and `SwipeDealbreakerKey.ALL` checks
- * the live `SwipeService.queryDeck` uses, so a future taxonomy or dealbreaker change
- * automatically rejects stale presets on apply.
+ * Swipe surface of the shared [SavedFilterService]. Payload is the verbatim `SwipeDeckRequestDto`
+ * minus cursor; validation runs the same `discoveryFiltersFrom` and `SwipeDealbreakerKey.ALL`
+ * checks the live `SwipeService.queryDeck` uses, so a taxonomy or dealbreaker change rejects
+ * stale presets on save.
  */
 class SavedSwipeFilterService(
-    private val repository: SavedSwipeFilterRepository,
-    private val subscriptionService: SubscriptionService? = null,
-    private val viewerTrustRepository: GridViewerTrustRepository? = null,
-    private val json: Json = Json,
-    private val idFactory: () -> UUID = UUID::randomUUID,
+    repository: SavedSwipeFilterRepository,
+    subscriptionService: SubscriptionService? = null,
+    viewerTrustRepository: GridViewerTrustRepository? = null,
+    json: Json = Json,
+    idFactory: () -> UUID = UUID::randomUUID,
 ) {
-    suspend fun list(viewerUserId: UUID): SavedSwipeFiltersListDto {
-        requireEntitlement(viewerUserId)
-        return SavedSwipeFiltersListDto(
-            items = repository.list(viewerUserId).map { it.toDto() },
+    private val presets =
+        SavedFilterService(
+            repository = repository,
+            payloadSerializer = SwipeDeckRequestDto.serializer(),
+            validate = ::validatePayload,
+            // Cursor is request-time only; limit is the server default for the preset's fresh deck.
+            normalize = { payload -> payload.copy(cursor = null) },
+            subscriptionService = subscriptionService,
+            viewerTrustRepository = viewerTrustRepository,
+            json = json,
+            idFactory = idFactory,
         )
-    }
+
+    suspend fun list(viewerUserId: UUID): SavedSwipeFiltersListDto = SavedSwipeFiltersListDto(items = presets.list(viewerUserId).map { it.toDto() })
 
     suspend fun create(
         viewerUserId: UUID,
         request: CreateSavedSwipeFilterRequestDto,
-    ): SavedSwipeFilterDto {
-        requireEntitlement(viewerUserId)
-        val name = request.name.trim()
-        if (name.isEmpty() || name.length > MAX_NAME_LENGTH) {
-            throw SavedSwipeFilterException("INVALID_SAVED_FILTER_NAME")
-        }
-        validateDealbreakers(request.payload)
-        val filters = validatePayload(request.payload)
-        requireLifestyleFilterAccess(viewerUserId, filters)
-        if (repository.countForUser(viewerUserId) >= MAX_PRESETS_PER_USER) {
-            throw SavedSwipeFilterException("SAVED_FILTER_LIMIT_REACHED")
-        }
-        val payloadJson =
-            json.encodeToString(
-                SwipeDeckRequestDto.serializer(),
-                request.payload.normalized(),
-            )
-        val record =
-            try {
-                repository.create(
-                    id = idFactory(),
-                    userId = viewerUserId,
-                    name = name,
-                    payloadJson = payloadJson,
-                )
-            } catch (_: SavedSwipeFilterDuplicateNameException) {
-                throw SavedSwipeFilterException("SAVED_FILTER_NAME_TAKEN")
-            }
-        return record.toDto()
-    }
+    ): SavedSwipeFilterDto = presets.create(viewerUserId, request.name, request.payload).toDto()
 
     suspend fun delete(
         viewerUserId: UUID,
         idText: String,
-    ): Boolean {
-        requireEntitlement(viewerUserId)
-        val id =
-            runCatching { UUID.fromString(idText) }
-                .getOrElse { throw SavedSwipeFilterException("INVALID_SAVED_FILTER_ID") }
-        return repository.delete(viewerUserId, id)
-    }
+    ): Boolean = presets.delete(viewerUserId, idText)
 
-    private suspend fun requireEntitlement(viewerUserId: UUID) {
-        val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
-        if (!policy.advancedFiltersAllowed) {
-            throw SavedSwipeFilterException("ENTITLEMENT_REQUIRED")
-        }
-    }
-
-    private fun validateDealbreakers(payload: SwipeDeckRequestDto) {
-        payload.dealbreakers.forEach { key ->
-            if (key.trim() !in SwipeDealbreakerKey.ALL) {
-                throw SavedSwipeFilterException("INVALID_SAVED_FILTER_PAYLOAD")
-            }
-        }
-    }
-
-    private fun validatePayload(payload: SwipeDeckRequestDto): DiscoveryFilters =
-        discoveryFiltersFrom(
-            minimumAge = payload.minimumAge,
-            maximumAge = payload.maximumAge,
-            relationshipContexts = payload.relationshipContexts,
-            linkedOnly = payload.linkedOnly,
-            verifiedOnly = payload.verifiedOnly,
-            facePhotoVerifiedOnly = payload.facePhotoVerifiedOnly,
-            ageVerifiedOnly = payload.ageVerifiedOnly,
-            discoveryStyles = payload.discoveryStyles,
-            lifestyleTags = payload.lifestyleTags,
-            logisticsTags = payload.logisticsTags,
-            withPhotosOnly = payload.withPhotosOnly,
-            hasPrivateAlbumOnly = payload.hasPrivateAlbumOnly,
-            intents = payload.intents,
-            genders = payload.genders,
-            orientations = payload.orientations,
-            verifiedPreferred = payload.verifiedPreferred,
-        ) { _ -> SavedSwipeFilterException("INVALID_SAVED_FILTER_PAYLOAD") }
-
-    private suspend fun requireLifestyleFilterAccess(
-        viewerUserId: UUID,
-        filters: DiscoveryFilters,
-    ) {
-        if (filters.lifestyleTags.isEmpty()) return
-        val verified = viewerTrustRepository?.isAgeVerified(viewerUserId) ?: true
-        if (!verified) throw SavedSwipeFilterException("AGE_VERIFICATION_REQUIRED")
-    }
-
-    /**
-     * Strips request-time fields that should never be persisted in a preset.
-     * Cursor is request-time only; limit is the server default for the preset's
-     * fresh deck session.
-     */
-    private fun SwipeDeckRequestDto.normalized(): SwipeDeckRequestDto = copy(cursor = null)
-
-    private fun SavedSwipeFilterRecord.toDto(): SavedSwipeFilterDto =
+    private fun SavedFilter<SwipeDeckRequestDto>.toDto(): SavedSwipeFilterDto =
         SavedSwipeFilterDto(
             id = id.toString(),
             name = name,
-            payload = json.decodeFromString(SwipeDeckRequestDto.serializer(), payloadJson),
+            payload = payload,
             createdAt = createdAt.toString(),
             updatedAt = updatedAt.toString(),
         )
 
     companion object {
-        const val MAX_NAME_LENGTH: Int = 60
-        const val MAX_PRESETS_PER_USER: Int = 12
+        const val MAX_NAME_LENGTH: Int = SavedFilterService.MAX_NAME_LENGTH
+        const val MAX_PRESETS_PER_USER: Int = SavedFilterService.MAX_PRESETS_PER_USER
     }
 }
 
-class SavedSwipeFilterException(
-    val code: String,
-) : RuntimeException(code)
+private fun validatePayload(payload: SwipeDeckRequestDto): DiscoveryFilters {
+    payload.dealbreakers.forEach { key ->
+        if (key.trim() !in SwipeDealbreakerKey.ALL) {
+            throw SavedFilterException("INVALID_SAVED_FILTER_PAYLOAD")
+        }
+    }
+    return discoveryFiltersFrom(
+        minimumAge = payload.minimumAge,
+        maximumAge = payload.maximumAge,
+        relationshipContexts = payload.relationshipContexts,
+        linkedOnly = payload.linkedOnly,
+        verifiedOnly = payload.verifiedOnly,
+        facePhotoVerifiedOnly = payload.facePhotoVerifiedOnly,
+        ageVerifiedOnly = payload.ageVerifiedOnly,
+        discoveryStyles = payload.discoveryStyles,
+        lifestyleTags = payload.lifestyleTags,
+        logisticsTags = payload.logisticsTags,
+        withPhotosOnly = payload.withPhotosOnly,
+        hasPrivateAlbumOnly = payload.hasPrivateAlbumOnly,
+        intents = payload.intents,
+        genders = payload.genders,
+        orientations = payload.orientations,
+        verifiedPreferred = payload.verifiedPreferred,
+    ) { _ -> SavedFilterException("INVALID_SAVED_FILTER_PAYLOAD") }
+}

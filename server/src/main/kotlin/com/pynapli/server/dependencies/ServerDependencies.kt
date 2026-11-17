@@ -53,7 +53,6 @@ import com.pynapli.server.presence.PresenceOfflineScanner
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profile.JdbcProfileRepository
 import com.pynapli.server.profile.ProfileService
-import com.pynapli.server.profile.TonightAvailabilityService
 import com.pynapli.server.profilelink.JdbcProfileLinkRepository
 import com.pynapli.server.profilelink.ProfileLinkService
 import com.pynapli.server.profiling.RequestProfilerFactory
@@ -141,7 +140,6 @@ class ServerDependencies(
     val savedGridFilterService: SavedGridFilterService,
     val savedSwipeFilterService: SavedSwipeFilterService,
     val topPicksService: TopPicksService,
-    val tonightAvailabilityService: TonightAvailabilityService,
     val tonightSessionService: TonightSessionService,
     val tonightFeedService: TonightFeedService,
     val tonightSessionExpiryWorker: TonightSessionExpiryWorker,
@@ -451,7 +449,6 @@ class ServerDependencies(
                 savedGridFilterService = grid.savedGridFilterService,
                 savedSwipeFilterService = grid.savedSwipeFilterService,
                 topPicksService = swipe.topPicksService,
-                tonightAvailabilityService = tonight.tonightAvailabilityService,
                 tonightSessionService = tonight.tonightSessionService,
                 tonightFeedService = tonight.tonightFeedService,
                 tonightSessionExpiryWorker = tonight.tonightSessionExpiryWorker,

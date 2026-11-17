@@ -276,7 +276,7 @@ fun PynapliApp(
                 savedGridFilterStateHolder = graph.savedGridFilterStateHolder,
                 savedSwipeFilterStateHolder = graph.savedSwipeFilterStateHolder,
                 travelLocationStateHolder = graph.travelLocationStateHolder,
-                tonightAvailabilityStateHolder = graph.tonightAvailabilityStateHolder,
+                playingTonightStateHolder = graph.playingTonightStateHolder,
                 onboardingStateHolder = graph.onboardingStateHolder,
                 conversationActions = conversationActions,
                 scope = scope,

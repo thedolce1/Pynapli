@@ -334,14 +334,6 @@ private class FakeApiClient(
         query: String,
     ): AppResult<com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
-    override suspend fun getTonightAvailability(): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
-
-    override suspend fun setTonightAvailability(
-        request: com.pynapli.shared.network.dto.SetTonightAvailableRequestDto,
-    ): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
-
-    override suspend fun clearTonightAvailability(): AppResult<com.pynapli.shared.network.dto.TonightAvailabilityDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
-
     override suspend fun getTonightFeed(
         radiusMeters: Int,
         intent: String?,

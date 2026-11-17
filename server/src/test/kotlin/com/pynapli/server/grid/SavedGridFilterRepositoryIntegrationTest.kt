@@ -1,5 +1,7 @@
 package com.pynapli.server.grid
 
+import com.pynapli.server.savedfilters.JdbcSavedFilterRepository
+import com.pynapli.server.savedfilters.SavedFilterSurface
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.runBlocking
@@ -22,7 +24,7 @@ class SavedGridFilterRepositoryIntegrationTest :
             runBlocking {
                 val user = UUID.fromString("00000000-0000-0000-0000-000000000101")
                 dataSource.insertActiveUser(user)
-                val repository = JdbcSavedGridFilterRepository(dataSource)
+                val repository = JdbcSavedFilterRepository(dataSource, SavedFilterSurface.Grid)
 
                 val created =
                     repository.create(
@@ -47,7 +49,7 @@ class SavedGridFilterRepositoryIntegrationTest :
             runBlocking {
                 val user = UUID.fromString("00000000-0000-0000-0000-000000000102")
                 dataSource.insertActiveUser(user)
-                val repository = JdbcSavedGridFilterRepository(dataSource)
+                val repository = JdbcSavedFilterRepository(dataSource, SavedFilterSurface.Grid)
                 repository.create(
                     id = UUID.randomUUID(),
                     userId = user,
@@ -74,7 +76,7 @@ class SavedGridFilterRepositoryIntegrationTest :
                 val intruder = UUID.fromString("00000000-0000-0000-0000-000000000104")
                 dataSource.insertActiveUser(owner)
                 dataSource.insertActiveUser(intruder)
-                val repository = JdbcSavedGridFilterRepository(dataSource)
+                val repository = JdbcSavedFilterRepository(dataSource, SavedFilterSurface.Grid)
                 val created =
                     repository.create(
                         id = UUID.randomUUID(),
