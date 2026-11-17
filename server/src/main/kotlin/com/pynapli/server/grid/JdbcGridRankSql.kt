@@ -70,8 +70,9 @@ internal fun Connection.queryGridRank(
                          AND ba.status = 'active'
                          AND ba.ends_at > now()
                    ) THEN 0 ELSE 1 END AS boost_bucket,
-                   GREATEST(0, FLOOR(ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)))::integer) AS distance_bucket_meters,
-                   ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
+                   -- Cell-to-cell distance (AUDIT-10): never the raw GPS distance.
+                   GREATEST(0, FLOOR(pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom))))::integer AS distance_bucket_meters,
+                   pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
                    target_travel.id IS NOT NULL AS visiting,
                    -- has_visible_linked_partner only feeds the linkedOnly filter,
                    -- which always runs on the uncached path (userSpecificViewerId

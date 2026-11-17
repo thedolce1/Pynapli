@@ -543,8 +543,8 @@ class ActivityServiceTest {
 
             val response = service.listActivity(viewer)
 
-            assertEquals("1.2 km", response.items.single().distanceLabel)
-            assertEquals(1_200, response.items.single().distanceMeters)
+            assertEquals("1.0 km", response.items.single().distanceLabel)
+            assertEquals(1_000, response.items.single().distanceMeters)
         }
 
     @Test
