@@ -438,6 +438,15 @@ Categories:
 
 Rate-limit hits should feed risk score, especially repeated hits.
 
+Rules that must hold (implemented; numbers live in `RateLimitService.POLICIES`):
+
+- **Sign-in can't be used to lock someone out.** Only failed sign-ins count, checked before the
+  password: 10 failures per hour per account + client IP (the trusted proxy hop,
+  `PYNAPLI_TRUSTED_PROXY_HOPS`) then `RATE_LIMITED`, so guessing from one address is bounded while
+  the real user on another network still signs in. Past 100 failures per hour per account from all
+  addresses, each attempt is delayed 3 s and a warning is logged with an account-hash prefix; it is
+  never refused. Successful sign-ins spend nothing. The suspended-account appeal shares this budget.
+
 ## Recovery And Appeals
 
 False positives will happen.

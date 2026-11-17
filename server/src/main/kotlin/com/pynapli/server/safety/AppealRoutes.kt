@@ -16,6 +16,7 @@ import io.ktor.server.routing.routing
 fun Application.configureAppealRoutes(
     authService: AuthService,
     appealService: AppealService,
+    trustedProxyHops: Int = 1,
 ) {
     routing {
         post("/v1/appeals") {
@@ -34,7 +35,7 @@ fun Application.configureAppealRoutes(
         // instead of a session. Only account-level appeals go through here.
         post("/v1/auth/account-appeal") {
             val request = call.receive<AccountAppealRequestDto>()
-            val identity = authService.verifyCredentials(request.email, request.password, request.deviceId)
+            val identity = authService.verifyCredentials(request.email, request.password, call.clientIp(trustedProxyHops))
             val actionType =
                 when (identity.userStatus) {
                     "suspended" -> "account_suspension"

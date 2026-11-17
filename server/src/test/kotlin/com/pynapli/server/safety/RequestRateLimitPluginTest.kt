@@ -40,6 +40,8 @@ class RequestRateLimitPluginTest {
             counts[key] = next
             return RateLimitCounter(count = next, ttlSeconds = 1_234)
         }
+
+        override suspend fun current(key: String) = counts[key]?.let { RateLimitCounter(count = it, ttlSeconds = 1_234) }
     }
 
     @Test

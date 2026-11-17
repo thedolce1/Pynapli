@@ -17,7 +17,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `AccountLifecycleRoutes.kt` | User-authenticated | Export/delete uses token-derived account owner. |
 | `ActivityRoutes.kt` | User-authenticated | Feed, summary, seen, dismiss, flirts, and album requests are recipient/actor scoped. |
 | `ActivityStreamRoutes.kt` | User-authenticated | SSE stream authenticates bearer token before subscription. |
-| `AuthRoutes.kt` | Public/auth mixed | Signup, login, refresh are public but rate-limited by hashed anonymous subject; logout requires bearer token. |
+| `AuthRoutes.kt` | Public/auth mixed | Signup, login, refresh are public but rate-limited by hashed anonymous subject; login counts failed attempts only, per account + trusted client IP (no per-email lockout); logout requires bearer token. |
 | `GridRoutes.kt` | User-authenticated | Grid query is token-derived and rate-limited. |
 | `SavedGridFilterRoutes.kt` | User-authenticated | Saved filters are owner-scoped. |
 | `LocationRoutes.kt` | User-authenticated | Current location updates only affect the token-derived user. |

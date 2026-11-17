@@ -106,8 +106,9 @@ class AuthService(
         deviceId: String?,
         platform: String?,
         appVersion: String?,
+        clientIp: String? = null,
     ): AuthSessionDto {
-        val identity = verifyCredentials(email, password, deviceId)
+        val identity = verifyCredentials(email, password, clientIp)
         if (identity.userStatus != "active") throw AuthException("ACCOUNT_NOT_ACTIVE")
 
         val session = sessionManager.createSession(UserRecord(identity.userId, identity.userStatus), deviceId, platform, appVersion)
@@ -119,18 +120,20 @@ class AuthService(
      * Checks an email + password without signing in. The password is checked before the account's
      * status, so a wrong password never reveals whether an account exists or is suspended.
      * Used by sign-in and by the suspended-account appeal (which can't have a session).
+     * Failed attempts are limited per account + [clientIp] (AuthRateLimitGuard).
      */
     suspend fun verifyCredentials(
         email: String,
         password: String,
-        deviceId: String?,
+        clientIp: String?,
     ): EmailIdentityRecord {
-        rateLimitGuard.enforce(RateLimitedAction.AUTH_LOGIN, email, deviceId)
+        rateLimitGuard.beforeLoginAttempt(email, clientIp)
         validator.validateEmailPassword(email, password)
-        val identity =
-            repository.findEmailIdentity(Sha256.hash(normalizeEmail(email)))
-                ?: throw AuthException("INVALID_CREDENTIALS")
-        if (!passwordHasher.verify(password, identity.passwordHash)) throw AuthException("INVALID_CREDENTIALS")
+        val identity = repository.findEmailIdentity(Sha256.hash(normalizeEmail(email)))
+        if (identity == null || !passwordHasher.verify(password, identity.passwordHash)) {
+            rateLimitGuard.recordLoginFailure(email, clientIp)
+            throw AuthException("INVALID_CREDENTIALS")
+        }
         return identity
     }
 

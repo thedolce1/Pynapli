@@ -142,7 +142,12 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAgeVerificationAdminRoutes(dependencies.config, dependencies.ageVerificationService)
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)
-    configureAuthRoutes(dependencies.authService, dependencies.passwordRecoveryService, dependencies.signedInDevicesService)
+    configureAuthRoutes(
+        dependencies.authService,
+        dependencies.passwordRecoveryService,
+        dependencies.signedInDevicesService,
+        trustedProxyHops = dependencies.config.trustedProxyHops,
+    )
     configureAccountLifecycleRoutes(dependencies.authService, dependencies.accountLifecycleService)
     configureProfileRoutes(dependencies.authService, dependencies.profileService, dependencies.requestProfilerFactory)
     configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)
@@ -182,7 +187,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         hiddenProfileService = dependencies.hiddenProfileService,
         reportService = dependencies.reportService,
     )
-    configureAppealRoutes(dependencies.authService, dependencies.appealService)
+    configureAppealRoutes(dependencies.authService, dependencies.appealService, dependencies.config.trustedProxyHops)
     configureSwipeRoutes(
         authService = dependencies.authService,
         swipeService = dependencies.swipeService,

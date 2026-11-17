@@ -26,6 +26,13 @@ class RedisRateLimitRepository(
             )
         }
 
+    override suspend fun current(key: String): RateLimitCounter? =
+        withContext(Dispatchers.IO) {
+            val count = redisCache.commands.get(key)?.toLongOrNull() ?: return@withContext null
+            val ttl = redisCache.commands.ttl(key) ?: -1L
+            RateLimitCounter(count = count, ttlSeconds = ttl.coerceAtLeast(0))
+        }
+
     private fun Any.toLongValue(): Long =
         when (this) {
             is Number -> toLong()

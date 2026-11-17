@@ -68,13 +68,39 @@ class RateLimitService(
         )
     }
 
+    /**
+     * Where [subject] stands against [action]'s limit without counting anything: allowed while the
+     * counter is below the limit, so one more counted attempt would still fit. Lets a caller check a
+     * budget up front and spend it only when the attempt turns out to count (a failed sign-in).
+     */
+    suspend fun peekSubject(
+        subject: String,
+        action: String,
+    ): RateLimitDecision {
+        val policy = POLICIES[action] ?: throw SafetyException("INVALID_RATE_LIMIT_ACTION")
+        val counter = repository.current(policy.subjectKeyFor(subject))
+        val count = counter?.count ?: 0
+        return RateLimitDecision(
+            allowed = count < policy.limit,
+            action = policy.action,
+            count = count,
+            limit = policy.limit,
+            ttlSeconds = counter?.ttlSeconds ?: 0,
+            windowSeconds = policy.windowSeconds,
+        )
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(RateLimitService::class.java)
 
         private val POLICIES =
             listOf(
                 RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
-                RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
+                // Failed sign-ins only (AuthRateLimitGuard). Per account + client IP: tight, so guessing
+                // from one address stops fast, while someone elsewhere can't lock the real user out.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN_FAILURE, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
+                // Per account from every address: past this, attempts are slowed, never refused.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN_FAILURE_ACCOUNT, limit = 100, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AUTH_REFRESH, limit = 120, windowSeconds = ONE_HOUR_SECONDS),
                 // Each request sends an email; a handful an hour covers a mistyped inbox.
                 RateLimitPolicy(action = RateLimitedAction.AUTH_PASSWORD_RESET, limit = 5, windowSeconds = ONE_HOUR_SECONDS),
@@ -136,7 +162,8 @@ class RateLimitService(
 
 object RateLimitedAction {
     const val AUTH_SIGNUP = "auth_signup"
-    const val AUTH_LOGIN = "auth_login"
+    const val AUTH_LOGIN_FAILURE = "auth_login_failure"
+    const val AUTH_LOGIN_FAILURE_ACCOUNT = "auth_login_failure_account"
     const val AUTH_REFRESH = "auth_refresh"
     const val AUTH_PASSWORD_RESET = "auth_password_reset"
     const val AUTH_PASSWORD_RESET_VERIFY = "auth_password_reset_verify"

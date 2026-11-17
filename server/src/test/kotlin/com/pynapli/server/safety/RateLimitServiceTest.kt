@@ -71,12 +71,12 @@ class RateLimitServiceTest {
             val repository = SequencedRateLimitRepository(listOf(1))
             val service = RateLimitService(repository)
 
-            val decision = service.checkSubject("Alex@Example.com", RateLimitedAction.AUTH_LOGIN)
+            val decision = service.checkSubject("Alex@Example.com", RateLimitedAction.AUTH_SIGNUP)
 
             assertTrue(decision.allowed)
-            assertEquals(RateLimitedAction.AUTH_LOGIN, decision.action)
+            assertEquals(RateLimitedAction.AUTH_SIGNUP, decision.action)
             val key = repository.keys.single()
-            assertTrue(key.startsWith("pynapli:rate:${RateLimitedAction.AUTH_LOGIN}:subject:"))
+            assertTrue(key.startsWith("pynapli:rate:${RateLimitedAction.AUTH_SIGNUP}:subject:"))
             assertFalse(key.contains("alex", ignoreCase = true))
             assertFalse(key.contains("example", ignoreCase = true))
         }
@@ -96,6 +96,8 @@ private class SequencedRateLimitRepository(
         val count = counts.getOrElse(index++) { counts.last() }
         return RateLimitCounter(count = count, ttlSeconds = windowSeconds)
     }
+
+    override suspend fun current(key: String): RateLimitCounter? = null
 }
 
 private class CapturingRateLimitRiskSignalPublisher : RateLimitRiskSignalPublisher {
