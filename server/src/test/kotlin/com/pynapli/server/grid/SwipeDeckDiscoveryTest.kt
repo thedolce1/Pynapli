@@ -92,24 +92,6 @@ class SwipeDeckDiscoveryTest :
             }
         }
 
-        "swipe matches exclude quarantined matched profiles" {
-            runBlocking {
-                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000921")
-                val visibleMatch = UUID.fromString("00000000-0000-0000-0000-000000000922")
-                val quarantinedMatch = UUID.fromString("00000000-0000-0000-0000-000000000923")
-                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
-                dataSource.insertDiscoverableUser(visibleMatch, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
-                dataSource.insertDiscoverableUser(quarantinedMatch, "Spam", age = 39, longitude = -122.0838, latitude = 37.4228)
-                dataSource.insertMatch(viewer, visibleMatch)
-                dataSource.insertMatch(viewer, quarantinedMatch)
-                dataSource.setRiskState(quarantinedMatch, score = 75, tier = "quarantine")
-
-                val matches = JdbcSwipeRepository(dataSource).listMatches(viewer, limit = 10)
-
-                assertEquals(listOf(visibleMatch), matches.map { it.matchedUserId })
-            }
-        }
-
         "swipe service persists deck pages and actioned card state" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000925")

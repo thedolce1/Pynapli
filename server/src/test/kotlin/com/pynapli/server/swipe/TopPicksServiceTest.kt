@@ -316,12 +316,6 @@ private class StubSwipeRepository(
         card: SwipeDeckSessionCardRecord,
         rewoundAt: Instant,
     ): Boolean = false
-
-    override suspend fun listMatches(
-        viewerUserId: UUID,
-        limit: Int,
-        after: MatchPageCursor?,
-    ): List<MatchSummaryRecord> = emptyList()
 }
 
 private class InMemoryTopPicksRepository : TopPicksRepository {

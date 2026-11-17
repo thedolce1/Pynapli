@@ -268,7 +268,6 @@ internal fun swipeStatusFor(code: String): HttpStatusCode =
         "STALE_SWIPE_DECK_SESSION",
         "INVALID_SWIPE_CARD_TOKEN",
         "INVALID_SWIPE_CURSOR",
-        "INVALID_MATCH_CURSOR",
         "INTRO_NOTE_EMPTY",
         "INTRO_NOTE_TOO_LONG",
         -> HttpStatusCode.BadRequest

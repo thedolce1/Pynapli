@@ -1,7 +1,6 @@
 package com.pynapli.shared.network
 
 import com.pynapli.shared.core.result.AppResult
-import com.pynapli.shared.network.dto.MatchesListResponseDto
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
@@ -27,6 +26,4 @@ internal class KtorSwipeApi(
             com.pynapli.shared.network.dto
                 .LikeBackRequestDto(targetUserId),
         )
-
-    override suspend fun listMatches(): AppResult<MatchesListResponseDto> = support.authGet("/v1/matches")
 }

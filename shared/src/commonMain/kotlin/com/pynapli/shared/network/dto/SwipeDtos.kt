@@ -121,12 +121,6 @@ data class SwipeRewindResponseDto(
     val card: SwipeCardDto? = null,
 )
 
-@Serializable
-data class MatchesListResponseDto(
-    val matches: List<MatchDto>,
-    val nextCursor: String? = null,
-)
-
 // FILTERS_SPEC L463-477: Saved filter presets, Swipe equivalent of `SavedGridFilter*`.
 // Payload is the verbatim `SwipeDeckRequestDto` minus request-time fields (cursor)
 // so the preset re-applies as a single fresh-deck request.

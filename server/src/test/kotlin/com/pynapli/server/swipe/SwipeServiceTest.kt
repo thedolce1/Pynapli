@@ -1641,71 +1641,6 @@ class SwipeServiceTest {
             assertEquals(false, rewind.rewound)
             assertEquals(SwipeAction.LIKE, repository.actionsSnapshot().getValue(viewer to target))
         }
-
-    @Test
-    fun listMatchesFiltersBlockedRelatedUsers() =
-        runBlocking {
-            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000070")
-            val blockedMatch = UUID.fromString("00000000-0000-0000-0000-000000000071")
-            val visibleMatch = UUID.fromString("00000000-0000-0000-0000-000000000072")
-            val service =
-                SwipeService(
-                    repository =
-                        InMemorySwipeRepository(
-                            seededMatches =
-                                listOf(
-                                    MatchRecord(
-                                        matchId = UUID.fromString("00000000-0000-0000-0000-000000000171"),
-                                        userA = viewer,
-                                        userB = blockedMatch,
-                                        createdAt = Instant.parse("2026-04-28T18:00:00Z"),
-                                    ),
-                                    MatchRecord(
-                                        matchId = UUID.fromString("00000000-0000-0000-0000-000000000172"),
-                                        userA = viewer,
-                                        userB = visibleMatch,
-                                        createdAt = Instant.parse("2026-04-28T18:01:00Z"),
-                                    ),
-                                ),
-                        ),
-                    blockRepository =
-                        StaticBlockRepository(
-                            relatedByUser = mapOf(viewer to setOf(blockedMatch)),
-                        ),
-                )
-
-            val response = service.listMatches(viewer)
-
-            assertEquals(1, response.matches.size)
-            assertEquals(visibleMatch.toString(), response.matches.single().matchedUserId)
-        }
-
-    @Test
-    fun listMatchesSuppressesRiskRestrictedMatches() =
-        runBlocking {
-            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000080")
-            val quarantinedMatch = UUID.fromString("00000000-0000-0000-0000-000000000081")
-            val service =
-                SwipeService(
-                    repository =
-                        InMemorySwipeRepository(
-                            seededMatches =
-                                listOf(
-                                    MatchRecord(
-                                        matchId = UUID.fromString("00000000-0000-0000-0000-000000000181"),
-                                        userA = viewer,
-                                        userB = quarantinedMatch,
-                                        createdAt = Instant.parse("2026-04-28T18:00:00Z"),
-                                    ),
-                                ),
-                        ),
-                    riskPolicyService = restrictedRiskPolicy(),
-                )
-
-            val response = service.listMatches(viewer)
-
-            assertEquals(emptyList(), response.matches)
-        }
 }
 
 private fun swipeCardRecord(
@@ -2055,21 +1990,6 @@ private class InMemorySwipeRepository(
         val (a, b) = canonicalPair(actorUserId, targetUserId)
         return matches.firstOrNull { it.userA == a && it.userB == b }
     }
-
-    override suspend fun listMatches(
-        viewerUserId: UUID,
-        limit: Int,
-        after: MatchPageCursor?,
-    ): List<MatchSummaryRecord> =
-        matches.filter { viewerUserId == it.userA || viewerUserId == it.userB }.map { match ->
-            MatchSummaryRecord(
-                matchId = match.matchId,
-                matchedUserId = if (match.userA == viewerUserId) match.userB else match.userA,
-                matchedDisplayName = null,
-                matchedThumbnailMediaAssetId = null,
-                createdAt = match.createdAt,
-            )
-        }
 
     fun actionsSnapshot(): Map<Pair<UUID, UUID>, String> = actions.toMap()
 

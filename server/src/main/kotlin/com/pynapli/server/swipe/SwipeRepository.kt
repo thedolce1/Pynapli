@@ -196,12 +196,6 @@ interface SwipeRepository {
         card: SwipeDeckSessionCardRecord,
         rewoundAt: Instant,
     ): Boolean
-
-    suspend fun listMatches(
-        viewerUserId: UUID,
-        limit: Int,
-        after: MatchPageCursor? = null,
-    ): List<MatchSummaryRecord>
 }
 
 data class SwipeDeckResult(
@@ -314,13 +308,5 @@ data class MatchRecord(
     val matchId: UUID,
     val userA: UUID,
     val userB: UUID,
-    val createdAt: Instant,
-)
-
-data class MatchSummaryRecord(
-    val matchId: UUID,
-    val matchedUserId: UUID,
-    val matchedDisplayName: String?,
-    val matchedThumbnailMediaAssetId: UUID?,
     val createdAt: Instant,
 )

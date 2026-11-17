@@ -206,7 +206,6 @@ internal fun userSafeMessage(code: String): String =
         "RATE_LIMITED" -> "Too many actions. Try again later."
         "PAYLOAD_TOO_LARGE" -> "That's too much to send at once."
         "INVALID_CONVERSATION_CURSOR" -> "Your message list is out of date. Pull to refresh."
-        "INVALID_MATCH_CURSOR" -> "Your match list is out of date. Pull to refresh."
         "RISK_RESTRICTED" -> "Your account is limited while we review recent activity. If you think that's a mistake, appeal in Profile > Safety center."
         "APP_CHECK_REQUIRED" -> "App verification failed. Please update the app and try again."
         "ADMIN_UNAUTHENTICATED" -> "Admin authentication is required."

@@ -8,7 +8,6 @@ import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.subscriptions.SubscriptionService
-import com.pynapli.shared.network.dto.MatchesListResponseDto
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
@@ -68,13 +67,6 @@ class SwipeService(
             deckTokenCodec = deckTokenCodec,
             clock = clock,
         )
-    private val matchList =
-        SwipeMatchListAction(
-            repository = repository,
-            dtoMapper = dtoMapper,
-            blockRepository = blockRepository,
-            riskPolicyService = riskPolicyService,
-        )
 
     suspend fun queryDeck(
         viewerUserId: UUID,
@@ -126,11 +118,6 @@ class SwipeService(
         }
         return SwipeActionResponseDto(recorded = true, match = match?.toDto(viewerUserId))
     }
-
-    suspend fun listMatches(
-        viewerUserId: UUID,
-        cursorText: String? = null,
-    ): MatchesListResponseDto = matchList.listMatches(viewerUserId, cursorText)
 }
 
 class SwipeException(

@@ -11,7 +11,6 @@ import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveNullable
 import io.ktor.server.response.respond
-import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.withContext
@@ -88,11 +87,6 @@ fun Application.configureSwipeRoutes(
             val user = call.authenticatedUser(authService)
             val request = call.receive<com.pynapli.shared.network.dto.LikeBackRequestDto>()
             call.respond(swipeService.likeBack(user.id, request))
-        }
-
-        get("/v1/matches") {
-            val user = call.authenticatedUser(authService)
-            call.respond(swipeService.listMatches(user.id, call.request.queryParameters["cursor"]))
         }
     }
 }

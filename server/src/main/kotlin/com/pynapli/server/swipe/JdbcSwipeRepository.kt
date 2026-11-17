@@ -21,7 +21,6 @@ class JdbcSwipeRepository(
         )
     private val deckSessionActions = JdbcSwipeDeckSessionActions(dataSource)
     private val actionActions = JdbcSwipeActionPersistenceActions(dataSource)
-    private val matchActions = JdbcSwipeMatchActions(dataSource)
 
     override suspend fun queryDeck(
         viewerUserId: UUID,
@@ -218,16 +217,5 @@ class JdbcSwipeRepository(
             session = session,
             card = card,
             rewoundAt = rewoundAt,
-        )
-
-    override suspend fun listMatches(
-        viewerUserId: UUID,
-        limit: Int,
-        after: MatchPageCursor?,
-    ): List<MatchSummaryRecord> =
-        matchActions.listMatches(
-            viewerUserId = viewerUserId,
-            limit = limit,
-            after = after,
         )
 }

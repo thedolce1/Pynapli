@@ -57,17 +57,6 @@ internal class SwipeDtoMapper(
             visiting = card.visiting,
         )
     }
-
-    fun matchSummaryToDto(record: MatchSummaryRecord): MatchDto =
-        MatchDto(
-            matchId = record.matchId.toString(),
-            matchedUserId = record.matchedUserId.toString(),
-            matchedDisplayName = record.matchedDisplayName,
-            matchedPhotoUrl =
-                record.matchedThumbnailMediaAssetId
-                    ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-            createdAt = record.createdAt.toString(),
-        )
 }
 
 internal fun SwipeActionRecord.toResponseDto(viewerUserId: UUID): SwipeActionResponseDto =
