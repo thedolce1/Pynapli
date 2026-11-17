@@ -58,6 +58,5 @@ data class AccountDeletionResult(
     val revokedSessionCount: Int,
     val purgedLocationCount: Int = 0,
     val endedPartnerLinkCount: Int = 0,
-    val endedPartnerBenefitCount: Int = 0,
     val softDeletedMediaCount: Int = 0,
 )

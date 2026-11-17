@@ -24,12 +24,10 @@ class JdbcAdminSubscriptionSupportRepositoryIntegrationTest {
     }
 
     @Test
-    fun readsOwnedSubscriptionsAndGrantedReceivedBenefitsThenWritesAudit() =
+    fun readsOwnedSubscriptionsThenWritesAudit() =
         runBlocking {
             val repository = JdbcAdminSubscriptionSupportRepository(dataSource)
             val userId = createUser()
-            val beneficiaryId = createUser()
-            val benefactorId = createUser()
 
             dataSource.insertSubscription(
                 userId = userId,
@@ -44,21 +42,6 @@ class JdbcAdminSubscriptionSupportRepositoryIntegrationTest {
                 acknowledgementState = "ACKNOWLEDGED",
                 lastVerifiedAt = Instant.parse("2026-06-15T00:00:00Z"),
             )
-            // This user grants a benefit to beneficiaryId (they are the subscriber).
-            dataSource.insertBenefit(
-                subscriberUserId = userId,
-                beneficiaryUserId = beneficiaryId,
-                tier = "select",
-                status = "active",
-            )
-            // This user also receives a benefit from benefactorId (they are the beneficiary).
-            dataSource.insertBenefit(
-                subscriberUserId = benefactorId,
-                beneficiaryUserId = userId,
-                tier = "social",
-                status = "active",
-            )
-
             val facts = repository.facts(userId)
 
             assertNotNull(facts)
@@ -68,10 +51,6 @@ class JdbcAdminSubscriptionSupportRepositoryIntegrationTest {
             assertEquals("select", subscription.tier)
             assertEquals("pynapli_select_monthly", subscription.externalProductId)
             assertEquals("ACKNOWLEDGED", subscription.acknowledgementState)
-            assertEquals(1, facts.benefitsGranted.size)
-            assertEquals(beneficiaryId, facts.benefitsGranted.first().otherUserId)
-            assertEquals(1, facts.benefitsReceived.size)
-            assertEquals(benefactorId, facts.benefitsReceived.first().otherUserId)
 
             repository.recordReviewAudit(actorId = "ops-1", userId = userId, reason = "billing question")
             assertEquals(1, dataSource.adminAuditCount("subscription_support_view", userId))
@@ -141,32 +120,6 @@ private fun DataSource.insertSubscription(
                 statement.setString(10, externalStatus)
                 statement.setString(11, acknowledgementState)
                 statement.setTimestamp(12, lastVerifiedAt?.let(Timestamp::from))
-                statement.executeUpdate()
-            }
-    }
-}
-
-private fun DataSource.insertBenefit(
-    subscriberUserId: UUID,
-    beneficiaryUserId: UUID,
-    tier: String,
-    status: String,
-) {
-    connection.use { connection ->
-        connection
-            .prepareStatement(
-                """
-                INSERT INTO linked_partner_benefits (
-                    id, subscriber_user_id, beneficiary_user_id, tier, status
-                )
-                VALUES (?, ?, ?, ?, ?)
-                """.trimIndent(),
-            ).use { statement ->
-                statement.setObject(1, UUID.randomUUID())
-                statement.setObject(2, subscriberUserId)
-                statement.setObject(3, beneficiaryUserId)
-                statement.setString(4, tier)
-                statement.setString(5, status)
                 statement.executeUpdate()
             }
     }

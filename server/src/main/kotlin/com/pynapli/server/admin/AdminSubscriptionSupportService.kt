@@ -1,7 +1,6 @@
 package com.pynapli.server.admin
 
 import com.pynapli.server.moderation.ModerationException
-import com.pynapli.shared.network.dto.AdminLinkedBenefitDto
 import com.pynapli.shared.network.dto.AdminSubscriptionRecordDto
 import com.pynapli.shared.network.dto.AdminSubscriptionSupportDto
 import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
@@ -9,8 +8,8 @@ import java.util.UUID
 
 /**
  * Builds the read-only admin subscription support view by composing the resolved entitlement (from
- * the existing subscription entitlement path that already owns that logic) with the user's stored
- * store-subscription rows and linked-partner benefit relationships. Raw purchase tokens / order ids
+ * the existing subscription entitlement path that already owns that logic, including any live
+ * linked-partner benefit) with the user's stored store-subscription rows. Raw purchase tokens / order ids
  * are never exposed — only the product id, status, and verification timestamps a support agent needs.
  */
 class AdminSubscriptionSupportService(
@@ -33,8 +32,6 @@ class AdminSubscriptionSupportService(
             userId = userId.toString(),
             entitlement = entitlement,
             subscriptions = facts.subscriptions.map { it.toDto() },
-            benefitsGranted = facts.benefitsGranted.map { it.toDto() },
-            benefitsReceived = facts.benefitsReceived.map { it.toDto() },
         )
     }
 }
@@ -50,13 +47,4 @@ private fun AdminSubscriptionRecordFact.toDto(): AdminSubscriptionRecordDto =
         currentPeriodStart = currentPeriodStart.toString(),
         currentPeriodEnd = currentPeriodEnd.toString(),
         lastVerifiedAt = lastVerifiedAt?.toString(),
-    )
-
-private fun AdminLinkedBenefitFact.toDto(): AdminLinkedBenefitDto =
-    AdminLinkedBenefitDto(
-        otherUserId = otherUserId.toString(),
-        tier = tier,
-        status = status,
-        startsAt = startsAt.toString(),
-        endsAt = endsAt?.toString(),
     )

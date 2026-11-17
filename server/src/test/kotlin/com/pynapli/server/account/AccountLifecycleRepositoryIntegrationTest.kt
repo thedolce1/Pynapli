@@ -121,7 +121,7 @@ class AccountLifecycleRepositoryIntegrationTest {
             dataSource.insertActiveTravelLocation(userId)
             dataSource.insertCurrentLocation(userId)
             dataSource.insertMediaAsset(userId)
-            dataSource.insertActivePartnerLinkWithBenefit(subscriberId = userId, beneficiaryId = reporterId)
+            dataSource.insertActivePartnerLink(subscriberId = userId, beneficiaryId = reporterId)
             dataSource.insertSafetyReport(reporterId, userId)
             val repository = JdbcAccountLifecycleRepository(dataSource)
 
@@ -155,15 +155,13 @@ class AccountLifecycleRepositoryIntegrationTest {
             assertNull(dataSource.stringValue("SELECT logistics_tags::text FROM profiles WHERE user_id = ?", userId))
             assertNull(dataSource.stringValue("SELECT intents::text FROM profiles WHERE user_id = ?", userId))
 
-            // Exact location purged; media soft-deleted; partner link + benefit ended.
+            // Exact location purged; media soft-deleted; partner link ended.
             assertEquals(0, dataSource.intValue("SELECT count(*) FROM user_locations WHERE user_id = ?", userId))
             assertEquals(1, result?.purgedLocationCount)
             assertNotNull(dataSource.timestampValue("SELECT deleted_at FROM media_assets WHERE owner_user_id = ?", userId))
             assertEquals(1, result?.softDeletedMediaCount)
             assertEquals("unlinked", dataSource.stringValue("SELECT status FROM user_profile_links WHERE user_id = ?", userId))
             assertEquals(1, result?.endedPartnerLinkCount)
-            assertEquals("ended", dataSource.stringValue("SELECT status FROM linked_partner_benefits WHERE subscriber_user_id = ?", userId))
-            assertEquals(1, result?.endedPartnerBenefitCount)
 
             // Safety/legal records preserved.
             assertEquals(1, dataSource.intValue("SELECT count(*) FROM safety_reports WHERE reported_user_id = ?", userId))
@@ -366,7 +364,7 @@ class AccountLifecycleRepositoryIntegrationTest {
         }
     }
 
-    private fun DataSource.insertActivePartnerLinkWithBenefit(
+    private fun DataSource.insertActivePartnerLink(
         subscriberId: UUID,
         beneficiaryId: UUID,
     ) {
@@ -382,19 +380,6 @@ class AccountLifecycleRepositoryIntegrationTest {
                     statement.setObject(1, linkId)
                     statement.setObject(2, subscriberId)
                     statement.setObject(3, beneficiaryId)
-                    statement.executeUpdate()
-                }
-            connection
-                .prepareStatement(
-                    """
-                    INSERT INTO linked_partner_benefits (id, subscriber_user_id, beneficiary_user_id, partner_link_id, tier, status)
-                    VALUES (?, ?, ?, ?, 'select', 'active')
-                    """.trimIndent(),
-                ).use { statement ->
-                    statement.setObject(1, UUID.randomUUID())
-                    statement.setObject(2, subscriberId)
-                    statement.setObject(3, beneficiaryId)
-                    statement.setObject(4, linkId)
                     statement.executeUpdate()
                 }
         }

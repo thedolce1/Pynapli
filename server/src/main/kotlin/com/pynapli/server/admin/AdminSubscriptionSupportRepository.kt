@@ -5,9 +5,9 @@ import java.util.UUID
 
 /**
  * Read-only subscription facts for the admin support view: the user's owned store-subscription rows
- * and the linked-partner benefits they grant / receive (from `subscriptions` and
- * `linked_partner_benefits`), plus the audit write that records the reveal. The resolved entitlement
- * is composed by the service from the existing subscription entitlement path.
+ * (from `subscriptions`), plus the audit write that records the reveal. The resolved entitlement,
+ * including any live linked-partner benefit, is composed by the service from the existing
+ * subscription entitlement path.
  */
 interface AdminSubscriptionSupportRepository {
     /** Returns null when the user does not exist. */
@@ -22,8 +22,6 @@ interface AdminSubscriptionSupportRepository {
 
 data class AdminSubscriptionSupportFacts(
     val subscriptions: List<AdminSubscriptionRecordFact>,
-    val benefitsGranted: List<AdminLinkedBenefitFact>,
-    val benefitsReceived: List<AdminLinkedBenefitFact>,
 )
 
 data class AdminSubscriptionRecordFact(
@@ -36,12 +34,4 @@ data class AdminSubscriptionRecordFact(
     val currentPeriodStart: Instant,
     val currentPeriodEnd: Instant,
     val lastVerifiedAt: Instant?,
-)
-
-data class AdminLinkedBenefitFact(
-    val otherUserId: UUID,
-    val tier: String,
-    val status: String,
-    val startsAt: Instant,
-    val endsAt: Instant?,
 )

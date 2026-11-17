@@ -14,7 +14,7 @@ class AdminSubscriptionSupportServiceTest {
     private val userId = UUID.fromString("00000000-0000-0000-0000-000000000801")
 
     @Test
-    fun viewComposesEntitlementSubscriptionsAndBenefitsThenAudits() =
+    fun viewComposesEntitlementAndSubscriptionsThenAudits() =
         runBlocking {
             val repository = FakeSubscriptionSupportRepository(storedFacts = facts())
             var lookedUp: UUID? = null
@@ -33,8 +33,6 @@ class AdminSubscriptionSupportServiceTest {
             assertEquals("select", dto.entitlement.tier)
             assertEquals(1, dto.subscriptions.size)
             assertEquals("play_store", dto.subscriptions.first().platform)
-            assertEquals(1, dto.benefitsGranted.size)
-            assertEquals(1, dto.benefitsReceived.size)
             assertEquals(userId, lookedUp)
             assertEquals(Triple("ops-1", userId, "billing question"), repository.audited)
         }
@@ -74,26 +72,6 @@ class AdminSubscriptionSupportServiceTest {
                         currentPeriodStart = Instant.parse("2026-06-01T00:00:00Z"),
                         currentPeriodEnd = Instant.parse("2026-07-01T00:00:00Z"),
                         lastVerifiedAt = Instant.parse("2026-06-15T00:00:00Z"),
-                    ),
-                ),
-            benefitsGranted =
-                listOf(
-                    AdminLinkedBenefitFact(
-                        otherUserId = UUID.fromString("00000000-0000-0000-0000-000000000802"),
-                        tier = "select",
-                        status = "active",
-                        startsAt = Instant.parse("2026-06-01T00:00:00Z"),
-                        endsAt = null,
-                    ),
-                ),
-            benefitsReceived =
-                listOf(
-                    AdminLinkedBenefitFact(
-                        otherUserId = UUID.fromString("00000000-0000-0000-0000-000000000803"),
-                        tier = "social",
-                        status = "ended",
-                        startsAt = Instant.parse("2026-05-01T00:00:00Z"),
-                        endsAt = Instant.parse("2026-05-20T00:00:00Z"),
                     ),
                 ),
         )

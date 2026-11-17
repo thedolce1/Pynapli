@@ -15,8 +15,6 @@ internal class JdbcAdminSubscriptionSupportRepository(
 
             AdminSubscriptionSupportFacts(
                 subscriptions = connection.subscriptions(userId),
-                benefitsGranted = connection.benefits(userId, asSubscriber = true),
-                benefitsReceived = connection.benefits(userId, asSubscriber = false),
             )
         }
 
@@ -75,40 +73,4 @@ internal class JdbcAdminSubscriptionSupportRepository(
                 }
             }
         }
-
-    // asSubscriber selects the benefits this user grants; otherwise the benefits they receive. The
-    // column names are compile-time constants (never user input), so the interpolation is injection-safe.
-    private fun Connection.benefits(
-        userId: UUID,
-        asSubscriber: Boolean,
-    ): List<AdminLinkedBenefitFact> {
-        val filterColumn = if (asSubscriber) "subscriber_user_id" else "beneficiary_user_id"
-        val otherColumn = if (asSubscriber) "beneficiary_user_id" else "subscriber_user_id"
-        return prepareStatement(
-            """
-            SELECT $otherColumn AS other_user_id, tier, status, starts_at, ends_at
-            FROM linked_partner_benefits
-            WHERE $filterColumn = ?
-            ORDER BY starts_at DESC
-            LIMIT 50
-            """.trimIndent(),
-        ).use { statement ->
-            statement.setObject(1, userId)
-            statement.executeQuery().use { rs ->
-                buildList {
-                    while (rs.next()) {
-                        add(
-                            AdminLinkedBenefitFact(
-                                otherUserId = rs.getObject("other_user_id", UUID::class.java),
-                                tier = rs.getString("tier"),
-                                status = rs.getString("status"),
-                                startsAt = rs.getTimestamp("starts_at").toInstant(),
-                                endsAt = rs.getTimestamp("ends_at")?.toInstant(),
-                            ),
-                        )
-                    }
-                }
-            }
-        }
-    }
 }

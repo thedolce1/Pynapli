@@ -238,8 +238,6 @@ class AdminSubscriptionSupportRoutesTest {
                         lastVerifiedAt = Instant.parse("2026-06-15T00:00:00Z"),
                     ),
                 ),
-            benefitsGranted = emptyList(),
-            benefitsReceived = emptyList(),
         )
 
     private fun entitlement(): SubscriptionEntitlementDto =

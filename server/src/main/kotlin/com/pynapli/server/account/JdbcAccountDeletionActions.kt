@@ -27,7 +27,6 @@ internal class JdbcAccountDeletionActions(
                 anonymizeProfile(connection, userId)
                 val purgedLocationCount = purgeExactLocation(connection, userId)
                 val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
-                val endedBenefitCount = endLinkedPartnerBenefits(connection, userId)
                 val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                 val revokedSessionCount = revokeSessions(connection, userId)
                 disablePushDevices(connection, userId)
@@ -44,7 +43,6 @@ internal class JdbcAccountDeletionActions(
                     revokedSessionCount = revokedSessionCount,
                     purgedLocationCount = purgedLocationCount,
                     endedPartnerLinkCount = endedPartnerLinkCount,
-                    endedPartnerBenefitCount = endedBenefitCount,
                     softDeletedMediaCount = softDeletedMediaCount,
                 )
             }
@@ -282,27 +280,6 @@ internal class JdbcAccountDeletionActions(
                 WHERE (user_id = ? OR linked_user_id = ?)
                   AND status IN ('pending', 'active')
                   AND unlinked_at IS NULL
-                """.trimIndent(),
-            ).use { statement ->
-                statement.setObject(1, userId)
-                statement.setObject(2, userId)
-                return statement.executeUpdate()
-            }
-    }
-
-    private fun endLinkedPartnerBenefits(
-        connection: Connection,
-        userId: UUID,
-    ): Int {
-        connection
-            .prepareStatement(
-                """
-                UPDATE linked_partner_benefits
-                SET status = 'ended',
-                    ends_at = COALESCE(ends_at, now()),
-                    updated_at = now()
-                WHERE (subscriber_user_id = ? OR beneficiary_user_id = ?)
-                  AND status = 'active'
                 """.trimIndent(),
             ).use { statement ->
                 statement.setObject(1, userId)
