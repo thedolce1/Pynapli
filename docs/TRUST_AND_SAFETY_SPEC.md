@@ -446,6 +446,20 @@ Rules that must hold (implemented; numbers live in `RateLimitService.POLICIES`):
   the real user on another network still signs in. Past 100 failures per hour per account from all
   addresses, each attempt is delayed 3 s and a warning is logged with an account-hash prefix; it is
   never refused. Successful sign-ins spend nothing. The suspended-account appeal shares this budget.
+- **Request-level limits** (`RequestRateLimitPlugin`, Redis-backed, fail open): bodies over 1 MB are
+  refused 413 on the bytes actually read, so chunked or header-less bodies can't dodge the cap (the
+  local media upload is exempt). Global per-minute ceilings on all traffic: 1,200 per client IP,
+  120 per IP without a session, 600 per signed-in user (probes, `/metrics`, webhooks and the
+  verification callback exempt). Route rules in `REQUEST_LIMIT_RULES`; signed-in rules are keyed by
+  the user behind the token, so a fresh sign-in doesn't reset them. Per-IP rules and the global
+  ceilings are off only when `PYNAPLI_ENV=local`.
+- **GET routes and enumeration.** Rate-limited reads: `GET /v1/profiles/{id}`, the private-album
+  read, admin per-person lookups (`/v1/admin/users/{id}`, `/v1/admin/subscriptions/support/{id}`,
+  `/v1/admin/partner-links/{id}`: 300/h per IP), plus the service-level grid, travel-search and
+  profile-view limits. Every other GET has only the global ceilings, by design: they return the
+  caller's own data (`/v1/me*`, settings, blocks, hidden, reports, appeals, sessions, entitlement,
+  activity, exports), or are membership-checked by an unguessable id (message threads, Psync
+  sessions, export downloads), so walking ids reveals nothing.
 - **Auth keeps working when Redis is down.** Sign-up, sign-in, refresh and password reset/change
   limits fall back to bounded in-process counters (`RateLimitOutageFallback`: 50,000 keys, LRU,
   per replica) only while Redis fails; a warning is logged when it takes over and an info line when

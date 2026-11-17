@@ -157,6 +157,23 @@ class RequestRateLimitPluginTest {
         }
 
     @Test
+    fun adminPersonLookupsArePerAddressSoALeakedTokenCantCrawlEveryone() =
+        testApplication {
+            application {
+                configureSerialization()
+                // Ceilings off so only the lookup rule is in play.
+                configureRequestLimits(RateLimitService(CountingRepository()), trustedProxyHops = 1, globalCeilings = false)
+                routing { get("/v1/admin/users/{id}") { call.respond("ok") } }
+            }
+
+            repeat(300) { index ->
+                assertEquals(HttpStatusCode.OK, client.get("/v1/admin/users/u$index") { header(HttpHeaders.XForwardedFor, "192.0.2.1") }.status)
+            }
+            assertEquals(HttpStatusCode.TooManyRequests, client.get("/v1/admin/users/next") { header(HttpHeaders.XForwardedFor, "192.0.2.1") }.status)
+            assertEquals(HttpStatusCode.OK, client.get("/v1/admin/users/next") { header(HttpHeaders.XForwardedFor, "192.0.2.2") }.status)
+        }
+
+    @Test
     fun anonymousTrafficFromOneAddressHitsAGlobalCeiling() =
         testApplication {
             application {

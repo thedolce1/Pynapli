@@ -18,6 +18,7 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
+import io.ktor.util.AttributeKey
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.writeFully
@@ -113,6 +114,9 @@ fun Application.configureRequestLimits(
     )
 }
 
+/** Set on a call whose body ran past the request cap; StatusPages answers it 413. */
+val RequestBodyCapExceeded = AttributeKey<Boolean>("PynapliRequestBodyCapExceeded")
+
 /** Passes [body] through, failing the read with [PayloadTooLargeException] once it exceeds [limit] bytes. */
 private fun ApplicationCall.cappedAt(
     body: ByteReadChannel,
@@ -125,7 +129,12 @@ private fun ApplicationCall.cappedAt(
             val read = body.readAvailable(buffer, 0, buffer.size)
             if (read == -1) break
             total += read
-            if (total > limit) throw PayloadTooLargeException(limit)
+            if (total > limit) {
+                // Marked before failing the read: however the reader reports the broken body, StatusPages
+                // can tell it was the cap (the failure's cause chain isn't reliable across the channel).
+                attributes.put(RequestBodyCapExceeded, true)
+                throw PayloadTooLargeException(limit)
+            }
             channel.writeFully(buffer, 0, read)
         }
     }.channel
@@ -208,4 +217,9 @@ internal val REQUEST_LIMIT_RULES =
         RequestLimitRule(HttpMethod.Post, Regex("/v1/notifications/devices"), RateLimitedAction.PUSH_REGISTER),
         // Reads where walking ids would enumerate other people's data.
         RequestLimitRule(HttpMethod.Get, Regex("/v1/media/users/$ID/albums/private"), RateLimitedAction.PRIVATE_ALBUM_FETCH),
+        // Admin per-person lookups (PII, subscriptions, partner links): admin calls carry the shared
+        // token, not a session, so these are per client IP. Bounds what a leaked token can scrape.
+        RequestLimitRule(HttpMethod.Get, Regex("/v1/admin/users/$ID"), RateLimitedAction.ADMIN_PERSON_LOOKUP, LimitKey.CLIENT_IP),
+        RequestLimitRule(HttpMethod.Get, Regex("/v1/admin/subscriptions/support/$ID"), RateLimitedAction.ADMIN_PERSON_LOOKUP, LimitKey.CLIENT_IP),
+        RequestLimitRule(HttpMethod.Get, Regex("/v1/admin/partner-links/$ID"), RateLimitedAction.ADMIN_PERSON_LOOKUP, LimitKey.CLIENT_IP),
     )

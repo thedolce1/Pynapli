@@ -154,7 +154,7 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_IP, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AUTH_PASSWORD_RESET_IP, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.ACCOUNT_APPEAL_IP, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
-                // Per session, far above real use: a fast chatter sends a few messages a minute.
+                // Per user, far above real use: a fast chatter sends a few messages a minute.
                 RateLimitPolicy(action = RateLimitedAction.MESSAGE_SEND, limit = 600, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.THREAD_CREATE, limit = 100, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.TYPING, limit = 2_400, windowSeconds = ONE_HOUR_SECONDS),
@@ -167,6 +167,8 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.PUSH_REGISTER, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
                 // A private-album fetch per owner id; walking ids would enumerate who has albums.
                 RateLimitPolicy(action = RateLimitedAction.PRIVATE_ALBUM_FETCH, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
+                // Admin per-person lookups per client IP: a moderator works a queue, not a crawl.
+                RateLimitPolicy(action = RateLimitedAction.ADMIN_PERSON_LOOKUP, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
                 // Global abuse ceilings (RequestRateLimitPlugin), per minute so a burst is caught fast.
                 // Per user: ten requests a second, sustained, is a script. Per client IP: room for a
                 // venue's shared Wi-Fi. Without a session (sign-in, sign-up, reset): much lower.
@@ -220,6 +222,7 @@ object RateLimitedAction {
     const val APPEAL = "appeal"
     const val PUSH_REGISTER = "push_register"
     const val PRIVATE_ALBUM_FETCH = "private_album_fetch"
+    const val ADMIN_PERSON_LOOKUP = "admin_person_lookup"
     const val GLOBAL_USER = "global_user"
     const val GLOBAL_IP = "global_ip"
     const val GLOBAL_ANONYMOUS_IP = "global_anonymous_ip"
