@@ -1,8 +1,6 @@
 package com.pynapli.server.admin
 
 import com.pynapli.server.moderation.ModerationException
-import com.pynapli.shared.network.dto.AdminPartnerLinkDto
-import com.pynapli.shared.network.dto.AdminPartnerLinkReviewDto
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID

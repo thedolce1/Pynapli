@@ -47,9 +47,3 @@ data class AgeVerificationCallbackRequestDto(
     val expiresAt: String? = null,
     val reason: String? = null,
 )
-
-@Serializable
-data class AdminAgeVerificationReviewRequestDto(
-    val status: String,
-    val reason: String? = null,
-)

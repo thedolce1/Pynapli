@@ -1,7 +1,5 @@
 package com.pynapli.server.admin
 
-import com.pynapli.shared.network.dto.AdminDashboardDto
-
 /**
  * Builds the unified admin dashboard from the aggregated queue backlog counts. Read-only and
  * aggregate — the route only requires the admin token (no reason/audit), matching the metrics routes.

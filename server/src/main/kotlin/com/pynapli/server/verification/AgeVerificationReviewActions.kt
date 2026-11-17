@@ -1,7 +1,6 @@
 package com.pynapli.server.verification
 
 import com.pynapli.server.safety.VerificationRiskSignalPublisher
-import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationStatusDto
 import java.time.Clock

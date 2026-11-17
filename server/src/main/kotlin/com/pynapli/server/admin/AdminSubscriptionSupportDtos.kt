@@ -1,5 +1,6 @@
-package com.pynapli.shared.network.dto
+package com.pynapli.server.admin
 
+import com.pynapli.shared.network.dto.SubscriptionEntitlementDto
 import kotlinx.serialization.Serializable
 
 /**

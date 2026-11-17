@@ -5,7 +5,6 @@ import com.pynapli.server.auth.authenticatedUser
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.moderation.requireAdminActor
 import com.pynapli.server.moderation.requiredAdminReason
-import com.pynapli.shared.network.dto.AdminAgeVerificationReviewRequestDto
 import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
 import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import io.ktor.server.application.Application

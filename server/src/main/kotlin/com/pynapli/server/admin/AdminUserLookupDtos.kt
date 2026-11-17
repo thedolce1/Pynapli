@@ -1,4 +1,4 @@
-package com.pynapli.shared.network.dto
+package com.pynapli.server.admin
 
 import kotlinx.serialization.Serializable
 
