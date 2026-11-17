@@ -50,11 +50,13 @@ class ApiPublicProfileRepository(
         targetType: String,
         category: String,
         note: String?,
+        targetId: String?,
     ): AppResult<ReportDto> =
         apiClient.submitReport(
             CreateReportRequestDto(
                 reportedUserId = userId,
                 targetType = targetType,
+                targetId = targetId,
                 category = category,
                 note = note,
             ),

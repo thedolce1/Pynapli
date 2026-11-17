@@ -42,12 +42,17 @@ class ReportService(
         if (rateLimitService?.check(reporterUserId, RateLimitedAction.REPORT)?.allowed == false) {
             throw SafetyException("RATE_LIMITED")
         }
+        val targetUuid = targetId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         val evidence =
-            if (targetType == "message" && evidenceLookup != null) {
-                val messageId = targetId?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: throw SafetyException("REPORT_TARGET_NOT_FOUND")
-                evidenceLookup.messageEvidence(messageId, reporterUserId, reportedUserId) ?: throw SafetyException("REPORT_TARGET_NOT_FOUND")
-            } else {
-                null
+            when {
+                evidenceLookup == null -> null
+                targetType == "message" ->
+                    evidenceLookup.messageEvidence(targetUuid ?: throw SafetyException("REPORT_TARGET_NOT_FOUND"), reporterUserId, reportedUserId)
+                        ?: throw SafetyException("REPORT_TARGET_NOT_FOUND")
+                targetType == "album" ->
+                    evidenceLookup.albumEvidence(targetUuid ?: throw SafetyException("REPORT_TARGET_NOT_FOUND"), reporterUserId, reportedUserId)
+                        ?: throw SafetyException("REPORT_TARGET_NOT_FOUND")
+                else -> null
             }
 
         val record =

@@ -45,6 +45,21 @@ class ProfileDetailStateHolderTest {
         }
 
     @Test
+    fun reportingAnAlbumSendsItsIdAndKeepsThePersonVisible() =
+        runTest {
+            val repository = RecordingPublicProfileRepository()
+            val stateHolder = ProfileDetailStateHolder(repository)
+            stateHolder.open(sampleCard("user-a"))
+
+            stateHolder.submitAlbumReport("album-9", "non_consensual_content")
+
+            assertEquals(listOf(Triple<String, String, String?>("user-a", "album", "album-9")), repository.reportCalls)
+            assertEquals(ProfileDetailStateHolder.ALBUM_REPORT_CONFIRMATION, stateHolder.state.value.reportFeedback)
+            stateHolder.dismiss()
+            assertEquals<String?>(null, stateHolder.state.value.hiddenTargetUserId)
+        }
+
+    @Test
     fun sendSparkFromNormalOpenLeavesSourceNull() =
         runTest {
             val repository = RecordingPublicProfileRepository()
@@ -108,6 +123,7 @@ private fun sampleCard(userId: String): GridProfileCardUi =
 
 private class RecordingPublicProfileRepository : PublicProfileRepository {
     val flirtCalls = mutableListOf<Pair<String, String?>>()
+    val reportCalls = mutableListOf<Triple<String, String, String?>>()
 
     override suspend fun loadProfile(userId: String): AppResult<PublicProfileDto> =
         AppResult.Success(
@@ -149,8 +165,10 @@ private class RecordingPublicProfileRepository : PublicProfileRepository {
         targetType: String,
         category: String,
         note: String?,
-    ): AppResult<ReportDto> =
-        AppResult.Success(
+        targetId: String?,
+    ): AppResult<ReportDto> {
+        reportCalls += Triple(userId, targetType, targetId)
+        return AppResult.Success(
             ReportDto(
                 reportId = "report-1",
                 reportedUserId = userId,
@@ -160,4 +178,5 @@ private class RecordingPublicProfileRepository : PublicProfileRepository {
                 createdAt = "2026-06-03T00:00:00Z",
             ),
         )
+    }
 }
