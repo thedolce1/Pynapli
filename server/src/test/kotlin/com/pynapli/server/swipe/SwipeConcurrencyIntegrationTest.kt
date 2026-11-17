@@ -66,6 +66,27 @@ class SwipeConcurrencyIntegrationTest :
             }
         }
 
+        "a rewind racing the other person's like back ends as either a match or a rewound like, never both" {
+            runBlocking {
+                val repository = JdbcSwipeRepository(dataSource)
+                var wrong = 0
+                repeat(iterations) { iteration ->
+                    val (viewer, target) = seedPair(iteration)
+                    val likeId = UUID.randomUUID()
+                    assertTrue(repository.recordSwipeAction(likeId, viewer, target, SwipeAction.LIKE).recorded)
+                    raceTogether(
+                        { repository.rewindIntoFreshCard(likeId, viewer, target) },
+                        { repository.recordSwipeAction(UUID.randomUUID(), target, viewer, SwipeAction.LIKE) },
+                    )
+                    val matched = dataSource.countMatchesBetween(viewer, target) == 1
+                    val likeRewound = dataSource.isRewound(likeId)
+                    // Allowed: (match, like still live) or (no match, like rewound).
+                    if (matched == likeRewound) wrong++
+                }
+                assertEquals(0, wrong, "iterations out of $iterations that ended with a match on a rewound like (or neither)")
+            }
+        }
+
         "a Pineapple Like retried with the same action id spends exactly one" {
             runBlocking {
                 val service = swipeService()
@@ -271,6 +292,17 @@ private fun DataSource.liveActionCount(
                     rs.getInt(1)
                 }
             }
+    }
+
+private fun DataSource.isRewound(actionId: UUID): Boolean =
+    connection.use { c ->
+        c.prepareStatement("SELECT rewound_at IS NOT NULL FROM swipe_actions WHERE id = ?").use { s ->
+            s.setObject(1, actionId)
+            s.executeQuery().use { rs ->
+                rs.next()
+                rs.getBoolean(1)
+            }
+        }
     }
 
 private fun DataSource.countMatchesBetween(
