@@ -54,46 +54,43 @@ internal suspend fun DataSource.listActiveTonightPresenceSessions(now: Instant):
 internal suspend fun DataSource.pauseTonightSession(
     sessionId: UUID,
     now: Instant,
-) {
+): Boolean =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
             connection
-                .prepareStatement("UPDATE tonight_sessions SET paused_at = ? WHERE id = ?")
+                .prepareStatement("UPDATE tonight_sessions SET paused_at = ? WHERE id = ? AND status = 'active'")
                 .use { statement ->
                     statement.setTimestamp(1, Timestamp.from(now))
                     statement.setObject(2, sessionId)
-                    statement.executeUpdate()
+                    statement.executeUpdate() > 0
                 }
         }
     }
-}
 
-internal suspend fun DataSource.resumeTonightSession(sessionId: UUID) {
+internal suspend fun DataSource.resumeTonightSession(sessionId: UUID): Boolean =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
             connection
-                .prepareStatement("UPDATE tonight_sessions SET paused_at = NULL WHERE id = ?")
+                .prepareStatement("UPDATE tonight_sessions SET paused_at = NULL WHERE id = ? AND status = 'active'")
                 .use { statement ->
                     statement.setObject(1, sessionId)
-                    statement.executeUpdate()
+                    statement.executeUpdate() > 0
                 }
         }
     }
-}
 
 internal suspend fun DataSource.systemEndTonightSession(
     sessionId: UUID,
     now: Instant,
-) {
+): Boolean =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
             connection
-                .prepareStatement("UPDATE tonight_sessions SET status = 'ended', ended_at = ? WHERE id = ?")
+                .prepareStatement("UPDATE tonight_sessions SET status = 'ended', ended_at = ? WHERE id = ? AND status = 'active'")
                 .use { statement ->
                     statement.setTimestamp(1, Timestamp.from(now))
                     statement.setObject(2, sessionId)
-                    statement.executeUpdate()
+                    statement.executeUpdate() > 0
                 }
         }
     }
-}

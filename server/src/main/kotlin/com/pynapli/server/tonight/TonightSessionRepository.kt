@@ -7,8 +7,10 @@ import java.util.UUID
 /**
  * Storage for Playing Tonight sessions. Multi-row writes (propose, approve, decline,
  * end) run in a single transaction; approve locks the session row so the
- * "all participants approved?" check is atomic. The service enforces all product rules;
- * this layer only persists/reads.
+ * "all participants approved?" check is atomic. The service decides the product rules;
+ * the one exception is [insertSessionIfAllowed], which re-runs the service's
+ * "already live" / weekly-cap checks under a lock, because only storage can make a
+ * check-then-insert atomic.
  */
 interface TonightSessionRepository {
     /** True if [photoAssetId] is a non-deleted asset owned by [userId]. */
@@ -42,12 +44,41 @@ interface TonightSessionRepository {
     suspend fun findActiveLinkedPartner(userId: UUID): UUID?
 
     /**
-     * Insert a session + its participant rows in one transaction. Solo sessions pass a
-     * single owner (approved); together sessions pass owner (approved) + partner (pending).
+     * Insert a session + its participant rows in one transaction, unless a concurrent
+     * proposal got there first. Solo sessions pass a single owner (approved); together
+     * sessions pass owner (approved) + partner (pending).
+     *
+     * The transaction first takes a per-user advisory lock for every participant (sorted, so
+     * overlapping proposals queue instead of deadlocking), then re-checks, in this order:
+     * - the creator has no live session ([hasActiveOrProposedSession] at [now]) →
+     *   otherwise [InsertOutcome.AlreadyActive];
+     * - when [weeklyCap] is given, the creator has created fewer than [WeeklyCap.limit]
+     *   sessions since [WeeklyCap.since] ([countSessionsCreatedSince]) →
+     *   otherwise [InsertOutcome.WeeklyLimitReached].
+     * Nothing is written unless the outcome is [InsertOutcome.Inserted].
      */
-    suspend fun insertSession(
+    suspend fun insertSessionIfAllowed(
         session: TonightSession,
-    ): TonightSession
+        now: Instant,
+        weeklyCap: WeeklyCap?,
+    ): InsertOutcome
+
+    /** A weekly creation cap for [insertSessionIfAllowed]; null there means uncapped. */
+    data class WeeklyCap(
+        val since: Instant,
+        val limit: Int,
+    )
+
+    /** Outcome of [insertSessionIfAllowed]. */
+    sealed interface InsertOutcome {
+        data class Inserted(
+            val session: TonightSession,
+        ) : InsertOutcome
+
+        object AlreadyActive : InsertOutcome
+
+        object WeeklyLimitReached : InsertOutcome
+    }
 
     /**
      * Atomically approve [userId]'s pending participant row on [sessionId] and, if every
@@ -122,24 +153,33 @@ interface TonightSessionRepository {
      */
     suspend fun listActivePresenceSessions(now: Instant): List<TonightPresenceSession>
 
-    /** Set paused_at = [now] on a session (begin a presence pause). */
+    /**
+     * Set paused_at = [now] on a session (begin a presence pause), only while it is still
+     * status='active'. Returns false when it no longer was (ended/declined/expired since the
+     * reconciler listed it) and nothing changed.
+     */
     suspend fun pauseSession(
         sessionId: UUID,
         now: Instant,
-    )
+    ): Boolean
 
-    /** Clear paused_at on a session (resume after the participant returned). */
-    suspend fun resumeSession(sessionId: UUID)
+    /**
+     * Clear paused_at on a session (resume after the participant returned), only while it is
+     * still status='active'. Returns false when nothing changed.
+     */
+    suspend fun resumeSession(sessionId: UUID): Boolean
 
     /**
      * End a session as the SYSTEM (participant-agnostic): status='ended', ended_at=[now]. Unlike
-     * [endSession] this performs no participant/status gating — the reconciler already selected an
-     * eligible session — so it must NOT be used for user-initiated ends.
+     * [endSession] this performs no participant gating, so it must NOT be used for user-initiated
+     * ends. It is gated on status='active' only: the reconciler lists sessions and acts on them
+     * later, and a session a user ended, or that expired, in between must keep that outcome.
+     * Returns false when the session was no longer active and nothing changed.
      */
     suspend fun systemEndSession(
         sessionId: UUID,
         now: Instant,
-    )
+    ): Boolean
 
     /** A live together session the presence reconciler may pause/resume/end. */
     data class TonightPresenceSession(

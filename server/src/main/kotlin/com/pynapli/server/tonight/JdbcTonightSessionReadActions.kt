@@ -2,6 +2,7 @@ package com.pynapli.server.tonight
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -35,27 +36,30 @@ internal suspend fun DataSource.hasActiveOrProposedTonightSession(
     now: Instant,
 ): Boolean =
     withContext(Dispatchers.IO) {
-        connection.use { connection ->
-            connection
-                .prepareStatement(
-                    """
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM tonight_session_participants p
-                        JOIN tonight_sessions s ON s.id = p.session_id
-                        WHERE p.user_id = ?
-                          AND s.status IN ('proposed', 'active')
-                          AND s.expires_at > ?
-                    )
-                    """.trimIndent(),
-                ).use { statement ->
-                    statement.setObject(1, userId)
-                    statement.setTimestamp(2, Timestamp.from(now))
-                    statement.executeQuery().use { rs ->
-                        rs.next()
-                        rs.getBoolean(1)
-                    }
-                }
+        connection.use { connection -> connection.hasActiveOrProposedTonightSession(userId, now) }
+    }
+
+internal fun Connection.hasActiveOrProposedTonightSession(
+    userId: UUID,
+    now: Instant,
+): Boolean =
+    prepareStatement(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM tonight_session_participants p
+            JOIN tonight_sessions s ON s.id = p.session_id
+            WHERE p.user_id = ?
+              AND s.status IN ('proposed', 'active')
+              AND s.expires_at > ?
+        )
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, userId)
+        statement.setTimestamp(2, Timestamp.from(now))
+        statement.executeQuery().use { rs ->
+            rs.next()
+            rs.getBoolean(1)
         }
     }
 
@@ -64,24 +68,27 @@ internal suspend fun DataSource.countTonightSessionsCreatedSince(
     since: Instant,
 ): Int =
     withContext(Dispatchers.IO) {
-        connection.use { connection ->
-            connection
-                .prepareStatement(
-                    """
-                    SELECT COUNT(*)
-                    FROM tonight_sessions
-                    WHERE created_by_user_id = ?
-                      AND created_at > ?
-                      AND status <> 'declined'
-                    """.trimIndent(),
-                ).use { statement ->
-                    statement.setObject(1, userId)
-                    statement.setTimestamp(2, Timestamp.from(since))
-                    statement.executeQuery().use { rs ->
-                        rs.next()
-                        rs.getInt(1)
-                    }
-                }
+        connection.use { connection -> connection.countTonightSessionsCreatedSince(userId, since) }
+    }
+
+internal fun Connection.countTonightSessionsCreatedSince(
+    userId: UUID,
+    since: Instant,
+): Int =
+    prepareStatement(
+        """
+        SELECT COUNT(*)
+        FROM tonight_sessions
+        WHERE created_by_user_id = ?
+          AND created_at > ?
+          AND status <> 'declined'
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, userId)
+        statement.setTimestamp(2, Timestamp.from(since))
+        statement.executeQuery().use { rs ->
+            rs.next()
+            rs.getInt(1)
         }
     }
 
