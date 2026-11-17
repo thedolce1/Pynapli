@@ -1,82 +1,160 @@
-# Path to testers — the one ordered list
+# Path to Testers
 
-Last updated: 2026-07-29
+The ordered founder path from today to the first external testers on Android, web and iOS, plus the
+current cloud state and the staging tester lane. Merged on 2026-11-17 from `CLOUD_STATUS.md` and
+`STAGING_TESTER_LANE.md`. GCP commands: [../infra/cloud-run/README.md](../infra/cloud-run/README.md).
+iOS detail: [IOS_BRINGUP_PLAN.md](IOS_BRINGUP_PLAN.md).
 
-**Why this file exists:** the steps were all written down, but spread across
-`CLOUD_STATUS.md` (backend → PWA → site), `GCP_PROVISIONING_CHECKLIST.md` (the GCP detail),
-`archive/ANDROID_PRODUCTION_GAMEPLAN.md` H1–H3 (Android tail) and `IOS_BRINGUP_PLAN.md` (iOS). Nowhere said
-**what order to do them in across all three targets, or what depends on what.** This does only that.
-It deliberately does not restate the detail — each step links to the doc that owns it.
+Legend: 🔵 founder ops (accounts, cloud, money, devices, store consoles) · 🟢 codeable · 🍎 needs macOS
 
-## The one thing that unlocks everything
+> **Deploying the Ktor API is the single blocker for Android testers and the PWA.** Every client is
+> server-authoritative and points at `localhost` today. Do the backend first, once.
 
-> **Deploying the Ktor API is the single blocker for both Android testers and the PWA.**
+## Cloud state
 
-Every client is server-authoritative and currently points at `localhost`. An APK handed to a tester
-today reaches nothing, and the PWA has no API to call. So the backend deploy is not "step 3 of the
-web track" — it is the gate for *all* tester access. Do it first, once.
+The backend is code-complete and deploy-ready; live provisioning is not done. Product authority stays
+in Ktor; Firebase is FCM, Crashlytics, Analytics, Remote Config, App Check and Hosting for the
+website. Live resource state cannot be verified from the repo: confirm in the
+[Firebase console](https://console.firebase.google.com/project/pynapli) and the
+[GCP console](https://console.cloud.google.com/).
 
-## Track A — Backend (blocks everything else) 🔵 founder
+| Thing | Value |
+| --- | --- |
+| Firebase project id / number | `pynapli` / `209241465883` |
+| Firebase admin service account | `firebase-adminsdk-fbsvc@pynapli.iam.gserviceaccount.com` |
+| Android package id | `com.pynapli.app` |
+| Domain | `pynapli.com` (purchased, DNS access confirmed) |
+| Backend service | `pynapli-api` (Cloud Run), region `us-central1` |
+| FCM/Firebase credentials | Application Default Credentials; **no JSON key** (org policy blocks key creation) |
 
-| # | Step | Owner | Detail |
-|---|---|---|---|
-| A1 | Lock project naming (`pynapli` vs `-dev`/`-staging`/`-prod` split) | 🔵 | `CLOUD_STATUS.md` |
-| A2 | Provision GCP: APIs, Cloud SQL (Postgres+PostGIS), Memorystore Redis, Artifact Registry, 6 Secret Manager secrets, GCS media bucket | 🔵 | `GCP_PROVISIONING_CHECKLIST.md` steps 1–7 |
-| A3 | Deploy the API to Cloud Run, ideally at **`api.pynapli.com`** | 🔵 | `GCP_PROVISIONING_CHECKLIST.md` step 8 + `infra/cloud-run/README.md` |
-| A4 | Cost controls / budget alerts — **do not skip** | 🔵 | `GCP_PROVISIONING_CHECKLIST.md` step 9 |
-| A5 | Verify `/health` and `/health/deep` against the live URL | 🔵 | `CLOUD_STATUS.md` "How to verify live state" |
+**Open decision, project naming:** the DevOps spec plans `pynapli-dev` / `-staging` / `-prod`, but
+the only real project is `pynapli`. Recommended: use `pynapli` as staging now, and create a separate
+`pynapli-prod` (own Firebase app and `google-services.json`) before real users.
 
-**A3 done = Android testers and the PWA both become possible.** Nothing below works before it.
+| Component | State | Notes |
+| --- | --- | --- |
+| Firebase project, Android app registered | Done | `androidApp/google-services.json` present locally, gitignored |
+| CI | Live | `.github/workflows/ci.yml`: Format, Verify, Web, Docker Smoke |
+| FCM server pipeline | Code-complete, not enabled | env vars in [DEVOPS_INFRA_SETUP_SPEC.md](DEVOPS_INFRA_SETUP_SPEC.md#fcm-enablement) |
+| App Check | Client code in all build types; not enforced | [DEVOPS_INFRA_SETUP_SPEC.md](DEVOPS_INFRA_SETUP_SPEC.md#app-check-enablement) |
+| Cloud Run API | Image, scripts and workflow ready; not deployed | `infra/server.Dockerfile`, `scripts/gcp-cloud-run-deploy.ps1`, `.github/workflows/staging-backend.yml` |
+| Cloud SQL, Memorystore, Artifact Registry, Secret Manager, GCS bucket | Not confirmed | required before deploy |
+| Firebase Hosting (website) | Configured (`firebase.json`, `.firebaserc`), never deployed | [../web/HOSTING.md](../web/HOSTING.md) |
+| Branch protection on `main` | Not applied | command in [DEVOPS_INFRA_SETUP_SPEC.md](DEVOPS_INFRA_SETUP_SPEC.md#branch-protection) |
+| Billing / cost alerts | Not set up | required before any prod resource |
+| Email aliases | Not created | founder ops |
 
-## Track B — Android to testers 🔵 founder, 🟢 me where noted
+Verify live state: `GET https://<cloud-run-url>/health` and `/health/deep` (both `200`).
 
-Code is complete and gated; everything here is provisioning or a physical device.
+## Track A: Backend (blocks everything) 🔵
+
+| # | Step | Detail |
+|---|---|---|
+| A1 | Lock project naming | above |
+| A2 | Provision GCP: APIs, Cloud SQL (Postgres+PostGIS) + `pynapli_staging` DB, Memorystore Redis + VPC connector, Artifact Registry, 6 Secret Manager secrets, GCS media bucket, runtime service account | [infra/cloud-run/README.md](../infra/cloud-run/README.md) steps 1–7 |
+| A3 | Deploy the API to Cloud Run, ideally at **`api.pynapli.com`** (the PWA default) | infra README step 8, or the **Deploy Staging API** workflow |
+| A4 | Budget alerts. **Do not skip.** | infra README step 9 |
+| A5 | Verify `/health` and `/health/deep` on the live URL | |
+
+**A3 done = Android testers and the PWA both become possible.**
+
+## Track B: Android to testers
 
 | # | Step | Owner | Notes |
 |---|---|---|---|
-| B1 | Create a release signing keystore; set `pynapli.android.releaseKeystore*` in `local.properties` | 🔵 | Build is already `-P`-configurable and builds unsigned without it. **Back the keystore up — losing it means you can never update the app on Play.** |
-| B2 | Build the staging APK pointed at the A3 URL | 🟢 | `scripts/android-staging-apk.ps1 -ApiBaseUrl https://<A3 host>` (sets `pynapli.android.stagingApiBaseUrl`; the WebSocket URL is derived, override with `-WebsocketBaseUrl`) |
-| B3 | Real-device QA on one physical mid-range phone (**H2**) | 🔵 | Emulator-only so far. Battery/location profile, push delivery, low-network. Harnesses exist. |
-| B4 | Play Console: app entry, internal testing track, upload the signed build | 🔵 | `archive/ANDROID_PRODUCTION_GAMEPLAN.md` H3 |
-| B5 | Data Safety form + content rating + store listing copy/screenshots | 🔵 | H3; a dating/lifestyle app is scrutinised here — budget real time |
+| B1 | Release signing keystore; set `pynapli.android.releaseKeystore*` in `local.properties` | 🔵 | Builds unsigned without it. **Back the keystore up: losing it means you can never update the app on Play.** |
+| B2 | Staging APK pointed at the A3 URL | 🟢 | Staging lane below |
+| B3 | Real-device QA on one physical mid-range phone | 🔵 | Emulator-only so far: battery/location, push delivery, low network. Harnesses exist. |
+| B4 | Play Console: app entry, internal testing track, upload the signed build | 🔵 | [archive/ANDROID_PRODUCTION_GAMEPLAN.md](archive/ANDROID_PRODUCTION_GAMEPLAN.md) H3 |
+| B5 | Data Safety form, content rating, store listing | 🔵 | A dating/lifestyle app is scrutinised here; budget real time |
 
-`google-services.json` is already present locally and correctly untracked, so FCM/Crashlytics/App
-Check are wired for debug. Staging/prod variants need their own file per Firebase app if you split
-projects at A1.
+Staging and prod need their own `google-services.json` per Firebase app if projects are split at A1.
 
-## Track C — PWA to testers 🔵 founder
+### Staging tester lane
+
+A Firebase-enabled APK pointed at a Cloud Run staging API, without laptop IPs or emulator addresses.
+It is not the Play lane: it does not replace release signing, Play internal testing, Data Safety, or
+production App Check / Play Integrity. Ktor remains the authority for sessions, discovery, messages,
+safety, entitlements, media grants and subscriptions.
+
+- `staging` Android build type: API `pynapli.android.stagingApiBaseUrl`, WebSocket
+  `pynapli.android.stagingWebsocketBaseUrl`, Firebase config from `androidApp/google-services.json`,
+  App Check **debug** provider (so testers can be allowlisted).
+- **Deploy Staging API** workflow (`staging-backend.yml`): builds and pushes the image, deploys Cloud
+  Run with staging env, Secret Manager bindings, Cloud SQL, Memorystore, GCS, FCM and App Check, then
+  smoke-tests `/health` and `/health/deep`.
+- **Staging Tester APK** workflow (`staging-tester-apk.yml`): writes `google-services.json` from a
+  secret, builds `:androidApp:assembleStaging`, uploads the APK artifact, optionally distributes via
+  Firebase App Distribution.
+
+GitHub secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `ANDROID_GOOGLE_SERVICES_JSON_B64` | Base64 `androidApp/google-services.json` for Firebase-enabled CI APKs |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Workload Identity provider resource for GitHub Actions → GCP |
+| `GCP_CI_SERVICE_ACCOUNT` | Service account for Artifact Registry, Cloud Run, App Distribution |
+| `FIREBASE_ANDROID_APP_ID` | Firebase Android app id (`1:...:android:...`) for App Distribution |
+
+Also required: the GCP resources and six secrets from Track A; App Check registered for
+`com.pynapli.app` with staging/debug devices allowlisted; at least one App Distribution tester group
+(default `founders`).
+
+Order:
+
+1. Run **Deploy Staging API**; copy the Cloud Run URL from the summary.
+2. Run **Staging Tester APK** with `api_base_url = <Cloud Run URL>` and
+   `websocket_base_url = <same URL with https:// changed to wss://>`.
+3. Install the `pynapli-staging-tester-apk` artifact, or let App Distribution send invites.
+4. Real-device smoke: login/signup, Grid load, Swipe load and action, Messages open/send, Activity
+   badge/feed, Store open, media upload, push delivery.
+
+Local build against a deployed staging API (requires `androidApp/google-services.json` unless
+`-SkipGoogleServicesCheck`; the WebSocket URL is derived unless overridden):
+
+```powershell
+.\scripts\android-staging-apk.ps1 `
+  -ApiBaseUrl "https://api-staging.pynapli.com" `
+  -WebsocketBaseUrl "wss://api-staging.pynapli.com"
+```
+
+## Track C: PWA and website 🔵
+
+Founder decision (2026-07-09): launch the funnel together (backend → PWA → site), so the site's
+"Create account" button reaches a working app on day one.
 
 | # | Step | Owner | Notes |
 |---|---|---|---|
-| C1 | Point the PWA at the API — set `window.__PYNAPLI_API_BASE__` in `index.html` (or leave `null` for the `api.pynapli.com` default) | 🟢 | One line, no Wasm rebuild |
-| C2 | Build `webApp/build/dist/wasmJs/productionExecutable` and host at **`app.pynapli.com`** with an SPA rewrite (serve `index.html` for unknown paths) | 🔵 | The rewrite is required — deep links 404 without it |
-| C3 | Confirm CORS: non-local defaults to `https://app.pynapli.com`; override with `PYNAPLI_CORS_ALLOWED_ORIGINS` only if the host differs | 🔵 | |
-| C4 | Deploy the marketing site `pynapli.com` so its CTAs reach a live app | 🔵 | `web/HOSTING.md`; already in `firebase.json` |
+| C1 | Point the PWA at the API: set `window.__PYNAPLI_API_BASE__` in `webApp/src/wasmJsMain/resources/index.html`, or leave `null` for the `https://api.pynapli.com` default | 🟢 | No Wasm rebuild |
+| C2 | Build `webApp/build/dist/wasmJs/productionExecutable` and host at **`app.pynapli.com`** with an SPA rewrite (serve `index.html` for unknown paths) | 🔵 | Deep links 404 without the rewrite. Can be a second Firebase Hosting site. |
+| C3 | CORS: non-local defaults to `https://app.pynapli.com`; `PYNAPLI_CORS_ALLOWED_ORIGINS` **replaces** that default, so include it if you set the variable | 🔵 | |
+| C4 | Deploy `pynapli.com` | 🔵 | below |
 
-**Founder decision on record (2026-07-09):** launch the funnel together, not piecemeal — a live site
-whose "Create account" button works beats a brochure with dead CTAs.
+```bash
+cd web && npm run build && cd ..
+firebase login
+firebase deploy --only hosting     # publishes web/dist (project pynapli)
+```
 
-## Track D — iOS to TestFlight 🍎 needs the Mac
+Then Firebase console → Hosting → add custom domain `pynapli.com`. See [../web/HOSTING.md](../web/HOSTING.md).
 
-Independent of A–C for *authoring*, but a TestFlight build still needs A3 to be usable.
+## Track D: iOS to TestFlight 🍎
+
+Independent of A–C for authoring, but a usable TestFlight build still needs A3.
 
 | # | Step | Owner | Notes |
 |---|---|---|---|
-| D1 | Create the Xcode project + first framework link | 🟢 on Mac | Not hand-writable; see `IOS_BRINGUP_PLAN.md` step 1 — carries most of the remaining risk |
-| D2 | Verify the Keychain session cipher on a simulator/device | 🟢 on Mac | **Security blocker:** tokens are plaintext until this is proven working |
-| D3 | APNs + Firebase Apple SDK setup | 🟢 on Mac + 🔵 certs | Needs an Apple Developer account (🔵) |
-| D4 | StoreKit 2 (can follow the first release — Store ships read-only, as on web) | 🟢 on Mac | |
-| D5 | App Store Connect entry, TestFlight build, privacy nutrition labels | 🔵 | Apple Developer Program enrolment is 🔵 and takes time — **start it early** |
+| D1 | Xcode project + first framework link | 🟢 on Mac | [IOS_BRINGUP_PLAN.md](IOS_BRINGUP_PLAN.md) step 1; carries most of the risk |
+| D2 | Verify the Keychain session cipher on simulator/device | 🟢 on Mac | **Security blocker:** tokens are plaintext until proven |
+| D3 | APNs + Firebase Apple SDK | 🟢 on Mac + 🔵 certs | Needs an Apple Developer account |
+| D4 | StoreKit 2 (can follow the first release; Store read-only as on web) | 🟢 on Mac | |
+| D5 | App Store Connect entry, TestFlight build, privacy nutrition labels | 🔵 | Developer Program enrolment takes time: start early |
 
-Plan estimate: **3–6 working days to a TestFlight build**, Store read-only.
+## Before public launch (not blocking testers)
 
-## Not blocking testers, but before *public* launch
-
-- Finalize real Privacy Policy / Terms copy (currently DRAFT + `noindex`).
-- Decide the waitlist form's fate — wire it to an email service or remove it; it is currently a no-op.
-- Reserve the email aliases (`support@`, `privacy@`, `security@`, `legal@`, `moderation@`, `no-reply@`).
-- Branch protection on `main` (still off; see `project_ci_billing_block`).
-
-## Legend
-
-🔵 founder ops (accounts, cloud, money, devices, store consoles) · 🟢 codeable · 🍎 requires macOS
+- Final Privacy Policy and Terms (currently DRAFT + `noindex`); GeoNames attribution in-app
+  ([THIRD_PARTY_DATA.md](THIRD_PARTY_DATA.md)).
+- Wire the website waitlist form to an email service or remove it (currently a no-op).
+- Email aliases: `support@`, `privacy@`, `security@`, `legal@`, `moderation@`, `admin@`, `no-reply@`.
+- Branch protection on `main`; separate prod project and DB; automated backups; rollback procedure;
+  billing alerts.

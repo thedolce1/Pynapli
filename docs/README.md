@@ -72,9 +72,7 @@ Runbooks and current cloud state. See also `../web/HOSTING.md` for the pynapli.c
 | Doc | What it covers |
 | --- | --- |
 | [DEVOPS_INFRA_SETUP_SPEC.md](DEVOPS_INFRA_SETUP_SPEC.md) | Local/CI/cloud infra, Firebase & GCP setup plan, secrets, environments. |
-| [CLOUD_STATUS.md](CLOUD_STATUS.md) | One-page Firebase/GCP snapshot — what's live vs. coded-but-not-provisioned. |
-| [GCP_PROVISIONING_CHECKLIST.md](GCP_PROVISIONING_CHECKLIST.md) | Step-by-step runbook to stand up the backend on GCP, then PWA + site. |
-| [STAGING_TESTER_LANE.md](STAGING_TESTER_LANE.md) | Firebase-enabled staging APK → Cloud Run staging API lane. |
+| [../infra/cloud-run/README.md](../infra/cloud-run/README.md) | Step-by-step GCP provisioning and Cloud Run deploy. |
 | [WEB_BROWSER_QA_CHECKLIST.md](WEB_BROWSER_QA_CHECKLIST.md) | Manual browser QA checklist for the Wasm PWA. |
 | [THIRD_PARTY_DATA.md](THIRD_PARTY_DATA.md) | Bundled datasets, licenses, and attribution obligations (e.g. GeoNames CC BY 4.0). |
 
@@ -85,7 +83,7 @@ Working documents that track intent and progress — not fixed specs.
 | Doc | What it covers |
 | --- | --- |
 | [IMPLEMENTATION_AUDIT.md](IMPLEMENTATION_AUDIT.md) | Current status per area: built, open gaps, owning spec. History is in [archive/IMPLEMENTATION_HISTORY.md](archive/IMPLEMENTATION_HISTORY.md). |
-| [PATH_TO_TESTERS.md](PATH_TO_TESTERS.md) | Founder checklist from today to the first external testers. |
+| [PATH_TO_TESTERS.md](PATH_TO_TESTERS.md) | Ordered founder path to testers, current cloud state, staging tester lane. |
 | [IOS_BRINGUP_PLAN.md](IOS_BRINGUP_PLAN.md) | Steps to stand up the iOS shell (needs a Mac). |
 | [WEB_PWA_GAMEPLAN.md](WEB_PWA_GAMEPLAN.md) | Web PWA architecture, adapters and the window-size contract. |
 
