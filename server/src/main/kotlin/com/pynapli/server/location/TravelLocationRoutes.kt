@@ -22,6 +22,7 @@ fun Application.configureTravelLocationRoutes(
     authService: AuthService,
     travelLocationService: TravelLocationService,
     travelPlaceSearchService: TravelPlaceSearchService,
+    travelTripService: TravelTripService? = null,
 ) {
     routing {
         // Type-ahead place resolution for the free-text travel picker. Sub-minimum
@@ -52,6 +53,29 @@ fun Application.configureTravelLocationRoutes(
             val user = call.authenticatedUser(authService)
             val cleared = travelLocationService.clear(user.id)
             if (cleared) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound)
+        }
+
+        // Planned trips (Select): Travel mode scheduled ahead, switched on and off by the server.
+        if (travelTripService != null) {
+            get("/v1/location/travel/trips") {
+                val user = call.authenticatedUser(authService)
+                call.respond(travelTripService.list(user.id))
+            }
+
+            post("/v1/location/travel/trips") {
+                val user = call.authenticatedUser(authService)
+                val request = call.receive<com.pynapli.shared.network.dto.PlanTravelTripRequestDto>()
+                call.respond(travelTripService.plan(user.id, request))
+            }
+
+            delete("/v1/location/travel/trips/{tripId}") {
+                val user = call.authenticatedUser(authService)
+                val tripId =
+                    call.parameters["tripId"]?.let { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
+                        ?: throw TravelLocationException("TRIP_NOT_FOUND")
+                travelTripService.cancel(user.id, tripId)
+                call.respond(HttpStatusCode.NoContent)
+            }
         }
     }
 }

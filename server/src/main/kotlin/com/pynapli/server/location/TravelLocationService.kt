@@ -53,6 +53,29 @@ class TravelLocationService(
         }
         requireTravelTier(viewerUserId, applyRateLimit = true)
         val switchesToday = requireDailySwitchAllowance(viewerUserId)
+        val place = validatedPlace(viewerUserId, request)
+        val record =
+            repository.setActive(
+                userId = viewerUserId,
+                request = place,
+                now = clock.instant(),
+            )
+        if (switchesToday + 1 == DAILY_ACTIVATION_LIMIT) {
+            // Reached the day's cap: a risk signal, recorded once (refused retries add no rows).
+            runCatching { riskSignals?.recordRepeatedTravelSwitching(viewerUserId, DAILY_ACTIVATION_LIMIT) }
+        }
+        return record.toDto()
+    }
+
+    /**
+     * Checks a destination the way every Travel switch must (name lengths, coordinates, and the
+     * region policy applied to where the coordinates really are) and returns it ready to store.
+     * Used by [set] and by planned trips, both when one is planned and when it starts.
+     */
+    internal suspend fun validatedPlace(
+        viewerUserId: UUID,
+        request: SetTravelLocationRequestDto,
+    ): TravelLocationUpsert {
         val city = request.city.trim()
         if (city.isEmpty() || city.length > MAX_CITY_LENGTH) {
             throw TravelLocationException("INVALID_TRAVEL_CITY")
@@ -86,24 +109,44 @@ class TravelLocationService(
                 if (!verified) throw TravelLocationException("AGE_VERIFICATION_REQUIRED")
             }
         }
-        val record =
-            repository.setActive(
-                userId = viewerUserId,
-                request =
-                    TravelLocationUpsert(
-                        latitude = request.latitude,
-                        longitude = request.longitude,
-                        city = city,
-                        region = region,
-                        country = country,
-                    ),
-                now = clock.instant(),
-            )
-        if (switchesToday + 1 == DAILY_ACTIVATION_LIMIT) {
-            // Reached the day's cap: a risk signal, recorded once (refused retries add no rows).
-            runCatching { riskSignals?.recordRepeatedTravelSwitching(viewerUserId, DAILY_ACTIVATION_LIMIT) }
-        }
-        return record.toDto()
+        return TravelLocationUpsert(
+            latitude = request.latitude,
+            longitude = request.longitude,
+            city = city,
+            region = region,
+            country = country,
+        )
+    }
+
+    /**
+     * Starts a planned trip: the same risk, plan and region rules as a manual switch, but no daily
+     * switch allowance (the trip was planned ahead, not a city hop). Null when the user may no longer
+     * use Travel mode (no longer on Select, or restricted); the caller cancels the trip then.
+     */
+    internal suspend fun activateForTrip(
+        userId: UUID,
+        place: SetTravelLocationRequestDto,
+    ): TravelLocationRecord? {
+        if (riskPolicyService?.isTravelRestricted(userId) == true) return null
+        if (!canPlanTrips(userId)) return null
+        val upsert = runCatching { validatedPlace(userId, place) }.getOrNull() ?: return null
+        return repository.setActive(userId, upsert, clock.instant())
+    }
+
+    /** Ends a trip's Travel mode, but only if that trip's row is still the active one. */
+    internal suspend fun clearIfStillActive(
+        userId: UUID,
+        travelLocationId: UUID,
+    ): Boolean {
+        val active = repository.findActive(userId) ?: return false
+        if (active.id != travelLocationId) return false
+        return repository.clearActive(userId, clock.instant())
+    }
+
+    /** Planned trips are a Select feature (Social keeps its one-switch preview). */
+    internal suspend fun canPlanTrips(userId: UUID): Boolean {
+        val policy = subscriptionService?.getPolicy(userId) ?: EntitlementPolicy.unrestricted()
+        return policy.tier == SubscriptionTier.SELECT
     }
 
     /**
