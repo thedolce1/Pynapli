@@ -13,6 +13,7 @@ import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
+import com.pynapli.app.store.PurchaseLock
 import com.pynapli.app.store.StorePurchaseGateway
 import com.pynapli.app.store.StorePurchaseResult
 import com.pynapli.shared.core.result.AppError
@@ -25,7 +26,6 @@ import com.pynapli.shared.network.dto.SubscriptionProductId
 import com.pynapli.shared.network.dto.SubscriptionPurchaseSyncStatus
 import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SubscriptionTierDto
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,6 +34,13 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.lang.ref.WeakReference
 import kotlin.coroutines.resume
+
+private data class PendingPurchase(
+    val tier: String,
+    val productId: String,
+)
+
+private typealias PurchaseClaim = PurchaseLock.Claim<PendingPurchase, AppResult<StorePurchaseResult>>
 
 class AndroidPlayBillingPurchaseGateway(
     context: Context,
@@ -44,7 +51,7 @@ class AndroidPlayBillingPurchaseGateway(
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var activityRef = WeakReference<Activity?>(null)
-    private var pendingPurchase: PendingPurchase? = null
+    private val purchaseLock = PurchaseLock<PendingPurchase, AppResult<StorePurchaseResult>>()
 
     private val billingClient: BillingClient =
         BillingClient
@@ -78,10 +85,22 @@ class AndroidPlayBillingPurchaseGateway(
         val activity =
             activityRef.get()
                 ?: return billingFailure("BILLING_ACTIVITY_UNAVAILABLE", "Purchases are not available right now.")
-        if (pendingPurchase != null) {
-            return billingFailure("BILLING_PURCHASE_IN_PROGRESS", "A purchase is already in progress.")
+        // Claimed before the first suspension, so a second tap can't slip in while this one connects.
+        val claim = purchaseLock.tryClaim(PendingPurchase(tier = tier.tier, productId = productId)) ?: return purchaseInProgress()
+        try {
+            return launchSubscriptionCheckout(claim, activity, productId)
+        } finally {
+            // Every exit that didn't complete the claim (an early failure, or the caller cancelled
+            // while the sheet was open) frees it; a later Play callback goes to the no-pending path.
+            purchaseLock.release(claim)
         }
+    }
 
+    private suspend fun launchSubscriptionCheckout(
+        claim: PurchaseClaim,
+        activity: Activity,
+        productId: String,
+    ): AppResult<StorePurchaseResult> {
         val connection = ensureConnected()
         if (connection.responseCode != BillingClient.BillingResponseCode.OK) {
             return billingFailure("BILLING_UNAVAILABLE", connection.debugMessage.ifBlank { "Google Play Billing is unavailable." })
@@ -96,14 +115,6 @@ class AndroidPlayBillingPurchaseGateway(
                 ?.offerToken
                 ?: return billingFailure("BILLING_OFFER_UNAVAILABLE", "This subscription offer is not available yet.")
 
-        val deferred = CompletableDeferred<AppResult<StorePurchaseResult>>()
-        pendingPurchase =
-            PendingPurchase(
-                tier = tier.tier,
-                productId = productId,
-                deferred = deferred,
-            )
-
         val params =
             BillingFlowParams
                 .newBuilder()
@@ -117,19 +128,29 @@ class AndroidPlayBillingPurchaseGateway(
                     ),
                 ).build()
 
+        return launchCheckout(claim, activity, params)
+    }
+
+    /** Opens Play's sheet for [claim] and waits for its callback. */
+    private suspend fun launchCheckout(
+        claim: PurchaseClaim,
+        activity: Activity,
+        params: BillingFlowParams,
+    ): AppResult<StorePurchaseResult> {
+        // From here Play's callback belongs to this claim. Set before launching: on the main thread
+        // the callback can't run until this coroutine suspends.
+        claim.launched = true
         val launchResult =
             withContext(Dispatchers.Main.immediate) {
                 billingClient.launchBillingFlow(activity, params)
             }
         if (launchResult.responseCode != BillingClient.BillingResponseCode.OK) {
-            pendingPurchase = null
             return billingFailure(
                 code = "BILLING_LAUNCH_FAILED",
                 message = launchResult.debugMessage.ifBlank { "Google Play checkout could not be opened." },
             )
         }
-
-        return deferred.await()
+        return claim.result.await()
     }
 
     override suspend fun purchaseProduct(product: PremiumProductDto): AppResult<StorePurchaseResult> {
@@ -139,9 +160,19 @@ class AndroidPlayBillingPurchaseGateway(
         val activity =
             activityRef.get()
                 ?: return billingFailure("BILLING_ACTIVITY_UNAVAILABLE", "Purchases are not available right now.")
-        if (pendingPurchase != null) {
-            return billingFailure("BILLING_PURCHASE_IN_PROGRESS", "A purchase is already in progress.")
+        val claim = purchaseLock.tryClaim(PendingPurchase(tier = ONE_TIME_PURCHASE, productId = productId)) ?: return purchaseInProgress()
+        try {
+            return launchProductCheckout(claim, activity, productId)
+        } finally {
+            purchaseLock.release(claim)
         }
+    }
+
+    private suspend fun launchProductCheckout(
+        claim: PurchaseClaim,
+        activity: Activity,
+        productId: String,
+    ): AppResult<StorePurchaseResult> {
         val connection = ensureConnected()
         if (connection.responseCode != BillingClient.BillingResponseCode.OK) {
             return billingFailure("BILLING_UNAVAILABLE", connection.debugMessage.ifBlank { "Google Play Billing is unavailable." })
@@ -153,8 +184,6 @@ class AndroidPlayBillingPurchaseGateway(
             return billingFailure("BILLING_PRODUCT_UNAVAILABLE", "This item is not available in Google Play yet.")
         }
 
-        val deferred = CompletableDeferred<AppResult<StorePurchaseResult>>()
-        pendingPurchase = PendingPurchase(tier = ONE_TIME_PURCHASE, productId = productId, deferred = deferred)
         val params =
             BillingFlowParams
                 .newBuilder()
@@ -166,19 +195,21 @@ class AndroidPlayBillingPurchaseGateway(
                             .build(),
                     ),
                 ).build()
-        val launchResult = withContext(Dispatchers.Main.immediate) { billingClient.launchBillingFlow(activity, params) }
-        if (launchResult.responseCode != BillingClient.BillingResponseCode.OK) {
-            pendingPurchase = null
-            return billingFailure("BILLING_LAUNCH_FAILED", launchResult.debugMessage.ifBlank { "Google Play checkout could not be opened." })
-        }
-        return deferred.await()
+        return launchCheckout(claim, activity, params)
     }
 
     override suspend fun restorePurchases(): AppResult<StorePurchaseResult> {
-        if (pendingPurchase != null) {
-            return billingFailure("BILLING_PURCHASE_IN_PROGRESS", "A purchase is already in progress.")
+        // Holds the same lock as checkout so a restore and a purchase never interleave. Never
+        // launched, so a Play callback arriving meanwhile takes the no-pending path.
+        val claim = purchaseLock.tryClaim(PendingPurchase(tier = RESTORE, productId = "")) ?: return purchaseInProgress()
+        try {
+            return restoreSubscriptions()
+        } finally {
+            purchaseLock.release(claim)
         }
+    }
 
+    private suspend fun restoreSubscriptions(): AppResult<StorePurchaseResult> {
         val connection = ensureConnected()
         if (connection.responseCode != BillingClient.BillingResponseCode.OK) {
             return billingFailure(
@@ -229,7 +260,8 @@ class AndroidPlayBillingPurchaseGateway(
     }
 
     override suspend fun syncUnfinishedPurchases(): Boolean {
-        if (pendingPurchase != null) return false
+        // Check-only, not a claim: a Buy tap during this quiet sync shouldn't be refused.
+        if (purchaseLock.isHeld) return false
         if (ensureConnected().responseCode != BillingClient.BillingResponseCode.OK) return false
         val subscriptions = (querySubscriptionPurchases() as? AppResult.Success)?.value.orEmpty()
         val oneTimeItems = (querySubscriptionPurchases(BillingClient.ProductType.INAPP) as? AppResult.Success)?.value.orEmpty()
@@ -248,22 +280,24 @@ class AndroidPlayBillingPurchaseGateway(
         billingResult: BillingResult,
         purchases: MutableList<Purchase>?,
     ) {
-        val pending = pendingPurchase
+        // Only a claim whose sheet is open owns this callback; a restore, or a checkout still
+        // connecting, doesn't.
+        val pending = purchaseLock.current?.takeIf { it.launched }
         if (pending == null) {
             // Play delivers purchases outside a checkout too (a pending payment that cleared, a
-            // purchase finished after the app was closed). Confirm them instead of dropping them.
+            // purchase finished after the app was closed, or one whose caller left before the sheet
+            // closed). Confirm them instead of dropping them.
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                purchases
-                    ?.filter { it.purchaseState == Purchase.PurchaseState.PURCHASED && !it.isAcknowledged }
-                    ?.forEach { purchase -> scope.launch { handlePurchase(purchase) } }
+                confirmOutsideCheckout(purchases.orEmpty())
             }
             return
         }
         when (billingResult.responseCode) {
             BillingClient.BillingResponseCode.OK -> {
-                val purchase =
-                    purchases
-                        ?.firstOrNull { purchase -> pending.productId in purchase.products }
+                val productId = pending.payload.productId
+                val (mine, others) = purchases.orEmpty().partition { purchase -> productId in purchase.products }
+                confirmOutsideCheckout(others)
+                val purchase = mine.firstOrNull()
                 if (purchase == null) {
                     pending.completeFailure("BILLING_PURCHASE_NOT_FOUND", "Purchase details were not returned.")
                     return
@@ -284,6 +318,12 @@ class AndroidPlayBillingPurchaseGateway(
                 )
             }
         }
+    }
+
+    private fun confirmOutsideCheckout(purchases: List<Purchase>) {
+        purchases
+            .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED && !it.isAcknowledged }
+            .forEach { purchase -> scope.launch { handlePurchase(purchase) } }
     }
 
     private suspend fun handlePurchase(purchase: Purchase): AppResult<StorePurchaseResult> {
@@ -503,16 +543,11 @@ class AndroidPlayBillingPurchaseGateway(
             }
         }
 
-    private fun PendingPurchase.complete(result: AppResult<StorePurchaseResult>) {
-        if (pendingPurchase === this) {
-            pendingPurchase = null
-        }
-        if (!deferred.isCompleted) {
-            deferred.complete(result)
-        }
+    private fun PurchaseClaim.complete(result: AppResult<StorePurchaseResult>) {
+        purchaseLock.complete(this, result)
     }
 
-    private fun PendingPurchase.completeFailure(
+    private fun PurchaseClaim.completeFailure(
         code: String,
         message: String,
     ) {
@@ -530,14 +565,11 @@ class AndroidPlayBillingPurchaseGateway(
             ),
         )
 
-    private data class PendingPurchase(
-        val tier: String,
-        val productId: String,
-        val deferred: CompletableDeferred<AppResult<StorePurchaseResult>>,
-    )
+    private fun purchaseInProgress(): AppResult.Failure = billingFailure("BILLING_PURCHASE_IN_PROGRESS", "A purchase is already in progress.")
 
     private companion object {
         private const val ONE_TIME_PURCHASE = "one_time"
+        private const val RESTORE = "restore"
         private val ONE_TIME_PRODUCT_IDS =
             setOf(
                 SubscriptionProductId.BOOST_SINGLE,
