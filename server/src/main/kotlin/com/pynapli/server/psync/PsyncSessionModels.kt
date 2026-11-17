@@ -27,6 +27,8 @@ data class PsyncSession(
     // home location. [locationLabel] is what both partners see ("Las Vegas, Nevada").
     val travelLocationId: UUID? = null,
     val locationLabel: String? = null,
+    // Set while the session is paused because this participant's connection dropped.
+    val autoPausedUserId: UUID? = null,
 )
 
 /**

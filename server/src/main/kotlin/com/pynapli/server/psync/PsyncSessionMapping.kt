@@ -18,6 +18,7 @@ internal fun PsyncSession.toDto(): PsyncSessionDto =
         expiresAt = expiresAt.toString(),
         participants = participants.map { it.toDto() },
         locationLabel = locationLabel,
+        autoPausedUserId = autoPausedUserId?.toString(),
     )
 
 internal fun PsyncSessionParticipant.toDto(): PsyncParticipantDto =

@@ -201,7 +201,14 @@ fun PsyncSessionScreen(
                     )
                 PsyncPhase.ACTIVE -> ActivePhase(state, stateHolder, scope, distanceUnit, onOpenProfile)
                 PsyncPhase.PAUSED ->
-                    StatusPhase("Paused", "Your places are saved. Resume when you're both back.") {
+                    StatusPhase(
+                        "Paused",
+                        if (state.session?.pausedForPartnerAway == true) {
+                            "${state.session?.partnerDisplayName ?: "Your partner"} lost connection. Your places are saved and you'll pick up as soon as they're back."
+                        } else {
+                            "Your places are saved. Resume when you're both back."
+                        },
+                    ) {
                         PrimaryButton("Resume", PsyncSessionTags.START_SESSION_BUTTON) { scope.launch { stateHolder.resume() } }
                         Spacer(Modifier.height(10.dp))
                         EndSessionControl(onEnd = { scope.launch { stateHolder.leave() } })

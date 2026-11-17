@@ -145,6 +145,7 @@ class ServerDependencies(
     val tonightSessionExpiryWorker: TonightSessionExpiryWorker,
     val psyncSessionService: PsyncSessionService,
     val psyncSessionExpiryWorker: PsyncSessionExpiryWorker? = null,
+    val psyncPresenceWatcher: com.pynapli.server.psync.PsyncPresenceWatcher? = null,
     val ageVerificationService: AgeVerificationService,
     val accountLifecycleService: AccountLifecycleService,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
@@ -162,6 +163,7 @@ class ServerDependencies(
         runCatching { accountDataExportWorker?.close() }
         runCatching { tonightSessionExpiryWorker.close() }
         runCatching { psyncSessionExpiryWorker?.close() }
+        runCatching { psyncPresenceWatcher?.close() }
         runCatching { notificationDispatchWorker?.close() }
         runCatching { profileActivityScope.cancel() }
         probes.asReversed().forEach { probe ->
@@ -447,6 +449,14 @@ class ServerDependencies(
                 tonightSessionExpiryWorker = tonight.tonightSessionExpiryWorker,
                 psyncSessionService = swipe.psyncSessionService,
                 psyncSessionExpiryWorker = swipe.psyncSessionExpiryWorker,
+                psyncPresenceWatcher =
+                    com.pynapli.server.psync.PsyncPresenceWatcher(
+                        dataSource = database.dataSource,
+                        liveness =
+                            com.pynapli.server.psync
+                                .RedisPsyncLiveness(redisCache),
+                        broadcaster = core.psyncBroadcaster,
+                    ),
                 ageVerificationService = ageVerificationService,
                 accountLifecycleService = core.accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,

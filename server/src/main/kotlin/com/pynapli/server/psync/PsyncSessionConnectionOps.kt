@@ -107,7 +107,8 @@ internal fun Connection.setSessionStatus(
     endedAt: Instant? = null,
 ) {
     prepareStatement(
-        "UPDATE psync_sessions SET status = ?, ended_at = COALESCE(?, ended_at) WHERE id = ?",
+        // Any explicit status change (manual pause/resume, start, finish) ends an auto-pause.
+        "UPDATE psync_sessions SET status = ?, ended_at = COALESCE(?, ended_at), auto_paused_user_id = NULL WHERE id = ?",
     ).use { statement ->
         statement.setString(1, status)
         statement.setTimestamp(2, endedAt?.let(Timestamp::from))
@@ -126,7 +127,7 @@ internal fun Connection.loadSession(
             """
             SELECT id, partner_link_id, initiator_user_id, status, filters::text AS filters,
                    deck_size, deck_session_id, created_at, started_at, expires_at, ended_at,
-                   travel_location_id, location_label
+                   travel_location_id, location_label, auto_paused_user_id
             FROM psync_sessions
             WHERE id = ?
             """.trimIndent(),

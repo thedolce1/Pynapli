@@ -83,9 +83,12 @@ internal fun <D, Dto> Route.recipientStream(
     toDto: (D) -> Dto,
     dtoSerializer: KSerializer<Dto>,
     logger: Logger,
+    // Runs for as long as the socket is open (e.g. a presence heartbeat); cancelled on close.
+    onOpen: (suspend (UUID) -> Unit)? = null,
 ) {
     webSocket(path) {
         val viewerId = authenticateStream(authService) ?: return@webSocket
+        val openJob = onOpen?.let { hook -> launch { hook(viewerId) } }
         val emitterJob =
             launch {
                 deltas
@@ -107,6 +110,7 @@ internal fun <D, Dto> Route.recipientStream(
             // Client disconnected; fall through.
         } finally {
             emitterJob.cancel()
+            openJob?.cancel()
         }
     }
 }

@@ -1069,6 +1069,53 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "a partner who drops off pauses the session, and it resumes when they're back" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+
+                val liveness = InMemoryPsyncLiveness()
+                val now = PsyncPresenceWatcher(dataSource, liveness, broadcaster = null)
+                // Both had the Psync screen open during this session.
+                now.onSeen(initiator)
+                now.onSeen(partner)
+                assertEquals(0, now.sweep(), "nobody has been gone long enough")
+
+                // Five minutes later the initiator is still there and the partner is not.
+                val later = PsyncPresenceWatcher(dataSource, liveness, broadcaster = null, clock = Clock.offset(Clock.systemUTC(), Duration.ofMinutes(5)))
+                liveness.markSeen(initiator, Instant.now().plus(Duration.ofMinutes(5)))
+                assertEquals(1, later.sweep())
+                assertEquals("paused", svc.get(sessionId, initiator).status)
+                assertEquals(partner.toString(), svc.get(sessionId, initiator).autoPausedUserId)
+                assertEquals(0, later.sweep(), "already paused")
+
+                // The partner opens Psync again: back on, with nobody tapping Resume.
+                later.onSeen(partner)
+                assertEquals("active", svc.get(sessionId, initiator).status)
+                assertNull(svc.get(sessionId, initiator).autoPausedUserId)
+            }
+        }
+
+        "someone who never opened Psync this session is not paused for it" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                val liveness = InMemoryPsyncLiveness()
+                // Seen yesterday, before this session started.
+                liveness.markSeen(partner, Instant.now().minus(Duration.ofDays(1)))
+
+                val later = PsyncPresenceWatcher(dataSource, liveness, broadcaster = null, clock = Clock.offset(Clock.systemUTC(), Duration.ofMinutes(5)))
+                assertEquals(0, later.sweep())
+                assertEquals("active", svc.get(sessionId, initiator).status)
+            }
+        }
+
         "a like that resolves into a match is not also announced as a pending like" {
             runBlocking {
                 val (initiator, partner) = seedLinkedPair()
