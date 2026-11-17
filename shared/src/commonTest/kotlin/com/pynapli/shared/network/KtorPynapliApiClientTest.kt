@@ -368,7 +368,6 @@ class KtorPynapliApiClientTest {
                               "updatedAt": "2026-04-24T18:00:00Z",
                               "accuracyMeters": 25,
                               "source": "gps",
-                              "geohash": "45.50:-73.57",
                               "city": null,
                               "region": null,
                               "country": null

@@ -39,8 +39,15 @@ class LocationServiceTest {
 
             assertEquals(30, response.accuracyMeters)
             assertEquals("gps", response.source)
-            assertEquals("45.50:-73.57", response.geohash)
             assertEquals("Montreal", response.city)
+            // L-40: the write acknowledgement echoes no location of any kind (no bucket, no
+            // coordinates): nothing in the serialized response can be read back as a position.
+            val json =
+                com.pynapli.shared.network.PynapliJson
+                    .encodeToString(com.pynapli.shared.network.dto.CurrentLocationDto.serializer(), response)
+            listOf("geohash", "45.5", "-73.5", "latitude", "longitude").forEach {
+                assertTrue(it !in json, "location echoed back ($it): $json")
+            }
             assertNotNull(response.updatedAt)
         }
     }
@@ -171,36 +178,51 @@ class LocationServiceTest {
             assertEquals(null, signals.lastSignal)
         }
 
+    // L-13: the client-declared source is not trusted. Declaring `manual_city` or `travel` on either
+    // side used to skip the impossible-travel signal; now every combination is evaluated.
     @Test
-    fun travelModeSourcesAreLegitimateJumpsAndNeverFlag() =
+    fun aDeclaredManualOrTravelSourceNoLongerSkipsTheSpoofSignal() =
         runBlocking {
             val userId = UUID.randomUUID()
-            val farAway =
+            val montreal =
                 CurrentCoordinatesRecord(
                     latitude = 45.5017,
                     longitude = -73.5673,
-                    source = "travel",
+                    source = "gps",
                     updatedAt = now.minusSeconds(60),
                 )
-            val signals = RecordingLocationRiskSignals()
+            listOf("gps", "network", "travel", "manual_city").forEach { previousSource ->
+                listOf("gps", "network", "travel", "manual_city").forEach { newSource ->
+                    val signals = RecordingLocationRiskSignals()
+                    LocationService(InMemoryLocationRepository(stored = montreal.copy(source = previousSource)), signals, clock)
+                        .updateCurrentLocation(
+                            userId,
+                            UpdateCurrentLocationRequestDto(latitude = 51.5074, longitude = -0.1278, source = newSource),
+                        )
+                    assertNotNull(signals.lastSignal, "no signal for $previousSource -> $newSource")
+                }
+            }
+        }
 
-            // Previous fix was a travel/manual jump: not comparable.
-            LocationService(InMemoryLocationRepository(stored = farAway), signals, clock)
+    // Legitimate Travel mode still never flags: the exemption is the server's own record of an
+    // active travel session, whatever the client declares.
+    @Test
+    fun anActiveServerSideTravelSessionIsALegitimateJump() =
+        runBlocking {
+            val signals = RecordingLocationRiskSignals()
+            val travelling =
+                CurrentCoordinatesRecord(
+                    latitude = 45.5017,
+                    longitude = -73.5673,
+                    source = "gps",
+                    updatedAt = now.minusSeconds(60),
+                    travelSessionActive = true,
+                )
+            LocationService(InMemoryLocationRepository(stored = travelling), signals, clock)
                 .updateCurrentLocation(
-                    userId,
+                    UUID.randomUUID(),
                     UpdateCurrentLocationRequestDto(latitude = 51.5074, longitude = -0.1278, source = "gps"),
                 )
-            assertEquals(null, signals.lastSignal)
-
-            // New fix is itself a travel/manual jump: not a device fix.
-            LocationService(
-                InMemoryLocationRepository(stored = farAway.copy(source = "gps")),
-                signals,
-                clock,
-            ).updateCurrentLocation(
-                userId,
-                UpdateCurrentLocationRequestDto(latitude = 51.5074, longitude = -0.1278, source = "manual_city"),
-            )
             assertEquals(null, signals.lastSignal)
         }
 
