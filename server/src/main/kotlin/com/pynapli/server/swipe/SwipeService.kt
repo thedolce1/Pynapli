@@ -127,7 +127,10 @@ class SwipeService(
         return SwipeActionResponseDto(recorded = true, match = match?.toDto(viewerUserId))
     }
 
-    suspend fun listMatches(viewerUserId: UUID): MatchesListResponseDto = matchList.listMatches(viewerUserId)
+    suspend fun listMatches(
+        viewerUserId: UUID,
+        cursorText: String? = null,
+    ): MatchesListResponseDto = matchList.listMatches(viewerUserId, cursorText)
 }
 
 class SwipeException(

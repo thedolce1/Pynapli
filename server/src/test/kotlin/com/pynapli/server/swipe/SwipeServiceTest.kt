@@ -2003,6 +2003,7 @@ private class InMemorySwipeRepository(
     override suspend fun listMatches(
         viewerUserId: UUID,
         limit: Int,
+        after: MatchPageCursor?,
     ): List<MatchSummaryRecord> =
         matches.filter { viewerUserId == it.userA || viewerUserId == it.userB }.map { match ->
             MatchSummaryRecord(
