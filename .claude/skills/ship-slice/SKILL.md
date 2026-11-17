@@ -1,6 +1,6 @@
 ---
 name: ship-slice
-description: How a Pynapli slice ships — gates, emulator QA, doc/audit updates, sub-agent team model. Use when implementing, verifying, or merging a slice.
+description: How a Pynapli slice ships — gates, emulator QA, doc/audit updates. Use when implementing, verifying, or merging a slice.
 ---
 
 # Shipping a slice
@@ -14,16 +14,4 @@ One feature branch + PR per slice, CI-gated. Each slice:
 5. Push → CI → merge.
 6. Edit the affected row(s) in `docs/IMPLEMENTATION_AUDIT.md` in place (status + open gaps, bump its date) and tick the relevant `*_SPEC.md` checklists. Don't append narrative there: the how goes in the commit/PR.
 
-Pause for review only at **phase boundaries**.
-
-## Agent "engineering team" model
-
-Large slices may be delegated to specialized sub-agents (the founder asked for a full-team workflow), each given the relevant spec + handoff context. The orchestrator reviews sub-agent work before anything merges; sub-agents never bypass the gates above.
-
-- **Architect/Plan** (`Plan`) — implementation strategy and critical files before coding.
-- **Backend** — Ktor domain services, JDBC/PostGIS, Flyway migrations, perf; server-authoritative rules only.
-- **Frontend/Design** (`frontend-design` skill) — restyle Compose surfaces to the handoff language with token-only primitives.
-- **Explore** — fan-out codebase searches for call sites / conventions.
-- **Reviewer** (`/code-review`, `/security-review`) — correctness + security pass on each diff before merge.
-
-All security/privacy/billing/consent/moderation rules remain server-validated regardless of which agent wrote the code (`docs/PRODUCTION_READINESS_AND_QUALITY_SPEC.md`).
+Pause for review only at **phase boundaries**. Sub-agents, if used, never bypass the gates above, and the orchestrator reviews their work before anything merges. Security, privacy, billing, consent and moderation rules stay server-validated whoever wrote the code.
