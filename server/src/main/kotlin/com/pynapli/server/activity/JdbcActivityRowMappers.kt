@@ -22,6 +22,9 @@ internal object JdbcActivityRowMappers {
             conversationId = rs.getString("conversation_id"),
             source = rs.getString("source"),
             psyncSessionId = rs.getString("psync_session_id"),
+            pairUserId = rs.getObject("pair_user_id", UUID::class.java),
+            pairDisplayName = rs.getString("pair_display_name"),
+            pairSessionId = rs.getString("pair_session_id"),
         )
     }
 

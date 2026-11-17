@@ -98,4 +98,8 @@ data class ActivityEventDto(
     val source: String? = null,
     // psync_invite / psync_started / psync_recap / psync_expired: the session it is about.
     val psyncSessionId: String? = null,
+    // A like made together in Psync: the actor's linked partner also liked you ("Maya & Alex").
+    // Liking back answers both; each partner's match is still its own conversation.
+    val pairUserId: String? = null,
+    val pairDisplayName: String? = null,
 )

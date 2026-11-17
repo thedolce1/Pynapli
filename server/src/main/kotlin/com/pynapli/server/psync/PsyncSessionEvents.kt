@@ -77,15 +77,27 @@ internal class PsyncSessionEvents(
     }
 
     /**
-     * Surface delivered Psync likes in each target's Likes You, exactly as a like from the ordinary
-     * Swipe deck would appear. The target sees an individual's like; nothing says it came from a
-     * Psync session, and passes are never delivered.
+     * Surface delivered Psync likes in each target's Likes You. A like only one partner made reads
+     * as that person's ordinary like. When both partners liked the same person, each like is tagged
+     * with the other partner so the target sees one "liked you together" row (PSYNC_SPEC pair
+     * presentation); both remain real likes the target can answer. Passes are never delivered.
      */
-    suspend fun emitDeliveredLikes(likes: List<PsyncDeliveredLike>) {
+    suspend fun emitDeliveredLikes(
+        likes: List<PsyncDeliveredLike>,
+        sessionId: UUID? = null,
+    ) {
         val activity = activityService ?: return
+        val likersByTarget = likes.groupBy { it.targetUserId }.mapValues { (_, byTarget) -> byTarget.map { it.actorUserId }.distinct() }
         for (like in likes) {
             val eventType = if (like.action == "pineapple_like") "pineapple_like" else "swipe_like"
-            activity.recordSwipeInterest(like.actorUserId, like.targetUserId, eventType)
+            val partner = likersByTarget[like.targetUserId].orEmpty().singleOrNull { it != like.actorUserId }
+            activity.recordSwipeInterest(
+                actorUserId = like.actorUserId,
+                targetUserId = like.targetUserId,
+                eventType = eventType,
+                pairUserId = partner?.takeIf { sessionId != null },
+                pairSessionId = sessionId.takeIf { partner != null },
+            )
         }
     }
 

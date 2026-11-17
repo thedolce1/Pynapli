@@ -7,8 +7,8 @@ internal fun ActivityEventDto.activityText(): String =
         "profile_view" -> if (count > 1) "viewed you ${count}x" else "viewed you"
         "flirt" -> if (count > 1) "sent Sparks ${count}x" else "sent a Spark"
         "album_request" -> if (count > 1) "requested album access ${count}x" else "requested album access"
-        "swipe_like" -> "liked you"
-        "pineapple_like" -> "sent a Pineapple"
+        "swipe_like" -> if (pairDisplayName != null) "liked you together" else "liked you"
+        "pineapple_like" -> if (pairDisplayName != null) "sent you Pineapples together" else "sent a Pineapple"
         "intro_note" -> "sent an Intro Note"
         "match" -> "matched with you"
         "album_granted" -> "shared their private album with you"
@@ -19,6 +19,9 @@ internal fun ActivityEventDto.activityText(): String =
         "psync_expired" -> "Psync session expired"
         else -> "interacted with you"
     }
+
+/** "Maya & Alex" for a like a linked couple made together in Psync; otherwise the actor's name. */
+internal fun ActivityEventDto.displayNames(): String = pairDisplayName?.let { "$actorDisplayName & $it" } ?: actorDisplayName
 
 internal fun ActivityEventDto.isUnreadBadgeActivity(): Boolean =
     !seen &&

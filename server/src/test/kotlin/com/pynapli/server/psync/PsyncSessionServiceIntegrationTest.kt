@@ -1041,6 +1041,34 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "when both partners like the same person, each delivered like names the other partner" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+
+                val svc = deckServiceWithActivity(listOf(target))
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                svc.actOnSingle(sessionId, partner, "like")
+
+                val pairs =
+                    dataSource.connection.use { connection ->
+                        connection
+                            .prepareStatement(
+                                "SELECT actor_user_id, metadata->>'pairUserId', metadata->>'pairSessionId' FROM activity_events WHERE recipient_user_id = ? AND event_type = 'swipe_like'",
+                            ).use { statement ->
+                                statement.setObject(1, target)
+                                statement.executeQuery().use { rs ->
+                                    buildMap { while (rs.next()) put(rs.getString(1), rs.getString(2) to rs.getString(3)) }
+                                }
+                            }
+                    }
+                assertEquals(partner.toString() to sessionId.toString(), pairs[initiator.toString()])
+                assertEquals(initiator.toString() to sessionId.toString(), pairs[partner.toString()])
+            }
+        }
+
         "a like that resolves into a match is not also announced as a pending like" {
             runBlocking {
                 val (initiator, partner) = seedLinkedPair()

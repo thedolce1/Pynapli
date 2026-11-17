@@ -1734,6 +1734,7 @@ private class RecordingActivityRepository : ActivityRepository {
         actorUserId: UUID,
         targetUserId: UUID,
         eventType: String,
+        metadataJson: String,
     ): Boolean = true
 
     override suspend fun recordMatch(

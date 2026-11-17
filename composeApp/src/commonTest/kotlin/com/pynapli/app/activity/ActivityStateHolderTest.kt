@@ -30,6 +30,22 @@ class ActivityStateHolderTest {
         }
 
     @Test
+    fun aCoupleWhoLikedYouTogetherIsOneCardAndLikingBackAnswersBoth() =
+        runTest {
+            val like = activityEvent(eventId = "pair-1", type = "swipe_like").copy(pairUserId = "alex-1", pairDisplayName = "Alex")
+            val repository = FakeActivityFeedRepository(result = AppResult.Success(ActivityFeedUi(items = listOf(like))))
+            val stateHolder = ActivityStateHolder(repository)
+            stateHolder.load()
+
+            assertEquals("Maya & Alex", like.displayNames())
+            assertEquals("liked you together", like.activityText())
+            stateHolder.likeBack(like)
+
+            assertEquals(listOf("actor-1", "alex-1"), repository.likedBack)
+            assertEquals("It's a match with Maya & Alex. Say hi in Messages.", stateHolder.state.value.actionFeedback)
+        }
+
+    @Test
     fun silentRefreshKeepsExistingFeedWhenRefreshFails() =
         runTest {
             val event = activityEvent(eventId = "event-1")

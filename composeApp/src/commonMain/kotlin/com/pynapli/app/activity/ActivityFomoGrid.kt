@@ -218,7 +218,7 @@ private fun ActivityFomoTile(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = item.actorDisplayName,
+                text = item.displayNames(),
                 color = PynapliColors.OnPhotoPrimary,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
