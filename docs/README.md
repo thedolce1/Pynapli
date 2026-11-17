@@ -45,9 +45,7 @@ The app is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyl
 
 | Doc | What it covers |
 | --- | --- |
-| [DESIGN_AND_NAVIGATION_SPEC.md](DESIGN_AND_NAVIGATION_SPEC.md) | Navigation model and screen structure. |
-| [FRONTEND_DESIGN_DIRECTION_SPEC.md](FRONTEND_DESIGN_DIRECTION_SPEC.md) | Visual design direction and principles. |
-| [DESIGN_TOKENS.md](DESIGN_TOKENS.md) | Color, type, and spacing tokens. |
+| [DESIGN_SPEC.md](DESIGN_SPEC.md) | Visual direction, navigation, token and sheet rules. |
 | [LANGUAGE_AND_TAXONOMY_SPEC.md](LANGUAGE_AND_TAXONOMY_SPEC.md) | Product vocabulary and taxonomy. |
 
 ## Trust, safety & moderation

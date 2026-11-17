@@ -16,4 +16,4 @@ Radii and colors **must** be tokens, not literals — enforced by `scripts/check
 
 Anything a pointer can activate carries `Modifier.handCursor(enabled = <its enabled>)` (design/PynapliPointer.kt); the same guard fails a clickable modifier or clickable Material control without it. Full-screen surfaces close on Esc with `Modifier.closeOnEscape` (design/PynapliEscape.kt). New chips or small icon buttons take `Modifier.wideChipHeight()` / `pynapliIconButtonSize(...)` (design/PynapliWideControls.kt) so they draw at 40dp on tablets and computers; phones keep the compact size.
 
-Everything else in `docs/FRONTEND_DESIGN_DIRECTION_SPEC.md` / `docs/DESIGN_AND_NAVIGATION_SPEC.md` still holds (dark-first, dense Grid, restrained, no decorative blobs). Update visual-regression goldens deliberately when restyling.
+Everything else in `docs/DESIGN_SPEC.md` still holds (dark-first, dense Grid, restrained, no decorative blobs). Update visual-regression goldens deliberately when restyling.
