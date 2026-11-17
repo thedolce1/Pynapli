@@ -103,6 +103,31 @@ internal fun Connection.findActiveBoostActivation(
         }
     }
 
+/**
+ * Marks this user's Boosts that have run out as 'expired'. Readers already ignore them (they filter
+ * on `ends_at`), but the one-active-Boost index (V92) counts rows by status, so a lapsed row must
+ * leave 'active' before the next activation is inserted. Call it under the activation lock.
+ */
+internal fun Connection.expireLapsedBoostActivations(
+    userId: UUID,
+    now: Instant,
+): Int =
+    prepareStatement(
+        """
+        UPDATE boost_activations
+        SET status = 'expired',
+            updated_at = ?
+        WHERE user_id = ?
+          AND status = 'active'
+          AND ends_at <= ?
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setTimestamp(1, Timestamp.from(now))
+        statement.setObject(2, userId)
+        statement.setTimestamp(3, Timestamp.from(now))
+        statement.executeUpdate()
+    }
+
 internal fun Connection.insertBoostActivation(
     userId: UUID,
     startsAt: Instant,

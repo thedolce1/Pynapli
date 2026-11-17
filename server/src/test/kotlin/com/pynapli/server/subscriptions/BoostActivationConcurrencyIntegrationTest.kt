@@ -9,6 +9,8 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 /** A double-tap on Boost must start one Boost and spend one, however close together the taps land. */
 class BoostActivationConcurrencyIntegrationTest :
@@ -37,7 +39,60 @@ class BoostActivationConcurrencyIntegrationTest :
                 assertEquals(0, wrong, "iterations out of $iterations that did not spend exactly one Boost")
             }
         }
+
+        "the database itself refuses a second active Boost for the same person" {
+            val user = UUID.randomUUID()
+            dataSource.insertUserWithBoosts(user, quantity = 0)
+            val now = Instant.now()
+            dataSource.insertActiveBoostRow(user, now, now.plusSeconds(1_800))
+
+            val refused = runCatching { dataSource.insertActiveBoostRow(user, now, now.plusSeconds(1_800)) }
+
+            assertTrue(refused.isFailure, "a second active Boost row should violate the one-active-Boost index")
+            assertEquals(1, dataSource.activeBoostCount(user))
+        }
+
+        "a Boost that ran out still lets the next one start, and spends for it" {
+            runBlocking {
+                val repository = JdbcSubscriptionRepository(dataSource)
+                val user = UUID.randomUUID()
+                dataSource.insertUserWithBoosts(user, quantity = 5)
+                val now = Instant.now()
+
+                val first = repository.activateBoost(user, now, Duration.ofMinutes(30))!!
+                // Nothing has swept the first one: it is past its end but still says 'active'.
+                val second = repository.activateBoost(user, now.plus(Duration.ofMinutes(31)), Duration.ofMinutes(30))!!
+
+                assertTrue(first.consumedInventory)
+                assertTrue(second.consumedInventory)
+                assertNotEquals(first.activation.activationId, second.activation.activationId)
+                assertEquals(3, dataSource.boostsLeft(user))
+                assertEquals(1, dataSource.activeBoostCount(user))
+            }
+        }
     })
+
+private fun DataSource.insertActiveBoostRow(
+    userId: UUID,
+    startsAt: Instant,
+    endsAt: Instant,
+) {
+    connection.use { c ->
+        c
+            .prepareStatement(
+                """
+                INSERT INTO boost_activations (id, user_id, boost_type, source, starts_at, ends_at, status)
+                VALUES (?, ?, 'boost', 'dev', ?, ?, 'active')
+                """.trimIndent(),
+            ).use { s ->
+                s.setObject(1, UUID.randomUUID())
+                s.setObject(2, userId)
+                s.setTimestamp(3, java.sql.Timestamp.from(startsAt))
+                s.setTimestamp(4, java.sql.Timestamp.from(endsAt))
+                s.executeUpdate()
+            }
+    }
+}
 
 private fun DataSource.insertUserWithBoosts(
     userId: UUID,
