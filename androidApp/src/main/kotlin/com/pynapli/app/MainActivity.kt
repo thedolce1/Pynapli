@@ -210,6 +210,7 @@ class MainActivity : ComponentActivity() {
                 graph.deepLinkStateHolder.openActivity(
                     tab = PynapliNotificationDeepLinks.activityTabFromIntent(intent),
                     eventId = PynapliNotificationDeepLinks.activityEventIdFromIntent(intent),
+                    openActorUserId = PynapliNotificationDeepLinks.actorProfileToOpen(intent),
                 )
             }
 

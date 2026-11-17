@@ -138,6 +138,8 @@ class ProfileHubStateHolder(
 
     suspend fun appealRestriction(reason: String): Boolean = safety.appealRestriction(reason)
 
+    suspend fun withdrawAppeal(appealId: String) = safety.withdrawAppeal(appealId)
+
     suspend fun unblockUser(userId: String) = safety.unblockUser(userId)
 
     suspend fun unhideProfile(userId: String) = safety.unhideProfile(userId)

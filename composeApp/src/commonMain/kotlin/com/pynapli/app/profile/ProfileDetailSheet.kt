@@ -158,7 +158,7 @@ fun ProfileDetailSheet(
                 isOwnProfile = state.isOwnProfile,
                 onInviteProfileLink =
                     profileLinkAction
-                        ?.takeIf { it.offeredInMenu && it.enabled && !it.isSubmitting && actionMode == ProfileDetailActionMode.Grid }
+                        ?.takeIf { it.offeredInMenu && it.enabled && !it.isSubmitting }
                         ?.let { onInviteProfileLink },
             )
 

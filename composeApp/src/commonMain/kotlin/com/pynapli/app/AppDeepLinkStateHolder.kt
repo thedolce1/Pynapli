@@ -12,6 +12,9 @@ data class AppDeepLinkCommand(
     val activityTab: ActivityTabUi? = null,
     val activityEventId: String? = null,
     val conversationId: String? = null,
+    // Open the focused event's person straight away (e.g. "X shared their private album": the
+    // push should land on the album, not on a list with one more tap to go).
+    val openActorUserId: String? = null,
 )
 
 class AppDeepLinkStateHolder {
@@ -22,6 +25,7 @@ class AppDeepLinkStateHolder {
     fun openActivity(
         tab: ActivityTabUi? = null,
         eventId: String? = null,
+        openActorUserId: String? = null,
     ) {
         _state.value =
             AppDeepLinkCommand(
@@ -29,6 +33,7 @@ class AppDeepLinkStateHolder {
                 target = TARGET_ACTIVITY,
                 activityTab = tab,
                 activityEventId = eventId,
+                openActorUserId = openActorUserId,
             )
     }
 

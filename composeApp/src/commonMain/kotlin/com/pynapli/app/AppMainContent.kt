@@ -201,6 +201,7 @@ internal fun ColumnScope.PynapliMainContent(
                         onOpenStore = onOpenStore,
                         onOpenAgeVerification = onOpenAgeVerification,
                         onOpenPsync = onOpenPsync,
+                        profileLinksStateHolder = profileLinksStateHolder,
                     )
                 PynapliTab.Store ->
                     StoreScreen(
@@ -597,6 +598,7 @@ private fun ColumnScope.SwipeTabContent(
     onOpenStore: () -> Unit,
     onOpenAgeVerification: () -> Unit,
     onOpenPsync: (() -> Unit)?,
+    profileLinksStateHolder: ProfileLinksStateHolder? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -616,5 +618,6 @@ private fun ColumnScope.SwipeTabContent(
         onOpenPsync = onOpenPsync,
         savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
         travelLocationStateHolder = travelLocationStateHolder,
+        profileLinksStateHolder = profileLinksStateHolder,
     )
 }

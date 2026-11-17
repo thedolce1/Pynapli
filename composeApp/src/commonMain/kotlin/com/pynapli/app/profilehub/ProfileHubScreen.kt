@@ -184,6 +184,7 @@ fun ProfileHubScreen(
             onUnblockUser = { userId -> scope.launch { stateHolder.unblockUser(userId) } },
             onUnhideProfile = { userId -> scope.launch { stateHolder.unhideProfile(userId) } },
             onAppealRestriction = { reason -> scope.launch { stateHolder.appealRestriction(reason) } },
+            onWithdrawAppeal = { appealId -> scope.launch { stateHolder.withdrawAppeal(appealId) } },
             onContactSupport = { contact -> runCatching { uriHandler.openUri(contact.toMailtoUri()) } },
             onClearMessage = stateHolder::clearMessage,
             modifier = modifier,

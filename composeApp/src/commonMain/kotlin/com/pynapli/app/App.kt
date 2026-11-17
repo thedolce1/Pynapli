@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import com.pynapli.app.activity.toActivityProfileCardUi
 import com.pynapli.app.auth.AuthScreen
 import com.pynapli.app.design.PynapliTheme
 import com.pynapli.app.design.PynapliWindowSizeClass
@@ -93,6 +94,9 @@ fun PynapliApp(
             },
             onOpenTonight = { tonightVisible = true },
             onOpenPsync = { psyncVisible = true },
+            onOpenActivityProfile = { event ->
+                scope.launch { graph.profileDetailStateHolder.open(event.toActivityProfileCardUi()) }
+            },
         )
 
         // Report the canonical route for the current navigation state. Composed before

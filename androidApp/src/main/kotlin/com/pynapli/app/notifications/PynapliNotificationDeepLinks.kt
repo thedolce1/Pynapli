@@ -12,6 +12,7 @@ object PynapliNotificationDeepLinks {
     const val EXTRA_ACTIVITY_TAB = "pynapli.deep_link.activity_tab"
     const val EXTRA_ACTIVITY_EVENT_ID = "pynapli.deep_link.activity_event_id"
     const val EXTRA_CONVERSATION_ID = "pynapli.deep_link.conversation_id"
+    const val EXTRA_OPEN_ACTOR_PROFILE = "pynapli.deep_link.open_actor_profile"
 
     fun intentForNotification(
         context: Context,
@@ -33,8 +34,12 @@ object PynapliNotificationDeepLinks {
             activityTab?.let { putExtra(EXTRA_ACTIVITY_TAB, it) }
             activityEventId?.let { putExtra(EXTRA_ACTIVITY_EVENT_ID, it) }
             conversationId?.let { putExtra(EXTRA_CONVERSATION_ID, it) }
+            // "X shared their private album" opens their profile with the album ready to view.
+            if (kind == "album_granted") (data["ownerUserId"] ?: payload["ownerUserId"])?.let { putExtra(EXTRA_OPEN_ACTOR_PROFILE, it) }
         }
     }
+
+    fun actorProfileToOpen(intent: Intent): String? = intent.getStringExtra(EXTRA_OPEN_ACTOR_PROFILE)
 
     fun targetFromIntent(intent: Intent): String? = intent.getStringExtra(EXTRA_TARGET)
 

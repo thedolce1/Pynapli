@@ -163,6 +163,21 @@ internal class ProfileHubSafetyActions(
         }
     }
 
+    suspend fun withdrawAppeal(appealId: String) {
+        when (val result = repository.withdrawAppeal(appealId)) {
+            is AppResult.Success ->
+                state.update { current ->
+                    current.copy(
+                        appeals = current.appeals.map { if (it.appealId == appealId) result.value else it },
+                        appealMessage = "Appeal withdrawn.",
+                        appealMessageIsError = false,
+                    )
+                }
+            is AppResult.Failure ->
+                state.update { it.copy(appealMessage = result.error.message, appealMessageIsError = true) }
+        }
+    }
+
     /** Appeals a restriction on the account (limited Sparks, messages, Tonight...). Returns true when filed. */
     suspend fun appealRestriction(reason: String): Boolean {
         if (state.value.isSubmittingAppeal) return false

@@ -46,4 +46,6 @@ interface SafetyApi {
     suspend fun listAppeals(): AppResult<AppealListDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
 
     suspend fun submitAppeal(request: CreateAppealRequestDto): AppResult<AppealDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
+    suspend fun withdrawAppeal(appealId: String): AppResult<AppealDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
 }

@@ -72,4 +72,6 @@ internal class KtorSafetyApi(
     override suspend fun listAppeals(): AppResult<AppealListDto> = support.authGet("/v1/appeals")
 
     override suspend fun submitAppeal(request: CreateAppealRequestDto): AppResult<AppealDto> = support.authSend(HttpMethod.Post, "/v1/appeals", request)
+
+    override suspend fun withdrawAppeal(appealId: String): AppResult<AppealDto> = support.authPost("/v1/appeals/$appealId/withdraw")
 }

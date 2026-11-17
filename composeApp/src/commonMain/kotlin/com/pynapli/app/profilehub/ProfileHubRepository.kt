@@ -45,6 +45,8 @@ interface ProfileHubRepository {
 
     suspend fun listAppeals(): AppResult<com.pynapli.shared.network.dto.AppealListDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
 
+    suspend fun withdrawAppeal(appealId: String): AppResult<com.pynapli.shared.network.dto.AppealDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
     suspend fun submitAppeal(request: com.pynapli.shared.network.dto.CreateAppealRequestDto): AppResult<com.pynapli.shared.network.dto.AppealDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
 
     suspend fun getSupportContact(): AppResult<SupportContactDto>
