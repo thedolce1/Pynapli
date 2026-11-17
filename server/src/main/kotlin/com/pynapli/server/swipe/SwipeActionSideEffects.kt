@@ -56,8 +56,8 @@ internal class SwipeActionSideEffects(
                     idempotencyKey = "match:${match.matchId}:$targetUserId",
                     payload =
                         mapOf(
-                            "target" to "activity",
-                            "activityTab" to "matches",
+                            // Matches live in the Messages new-matches rail, not an Activity tab.
+                            "target" to "messages",
                             "activityEventType" to "match",
                             "matchId" to match.matchId.toString(),
                             "matchedUserId" to viewerUserId.toString(),

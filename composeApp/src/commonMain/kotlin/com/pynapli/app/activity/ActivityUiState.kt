@@ -60,19 +60,18 @@ enum class ActivityTabUi(
     val apiValue: String,
 ) {
     // Mobile Activity surface: Flirts (unified inbound interest — taps + swipe-likes + pineapples +
-    // intro notes — and the premium reveal money surface), Views, Matches (all swipe matches), and
-    // Requests (album-access + partner/psync/tonight invites).
+    // intro notes — and the premium reveal money surface), Views, and Requests (album-access +
+    // partner/psync/tonight invites). Matches live in the Messages new-matches rail.
     Flirts("Flirts", "flirts"),
     Views("Views", "views"),
-    Matches("Matches", "matches"),
     Requests("Requests", "requests"),
 }
 
 /**
- * Flirts, Views, and Matches render as a 2-up profile grid (FOMO teaser). Requests keeps action
+ * Flirts and Views render as a 2-up profile grid (FOMO teaser). Requests keeps action
  * rows (album review / invite CTAs), so it stays the list layout.
  */
-internal fun ActivityTabUi.isFomoGridTab(): Boolean = this == ActivityTabUi.Flirts || this == ActivityTabUi.Views || this == ActivityTabUi.Matches
+internal fun ActivityTabUi.isFomoGridTab(): Boolean = this == ActivityTabUi.Flirts || this == ActivityTabUi.Views
 
 @Immutable
 data class ActivityFeedUi(

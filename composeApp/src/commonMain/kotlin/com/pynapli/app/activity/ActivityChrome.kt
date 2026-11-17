@@ -225,6 +225,5 @@ internal fun ActivityTabUi.emptyLabel(): String =
     when (this) {
         ActivityTabUi.Flirts -> "No flirts yet."
         ActivityTabUi.Views -> "No views yet."
-        ActivityTabUi.Matches -> "No matches yet."
         ActivityTabUi.Requests -> "No requests yet."
     }

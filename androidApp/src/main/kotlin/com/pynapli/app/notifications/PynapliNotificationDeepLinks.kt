@@ -20,7 +20,9 @@ object PynapliNotificationDeepLinks {
     ): Intent {
         val payload = data["payload"].orEmpty().toJsonMap()
         val kind = data["kind"] ?: payload["kind"]
-        val target = data["target"] ?: payload["target"] ?: targetForKind(kind)
+        // Matches open in Messages (new-matches rail). Pushes queued before the server switched match
+        // pushes to the messages target still say target=activity, activityTab=matches.
+        val target = if (kind == "match") AppDeepLinkStateHolder.TARGET_MESSAGES else data["target"] ?: payload["target"] ?: targetForKind(kind)
         val activityTab = data["activityTab"] ?: payload["activityTab"] ?: activityTabForKind(kind)
         val activityEventId = data["activityEventId"] ?: payload["activityEventId"]
         val conversationId =
@@ -47,7 +49,6 @@ object PynapliNotificationDeepLinks {
         when (intent.getStringExtra(EXTRA_ACTIVITY_TAB)) {
             ActivityTabUi.Views.apiValue -> ActivityTabUi.Views
             ActivityTabUi.Flirts.apiValue -> ActivityTabUi.Flirts
-            ActivityTabUi.Matches.apiValue -> ActivityTabUi.Matches
             ActivityTabUi.Requests.apiValue -> ActivityTabUi.Requests
             else -> null
         }

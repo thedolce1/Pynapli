@@ -23,17 +23,6 @@
         "minColorBucketCount": 10
       }
     },
-    "matchesTab": {
-      "requiredTexts": ["Matches", "Jules", "matched with you"],
-      "forbiddenTexts": ["No matches yet.", "Request failed", "Exception"],
-      "image": {
-        "minWidth": 320,
-        "minHeight": 600,
-        "minNonBlackRatio": 0.025,
-        "maxBrightRatio": 0.32,
-        "minColorBucketCount": 10
-      }
-    },
     "requestsTab": {
       "requiredTexts": ["Requests", "Rae", "requested album access", "Review"],
       "forbiddenTexts": ["No requests yet.", "Request failed", "Exception"],

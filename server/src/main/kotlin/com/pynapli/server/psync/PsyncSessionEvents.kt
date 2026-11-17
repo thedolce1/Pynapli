@@ -120,8 +120,8 @@ internal class PsyncSessionEvents(
                     idempotencyKey = "match:${match.matchId}:${match.targetUserId}",
                     payload =
                         mapOf(
-                            "target" to "activity",
-                            "activityTab" to "matches",
+                            // Matches live in the Messages new-matches rail, not an Activity tab.
+                            "target" to "messages",
                             "activityEventType" to "match",
                             "matchId" to match.matchId.toString(),
                             "matchedUserId" to match.partnerUserId.toString(),

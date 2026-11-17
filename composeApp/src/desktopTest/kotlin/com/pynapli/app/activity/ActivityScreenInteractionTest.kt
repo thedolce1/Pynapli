@@ -259,44 +259,6 @@ class ActivityScreenInteractionTest {
             onNodeWithTag(ActivityFomoTags.tile("view-1")).performClick()
             waitUntil(timeoutMillis = 5_000) { openedProfiles == listOf("view-1-actor") }
         }
-
-    @OptIn(ExperimentalTestApi::class)
-    @Test
-    fun matchesTabTileOpensConversation() =
-        runComposeUiTest {
-            val repository =
-                StaticActivityScreenRepository(
-                    responses =
-                        mutableMapOf(
-                            ActivityRequest(ActivityTabUi.Flirts, null) to ActivityFeedUi(items = emptyList()),
-                            ActivityRequest(ActivityTabUi.Matches, null) to
-                                ActivityFeedUi(
-                                    items = listOf(activityEvent("match-1", "match", "Taylor", matchId = "match-id-1")),
-                                ),
-                        ),
-                )
-            val stateHolder = ActivityStateHolder(repository)
-            val openedMatches = mutableListOf<String>()
-
-            setContent {
-                PynapliTheme(themeMode = "dark") {
-                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
-                        ActivityScreen(
-                            stateHolder = stateHolder,
-                            onOpenMatch = { openedMatches += it.eventId },
-                        )
-                    }
-                }
-            }
-
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Flirts, null)) }
-            onNodeWithText("Matches").performClick()
-            waitUntil(timeoutMillis = 5_000) { repository.loadCalls.contains(ActivityRequest(ActivityTabUi.Matches, null)) }
-
-            onNodeWithTag(ActivityFomoTags.GRID).assertExists()
-            onNodeWithTag(ActivityFomoTags.tile("match-1")).performClick()
-            waitUntil(timeoutMillis = 5_000) { openedMatches == listOf("match-1") }
-        }
 }
 
 private class StaticActivityScreenRepository(

@@ -232,7 +232,7 @@ Save-Screen "swipe-after-gesture"
 Write-Host "[swipe-gesture] OK"
 
 # --- Stage 4: Activity ---
-$activityXml = Invoke-Stage -Stage "activity" -NavText "Activity" -Expect @("Flirts", "Views", "Matches", "Requests")
+$activityXml = Invoke-Stage -Stage "activity" -NavText "Activity" -Expect @("Flirts", "Views", "Requests")
 
 # --- Stage 5: Messages (inbox renders; the seeded match thread is reachable) ---
 $messagesXml = Invoke-Stage -Stage "messages" -NavText "Messages" -Expect @("Messages", "New Matches")
