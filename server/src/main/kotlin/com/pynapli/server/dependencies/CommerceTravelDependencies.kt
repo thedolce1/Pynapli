@@ -1,6 +1,7 @@
 package com.pynapli.server.dependencies
 
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.db.PostgresJobLock
 import com.pynapli.server.grid.JdbcGridViewerTrustRepository
 import com.pynapli.server.location.ConfiguredTravelRegionPolicy
 import com.pynapli.server.location.JdbcTravelPlaceRepository
@@ -70,6 +71,7 @@ internal fun buildCommerceTravelDependencies(
                 service = subscriptionService,
                 intervalMillis = config.playStoreSubscriptionSyncIntervalMillis,
                 batchSize = config.playStoreSubscriptionSyncBatchSize,
+                jobLock = PostgresJobLock(dataSource),
             )
         } else {
             null

@@ -1,5 +1,7 @@
 package com.pynapli.server.tonight
 
+import com.pynapli.server.db.JobLock
+import com.pynapli.server.db.UnlockedJobs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +30,7 @@ import org.slf4j.LoggerFactory
 class TonightSessionExpiryWorker(
     private val service: TonightSessionService,
     private val intervalMillis: Long,
+    private val jobLock: JobLock = UnlockedJobs,
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(TonightSessionExpiryWorker::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -39,22 +42,25 @@ class TonightSessionExpiryWorker(
             scope.launch {
                 while (isActive) {
                     runCatching {
-                        val expired = service.expireStale()
-                        if (expired > 0) {
-                            logger.info("Playing Tonight expiry swept {} session(s) to 'expired'", expired)
-                        }
-                        val reminded = service.sendExpiryReminders()
-                        if (reminded > 0) {
-                            logger.info("Playing Tonight reminded {} session(s) nearing expiry", reminded)
-                        }
-                        val reconciled = service.reconcilePresence()
-                        if (reconciled.changed) {
-                            logger.info(
-                                "Playing Tonight presence reconcile: {} paused, {} resumed, {} ended",
-                                reconciled.paused,
-                                reconciled.resumed,
-                                reconciled.ended,
-                            )
+                        // One replica per tick; the others skip it (see JobLock).
+                        jobLock.runExclusive("tonight-session-expiry") {
+                            val expired = service.expireStale()
+                            if (expired > 0) {
+                                logger.info("Playing Tonight expiry swept {} session(s) to 'expired'", expired)
+                            }
+                            val reminded = service.sendExpiryReminders()
+                            if (reminded > 0) {
+                                logger.info("Playing Tonight reminded {} session(s) nearing expiry", reminded)
+                            }
+                            val reconciled = service.reconcilePresence()
+                            if (reconciled.changed) {
+                                logger.info(
+                                    "Playing Tonight presence reconcile: {} paused, {} resumed, {} ended",
+                                    reconciled.paused,
+                                    reconciled.resumed,
+                                    reconciled.ended,
+                                )
+                            }
                         }
                     }.onFailure { error ->
                         logger.warn("Playing Tonight expiry sweep failed", error)
