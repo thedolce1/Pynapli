@@ -1,5 +1,7 @@
 package com.pynapli.server.tonight
 
+import com.pynapli.server.grid.insertActiveTravelLocation
+import com.pynapli.server.grid.moveUser
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.JdbcBlockRepository
@@ -255,8 +257,8 @@ class TonightFeedServiceIntegrationTest :
                 val item = response.items.single()
                 assertNull(item.person.distanceLabel)
                 assertNull(item.person.distanceMeters)
-                // zone key is still present even when distance is hidden.
-                assertNotNull(item.person.zoneKey)
+                // L-11: the zone is location too, so it is withheld with the distance.
+                assertNull(item.person.zoneKey)
             }
         }
 
@@ -297,26 +299,62 @@ class TonightFeedServiceIntegrationTest :
             }
         }
 
-        "zoneKey is present and coarse" {
+        "zoneKey is a 0.02-degree zone: owners kilometres apart inside one zone are indistinguishable" {
+            runBlocking {
+                val viewer = UUID.randomUUID()
+                dataSource.seedDiscoverableUser(viewer, "Viewer", viewerLon, viewerLat)
+                // Opposite corners of the zone [2.34, 2.36) x [48.84, 48.86): ~2.4 km apart.
+                val owners =
+                    listOf(2.3405 to 48.8410, 2.3595 to 48.8590, 2.3500 to 48.8500).map { (lon, lat) ->
+                        UUID.randomUUID().also { owner ->
+                            dataSource.seedDiscoverableUser(owner, "Owner", lon, lat)
+                            dataSource.insertActiveSoloSession(owner, intent = "solo")
+                        }
+                    }
+
+                val zones = service().feed(viewer, radiusMeters = 50_000, intent = null, limit = 100).items.map { it.person.zoneKey }
+
+                assertEquals(owners.size, zones.size)
+                assertEquals(listOf("117_2442"), zones.distinct(), "zones must not separate owners inside one zone: $zones")
+            }
+        }
+
+        "a travelling owner is placed, zoned and measured by their travel point, never their home" {
             runBlocking {
                 val viewer = UUID.randomUUID()
                 val owner = UUID.randomUUID()
                 dataSource.seedDiscoverableUser(viewer, "Viewer", viewerLon, viewerLat)
-                dataSource.seedDiscoverableUser(owner, "Owner", viewerLon + 0.001, viewerLat)
+                // Home ~70 m from the viewer; travelling ~6 km north-west.
+                dataSource.seedDiscoverableUser(owner, "Traveller", viewerLon + 0.001, viewerLat)
+                dataSource.insertActiveTravelLocation(owner, "Elsewhere", latitude = 48.9050, longitude = 2.3050)
                 dataSource.insertActiveSoloSession(owner, intent = "solo")
 
-                val response = service().feed(viewer, radiusMeters = 50_000, intent = null, limit = 100)
+                val person = service().feed(viewer, radiusMeters = 50_000, intent = null, limit = 100).items.single().person
+                assertEquals("115_2445", person.zoneKey)
+                assertTrue(assertNotNull(person.distanceMeters) >= 5_000, "home distance leaked: ${person.distanceMeters}")
+                // Matched only where they travel: a 2 km radius around the viewer (their home) misses them.
+                assertTrue(service().feed(viewer, radiusMeters = 2_000, intent = null, limit = 100).items.isEmpty())
+            }
+        }
 
-                val zoneKey =
-                    response.items
-                        .single()
-                        .person.zoneKey
-                assertNotNull(zoneKey)
-                // "lonE3_latE3" — both coarse integers (~111m buckets).
-                val parts = zoneKey.split("_")
-                assertEquals(2, parts.size)
-                assertNotNull(parts[0].toIntOrNull())
-                assertNotNull(parts[1].toIntOrNull())
+        "an owner who hides distance has a list position that does not depend on where they are" {
+            runBlocking {
+                val viewer = UUID.randomUUID()
+                dataSource.seedDiscoverableUser(viewer, "Viewer", viewerLon, viewerLat)
+                val hidden = UUID.randomUUID()
+                dataSource.seedDiscoverableUser(hidden, "Hidden", viewerLon + 0.001, viewerLat, showDistance = false)
+                dataSource.insertActiveSoloSession(hidden, intent = "solo")
+                listOf(0.004, 0.02, 0.05, 0.09, 0.15).forEach { offset ->
+                    val owner = UUID.randomUUID()
+                    dataSource.seedDiscoverableUser(owner, "Shown", viewerLon + offset, viewerLat)
+                    dataSource.insertActiveSoloSession(owner, intent = "solo")
+                }
+
+                fun order() = runBlocking { service().feed(viewer, radiusMeters = 25_000, intent = null, limit = 100).items.map { it.person.userId } }
+                val near = order()
+                dataSource.moveUser(hidden, longitude = viewerLon + 0.12, latitude = viewerLat)
+                val far = order()
+                assertEquals(near, far, "a hidden owner moving ~9 km changed their place in the feed")
             }
         }
 

@@ -33,8 +33,8 @@ internal val TonightIntent.label: String
 /**
  * One Playing Tonight feed row, mapped from [com.pynapli.shared.network.dto.TonightFeedItemDto].
  * Anchored on an individual (never a couple card); the linked partner is a mini-avatar only.
- * Location is intentionally coarse: only [zoneKey] (a ~111 m bucket) is carried — never precise
- * coordinates. The map jitters dots deterministically within their zone from [sessionId].
+ * Location is intentionally coarse: only [zoneKey] (a ~2 km zone, null when the person hides
+ * their distance) is carried — never precise coordinates. The map jitters dots deterministically within their zone from [sessionId].
  */
 @Immutable
 data class TonightFeedItemUi(

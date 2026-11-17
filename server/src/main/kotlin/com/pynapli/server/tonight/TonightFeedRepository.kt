@@ -15,8 +15,9 @@ interface TonightFeedRepository {
      * Live sessions near [viewerUserId]: each row is one active, non-expired,
      * map-visible session whose OWNER passes the same discovery eligibility gates
      * as the Grid and is within [radiusMeters]. [intent] (when non-null) narrows to
-     * matching `tonight_sessions.intent`. Ordered by owner distance ASC then session
-     * id ASC; capped at [limit]. The caller must have already verified the viewer has
+     * matching `tonight_sessions.intent`. Ordered by a coarse km bucket (distance-independent
+     * when the owner hides distance), a stable pseudo-random tiebreak, then session id;
+     * capped at [limit]. The caller must have already verified the viewer has
      * a location (an empty result here can also mean "no eligible sessions").
      */
     suspend fun feedNear(
@@ -29,10 +30,10 @@ interface TonightFeedRepository {
 }
 
 /**
- * Server-internal feed row. Carries the OWNER identity + raw distance + coarse
- * lat/lon (E3) for the zone bucket, plus the linked partner (for `mode='together'`)
- * as raw ids the service resolves. Precise coordinates are NEVER exposed; only the
- * coarse E3 bucket leaves the service as a zone key.
+ * Server-internal feed row. Carries the OWNER identity, the cell-to-cell distance and the
+ * coarse zone indices (0.02-degree grid) of the owner's EFFECTIVE location, plus the linked
+ * partner (for `mode='together'`) as raw ids the service resolves. Precise coordinates are
+ * NEVER read; the zone leaves the service only when the owner shows distance.
  */
 data class TonightFeedRow(
     val sessionId: UUID,
@@ -46,8 +47,8 @@ data class TonightFeedRow(
     val ownerShowDistance: Boolean,
     val ownerDistanceMeters: Double,
     val ownerThumbnailMediaAssetId: UUID?,
-    val ownerLatE3: Int,
-    val ownerLonE3: Int,
+    val ownerZoneX: Int,
+    val ownerZoneY: Int,
     val partnerUserId: UUID?,
     val partnerDisplayName: String?,
     val partnerThumbnailMediaAssetId: UUID?,

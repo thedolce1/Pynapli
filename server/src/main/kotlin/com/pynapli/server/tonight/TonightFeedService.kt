@@ -1,5 +1,6 @@
 package com.pynapli.server.tonight
 
+import com.pynapli.server.distance.CoarseLocation
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
@@ -21,7 +22,8 @@ import java.util.UUID
  *  - drop a row whose OWNER is blocked or hidden by the viewer;
  *  - keep a row but null the partner mini when the PARTNER is blocked or hidden;
  *  - distance label/meters only when the owner opted into showing distance;
- *  - zone-only location (coarse E3 bucket) — never precise coordinates;
+ *  - zone-only location (a 0.02-degree zone of the owner's effective location, omitted when
+ *    the owner hides distance) — never precise coordinates;
  *  - online resolved from presence; thumbnails resolved to signed/public URLs.
  */
 class TonightFeedService(
@@ -43,7 +45,8 @@ class TonightFeedService(
             throw TonightSessionException("INVALID_TONIGHT_INTENT")
         }
 
-        val boundedRadius = radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
+        // L-09: snapped to the same fixed radius steps as the Grid.
+        val boundedRadius = CoarseLocation.snapRadiusMeters(radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS))
         val boundedLimit = limit.coerceIn(MIN_LIMIT, MAX_LIMIT)
 
         val rows =
@@ -97,7 +100,8 @@ class TonightFeedService(
                                 if (row.ownerShowDistance) row.ownerDistanceMeters.toPublicDistanceLabel() else null,
                             distanceMeters =
                                 if (row.ownerShowDistance) row.ownerDistanceMeters.toPublicDistanceMeters() else null,
-                            zoneKey = "${row.ownerLonE3}_${row.ownerLatE3}",
+                            // L-11: the zone is location too; an owner who hides distance gets none.
+                            zoneKey = if (row.ownerShowDistance) "${row.ownerZoneX}_${row.ownerZoneY}" else null,
                         ),
                     linkedPartner =
                         if (partnerVisible) {
