@@ -33,6 +33,7 @@ import com.pynapli.server.plugins.configureAdminAudit
 import com.pynapli.server.plugins.configureAppCheck
 import com.pynapli.server.plugins.configureHTTP
 import com.pynapli.server.plugins.configureMonitoring
+import com.pynapli.server.plugins.configureSecurityHeaders
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.plugins.selectAppCheckVerifier
@@ -65,13 +66,22 @@ fun main() {
     val config = ServerConfig.fromEnvironment()
     val dependencies = ServerDependencies.fromEnvironment(config)
 
-    embeddedServer(
-        factory = Netty,
-        port = config.port,
-        module = {
-            module(dependencies)
+    val server =
+        embeddedServer(
+            factory = Netty,
+            port = config.port,
+            module = {
+                module(dependencies)
+            },
+        )
+    // Cloud Run sends SIGTERM and allows ~10 s: stop taking new requests, let in-flight ones finish
+    // for up to SHUTDOWN_GRACE_MS, then stop (which closes workers and pools via closeDependenciesOnStop).
+    Runtime.getRuntime().addShutdownHook(
+        Thread {
+            server.stop(gracePeriodMillis = SHUTDOWN_GRACE_MS, timeoutMillis = SHUTDOWN_TIMEOUT_MS)
         },
-    ).start(wait = true)
+    )
+    server.start(wait = true)
 }
 
 fun Application.module(dependencies: ServerDependencies = ServerDependencies.fromEnvironment()) {
@@ -89,6 +99,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureStatusPages()
     configureMonitoring()
     configureHTTP(dependencies.config.corsAllowedOrigins)
+    configureSecurityHeaders(dependencies.config.environment)
     configureRequestMediaBaseUrl()
     configureAppCheck(dependencies.config.appCheckEnforced, selectAppCheckVerifier(dependencies.config))
     configureAdminAudit(dependencies.adminRequestAuditRecorder)
@@ -175,3 +186,6 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         requestProfilerFactory = dependencies.requestProfilerFactory,
     )
 }
+
+private const val SHUTDOWN_GRACE_MS = 3_000L
+private const val SHUTDOWN_TIMEOUT_MS = 8_000L
