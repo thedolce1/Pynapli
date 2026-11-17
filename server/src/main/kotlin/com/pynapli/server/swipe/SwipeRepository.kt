@@ -182,8 +182,8 @@ interface SwipeRepository {
     }
 
     /**
-     * Reverses a previously-recorded swipe action. If the action consumed a
-     * Pineapple Like (`consumed_inventory_id IS NOT NULL`) the implementation
+     * Reverses a previously-recorded swipe action. If the action consumed paid inventory (a
+     * Pineapple Like or an Intro Note, `consumed_inventory_id IS NOT NULL`) the implementation
      * MUST refund the matching `premium_inventory` row atomically inside the
      * same transaction as the action's rewound_at update — `SwipeService.rewind`
      * relies on this to keep inventory accounting consistent.
@@ -273,17 +273,16 @@ data class SwipeActionResult(
     val inventoryUnavailable: Boolean = false,
 )
 
-/** Paid inventory a swipe spends inside its own record transaction. */
+/**
+ * Paid inventory a swipe spends inside its own record transaction. The action always keeps the
+ * spent `premium_inventory.id` (`swipe_actions.consumed_inventory_id`), so every paid spend can be
+ * traced and a rewind refunds exactly the row that paid.
+ */
 enum class SwipeInventorySpend(
     val inventoryType: String,
-    /**
-     * Whether the action keeps the spent `premium_inventory.id`. A Pineapple Like does, because
-     * rewinding it refunds that row; an Intro Note can't be rewound and keeps none.
-     */
-    val storesInventoryId: Boolean,
 ) {
-    PINEAPPLE_LIKE("pineapple_like", storesInventoryId = true),
-    INTRO_NOTE("intro_note", storesInventoryId = false),
+    PINEAPPLE_LIKE("pineapple_like"),
+    INTRO_NOTE("intro_note"),
 }
 
 data class SwipeActionRecord(

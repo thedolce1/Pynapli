@@ -1904,7 +1904,7 @@ private class InMemorySwipeRepository(
                 return SwipeActionResult(recorded = false, match = null, newlyRecorded = false)
             }
             inventoryLeft[key] = available - 1
-            if (spendInventory.storesInventoryId) spentInventoryId = UUID.randomUUID()
+            spentInventoryId = UUID.randomUUID()
         }
         val result =
             recordSwipeAction(

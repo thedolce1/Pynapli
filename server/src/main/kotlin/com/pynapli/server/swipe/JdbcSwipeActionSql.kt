@@ -40,7 +40,7 @@ internal fun Connection.recordSwipeActionTransaction(
                         rollback()
                         return SwipeActionResult(recorded = false, match = null, newlyRecorded = false, inventoryUnavailable = true)
                     }
-            if (spendInventory.storesInventoryId) inventoryId = spentId
+            inventoryId = spentId
         }
         // On a conflict the rollback also undoes the spend above, so a swipe that did not land
         // costs nothing.
@@ -225,7 +225,8 @@ private fun Connection.markSwipeActionRewound(
           AND sa.actor_user_id = ?
           AND sa.target_user_id = ?
           AND sa.rewound_at IS NULL
-          AND sa.action IN ('like', 'pass', 'pineapple_like')
+          -- An Intro Note is rewindable here too, so the unit it spent comes back with it.
+          AND sa.action IN ('like', 'pass', 'pineapple_like', 'intro_note')
           AND NOT EXISTS (
               SELECT 1
               FROM matches m
