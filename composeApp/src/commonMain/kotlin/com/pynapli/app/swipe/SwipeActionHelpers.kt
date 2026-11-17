@@ -5,8 +5,9 @@ import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.network.dto.SwipeRewindResponseDto
 import kotlin.random.Random
 
-internal const val INTRO_NOTE_MAX_LENGTH = 140
 internal const val MAX_PENDING_ACTIONS = 10
+internal const val PINEAPPLE_NOTE_NOT_ACCEPTED = "PINEAPPLE_LIKE_NOTE_NOT_ACCEPTED"
+internal const val PINEAPPLE_NOTE_TOO_LONG_MESSAGE = "Notes with a Pineapple Like are 140 characters or less."
 
 // Prefetch the next 30-card page once this many cards remain. Tuned for "never wait for a card"
 // (SWIPE_IMPLEMENTATION_SPEC perf goal): a 10-card runway is several seconds even for very fast
@@ -15,13 +16,13 @@ internal const val LOAD_MORE_THRESHOLD = 10
 
 internal fun QueuedSwipeAction.paywallMessageFor(errorCode: String): String? =
     when (errorCode) {
-        "ENTITLEMENT_REQUIRED" ->
-            if (action == SwipeAction.INTRO_NOTE) {
-                "Intro Notes are included with Social or Select."
+        "ENTITLEMENT_REQUIRED" -> "Social or Select is required."
+        "PINEAPPLE_LIKE_INVENTORY_REQUIRED" ->
+            if (action == SwipeAction.PINEAPPLE_LIKE && noteText != null) {
+                "You're out of Pineapple Likes. Get more to send your note."
             } else {
-                "Social or Select is required."
+                "You're out of Pineapple Likes. Get more to stand out."
             }
-        "PINEAPPLE_LIKE_INVENTORY_REQUIRED" -> "Pineapple Likes are scarce high-intent signals."
         else -> null
     }
 

@@ -4,9 +4,7 @@ import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.server.safety.RiskPolicyService
-import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
-import com.pynapli.shared.network.dto.SubscriptionTier
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
@@ -69,7 +67,6 @@ internal class SwipeSubmitAction(
                     viewerUserId = viewerUserId,
                     targetUserId = targetUserId,
                     radiusMeters = SWIPE_MAX_RADIUS_METERS,
-                    requireIntroNotesAllowed = action == SwipeAction.INTRO_NOTE,
                     now = now,
                 )
             }
@@ -79,14 +76,6 @@ internal class SwipeSubmitAction(
         if (profile("swipe.action.risk") { riskPolicyService?.isSocialActionRestricted(viewerUserId) == true }) {
             throw SwipeException("RISK_RESTRICTED")
         }
-        val policy =
-            profile("swipe.action.policy") {
-                subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
-            }
-        if (action == SwipeAction.INTRO_NOTE && policy.tier == SubscriptionTier.FREE) {
-            throw SwipeException("ENTITLEMENT_REQUIRED")
-        }
-
         if (profile("swipe.action.rateLimit") {
                 rateLimitService?.check(viewerUserId, RateLimitedAction.SWIPE_ACTION)?.allowed == false
             }
@@ -98,13 +87,19 @@ internal class SwipeSubmitAction(
             throw SwipeException("INVALID_SWIPE_TARGET")
         }
 
-        // Paid swipes spend their unit inside the record transaction, so a retry, a second request
-        // for the same person, or a failed insert can never cost the user a unit for nothing.
+        // "Allow notes with Pineapple Likes" off: refuse the note, not the like. Nothing is spent, so
+        // the client can offer to send the same Pineapple Like without it.
+        if (noteText != null && !preconditions.targetAcceptsNotes) {
+            throw SwipeException("PINEAPPLE_LIKE_NOTE_NOT_ACCEPTED")
+        }
+
+        // A Pineapple Like (with or without a note) spends its unit inside the record transaction, so
+        // a retry, a second request for the same person, or a failed insert can never cost the user a
+        // unit for nothing.
         // Without a subscription service nothing is metered, as before.
         val spendInventory =
             when {
                 subscriptionService == null -> null
-                action == SwipeAction.INTRO_NOTE -> SwipeInventorySpend.INTRO_NOTE
                 action == SwipeAction.PINEAPPLE_LIKE -> SwipeInventorySpend.PINEAPPLE_LIKE
                 else -> null
             }
@@ -125,13 +120,7 @@ internal class SwipeSubmitAction(
                 )
             }
         if (result.inventoryUnavailable) {
-            throw SwipeException(
-                if (spendInventory == SwipeInventorySpend.INTRO_NOTE) {
-                    "INTRO_NOTE_INVENTORY_REQUIRED"
-                } else {
-                    "PINEAPPLE_LIKE_INVENTORY_REQUIRED"
-                },
-            )
+            throw SwipeException("PINEAPPLE_LIKE_INVENTORY_REQUIRED")
         }
         if (result.newlyRecorded) {
             sideEffects.recordActivityForAction(

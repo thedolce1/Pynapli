@@ -22,8 +22,6 @@ internal class SubscriptionInventoryActions(
         )
     }
 
-    suspend fun consumeIntroNoteInventory(userId: UUID): Boolean = repository.consumeIntroNoteInventory(userId, clock.instant())
-
     suspend fun consumePineappleLikeInventory(userId: UUID): Boolean = repository.consumePineappleLikeInventory(userId, clock.instant())
 
     suspend fun consumePineappleLikeInventoryReturningId(userId: UUID): UUID? = repository.consumePineappleLikeInventoryReturningId(userId, clock.instant())

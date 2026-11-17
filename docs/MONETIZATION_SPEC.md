@@ -201,7 +201,7 @@ Included:
 - Priority Likes
 - Weekly Pineapple Likes
 - Monthly Boost
-- Pineapple Like notes (Intro Notes, being merged)
+- Notes on Pineapple Likes (any Pineapple Like can carry one)
 - Full read receipts
 - Typing status
 - Message unsend
@@ -216,7 +216,9 @@ Suggested monthly inventory:
 
 - 5 Pineapple Likes per week
 - 1 Boost per month
-- Pineapple Like notes (Intro Notes, being merged)
+
+The Select "Intro Notes" perk was removed with Intro Notes (2026-11-17); Select already includes
+weekly Pineapple Likes, each of which can carry a note, so no separate perk replaces it.
 
 Inventory should expire if unused at renewal or refresh windows, depending feature. Expiring inventory creates urgency but must be clearly disclosed.
 
@@ -316,12 +318,25 @@ Rules:
 - Does not guarantee match.
 - Should not be unlimited.
 
-### Intro Note
+### Pineapple Like note (formerly Intro Note)
 
-Being merged into Pineapple Like as an optional note (2026-11-17); the `intro_notes_three` Play SKU
-must be retired in Play Console when that ships. Rules that carry over to the note: message before
-match from Swipe only; it doesn't become a chat until matched; the recipient can disable or restrict
-it; delivery is not guaranteed; 140-character limit; rate-limited.
+Shipped 2026-11-17: Intro Notes are no longer a product. A Pineapple Like optionally carries a note
+(`SwipeActionRequestDto.noteText`, trimmed, 1-140 characters, `PineappleLikeNote` in `:shared`).
+
+- One Pineapple Like unit is spent either way, inside the swipe record transaction under the pair
+  lock, and refunded on rewind like any Pineapple Like.
+- A noted Pineapple Like is a positive swipe everywhere (match both orders, like-back from Activity,
+  Psync).
+- The recipient's `Allow notes with Pineapple Likes` toggle (`discovery_settings.allow_intro_notes`,
+  wire field `allowIntroNotes`) refuses only the note: `PINEAPPLE_LIKE_NOTE_NOT_ACCEPTED` (409),
+  nothing spent; the client offers to send the Pineapple Like without it. The like is never blocked
+  by the toggle. Over-long notes: `PINEAPPLE_LIKE_NOTE_TOO_LONG` (400).
+- The note shows on the like in the recipient's Activity (`ActivityEventDto.noteText`); it never
+  becomes a chat until matched.
+- Legacy: V92 turned stored Intro Notes into Pineapple Likes with their note and unspent Intro Note
+  inventory into Pineapple Likes. The retired Play product `pynapli_intro_notes_3` is no longer sold;
+  a purchase made under it is still verified and credited as 3 Pineapple Likes. **Founder: deactivate
+  `pynapli_intro_notes_3` in Play Console.**
 
 ### Extra Picks
 
@@ -410,7 +425,7 @@ Bad paywall moments:
 | Incognito | No | No/Maybe | Yes |
 | Travel mode | No | Preview | Yes |
 | Pineapple Likes | Limited/promo | Weekly | More weekly |
-| Pineapple Like notes (Intro Notes, being merged) | No/promo | Limited | Yes |
+| Notes on Pineapple Likes | With any Pineapple Like | With any Pineapple Like | With any Pineapple Like |
 | Monthly Boost | No | Discounted | Included |
 | Private album basics | Yes | Yes | Yes |
 | Timed album access | Basic | Yes | Advanced |
@@ -470,7 +485,7 @@ Track:
 - Partner benefit usage
 - Boost purchase conversion
 - Pineapple Like usage
-- Intro Note acceptance rate
+- Pineapple Like note rate (share of Pineapple Likes sent with a note) and note-to-match rate
 - Activity paywall conversion
 - Advanced filter paywall conversion
 - Ad revenue per free user
@@ -518,7 +533,7 @@ Do not experiment with:
 - [x] Rewind is gated to Social/Select for latest eligible Like/Pass.
 - [x] Boost inventory exists.
 - [x] Pineapple Like inventory exists.
-- [x] Intro Note inventory exists (being merged into Pineapple Like).
+- [x] Intro Notes merged into Pineapple Like as an optional note (V92; legacy Play SKU credited as Pineapple Likes).
 - [ ] Fake ad slot and "ad-supported"/"No ads" claims removed (in progress).
 - [x] Safety features remain free.
 - [x] Paywall copy uses Social/Select naming.

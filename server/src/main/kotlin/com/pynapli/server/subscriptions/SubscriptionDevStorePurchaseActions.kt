@@ -67,11 +67,6 @@ internal class SubscriptionDevStorePurchaseActions(
                     DEV_INVENTORY_GRANTED
                 }
 
-                SubscriptionProductId.INTRO_NOTES_THREE -> {
-                    grantDevPremiumProduct(userId, PremiumInventoryType.INTRO_NOTE, quantity = 3, now = now)
-                    DEV_INVENTORY_GRANTED
-                }
-
                 else -> throw SubscriptionException("INVALID_STORE_PRODUCT")
             }
 

@@ -276,8 +276,9 @@ private class StubSwipeRepository(
         viewerUserId: UUID,
         targetUserId: UUID,
         radiusMeters: Int,
-        requireIntroNotesAllowed: Boolean,
     ): Boolean = true
+
+    override suspend fun targetAcceptsPineappleLikeNotes(targetUserId: UUID): Boolean = true
 
     override suspend fun isDeckCardActionable(
         sessionId: UUID,

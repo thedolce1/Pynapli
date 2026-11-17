@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,9 @@ import com.pynapli.shared.network.dto.ActivityEventDto
 
 internal const val PLAYING_TONIGHT_SOURCE = "playing_tonight"
 internal const val VIA_PLAYING_TONIGHT_TEST_TAG = "activity-via-playing-tonight"
+
+/** The note a Pineapple Like carried, shown on its row/tile. */
+internal const val ACTIVITY_LIKE_NOTE_TEST_TAG = "activity-like-note"
 
 @Composable
 internal fun ActivityRow(
@@ -128,6 +132,17 @@ internal fun ActivityRow(
                         maxLines = 1,
                     )
                 }
+            }
+            item.noteText?.let { note ->
+                Text(
+                    text = "\u201C$note\u201D",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontStyle = FontStyle.Italic,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp).testTag(ACTIVITY_LIKE_NOTE_TEST_TAG),
+                )
             }
             if (item.source == PLAYING_TONIGHT_SOURCE) {
                 ViaPlayingTonightChip()

@@ -14,7 +14,6 @@ internal class JdbcSwipeActionPersistenceActions(
         viewerUserId: UUID,
         targetUserId: UUID,
         radiusMeters: Int,
-        requireIntroNotesAllowed: Boolean,
     ): Boolean =
         withContext(Dispatchers.IO) {
             if (viewerUserId == targetUserId) return@withContext false
@@ -23,10 +22,11 @@ internal class JdbcSwipeActionPersistenceActions(
                     viewerUserId = viewerUserId,
                     targetUserId = targetUserId,
                     radiusMeters = radiusMeters,
-                    requireIntroNotesAllowed = requireIntroNotesAllowed,
                 )
             }
         }
+
+    suspend fun targetAcceptsPineappleLikeNotes(targetUserId: UUID): Boolean = dataSource.withConnection { connection -> connection.targetAcceptsPineappleLikeNotes(targetUserId) }
 
     suspend fun checkActionPreconditions(
         sessionId: UUID,
@@ -34,12 +34,11 @@ internal class JdbcSwipeActionPersistenceActions(
         viewerUserId: UUID,
         targetUserId: UUID,
         radiusMeters: Int,
-        requireIntroNotesAllowed: Boolean,
         now: Instant,
     ): SwipeActionPreconditionCheck =
         withContext(Dispatchers.IO) {
             if (viewerUserId == targetUserId) {
-                return@withContext SwipeActionPreconditionCheck(deckCardActionable = false, targetEligible = false)
+                return@withContext SwipeActionPreconditionCheck(deckCardActionable = false, targetEligible = false, targetAcceptsNotes = false)
             }
             dataSource.connection.use { connection ->
                 connection.checkSwipeActionPreconditions(
@@ -48,7 +47,6 @@ internal class JdbcSwipeActionPersistenceActions(
                     viewerUserId = viewerUserId,
                     targetUserId = targetUserId,
                     radiusMeters = radiusMeters,
-                    requireIntroNotesAllowed = requireIntroNotesAllowed,
                     now = now,
                 )
             }

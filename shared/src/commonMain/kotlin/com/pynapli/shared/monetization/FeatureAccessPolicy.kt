@@ -17,7 +17,6 @@ enum class PynapliFeature(
     GridAdvancedFilters(true),
     SwipeAdvancedFilters(true),
     ActivityDeepReveal(true),
-    IntroNote(true),
     PineappleLike(true),
     Boost(true),
 }

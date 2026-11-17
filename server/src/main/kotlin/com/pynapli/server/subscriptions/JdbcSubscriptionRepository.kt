@@ -53,11 +53,6 @@ class JdbcSubscriptionRepository(
         reason: String,
     ): StoredEntitlementRecord? = entitlements.revokeStoredEntitlement(entitlementId, actorId, reason)
 
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = inventory.consumeIntroNoteInventory(userId, now)
-
     override suspend fun consumePineappleLikeInventory(
         userId: UUID,
         now: Instant,

@@ -59,8 +59,8 @@ enum class ActivityTabUi(
     val label: String,
     val apiValue: String,
 ) {
-    // Mobile Activity surface: Flirts (unified inbound interest — taps + swipe-likes + pineapples +
-    // intro notes — and the premium reveal money surface), Views, and Requests (album-access +
+    // Mobile Activity surface: Flirts (unified inbound interest — taps + swipe-likes + pineapples,
+    // with their notes — and the premium reveal money surface), Views, and Requests (album-access +
     // partner/psync/tonight invites). Matches live in the Messages new-matches rail.
     Flirts("Flirts", "flirts"),
     Views("Views", "views"),

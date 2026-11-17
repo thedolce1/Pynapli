@@ -24,4 +24,5 @@ internal fun ActivityEventRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
         psyncSessionId = psyncSessionId,
         pairUserId = pairUserId?.toString(),
         pairDisplayName = pairDisplayName,
+        noteText = noteText,
     )

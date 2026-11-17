@@ -5,7 +5,7 @@ internal const val ACTIVITY_DEFAULT_LIMIT = 50
 internal const val ACTIVITY_MAX_LIMIT = 100
 internal const val ACTIVITY_MAX_MARK_SEEN_IDS = 100
 
-internal val ACTIVITY_SWIPE_INTEREST_EVENT_TYPES = setOf("swipe_like", "pineapple_like", "intro_note")
+internal val ACTIVITY_SWIPE_INTEREST_EVENT_TYPES = setOf("swipe_like", "pineapple_like")
 
 class ActivityException(
     val code: String,

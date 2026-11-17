@@ -56,7 +56,6 @@ class SwipeStageKeyTest {
                             onRetryPendingActions = {},
                             onRewind = {},
                             onPass = { passes += 1 },
-                            onIntroNote = {},
                             onPineappleLike = { pineapples += 1 },
                             onLike = { likes += 1 },
                         )
@@ -98,7 +97,6 @@ class SwipeStageKeyTest {
                             onRetryPendingActions = {},
                             onRewind = {},
                             onPass = { actions += 1 },
-                            onIntroNote = {},
                             onPineappleLike = { actions += 1 },
                             onLike = { actions += 1 },
                         )

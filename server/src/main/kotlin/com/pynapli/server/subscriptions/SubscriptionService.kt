@@ -166,8 +166,6 @@ class SubscriptionService(
 
     suspend fun getPolicy(userId: UUID): EntitlementPolicy = entitlementActions.getPolicy(userId)
 
-    suspend fun consumeIntroNoteInventory(userId: UUID): Boolean = inventoryActions.consumeIntroNoteInventory(userId)
-
     suspend fun consumePineappleLikeInventory(userId: UUID): Boolean = inventoryActions.consumePineappleLikeInventory(userId)
 
     /**

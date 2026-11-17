@@ -110,6 +110,8 @@ data class ActivityEventRecord(
     val pairUserId: UUID? = null,
     val pairDisplayName: String? = null,
     val pairSessionId: String? = null,
+    // pineapple_like: the note the sender added, if any.
+    val noteText: String? = null,
 )
 
 fun ActivityEventRecord.toCursorAnchor(seenCount: Int): ActivityCursorAnchor =

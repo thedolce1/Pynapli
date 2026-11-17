@@ -66,7 +66,6 @@ internal object SubscriptionCatalog {
                         "Advanced filters",
                         "Incognito",
                         "Travel mode",
-                        "Intro Notes",
                         "Weekly Pineapple Likes",
                         "Monthly Boost",
                     ),
@@ -94,30 +93,16 @@ internal object SubscriptionCatalog {
                 productId = SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
                 inventoryType = PremiumInventoryType.PINEAPPLE_LIKE,
                 displayName = "Pineapple Likes",
-                description = "Send a stronger swipe signal.",
+                description = "Stand out, with an optional note.",
                 priceUsdCents = 399,
                 quantity = 5,
                 playStoreProductId = SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
                 features =
                     listOf(
                         "High-intent swipe signal",
+                        "Add a note up to 140 characters",
                         "Prioritized in Activity",
                         "Dismissible by recipient",
-                    ),
-            ),
-            PremiumProductDto(
-                productId = SubscriptionProductId.INTRO_NOTES_THREE,
-                inventoryType = PremiumInventoryType.INTRO_NOTE,
-                displayName = "Intro Notes",
-                description = "Send a short note before matching.",
-                priceUsdCents = 299,
-                quantity = 3,
-                playStoreProductId = SubscriptionProductId.INTRO_NOTES_THREE,
-                features =
-                    listOf(
-                        "140 characters max",
-                        "Does not open chat by itself",
-                        "Subject to recipient controls",
                     ),
             ),
         )

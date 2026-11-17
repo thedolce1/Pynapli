@@ -29,8 +29,6 @@ internal class SwipeActionSideEffects(
                         targetUserId,
                         "pineapple_like",
                     )
-
-                SwipeAction.INTRO_NOTE -> activity.recordSwipeInterest(viewerUserId, targetUserId, "intro_note")
                 else -> Unit
             }
             match?.let { activity.recordMatch(it.userA, it.userB, it.matchId) }

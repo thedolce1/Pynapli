@@ -13,14 +13,19 @@ object SubscriptionProductId {
     const val PLAY_SELECT_MONTHLY = "pynapli_select_monthly"
     const val BOOST_SINGLE = "pynapli_boost_1"
     const val PINEAPPLE_LIKES_FIVE = "pynapli_pineapple_likes_5"
-    const val INTRO_NOTES_THREE = "pynapli_intro_notes_3"
+
+    /**
+     * Retired 2026-11-17 when Intro Notes became an optional note on a Pineapple Like. Never sold
+     * again; kept only so a purchase already made (or still pending) under it is still verified and
+     * credited, as three Pineapple Likes.
+     */
+    const val LEGACY_INTRO_NOTES_THREE = "pynapli_intro_notes_3"
 }
 
 object PremiumInventoryType {
     const val BOOST = "boost"
     const val SUPER_BOOST = "super_boost"
     const val PINEAPPLE_LIKE = "pineapple_like"
-    const val INTRO_NOTE = "intro_note"
     const val EXTRA_PICK = "extra_pick"
 }
 
@@ -103,7 +108,7 @@ data class SubmitDevStorePurchaseRequestDto(
     val productId: String,
 )
 
-/** A one-time Google Play purchase (Boost, Pineapple Likes, Intro Notes) to verify and credit. */
+/** A one-time Google Play purchase (Boost, Pineapple Likes) to verify and credit. */
 @Serializable
 data class SubmitPlayStoreProductPurchaseRequestDto(
     val productId: String,

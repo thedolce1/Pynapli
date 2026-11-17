@@ -142,25 +142,6 @@ class SubscriptionRepositoryIntegrationTest {
         }
 
     @Test
-    fun consumeIntroNoteInventoryDecrementsOneAvailableUnit() =
-        runBlocking {
-            val user = uuid(401)
-            val now = Instant.parse("2026-05-06T12:00:00Z")
-            dataSource.insertUser(user)
-            dataSource.insertPremiumInventory(
-                userId = user,
-                inventoryType = "intro_note",
-                quantity = 1,
-                expiresAt = Instant.parse("2026-06-01T00:00:00Z"),
-            )
-            val repository = JdbcSubscriptionRepository(dataSource)
-
-            assertEquals(true, repository.consumeIntroNoteInventory(user, now))
-            assertEquals(false, repository.consumeIntroNoteInventory(user, now))
-            assertEquals(0, dataSource.inventoryQuantity(user, "intro_note"))
-        }
-
-    @Test
     fun consumePineappleLikeInventoryDecrementsOneAvailableUnit() =
         runBlocking {
             val user = uuid(402)
@@ -208,7 +189,7 @@ class SubscriptionRepositoryIntegrationTest {
             val granted =
                 repository.grantPremiumInventory(
                     userId = user,
-                    inventoryType = "intro_note",
+                    inventoryType = "pineapple_like",
                     quantity = 3,
                     source = "dev",
                     expiresAt = Instant.parse("2026-07-01T00:00:00Z"),
@@ -217,11 +198,11 @@ class SubscriptionRepositoryIntegrationTest {
             val balances = repository.listPremiumInventoryBalances(user, now)
 
             assertNotNull(granted)
-            assertEquals("intro_note", granted.inventoryType)
+            assertEquals("pineapple_like", granted.inventoryType)
             assertEquals(3, granted.quantity)
-            assertEquals(listOf("boost", "intro_note"), balances.map { it.inventoryType })
+            assertEquals(listOf("boost", "pineapple_like"), balances.map { it.inventoryType })
             assertEquals(5, balances.first { it.inventoryType == "boost" }.quantity)
-            assertEquals(3, balances.first { it.inventoryType == "intro_note" }.quantity)
+            assertEquals(3, balances.first { it.inventoryType == "pineapple_like" }.quantity)
             assertEquals(
                 Instant.parse("2026-06-01T00:00:00Z"),
                 balances.first { it.inventoryType == "boost" }.nextExpiresAt,

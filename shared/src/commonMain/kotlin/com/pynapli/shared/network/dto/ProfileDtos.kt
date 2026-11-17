@@ -81,6 +81,8 @@ data class DiscoverySettingsDto(
     val allowGridMessages: Boolean,
     val gridMessagePolicy: String,
     val allowFlirts: Boolean,
+    // "Allow notes with Pineapple Likes". Off: a Pineapple Like still arrives, without its note.
+    // The wire name predates Intro Notes becoming that note (2026-11-17).
     val allowIntroNotes: Boolean,
     val allowAlbumRequests: Boolean,
     val soloEnabled: Boolean,
@@ -127,6 +129,7 @@ data class UpdateDiscoverySettingsRequestDto(
     val allowGridMessages: Boolean? = null,
     val gridMessagePolicy: String? = null,
     val allowFlirts: Boolean? = null,
+    // "Allow notes with Pineapple Likes" (see DiscoverySettingsDto.allowIntroNotes).
     val allowIntroNotes: Boolean? = null,
     val allowAlbumRequests: Boolean? = null,
     val visibleWhileTraveling: Boolean? = null,

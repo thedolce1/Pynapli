@@ -179,5 +179,5 @@ internal object JdbcActivitySignalSql {
 
     val PSYNC_SESSION_EVENT_TYPES = setOf("psync_invite", "psync_started", "psync_recap", "psync_expired")
 
-    val SWIPE_INTEREST_EVENT_TYPES = setOf("swipe_like", "pineapple_like", "intro_note")
+    val SWIPE_INTEREST_EVENT_TYPES = setOf("swipe_like", "pineapple_like")
 }

@@ -27,9 +27,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliBottomSheet
+import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.PynapliSheetActionRow
+import com.pynapli.app.design.PynapliSheetColumn
+import com.pynapli.app.design.PynapliSheetTitle
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Person
+import com.pynapli.shared.network.dto.PineappleLikeNote
 
 @Composable
 internal fun LinkedPartnerPreviewDialog(
@@ -123,30 +129,39 @@ internal fun LinkedPartnerPreviewDialog(
     )
 }
 
+/**
+ * The Pineapple Like flow (Intro Notes merged into it, 2026-11-17): one Pineapple Like is spent,
+ * with or without the optional note. When the recipient doesn't accept notes ([notesRefused]), the
+ * field goes away and the sheet offers the Pineapple Like on its own.
+ */
 @Composable
-internal fun IntroNoteDialog(
+internal fun PineappleLikeSheet(
     displayName: String,
     noteText: String,
+    notesRefused: Boolean,
     isSubmitting: Boolean,
     onNoteTextChanged: (String) -> Unit,
     onDismiss: () -> Unit,
     onSend: () -> Unit,
 ) {
     val trimmed = noteText.trim()
-    val canSend = trimmed.isNotEmpty() && trimmed.length <= INTRO_NOTE_UI_MAX_LENGTH && !isSubmitting
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "Intro Note",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val noteFits = trimmed.length <= PineappleLikeNote.MAX_LENGTH
+    val canSend = !isSubmitting && (notesRefused || noteFits)
+    PynapliBottomSheet(
+        onDismiss = { if (!isSubmitting) onDismiss() },
+        modifier = Modifier.testTag(SwipeTestTags.PINEAPPLE_LIKE_SHEET),
+    ) {
+        PynapliSheetColumn {
+            PynapliSheetTitle(text = "Send $displayName a Pineapple Like")
+            if (notesRefused) {
                 Text(
-                    text = "Send a short note to $displayName before matching.",
+                    text = "$displayName isn't accepting notes with Pineapple Likes. You can still send the Pineapple Like on its own.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                Text(
+                    text = "Stand out in their likes. Add a short note if you want; it uses one Pineapple Like either way.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -154,39 +169,52 @@ internal fun IntroNoteDialog(
                     value = noteText,
                     onValueChange = onNoteTextChanged,
                     enabled = !isSubmitting,
+                    placeholder = { Text("Add a note (optional)") },
+                    isError = !noteFits,
                     maxLines = 4,
                     singleLine = false,
-                    modifier = Modifier.fillMaxWidth(),
+                    shape = PynapliShape.CardShape,
+                    modifier = Modifier.fillMaxWidth().testTag(SwipeTestTags.PINEAPPLE_LIKE_NOTE_FIELD),
                 )
                 Text(
-                    text = "${trimmed.length}/$INTRO_NOTE_UI_MAX_LENGTH",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "${trimmed.length}/${PineappleLikeNote.MAX_LENGTH}",
+                    color = if (noteFits) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.labelSmall,
                     textAlign = TextAlign.End,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = onSend,
-                enabled = canSend,
-                modifier = Modifier.handCursor(enabled = canSend),
-            ) {
-                Text(text = if (isSubmitting) "Sending" else "Send")
+            PynapliSheetActionRow {
+                TextButton(
+                    onClick = onDismiss,
+                    enabled = !isSubmitting,
+                    modifier = Modifier.handCursor(enabled = !isSubmitting),
+                ) {
+                    Text("Cancel")
+                }
+                Button(
+                    onClick = onSend,
+                    enabled = canSend,
+                    modifier =
+                        Modifier
+                            .handCursor(enabled = canSend)
+                            .testTag(
+                                if (notesRefused) SwipeTestTags.PINEAPPLE_LIKE_SEND_WITHOUT_NOTE else SwipeTestTags.PINEAPPLE_LIKE_SEND,
+                            ),
+                ) {
+                    Text(
+                        text =
+                            when {
+                                isSubmitting -> "Sending"
+                                notesRefused -> "Send without note"
+                                else -> "Send Pineapple Like"
+                            },
+                    )
+                }
             }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                enabled = !isSubmitting,
-                modifier = Modifier.handCursor(enabled = !isSubmitting),
-            ) {
-                Text("Cancel")
-            }
-        },
-    )
+        }
+    }
 }
 
-private const val INTRO_NOTE_UI_MAX_LENGTH = 140
-internal const val INTRO_NOTE_INPUT_MAX_LENGTH = 160
+/** The note field accepts a little past the limit so a paste isn't silently cut; the counter turns red. */
+internal const val PINEAPPLE_NOTE_INPUT_MAX_LENGTH = PineappleLikeNote.MAX_LENGTH + 20

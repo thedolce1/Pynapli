@@ -163,6 +163,8 @@ internal fun userSafeMessage(code: String): String =
         "INTRO_NOTE_TOO_LONG" -> "Intro Note is too long."
         "INTRO_NOTE_INVENTORY_REQUIRED" -> "You do not have an Intro Note available."
         "PINEAPPLE_LIKE_INVENTORY_REQUIRED" -> "You do not have a Pineapple Like available."
+        "PINEAPPLE_LIKE_NOTE_NOT_ACCEPTED" -> "They aren't accepting notes with Pineapple Likes. Send it without the note."
+        "PINEAPPLE_LIKE_NOTE_TOO_LONG" -> "Notes with a Pineapple Like are 140 characters or less."
         "BOOST_INVENTORY_REQUIRED" -> "You do not have a Boost available."
         "INVALID_NOTIFICATION_DETAIL_LEVEL" -> "Choose a valid notification detail level."
         "INVALID_PUSH_PLATFORM", "INVALID_PUSH_TOKEN" -> "Push device could not be registered."

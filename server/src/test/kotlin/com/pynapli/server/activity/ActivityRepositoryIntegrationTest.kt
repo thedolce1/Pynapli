@@ -259,7 +259,7 @@ class ActivityRepositoryIntegrationTest {
                     Triple(viewActor, "profile_view", Instant.parse("2026-05-18T14:00:00Z")),
                     Triple(flirtActor, "flirt", Instant.parse("2026-05-18T14:01:00Z")),
                     Triple(likeActor, "swipe_like", Instant.parse("2026-05-18T14:02:00Z")),
-                    Triple(introActor, "intro_note", Instant.parse("2026-05-18T14:03:00Z")),
+                    Triple(introActor, "pineapple_like", Instant.parse("2026-05-18T14:03:00Z")),
                     Triple(matchActor, "match", Instant.parse("2026-05-18T14:04:00Z")),
                     Triple(pendingAlbumActor, "album_request", Instant.parse("2026-05-18T14:05:00Z")),
                     Triple(inviteActor, "partner_chat_invite", Instant.parse("2026-05-18T14:06:00Z")),
@@ -354,14 +354,14 @@ class ActivityRepositoryIntegrationTest {
 
             assertTrue(repository.recordSwipeInterest(viewer, target, "swipe_like"))
             assertFalse(repository.recordSwipeInterest(viewer, target, "swipe_like"))
-            assertTrue(repository.recordSwipeInterest(viewer, target, "intro_note"))
+            assertTrue(repository.recordSwipeInterest(viewer, target, "pineapple_like"))
             assertTrue(repository.recordMatch(recipientUserId = viewer, actorUserId = target, matchId = matchId))
             assertFalse(repository.recordMatch(recipientUserId = viewer, actorUserId = target, matchId = matchId))
             assertTrue(repository.recordPartnerChatInvite(viewer, target, conversationId))
             assertFalse(repository.recordPartnerChatInvite(viewer, target, conversationId))
 
             assertEquals(1, dataSource.eventCount("swipe_like"))
-            assertEquals(1, dataSource.eventCount("intro_note"))
+            assertEquals(1, dataSource.eventCount("pineapple_like"))
             assertEquals(1, dataSource.eventCount("match"))
             assertEquals(1, dataSource.eventCount("partner_chat_invite"))
             val matchEvent = repository.listActivity(ActivityFeedQuery(viewer, setOf("match"), 10, null)).single()

@@ -173,21 +173,23 @@ Created when another user sends a high-intent like.
 Rules:
 
 - Should appear more prominently than normal Like.
-- Can allow attached Intro Note where inventory/eligibility permits.
+- Can carry an optional note (up to 140 characters), shown on the like; the note is refused, not
+  the like, when the recipient turned off `Allow notes with Pineapple Likes`.
 - Should be rate-limited and scarce.
 - Should respect privacy, age, verification, and block settings.
 
-### Intro Note
+### Pineapple Like note (formerly Intro Note)
 
-Created when a user sends a premium message-before-match note from Swipe.
+Intro Notes merged into the Pineapple Like (2026-11-17); there is no separate `intro_note` card.
+V92 converted existing ones into `pineapple_like` cards. The note (`ActivityEventDto.noteText`) is
+read from the live like, so a rewound like shows none.
 
 Rules:
 
 - Max 140 characters.
 - Appears in Activity, not Messages, until matched.
-- If recipient likes back, a match/chat can be created.
-- If recipient dismisses, no chat is created.
-- Delivery is not guaranteed if recipient settings block it.
+- Liking back makes the match (and its conversation), like any Pineapple Like.
+- Dismissing creates no chat.
 
 ### Match
 
@@ -418,7 +420,7 @@ User settings:
 - Browse incognito
 - Allow flirts
 - Allow album requests
-- Allow Intro Notes
+- Allow notes with Pineapple Likes
 - Allow partner chat invites
 - Detailed notifications
 
@@ -595,7 +597,7 @@ Messages:
 - Shared media inside chat
 - Partner-invited group chats after acceptance
 
-Do not turn flirts or intro notes into chat threads until match/chat eligibility is satisfied.
+Do not turn flirts or Pineapple Like notes into chat threads until match/chat eligibility is satisfied.
 
 ## Activity, Grid and Swipe Boundaries
 
@@ -637,7 +639,7 @@ Avoid:
 - [x] Flirts appear in Activity, not Messages.
 - [x] Likes You appears in Activity.
 - [x] Pineapple Likes appear in Activity.
-- [x] Intro Notes appear in Activity, not Messages (Intro Notes being merged into Pineapple Like).
+- [x] A Pineapple Like's note appears on the like in Activity, not Messages (Intro Notes merged into Pineapple Like, V92).
 - [x] Matches appear in Activity for both matched users (Matches tab being merged into the Messages new-matches rail).
 - [x] Match Activity rows can open the message path.
 - [x] Partner chat invites appear in invited partner Activity.

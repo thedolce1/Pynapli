@@ -2,6 +2,7 @@ package com.pynapli.app.swipe
 
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
+import com.pynapli.shared.network.dto.PineappleLikeNote
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -173,22 +174,28 @@ class SwipeStateHolder(
 
     suspend fun pass() = act(SwipeAction.PASS)
 
-    suspend fun submitIntroNote(
+    /** A Pineapple Like, with an optional note (blank sends none). One Pineapple Like is spent either way. */
+    suspend fun submitPineappleLike(
         card: SwipeCardDto,
-        noteText: String,
+        noteText: String?,
     ) {
-        val trimmed = noteText.trim()
-        when {
-            trimmed.isBlank() -> {
-                _state.update { it.copy(errorMessage = "Intro note cannot be empty.") }
-                return
-            }
-            trimmed.length > INTRO_NOTE_MAX_LENGTH -> {
-                _state.update { it.copy(errorMessage = "Intro note must be 140 characters or less.") }
-                return
-            }
+        val note = PineappleLikeNote.normalize(noteText)
+        if (note != null && note.length > PineappleLikeNote.MAX_LENGTH) {
+            _state.update { it.copy(errorMessage = PINEAPPLE_NOTE_TOO_LONG_MESSAGE) }
+            return
         }
-        submitAction(card = card, action = SwipeAction.INTRO_NOTE, noteText = trimmed)
+        _state.update { it.copy(noteRefusedCard = null) }
+        submitAction(card = card, action = SwipeAction.PINEAPPLE_LIKE, noteText = note)
+    }
+
+    /** The recipient doesn't accept notes: send the same Pineapple Like without one. */
+    suspend fun sendPineappleLikeWithoutNote() {
+        val card = _state.value.noteRefusedCard ?: return
+        submitPineappleLike(card, noteText = null)
+    }
+
+    fun dismissNoteRefusal() {
+        _state.update { it.copy(noteRefusedCard = null) }
     }
 
     suspend fun submitAction(
@@ -353,8 +360,10 @@ class SwipeStateHolder(
                                 isSubmitting = false,
                                 pendingActionCount = pendingActions.size,
                                 paywallMessage = queued.paywallMessageFor(result.error.code) ?: it.paywallMessage,
+                                noteRefusedCard = queued.card.takeIf { result.error.code == PINEAPPLE_NOTE_NOT_ACCEPTED },
                                 errorCode = result.error.code,
-                                errorMessage = result.error.message,
+                                // The note-refused prompt explains itself; no inline error on top of it.
+                                errorMessage = result.error.message.takeUnless { result.error.code == PINEAPPLE_NOTE_NOT_ACCEPTED },
                             )
                         }
                         return

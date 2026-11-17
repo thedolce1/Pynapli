@@ -28,7 +28,7 @@ The swipe experience should feel:
 - Lower-spam than grid
 - More deliberate than browsing
 
-Users cannot freely message from swipe unless there is a mutual match, except for tightly capped premium/a la carte intro notes.
+Users cannot freely message from swipe unless there is a mutual match, except for the note a Pineapple Like can carry.
 
 ## Non-Negotiable UX Rules
 
@@ -39,7 +39,7 @@ Users cannot freely message from swipe unless there is a mutual match, except fo
 5. Swipe filters are lighter than grid filters.
 6. Swipe filters can be flexible unless marked as dealbreakers.
 7. Swipe must remember pending actions and handle offline/poor-network states.
-8. Likes, passes, rewinds, intro notes, and matches must be server-authoritative.
+8. Likes, passes, rewinds, Pineapple Like notes, and matches must be server-authoritative.
 9. Card motion must feel physical and immediate.
 10. The swipe deck should never feel like a dense profile questionnaire.
 
@@ -121,9 +121,8 @@ Before match:
 
 - Like
 - Pass
-- Super Like / Pineapple Like
+- Super Like / Pineapple Like, with an optional note
 - Rewind, if allowed
-- Intro Note, if available
 - View linked-partner preview
 - Report
 - Block
@@ -145,8 +144,7 @@ Server-authoritative action model:
 enum class SwipeActionType {
     LIKE,
     PASS,
-    SUPER_LIKE,
-    INTRO_NOTE,
+    SUPER_LIKE, // optional noteText; Intro Notes merged into it 2026-11-17
     REWIND
 }
 
@@ -177,14 +175,24 @@ Rules:
 - Block always overrides match/like state.
 - Unmatch removes the active match and conversation access according to safety policy.
 
-## Intro Notes
+## Pineapple Like note (Intro Notes merged, shipped 2026-11-17)
 
-Being merged into Pineapple Like as an optional note (founder decision 2026-11-17). Until then, and
-for the merged note:
+There is no separate Intro Note action or product. A Pineapple Like (`action = pineapple_like`)
+optionally carries `noteText`:
 
-- 140 characters max; requires the recipient to be eligible (privacy setting, age/verification).
-- Delivery is not guaranteed; it spends a weekly or purchased allowance.
-- It is a high-intent like with an attached note; the recipient accepts by liking back or dismisses.
+- Trimmed; blank is no note; 140 characters max (`PineappleLikeNote.MAX_LENGTH`,
+  `PINEAPPLE_LIKE_NOTE_TOO_LONG`). A note on any other action is `INVALID_SWIPE_ACTION`, and so is the
+  retired `intro_note` action.
+- One Pineapple Like unit is spent either way, in the record transaction under the pair lock;
+  rewinding refunds it.
+- It is a positive swipe: matches in both orders, can be liked back from Activity, counts in Psync.
+- The recipient's `Allow notes with Pineapple Likes` toggle off refuses only the note
+  (`PINEAPPLE_LIKE_NOTE_NOT_ACCEPTED`, nothing spent). The client reopens the Pineapple Like sheet
+  without the note field and offers `Send without note`.
+- Client: the Pineapple Like button (and the up-arrow key on wide windows) opens the Pineapple Like
+  sheet with an optional note field; sending plays the same swipe-up. The swipe-up gesture sends it
+  without a note.
+- Legacy `intro_note` rows were converted by V92.
 
 ## Super Like / Pineapple Like
 
@@ -412,7 +420,6 @@ data class SwipeCardDto(
     val shortBio: String?,
     val tags: List<String>,
     val verified: Boolean,
-    val canReceiveIntroNote: Boolean,
     val online: Boolean
 )
 ```
@@ -500,7 +507,7 @@ Swipe should feed Activity:
 
 - Someone liked you
 - Someone Super/Pineapple Liked you
-- Someone sent an Intro Note
+- Someone sent a Pineapple Like with a note (the note shows on the like)
 - You matched
 - Your Boost generated views/likes
 - Your Pick expires soon
@@ -509,7 +516,7 @@ Activity handles FOMO. Swipe should stay focused on decisions.
 
 Current implementation note:
 
-- Server-authoritative Swipe actions now emit Activity rows for normal Likes, Pineapple Likes, Intro Notes, and mutual matches after action validation/recording succeeds.
+- Server-authoritative Swipe actions now emit Activity rows for normal Likes, Pineapple Likes (with their optional note), and mutual matches after action validation/recording succeeds.
 - Match Activity is written for both matched users.
 - Idempotent Swipe action retries do not create duplicate Activity rows.
 
@@ -525,7 +532,7 @@ safety. The free tier is not "ad-supported": the ad slot and "No ads" perk are b
 Swipe safety rules:
 
 - Block/report must be available from every card.
-- Age verification can gate chat or intro notes.
+- Age verification can gate chat or Pineapple Like notes.
 - Verified-only chat mode should be supported.
 - Contact blocking should be considered for launch or early roadmap.
 - Discovery off should stop showing the profile to new swipe users while preserving existing matches/chats.
@@ -565,7 +572,7 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
 
 - [x] Swipe card DTO; signed persisted deck sessions and card tokens; the action endpoint validates
   dealt-card state.
-- [x] Like / Pass / Pineapple Like / Intro Note actions; server-authoritative match creation.
+- [x] Like / Pass / Pineapple Like (optional note; Intro Notes merged in, V92) actions; server-authoritative match creation.
 - [x] Cursor pagination continues a deck session without duplicates; the client auto-loads the next
   page below a threshold, deduping against pending actions.
 - [x] Rewind is server-aware for the latest eligible Like/Pass/Pineapple Like and local queued

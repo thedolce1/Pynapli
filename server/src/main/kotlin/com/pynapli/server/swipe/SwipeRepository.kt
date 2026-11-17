@@ -56,13 +56,19 @@ interface SwipeRepository {
         viewerUserId: UUID,
         targetUserId: UUID,
         radiusMeters: Int,
-        requireIntroNotesAllowed: Boolean = false,
     ): Boolean
+
+    /**
+     * Whether [targetUserId] accepts notes with Pineapple Likes ("Allow notes with Pineapple Likes",
+     * stored as discovery_settings.allow_intro_notes). Never decides whether the like itself lands.
+     */
+    suspend fun targetAcceptsPineappleLikeNotes(targetUserId: UUID): Boolean
 
     /**
      * One-shot precondition gate for action submit. Combines the deck-card actionability
      * check and the target eligibility check that submitAction used to call separately.
-     * Implementations should include block/privacy/visibility exclusions in targetEligible.
+     * Implementations should include block/privacy/visibility exclusions in targetEligible, and
+     * report the target's Pineapple Like note setting in targetAcceptsNotes.
      * The default impl delegates to the existing two methods so test fakes do not have
      * to change; JdbcSwipeRepository overrides with a single SQL round-trip.
      */
@@ -72,7 +78,6 @@ interface SwipeRepository {
         viewerUserId: UUID,
         targetUserId: UUID,
         radiusMeters: Int,
-        requireIntroNotesAllowed: Boolean,
         now: Instant,
     ): SwipeActionPreconditionCheck =
         SwipeActionPreconditionCheck(
@@ -89,8 +94,8 @@ interface SwipeRepository {
                     viewerUserId = viewerUserId,
                     targetUserId = targetUserId,
                     radiusMeters = radiusMeters,
-                    requireIntroNotesAllowed = requireIntroNotesAllowed,
                 ),
+            targetAcceptsNotes = targetAcceptsPineappleLikeNotes(targetUserId),
         )
 
     suspend fun findSwipeActionById(
@@ -207,6 +212,8 @@ data class SwipeActionPreconditionCheck(
     val deckCardActionable: Boolean,
     val targetEligible: Boolean,
     val viewerTravelLocationId: UUID? = null,
+    /** The target accepts notes with Pineapple Likes. */
+    val targetAcceptsNotes: Boolean,
 )
 
 data class SwipeDeckSessionState(
@@ -271,13 +278,12 @@ data class SwipeActionResult(
 enum class SwipeInventorySpend(
     val inventoryType: String,
     /**
-     * Whether the action keeps the spent `premium_inventory.id`. A Pineapple Like does, because
-     * rewinding it refunds that row; an Intro Note can't be rewound and keeps none.
+     * Whether the action keeps the spent `premium_inventory.id`. A Pineapple Like does (with or
+     * without a note), because rewinding it refunds that row.
      */
     val storesInventoryId: Boolean,
 ) {
     PINEAPPLE_LIKE("pineapple_like", storesInventoryId = true),
-    INTRO_NOTE("intro_note", storesInventoryId = false),
 }
 
 data class SwipeActionRecord(

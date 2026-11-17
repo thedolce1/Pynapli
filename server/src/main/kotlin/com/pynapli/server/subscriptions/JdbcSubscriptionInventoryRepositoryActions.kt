@@ -13,11 +13,6 @@ import javax.sql.DataSource
 internal class JdbcSubscriptionInventoryRepositoryActions(
     private val dataSource: DataSource,
 ) {
-    suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = consumePremiumInventory(userId = userId, inventoryType = "intro_note", now = now)
-
     suspend fun consumePineappleLikeInventory(
         userId: UUID,
         now: Instant,

@@ -6,7 +6,17 @@ object SwipeAction {
     const val LIKE = "like"
     const val PASS = "pass"
     const val PINEAPPLE_LIKE = "pineapple_like"
-    const val INTRO_NOTE = "intro_note"
+}
+
+/**
+ * The optional note a Pineapple Like can carry (`SwipeActionRequestDto.noteText`). Intro Notes were
+ * a separate product until 2026-11-17; they are now this note. Trimmed; blank means no note.
+ */
+object PineappleLikeNote {
+    const val MAX_LENGTH = 140
+
+    /** The note as the server stores it: trimmed, or null when there is nothing to send. */
+    fun normalize(text: String?): String? = text?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 // FILTERS_SPEC L356-365: dealbreaker-eligible filter keys for the Swipe deck.
@@ -90,6 +100,7 @@ data class SwipeActionRequestDto(
     val cardToken: String = "",
     val targetUserId: String,
     val action: String,
+    // Only on a Pineapple Like: an optional note of up to PineappleLikeNote.MAX_LENGTH characters.
     val noteText: String? = null,
 )
 

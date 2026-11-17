@@ -389,7 +389,7 @@ class ActivityServiceTest {
         }
 
     @Test
-    fun recordSwipeInterestWritesLikesAndIntroNotesForActivityTabs() =
+    fun recordSwipeInterestWritesLikesAndPineappleLikesForActivityTabs() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000002001")
             val target = UUID.fromString("00000000-0000-0000-0000-000000002002")
@@ -397,12 +397,12 @@ class ActivityServiceTest {
             val service = ActivityService(repository)
 
             service.recordSwipeInterest(viewer, target, "swipe_like")
-            service.recordSwipeInterest(viewer, target, "intro_note")
+            service.recordSwipeInterest(viewer, target, "pineapple_like")
 
             assertEquals(
                 listOf(
                     Triple(viewer, target, "swipe_like"),
-                    Triple(viewer, target, "intro_note"),
+                    Triple(viewer, target, "pineapple_like"),
                 ),
                 repository.swipeInterests,
             )

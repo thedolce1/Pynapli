@@ -54,8 +54,11 @@ fun SwipeScreen(
     var requestedAction by remember { mutableStateOf<String?>(null) }
     var selectedProfileCard by remember { mutableStateOf<SwipeCardDto?>(null) }
     var profileActionMode by remember { mutableStateOf(ProfileDetailActionMode.SwipeUnmatched) }
-    var introNoteCard by remember { mutableStateOf<SwipeCardDto?>(null) }
-    var introNoteText by remember { mutableStateOf("") }
+    // The Pineapple Like sheet (optional note) for the top card, and the note riding on the swipe-up
+    // animation it starts, keyed to that card so a different card's swipe-up never picks it up.
+    var pineappleSheetCard by remember { mutableStateOf<SwipeCardDto?>(null) }
+    var pineappleNoteText by remember { mutableStateOf("") }
+    var pendingPineappleNote by remember { mutableStateOf<Pair<String, String>?>(null) }
     var linkedPartnerPreviewCard by remember { mutableStateOf<SwipeCardDto?>(null) }
     var filtersSheetVisible by remember { mutableStateOf(false) }
     var travelSheetVisible by remember { mutableStateOf(false) }
@@ -116,17 +119,24 @@ fun SwipeScreen(
             }
         },
         onLinkedPartnerTap = { card -> linkedPartnerPreviewCard = card },
-        onSwiped = { card, action -> scope.launch { stateHolder.submitAction(card, action) } },
+        onSwiped = { card, action ->
+            if (action == SwipeAction.PINEAPPLE_LIKE) {
+                val note = pendingPineappleNote?.takeIf { it.first == card.userId }?.second
+                pendingPineappleNote = null
+                scope.launch { stateHolder.submitPineappleLike(card, note) }
+            } else {
+                scope.launch { stateHolder.submitAction(card, action) }
+            }
+        },
         onRetryPendingActions = { scope.launch { stateHolder.retryPendingActions() } },
         onRewind = { scope.launch { stateHolder.rewind() } },
         onPass = { requestedAction = SwipeAction.PASS },
-        onIntroNote = {
+        onPineappleLike = {
             state.topCard?.let { card ->
-                introNoteCard = card
-                introNoteText = ""
+                pineappleSheetCard = card
+                pineappleNoteText = ""
             }
         },
-        onPineappleLike = { requestedAction = SwipeAction.PINEAPPLE_LIKE },
         onLike = { requestedAction = SwipeAction.LIKE },
         modifier = modifier,
     )
@@ -339,25 +349,38 @@ fun SwipeScreen(
         )
     }
 
-    introNoteCard?.let { card ->
-        IntroNoteDialog(
+    pineappleSheetCard?.let { card ->
+        PineappleLikeSheet(
             displayName = card.displayName,
-            noteText = introNoteText,
-            isSubmitting = state.isSubmitting,
-            onNoteTextChanged = { text -> introNoteText = text.take(INTRO_NOTE_INPUT_MAX_LENGTH) },
+            noteText = pineappleNoteText,
+            notesRefused = false,
+            isSubmitting = false,
+            onNoteTextChanged = { text -> pineappleNoteText = text.take(PINEAPPLE_NOTE_INPUT_MAX_LENGTH) },
             onDismiss = {
-                if (!state.isSubmitting) {
-                    introNoteCard = null
-                    introNoteText = ""
-                }
+                pineappleSheetCard = null
+                pineappleNoteText = ""
             },
             onSend = {
-                scope.launch {
-                    stateHolder.submitIntroNote(card, introNoteText)
-                    introNoteCard = null
-                    introNoteText = ""
-                }
+                // Same swipe-up as the gesture; the note rides along to onSwiped for this card.
+                pendingPineappleNote = card.userId to pineappleNoteText
+                pineappleSheetCard = null
+                pineappleNoteText = ""
+                requestedAction = SwipeAction.PINEAPPLE_LIKE
             },
+        )
+    }
+
+    // The recipient doesn't take notes: the card is back on top, and the same sheet offers the
+    // Pineapple Like on its own. Dismissing leaves the card to decide on again.
+    state.noteRefusedCard?.let { card ->
+        PineappleLikeSheet(
+            displayName = card.displayName,
+            noteText = "",
+            notesRefused = true,
+            isSubmitting = state.isSubmitting,
+            onNoteTextChanged = {},
+            onDismiss = stateHolder::dismissNoteRefusal,
+            onSend = { scope.launch { stateHolder.sendPineappleLikeWithoutNote() } },
         )
     }
 }

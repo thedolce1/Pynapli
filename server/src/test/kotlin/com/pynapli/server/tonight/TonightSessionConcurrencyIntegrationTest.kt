@@ -203,7 +203,6 @@ private fun concurrencyPolicy(tier: String): EntitlementPolicy =
         tier = tier,
         activityRevealLimit = if (tier == SubscriptionTier.FREE) 1 else Int.MAX_VALUE,
         advancedFiltersAllowed = tier != SubscriptionTier.FREE,
-        introNoteInventoryRequired = true,
         gridPageLimit = 60,
         gridResultDepthLimit = 60,
         psyncMaxDeckSize = if (tier == SubscriptionTier.FREE) 10 else 50,

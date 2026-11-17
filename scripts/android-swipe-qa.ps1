@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$PackageName = "com.pynapli.app",
     [string]$LaunchActivity = ".DefaultLauncherAlias",
@@ -251,7 +251,6 @@ function Get-MainSwipeSnapshot {
         "Age",
         "Rewind",
         "Pass",
-        "Intro Note",
         "Pineapple Like",
         "Like",
         "Grid",
@@ -547,13 +546,14 @@ $script:VisualSignatures.linkedPartnerPreview = Assert-GoldenStage "linkedPartne
 Tap-Text "Close"
 Wait-ForAnyText @("Linked", "Like") 20 | Out-Null
 
-Tap-ContentDescription "Intro Note"
-Wait-ForAnyText @("Intro Note", "Send a short note") 20 | Out-Null
+# The Pineapple Like button opens its sheet (optional note; Intro Notes merged into it 2026-11-17).
+Tap-ContentDescription "Pineapple Like"
+Wait-ForAnyText @("Send Pineapple Like", "Add a note (optional)") 20 | Out-Null
 Start-Sleep -Milliseconds 600
-$introXml = Dump-Ui "08_swipe_intro_note_dialog" -Keep
-Assert-NoAppErrorText $introXml "Intro Note dialog"
-$script:Screenshots.introNoteDialog = Save-Screen "08_swipe_intro_note_dialog"
-$script:VisualSignatures.introNoteDialog = Assert-GoldenStage "introNoteDialog" $introXml $script:Screenshots.introNoteDialog
+$pineappleXml = Dump-Ui "08_swipe_pineapple_like_sheet" -Keep
+Assert-NoAppErrorText $pineappleXml "Pineapple Like sheet"
+$script:Screenshots.pineappleLikeSheet = Save-Screen "08_swipe_pineapple_like_sheet"
+$script:VisualSignatures.pineappleLikeSheet = Assert-GoldenStage "pineappleLikeSheet" $pineappleXml $script:Screenshots.pineappleLikeSheet
 Tap-Text "Cancel"
 Wait-ForAnyText @("Linked", "Like") 20 | Out-Null
 
@@ -589,7 +589,7 @@ Write-Summary @{
         filtersSheetCaptured = $true
         travelSheetCaptured = $true
         linkedPartnerPreviewCaptured = $true
-        introNoteDialogCaptured = $true
+        pineappleLikeSheetCaptured = $true
     }
     visualSignatures = $script:VisualSignatures
     screenshots = $script:Screenshots

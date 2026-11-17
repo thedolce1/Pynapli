@@ -77,7 +77,7 @@ internal fun ActivityControlsContent(
                         onCheckedChange = onAllowFlirtsChanged,
                     )
                     PrivacyToggleRow(
-                        label = "Allow Intro Notes",
+                        label = "Allow notes with Pineapple Likes",
                         value = if (state.activityDraft.allowIntroNotes) "On" else "Off",
                         checked = state.activityDraft.allowIntroNotes,
                         onCheckedChange = onAllowIntroNotesChanged,

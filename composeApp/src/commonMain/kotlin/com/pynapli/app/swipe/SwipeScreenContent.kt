@@ -61,7 +61,6 @@ internal fun SwipeScreenContent(
     onRetryPendingActions: () -> Unit,
     onRewind: () -> Unit,
     onPass: () -> Unit,
-    onIntroNote: () -> Unit,
     onPineappleLike: () -> Unit,
     onLike: () -> Unit,
     modifier: Modifier = Modifier,
@@ -191,7 +190,6 @@ internal fun SwipeScreenContent(
                 isSubmitting = false,
                 onRewind = onRewind,
                 onPass = onPass,
-                onIntroNote = onIntroNote,
                 onPineappleLike = onPineappleLike,
                 onLike = onLike,
             )

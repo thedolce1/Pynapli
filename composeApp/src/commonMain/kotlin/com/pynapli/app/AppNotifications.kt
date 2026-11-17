@@ -132,7 +132,6 @@ private fun ActivityEventDto.activityNotificationBody(): String =
         "flirt" -> "sent a spark"
         "swipe_like" -> "liked you"
         "pineapple_like" -> "sent a Pineapple"
-        "intro_note" -> "sent an Intro Note"
         "match" -> "matched with you"
         "album_request" -> "requested album access"
         "album_granted" -> "shared their private album"
@@ -143,7 +142,7 @@ private fun ActivityEventDto.activityNotificationBody(): String =
 private fun ActivityEventDto.activityTab(): ActivityTabUi =
     when (type) {
         "profile_view", "viewed_profile" -> ActivityTabUi.Views
-        "flirt", "swipe_like", "pineapple_like", "intro_note" -> ActivityTabUi.Flirts
+        "flirt", "swipe_like", "pineapple_like" -> ActivityTabUi.Flirts
         "album_request",
         "album_granted",
         "partner_chat_invite",

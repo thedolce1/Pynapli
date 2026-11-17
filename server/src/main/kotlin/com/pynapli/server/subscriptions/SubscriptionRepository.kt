@@ -52,11 +52,6 @@ interface SubscriptionRepository {
         reason: String,
     ): StoredEntitlementRecord? = null
 
-    suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean
-
     suspend fun consumePineappleLikeInventory(
         userId: UUID,
         now: Instant,

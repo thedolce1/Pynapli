@@ -574,7 +574,9 @@ class AndroidPlayBillingPurchaseGateway(
             setOf(
                 SubscriptionProductId.BOOST_SINGLE,
                 SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
-                SubscriptionProductId.INTRO_NOTES_THREE,
+                // Retired (Intro Notes became a note on a Pineapple Like). Never sold again, but an
+                // unfinished purchase of it is still recovered, verified and credited by the server.
+                SubscriptionProductId.LEGACY_INTRO_NOTES_THREE,
             )
     }
 }

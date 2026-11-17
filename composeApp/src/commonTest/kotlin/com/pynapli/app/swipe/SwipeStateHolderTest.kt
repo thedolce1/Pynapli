@@ -33,7 +33,7 @@ class SwipeStateHolderTest {
         }
 
     @Test
-    fun introNoteValidationStopsOverLimitRequest() =
+    fun pineappleLikeNoteOverTheLimitIsStoppedBeforeSending() =
         runTest {
             val card = swipeCard(userId = "target-1")
             val repository =
@@ -43,12 +43,61 @@ class SwipeStateHolderTest {
             val stateHolder = SwipeStateHolder(repository)
 
             stateHolder.load()
-            stateHolder.submitIntroNote(card, "x".repeat(141))
+            stateHolder.submitPineappleLike(card, "x".repeat(141))
 
             val state = stateHolder.state.value
             assertEquals(0, repository.submitCount)
-            assertEquals("Intro note must be 140 characters or less.", state.errorMessage)
+            assertEquals("Notes with a Pineapple Like are 140 characters or less.", state.errorMessage)
             assertEquals(card, state.topCard)
+        }
+
+    @Test
+    fun pineappleLikeCarriesItsTrimmedNoteAndABlankNoteIsNoNote() =
+        runTest {
+            val first = swipeCard(userId = "target-1")
+            val second = swipeCard(userId = "target-2")
+            val repository = FakeSwipeRepository(deck = SwipeDeckUi(cards = listOf(first, second), deckSessionId = "deck-1"))
+            val stateHolder = SwipeStateHolder(repository)
+
+            stateHolder.load()
+            stateHolder.submitPineappleLike(first, "  Loved your hiking photos  ")
+            stateHolder.submitPineappleLike(second, "   ")
+
+            assertEquals(
+                listOf(
+                    SwipeAction.PINEAPPLE_LIKE to "Loved your hiking photos",
+                    SwipeAction.PINEAPPLE_LIKE to null,
+                ),
+                repository.submittedActions.map { it.action to it.noteText },
+            )
+        }
+
+    @Test
+    fun refusedNoteOffersToSendThePineappleLikeWithoutIt() =
+        runTest {
+            val card = swipeCard(userId = "target-1")
+            val repository =
+                FakeSwipeRepository(
+                    deck = SwipeDeckUi(cards = listOf(card), deckSessionId = "deck-1"),
+                    actionResult =
+                        AppResult.Failure(
+                            AppError("PINEAPPLE_LIKE_NOTE_NOT_ACCEPTED", "Not accepting notes.", recoverable = false),
+                        ),
+                )
+            val stateHolder = SwipeStateHolder(repository)
+
+            stateHolder.load()
+            stateHolder.submitPineappleLike(card, "Hey there")
+
+            assertEquals(card, stateHolder.state.value.noteRefusedCard)
+            assertEquals(card, stateHolder.state.value.topCard)
+
+            repository.actionResult = AppResult.Success(null)
+            stateHolder.sendPineappleLikeWithoutNote()
+
+            assertEquals(SwipeAction.PINEAPPLE_LIKE to null, repository.submittedActions.last().let { it.action to it.noteText })
+            assertNull(stateHolder.state.value.noteRefusedCard)
+            assertNull(stateHolder.state.value.topCard)
         }
 
     @Test

@@ -12,7 +12,6 @@
         "Age",
         "Rewind",
         "Pass",
-        "Intro Note",
         "Pineapple Like",
         "Like",
         "Grid",
@@ -92,7 +91,6 @@
         "Linked",
         "Rewind",
         "Pass",
-        "Intro Note",
         "Pineapple Like",
         "Like"
       ],
@@ -136,12 +134,11 @@
         "minColorBucketCount": 8
       }
     },
-    "introNoteDialog": {
+    "pineappleLikeSheet": {
       "requiredTexts": [
-        "Intro Note",
-        "Send a short note",
+        "Send Pineapple Like",
+        "Add a note (optional)",
         "0/140",
-        "Send",
         "Cancel"
       ],
       "forbiddenTexts": [
@@ -164,7 +161,6 @@
         "Swipe",
         "Rewind",
         "Pass",
-        "Intro Note",
         "Pineapple Like",
         "Like"
       ],
@@ -189,7 +185,6 @@
         "Swipe",
         "Rewind",
         "Pass",
-        "Intro Note",
         "Pineapple Like",
         "Like"
       ],

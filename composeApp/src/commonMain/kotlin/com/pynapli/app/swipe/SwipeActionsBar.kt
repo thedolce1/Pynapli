@@ -24,7 +24,6 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Close
-import com.pynapli.app.design.icons.filled.Edit
 import com.pynapli.app.design.icons.filled.Favorite
 import com.pynapli.app.design.icons.filled.Refresh
 import com.pynapli.app.design.icons.filled.Star
@@ -36,7 +35,6 @@ internal fun SwipeActions(
     isSubmitting: Boolean,
     onRewind: () -> Unit,
     onPass: () -> Unit,
-    onIntroNote: () -> Unit,
     onPineappleLike: () -> Unit,
     onLike: () -> Unit,
 ) {
@@ -69,19 +67,8 @@ internal fun SwipeActions(
             iconTint = PynapliColors.Danger,
             onClick = onPass,
         )
-        // Also neutral: an intro note is a normal way to reach someone, not the premium action.
-        SwipeActionButton(
-            enabled = actionEnabled,
-            isSubmitting = isSubmitting,
-            testTag = SwipeTestTags.INTRO_NOTE_ACTION,
-            icon = Icons.Filled.Edit,
-            contentDescription = "Intro Note",
-            background = MaterialTheme.colorScheme.surfaceVariant,
-            iconTint = PynapliColors.TextSecondary,
-            onClick = onIntroNote,
-        )
-        // The ONLY gold button in the bar. Pineapple Like is the premium standout action, so it is
-        // what the accent is reserved for — it only reads as special while nothing beside it shares
+        // The ONLY gold button in the bar. Pineapple Like (with its optional note) is the premium
+        // standout action, so it is what the accent is reserved for — it only reads as special while nothing beside it shares
         // the colour.
         SwipeActionButton(
             enabled = actionEnabled,

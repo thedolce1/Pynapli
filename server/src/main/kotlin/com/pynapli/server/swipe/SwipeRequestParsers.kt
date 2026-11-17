@@ -2,6 +2,7 @@ package com.pynapli.server.swipe
 
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.discoveryFiltersFrom
+import com.pynapli.shared.network.dto.PineappleLikeNote
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeDealbreakerKey
@@ -66,13 +67,11 @@ internal data class ParsedSwipeActionRequest(
 )
 
 internal object SwipeActionRequestParser {
-    private const val INTRO_NOTE_MAX_LENGTH = 140
     private val ACTIONS =
         setOf(
             SwipeAction.LIKE,
             SwipeAction.PASS,
             SwipeAction.PINEAPPLE_LIKE,
-            SwipeAction.INTRO_NOTE,
         )
 
     fun parse(
@@ -84,12 +83,11 @@ internal object SwipeActionRequestParser {
 
         val action = request.action.trim().lowercase()
         if (action !in ACTIONS) throw SwipeException("INVALID_SWIPE_ACTION")
-        val noteText = request.noteText?.trim()?.takeIf { it.isNotEmpty() }
-        if (action == SwipeAction.INTRO_NOTE) {
-            if (noteText == null) throw SwipeException("INTRO_NOTE_EMPTY")
-            if (noteText.length > INTRO_NOTE_MAX_LENGTH) throw SwipeException("INTRO_NOTE_TOO_LONG")
-        } else if (noteText != null) {
-            throw SwipeException("INVALID_SWIPE_ACTION")
+        // Only a Pineapple Like carries a note (Intro Notes merged into it, 2026-11-17); blank is no note.
+        val noteText = PineappleLikeNote.normalize(request.noteText)
+        if (noteText != null) {
+            if (action != SwipeAction.PINEAPPLE_LIKE) throw SwipeException("INVALID_SWIPE_ACTION")
+            if (noteText.length > PineappleLikeNote.MAX_LENGTH) throw SwipeException("PINEAPPLE_LIKE_NOTE_TOO_LONG")
         }
 
         val deckSessionId = request.deckSessionId.trim()

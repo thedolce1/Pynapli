@@ -120,7 +120,7 @@ private fun selectTier(): SubscriptionTierDto =
         displayName = "Pynapli Select",
         monthlyPriceUsdCents = 999,
         linkedPartnerIncluded = true,
-        features = listOf("Full Activity reveal", "Intro Notes"),
+        features = listOf("Full Activity reveal", "Weekly Pineapple Likes"),
         playStoreProductId = SubscriptionProductId.PLAY_SELECT_MONTHLY,
     )
 

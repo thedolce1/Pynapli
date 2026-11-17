@@ -9,7 +9,6 @@ internal fun Connection.isSwipeActionTargetEligible(
     viewerUserId: UUID,
     targetUserId: UUID,
     radiusMeters: Int,
-    requireIntroNotesAllowed: Boolean,
 ): Boolean =
     prepareStatement(
         """
@@ -49,7 +48,6 @@ internal fun Connection.isSwipeActionTargetEligible(
               AND target_settings.swipe_visible = true
               AND target_settings.incognito = false
               AND (target_travel.id IS NULL OR target_settings.visible_while_traveling = true)
-              AND (?::boolean = false OR target_settings.allow_intro_notes = true)
               AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
               AND (
                   ST_DWithin(v.geom, target_location.geom, ?)
@@ -73,11 +71,10 @@ internal fun Connection.isSwipeActionTargetEligible(
         statement.setObject(1, viewerUserId)
         statement.setObject(2, targetUserId)
         statement.setObject(3, targetUserId)
-        statement.setBoolean(4, requireIntroNotesAllowed)
+        statement.setDouble(4, radiusMeters.toDouble())
         statement.setDouble(5, radiusMeters.toDouble())
-        statement.setDouble(6, radiusMeters.toDouble())
+        statement.setObject(6, viewerUserId)
         statement.setObject(7, viewerUserId)
-        statement.setObject(8, viewerUserId)
         statement.executeQuery().use { rs ->
             rs.next()
             rs.getBoolean(1)
@@ -90,7 +87,6 @@ internal fun Connection.checkSwipeActionPreconditions(
     viewerUserId: UUID,
     targetUserId: UUID,
     radiusMeters: Int,
-    requireIntroNotesAllowed: Boolean,
     now: Instant,
 ): SwipeActionPreconditionCheck =
     prepareStatement(
@@ -152,7 +148,6 @@ internal fun Connection.checkSwipeActionPreconditions(
                   AND target_settings.swipe_visible = true
                   AND target_settings.incognito = false
                   AND (target_travel.id IS NULL OR target_settings.visible_while_traveling = true)
-                  AND (?::boolean = false OR target_settings.allow_intro_notes = true)
                   AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
                   AND (
                       ST_DWithin(v.geom, target_location.geom, ?)
@@ -176,7 +171,12 @@ internal fun Connection.checkSwipeActionPreconditions(
                       WHERE uhp.hider_user_id = ?
                         AND uhp.hidden_user_id = target.id
                   )
-            ) AS target_eligible
+            ) AS target_eligible,
+            -- "Allow notes with Pineapple Likes": only decides whether a note may ride along.
+            COALESCE(
+                (SELECT allow_intro_notes FROM discovery_settings WHERE user_id = ?),
+                false
+            ) AS target_accepts_notes
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, viewerUserId)
@@ -188,19 +188,26 @@ internal fun Connection.checkSwipeActionPreconditions(
         statement.setTimestamp(7, Timestamp.from(now))
         statement.setObject(8, targetUserId)
         statement.setObject(9, targetUserId)
-        statement.setBoolean(10, requireIntroNotesAllowed)
+        statement.setDouble(10, radiusMeters.toDouble())
         statement.setDouble(11, radiusMeters.toDouble())
-        statement.setDouble(12, radiusMeters.toDouble())
+        statement.setObject(12, viewerUserId)
         statement.setObject(13, viewerUserId)
         statement.setObject(14, viewerUserId)
         statement.setObject(15, viewerUserId)
-        statement.setObject(16, viewerUserId)
+        statement.setObject(16, targetUserId)
         statement.executeQuery().use { rs ->
             rs.next()
             SwipeActionPreconditionCheck(
                 deckCardActionable = rs.getBoolean("deck_card_actionable"),
                 targetEligible = rs.getBoolean("target_eligible"),
                 viewerTravelLocationId = rs.getObject("viewer_travel_location_id", UUID::class.java),
+                targetAcceptsNotes = rs.getBoolean("target_accepts_notes"),
             )
         }
+    }
+
+internal fun Connection.targetAcceptsPineappleLikeNotes(targetUserId: UUID): Boolean =
+    prepareStatement("SELECT allow_intro_notes FROM discovery_settings WHERE user_id = ?").use { statement ->
+        statement.setObject(1, targetUserId)
+        statement.executeQuery().use { rs -> rs.next() && rs.getBoolean(1) }
     }

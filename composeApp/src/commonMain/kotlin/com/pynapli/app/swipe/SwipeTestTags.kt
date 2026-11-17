@@ -17,7 +17,10 @@ internal object SwipeTestTags {
     const val PHOTO_CAROUSEL_INDICATORS = "swipe-card-photo-carousel-indicators"
     const val REWIND_ACTION = "swipe-action-rewind"
     const val PASS_ACTION = "swipe-action-pass"
-    const val INTRO_NOTE_ACTION = "swipe-action-intro-note"
     const val PINEAPPLE_LIKE_ACTION = "swipe-action-pineapple-like"
     const val LIKE_ACTION = "swipe-action-like"
+    const val PINEAPPLE_LIKE_SHEET = "swipe-pineapple-like-sheet"
+    const val PINEAPPLE_LIKE_NOTE_FIELD = "swipe-pineapple-like-note"
+    const val PINEAPPLE_LIKE_SEND = "swipe-pineapple-like-send"
+    const val PINEAPPLE_LIKE_SEND_WITHOUT_NOTE = "swipe-pineapple-like-send-without-note"
 }

@@ -24,6 +24,7 @@ internal object JdbcActivityFeedSql {
                NULLIF(pair_profile.display_name, '') AS pair_display_name,
                ae.metadata->>'pairSessionId' AS pair_session_id,
                album_request.status AS album_request_status,
+               like_note.note_text AS note_text,
                actor_settings.show_distance AS actor_show_distance,
                CASE
                    WHEN actor_settings.show_distance = true
@@ -89,6 +90,18 @@ internal object JdbcActivityFeedSql {
             ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
             LIMIT 1
         ) actor_photo ON true
+        -- A Pineapple Like's optional note, read from the live like itself: a rewound like has none.
+        LEFT JOIN LATERAL (
+            SELECT sa.note_text
+            FROM swipe_actions sa
+            WHERE ae.event_type = 'pineapple_like'
+              AND sa.actor_user_id = ae.actor_user_id
+              AND sa.target_user_id = ae.recipient_user_id
+              AND sa.action = 'pineapple_like'
+              AND sa.rewound_at IS NULL
+            ORDER BY sa.created_at DESC
+            LIMIT 1
+        ) like_note ON true
         WHERE ae.recipient_user_id = ?
           AND ae.visibility_status = 'visible'
           AND ae.deleted_at IS NULL

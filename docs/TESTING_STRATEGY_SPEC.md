@@ -77,7 +77,7 @@ Current Swipe coverage:
 
 - `SwipeScreenVisualInteractionTest` renders the real shared Compose `SwipeScreen` in a fixed mobile viewport with the dark Pynapli theme.
 - The test captures pixels and checks for the intended visual signature: subdued dark surface, tonal card body, readable text/icons, Pynapli gold accent, and Like action accent.
-- The test also clicks Like and Pass through the real action buttons and verifies the deck advances, then verifies the Intro Note dialog opens.
+- The test also clicks Like and Pass through the real action buttons and verifies the deck advances, then opens the Pineapple Like sheet, types a note and verifies the Pineapple Like is sent with it.
 - `SwipeImagePrefetchPlannerTest` verifies the active/near-next Swipe image prefetch window, URL ordering, and deduplication.
 - `scripts/swipe-api-load-test.ps1` now exercises the Ktor Swipe API against a dense local dataset, including core deck/action/rewind flows and optional Boost, Top Picks, and Travel scenarios.
 - `scripts/android-swipe-qa.ps1` runs the installed Android app against local Ktor, captures Swipe screenshots/XML, verifies structural golden signatures, opens filters and travel mode, opens the linked-partner preview, opens the Intro Note dialog, and proves left/right Swipe gestures advance the visible deck. Latest emulator proof: `artifacts/android-swipe-qa/20260518-214507`.

@@ -22,6 +22,9 @@ data class SwipeUiState(
     val errorCode: String? = null,
     val errorMessage: String? = null,
     val pendingMatch: MatchDto? = null,
+    // The card whose Pineapple Like note was refused (the recipient turned notes off). The screen
+    // offers to send the same Pineapple Like without it.
+    val noteRefusedCard: SwipeCardDto? = null,
 ) {
     val topCard: SwipeCardDto? get() = cards.firstOrNull()
     val hasMore: Boolean get() = cards.isNotEmpty() || nextCursor != null

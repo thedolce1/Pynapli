@@ -71,12 +71,16 @@ internal class SubscriptionPlayStoreProductPurchaseActions(
         const val STATUS_ALREADY_CREDITED = "already_granted"
         const val STATUS_PENDING = "pending_verification"
 
-        /** Store product -> (inventory type, quantity). Bought items don't expire. */
+        /**
+         * Store product -> (inventory type, quantity). Bought items don't expire. The retired Intro
+         * Notes pack is no longer sold, but a purchase made under it (including one still pending in
+         * Play) is still verified and credited as the Pineapple Likes the notes became.
+         */
         val PRODUCT_GRANTS: Map<String, Pair<String, Int>> =
             mapOf(
                 SubscriptionProductId.BOOST_SINGLE to (PremiumInventoryType.BOOST to 1),
                 SubscriptionProductId.PINEAPPLE_LIKES_FIVE to (PremiumInventoryType.PINEAPPLE_LIKE to 5),
-                SubscriptionProductId.INTRO_NOTES_THREE to (PremiumInventoryType.INTRO_NOTE to 3),
+                SubscriptionProductId.LEGACY_INTRO_NOTES_THREE to (PremiumInventoryType.PINEAPPLE_LIKE to 3),
             )
     }
 }

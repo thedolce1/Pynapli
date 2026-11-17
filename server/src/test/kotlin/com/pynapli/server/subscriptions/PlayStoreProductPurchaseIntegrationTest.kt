@@ -68,6 +68,27 @@ class PlayStoreProductPurchaseIntegrationTest {
         }
 
     @Test
+    fun aPurchaseOfTheRetiredIntroNotesPackIsCreditedAsThreePineappleLikes() =
+        runBlocking<Unit> {
+            val buyer = user("buyer@example.com")
+
+            val credited =
+                service.recordPlayStoreProductPurchase(
+                    buyer,
+                    purchase(productId = SubscriptionProductId.LEGACY_INTRO_NOTES_THREE, token = "sandbox-intro-notes-token-01"),
+                )
+
+            assertEquals("inventory_granted", credited.status)
+            assertEquals(3, balance(buyer, PremiumInventoryType.PINEAPPLE_LIKE))
+            assertEquals(listOf(PremiumInventoryType.PINEAPPLE_LIKE), service.getInventory(buyer).balances.map { it.inventoryType })
+            // The retired pack is never offered again.
+            assertEquals(
+                false,
+                service.getInventory().premiumProducts.any { it.productId == SubscriptionProductId.LEGACY_INTRO_NOTES_THREE },
+            )
+        }
+
+    @Test
     fun aTokenAlreadyCreditedToSomeoneElseIsRefused() =
         runBlocking<Unit> {
             val buyer = user("buyer@example.com")

@@ -100,14 +100,14 @@ class JdbcSwipeRepository(
         viewerUserId: UUID,
         targetUserId: UUID,
         radiusMeters: Int,
-        requireIntroNotesAllowed: Boolean,
     ): Boolean =
         actionActions.isActionTargetEligible(
             viewerUserId = viewerUserId,
             targetUserId = targetUserId,
             radiusMeters = radiusMeters,
-            requireIntroNotesAllowed = requireIntroNotesAllowed,
         )
+
+    override suspend fun targetAcceptsPineappleLikeNotes(targetUserId: UUID): Boolean = actionActions.targetAcceptsPineappleLikeNotes(targetUserId)
 
     override suspend fun checkActionPreconditions(
         sessionId: UUID,
@@ -115,7 +115,6 @@ class JdbcSwipeRepository(
         viewerUserId: UUID,
         targetUserId: UUID,
         radiusMeters: Int,
-        requireIntroNotesAllowed: Boolean,
         now: Instant,
     ): SwipeActionPreconditionCheck =
         actionActions.checkActionPreconditions(
@@ -124,7 +123,6 @@ class JdbcSwipeRepository(
             viewerUserId = viewerUserId,
             targetUserId = targetUserId,
             radiusMeters = radiusMeters,
-            requireIntroNotesAllowed = requireIntroNotesAllowed,
             now = now,
         )
 

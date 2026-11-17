@@ -39,9 +39,4 @@ internal class StaticSubscriptionRepository(
         userId: UUID,
         now: Instant,
     ): StoredEntitlementRecord? = null
-
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = false
 }

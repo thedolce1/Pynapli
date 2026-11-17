@@ -8,8 +8,12 @@ internal fun ActivityEventDto.activityText(): String =
         "flirt" -> if (count > 1) "sent Sparks ${count}x" else "sent a Spark"
         "album_request" -> if (count > 1) "requested album access ${count}x" else "requested album access"
         "swipe_like" -> if (pairDisplayName != null) "liked you together" else "liked you"
-        "pineapple_like" -> if (pairDisplayName != null) "sent you Pineapples together" else "sent a Pineapple"
-        "intro_note" -> "sent an Intro Note"
+        "pineapple_like" ->
+            when {
+                pairDisplayName != null -> "sent you Pineapples together"
+                noteText != null -> "sent a Pineapple with a note"
+                else -> "sent a Pineapple"
+            }
         "match" -> "matched with you"
         "album_granted" -> "shared their private album with you"
         "partner_chat_invite" -> "sent a chat invite"
@@ -29,7 +33,6 @@ internal fun ActivityEventDto.isUnreadBadgeActivity(): Boolean =
             "flirt",
             "swipe_like",
             "pineapple_like",
-            "intro_note",
             "match",
             "partner_chat_invite",
             "psync_invite",

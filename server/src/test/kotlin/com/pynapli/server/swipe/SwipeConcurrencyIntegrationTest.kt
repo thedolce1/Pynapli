@@ -133,51 +133,49 @@ class SwipeConcurrencyIntegrationTest :
             }
         }
 
-        "an Intro Note retried with the same action id spends exactly one" {
+        "a Pineapple Like with a note retried with the same action id spends exactly one" {
             runBlocking {
                 val service = swipeService()
                 var wrong = 0
                 repeat(iterations) { iteration ->
                     val (viewer, target) = seedPair(iteration)
-                    dataSource.insertSocialSubscription(viewer)
-                    dataSource.grantInventory(viewer, "intro_note", 5)
+                    dataSource.grantInventory(viewer, "pineapple_like", 5)
                     val request =
                         service
-                            .dealtRequest(viewer, target, SwipeAction.INTRO_NOTE, UUID.randomUUID())
+                            .dealtRequest(viewer, target, SwipeAction.PINEAPPLE_LIKE, UUID.randomUUID())
                             .copy(noteText = "Hi there")
                     raceTogether({ service.submitAction(viewer, request) }, { service.submitAction(viewer, request) })
-                    val left = dataSource.inventoryQuantity(viewer, "intro_note")
+                    val left = dataSource.inventoryQuantity(viewer, "pineapple_like")
                     val recorded = dataSource.liveActionCount(viewer, target)
                     if (left != 4 || recorded != 1) wrong++
                 }
-                assertEquals(0, wrong, "iterations out of $iterations that did not spend exactly one Intro Note")
+                assertEquals(0, wrong, "iterations out of $iterations that did not spend exactly one Pineapple Like with a note")
             }
         }
 
-        "two Intro Notes to the same person with different action ids spend exactly one" {
+        "two Pineapple Likes with notes to the same person with different action ids spend exactly one" {
             runBlocking {
                 val service = swipeService()
                 var wrong = 0
                 repeat(iterations) { iteration ->
                     val (viewer, target) = seedPair(iteration)
-                    dataSource.insertSocialSubscription(viewer)
-                    dataSource.grantInventory(viewer, "intro_note", 5)
+                    dataSource.grantInventory(viewer, "pineapple_like", 5)
                     val first =
                         service
-                            .dealtRequest(viewer, target, SwipeAction.INTRO_NOTE, UUID.randomUUID())
+                            .dealtRequest(viewer, target, SwipeAction.PINEAPPLE_LIKE, UUID.randomUUID())
                             .copy(noteText = "Hi there")
                     val second = first.copy(actionId = UUID.randomUUID().toString())
                     raceTogether({ service.submitAction(viewer, first) }, { service.submitAction(viewer, second) })
-                    val left = dataSource.inventoryQuantity(viewer, "intro_note")
+                    val left = dataSource.inventoryQuantity(viewer, "pineapple_like")
                     val recorded = dataSource.liveActionCount(viewer, target)
                     if (left != 4 || recorded != 1) wrong++
                 }
-                assertEquals(0, wrong, "iterations out of $iterations that did not spend exactly one Intro Note")
+                assertEquals(0, wrong, "iterations out of $iterations that did not spend exactly one Pineapple Like with a note")
             }
         }
     })
 
-private suspend fun SwipeService.dealtRequest(
+internal suspend fun SwipeService.dealtRequest(
     viewer: UUID,
     target: UUID,
     action: String,
@@ -194,7 +192,7 @@ private suspend fun SwipeService.dealtRequest(
     )
 }
 
-private fun DataSource.grantInventory(
+internal fun DataSource.grantInventory(
     userId: UUID,
     inventoryType: String,
     quantity: Int,
@@ -237,7 +235,7 @@ private fun DataSource.insertSocialSubscription(userId: UUID) {
     }
 }
 
-private fun DataSource.inventoryQuantity(
+internal fun DataSource.inventoryQuantity(
     userId: UUID,
     inventoryType: String,
 ): Int =
@@ -255,7 +253,7 @@ private fun DataSource.inventoryQuantity(
             }
     }
 
-private fun DataSource.liveActionCount(
+internal fun DataSource.liveActionCount(
     actor: UUID,
     target: UUID,
 ): Int =
@@ -273,7 +271,7 @@ private fun DataSource.liveActionCount(
             }
     }
 
-private fun DataSource.countMatchesBetween(
+internal fun DataSource.countMatchesBetween(
     a: UUID,
     b: UUID,
 ): Int =

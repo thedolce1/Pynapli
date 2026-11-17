@@ -55,10 +55,14 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 - Match creation is server-authoritative. Dealbreakers are hard; soft filters expand only when
   allowed.
 - `actionId` is a client-generated idempotency key. A reused `actionId` with a different
-  target/action/note is rejected. **Idempotent retries never spend Pineapple Like (or Intro Note)
-  inventory twice.**
-- Paid notes need entitlement or inventory and recipient eligibility. (Intro Notes are being merged
-  into Pineapple Like as an optional note.)
+  target/action/note is rejected. **Idempotent retries never spend Pineapple Like inventory twice.**
+- `noteText` is only valid on `pineapple_like` (trimmed, 1-140 characters, else
+  `PINEAPPLE_LIKE_NOTE_TOO_LONG`); the `intro_note` action is retired (`INVALID_SWIPE_ACTION`). When
+  the recipient turned notes off the request fails `PINEAPPLE_LIKE_NOTE_NOT_ACCEPTED` (409) with
+  nothing spent; the same Pineapple Like without the note succeeds. `ActivityEventDto.noteText`
+  carries the note on the recipient's `pineapple_like` item. The Play product
+  `pynapli_intro_notes_3` is no longer in the catalog; `POST /v1/store/play-store/purchases/one-time`
+  still accepts it and credits 3 Pineapple Likes.
 - Rewind is entitlement-gated, soft-rewinds the latest eligible Like/Pass, and returns a fresh deck
   session and card token for the restored card; `rewound=false` when nothing can be safely restored.
 - `GET /v1/matches` is being removed (no client caller); matches reach users through conversations.

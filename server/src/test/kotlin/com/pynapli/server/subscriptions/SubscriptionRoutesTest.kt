@@ -227,11 +227,6 @@ private class StoreRouteSubscriptionRepository(
         activeSubscriptions += record
         return record
     }
-
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = false
 }
 
 private fun uuid(value: Int): UUID = UUID.fromString("00000000-0000-0000-0000-${value.toString().padStart(12, '0')}")

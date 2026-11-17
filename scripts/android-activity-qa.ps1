@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$PackageName = "com.pynapli.app",
     [string]$LaunchActivity = ".DefaultLauncherAlias",
@@ -383,7 +383,7 @@ $script:Screenshots.gridAfterLogin = Save-Screen "02_grid_after_login"
 
 Tap-BottomNavText "Activity"
 Wait-ForAnyText @("Activity", "Flirts", "Views") 45 | Out-Null
-# Default tab is Flirts (unified inbound interest: taps + swipe-likes + pineapples + intro notes —
+# Default tab is Flirts (unified inbound interest: taps + swipe-likes + pineapples (with their notes) —
 # the premium reveal money surface). Matches live in the Messages new-matches rail; album/invite
 # requests are folded into Requests. Flirts/Views render as a 2-up FOMO grid.
 $initialXml = Capture-ActivityStage "flirtsTab" "03_activity_flirts"

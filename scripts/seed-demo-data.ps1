@@ -1,4 +1,4 @@
-﻿# Seeds a rich two-city demo world for partner/founder deep-dive builds:
+# Seeds a rich two-city demo world for partner/founder deep-dive builds:
 #   - viewer accounts: seb@pynapli.local (Toronto/Weston) + partner@pynapli.local (Victoria Harbour)
 #   - N populated fake profiles per city (photos, bios, tags, presence, linked couples)
 #   - live Activity events, real message threads, Playing Tonight sessions, dev subscriptions
@@ -623,7 +623,7 @@ function Set-DemoMonetization {
     for ($i = 0; $i -lt $ViewerSessions.Count; $i++) {
         $userId = $ViewerSessions[$i].user.userId
         $subValues += "('00000000-0000-0000-0000-000000000{0:d3}'::uuid, '$userId'::uuid, 'dev', 'demo-select-{1}', 'select', 'active', now() - interval '1 day', now() + interval '30 days')" -f (801 + $i), $i
-        $invValues += "('00000000-0000-0000-0000-000000000{0:d3}'::uuid, '$userId'::uuid, 'intro_note', 5, 'dev', now() + interval '30 days')" -f (811 + $i)
+        $invValues += "('00000000-0000-0000-0000-000000000{0:d3}'::uuid, '$userId'::uuid, 'pineapple_like', 5, 'dev', now() + interval '30 days')" -f (811 + $i)
     }
 
     $sql = @"
@@ -649,7 +649,7 @@ SET user_id = EXCLUDED.user_id,
     updated_at = now();
 "@
     if (Invoke-DemoSql -Sql $sql -Action "Demo subscriptions") {
-        Write-Host "  [ok] Select subscriptions + intro notes for both viewers"
+        Write-Host "  [ok] Select subscriptions + Pineapple Likes for both viewers"
     }
 }
 

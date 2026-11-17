@@ -236,6 +236,8 @@ internal fun swipeStatusFor(code: String): HttpStatusCode =
         "INTRO_NOTE_INVENTORY_REQUIRED",
         "PINEAPPLE_LIKE_INVENTORY_REQUIRED",
         -> HttpStatusCode.Forbidden
+        "PINEAPPLE_LIKE_NOTE_NOT_ACCEPTED" -> HttpStatusCode.Conflict
+        "PINEAPPLE_LIKE_NOTE_TOO_LONG" -> HttpStatusCode.BadRequest
         "LOCATION_REQUIRED" -> HttpStatusCode.BadRequest
         "LIKE_BACK_NOT_AVAILABLE" -> HttpStatusCode.Conflict
         "INVALID_SWIPE_TARGET",

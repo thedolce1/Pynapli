@@ -39,7 +39,6 @@ class FeatureAccessPolicyTest {
                 PynapliFeature.GridAdvancedFilters,
                 PynapliFeature.SwipeAdvancedFilters,
                 PynapliFeature.ActivityDeepReveal,
-                PynapliFeature.IntroNote,
                 PynapliFeature.PineappleLike,
                 PynapliFeature.Boost,
             )

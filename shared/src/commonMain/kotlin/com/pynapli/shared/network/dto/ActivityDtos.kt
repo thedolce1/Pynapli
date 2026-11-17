@@ -101,4 +101,6 @@ data class ActivityEventDto(
     // Liking back answers both; each partner's match is still its own conversation.
     val pairUserId: String? = null,
     val pairDisplayName: String? = null,
+    // pineapple_like: the note the sender added, shown to the recipient with the like.
+    val noteText: String? = null,
 )

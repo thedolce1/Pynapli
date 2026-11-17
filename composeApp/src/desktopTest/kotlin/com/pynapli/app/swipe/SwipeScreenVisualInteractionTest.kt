@@ -10,8 +10,8 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.conversation.ConversationStateHolder
@@ -50,7 +50,7 @@ class SwipeScreenVisualInteractionTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun swipeActionsAdvanceDeckAndIntroNoteDialogOpens() =
+    fun swipeActionsAdvanceDeckAndPineappleLikeCarriesItsNote() =
         runComposeUiTest {
             mainClock.autoAdvance = true
             val cards = visualSwipeCards()
@@ -89,11 +89,21 @@ class SwipeScreenVisualInteractionTest {
                         ?.userId == cards[2].userId
             }
 
-            onNodeWithTag(SwipeTestTags.INTRO_NOTE_ACTION).performClick()
+            // The Pineapple Like button opens its sheet; the note rides on the same swipe-up.
+            onNodeWithTag(SwipeTestTags.PINEAPPLE_LIKE_ACTION).performClick()
             waitForIdle()
+            onNodeWithTag(SwipeTestTags.PINEAPPLE_LIKE_SHEET).assertExists()
+            onNodeWithTag(SwipeTestTags.PINEAPPLE_LIKE_NOTE_FIELD).performTextInput("Coffee this week?")
+            onNodeWithTag(SwipeTestTags.PINEAPPLE_LIKE_SEND).performClick()
+            waitForIdle()
+            mainClock.advanceTimeBy(SWIPE_FLY_OUT_TEST_MS)
+            waitForIdle()
+            waitUntil(timeoutMillis = 5_000) { repository.submittedActions.size == 3 }
 
-            onNodeWithText("Intro Note").assertExists()
-            assertEquals(listOf(SwipeAction.LIKE, SwipeAction.PASS), repository.submittedActions.map { it.action })
+            assertEquals(
+                listOf(SwipeAction.LIKE to null, SwipeAction.PASS to null, SwipeAction.PINEAPPLE_LIKE to "Coffee this week?"),
+                repository.submittedActions.map { it.action to it.noteText },
+            )
         }
 }
 

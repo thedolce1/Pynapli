@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$BaseUrl = "http://localhost:8080",
     [string]$Password = "PynapliDevPass123!",
     [switch]$SetAndroidEmulatorLocation,
@@ -540,9 +540,9 @@ INSERT INTO premium_inventory (
     expires_at
 )
 VALUES
-    ('00000000-0000-0000-0000-000000000311'::uuid, '$viewerUserId'::uuid, 'intro_note', 5, 'dev', now() + interval '30 days'),
-    ('00000000-0000-0000-0000-000000000312'::uuid, '$mayaUserId'::uuid, 'intro_note', 2, 'dev', now() + interval '30 days'),
-    ('00000000-0000-0000-0000-000000000313'::uuid, '$alexUserId'::uuid, 'intro_note', 2, 'dev', now() + interval '30 days')
+    ('00000000-0000-0000-0000-000000000311'::uuid, '$viewerUserId'::uuid, 'pineapple_like', 5, 'dev', now() + interval '30 days'),
+    ('00000000-0000-0000-0000-000000000312'::uuid, '$mayaUserId'::uuid, 'pineapple_like', 2, 'dev', now() + interval '30 days'),
+    ('00000000-0000-0000-0000-000000000313'::uuid, '$alexUserId'::uuid, 'pineapple_like', 2, 'dev', now() + interval '30 days')
 ON CONFLICT (id) DO UPDATE
 SET user_id = EXCLUDED.user_id,
     quantity = EXCLUDED.quantity,

@@ -227,7 +227,6 @@ class SubscriptionServiceTest {
             listOf(
                 SubscriptionProductId.BOOST_SINGLE,
                 SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
-                SubscriptionProductId.INTRO_NOTES_THREE,
             ),
             service.getInventory().premiumProducts.map { it.productId },
         )
@@ -806,11 +805,6 @@ private class InMemorySubscriptionRepository(
         return revoked
     }
 
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = false
-
     override suspend fun listPremiumInventoryBalances(
         userId: UUID,
         now: Instant,
@@ -975,11 +969,6 @@ private class CountingActiveEntitlementRepository(
         userId: UUID,
         now: Instant,
     ): StoredEntitlementRecord? = null
-
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = false
 }
 
 private class FakePlayStorePurchaseVerifier(
@@ -1085,11 +1074,6 @@ private class MutableEntitlementRepository(
         userId: UUID,
         now: Instant,
     ): StoredEntitlementRecord? = null
-
-    override suspend fun consumeIntroNoteInventory(
-        userId: UUID,
-        now: Instant,
-    ): Boolean = false
 
     override suspend fun listPlayStoreSubscriptionsDueForVerification(
         staleBefore: Instant,
