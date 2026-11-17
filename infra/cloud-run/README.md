@@ -2,7 +2,7 @@
 
 How to stand up the Ktor API on Google Cloud: Artifact Registry, Cloud Run, Cloud SQL
 PostgreSQL/PostGIS, Memorystore Redis, Secret Manager and Cloud Storage. Local Docker Compose stays
-local. Includes the former `docs/GCP_PROVISIONING_CHECKLIST.md` (merged 2026-11-17). The ordered
+local. Includes the former GCP provisioning checklist (merged 2026-11-17). The ordered
 founder path across all targets is [docs/PATH_TO_TESTERS.md](../../docs/PATH_TO_TESTERS.md); infra
 rules are in [docs/DEVOPS_INFRA_SETUP_SPEC.md](../../docs/DEVOPS_INFRA_SETUP_SPEC.md).
 
