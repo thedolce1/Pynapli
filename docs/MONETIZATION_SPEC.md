@@ -524,9 +524,9 @@ Do not experiment with:
 - [x] Subscription cooldown/abuse detection exists.
 - [ ] StoreKit validation exists.
 - [x] Google Play validation is server-authoritative end-to-end (`submit -> verify -> grant`, plus RTDN renewal/cancel/refund reconciliation and a sync worker), and is provable in dev/QA via an env-gated sandbox verifier (`PYNAPLI_PLAY_STORE_SANDBOX_ENABLED`) without prod creds. Remaining: real Play Console service-account credentials/config + product setup (deployment/ops step).
-- [x] Store tab displays Free/Social/Select, current entitlement, linked-partner benefit, accelerator products, and server-backed inventory balances.
+- [x] The store sheet (no Store tab since 2026-11-17; opened from every paywall, scrolled to what it sells, and from the profile menu's Plans and store row) displays Free/Social/Select, current entitlement, linked-partner benefit, accelerator products, and server-backed inventory balances.
 - [x] Local/dev Store purchase endpoint exists for emulator QA and is environment-gated.
-- [x] Connected Android Store QA proves login -> Grid -> Store, structural Store screenshots, Restore, dev Boost purchase, balance refresh, and no app error text.
+- [x] Connected Android Store QA proves login -> Grid -> Profile -> Plans and store, structural Store screenshots, Restore, dev Boost purchase, balance refresh, and no app error text.
 - [x] Restore purchases exists.
 - [x] Activity gating is implemented.
 - [x] Advanced filters are gated.

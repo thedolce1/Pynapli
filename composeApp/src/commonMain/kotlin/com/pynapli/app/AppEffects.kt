@@ -44,6 +44,8 @@ internal fun PynapliAppEffects(
     onOpenPartnerPanel: () -> Unit = onOpenProfileHub,
     onOpenTonight: () -> Unit,
     onOpenPsync: () -> Unit,
+    // /store and any store deep link: the plans/store sheet (there is no Store tab).
+    onOpenStore: () -> Unit,
     onOpenActivityProfile: (com.pynapli.shared.network.dto.ActivityEventDto) -> Unit = {},
 ) {
     val authState by authStateHolder.state.collectAsState()
@@ -148,7 +150,7 @@ internal fun PynapliAppEffects(
 
                 AppDeepLinkStateHolder.TARGET_SWIPE -> onSelectTab(PynapliTab.Swipe)
 
-                AppDeepLinkStateHolder.TARGET_STORE -> onSelectTab(PynapliTab.Store)
+                AppDeepLinkStateHolder.TARGET_STORE -> onOpenStore()
 
                 AppDeepLinkStateHolder.TARGET_PROFILE -> onOpenProfileHub()
 

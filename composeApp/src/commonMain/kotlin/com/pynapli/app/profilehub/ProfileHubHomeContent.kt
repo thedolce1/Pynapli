@@ -25,6 +25,7 @@ import com.pynapli.app.design.icons.filled.People
 import com.pynapli.app.design.icons.filled.PhotoLibrary
 import com.pynapli.app.design.icons.filled.Security
 import com.pynapli.app.design.icons.filled.Settings
+import com.pynapli.app.design.icons.filled.ShoppingBag
 import com.pynapli.app.design.icons.filled.Tune
 import com.pynapli.app.design.icons.filled.Visibility
 import com.pynapli.app.media.MediaAlbumsUiState
@@ -177,6 +178,13 @@ internal fun ProfileHubContent(
 
         item {
             ProfileHubSection("Subscription") {
+                // The Store lives here and in every paywall (no Store tab since 2026-11-17).
+                ProfileHubRow(
+                    icon = Icons.Filled.ShoppingBag,
+                    label = "Plans and store",
+                    value = "Plans, Boosts, Pineapple Likes",
+                    onClick = onOpenStore,
+                )
                 ProfileHubRow(
                     icon = Icons.Filled.CardMembership,
                     label = "Current plan",

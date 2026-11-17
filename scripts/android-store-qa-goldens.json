@@ -8,11 +8,7 @@
         "Plans",
         "Pynapli Free",
         "Pynapli Social",
-        "Core discovery and safety included",
-        "Grid",
-        "Swipe",
-        "Activity",
-        "Messages"
+        "Core discovery and safety included"
       ],
       "forbiddenTexts": [
         "Something went wrong",
@@ -77,28 +73,8 @@
       "requiredTexts": [
         "Pineapple Likes",
         "5 for $3.99",
+        "Add a note up to 140 characters",
         "Balance: 0"
-      ],
-      "forbiddenTexts": [
-        "Something went wrong",
-        "Request failed",
-        "Illegal input",
-        "Exception",
-        "UNAUTHENTICATED"
-      ],
-      "image": {
-        "minWidth": 320,
-        "minHeight": 600,
-        "minNonBlackRatio": 0.12,
-        "maxBrightRatio": 0.36,
-        "minColorBucketCount": 10
-      }
-    },
-    "introProductVisible": {
-      "requiredTexts": [
-        "Intro Notes",
-        "3 for $2.99",
-        "140 characters max"
       ],
       "forbiddenTexts": [
         "Something went wrong",

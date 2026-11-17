@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,6 +34,10 @@ fun StoreScreen(
     modifier: Modifier = Modifier,
     // Web is read-only (founder-locked): catalog + balances visible, no purchase controls.
     purchasesAvailable: Boolean = true,
+    // The section a paywall opened the Store for; the list scrolls there once it has loaded.
+    focus: StorePaywallFocus? = null,
+    // Shown as a Close button when the Store is a sheet.
+    onClose: (() -> Unit)? = null,
 ) {
     val state by stateHolder.state.collectAsState()
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -51,6 +56,8 @@ fun StoreScreen(
         onManageSubscription = { uriHandler.openUri(MANAGE_SUBSCRIPTIONS_URL) },
         modifier = modifier,
         purchasesAvailable = purchasesAvailable,
+        focus = focus,
+        onClose = onClose,
     )
 }
 
@@ -64,7 +71,14 @@ private fun StoreScreenContent(
     purchasesAvailable: Boolean = true,
     onUseBoost: () -> Unit = {},
     onManageSubscription: () -> Unit = {},
+    focus: StorePaywallFocus? = null,
+    onClose: (() -> Unit)? = null,
 ) {
+    val listState = rememberLazyListState()
+    val focusIndex = focus?.let { storeListIndexFor(it, state, purchasesAvailable) }
+    LaunchedEffect(focusIndex) {
+        focusIndex?.let { listState.scrollToItem(it) }
+    }
     // The flagship paid plan (highest monthly price) gets the "Recommended" hero emphasis.
     val heroTier =
         state.tiers
@@ -86,6 +100,7 @@ private fun StoreScreenContent(
                     state.pendingPurchaseProductId == null,
             onRestorePurchases = onRestorePurchases,
             showRestore = purchasesAvailable,
+            onClose = onClose,
         )
         StoreMessageRow(
             message = state.purchaseMessage,
@@ -120,6 +135,7 @@ private fun StoreScreenContent(
 
             else -> {
                 LazyColumn(
+                    state = listState,
                     modifier =
                         Modifier
                             .fillMaxSize()

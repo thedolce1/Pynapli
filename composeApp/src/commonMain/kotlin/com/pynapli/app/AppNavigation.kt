@@ -36,7 +36,7 @@ internal enum class PynapliTab(
     Swipe("Swipe", PynapliTabIcons.Swipe),
     Activity("Activity", PynapliTabIcons.Activity),
     Messages("Messages", PynapliTabIcons.Messages),
-    Store("Store", PynapliTabIcons.Store),
+    // No Store tab (founder decision 2026-11-17): paywalls and the profile menu open the store sheet.
 }
 
 @Composable
@@ -53,17 +53,10 @@ internal fun PynapliBottomNavigation(
         tonalElevation = 0.dp,
     ) {
         PynapliTab.entries.forEach { tab ->
-            val enabled =
-                tab == PynapliTab.Grid ||
-                    tab == PynapliTab.Swipe ||
-                    tab == PynapliTab.Activity ||
-                    tab == PynapliTab.Messages ||
-                    tab == PynapliTab.Store
             val isSelected = selectedTab == tab
             NavigationBarItem(
-                enabled = enabled,
                 selected = isSelected,
-                onClick = { if (enabled) onTabSelected(tab) },
+                onClick = { onTabSelected(tab) },
                 icon = {
                     PynapliTabIconWithBadge(
                         tab = tab,
@@ -80,7 +73,7 @@ internal fun PynapliBottomNavigation(
                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
-                modifier = Modifier.handCursor(enabled = enabled),
+                modifier = Modifier.handCursor(),
             )
         }
     }
@@ -88,7 +81,7 @@ internal fun PynapliBottomNavigation(
 
 /**
  * Side navigation for Medium+ windows (WEB_PWA_GAMEPLAN.md "Window size classes"):
- * the same five tabs and badges as [PynapliBottomNavigation], stacked in a rail with
+ * the same four tabs and badges as [PynapliBottomNavigation], stacked in a rail with
  * a hairline end divider. Compact windows keep the bottom bar untouched.
  */
 @Composable

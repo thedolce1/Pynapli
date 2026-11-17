@@ -42,5 +42,4 @@ object PynapliTabIcons {
             selected = Icons.Filled.LocalFireDepartment,
         )
     val Messages = PynapliTabIcon(unselected = Icons.Outlined.ChatBubbleOutlined, selected = Icons.Filled.ChatBubble)
-    val Store = PynapliTabIcon(unselected = Icons.Outlined.ShoppingBagOutlined, selected = Icons.Filled.ShoppingBag)
 }

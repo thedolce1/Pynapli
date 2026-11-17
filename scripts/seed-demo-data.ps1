@@ -1,4 +1,4 @@
-# Seeds a rich two-city demo world for partner/founder deep-dive builds:
+﻿# Seeds a rich two-city demo world for partner/founder deep-dive builds:
 #   - viewer accounts: seb@pynapli.local (Toronto/Weston) + partner@pynapli.local (Victoria Harbour)
 #   - N populated fake profiles per city (photos, bios, tags, presence, linked couples)
 #   - live Activity events, real message threads, Playing Tonight sessions, dev subscriptions

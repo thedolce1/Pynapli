@@ -148,8 +148,22 @@ function Tap-Text {
     Start-Sleep -Milliseconds 1500
 }
 
-function Assert-TextPresent {
-    param([xml]$Xml, [string[]]$AnyOf, [string]$Stage)
+function Scroll-UntilAnyText {
+    # Swipes up until one of $Texts is on screen (the profile menu's Store row sits below the fold).
+    param([string[]]$Texts, [int]$MaxScrolls = 6)
+    for ($attempt = 0; $attempt -le $MaxScrolls; $attempt++) {
+        $xml = Dump-Ui "scroll"
+        $visible = Get-VisibleTexts $xml
+        foreach ($text in $Texts) {
+            if ($visible -contains $text) { return $xml }
+        }
+        Invoke-Adb @("shell", "input", "swipe", "540", "1700", "540", "800", "350") | Out-Null
+        Start-Sleep -Milliseconds 700
+    }
+    throw "Timed out scrolling for any of: $($Texts -join ', ')"
+}
+
+function Assert-TextPresent {    param([xml]$Xml, [string[]]$AnyOf, [string]$Stage)
     $visible = Get-VisibleTexts $Xml
     foreach ($text in $AnyOf) {
         if ($visible -contains $text) { return }
@@ -237,8 +251,11 @@ $activityXml = Invoke-Stage -Stage "activity" -NavText "Activity" -Expect @("Fli
 # --- Stage 5: Messages (inbox renders; the seeded match thread is reachable) ---
 $messagesXml = Invoke-Stage -Stage "messages" -NavText "Messages" -Expect @("Messages", "New Matches")
 
-# --- Stage 6: Store ---
-$storeXml = Invoke-Stage -Stage "store" -NavText "Store" -Expect @("Store", "Plans", "Boosts & extras", "Restore")
+# --- Stage 6: Store (a sheet from the profile menu; there is no Store tab) ---
+Tap-Text "Profile"
+Wait-ForAnyText @("Edit profile", "Subscription") | Out-Null
+Scroll-UntilAnyText @("Plans and store") | Out-Null
+$storeXml = Invoke-Stage -Stage "store" -NavText "Plans and store" -Expect @("Store", "Plans", "Boosts & extras", "Restore")
 
 Write-Host ""
 Write-Host "E2E PASS: login -> grid -> swipe -> activity -> messages -> store. Artifacts in $script:OutputDir"

@@ -1,0 +1,96 @@
+package com.pynapli.app.store
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import com.pynapli.app.design.PynapliBottomSheet
+import com.pynapli.app.design.PynapliSheetTokens
+import com.pynapli.app.design.closeOnEscape
+import com.pynapli.shared.network.dto.PremiumInventoryType
+import com.pynapli.shared.network.dto.SubscriptionTier
+
+/**
+ * Where a paywall opens the Store. There is no Store tab (founder decision 2026-11-17): every upsell
+ * opens the same plans/store sheet, scrolled to what it sells.
+ */
+enum class StorePaywallFocus {
+    /** The plan list: locked filters, Likes You reveal, read receipts, Psync limits, the profile menu. */
+    Plans,
+
+    /** The Select plan: Travel mode. */
+    Select,
+
+    /** Pineapple Likes: out of Pineapple Likes. */
+    PineappleLikes,
+}
+
+/**
+ * The Store list row [focus] scrolls to, mirroring the item order in [StoreScreen]'s list, or null
+ * when the store hasn't loaded what it should land on (then the sheet opens at the top).
+ */
+internal fun storeListIndexFor(
+    focus: StorePaywallFocus,
+    state: StoreUiState,
+    purchasesAvailable: Boolean,
+): Int? {
+    if (state.tiers.isEmpty()) return null
+    // current-plan, then manage-on-mobile on read-only clients.
+    val tiersTitle = if (purchasesAvailable) 1 else 2
+    val firstTier = tiersTitle + 1
+    // linked-partner-benefit, then the products title.
+    val firstProduct = firstTier + state.tiers.size + 2
+    return when (focus) {
+        StorePaywallFocus.Plans -> tiersTitle
+        StorePaywallFocus.Select ->
+            state.tiers
+                .indexOfFirst { it.tier == SubscriptionTier.SELECT }
+                .takeIf { it >= 0 }
+                ?.let { firstTier + it }
+        StorePaywallFocus.PineappleLikes -> productIndex(state, PremiumInventoryType.PINEAPPLE_LIKE)?.let { firstProduct + it }
+    }
+}
+
+private fun productIndex(
+    state: StoreUiState,
+    inventoryType: String,
+): Int? = state.premiumProducts.indexOfFirst { it.inventoryType == inventoryType }.takeIf { it >= 0 }
+
+/**
+ * The full plans/store content as a near-full-height sheet, opened from any paywall or the profile
+ * menu. Same Store content as before (purchase lock, restore and pending-purchase recovery live in
+ * [StoreStateHolder] and the platform gateway, so they behave exactly as they did in the tab).
+ */
+@Composable
+fun StorePaywallSheet(
+    stateHolder: StoreStateHolder,
+    focus: StorePaywallFocus,
+    onDismiss: () -> Unit,
+    purchasesAvailable: Boolean = true,
+) {
+    PynapliBottomSheet(
+        onDismiss = onDismiss,
+        modifier = Modifier.testTag(StoreTestTags.PAYWALL_SHEET),
+    ) {
+        // StoreScreen scrolls its own lazy list, so it gets a fixed-height host rather than the
+        // scrolling sheet scaffold.
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(PynapliSheetTokens.TALL_HEIGHT_FRACTION)
+                    .closeOnEscape(onDismiss),
+        ) {
+            StoreScreen(
+                stateHolder = stateHolder,
+                purchasesAvailable = purchasesAvailable,
+                focus = focus,
+                onClose = onDismiss,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}

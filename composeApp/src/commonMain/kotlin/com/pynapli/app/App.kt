@@ -28,6 +28,8 @@ import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.PhotoCropOverlay
 import com.pynapli.app.onboarding.OnboardingFlowScreen
+import com.pynapli.app.store.StorePaywallFocus
+import com.pynapli.app.store.StorePaywallSheet
 import kotlinx.coroutines.launch
 
 /**
@@ -60,6 +62,10 @@ fun PynapliApp(
         var profileSurface by remember { mutableStateOf(ProfileSurface.None) }
         var tonightVisible by remember { mutableStateOf(false) }
         var psyncVisible by remember { mutableStateOf(false) }
+        // The plans/store sheet and the paywall that opened it; null when closed. There is no Store
+        // tab (2026-11-17): every upsell opens this sheet.
+        var storePaywallFocus by remember { mutableStateOf<StorePaywallFocus?>(null) }
+        val openStore: (StorePaywallFocus) -> Unit = { focus -> storePaywallFocus = focus }
         // Built per signed-in viewer so session mapping (isInitiator/partner) is correct.
         val psyncStateHolder =
             remember(authState.session?.userId, graph.psyncRepository) {
@@ -86,6 +92,7 @@ fun PynapliApp(
                 profileSurface = ProfileSurface.None
                 tonightVisible = false
                 psyncVisible = false
+                storePaywallFocus = null
             },
             onOpenProfileHub = { profileSurface = ProfileSurface.Hub },
             onOpenPartnerPanel = {
@@ -94,6 +101,7 @@ fun PynapliApp(
             },
             onOpenTonight = { tonightVisible = true },
             onOpenPsync = { psyncVisible = true },
+            onOpenStore = { openStore(StorePaywallFocus.Plans) },
             onOpenActivityProfile = { event ->
                 scope.launch { graph.profileDetailStateHolder.open(event.toActivityProfileCardUi()) }
             },
@@ -126,6 +134,7 @@ fun PynapliApp(
                     conversationId = openConversationId,
                     tonightOpen = tonightVisible && graph.playingTonightStateHolder != null,
                     psyncOpen = psyncVisible && psyncStateHolder != null,
+                    storeOpen = storePaywallFocus != null,
                 )
             LaunchedEffect(route) { platform.onNavigationRouteChanged(route) }
         }
@@ -228,7 +237,8 @@ fun PynapliApp(
                 scope = scope,
                 conversationStateHolder = graph.conversationStateHolder,
                 messagesStateHolder = graph.messagesStateHolder,
-                onOpenStore = { selectedTab = PynapliTab.Store },
+                // Read receipts, typing status and disappearing messages are plan perks.
+                onOpenStore = { openStore(StorePaywallFocus.Plans) },
             )
 
         LaunchedEffect(selectedTab, profileDetailState.blockedTargetUserId) {
@@ -270,7 +280,6 @@ fun PynapliApp(
                 profileHubStateHolder = graph.profileHubStateHolder,
                 profileLinksStateHolder = graph.profileLinksStateHolder,
                 swipeStateHolder = graph.swipeStateHolder,
-                storeStateHolder = graph.storeStateHolder,
                 appSettingsStateHolder = graph.appSettingsStateHolder,
                 authStateHolder = graph.authStateHolder,
                 savedGridFilterStateHolder = graph.savedGridFilterStateHolder,
@@ -281,7 +290,7 @@ fun PynapliApp(
                 conversationActions = conversationActions,
                 scope = scope,
                 onProfileSurface = { profileSurface = it },
-                onOpenStore = { selectedTab = PynapliTab.Store },
+                onOpenStore = openStore,
                 onOpenAgeVerification = {
                     // Route a gated AGE_VERIFICATION_REQUIRED prompt into the existing
                     // Profile-Hub age-verification flow: show the Hub surface and open its dialog.
@@ -303,7 +312,6 @@ fun PynapliApp(
                 onPickMediaForAlbum = platform.onPickMediaForAlbum,
                 onPickConversationPhoto = platform.onPickConversationPhoto,
                 onSetDiscreetIcon = platform.onSetDiscreetIcon,
-                storePurchasesAvailable = platform.storePurchasesAvailable,
                 discreetIconSupported = platform.discreetIconSupported,
             )
         }
@@ -365,10 +373,8 @@ fun PynapliApp(
             onTonightDismiss = { tonightVisible = false },
             psyncVisible = psyncVisible,
             onPsyncDismiss = { psyncVisible = false },
-            onPsyncOpenStore = {
-                psyncVisible = false
-                selectedTab = PynapliTab.Store
-            },
+            // Psync tier limits: the sheet opens over the session, which stays where it was.
+            onPsyncOpenStore = { openStore(StorePaywallFocus.Plans) },
             psyncTravelCityName =
                 graph.travelLocationStateHolder
                     ?.state
@@ -395,6 +401,15 @@ fun PynapliApp(
             onPickConversationPhoto = platform.onPickConversationPhoto,
             scope = scope,
         )
+
+        storePaywallFocus?.let { focus ->
+            StorePaywallSheet(
+                stateHolder = graph.storeStateHolder,
+                focus = focus,
+                onDismiss = { storePaywallFocus = null },
+                purchasesAvailable = platform.storePurchasesAvailable,
+            )
+        }
 
         // Square-crop step for a freshly picked profile photo; composed last so it
         // draws above the shell and every overlay.

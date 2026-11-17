@@ -88,15 +88,26 @@ class PynapliRoutesTest {
                 conversationId = "conv-42",
             ),
         )
+        // The store is a sheet over whatever is showing (no Store tab), and it draws above the overlays.
         assertEquals(
             PynapliRoutes.STORE,
             pynapliRouteFor(
                 authenticated = true,
                 onboardingActive = false,
-                tab = PynapliTab.Store,
-                profileSurface = ProfileSurface.None,
+                tab = PynapliTab.Swipe,
+                profileSurface = ProfileSurface.Hub,
                 conversationId = null,
+                psyncOpen = true,
+                storeOpen = true,
             ),
+        )
+    }
+
+    @Test
+    fun thereAreFourTabsAndNoStoreTab() {
+        assertEquals(
+            listOf(PynapliTab.Grid, PynapliTab.Swipe, PynapliTab.Activity, PynapliTab.Messages),
+            PynapliTab.entries.toList(),
         )
     }
 

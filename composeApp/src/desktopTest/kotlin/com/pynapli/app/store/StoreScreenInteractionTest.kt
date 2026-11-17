@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -57,9 +58,42 @@ class StoreScreenInteractionTest {
             onNodeWithText("Boost added.").assertExists()
             onNodeWithText("Balance: 1").assertExists()
         }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun paywallSheetOpensOnWhatItSellsAndCloses() =
+        runComposeUiTest {
+            val repository = RefreshingStoreRepository(products = listOf(boostProduct(), pineappleProduct()))
+            val stateHolder = StoreStateHolder(repository = repository, purchaseGateway = RecordingStorePurchaseGateway())
+            var dismissed = false
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        StorePaywallSheet(
+                            stateHolder = stateHolder,
+                            focus = StorePaywallFocus.PineappleLikes,
+                            onDismiss = { dismissed = true },
+                        )
+                    }
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000) { repository.loadCount == 1 }
+            waitForIdle()
+            onNodeWithTag(StoreTestTags.PAYWALL_SHEET).assertExists()
+            // Out of Pineapple Likes lands on the Pineapple Likes pack, past the plans.
+            onNodeWithText("Pineapple Likes").assertIsDisplayed()
+
+            onNodeWithTag(StoreTestTags.CLOSE).performClick()
+            waitForIdle()
+            assertEquals(true, dismissed)
+        }
 }
 
-private class RefreshingStoreRepository : StoreRepository {
+private class RefreshingStoreRepository(
+    private val products: List<PremiumProductDto> = listOf(boostProduct()),
+) : StoreRepository {
     var loadCount = 0
         private set
 
@@ -68,7 +102,7 @@ private class RefreshingStoreRepository : StoreRepository {
         return AppResult.Success(
             StoreUi(
                 tiers = listOf(freeTier(), socialTier(), selectTier()),
-                premiumProducts = listOf(boostProduct()),
+                premiumProducts = products,
                 balances =
                     if (loadCount > 1) {
                         listOf(PremiumInventoryBalanceDto(PremiumInventoryType.BOOST, quantity = 1))
@@ -133,6 +167,17 @@ private fun boostProduct(): PremiumProductDto =
         priceUsdCents = 299,
         quantity = 1,
         features = listOf("30-minute visibility lift"),
+    )
+
+private fun pineappleProduct(): PremiumProductDto =
+    PremiumProductDto(
+        productId = SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
+        inventoryType = PremiumInventoryType.PINEAPPLE_LIKE,
+        displayName = "Pineapple Likes",
+        description = "Stand out, with an optional note.",
+        priceUsdCents = 399,
+        quantity = 5,
+        features = listOf("Add a note up to 140 characters"),
     )
 
 private fun entitlement(): SubscriptionEntitlementDto =

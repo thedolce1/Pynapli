@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$PackageName = "com.pynapli.app",
     [string]$LaunchActivity = ".DefaultLauncherAlias",
@@ -256,7 +256,6 @@ function Get-MainSwipeSnapshot {
         "Grid",
         "Activity",
         "Messages",
-        "Store",
         "Linked partner",
         "Verified"
     )

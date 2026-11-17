@@ -16,8 +16,7 @@
         "Like",
         "Grid",
         "Activity",
-        "Messages",
-        "Store"
+        "Messages"
       ],
       "forbiddenTexts": [
         "Illegal input",

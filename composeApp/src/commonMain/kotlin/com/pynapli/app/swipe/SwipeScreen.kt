@@ -15,6 +15,7 @@ import com.pynapli.app.grid.toUi
 import com.pynapli.app.profile.ProfileDetailActionMode
 import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
+import com.pynapli.app.store.StorePaywallFocus
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
 import com.pynapli.shared.settings.AppSettings
@@ -29,7 +30,8 @@ fun SwipeScreen(
     distanceUnit: String = AppSettings.UNIT_METRIC,
     matchNotificationsEnabled: Boolean = true,
     notificationDetail: String = AppSettings.NOTIFICATION_DISCREET,
-    onOpenStore: () -> Unit = {},
+    // Opens the plans/store sheet on the section this paywall sells.
+    onOpenStore: (StorePaywallFocus) -> Unit = {},
     onOpenAgeVerification: () -> Unit = {},
     onOpenPsync: (() -> Unit)? = null,
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
@@ -106,7 +108,11 @@ fun SwipeScreen(
         distanceUnit = distanceUnit,
         onOpenFilters = { filtersSheetVisible = true },
         onOpenTravel = { travelSheetVisible = true },
-        onOpenStore = onOpenStore,
+        onOpenStore = {
+            onOpenStore(
+                if (state.errorCode == "PINEAPPLE_LIKE_INVENTORY_REQUIRED") StorePaywallFocus.PineappleLikes else StorePaywallFocus.Plans,
+            )
+        },
         onOpenPsync = onOpenPsync,
         onFilterSelected = { filter -> scope.launch { stateHolder.selectFilter(filter) } },
         onRetryDeck = { scope.launch { stateHolder.load() } },
@@ -274,7 +280,7 @@ fun SwipeScreen(
                 filtersSheetVisible = false
                 scope.launch { stateHolder.applyFilters(SwipeFilters.defaults) }
             },
-            onOpenStore = onOpenStore,
+            onOpenStore = { onOpenStore(StorePaywallFocus.Plans) },
             onOpenAgeVerification = onOpenAgeVerification,
             savedState = savedSwipeFiltersState,
             onSavePreset = { name, filters ->
@@ -321,7 +327,8 @@ fun SwipeScreen(
             },
             onOpenStore = {
                 travelSheetVisible = false
-                onOpenStore()
+                // Travel mode is a Select perk.
+                onOpenStore(StorePaywallFocus.Select)
             },
             onSelectPlace = { place -> travelLocationStateHolder?.selectPlace(place) },
             onPlanTrip = { place, startsOn, endsOn, announce ->

@@ -118,7 +118,7 @@ BEGIN
     DELETE FROM premium_inventory
     WHERE user_id = viewer_id
       AND source = 'dev'
-      AND inventory_type IN ('boost', 'pineapple_like', 'intro_note');
+      AND inventory_type IN ('boost', 'pineapple_like');
 END
 `$`$;
 "@
@@ -261,7 +261,11 @@ $gridXml = Dump-Ui "02_grid_after_login" -Keep
 Assert-NoAppErrorText $gridXml "Grid after login"
 $script:Screenshots.gridAfterLogin = Save-Screen "02_grid_after_login"
 
-Tap-BottomNavText "Store"
+# No Store tab (2026-11-17): the Store is a sheet opened from the profile menu and from paywalls.
+Tap-Text "Profile"
+Wait-ForAnyText @("Edit profile", "Subscription") 45 | Out-Null
+Scroll-UntilAnyText @("Plans and store") 8 | Out-Null
+Tap-Text "Plans and store"
 Wait-ForAnyText @("Store", "Plans") 45 | Out-Null
 $initialXml = Capture-StoreStage "storeInitial" "03_store_initial"
 Assert-TextPresent $initialXml "Pynapli Social" "Initial Store"
@@ -271,14 +275,12 @@ Wait-ForAnyText @("Store refreshed.") 45 | Out-Null
 $restoreXml = Capture-StoreStage "restoreRefreshed" "04_restore_refreshed"
 Assert-TextPresent $restoreXml "Store refreshed." "Store restore"
 
-# Scroll to the last product so the whole Boosts & extras section is on-screen. Anchor on the Intro
-# Notes product's UNIQUE "3 for $2.99" price line, not the plain "Intro Notes" name: the Select plan
-# now advertises "Intro Notes" as an included feature, so anchoring on the name stopped the scroll at
-# the Select card before ever reaching the accelerators. More scroll headroom for the longer list.
-Scroll-UntilAnyText @('3 for $2.99') 8 | Out-Null
+# Scroll to the last product so the whole Boosts & extras section is on-screen. Anchor on the
+# Pineapple Likes pack's UNIQUE "5 for $3.99" price line, not the plain name: the Select plan lists
+# "Weekly Pineapple Likes", so anchoring on the name could stop at the Select card.
+Scroll-UntilAnyText @('5 for $3.99') 8 | Out-Null
 $productsXml = Capture-StoreStage "productsVisible" "05_products_visible"
 Assert-TextPresent $productsXml "Pineapple Likes" "Store products"
-Assert-TextPresent $productsXml "Intro Notes" "Store products"
 
 Tap-Text '$2.99'
 Wait-ForAnyText @("Boost added.", "Balance: 1") 45 | Out-Null
@@ -289,11 +291,7 @@ Assert-TextPresent $purchasedXml "Balance: 1" "Boost purchase"
 Scroll-UntilAnyText @("Balance: 0") | Out-Null
 $otherProductsXml = Capture-StoreStage "otherProductsVisible" "07_other_products_visible"
 Assert-TextPresent $otherProductsXml "Pineapple Likes" "Other Store products"
-
-Scroll-UntilAnyText @("140 characters max") | Out-Null
-$introProductXml = Capture-StoreStage "introProductVisible" "08_intro_product_visible"
-Assert-TextPresent $introProductXml "Intro Notes" "Intro Note Store product"
-Assert-TextPresent $introProductXml '3 for $2.99' "Intro Note Store product"
+Assert-TextPresent $otherProductsXml "Add a note up to 140 characters" "Other Store products"
 
 Write-Summary @{
     baseUrl = $BaseUrl
@@ -301,5 +299,5 @@ Write-Summary @{
     artifactDir = $script:ArtifactDir
     screenshots = $script:Screenshots
     visualSignatures = $script:VisualSignatures
-    stages = @("gridAfterLogin", "storeInitial", "restoreRefreshed", "productsVisible", "boostPurchased", "otherProductsVisible", "introProductVisible")
+    stages = @("gridAfterLogin", "storeInitial", "restoreRefreshed", "productsVisible", "boostPurchased", "otherProductsVisible")
 }

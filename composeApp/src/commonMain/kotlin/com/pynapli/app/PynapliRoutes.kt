@@ -16,11 +16,13 @@ object PynapliRoutes {
     const val ACTIVITY = "/activity"
     const val MESSAGES = "/messages"
     const val PROFILE = "/profile"
-    const val STORE = "/store"
 
     /** Full-screen overlays: real paths so browser back closes them and they can be bookmarked. */
     const val TONIGHT = "/tonight"
     const val PSYNC = "/psync"
+
+    /** The plans/store sheet (no Store tab since 2026-11-17); browser back closes it. */
+    const val STORE = "/store"
 
     fun messagesThread(conversationId: String): String = "$MESSAGES/$conversationId"
 
@@ -100,11 +102,14 @@ internal fun pynapliRouteFor(
     conversationId: String?,
     tonightOpen: Boolean = false,
     psyncOpen: Boolean = false,
+    storeOpen: Boolean = false,
 ): String =
     when {
         onboardingActive -> PynapliRoutes.SIGNUP
         !authenticated -> PynapliRoutes.LOGIN
-        // The overlays draw above every tab and the profile surface, so they win.
+        // The overlays draw above every tab and the profile surface, so they win; the store sheet
+        // draws above the other overlays.
+        storeOpen -> PynapliRoutes.STORE
         psyncOpen -> PynapliRoutes.PSYNC
         tonightOpen -> PynapliRoutes.TONIGHT
         profileSurface != ProfileSurface.None -> PynapliRoutes.PROFILE
@@ -116,6 +121,5 @@ internal fun pynapliRouteFor(
                 PynapliTab.Messages ->
                     conversationId?.let(PynapliRoutes::messagesThread)
                         ?: PynapliRoutes.MESSAGES
-                PynapliTab.Store -> PynapliRoutes.STORE
             }
     }

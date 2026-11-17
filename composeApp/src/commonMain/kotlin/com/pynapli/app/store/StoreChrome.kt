@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -21,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,6 +33,7 @@ import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Check
+import com.pynapli.app.design.icons.filled.Close
 import com.pynapli.app.design.icons.filled.Link
 import com.pynapli.app.design.icons.filled.Refresh
 import com.pynapli.app.design.icons.filled.ShoppingBag
@@ -46,6 +49,7 @@ internal fun StoreHeader(
     restoreEnabled: Boolean,
     onRestorePurchases: () -> Unit,
     showRestore: Boolean = true,
+    onClose: (() -> Unit)? = null,
 ) {
     PynapliScreenHeader(
         leading = { StoreIconBadge() },
@@ -65,6 +69,14 @@ internal fun StoreHeader(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(if (isRestoringPurchases) "Restoring" else "Restore")
+                }
+            }
+            onClose?.let { close ->
+                IconButton(
+                    onClick = close,
+                    modifier = Modifier.testTag(StoreTestTags.CLOSE).handCursor(),
+                ) {
+                    Icon(imageVector = Icons.Filled.Close, contentDescription = "Close Store")
                 }
             }
         },
@@ -361,4 +373,6 @@ private fun String.tierLabel(): String =
 
 internal object StoreTestTags {
     const val LIST = "store-list"
+    const val PAYWALL_SHEET = "store-paywall-sheet"
+    const val CLOSE = "store-close"
 }

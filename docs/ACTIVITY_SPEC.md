@@ -41,8 +41,9 @@ Activity should not:
 
 ## Navigation
 
-Activity is a primary bottom tab (Grid, Swipe, Activity, Messages; the Store tab is being replaced by
-paywall sheets, see [DESIGN_SPEC.md](DESIGN_SPEC.md)). It is both an engagement and a monetization
+Activity is a primary bottom tab (Grid, Swipe, Activity, Messages; there is no Store tab, paywalls
+open the store sheet, see [DESIGN_SPEC.md](DESIGN_SPEC.md)). The Likes You / Viewed You reveal
+opens the store sheet on the plans. It is both an engagement and a monetization
 surface.
 
 ## Ordering

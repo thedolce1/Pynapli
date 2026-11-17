@@ -65,11 +65,13 @@ profile peek.
 
 ## Navigation
 
-- Bottom navigation (Compact) / navigation rail (Medium+) tabs today: **Grid, Swipe, Activity,
-  Messages, Store**.
-- **2026-11-17, founder decision:** the earlier "five locked tabs" rule is reversed. The Store
-  bottom tab is being replaced by paywall sheets plus a Store row in the profile menu, leaving four
-  tabs. Until that ships, the code still has five.
+- Bottom navigation (Compact) / navigation rail (Medium+) tabs: **Grid, Swipe, Activity, Messages**.
+- **No Store tab** (founder decision 2026-11-17; the earlier "five locked tabs" rule is reversed).
+  Sell from context: every paywall opens the same plans/store sheet (`store/StorePaywallSheet.kt`,
+  a `PynapliBottomSheet`; a centered dialog on Medium+), scrolled to what it sells
+  (`StorePaywallFocus`: plans, the Select plan, or Pineapple Likes). The profile menu's
+  Subscription section has a **Plans and store** row. `/store` and store deep links open the sheet;
+  browser back closes it.
 - Profile and settings open from the header avatar. **Profile is never a bottom tab.**
 - Header structure (`design/PynapliScreenHeader.kt`, `PynapliHeaderTokens`): left avatar, center
   context/location/search pill, right context action. Use the shared header slots; don't hand-roll
@@ -91,7 +93,7 @@ profile peek.
 | Activity | Medium-high | Newest first, compact rows: avatar, action, timestamp, partner icon. Gated rows tease without feeling scammy; blur and lock states stay readable. |
 | Messages | Medium | Scannable inbox, clear sent/received alignment, timestamp and state without clutter, neutral system messages. Partner invite-to-chat states are explicit; private album interactions are consent-based; safety/report actions reachable without clutter. |
 | Profile and settings | Medium-low | Calm, organized, never a marketing surface. Account, privacy, subscription, partner link, safety, albums and app management easy to find. |
-| Store and paywalls | Medium | Tiers understandable at a glance; linked-partner benefit prominent; add-ons clear and optional. **No fake scarcity or countdown pressure.** Same subdued visual language. |
+| Store sheet and paywalls | Medium | Tiers understandable at a glance; linked-partner benefit prominent; add-ons clear and optional. **No fake scarcity or countdown pressure.** Same subdued visual language. |
 
 ## Motion
 
@@ -139,4 +141,4 @@ reduced-motion settings where the platform exposes them.
 - [ ] Partial: deep-link commands are held in `AppDeepLinkStateHolder` until consumed, so they
   survive login; the stale-target empty state is not verified on every target.
 - [ ] Accessibility pass for touch targets and text overflow.
-- [ ] Store tab replaced by paywall sheets plus a profile-menu row (founder decision 2026-11-17).
+- [x] Store tab replaced by the store sheet, opened from every paywall and a profile-menu row (founder decision 2026-11-17).

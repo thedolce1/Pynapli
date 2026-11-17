@@ -42,8 +42,8 @@ hookup marketplace, escorting app or sex-services platform.
 
 ## Navigation
 
-Bottom tabs: Grid, Swipe, Activity, Messages, Store. The Store tab is being replaced by paywall
-sheets plus a profile-menu row (founder decision 2026-11-17; see [DESIGN_SPEC.md](DESIGN_SPEC.md)).
+Bottom tabs: Grid, Swipe, Activity, Messages. There is no Store tab: paywalls and a profile-menu
+row open the store sheet (founder decision 2026-11-17; see [DESIGN_SPEC.md](DESIGN_SPEC.md)).
 Profile and settings open from the avatar in the compact header and are never a bottom tab. The
 avatar menu holds edit profile, partner link, albums, subscription, privacy, verification, app
 settings, safety center, discreet app icon, and sign out.

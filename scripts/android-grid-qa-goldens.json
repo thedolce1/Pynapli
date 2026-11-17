@@ -12,8 +12,7 @@
         "Grid",
         "Swipe",
         "Activity",
-        "Messages",
-        "Store"
+        "Messages"
       ],
       "forbiddenTexts": [
         "Illegal input",
@@ -72,8 +71,7 @@
         "Grid",
         "Swipe",
         "Activity",
-        "Messages",
-        "Store"
+        "Messages"
       ],
       "forbiddenTexts": [
         "Illegal input",
@@ -100,8 +98,7 @@
         "Grid",
         "Swipe",
         "Activity",
-        "Messages",
-        "Store"
+        "Messages"
       ],
       "forbiddenTexts": [
         "Illegal input",
@@ -152,8 +149,7 @@
         "Grid",
         "Swipe",
         "Activity",
-        "Messages",
-        "Store"
+        "Messages"
       ],
       "forbiddenTexts": [
         "Illegal input",

@@ -48,8 +48,7 @@ import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilehub.ProfileHubScreen
 import com.pynapli.app.profilehub.ProfileHubStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
-import com.pynapli.app.store.StoreScreen
-import com.pynapli.app.store.StoreStateHolder
+import com.pynapli.app.store.StorePaywallFocus
 import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SwipeScreen
 import com.pynapli.app.swipe.SwipeStateHolder
@@ -63,8 +62,7 @@ private val MessagesInboxPaneWidth = 380.dp
 
 /**
  * The primary in-tab content of [PynapliApp] (extracted from the App.kt shell): the profile-surface
- * dispatch (Hub / Media Albums) and the bottom-nav tab `when` (Grid / Messages / Activity / Swipe /
- * Store). Behavior-preserving — moved verbatim, with the shell's mutable navigation vars replaced by
+ * dispatch (Hub / Media Albums) and the bottom-nav tab `when` (Grid / Messages / Activity / Swipe). Behavior-preserving — moved verbatim, with the shell's mutable navigation vars replaced by
  * setter callbacks ([onProfileSurface], [onOpenStore], [onOpenTonight], [onOpenPsync]). It collects
  * the per-screen UI state from the passed holders, so the shell no longer threads those values.
  */
@@ -82,7 +80,6 @@ internal fun ColumnScope.PynapliMainContent(
     profileHubStateHolder: ProfileHubStateHolder,
     profileLinksStateHolder: ProfileLinksStateHolder,
     swipeStateHolder: SwipeStateHolder,
-    storeStateHolder: StoreStateHolder,
     appSettingsStateHolder: AppSettingsStateHolder,
     authStateHolder: AuthStateHolder,
     savedGridFilterStateHolder: SavedGridFilterStateHolder?,
@@ -93,7 +90,8 @@ internal fun ColumnScope.PynapliMainContent(
     conversationActions: ConversationActions,
     scope: CoroutineScope,
     onProfileSurface: (ProfileSurface) -> Unit,
-    onOpenStore: () -> Unit,
+    // Opens the plans/store sheet on the section the paywall sells (there is no Store tab).
+    onOpenStore: (StorePaywallFocus) -> Unit,
     onOpenAgeVerification: () -> Unit,
     onOpenTonight: () -> Unit,
     onOpenPsync: (() -> Unit)?,
@@ -102,7 +100,6 @@ internal fun ColumnScope.PynapliMainContent(
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit,
     onPickConversationPhoto: () -> Unit,
     onSetDiscreetIcon: (Boolean) -> Unit,
-    storePurchasesAvailable: Boolean = true,
     discreetIconSupported: Boolean = true,
 ) {
     // Pure dispatcher: it reads no state, so a state change only recomposes the child that reads it.
@@ -119,7 +116,7 @@ internal fun ColumnScope.PynapliMainContent(
                 authStateHolder = authStateHolder,
                 scope = scope,
                 onProfileSurface = onProfileSurface,
-                onOpenStore = onOpenStore,
+                onOpenStore = { onOpenStore(StorePaywallFocus.Plans) },
                 onSetDiscreetIcon = onSetDiscreetIcon,
                 discreetIconSupported = discreetIconSupported,
                 onOpenPsync = onOpenPsync,
@@ -158,7 +155,8 @@ internal fun ColumnScope.PynapliMainContent(
                         onboardingStateHolder = onboardingStateHolder,
                         scope = scope,
                         onProfileSurface = onProfileSurface,
-                        onOpenStore = onOpenStore,
+                        // Locked Grid filters and depth are plan perks.
+                        onOpenStore = { onOpenStore(StorePaywallFocus.Plans) },
                         onOpenAgeVerification = onOpenAgeVerification,
                         onOpenTonight = onOpenTonight,
                         onUseCurrentLocation = onUseCurrentLocation,
@@ -186,7 +184,8 @@ internal fun ColumnScope.PynapliMainContent(
                         appSettingsStateHolder = appSettingsStateHolder,
                         authStateHolder = authStateHolder,
                         scope = scope,
-                        onOpenStore = onOpenStore,
+                        // Likes You / Viewed You reveal is a plan perk.
+                        onOpenStore = { onOpenStore(StorePaywallFocus.Plans) },
                         onOpenPsyncSession = onOpenPsyncSession,
                     )
                 PynapliTab.Swipe ->
@@ -202,12 +201,6 @@ internal fun ColumnScope.PynapliMainContent(
                         onOpenAgeVerification = onOpenAgeVerification,
                         onOpenPsync = onOpenPsync,
                         profileLinksStateHolder = profileLinksStateHolder,
-                    )
-                PynapliTab.Store ->
-                    StoreScreen(
-                        modifier = Modifier.weight(1f),
-                        stateHolder = storeStateHolder,
-                        purchasesAvailable = storePurchasesAvailable,
                     )
             }
     }
@@ -283,10 +276,8 @@ private fun ColumnScope.ProfileHubSurface(
             onProfileSurface(ProfileSurface.None)
             scope.launch { authStateHolder.logout() }
         },
-        onOpenStore = {
-            onProfileSurface(ProfileSurface.None)
-            onOpenStore()
-        },
+        // The store sheet opens over the hub, so closing it returns here.
+        onOpenStore = onOpenStore,
         onPreviewProfile = {
             authState.session?.userId?.let { userId ->
                 scope.launch {
@@ -595,7 +586,7 @@ private fun ColumnScope.SwipeTabContent(
     authStateHolder: AuthStateHolder,
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder?,
     travelLocationStateHolder: TravelLocationStateHolder?,
-    onOpenStore: () -> Unit,
+    onOpenStore: (StorePaywallFocus) -> Unit,
     onOpenAgeVerification: () -> Unit,
     onOpenPsync: (() -> Unit)?,
     profileLinksStateHolder: ProfileLinksStateHolder? = null,
