@@ -46,6 +46,7 @@ import com.pynapli.server.psync.configurePsyncRoutes
 import com.pynapli.server.psync.configurePsyncStreamRoutes
 import com.pynapli.server.routing.configureHealthRoutes
 import com.pynapli.server.safety.configureAppealRoutes
+import com.pynapli.server.safety.configureRequestLimits
 import com.pynapli.server.safety.configureSafetyRoutes
 import com.pynapli.server.subscriptions.configurePlayStoreRtdnRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionAdminRoutes
@@ -100,6 +101,13 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureMonitoring()
     configureHTTP(dependencies.config.corsAllowedOrigins)
     configureSecurityHeaders(dependencies.config.environment)
+    dependencies.rateLimitService?.let {
+        configureRequestLimits(
+            rateLimitService = it,
+            trustedProxyHops = dependencies.config.trustedProxyHops,
+            perIpLimits = dependencies.config.environment != "local",
+        )
+    }
     configureRequestMediaBaseUrl()
     configureAppCheck(dependencies.config.appCheckEnforced, selectAppCheckVerifier(dependencies.config))
     configureAdminAudit(dependencies.adminRequestAuditRecorder)

@@ -47,6 +47,8 @@ data class ServerConfig(
     val dataRetentionEnabled: Boolean = true,
     val dataRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
     val expiredMessageGraceDays: Long = 30,
+    /** Proxies in front of the API that append to X-Forwarded-For (Cloud Run: 1). */
+    val trustedProxyHops: Int = 1,
     val activityRetentionEnabled: Boolean = false,
     val activityRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
     val mediaCleanupEnabled: Boolean = false,
@@ -252,6 +254,12 @@ data class ServerConfig(
                         ?.toLongOrNull()
                         ?.coerceIn(0L, 365L)
                         ?: 30,
+                trustedProxyHops =
+                    System
+                        .getenv("PYNAPLI_TRUSTED_PROXY_HOPS")
+                        ?.toIntOrNull()
+                        ?.coerceIn(0, 5)
+                        ?: 1,
                 activityRetentionEnabled =
                     System.getenv("PYNAPLI_ACTIVITY_RETENTION_ENABLED")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),

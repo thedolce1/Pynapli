@@ -99,9 +99,27 @@ class RateLimitService(
                 // Profile/settings edits run validation + the bio scanner on every call; generous
                 // for legitimate editing, but caps scripted spam of the write/scan path.
                 RateLimitPolicy(action = RateLimitedAction.PROFILE_UPDATE, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
+                // Request-level limits (RequestRateLimitPlugin). Per client IP before sign-in, sized for
+                // a shared NAT (a venue's Wi-Fi), well below what scripted guessing needs.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN_IP, limit = 100, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_IP, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.AUTH_PASSWORD_RESET_IP, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.ACCOUNT_APPEAL_IP, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
+                // Per session, far above real use: a fast chatter sends a few messages a minute.
+                RateLimitPolicy(action = RateLimitedAction.MESSAGE_SEND, limit = 600, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.THREAD_CREATE, limit = 100, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.TYPING, limit = 2_400, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.PROFILE_LINK_INVITE, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.SESSION_CREATE, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.BLOCK_OR_HIDE, limit = 120, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.LOCATION_UPDATE, limit = 360, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.DATA_EXPORT, limit = 5, windowSeconds = ONE_DAY_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.APPEAL, limit = 10, windowSeconds = ONE_DAY_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.PUSH_REGISTER, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
             ).associateBy { it.action }
 
         private const val ONE_HOUR_SECONDS = 3_600L
+        private const val ONE_DAY_SECONDS = 86_400L
         private const val NUDGE_COOLDOWN_SECONDS = 60L
     }
 }
@@ -127,6 +145,20 @@ object RateLimitedAction {
     const val BOOST_ACTIVATE = "boost_activate"
     const val PSYNC_NUDGE = "psync_nudge"
     const val PROFILE_UPDATE = "profile_update"
+    const val AUTH_LOGIN_IP = "auth_login_ip"
+    const val AUTH_SIGNUP_IP = "auth_signup_ip"
+    const val AUTH_PASSWORD_RESET_IP = "auth_password_reset_ip"
+    const val ACCOUNT_APPEAL_IP = "account_appeal_ip"
+    const val MESSAGE_SEND = "message_send"
+    const val THREAD_CREATE = "thread_create"
+    const val TYPING = "typing"
+    const val PROFILE_LINK_INVITE = "profile_link_invite"
+    const val SESSION_CREATE = "session_create"
+    const val BLOCK_OR_HIDE = "block_or_hide"
+    const val LOCATION_UPDATE = "location_update"
+    const val DATA_EXPORT = "data_export"
+    const val APPEAL = "appeal"
+    const val PUSH_REGISTER = "push_register"
 }
 
 data class RateLimitDecision(

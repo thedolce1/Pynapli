@@ -66,6 +66,7 @@ import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockService
 import com.pynapli.server.safety.HiddenProfileRepository
 import com.pynapli.server.safety.HiddenProfileService
+import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.ReportService
 import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
@@ -114,6 +115,7 @@ class ServerDependencies(
     val activityService: ActivityService,
     val activityRetentionWorker: ActivityRetentionWorker?,
     val dataRetentionWorker: DataRetentionWorker? = null,
+    val rateLimitService: RateLimitService? = null,
     val mediaCleanupWorker: MediaCleanupWorker?,
     val accountDataExportWorker: AccountDataExportWorker?,
     val notificationService: NotificationService,
@@ -415,6 +417,7 @@ class ServerDependencies(
                 activityService = activityService,
                 activityRetentionWorker = activityRetentionWorker,
                 dataRetentionWorker = dataRetentionWorker,
+                rateLimitService = core.rateLimitService,
                 mediaCleanupWorker = mediaCleanupWorker,
                 accountDataExportWorker = core.accountDataExportWorker,
                 notificationService = core.notificationService,
