@@ -5,9 +5,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.Base64
 import java.util.UUID
+import javax.crypto.Cipher
 import javax.crypto.Mac
+import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 class DiscoveryCursorCodec(
@@ -18,11 +21,23 @@ class DiscoveryCursorCodec(
             ignoreUnknownKeys = false
         },
 ) {
-    private val secretBytes =
+    /**
+     * AES-256 key derived from the existing cursor secret (no new config): HMAC-SHA256 keyed by the
+     * secret over a fixed purpose label, so the encryption key is independent of any other use of
+     * the same secret.
+     */
+    private val encryptionKey: SecretKeySpec =
         secret
             .also { value ->
                 require(value.isNotBlank()) { "Discovery cursor secret must not be blank." }
             }.toByteArray(StandardCharsets.UTF_8)
+            .let { secretBytes ->
+                val mac = Mac.getInstance("HmacSHA256")
+                mac.init(SecretKeySpec(secretBytes, "HmacSHA256"))
+                SecretKeySpec(mac.doFinal(KEY_DERIVATION_LABEL.toByteArray(StandardCharsets.UTF_8)), "AES")
+            }
+
+    private val secureRandom = SecureRandom()
 
     fun encodeGridCursor(
         scopeHash: String,
@@ -59,42 +74,53 @@ class DiscoveryCursorCodec(
         )
     }
 
+    /**
+     * Sealed token: `g2.<base64url(nonce || AES-256-GCM(payload json))>`. The payload is encrypted, not
+     * just signed (L-07): a client reading its own cursor learns nothing about the ranking anchor (an
+     * old v1 cursor exposed a metre-exact distance bucket in readable base64 JSON). The GCM tag
+     * authenticates the version prefix as associated data, so tampering, a foreign secret or an old
+     * token all fail decryption and surface as [DiscoveryCursorException].
+     */
     private fun encode(payload: DiscoveryCursorPayload): String {
         val payloadJson = json.encodeToString(DiscoveryCursorPayload.serializer(), payload)
-        val payloadSegment = base64UrlEncode(payloadJson.toByteArray(StandardCharsets.UTF_8))
-        val signedValue = "$TOKEN_VERSION.$payloadSegment"
-        val signature = base64UrlEncode(hmacSha256(signedValue))
-        return "$signedValue.$signature"
+        val nonce = ByteArray(GCM_NONCE_BYTES).also(secureRandom::nextBytes)
+        val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, encryptionKey, GCMParameterSpec(GCM_TAG_BITS, nonce))
+        cipher.updateAAD(TOKEN_VERSION_BYTES)
+        val sealed = cipher.doFinal(payloadJson.toByteArray(StandardCharsets.UTF_8))
+        return "$TOKEN_VERSION.${base64UrlEncode(nonce + sealed)}"
     }
 
     private fun decode(token: String): DiscoveryCursorPayload {
         val parts = token.split(".")
-        if (parts.size != 3 || parts[0] != TOKEN_VERSION) throw DiscoveryCursorException()
-
-        val signedValue = "${parts[0]}.${parts[1]}"
-        val expectedSignature = hmacSha256(signedValue)
-        val suppliedSignature = runCatching { base64UrlDecode(parts[2]) }.getOrElse { throw DiscoveryCursorException() }
-        if (!MessageDigest.isEqual(expectedSignature, suppliedSignature)) throw DiscoveryCursorException()
+        if (parts.size != 2 || parts[0] != TOKEN_VERSION) throw DiscoveryCursorException()
+        val box = runCatching { base64UrlDecode(parts[1]) }.getOrElse { throw DiscoveryCursorException() }
+        if (box.size < GCM_NONCE_BYTES + GCM_TAG_BITS / 8) throw DiscoveryCursorException()
 
         val payloadJson =
             runCatching {
-                String(base64UrlDecode(parts[1]), StandardCharsets.UTF_8)
+                val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
+                cipher.init(
+                    Cipher.DECRYPT_MODE,
+                    encryptionKey,
+                    GCMParameterSpec(GCM_TAG_BITS, box, 0, GCM_NONCE_BYTES),
+                )
+                cipher.updateAAD(TOKEN_VERSION_BYTES)
+                String(cipher.doFinal(box, GCM_NONCE_BYTES, box.size - GCM_NONCE_BYTES), StandardCharsets.UTF_8)
             }.getOrElse { throw DiscoveryCursorException() }
 
         return runCatching {
             json.decodeFromString(DiscoveryCursorPayload.serializer(), payloadJson)
         }.getOrElse { throw DiscoveryCursorException() }
     }
-
-    private fun hmacSha256(value: String): ByteArray {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(secretBytes, "HmacSHA256"))
-        return mac.doFinal(value.toByteArray(StandardCharsets.UTF_8))
-    }
-
     companion object {
-        private const val VERSION = 1
-        private const val TOKEN_VERSION = "v1"
+        private const val VERSION = 2
+        private const val TOKEN_VERSION = "g2"
+        private val TOKEN_VERSION_BYTES = TOKEN_VERSION.toByteArray(StandardCharsets.UTF_8)
+        private const val KEY_DERIVATION_LABEL = "pynapli/discovery-cursor/aes-gcm/v2"
+        private const val CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
+        private const val GCM_NONCE_BYTES = 12
+        private const val GCM_TAG_BITS = 128
         private const val SURFACE_GRID = "grid"
 
         fun gridScopeHash(
@@ -162,7 +188,7 @@ class DiscoveryCursorException : RuntimeException("INVALID_DISCOVERY_CURSOR")
 
 @Serializable
 private data class DiscoveryCursorPayload(
-    val version: Int = 1,
+    val version: Int = 2,
     val surface: String,
     val scopeHash: String,
     val boostBucket: Int? = null,
