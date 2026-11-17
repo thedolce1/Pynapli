@@ -39,6 +39,8 @@ internal fun ResultSet.readDeckRankRow(): DeckRankRow =
         distanceMeters = getDouble("distance_meters"),
         isBoosted = getBoolean("is_boosted"),
         softScore = getInt("soft_score"),
+        orderBucket = getInt("order_bucket"),
+        orderTiebreak = getLong("order_tiebreak"),
     )
 
 internal fun DiscoveryFilters.isRankCacheEligible(): Boolean = linkedOnly == null

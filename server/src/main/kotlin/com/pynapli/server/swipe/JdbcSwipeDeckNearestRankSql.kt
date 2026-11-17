@@ -16,8 +16,14 @@ internal fun Connection.queryDeckRankNearestWindow(
     val sql =
         """
         WITH viewer_location AS (
-            SELECT ul.geom AS geom
+            -- The viewer's EFFECTIVE location snapped to their cell: the nearest window is chosen
+            -- from the cell centre, so moving inside a cell never changes who is in it.
+            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
             FROM user_locations ul
+            LEFT JOIN travel_locations tl
+              ON tl.user_id = ul.user_id
+             AND tl.status = 'active'
+             AND tl.active_until IS NULL
             WHERE ul.user_id = ?
         ),
         nearest_locations AS MATERIALIZED (
@@ -30,6 +36,15 @@ internal fun Connection.queryDeckRankNearestWindow(
                 SELECT user_id, geom
                 FROM user_locations
                 WHERE ST_DWithin(v.geom, geom, ?)
+                  -- A traveller is never ranked by their home GPS: travellers reach the deck only
+                  -- through the travel-point path, at their effective location.
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM travel_locations near_travel
+                      WHERE near_travel.user_id = user_locations.user_id
+                        AND near_travel.status = 'active'
+                        AND near_travel.active_until IS NULL
+                  )
                 ORDER BY geom <-> v.geom
                 LIMIT ?
             ) near ON true
@@ -50,8 +65,13 @@ internal fun Connection.queryDeckRankNearestWindow(
                      AND ba.ends_at > now()
                ) AS is_boosted,
                false AS visiting,
-               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score,
+               -- L-08: coarse order key (km bucket, distance-independent for hidden users) + stable
+               -- pseudo-random tiebreak seeded by the viewer's cell. Never exact distance.
+               pynapli_order_bucket_m(ds.show_distance, nl.distance_meters, $radiusMeters, 'deck:' || ST_AsText(v.geom::geometry), u.id) AS order_bucket,
+               pynapli_order_tiebreak('deck:' || ST_AsText(v.geom::geometry), u.id) AS order_tiebreak
         FROM nearest_locations nl
+        CROSS JOIN viewer_location v
         JOIN users u ON u.id = nl.user_id
         JOIN profiles p ON p.user_id = u.id
         JOIN discovery_settings ds ON ds.user_id = u.id
@@ -163,7 +183,7 @@ internal fun Connection.queryDeckRankNearestWindow(
               ?::boolean = false
               OR u.id <> ALL(?::uuid[])
           )
-        ORDER BY soft_score DESC, nl.distance_order
+        ORDER BY soft_score DESC, order_bucket ASC, order_tiebreak ASC
         LIMIT ?
         """.trimIndent()
 

@@ -152,6 +152,48 @@ class GridLocationPrivacyTest :
             }
         }
 
+        "the swipe deck order of a hidden-distance user does not depend on where they are" {
+            runBlocking {
+                seedNeighbourhood()
+                val deck = com.pynapli.server.swipe.JdbcSwipeRepository(dataSource, rankCacheTtl = Duration.ZERO)
+                attackerPositions.forEach { (lon, lat) ->
+                    dataSource.moveUser(attacker, longitude = lon, latitude = lat)
+                    dataSource.moveUser(hiddenOne, longitude = -122.0800, latitude = 37.4190)
+                    val before = deck.queryDeck(attacker, 25_000, 50).cards.map { it.userId }
+                    dataSource.moveUser(hiddenOne, longitude = -122.0400, latitude = 37.4400)
+                    val after = deck.queryDeck(attacker, 25_000, 50).cards.map { it.userId }
+                    assertTrue(hiddenOne in before)
+                    assertEquals(before, after, "hidden user moved 4 km and the deck order changed (attacker at $lon,$lat)")
+                }
+            }
+        }
+
+        "a traveller's home distance never appears on a swipe card" {
+            runBlocking {
+                val traveller = UUID.fromString("00000000-0000-0000-0000-00000000a0f2")
+                dataSource.insertDiscoverableUser(attacker, "Attacker", age = 30, longitude = -122.08, latitude = 37.42)
+                dataSource.insertDiscoverableUser(traveller, "Traveller", age = 30, longitude = -122.07, latitude = 37.42)
+                dataSource.insertActiveTravelLocation(traveller, "Elsewhere", latitude = 37.80, longitude = -122.27)
+                // Enough locals that the cached deck takes the nearest-candidate window.
+                (0 until 12).forEach { i ->
+                    dataSource.insertDiscoverableUser(
+                        UUID.fromString("00000000-0000-0000-0000-00000000e%03d".format(i)),
+                        "Local $i",
+                        age = 30,
+                        longitude = -122.081 + i * 0.001,
+                        latitude = 37.421,
+                    )
+                }
+                listOf(Duration.ZERO, Duration.ofMinutes(5)).forEach { ttl ->
+                    val cards = com.pynapli.server.swipe.JdbcSwipeRepository(dataSource, rankCacheTtl = ttl).queryDeck(attacker, 25_000, 10).cards
+                    cards.firstOrNull { it.userId == traveller }?.let { dealt ->
+                        assertTrue(dealt.visiting, "traveller dealt as a local (ttl=$ttl)")
+                        assertTrue(dealt.distanceMeters >= 40_000, "home distance leaked (ttl=$ttl): ${dealt.distanceMeters}")
+                    }
+                }
+            }
+        }
+
         "paging 12 at a time through mixed hidden, shown and boosted users never skips or duplicates, cached or not" {
             runBlocking {
                 dataSource.insertDiscoverableUser(attacker, "Attacker", age = 30, longitude = -122.08, latitude = 37.42)
