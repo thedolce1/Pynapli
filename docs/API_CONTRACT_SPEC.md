@@ -44,7 +44,11 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 - Cards stay minimal (id, name, thumbnail, online, distance label, linked-partner mini).
 - Blocks, privacy and risk apply before cards are returned.
 - Tier volume caps (page size and depth) are enforced server-side. **Cursor tokens carry scope and
-  seen-count state**, so a client can't bypass tier depth by changing the requested limit.
+  seen-count state**, so a client can't bypass tier depth by changing the requested limit. Grid
+  cursors are sealed (AES-GCM, opaque to the client) and pages are at least 12 cards.
+- `radiusMeters` is snapped up to 2, 5, 10, 25, 50 or 100 km; distances, order and radius
+  membership are computed between coarse location cells (see GRID_IMPLEMENTATION_SPEC "Location
+  privacy"). `distanceMeters`/`distanceLabel` are null when the person hides distance.
   `resultLimitReached` is true when a capped tier hit its depth and more candidates exist behind the
   paid gate.
 - Open messaging from the Grid is allowed when the recipient's settings and risk policy allow.
