@@ -162,6 +162,9 @@ class JdbcTonightFeedRepository(
                 ) partner_photo ON true
                 WHERE partner_tsp.session_id = ts.id
                   AND partner_tsp.role = 'partner'
+                  -- A suspended, banned or deleted partner is never shown on someone's session.
+                  AND partner_user.status = 'active'
+                  AND partner_user.deleted_at IS NULL
                 ORDER BY partner_user.id ASC
                 LIMIT 1
             ) partner ON ts.mode = 'together'
