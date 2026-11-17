@@ -5,7 +5,6 @@ import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.grid.GridService
 import com.pynapli.server.grid.JdbcGridRepository
 import com.pynapli.server.grid.JdbcGridViewerTrustRepository
-import com.pynapli.server.grid.JdbcSavedGridFilterRepository
 import com.pynapli.server.grid.RedisGridCandidateRankCache
 import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.media.MediaAssetUrlResolver
@@ -13,8 +12,9 @@ import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.HiddenProfileRepository
 import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.savedfilters.JdbcSavedFilterRepository
+import com.pynapli.server.savedfilters.SavedFilterSurface
 import com.pynapli.server.subscriptions.SubscriptionService
-import com.pynapli.server.swipe.JdbcSavedSwipeFilterRepository
 import com.pynapli.server.swipe.SavedSwipeFilterService
 import java.time.Duration
 import javax.sql.DataSource
@@ -65,13 +65,13 @@ internal fun buildGridDependencies(
         )
     val savedGridFilterService =
         SavedGridFilterService(
-            repository = JdbcSavedGridFilterRepository(dataSource),
+            repository = JdbcSavedFilterRepository(dataSource, SavedFilterSurface.Grid),
             subscriptionService = subscriptionService,
             viewerTrustRepository = JdbcGridViewerTrustRepository(dataSource),
         )
     val savedSwipeFilterService =
         SavedSwipeFilterService(
-            repository = JdbcSavedSwipeFilterRepository(dataSource),
+            repository = JdbcSavedFilterRepository(dataSource, SavedFilterSurface.Swipe),
             subscriptionService = subscriptionService,
             viewerTrustRepository = JdbcGridViewerTrustRepository(dataSource),
         )

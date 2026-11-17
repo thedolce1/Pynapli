@@ -61,7 +61,8 @@ internal fun gridStatusFor(code: String): HttpStatusCode =
         else -> HttpStatusCode.BadRequest
     }
 
-internal fun savedGridFilterStatusFor(code: String): HttpStatusCode =
+/** Saved filters, both surfaces (Grid and Swipe share one code set). */
+internal fun savedFilterStatusFor(code: String): HttpStatusCode =
     when (code) {
         "ENTITLEMENT_REQUIRED",
         "AGE_VERIFICATION_REQUIRED",
@@ -102,22 +103,6 @@ internal fun travelLocationStatusFor(code: String): HttpStatusCode =
         "INVALID_TRAVEL_COORDINATES",
         "INVALID_TRAVEL_SEARCH_QUERY",
         -> HttpStatusCode.BadRequest
-        else -> HttpStatusCode.BadRequest
-    }
-
-// Same code surface as `savedGridFilterStatusFor` today, kept as a parallel
-// function so the two presets surfaces can diverge later without coupling them
-// through a shared lookup table.
-internal fun savedSwipeFilterStatusFor(code: String): HttpStatusCode =
-    when (code) {
-        "ENTITLEMENT_REQUIRED",
-        "AGE_VERIFICATION_REQUIRED",
-        -> HttpStatusCode.Forbidden
-        "SAVED_FILTER_NAME_TAKEN" -> HttpStatusCode.Conflict
-        "SAVED_FILTER_LIMIT_REACHED" -> HttpStatusCode.Conflict
-        "INVALID_SAVED_FILTER_NAME" -> HttpStatusCode.BadRequest
-        "INVALID_SAVED_FILTER_PAYLOAD" -> HttpStatusCode.BadRequest
-        "INVALID_SAVED_FILTER_ID" -> HttpStatusCode.BadRequest
         else -> HttpStatusCode.BadRequest
     }
 
