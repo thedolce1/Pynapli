@@ -41,6 +41,25 @@ object CoarseLocation {
      */
     const val CELL_PAD_METERS: Double = 1_600.0
 
+    /**
+     * Discovery radius steps (L-09). A requested radius is rounded UP to the next step, so moving a
+     * radius slider metre by metre can never be used to binary-search someone's distance: the only
+     * membership tests an attacker can run are these six circles, and membership itself is a
+     * cell-to-cell test.
+     */
+    val RADIUS_STEPS_METERS: List<Int> = listOf(2_000, 5_000, 10_000, 25_000, 50_000, 100_000)
+
+    fun snapRadiusMeters(requestedMeters: Int): Int = RADIUS_STEPS_METERS.firstOrNull { it >= requestedMeters } ?: RADIUS_STEPS_METERS.last()
+
+    /**
+     * Cache / ordering key of a viewer cell: the snapped cell centre in hundredths of a degree. Built
+     * from the SQL-snapped coordinates (already multiples of [CELL_DEGREES]) so it is exact.
+     */
+    fun cellKey(
+        snappedLongitude: Double,
+        snappedLatitude: Double,
+    ): Pair<Int, Int> = Math.round(snappedLongitude / CELL_DEGREES).toInt() to Math.round(snappedLatitude / CELL_DEGREES).toInt()
+
     /** SQL: the cell of a geography expression. */
     fun cellSql(geography: String): String = "pynapli_location_cell($geography)"
 

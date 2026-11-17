@@ -483,7 +483,7 @@ class GridServiceTest {
             val anchor =
                 GridCursorAnchor(
                     boostBucket = 1,
-                    distanceBucketMeters = 1_240,
+                    orderBucket = 1_240,
                     userId = targetId,
                 )
             val repository =
@@ -497,7 +497,7 @@ class GridServiceTest {
                                     displayName = "Alex",
                                     showDistance = true,
                                     distanceMeters = 1_240.0,
-                                    distanceBucketMeters = 1_240,
+                                    orderBucket = 1_240,
                                 ),
                             ),
                         nextCursorAnchor = anchor,
@@ -529,13 +529,13 @@ class GridServiceTest {
                                         displayName = "Alex",
                                         showDistance = true,
                                         distanceMeters = 1_240.0,
-                                        distanceBucketMeters = 1_240,
+                                        orderBucket = 1_240,
                                     ),
                                 ),
                             nextCursorAnchor =
                                 GridCursorAnchor(
                                     boostBucket = 1,
-                                    distanceBucketMeters = 1_240,
+                                    orderBucket = 1_240,
                                     userId = targetId,
                                 ),
                         ),
@@ -569,13 +569,13 @@ class GridServiceTest {
                                         displayName = "Alex",
                                         showDistance = true,
                                         distanceMeters = 1_240.0,
-                                        distanceBucketMeters = 1_240,
+                                        orderBucket = 1_240,
                                     ),
                                 ),
                             nextCursorAnchor =
                                 GridCursorAnchor(
                                     boostBucket = 1,
-                                    distanceBucketMeters = 1_240,
+                                    orderBucket = 1_240,
                                     userId = targetId,
                                 ),
                         ),
@@ -625,11 +625,11 @@ class GridServiceTest {
                                 "Far Alex",
                                 showDistance = true,
                                 distanceMeters = 80_000.0,
-                                distanceBucketMeters = 80_000,
+                                orderBucket = 80_000,
                             ),
                         ),
                     nextCursorAnchorAtMax =
-                        GridCursorAnchor(boostBucket = 0, distanceBucketMeters = 80_000, userId = targetId),
+                        GridCursorAnchor(boostBucket = 0, orderBucket = 80_000, userId = targetId),
                 )
             val service = GridService(repository)
 
@@ -726,7 +726,7 @@ private class LimitAwareGridRepository(
                 displayName = "Grid $index",
                 showDistance = true,
                 distanceMeters = index.toDouble(),
-                distanceBucketMeters = index,
+                orderBucket = index,
             )
         }
 
@@ -739,7 +739,7 @@ private class LimitAwareGridRepository(
     ): GridQueryResult {
         receivedLimits += limit
         receivedCursors += cursor
-        val startIndex = cursor?.distanceBucketMeters?.plus(1) ?: 0
+        val startIndex = cursor?.orderBucket?.plus(1) ?: 0
         val page = cards.drop(startIndex).take(limit)
         val hasMore = cards.size > startIndex + limit
         return GridQueryResult(

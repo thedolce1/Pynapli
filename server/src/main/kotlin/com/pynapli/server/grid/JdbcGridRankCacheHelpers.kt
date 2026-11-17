@@ -1,6 +1,7 @@
 package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.Types
@@ -19,20 +20,18 @@ internal fun PreparedStatement.setNullableUuid(
 }
 
 /**
- * Coarse location bucket for the viewer, derived from their effective discovery
- * location. Mirrors Swipe's `findViewerLocationCacheKey`: an active
- * travel_locations row overrides the real GPS point (passport mode), so the
- * COALESCE matches the `viewer_location` CTE used by the rank query. The point
- * is rounded to E3 (~111m) so nearby viewers share the expensive spatial rank
- * window while card distances stay close enough for the Grid's coarse labels.
+ * The viewer's location cell, derived from their effective discovery location: an active
+ * travel_locations row overrides the real GPS point (passport mode), matching the `viewer_location`
+ * CTE of the rank query. The cell is snapped IN SQL with the same `pynapli_location_cell` the rank
+ * query ranks from, so two viewers share a cache key exactly when they share a rank origin (L-14).
  *
  * Returns null when the viewer has no location row at all.
  */
 internal fun Connection.findGridViewerLocationCacheKey(viewerUserId: UUID): GridLocationCacheKey? =
     prepareStatement(
         """
-        SELECT ST_X(geom::geometry) AS longitude,
-               ST_Y(geom::geometry) AS latitude
+        SELECT ST_X(pynapli_location_cell(geom)::geometry) AS longitude,
+               ST_Y(pynapli_location_cell(geom)::geometry) AS latitude
         FROM (
             SELECT COALESCE(tl.geom, ul.geom) AS geom
             FROM user_locations ul
@@ -50,10 +49,9 @@ internal fun Connection.findGridViewerLocationCacheKey(viewerUserId: UUID): Grid
             if (!rs.next()) {
                 null
             } else {
-                GridLocationCacheKey(
-                    longitudeE3 = Math.round(rs.getDouble("longitude") * 1_000.0).toInt(),
-                    latitudeE3 = Math.round(rs.getDouble("latitude") * 1_000.0).toInt(),
-                )
+                val (longitudeE2, latitudeE2) =
+                    CoarseLocation.cellKey(snappedLongitude = rs.getDouble("longitude"), snappedLatitude = rs.getDouble("latitude"))
+                GridLocationCacheKey(longitudeE2 = longitudeE2, latitudeE2 = latitudeE2)
             }
         }
     }

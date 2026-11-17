@@ -162,8 +162,11 @@ class GridRankCacheTest :
                         cursor = assertNotNull(uncachedFirst.nextCursorAnchor),
                     )
 
-                assertEquals(listOf(first, second), cachedFirst.cards.map { it.userId })
-                assertEquals(listOf(third), cachedSecond.cards.map { it.userId })
+                // All three sit in the viewer's 1 km order bucket, so their order is the stable
+                // pseudo-random tiebreak (L-08), not exact distance: assert the partition, not an order.
+                assertEquals(2, cachedFirst.cards.size)
+                assertEquals(1, cachedSecond.cards.size)
+                assertEquals(setOf(first, second, third), (cachedFirst.cards + cachedSecond.cards).map { it.userId }.toSet())
                 assertEquals(
                     uncachedFirst.cards.map { it.userId },
                     cachedFirst.cards.map { it.userId },
@@ -323,8 +326,9 @@ class GridRankCacheTest :
                         displayName = "Maya | with: delimiters \"and\" quotes",
                         showDistance = true,
                         boostBucket = 0,
-                        distanceBucketMeters = 1234,
+                        orderBucket = 1234,
                         distanceMeters = 1234.56,
+                        orderTiebreak = 1_152_921_504_606_846_975L,
                         visiting = false,
                     ),
                     GridRankRow(
@@ -332,7 +336,7 @@ class GridRankCacheTest :
                         displayName = "Pynapli User",
                         showDistance = false,
                         boostBucket = 1,
-                        distanceBucketMeters = 0,
+                        orderBucket = 0,
                         distanceMeters = 0.0,
                         visiting = true,
                     ),

@@ -1,6 +1,7 @@
 package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.util.UUID
 
@@ -8,7 +9,7 @@ import java.util.UUID
  * Cacheable RANK phase of the Grid query. Returns a WINDOW of ranked candidate
  * identity rows (user_id + the cheap ranking / keyset-cursor fields), ordered by
  * the SAME keyset order as the original single query
- * (boost_bucket ASC, distance_bucket_meters ASC, user_id ASC), with NO cursor
+ * (boost_bucket ASC, order bucket ASC, order_tiebreak ASC, user_id ASC), with NO cursor
  * WHERE clause and LIMIT = [limit] (the caller passes the window size).
  *
  * When [userSpecificViewerId] is null the query is EXCLUSION-FREE: no viewer-self
@@ -27,15 +28,19 @@ internal fun Connection.queryGridRank(
     limit: Int,
     filters: DiscoveryFilters,
     userSpecificViewerId: UUID?,
+    orderSeed: String,
     cursor: GridCursorAnchor? = null,
 ): List<GridRankRow> {
+    val paddedRadius = radiusMeters + CoarseLocation.CELL_PAD_METERS
     val sql =
         """
         WITH viewer_location AS (
             -- Passport/travel mode (SWIPE_IMPLEMENTATION_SPEC L339-354): when the
             -- viewer has an active travel_locations row, its geom overrides the
             -- real GPS location for discovery.
-            SELECT COALESCE(tl.geom, ul.geom) AS geom
+            -- Ranked from the CENTRE OF THE VIEWER'S CELL, never their exact GPS (L-10/L-14): every
+            -- distance, radius test and order key below is a function of (viewer cell, target cell).
+            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
             FROM user_locations ul
             LEFT JOIN travel_locations tl
               ON tl.user_id = ul.user_id
@@ -46,7 +51,8 @@ internal fun Connection.queryGridRank(
         -- Candidate ids from two index-backed radius lookups (home GPS, active travel point). The
         -- radius test below is an OR across two LEFT-JOINed tables, which no index can serve, so
         -- without this every visible user was scanned and distance-tested (EXPLAIN on 106k users:
-        -- seq scan, ~1.1 s). base_candidates keeps that OR, so the result set is unchanged.
+        -- seq scan, ~1.1 s). The radius here is padded by the cell slack so the exact cell-to-cell
+        -- membership test in base_candidates never misses a candidate.
         nearby_ids AS (
             SELECT near_home.user_id
             FROM viewer_location v
@@ -70,8 +76,8 @@ internal fun Connection.queryGridRank(
                          AND ba.status = 'active'
                          AND ba.ends_at > now()
                    ) THEN 0 ELSE 1 END AS boost_bucket,
-                   -- Cell-to-cell distance (AUDIT-10): never the raw GPS distance.
-                   GREATEST(0, FLOOR(pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom))))::integer AS distance_bucket_meters,
+                   -- Cell-to-cell distance from the target's EFFECTIVE location (travel point when
+                   -- travelling, else home): never a raw GPS distance, never a traveller's home.
                    pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
                    target_travel.id IS NOT NULL AS visiting,
                    -- has_visible_linked_partner only feeds the linkedOnly filter,
@@ -127,10 +133,9 @@ internal fun Connection.queryGridRank(
               AND ds.incognito = false
               AND (target_travel.id IS NULL OR ds.visible_while_traveling = true)
               AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
-              AND (
-                  ST_DWithin(v.geom, ul.geom, ?)
-                  OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
-              )
+              -- Radius membership (L-09): cell-to-cell distance of the EFFECTIVE location within the
+              -- snapped radius step. A traveller is matched only where they are travelling.
+              AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) <= ?
               AND (?::integer IS NULL OR p.display_age >= ?::integer)
               AND (?::integer IS NULL OR p.display_age <= ?::integer)
               AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
@@ -238,8 +243,12 @@ internal fun Connection.queryGridRank(
               )
         ),
         ranked_candidates AS (
-            SELECT *
-            FROM base_candidates
+            -- L-08 order key: whole-km coarse bucket (or a distance-independent bucket when the
+            -- candidate hides distance) + a stable pseudo-random tiebreak seeded by the viewer cell.
+            SELECT bc.*,
+                   pynapli_order_bucket_m(bc.show_distance, bc.distance_meters, ?, ?, bc.user_id) AS distance_bucket_meters,
+                   pynapli_order_tiebreak(?, bc.user_id) AS order_tiebreak
+            FROM base_candidates bc
             WHERE (
                 ?::boolean IS NULL
                 OR (?::boolean = true AND has_visible_linked_partner)
@@ -259,6 +268,12 @@ internal fun Connection.queryGridRank(
                 OR (
                     boost_bucket = ?::integer
                     AND distance_bucket_meters = ?::integer
+                    AND order_tiebreak > ?::bigint
+                )
+                OR (
+                    boost_bucket = ?::integer
+                    AND distance_bucket_meters = ?::integer
+                    AND order_tiebreak = ?::bigint
                     AND user_id > ?::uuid
                 )
             )
@@ -269,10 +284,12 @@ internal fun Connection.queryGridRank(
                pc.boost_bucket,
                pc.distance_bucket_meters,
                pc.distance_meters,
+               pc.order_tiebreak,
                pc.visiting
         FROM paged_candidates pc
         ORDER BY pc.boost_bucket ASC,
                  pc.distance_bucket_meters ASC,
+                 pc.order_tiebreak ASC,
                  pc.user_id ASC
         LIMIT ?
         """.trimIndent()
@@ -288,9 +305,9 @@ internal fun Connection.queryGridRank(
         // Bound in SQL order; the running index keeps added placeholders from shifting the rest.
         var index = 1
         statement.setObject(index++, viewerUserId)
-        // nearby_ids radius (home GPS + travel point).
-        statement.setDouble(index++, radiusMeters.toDouble())
-        statement.setDouble(index++, radiusMeters.toDouble())
+        // nearby_ids index pre-filter radius (home GPS + travel point), padded by the cell slack.
+        statement.setDouble(index++, paddedRadius)
+        statement.setDouble(index++, paddedRadius)
         // has_visible_linked_partner gate + per-viewer block params (skipped when null).
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setNullableUuid(index++, userSpecificViewerId)
@@ -298,8 +315,7 @@ internal fun Connection.queryGridRank(
         // self exclusion gate.
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setNullableUuid(index++, userSpecificViewerId)
-        // ST_DWithin radius bound twice (real GPS + travel point).
-        statement.setDouble(index++, radiusMeters.toDouble())
+        // Exact cell-to-cell radius membership.
         statement.setDouble(index++, radiusMeters.toDouble())
         statement.setObject(index++, filters.minimumAge)
         statement.setObject(index++, filters.minimumAge)
@@ -336,6 +352,10 @@ internal fun Connection.queryGridRank(
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setNullableUuid(index++, userSpecificViewerId)
+        // Order key: radius (hidden placement span), seed, seed.
+        statement.setInt(index++, radiusMeters)
+        statement.setString(index++, orderSeed)
+        statement.setString(index++, orderSeed)
         // linkedOnly filter (?::boolean IS NULL / true / false).
         statement.setObject(index++, filters.linkedOnly)
         statement.setObject(index++, filters.linkedOnly)
@@ -344,9 +364,13 @@ internal fun Connection.queryGridRank(
         statement.setBoolean(index++, cursor != null)
         statement.setObject(index++, cursor?.boostBucket)
         statement.setObject(index++, cursor?.boostBucket)
-        statement.setObject(index++, cursor?.distanceBucketMeters)
+        statement.setObject(index++, cursor?.orderBucket)
         statement.setObject(index++, cursor?.boostBucket)
-        statement.setObject(index++, cursor?.distanceBucketMeters)
+        statement.setObject(index++, cursor?.orderBucket)
+        statement.setObject(index++, cursor?.orderTiebreak)
+        statement.setObject(index++, cursor?.boostBucket)
+        statement.setObject(index++, cursor?.orderBucket)
+        statement.setObject(index++, cursor?.orderTiebreak)
         statement.setObject(index++, cursor?.userId)
         statement.setInt(index++, limit)
         statement.executeQuery().use { rs ->
@@ -358,8 +382,9 @@ internal fun Connection.queryGridRank(
                             displayName = rs.getString("display_name"),
                             showDistance = rs.getBoolean("show_distance"),
                             boostBucket = rs.getInt("boost_bucket"),
-                            distanceBucketMeters = rs.getInt("distance_bucket_meters"),
+                            orderBucket = rs.getInt("distance_bucket_meters"),
                             distanceMeters = rs.getDouble("distance_meters"),
+                            orderTiebreak = rs.getLong("order_tiebreak"),
                             visiting = rs.getBoolean("visiting"),
                         ),
                     )

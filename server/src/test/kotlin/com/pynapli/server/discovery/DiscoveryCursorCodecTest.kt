@@ -24,7 +24,7 @@ class DiscoveryCursorCodecTest {
     private val codec = DiscoveryCursorCodec(secret)
     private val viewer = UUID.randomUUID()
     private val anchor =
-        GridCursorAnchor(boostBucket = 1, distanceBucketMeters = 1_234, userId = UUID.randomUUID(), seenCount = 40)
+        GridCursorAnchor(boostBucket = 1, orderBucket = 1_234, userId = UUID.randomUUID(), seenCount = 40)
 
     private fun scope(
         viewerUserId: UUID = viewer,
@@ -115,7 +115,7 @@ class DiscoveryCursorCodecTest {
         // refused as an invalid cursor (never decoded, never a crash).
         val json =
             """{"version":1,"surface":"grid","scopeHash":"${scope()}","boostBucket":1,""" +
-                """"distanceBucketMeters":1234,"userId":"${anchor.userId}","seenCount":40}"""
+                """"orderBucket":1234,"userId":"${anchor.userId}","seenCount":40}"""
         val b64 = Base64.getUrlEncoder().withoutPadding()
         val signed = "v1.${b64.encodeToString(json.toByteArray(StandardCharsets.UTF_8))}"
         val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(secret.toByteArray(), "HmacSHA256")) }

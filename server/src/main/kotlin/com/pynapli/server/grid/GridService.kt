@@ -4,6 +4,7 @@ import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.discovery.DiscoveryCursorException
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.discoveryFiltersFrom
+import com.pynapli.server.distance.CoarseLocation
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
@@ -39,7 +40,8 @@ class GridService(
         profile("grid.rateLimit") { requireGridQueryRateLimit(viewerUserId) }
         val radiusMeters =
             profile("grid.radius") {
-                request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
+                // L-09: snap UP to a fixed step so the radius cannot be binary-searched.
+                CoarseLocation.snapRadiusMeters(request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS))
             }
         val filters =
             profile("grid.filters") {

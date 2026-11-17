@@ -48,7 +48,8 @@ class DiscoveryCursorCodec(
                 surface = SURFACE_GRID,
                 scopeHash = scopeHash,
                 boostBucket = anchor.boostBucket,
-                distanceBucketMeters = anchor.distanceBucketMeters,
+                orderBucket = anchor.orderBucket,
+                orderTiebreak = anchor.orderTiebreak,
                 userId = anchor.userId.toString(),
                 seenCount = anchor.seenCount,
             ),
@@ -65,12 +66,13 @@ class DiscoveryCursorCodec(
 
         return GridCursorAnchor(
             boostBucket = payload.boostBucket ?: throw DiscoveryCursorException(),
-            distanceBucketMeters = payload.distanceBucketMeters ?: throw DiscoveryCursorException(),
+            orderBucket = payload.orderBucket ?: throw DiscoveryCursorException(),
             userId =
                 runCatching {
                     UUID.fromString(payload.userId ?: throw DiscoveryCursorException())
                 }.getOrElse { throw DiscoveryCursorException() },
             seenCount = payload.seenCount ?: 0,
+            orderTiebreak = payload.orderTiebreak ?: throw DiscoveryCursorException(),
         )
     }
 
@@ -192,7 +194,8 @@ private data class DiscoveryCursorPayload(
     val surface: String,
     val scopeHash: String,
     val boostBucket: Int? = null,
-    val distanceBucketMeters: Int? = null,
+    val orderBucket: Int? = null,
+    val orderTiebreak: Long? = null,
     val userId: String? = null,
     val seenCount: Int? = null,
 )

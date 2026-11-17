@@ -80,7 +80,8 @@ internal class JdbcGridRepository(
                             showDistance = row.showDistance,
                             distanceMeters = row.distanceMeters,
                             boostBucket = row.boostBucket,
-                            distanceBucketMeters = row.distanceBucketMeters,
+                            orderBucket = row.orderBucket,
+                            orderTiebreak = row.orderTiebreak,
                             linkedPartnerUserId = h?.linkedPartnerUserId,
                             linkedPartnerDisplayName = h?.linkedPartnerDisplayName,
                             linkedPartnerThumbnailMediaAssetId = h?.linkedPartnerThumbnailMediaAssetId,
@@ -107,6 +108,7 @@ internal class JdbcGridRepository(
                 val rows =
                     connection.prepareStatement(VISITING_SOON_QUERY).use { statement ->
                         statement.setObject(1, viewerUserId)
+                        // Snapped radius step (GridService), tested cell-to-cell.
                         statement.setInt(2, radiusMeters)
                         statement.setObject(3, viewerUserId)
                         statement.setInt(4, limit)
@@ -173,7 +175,7 @@ internal class JdbcGridRepository(
             !candidateRankCache.isEnabled() ||
             viewerTravelActive
         ) {
-            return queryGridRankUncached(viewerUserId, radiusMeters, limit, filters, cursor)
+            return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor)
         }
 
         val cacheWindow = rankCacheWindow.coerceAtLeast(limit)
@@ -193,6 +195,7 @@ internal class JdbcGridRepository(
                     filters = filters,
                     // EXCLUSION-FREE window: no self filter, no per-viewer block.
                     userSpecificViewerId = null,
+                    orderSeed = viewerLocationKey.orderSeed,
                 )
             }
 
@@ -215,7 +218,7 @@ internal class JdbcGridRepository(
             return GridRankPage(cards = page, hasMore = hasMore)
         }
 
-        return queryGridRankUncached(viewerUserId, radiusMeters, limit, filters, cursor)
+        return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor)
     }
 
     /**
@@ -227,6 +230,7 @@ internal class JdbcGridRepository(
      */
     private fun Connection.queryGridRankUncached(
         viewerUserId: UUID,
+        viewerLocationKey: GridLocationCacheKey,
         radiusMeters: Int,
         limit: Int,
         filters: DiscoveryFilters,
@@ -243,6 +247,7 @@ internal class JdbcGridRepository(
                 limit = limit + 1,
                 filters = filters,
                 userSpecificViewerId = viewerUserId,
+                orderSeed = viewerLocationKey.orderSeed,
                 cursor = cursor,
             )
         val page = ranked.take(limit)
@@ -256,11 +261,12 @@ private data class GridRankPage(
     val hasMore: Boolean,
 )
 
-/** Keyset comparison matching the SQL ORDER BY (boost_bucket, distance_bucket_meters, user_id ASC). */
+/** Keyset comparison matching the SQL ORDER BY (boost_bucket, order bucket, order_tiebreak, user_id ASC). */
 private fun GridRankRow.afterCursor(cursor: GridCursorAnchor): Boolean =
     when {
         boostBucket != cursor.boostBucket -> boostBucket > cursor.boostBucket
-        distanceBucketMeters != cursor.distanceBucketMeters -> distanceBucketMeters > cursor.distanceBucketMeters
+        orderBucket != cursor.orderBucket -> orderBucket > cursor.orderBucket
+        orderTiebreak != cursor.orderTiebreak -> orderTiebreak > cursor.orderTiebreak
         // Postgres orders uuid as 16 unsigned bytes (big-endian). Java's
         // UUID.compareTo treats the halves as signed longs, which disagrees once
         // the high bit is set — so we replicate Postgres' unsigned ordering to
@@ -283,7 +289,8 @@ private fun UUID.compareUnsigned(other: UUID): Int {
 private val VISITING_SOON_QUERY =
     """
     WITH viewer_location AS (
-        SELECT COALESCE(tl.geom, ul.geom) AS geom
+        -- The viewer's cell centre, as on the Grid (L-09/L-10): membership is cell-to-cell.
+        SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
         FROM user_locations ul
         LEFT JOIN travel_locations tl
           ON tl.user_id = ul.user_id
@@ -302,7 +309,7 @@ private val VISITING_SOON_QUERY =
      AND t.announce_to_locals = true
      AND t.ends_on >= current_date
      AND t.starts_on <= current_date + 14
-     AND ST_DWithin(v.geom, ST_SetSRID(ST_MakePoint(t.longitude, t.latitude), 4326)::geography, ?)
+     AND pynapli_coarse_distance_m(v.geom, ST_SetSRID(ST_MakePoint(t.longitude, t.latitude), 4326)::geography) <= ?
     JOIN users u ON u.id = t.user_id AND u.status = 'active' AND u.deleted_at IS NULL
     JOIN profiles p ON p.user_id = u.id AND p.visibility_status = 'visible'
     JOIN discovery_settings ds ON ds.user_id = u.id AND ds.grid_visible = true AND ds.incognito = false
