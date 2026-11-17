@@ -28,11 +28,15 @@ interface PsyncSessionRepository {
     /** True if a non-terminal Psync session already exists for [linkId]. */
     suspend fun hasNonTerminalSessionForLink(linkId: UUID): Boolean
 
-    /** Insert a session + its participant rows in one transaction. Returns it loaded. */
+    /**
+     * Insert a session + its participant rows in one transaction. Returns it loaded, or null (and
+     * inserts nothing) if the session's link already has a non-terminal session: creates for one
+     * link are serialised, so two partners creating at once yield exactly one session.
+     */
     suspend fun insertSession(
         session: PsyncSession,
         participants: List<PsyncSessionParticipant>,
-    ): PsyncSession
+    ): PsyncSession?
 
     /**
      * Atomically set [userId]'s consent=accepted/approved=true on [sessionId] and, if every
@@ -161,7 +165,8 @@ interface PsyncSessionRepository {
     /**
      * Insert [actorUserId]'s private decision on [targetUserId] in [sessionId] idempotently
      * (ON CONFLICT DO NOTHING — first decision wins). Returns [newlyRecorded]=false if a
-     * decision already existed, plus the actor's current acted count.
+     * decision already existed, plus the actor's current acted count. Locks the session row and
+     * writes nothing unless it is still `active` and before its deadline.
      */
     suspend fun recordAction(
         sessionId: UUID,
@@ -262,10 +267,15 @@ interface PsyncSessionRepository {
         object InvalidState : StartOutcome
     }
 
-    /** Outcome of [recordAction]: idempotent insert result + the actor's acted count. */
+    /**
+     * Outcome of [recordAction]: idempotent insert result + the actor's acted count.
+     * [sessionActive] false means the session was no longer active (or past its deadline) once its
+     * row was locked, so nothing was written.
+     */
     data class RecordActionOutcome(
         val newlyRecorded: Boolean,
         val actedCount: Int,
+        val sessionActive: Boolean = true,
     )
 
     /**

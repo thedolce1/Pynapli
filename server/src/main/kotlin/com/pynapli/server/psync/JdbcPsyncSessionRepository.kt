@@ -26,7 +26,7 @@ class JdbcPsyncSessionRepository(
     override suspend fun insertSession(
         session: PsyncSession,
         participants: List<PsyncSessionParticipant>,
-    ): PsyncSession = dataSource.insertPsyncSession(json, session, participants)
+    ): PsyncSession? = dataSource.insertPsyncSession(json, session, participants)
 
     override suspend fun accept(
         sessionId: UUID,
@@ -112,7 +112,7 @@ class JdbcPsyncSessionRepository(
         now: Instant,
         actionIdFactory: () -> UUID,
         consumedInventoryId: UUID?,
-    ): RecordActionOutcome = dataSource.recordPsyncAction(sessionId, actorUserId, targetUserId, action, now, actionIdFactory, consumedInventoryId)
+    ): RecordActionOutcome = dataSource.recordPsyncAction(json, sessionId, actorUserId, targetUserId, action, now, actionIdFactory, consumedInventoryId)
 
     override suspend fun claimUndeliveredPineappleRefunds(): List<UUID> = dataSource.claimUndeliveredPsyncPineappleRefunds()
 

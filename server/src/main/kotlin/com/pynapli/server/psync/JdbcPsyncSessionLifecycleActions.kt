@@ -1,15 +1,19 @@
 package com.pynapli.server.psync
 
 import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.lockForTransaction
 import com.pynapli.server.psync.PsyncSessionRepository.ActiveLink
 import com.pynapli.server.psync.PsyncSessionRepository.MutateOutcome
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
+
+private const val PSYNC_LINK_LOCK_NAMESPACE = "psync-link"
 
 internal suspend fun DataSource.findPsyncActiveLink(userId: UUID): ActiveLink? =
     withContext(Dispatchers.IO) {
@@ -66,35 +70,40 @@ internal suspend fun DataSource.countStartedPsyncSessionsSince(
 
 internal suspend fun DataSource.hasNonTerminalPsyncSessionForLink(linkId: UUID): Boolean =
     withContext(Dispatchers.IO) {
-        connection.use { connection ->
-            connection
-                .prepareStatement(
-                    """
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM psync_sessions
-                        WHERE partner_link_id = ?
-                          AND status IN ($PSYNC_NON_TERMINAL_STATUS_LIST)
-                    )
-                    """.trimIndent(),
-                ).use { statement ->
-                    statement.setObject(1, linkId)
-                    statement.executeQuery().use { rs ->
-                        rs.next()
-                        rs.getBoolean(1)
-                    }
-                }
+        connection.use { connection -> connection.hasNonTerminalSessionForLink(linkId) }
+    }
+
+private fun Connection.hasNonTerminalSessionForLink(linkId: UUID): Boolean =
+    prepareStatement(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM psync_sessions
+            WHERE partner_link_id = ?
+              AND status IN ($PSYNC_NON_TERMINAL_STATUS_LIST)
+        )
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, linkId)
+        statement.executeQuery().use { rs ->
+            rs.next()
+            rs.getBoolean(1)
         }
     }
 
+/** Null when the link already has a session that hasn't ended: nothing is inserted. */
 internal suspend fun DataSource.insertPsyncSession(
     json: Json,
     session: PsyncSession,
     participants: List<PsyncSessionParticipant>,
-): PsyncSession =
+): PsyncSession? =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
             connection.inTransaction {
+                // Both partners can tap Start Psync at once, and each would pass the service's
+                // check before the other's insert. Serialise creates per link and check again here.
+                connection.lockForTransaction(PSYNC_LINK_LOCK_NAMESPACE, session.partnerLinkId.toString())
+                if (connection.hasNonTerminalSessionForLink(session.partnerLinkId)) return@inTransaction null
                 connection
                     .prepareStatement(
                         """
