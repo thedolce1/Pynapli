@@ -38,7 +38,7 @@ class RiskServiceTest {
         }
 
     @Test
-    fun repeatedSevereReportsCanReachQuarantineTier() =
+    fun repeatedSevereReportsFromOneReporterCountOnceAndNeverTerminate() =
         runBlocking {
             val repository = InMemoryRiskRepository()
             val service = RiskService(repository)
@@ -56,10 +56,20 @@ class RiskServiceTest {
             }
 
             val state = repository.states.getValue(reportedId)
-            assertEquals(100, state.score)
-            assertEquals("terminate", state.tier)
-            assertEquals("terminate", repository.events.last().tierAfter)
+            assertEquals(35, state.score)
+            assertEquals("watch", state.tier)
+            assertEquals(listOf(35, 0, 0), repository.events.map { it.delta })
         }
+
+    @Test
+    fun reportScoringPolicyCapsSingleReporterBelowQuarantineAndEveryoneBelowTerminate() {
+        val policy = ReportScoringPolicy()
+        assertEquals(0, policy.countedDelta(currentScore = 10, requestedDelta = 35, duplicate = true, distinctReporters = 1))
+        assertEquals(4, policy.countedDelta(currentScore = 65, requestedDelta = 25, duplicate = false, distinctReporters = 1))
+        assertEquals(24, policy.countedDelta(currentScore = 65, requestedDelta = 25, duplicate = false, distinctReporters = 2))
+        assertEquals(4, policy.countedDelta(currentScore = 85, requestedDelta = 35, duplicate = false, distinctReporters = 9))
+        assertEquals(0, policy.countedDelta(currentScore = 95, requestedDelta = 35, duplicate = false, distinctReporters = 9))
+    }
 
     @Test
     fun recordRateLimitHitStoresActionSignal() =
@@ -220,6 +230,22 @@ private class InMemoryRiskRepository : RiskRepository {
             )
         events += event
         return RiskMutationRecord(event = event, state = state)
+    }
+
+    override suspend fun recordReportEvent(
+        userId: UUID,
+        reporterUserId: UUID,
+        reason: String,
+        requestedDelta: Int,
+        metadataJson: String,
+        policy: ReportScoringPolicy,
+        eventIdFactory: () -> UUID,
+    ): RiskMutationRecord {
+        val reportEvents = events.filter { it.userId == userId && it.source == RiskService.SOURCE_REPORT }
+        val duplicate = reportEvents.any { it.actorUserId == reporterUserId && it.reason == reason }
+        val distinct = (reportEvents.mapNotNull { it.actorUserId } + reporterUserId).toSet().size
+        val counted = policy.countedDelta(states[userId]?.score ?: 0, requestedDelta, duplicate, distinct)
+        return recordEvent(userId, reporterUserId, RiskService.SOURCE_REPORT, reason, counted, metadataJson, eventIdFactory)
     }
 
     override suspend fun getState(userId: UUID): AccountRiskStateRecord? = states[userId]
