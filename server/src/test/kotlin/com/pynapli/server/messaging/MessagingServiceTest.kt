@@ -1058,6 +1058,7 @@ private class InMemoryMessagingRepository(
     override suspend fun listConversations(
         userId: UUID,
         limit: Int,
+        after: ConversationPageCursor?,
     ): List<ConversationRecord> =
         conversationsByPair.values
             .filter { conversation ->

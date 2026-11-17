@@ -9,10 +9,11 @@ import javax.sql.DataSource
 internal suspend fun DataSource.listMessagingConversations(
     userId: UUID,
     limit: Int,
+    after: ConversationPageCursor? = null,
 ): List<ConversationRecord> =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            connection.listConversationIds(userId, limit).mapNotNull { conversationId ->
+            connection.listConversationIds(userId, limit, after).mapNotNull { conversationId ->
                 connection.loadConversation(userId, conversationId)
             }
         }

@@ -16,6 +16,36 @@ import kotlin.test.assertFalse
 
 class MessagesStateHolderTest {
     @Test
+    fun olderThreadsLoadPageByPageAndARefreshKeepsThePagesAlreadyLoaded() =
+        runTest {
+            val page1 = listOf(conversation("c1", ConversationParticipantStatus.ACTIVE, updatedAt = "2026-05-03T00:00:00Z"))
+            val page2 = listOf(conversation("c2", ConversationParticipantStatus.ACTIVE, updatedAt = "2026-05-02T00:00:00Z"))
+            val repository = FakeMessagesRepository(page1)
+            repository.firstPageCursor = "after-c1"
+            repository.pagesAfter = mapOf("after-c1" to ConversationListResponseDto(items = page2, nextCursor = null))
+            val holder = MessagesStateHolder(repository)
+
+            holder.load()
+            assertEquals("after-c1", holder.state.value.nextCursor)
+            holder.loadMore()
+            assertEquals(
+                listOf("c1", "c2"),
+                holder.state.value.conversations
+                    .map { it.conversationId },
+            )
+            assertEquals(null, holder.state.value.nextCursor)
+
+            // A new message bumps a fresh thread to the top; the second page must not vanish.
+            repository.listResult = listOf(conversation("c0", ConversationParticipantStatus.ACTIVE, updatedAt = "2026-05-04T00:00:00Z"))
+            holder.refreshSilently()
+            assertEquals(
+                listOf("c0", "c1", "c2"),
+                holder.state.value.conversations
+                    .map { it.conversationId },
+            )
+        }
+
+    @Test
     fun partnerChatInvitesOnlyReturnsInvitedViewerConversations() {
         val invited = conversation("invited", viewerStatus = ConversationParticipantStatus.INVITED)
         val active = conversation("active", viewerStatus = ConversationParticipantStatus.ACTIVE)
@@ -113,7 +143,12 @@ private class FakeMessagesRepository(
             ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED),
         )
 
-    override suspend fun listConversations(): AppResult<ConversationListResponseDto> = AppResult.Success(ConversationListResponseDto(items = listResult))
+    var firstPageCursor: String? = null
+    var pagesAfter: Map<String, ConversationListResponseDto> = emptyMap()
+
+    override suspend fun listConversations(): AppResult<ConversationListResponseDto> = AppResult.Success(ConversationListResponseDto(items = listResult, nextCursor = firstPageCursor))
+
+    override suspend fun listConversationsAfter(cursor: String): AppResult<ConversationListResponseDto> = AppResult.Success(pagesAfter.getValue(cursor))
 
     override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> = acceptResult
 
@@ -127,6 +162,7 @@ private fun conversation(
     conversationId: String,
     viewerStatus: String,
     partnerInvite: PartnerChatInviteDto? = null,
+    updatedAt: String = "2026-05-01T17:30:00Z",
 ): ConversationDto =
     ConversationDto(
         conversationId = conversationId,
@@ -147,7 +183,7 @@ private fun conversation(
                 ),
             ),
         unreadCount = 0,
-        updatedAt = "2026-05-01T17:30:00Z",
+        updatedAt = updatedAt,
         partnerInvite = partnerInvite,
     )
 

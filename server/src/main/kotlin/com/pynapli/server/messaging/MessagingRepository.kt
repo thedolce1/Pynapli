@@ -4,9 +4,11 @@ import java.time.Instant
 import java.util.UUID
 
 interface MessagingRepository {
+    /** Newest activity first; [after] continues below the last thread of the previous page. */
     suspend fun listConversations(
         userId: UUID,
         limit: Int,
+        after: ConversationPageCursor? = null,
     ): List<ConversationRecord>
 
     suspend fun getOrCreateDirectConversation(
@@ -156,6 +158,12 @@ data class ConversationDetailRecord(
 data class MessagePageRecord(
     val messages: List<MessageRecord>,
     val nextCursor: MessagePageCursor?,
+)
+
+/** Position in the inbox: the last thread shown (its activity time, then id to break ties). */
+data class ConversationPageCursor(
+    val updatedAt: Instant,
+    val conversationId: UUID,
 )
 
 data class MessagePageCursor(

@@ -7,6 +7,7 @@ import java.util.UUID
 internal fun Connection.listConversationIds(
     userId: UUID,
     limit: Int,
+    after: ConversationPageCursor? = null,
 ): List<UUID> =
     prepareStatement(
         """
@@ -17,7 +18,9 @@ internal fun Connection.listConversationIds(
          AND viewer_cp.user_id = ?
          AND viewer_cp.left_at IS NULL
          AND viewer_cp.invitation_status IN ('active', 'invited')
-        WHERE c.created_by_user_id = ?
+        WHERE (?::timestamptz IS NULL OR (c.updated_at, c.id) < (?::timestamptz, ?::uuid))
+          AND (
+           c.created_by_user_id = ?
            OR viewer_cp.invitation_status = 'invited'
            OR EXISTS (
                SELECT 1
@@ -34,14 +37,19 @@ internal fun Connection.listConversationIds(
                      )
                  )
            )
+          )
         ORDER BY c.updated_at DESC, c.id DESC
         LIMIT ?
         """.trimIndent(),
     ).use { statement ->
+        val afterTime = after?.updatedAt?.let { java.sql.Timestamp.from(it) }
         statement.setObject(1, userId)
-        statement.setObject(2, userId)
-        statement.setObject(3, userId)
-        statement.setInt(4, limit.coerceIn(1, 100))
+        statement.setTimestamp(2, afterTime)
+        statement.setTimestamp(3, afterTime)
+        statement.setObject(4, after?.conversationId)
+        statement.setObject(5, userId)
+        statement.setObject(6, userId)
+        statement.setInt(7, limit.coerceIn(1, 101))
         statement.executeQuery().use { rs ->
             buildList {
                 while (rs.next()) add(rs.getObject("id", UUID::class.java))

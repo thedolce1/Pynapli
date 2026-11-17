@@ -575,6 +575,33 @@ class MessagingRepositoryIntegrationTest {
         }
 
     @Test
+    fun theInboxPagesNewestFirstWithoutGapsOrRepeats() =
+        runBlocking<Unit> {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000009b0")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            val repository = JdbcMessagingRepository(dataSource)
+            val threads =
+                (1..5).map { n ->
+                    val other = UUID.fromString("00000000-0000-0000-0000-0000000009b$n")
+                    dataSource.insertUserWithProfile(other, "Other $n")
+                    val conversation = repository.getOrCreateDirectConversation(viewer, other, origin = "grid")!!
+                    repository.sendMessage(viewer, conversation.conversationId, "hi $n")
+                    conversation.conversationId
+                }
+
+            val seen = mutableListOf<UUID>()
+            var after: ConversationPageCursor? = null
+            do {
+                val page = repository.listConversations(viewer, limit = 2, after = after)
+                seen += page.map { it.conversationId }
+                after = page.lastOrNull()?.let { ConversationPageCursor(it.updatedAt, it.conversationId) }
+            } while (page.size == 2)
+
+            // Newest activity first, every thread once.
+            assertEquals(threads.reversed(), seen)
+        }
+
+    @Test
     fun expiryHidesOldUserMessagesButRetainsRowsAndKeepsSystemNotice() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008a1")

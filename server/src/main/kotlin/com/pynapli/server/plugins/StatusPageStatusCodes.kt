@@ -215,6 +215,7 @@ internal fun messagingStatusFor(code: String): HttpStatusCode =
         "INVALID_CONVERSATION_TARGET",
         "INVALID_CONVERSATION_ORIGIN",
         "INVALID_MESSAGE_CURSOR",
+        "INVALID_CONVERSATION_CURSOR",
         "INVALID_MESSAGE_PAGE_LIMIT",
         "MESSAGE_BODY_EMPTY",
         "MESSAGE_BODY_TOO_LONG",
