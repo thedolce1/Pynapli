@@ -801,7 +801,7 @@ The first serious version should include:
 - DevOps and infrastructure setup: [DEVOPS_INFRA_SETUP_SPEC.md](DEVOPS_INFRA_SETUP_SPEC.md)
 - Frontend design direction: [FRONTEND_DESIGN_DIRECTION_SPEC.md](FRONTEND_DESIGN_DIRECTION_SPEC.md)
 - Grid and swipe filtering details: [FILTERS_SPEC.md](FILTERS_SPEC.md)
-- Launch strategy details: [LAUNCH_STRATEGY_SPEC.md](LAUNCH_STRATEGY_SPEC.md)
+- Launch strategy (archived): [LAUNCH_STRATEGY_SPEC.md](archive/LAUNCH_STRATEGY_SPEC.md)
 - Language and taxonomy details: [LANGUAGE_AND_TAXONOMY_SPEC.md](LANGUAGE_AND_TAXONOMY_SPEC.md)
 - Messaging details: [MESSAGING_SPEC.md](MESSAGING_SPEC.md)
 - Mobile app architecture details: [MOBILE_APP_ARCHITECTURE_SPEC.md](MOBILE_APP_ARCHITECTURE_SPEC.md)

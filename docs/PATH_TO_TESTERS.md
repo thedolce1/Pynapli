@@ -4,7 +4,7 @@ Last updated: 2026-07-29
 
 **Why this file exists:** the steps were all written down, but spread across
 `CLOUD_STATUS.md` (backend → PWA → site), `GCP_PROVISIONING_CHECKLIST.md` (the GCP detail),
-`ANDROID_PRODUCTION_GAMEPLAN.md` H1–H3 (Android tail) and `IOS_BRINGUP_PLAN.md` (iOS). Nowhere said
+`archive/ANDROID_PRODUCTION_GAMEPLAN.md` H1–H3 (Android tail) and `IOS_BRINGUP_PLAN.md` (iOS). Nowhere said
 **what order to do them in across all three targets, or what depends on what.** This does only that.
 It deliberately does not restate the detail — each step links to the doc that owns it.
 
@@ -37,7 +37,7 @@ Code is complete and gated; everything here is provisioning or a physical device
 | B1 | Create a release signing keystore; set `pynapli.android.releaseKeystore*` in `local.properties` | 🔵 | Build is already `-P`-configurable and builds unsigned without it. **Back the keystore up — losing it means you can never update the app on Play.** |
 | B2 | Build the staging APK pointed at the A3 URL | 🟢 | `scripts/android-staging-apk.ps1 -ApiBaseUrl https://<A3 host>` (sets `pynapli.android.stagingApiBaseUrl`; the WebSocket URL is derived, override with `-WebsocketBaseUrl`) |
 | B3 | Real-device QA on one physical mid-range phone (**H2**) | 🔵 | Emulator-only so far. Battery/location profile, push delivery, low-network. Harnesses exist. |
-| B4 | Play Console: app entry, internal testing track, upload the signed build | 🔵 | `ANDROID_PRODUCTION_GAMEPLAN.md` H3 |
+| B4 | Play Console: app entry, internal testing track, upload the signed build | 🔵 | `archive/ANDROID_PRODUCTION_GAMEPLAN.md` H3 |
 | B5 | Data Safety form + content rating + store listing copy/screenshots | 🔵 | H3; a dating/lifestyle app is scrutinised here — budget real time |
 
 `google-services.json` is already present locally and correctly untracked, so FCM/Crashlytics/App

@@ -11,7 +11,6 @@ The app is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyl
 | Doc | What it covers |
 | --- | --- |
 | [PYNAPLI_PRODUCT_SPEC.md](PYNAPLI_PRODUCT_SPEC.md) | Top-level product vision, scope, and core experience. |
-| [LAUNCH_STRATEGY_SPEC.md](LAUNCH_STRATEGY_SPEC.md) | Go-to-market and launch readiness. |
 
 ## Architecture & engineering
 
@@ -90,10 +89,7 @@ Working documents that track intent and progress — not fixed specs.
 | [IMPLEMENTATION_AUDIT.md](IMPLEMENTATION_AUDIT.md) | Current status per area: built, open gaps, owning spec. History is in [archive/IMPLEMENTATION_HISTORY.md](archive/IMPLEMENTATION_HISTORY.md). |
 | [PATH_TO_TESTERS.md](PATH_TO_TESTERS.md) | Founder checklist from today to the first external testers. |
 | [IOS_BRINGUP_PLAN.md](IOS_BRINGUP_PLAN.md) | Steps to stand up the iOS shell (needs a Mac). |
-| [reviews/CODEBASE_REVIEW_2026-11.md](reviews/CODEBASE_REVIEW_2026-11.md) | 2026-11 codebase review: findings, tiers, and which slices have shipped. |
-| [ANDROID_PRODUCTION_GAMEPLAN.md](ANDROID_PRODUCTION_GAMEPLAN.md) | Phased plan to take Android to production grade. |
-| [WEB_PWA_GAMEPLAN.md](WEB_PWA_GAMEPLAN.md) | Compose-for-Web Wasm PWA plan (W0–W6). |
-| [FRONTEND_POLISH_PASS.md](FRONTEND_POLISH_PASS.md) | Phased enterprise-grade frontend polish pass. |
+| [WEB_PWA_GAMEPLAN.md](WEB_PWA_GAMEPLAN.md) | Web PWA architecture, adapters and the window-size contract. |
 
 ## Legal & policy
 
@@ -109,3 +105,8 @@ Superseded docs, kept for history. Don't treat them as current guidance.
 | Doc | Was |
 |---|---|
 | [archive/IMPLEMENTATION_HISTORY.md](archive/IMPLEMENTATION_HISTORY.md) | Shipped-slice changelog. |
+| [archive/ANDROID_PRODUCTION_GAMEPLAN.md](archive/ANDROID_PRODUCTION_GAMEPLAN.md) | Android production plan (Track A complete). Cited by `scripts/android-qa-matrix.ps1` for API-level coverage. |
+| [archive/FRONTEND_POLISH_PASS.md](archive/FRONTEND_POLISH_PASS.md) | Frontend polish pass, phases 0–4 (complete). |
+| [archive/LAUNCH_STRATEGY_SPEC.md](archive/LAUNCH_STRATEGY_SPEC.md) | Go-to-market and launch strategy. |
+| [archive/CODEBASE_REVIEW_2026-11.md](archive/CODEBASE_REVIEW_2026-11.md) | 2026-11 codebase review (all tiers merged). |
+| [archive/WEB_PWA_PHASE_LOG.md](archive/WEB_PWA_PHASE_LOG.md) | Web PWA phases W0–W8; code comments cite its slice numbers. |
