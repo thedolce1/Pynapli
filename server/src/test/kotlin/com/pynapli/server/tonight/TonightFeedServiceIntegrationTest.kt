@@ -329,7 +329,12 @@ class TonightFeedServiceIntegrationTest :
                 dataSource.insertActiveTravelLocation(owner, "Elsewhere", latitude = 48.9050, longitude = 2.3050)
                 dataSource.insertActiveSoloSession(owner, intent = "solo")
 
-                val person = service().feed(viewer, radiusMeters = 50_000, intent = null, limit = 100).items.single().person
+                val person =
+                    service()
+                        .feed(viewer, radiusMeters = 50_000, intent = null, limit = 100)
+                        .items
+                        .single()
+                        .person
                 assertEquals("115_2445", person.zoneKey)
                 assertTrue(assertNotNull(person.distanceMeters) >= 5_000, "home distance leaked: ${person.distanceMeters}")
                 // Matched only where they travel: a 2 km radius around the viewer (their home) misses them.

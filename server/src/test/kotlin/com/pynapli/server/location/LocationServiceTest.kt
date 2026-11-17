@@ -44,7 +44,11 @@ class LocationServiceTest {
             // coordinates): nothing in the serialized response can be read back as a position.
             val json =
                 com.pynapli.shared.network.PynapliJson
-                    .encodeToString(com.pynapli.shared.network.dto.CurrentLocationDto.serializer(), response)
+                    .encodeToString(
+                        com.pynapli.shared.network.dto.CurrentLocationDto
+                            .serializer(),
+                        response,
+                    )
             listOf("geohash", "45.5", "-73.5", "latitude", "longitude").forEach {
                 assertTrue(it !in json, "location echoed back ($it): $json")
             }

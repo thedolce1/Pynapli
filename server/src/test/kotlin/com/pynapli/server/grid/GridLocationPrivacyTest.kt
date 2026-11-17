@@ -155,7 +155,9 @@ class GridLocationPrivacyTest :
         "the swipe deck order of a hidden-distance user does not depend on where they are" {
             runBlocking {
                 seedNeighbourhood()
-                val deck = com.pynapli.server.swipe.JdbcSwipeRepository(dataSource, rankCacheTtl = Duration.ZERO)
+                val deck =
+                    com.pynapli.server.swipe
+                        .JdbcSwipeRepository(dataSource, rankCacheTtl = Duration.ZERO)
                 attackerPositions.forEach { (lon, lat) ->
                     dataSource.moveUser(attacker, longitude = lon, latitude = lat)
                     dataSource.moveUser(hiddenOne, longitude = -122.0800, latitude = 37.4190)
@@ -185,7 +187,11 @@ class GridLocationPrivacyTest :
                     )
                 }
                 listOf(Duration.ZERO, Duration.ofMinutes(5)).forEach { ttl ->
-                    val cards = com.pynapli.server.swipe.JdbcSwipeRepository(dataSource, rankCacheTtl = ttl).queryDeck(attacker, 25_000, 10).cards
+                    val cards =
+                        com.pynapli.server.swipe
+                            .JdbcSwipeRepository(dataSource, rankCacheTtl = ttl)
+                            .queryDeck(attacker, 25_000, 10)
+                            .cards
                     cards.firstOrNull { it.userId == traveller }?.let { dealt ->
                         assertTrue(dealt.visiting, "traveller dealt as a local (ttl=$ttl)")
                         assertTrue(dealt.distanceMeters >= 40_000, "home distance leaked (ttl=$ttl): ${dealt.distanceMeters}")

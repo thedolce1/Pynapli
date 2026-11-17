@@ -115,6 +115,7 @@ class DiscoveryCursorCodec(
             json.decodeFromString(DiscoveryCursorPayload.serializer(), payloadJson)
         }.getOrElse { throw DiscoveryCursorException() }
     }
+
     companion object {
         private const val VERSION = 2
         private const val TOKEN_VERSION = "g2"
