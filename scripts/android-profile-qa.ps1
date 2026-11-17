@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$ViewerEmail = "dev@pynapli.local",
     [string]$Password = "PynapliDevPass123!",
@@ -201,11 +201,11 @@ WHERE status = 'active' AND unlinked_at IS NULL
        OR linked_user_id IN (SELECT id FROM users WHERE email_hash IN ('$viewerHash', '$partnerHash')));
 
 INSERT INTO user_profile_links (id, user_id, linked_user_id, status, accepted_at, unlinked_at)
-SELECT '00000000-0000-0000-0000-0000000002f1'::uuid, v.id, p.id, 'active', now(), NULL::timestamptz
+SELECT gen_random_uuid(), v.id, p.id, 'active', now(), NULL::timestamptz
 FROM (SELECT id FROM users WHERE email_hash = '$viewerHash') v,
      (SELECT id FROM users WHERE email_hash = '$partnerHash') p
 UNION ALL
-SELECT '00000000-0000-0000-0000-0000000002f2'::uuid, p.id, v.id, 'active', now(), NULL::timestamptz
+SELECT gen_random_uuid(), p.id, v.id, 'active', now(), NULL::timestamptz
 FROM (SELECT id FROM users WHERE email_hash = '$viewerHash') v,
      (SELECT id FROM users WHERE email_hash = '$partnerHash') p
 ON CONFLICT (user_id, linked_user_id) DO UPDATE
