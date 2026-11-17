@@ -93,9 +93,11 @@ class RiskScoringIntegrationTest {
             assertEquals(false, policy.isSocialActionRestricted(user))
             assertEquals(false, policy.shouldHideFromDiscovery(user))
 
-            // Accumulate report signals across the quarantine threshold -> restricted + hidden.
-            repeat(5) {
-                riskService.recordReportCreated(UUID.randomUUID(), reporter, user, "profile", "harassment_or_threats")
+            // Accumulate report signals from several reporters across the quarantine threshold ->
+            // restricted + hidden. (One reporter alone can't: ReportScoringPolicy, AUDIT-15.)
+            repeat(3) {
+                val another = createUser()
+                riskService.recordReportCreated(UUID.randomUUID(), another, user, "profile", "harassment_or_threats")
             }
             assertEquals(true, policy.isSocialActionRestricted(user))
             assertEquals(true, policy.shouldHideFromDiscovery(user))

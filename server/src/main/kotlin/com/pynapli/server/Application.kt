@@ -106,6 +106,8 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
             rateLimitService = it,
             trustedProxyHops = dependencies.config.trustedProxyHops,
             perIpLimits = dependencies.config.environment != "local",
+            // Signed-in limits follow the account, so a fresh sign-in doesn't reset them.
+            resolveUserId = { token -> runCatching { dependencies.authService.authenticate(token).id }.getOrNull() },
         )
     }
     configureRequestMediaBaseUrl()

@@ -25,9 +25,11 @@ import com.pynapli.server.verification.VerificationException
 import com.pynapli.shared.network.dto.ApiErrorDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.PayloadTooLargeException
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
@@ -297,7 +299,15 @@ fun Application.configureStatusPages() {
         // A body that isn't valid JSON, or is missing a required field, is the caller's mistake, not
         // an outage: answer 400 instead of falling through to the 500 below (which also alerts).
         // The body itself is never logged.
+        // A body over the request cap (RequestRateLimitPlugin counts the bytes as they are read, so a
+        // chunked body can't dodge it). Converters may wrap the failure, so look down the cause chain.
+        exception<PayloadTooLargeException> { call, _ -> call.respondPayloadTooLarge() }
+
         exception<BadRequestException> { call, cause ->
+            if (cause.isPayloadTooLarge()) {
+                call.respondPayloadTooLarge()
+                return@exception
+            }
             statusPagesLogger.warn(
                 "Rejected malformed request: {} {} ({})",
                 call.request.httpMethod.value,
@@ -316,6 +326,10 @@ fun Application.configureStatusPages() {
         }
 
         exception<Throwable> { call, cause ->
+            if (cause.isPayloadTooLarge()) {
+                call.respondPayloadTooLarge()
+                return@exception
+            }
             statusPagesLogger.error(
                 // path() has no query string: cursors and filter values stay out of the error log.
                 "Unhandled request failure: ${call.request.httpMethod.value} ${call.request.path()}",
@@ -333,3 +347,11 @@ fun Application.configureStatusPages() {
         }
     }
 }
+
+private fun Throwable.isPayloadTooLarge(): Boolean = generateSequence(this) { it.cause }.take(8).any { it is PayloadTooLargeException }
+
+private suspend fun ApplicationCall.respondPayloadTooLarge() =
+    respond(
+        status = HttpStatusCode.PayloadTooLarge,
+        message = ApiErrorDto(code = "PAYLOAD_TOO_LARGE", message = userSafeMessage("PAYLOAD_TOO_LARGE"), requestId = requestIdOrUnknown()),
+    )

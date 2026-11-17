@@ -1,18 +1,27 @@
 package com.pynapli.server.safety
 
 import com.pynapli.server.plugins.configureSerialization
+import com.pynapli.server.plugins.configureStatusPages
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.request
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
+import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.writeFully
+import kotlinx.serialization.Serializable
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -90,5 +99,115 @@ class RequestRateLimitPluginTest {
             assertEquals(HttpStatusCode.PayloadTooLarge, client.post("/v1/profile") { setBody("x".repeat(64)) }.status)
             assertEquals(HttpStatusCode.OK, client.post("/v1/media/uploads/local/abc") { setBody("x".repeat(64)) }.status)
             assertEquals(HttpStatusCode.OK, client.get("/v1/grid").status)
+        }
+
+    /** A body sent chunked, with no Content-Length header for the cap to look at. */
+    private fun chunkedBody(text: String) =
+        object : OutgoingContent.WriteChannelContent() {
+            override val contentType = ContentType.Application.Json
+
+            override suspend fun writeTo(channel: ByteWriteChannel) {
+                channel.writeFully(text.toByteArray())
+            }
+        }
+
+    @Serializable
+    private data class NoteDto(
+        val note: String,
+    )
+
+    @Test
+    fun aChunkedBodyWithNoContentLengthIsCappedOnTheBytesActuallyRead() =
+        testApplication {
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureRequestLimits(RateLimitService(CountingRepository()), maxBodyBytes = 64)
+                routing { post("/v1/profile") { call.respond(call.receive<NoteDto>().note) } }
+            }
+
+            val oversized = client.post("/v1/profile") { setBody(chunkedBody("""{"note":"${"x".repeat(500)}"}""")) }
+            assertEquals(null, oversized.request.headers[HttpHeaders.ContentLength])
+            assertEquals(HttpStatusCode.PayloadTooLarge, oversized.status)
+            assertTrue(oversized.bodyAsText().contains("PAYLOAD_TOO_LARGE"))
+
+            val small = client.post("/v1/profile") { setBody(chunkedBody("""{"note":"hi"}""")) }
+            assertEquals(HttpStatusCode.OK, small.status)
+        }
+
+    @Test
+    fun authenticatedRulesFollowTheUserAcrossSignInsNotTheSession() =
+        testApplication {
+            val sameUser = UUID.randomUUID()
+            application {
+                configureSerialization()
+                configureRequestLimits(RateLimitService(CountingRepository()), resolveUserId = { token -> sameUser.takeIf { token.startsWith("alex-") } })
+                routing { post("/v1/messages/threads/{id}/messages") { call.respond("sent") } }
+            }
+
+            // Spread over many threads so only the account-wide budget is in play.
+            repeat(600) { index ->
+                client.post("/v1/messages/threads/t$index/messages") { header(HttpHeaders.Authorization, "Bearer alex-session-1") }
+            }
+            // Signing in again (a new session token) must not hand out a fresh budget.
+            val again = client.post("/v1/messages/threads/new/messages") { header(HttpHeaders.Authorization, "Bearer alex-session-2") }
+            assertEquals(HttpStatusCode.TooManyRequests, again.status)
+        }
+
+    @Test
+    fun anonymousTrafficFromOneAddressHitsAGlobalCeiling() =
+        testApplication {
+            application {
+                configureSerialization()
+                configureRequestLimits(RateLimitService(CountingRepository()), trustedProxyHops = 1)
+                routing {
+                    get("/v1/anything") { call.respond("ok") }
+                    get("/health") { call.respond("ok") }
+                }
+            }
+
+            repeat(120) {
+                assertEquals(HttpStatusCode.OK, client.get("/v1/anything") { header(HttpHeaders.XForwardedFor, "198.51.100.4") }.status)
+            }
+            assertEquals(HttpStatusCode.TooManyRequests, client.get("/v1/anything") { header(HttpHeaders.XForwardedFor, "198.51.100.4") }.status)
+            assertEquals(HttpStatusCode.OK, client.get("/v1/anything") { header(HttpHeaders.XForwardedFor, "198.51.100.5") }.status)
+            assertEquals(HttpStatusCode.OK, client.get("/health") { header(HttpHeaders.XForwardedFor, "198.51.100.4") }.status, "probes are exempt")
+        }
+
+    @Test
+    fun signedInTrafficHitsAPerUserCeilingAndAPerAddressCeiling() =
+        testApplication {
+            application {
+                configureSerialization()
+                configureRequestLimits(RateLimitService(CountingRepository()), trustedProxyHops = 1, resolveUserId = { token -> UUID.nameUUIDFromBytes(token.toByteArray()) })
+                routing { get("/v1/anything") { call.respond("ok") } }
+            }
+
+            repeat(600) {
+                client.get("/v1/anything") {
+                    header(HttpHeaders.Authorization, "Bearer busy")
+                    header(HttpHeaders.XForwardedFor, "203.0.113.9")
+                }
+            }
+            val busy =
+                client.get("/v1/anything") {
+                    header(HttpHeaders.Authorization, "Bearer busy")
+                    header(HttpHeaders.XForwardedFor, "203.0.113.10")
+                }
+            assertEquals(HttpStatusCode.TooManyRequests, busy.status, "per user, whatever the address")
+
+            // Many signed-in users behind one address share a much larger per-address ceiling.
+            repeat(600) { index ->
+                client.get("/v1/anything") {
+                    header(HttpHeaders.Authorization, "Bearer user-$index")
+                    header(HttpHeaders.XForwardedFor, "203.0.113.9")
+                }
+            }
+            val crowded =
+                client.get("/v1/anything") {
+                    header(HttpHeaders.Authorization, "Bearer fresh")
+                    header(HttpHeaders.XForwardedFor, "203.0.113.9")
+                }
+            assertEquals(HttpStatusCode.TooManyRequests, crowded.status)
         }
 }

@@ -550,6 +550,7 @@ Important:
 - [x] Swipe velocity detection exists.
 - [x] Profile view velocity detection exists.
 - [x] Device/account-farm hash signals exist.
+- [x] Reports can't be weaponised into automatic enforcement (`ReportScoringPolicy`): a reporter counts toward a target's risk score once per reason per 30 days (repeats are stored and accepted at zero weight); one distinct reporter caps the report-driven score at 69 (below quarantine), two or more at 89; reports alone never reach terminate, which needs a moderator.
 - [x] Reporting someone takes them out of the reporter's discovery.
 - [x] Travel mode abuse controls exist. Every tier is capped at 6 Travel mode destination switches per rolling 24 hours.
 - [x] Location spoofing signals exist.

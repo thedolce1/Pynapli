@@ -78,6 +78,7 @@ interface DeviceRiskSignalPublisher {
 class RiskService(
     private val repository: RiskRepository,
     private val travelEnforcement: TravelRiskEnforcement? = null,
+    private val reportScoringPolicy: ReportScoringPolicy = ReportScoringPolicy(),
 ) : ReportRiskSignalPublisher,
     RateLimitRiskSignalPublisher,
     MessageReviewRiskSignalPublisher,
@@ -92,19 +93,23 @@ class RiskService(
         targetType: String,
         category: String,
     ) {
-        recordEvent(
-            userId = reportedUserId,
-            actorUserId = reporterUserId,
-            source = SOURCE_REPORT,
-            reason = "report.$category",
-            delta = reportDelta(category),
-            metadataJson =
-                mapOf(
-                    "reportId" to reportId.toString(),
-                    "targetType" to targetType,
-                    "category" to category,
-                ).toJsonObjectString(),
-        )
+        // Reports are weighed by ReportScoringPolicy: once per reporter per reason, and never past
+        // quarantine (one reporter) or terminate (any number) without a moderator.
+        val result =
+            repository.recordReportEvent(
+                userId = reportedUserId,
+                reporterUserId = reporterUserId,
+                reason = "report.$category",
+                requestedDelta = reportDelta(category),
+                metadataJson =
+                    mapOf(
+                        "reportId" to reportId.toString(),
+                        "targetType" to targetType,
+                        "category" to category,
+                    ).toJsonObjectString(),
+                policy = reportScoringPolicy,
+            )
+        travelEnforcement?.onTierChanged(reportedUserId, result.state.tier)
     }
 
     suspend fun getState(userId: UUID): AccountRiskStateRecord? = repository.getState(userId)
