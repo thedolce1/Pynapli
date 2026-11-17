@@ -59,6 +59,8 @@ import com.pynapli.server.profilelink.ProfileLinkService
 import com.pynapli.server.profiling.RequestProfilerFactory
 import com.pynapli.server.psync.PsyncSessionExpiryWorker
 import com.pynapli.server.psync.PsyncSessionService
+import com.pynapli.server.retention.DataRetentionService
+import com.pynapli.server.retention.DataRetentionWorker
 import com.pynapli.server.safety.AppealService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockService
@@ -111,6 +113,7 @@ class ServerDependencies(
     val adminRiskService: AdminRiskService,
     val activityService: ActivityService,
     val activityRetentionWorker: ActivityRetentionWorker?,
+    val dataRetentionWorker: DataRetentionWorker? = null,
     val mediaCleanupWorker: MediaCleanupWorker?,
     val accountDataExportWorker: AccountDataExportWorker?,
     val notificationService: NotificationService,
@@ -152,6 +155,7 @@ class ServerDependencies(
         runCatching { presenceOfflineScanner.close() }
         runCatching { playStoreSubscriptionSyncWorker?.close() }
         runCatching { activityRetentionWorker?.close() }
+        runCatching { dataRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
         runCatching { accountDataExportWorker?.close() }
         runCatching { tonightSessionExpiryWorker.close() }
@@ -233,6 +237,20 @@ class ServerDependencies(
                                 repository = JdbcActivityRetentionRepository(database.dataSource),
                             ),
                         intervalMillis = config.activityRetentionIntervalMillis,
+                        jobLock = PostgresJobLock(database.dataSource),
+                    )
+                } else {
+                    null
+                }
+            val dataRetentionWorker =
+                if (config.dataRetentionEnabled) {
+                    DataRetentionWorker(
+                        service =
+                            DataRetentionService(
+                                dataSource = database.dataSource,
+                                expiredMessageGrace = java.time.Duration.ofDays(config.expiredMessageGraceDays),
+                            ),
+                        intervalMillis = config.dataRetentionIntervalMillis,
                         jobLock = PostgresJobLock(database.dataSource),
                     )
                 } else {
@@ -396,6 +414,7 @@ class ServerDependencies(
                 adminRiskService = messaging.adminRiskService,
                 activityService = activityService,
                 activityRetentionWorker = activityRetentionWorker,
+                dataRetentionWorker = dataRetentionWorker,
                 mediaCleanupWorker = mediaCleanupWorker,
                 accountDataExportWorker = core.accountDataExportWorker,
                 notificationService = core.notificationService,

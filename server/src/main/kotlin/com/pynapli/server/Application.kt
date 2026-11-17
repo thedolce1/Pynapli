@@ -78,6 +78,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     closeDependenciesOnStop(dependencies)
     dependencies.notificationDispatchWorker?.start()
     dependencies.activityRetentionWorker?.start()
+    dependencies.dataRetentionWorker?.start()
     dependencies.mediaCleanupWorker?.start()
     dependencies.tonightSessionExpiryWorker.start()
     dependencies.psyncSessionExpiryWorker?.start()
