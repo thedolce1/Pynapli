@@ -204,6 +204,13 @@ internal val REQUEST_LIMIT_RULES =
         // Signed in: per user.
         RequestLimitRule(HttpMethod.Post, Regex("/v1/messages/threads/$ID/messages"), RateLimitedAction.MESSAGE_SEND),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/messages/threads/$ID/media"), RateLimitedAction.MESSAGE_SEND),
+        // ...and a tighter budget per conversation, so one thread can't be flooded (text + media).
+        RequestLimitRule(
+            HttpMethod.Post,
+            Regex("/v1/messages/threads/($ID)/(?:messages|media)"),
+            RateLimitedAction.MESSAGE_SEND_CONVERSATION,
+            perPathObject = true,
+        ),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/messages/threads"), RateLimitedAction.THREAD_CREATE),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/messages/threads/$ID/typing"), RateLimitedAction.TYPING),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/profile-links/invitations"), RateLimitedAction.PROFILE_LINK_INVITE),
@@ -216,6 +223,7 @@ internal val REQUEST_LIMIT_RULES =
         RequestLimitRule(HttpMethod.Post, Regex("/v1/appeals"), RateLimitedAction.APPEAL),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/notifications/devices"), RateLimitedAction.PUSH_REGISTER),
         // Reads where walking ids would enumerate other people's data.
+        RequestLimitRule(HttpMethod.Get, Regex("/v1/profiles/$ID"), RateLimitedAction.PROFILE_FETCH),
         RequestLimitRule(HttpMethod.Get, Regex("/v1/media/users/$ID/albums/private"), RateLimitedAction.PRIVATE_ALBUM_FETCH),
         // Admin per-person lookups (PII, subscriptions, partner links): admin calls carry the shared
         // token, not a session, so these are per client IP. Bounds what a leaked token can scrape.

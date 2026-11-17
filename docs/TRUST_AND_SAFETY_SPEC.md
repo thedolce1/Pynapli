@@ -453,6 +453,10 @@ Rules that must hold (implemented; numbers live in `RateLimitService.POLICIES`):
   verification callback exempt). Route rules in `REQUEST_LIMIT_RULES`; signed-in rules are keyed by
   the user behind the token, so a fresh sign-in doesn't reset them. Per-IP rules and the global
   ceilings are off only when `PYNAPLI_ENV=local`.
+- **Per-user route budgets** (hourly): message sends 600 per user across all conversations and 180
+  per sender per conversation (text and media together, keyed by route + conversation id); profile
+  fetches (`GET /v1/profiles/{id}`) 300; location updates 360. All keyed by the account, not the
+  session.
 - **GET routes and enumeration.** Rate-limited reads: `GET /v1/profiles/{id}`, the private-album
   read, admin per-person lookups (`/v1/admin/users/{id}`, `/v1/admin/subscriptions/support/{id}`,
   `/v1/admin/partner-links/{id}`: 300/h per IP), plus the service-level grid, travel-search and

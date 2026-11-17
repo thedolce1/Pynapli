@@ -53,8 +53,9 @@ class RequestRateLimitPluginTest {
                 routing { post("/v1/messages/threads/{id}/messages") { call.respond("sent") } }
             }
 
-            repeat(600) {
-                val ok = client.post("/v1/messages/threads/t1/messages") { header(HttpHeaders.Authorization, "Bearer spammer-token") }
+            // Spread over conversations so only the account-wide send budget is in play.
+            repeat(600) { index ->
+                val ok = client.post("/v1/messages/threads/t${index % 10}/messages") { header(HttpHeaders.Authorization, "Bearer spammer-token") }
                 assertEquals(HttpStatusCode.OK, ok.status)
             }
             val limited = client.post("/v1/messages/threads/t1/messages") { header(HttpHeaders.Authorization, "Bearer spammer-token") }
@@ -154,6 +155,58 @@ class RequestRateLimitPluginTest {
             // Signing in again (a new session token) must not hand out a fresh budget.
             val again = client.post("/v1/messages/threads/new/messages") { header(HttpHeaders.Authorization, "Bearer alex-session-2") }
             assertEquals(HttpStatusCode.TooManyRequests, again.status)
+        }
+
+    @Test
+    fun oneSenderHasATighterBudgetInEachConversation() =
+        testApplication {
+            application {
+                configureSerialization()
+                configureRequestLimits(RateLimitService(CountingRepository()), resolveUserId = { UUID.nameUUIDFromBytes(it.toByteArray()) })
+                routing {
+                    post("/v1/messages/threads/{id}/messages") { call.respond("sent") }
+                    post("/v1/messages/threads/{id}/media") { call.respond("sent") }
+                }
+            }
+            suspend fun send(
+                thread: String,
+                kind: String = "messages",
+                token: String = "flooder",
+            ) = client.post("/v1/messages/threads/$thread/$kind") { header(HttpHeaders.Authorization, "Bearer $token") }
+
+            repeat(90) { assertEquals(HttpStatusCode.OK, send("target").status) }
+            repeat(90) { assertEquals(HttpStatusCode.OK, send("target", kind = "media").status) }
+            assertEquals(HttpStatusCode.TooManyRequests, send("target").status, "text and media share the conversation budget")
+            assertEquals(HttpStatusCode.OK, send("another").status, "other conversations are unaffected")
+            assertEquals(HttpStatusCode.OK, send("target", token = "the-other-member").status, "so is the other member")
+        }
+
+    @Test
+    fun profileFetchesAndLocationUpdatesFollowTheUserAcrossSessions() =
+        testApplication {
+            val alex = UUID.randomUUID()
+            application {
+                configureSerialization()
+                configureRequestLimits(
+                    RateLimitService(CountingRepository()),
+                    resolveUserId = { token -> alex.takeIf { token.startsWith("alex-") } },
+                    globalCeilings = false,
+                )
+                routing {
+                    get("/v1/profiles/{id}") { call.respond("profile") }
+                    post("/v1/location/current") { call.respond("ok") }
+                }
+            }
+
+            repeat(300) { index ->
+                assertEquals(HttpStatusCode.OK, client.get("/v1/profiles/p$index") { header(HttpHeaders.Authorization, "Bearer alex-session-${index % 3}") }.status)
+            }
+            assertEquals(HttpStatusCode.TooManyRequests, client.get("/v1/profiles/next") { header(HttpHeaders.Authorization, "Bearer alex-session-new") }.status)
+
+            repeat(360) { index ->
+                assertEquals(HttpStatusCode.OK, client.post("/v1/location/current") { header(HttpHeaders.Authorization, "Bearer alex-session-${index % 2}") }.status)
+            }
+            assertEquals(HttpStatusCode.TooManyRequests, client.post("/v1/location/current") { header(HttpHeaders.Authorization, "Bearer alex-session-new") }.status)
         }
 
     @Test

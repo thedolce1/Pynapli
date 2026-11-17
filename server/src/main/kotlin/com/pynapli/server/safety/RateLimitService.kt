@@ -156,6 +156,8 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.ACCOUNT_APPEAL_IP, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
                 // Per user, far above real use: a fast chatter sends a few messages a minute.
                 RateLimitPolicy(action = RateLimitedAction.MESSAGE_SEND, limit = 600, windowSeconds = ONE_HOUR_SECONDS),
+                // Per sender per conversation (text + media): three a minute sustained for an hour.
+                RateLimitPolicy(action = RateLimitedAction.MESSAGE_SEND_CONVERSATION, limit = 180, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.THREAD_CREATE, limit = 100, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.TYPING, limit = 2_400, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.PROFILE_LINK_INVITE, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
@@ -167,6 +169,8 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.PUSH_REGISTER, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
                 // A private-album fetch per owner id; walking ids would enumerate who has albums.
                 RateLimitPolicy(action = RateLimitedAction.PRIVATE_ALBUM_FETCH, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
+                // Opening someone's profile, per user: browsing opens a few dozen an hour; walking ids is a crawl.
+                RateLimitPolicy(action = RateLimitedAction.PROFILE_FETCH, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
                 // Admin per-person lookups per client IP: a moderator works a queue, not a crawl.
                 RateLimitPolicy(action = RateLimitedAction.ADMIN_PERSON_LOOKUP, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
                 // Global abuse ceilings (RequestRateLimitPlugin), per minute so a burst is caught fast.
@@ -212,6 +216,8 @@ object RateLimitedAction {
     const val AUTH_PASSWORD_RESET_IP = "auth_password_reset_ip"
     const val ACCOUNT_APPEAL_IP = "account_appeal_ip"
     const val MESSAGE_SEND = "message_send"
+    const val MESSAGE_SEND_CONVERSATION = "message_send_conversation"
+    const val PROFILE_FETCH = "profile_fetch"
     const val THREAD_CREATE = "thread_create"
     const val TYPING = "typing"
     const val PROFILE_LINK_INVITE = "profile_link_invite"
