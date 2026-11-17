@@ -414,8 +414,8 @@ class SwipeServiceTest {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000152")
             val target = UUID.fromString("00000000-0000-0000-0000-000000000153")
-            val repository = InMemorySwipeRepository()
-            val subscriptionRepository = StaticSubscriptionRepository.paid(viewer, SubscriptionTier.SELECT, introNotes = 1)
+            val repository = InMemorySwipeRepository(inventory = mapOf((viewer to "intro_note") to 1))
+            val subscriptionRepository = StaticSubscriptionRepository.paid(viewer, SubscriptionTier.SELECT, introNotes = 0)
             val service =
                 SwipeService(
                     repository = repository,
@@ -435,7 +435,7 @@ class SwipeServiceTest {
 
             assertTrue(response.recorded)
             assertEquals(SwipeAction.INTRO_NOTE, repository.actionsSnapshot().getValue(viewer to target))
-            assertEquals(0, subscriptionRepository.introNotesRemaining(viewer))
+            assertEquals(0, repository.inventoryRemaining(viewer, "intro_note"))
         }
 
     @Test
@@ -444,8 +444,8 @@ class SwipeServiceTest {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000252")
             val target = UUID.fromString("00000000-0000-0000-0000-000000000253")
             val actionId = UUID.fromString("00000000-0000-0000-0000-000000000254")
-            val repository = InMemorySwipeRepository()
-            val subscriptionRepository = StaticSubscriptionRepository.paid(viewer, SubscriptionTier.SELECT, introNotes = 1)
+            val repository = InMemorySwipeRepository(inventory = mapOf((viewer to "intro_note") to 1))
+            val subscriptionRepository = StaticSubscriptionRepository.paid(viewer, SubscriptionTier.SELECT, introNotes = 0)
             val service =
                 SwipeService(
                     repository = repository,
@@ -466,7 +466,7 @@ class SwipeServiceTest {
             assertTrue(first.recorded)
             assertTrue(retry.recorded)
             assertEquals(SwipeAction.INTRO_NOTE, repository.actionsSnapshot().getValue(viewer to target))
-            assertEquals(0, subscriptionRepository.introNotesRemaining(viewer))
+            assertEquals(0, repository.inventoryRemaining(viewer, "intro_note"))
         }
 
     @Test
@@ -523,13 +523,12 @@ class SwipeServiceTest {
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000156")
             val target = UUID.fromString("00000000-0000-0000-0000-000000000157")
-            val repository = InMemorySwipeRepository()
+            val repository = InMemorySwipeRepository(inventory = mapOf((viewer to "pineapple_like") to 1))
             val subscriptionRepository =
                 StaticSubscriptionRepository.paid(
                     userId = viewer,
                     tier = SubscriptionTier.SOCIAL,
                     introNotes = 0,
-                    pineappleLikes = 1,
                 )
             val service =
                 SwipeService(
@@ -550,7 +549,7 @@ class SwipeServiceTest {
             assertTrue(response.recorded)
             assertNotNull(response.match)
             assertEquals(SwipeAction.PINEAPPLE_LIKE, repository.actionsSnapshot().getValue(viewer to target))
-            assertEquals(0, subscriptionRepository.pineappleLikesRemaining(viewer))
+            assertEquals(0, repository.inventoryRemaining(viewer, "pineapple_like"))
         }
 
     @Test
@@ -1517,6 +1516,7 @@ class SwipeServiceTest {
                                 distanceMeters = 850.0,
                             ),
                         ),
+                    inventory = mapOf((viewer to "pineapple_like") to 1),
                 )
             val service =
                 SwipeService(
@@ -1526,7 +1526,6 @@ class SwipeServiceTest {
                             viewer,
                             SubscriptionTier.SELECT,
                             introNotes = 0,
-                            pineappleLikes = 1,
                         ),
                 )
             val deck = service.queryDeck(viewer, SwipeDeckRequestDto(limit = 5))
@@ -1775,8 +1774,12 @@ private class InMemorySwipeRepository(
     // that call (callIndex starts at 0). Falls back to seededCards when null or
     // when callIndex >= cardsByCall.size.
     private val cardsByCall: List<List<SwipeCardRecord>>? = null,
+    // Paid inventory the actor can spend on a dealt-card swipe, keyed by (user, inventory type).
+    // Production spends it inside the record transaction (JdbcSwipeActionSql), so the fake does too.
+    inventory: Map<Pair<UUID, String>, Int> = emptyMap(),
 ) : SwipeRepository {
     private val actions = mutableMapOf<Pair<UUID, UUID>, String>()
+    private val inventoryLeft = inventory.toMutableMap()
     private val actionRecords = mutableMapOf<UUID, SwipeActionRecord>()
     private val actionOrder = mutableListOf<UUID>()
     val consumedInventoryIds = mutableMapOf<UUID, UUID>()
@@ -1863,6 +1866,59 @@ private class InMemorySwipeRepository(
         now: Instant,
     ) {
         actionedDeckCards += sessionId to cardTokenHash
+    }
+
+    fun inventoryRemaining(
+        userId: UUID,
+        inventoryType: String,
+    ): Int = inventoryLeft[userId to inventoryType] ?: 0
+
+    override suspend fun recordSwipeActionAndMarkCard(
+        actionId: UUID,
+        actorUserId: UUID,
+        targetUserId: UUID,
+        action: String,
+        sessionId: UUID,
+        cardTokenHash: String,
+        now: Instant,
+        noteText: String?,
+        travelLocationId: UUID?,
+        spendInventory: SwipeInventorySpend?,
+        matchIdFactory: () -> UUID,
+    ): SwipeActionResult {
+        var spentInventoryId: UUID? = null
+        if (spendInventory != null) {
+            actionRecords[actionId]?.takeIf { it.actorUserId == actorUserId }?.let { existing ->
+                return SwipeActionResult(
+                    recorded = existing.rewoundAt == null,
+                    match = findMatch(existing.actorUserId, existing.targetUserId),
+                    newlyRecorded = false,
+                )
+            }
+            val key = actorUserId to spendInventory.inventoryType
+            val available = inventoryLeft[key] ?: 0
+            if (available <= 0) {
+                return SwipeActionResult(recorded = false, match = null, newlyRecorded = false, inventoryUnavailable = true)
+            }
+            if (actorUserId to targetUserId in actions) {
+                return SwipeActionResult(recorded = false, match = null, newlyRecorded = false)
+            }
+            inventoryLeft[key] = available - 1
+            if (spendInventory.storesInventoryId) spentInventoryId = UUID.randomUUID()
+        }
+        val result =
+            recordSwipeAction(
+                actionId = actionId,
+                actorUserId = actorUserId,
+                targetUserId = targetUserId,
+                action = action,
+                noteText = noteText,
+                consumedInventoryId = spentInventoryId,
+                travelLocationId = travelLocationId,
+                matchIdFactory = matchIdFactory,
+            )
+        if (result.recorded) markDeckCardActionRecorded(sessionId, cardTokenHash, targetUserId, action, now)
+        return result
     }
 
     override suspend fun isActionTargetEligible(
@@ -2205,10 +2261,6 @@ private class StaticSubscriptionRepository(
         pineappleLikeInventory[userId] = available - 1
         return true
     }
-
-    fun introNotesRemaining(userId: UUID): Int = introNoteInventory[userId] ?: 0
-
-    fun pineappleLikesRemaining(userId: UUID): Int = pineappleLikeInventory[userId] ?: 0
 
     companion object {
         fun paid(

@@ -1,5 +1,7 @@
 package com.pynapli.server.psync
 
+import com.pynapli.server.db.lockPairsForTransaction
+import com.pynapli.server.swipe.SWIPE_PAIR_LOCK_NAMESPACE
 import java.sql.Connection
 import java.util.UUID
 
@@ -29,6 +31,13 @@ internal fun Connection.resolveMatches(
     val targets = deckTargetIds(session.id)
     val likedByInitiator = likedTargetsByActor(session.id, initiator)
     val likedByPartner = likedTargetsByActor(session.id, partner)
+    // The target may be liking a partner from Swipe right now. Take the same per-pair lock Swipe
+    // takes before any check or insert below, or each side could miss the other's like. All of
+    // them up front and in sorted order, so two overlapping resolves can't deadlock.
+    lockPairsForTransaction(
+        SWIPE_PAIR_LOCK_NAMESPACE,
+        likedByInitiator.keys.map { initiator to it } + likedByPartner.keys.map { partner to it },
+    )
     val delivered = mutableListOf<PsyncDeliveredLike>()
 
     val matches =

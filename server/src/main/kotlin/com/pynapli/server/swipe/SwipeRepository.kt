@@ -136,6 +136,13 @@ interface SwipeRepository {
         matchIdFactory: () -> UUID = UUID::randomUUID,
     ): SwipeActionResult? = null
 
+    /**
+     * Records a dealt-card swipe and marks the card actioned. With [spendInventory], one unit of
+     * that paid inventory is spent in the same transaction as the insert: a replay of an
+     * [actionId] that already landed spends nothing, a swipe that does not land (already decided
+     * on this person, or an error) gives the unit back, and with nothing left the result has
+     * `inventoryUnavailable = true` and nothing is recorded.
+     */
     suspend fun recordSwipeActionAndMarkCard(
         actionId: UUID,
         actorUserId: UUID,
@@ -145,10 +152,13 @@ interface SwipeRepository {
         cardTokenHash: String,
         now: Instant,
         noteText: String? = null,
-        consumedInventoryId: UUID? = null,
         travelLocationId: UUID? = null,
+        spendInventory: SwipeInventorySpend? = null,
         matchIdFactory: () -> UUID = UUID::randomUUID,
     ): SwipeActionResult {
+        // This default has no inventory to spend from; a repository that sells paid swipes must
+        // override it and spend inside its own transaction.
+        require(spendInventory == null) { "This SwipeRepository can't spend paid inventory" }
         val result =
             recordSwipeAction(
                 actionId = actionId,
@@ -156,7 +166,6 @@ interface SwipeRepository {
                 targetUserId = targetUserId,
                 action = action,
                 noteText = noteText,
-                consumedInventoryId = consumedInventoryId,
                 travelLocationId = travelLocationId,
                 matchIdFactory = matchIdFactory,
             )
@@ -260,7 +269,22 @@ data class SwipeActionResult(
     val recorded: Boolean,
     val match: MatchRecord?,
     val newlyRecorded: Boolean = recorded,
+    /** The swipe needed paid inventory and the actor had none left; nothing was recorded. */
+    val inventoryUnavailable: Boolean = false,
 )
+
+/** Paid inventory a swipe spends inside its own record transaction. */
+enum class SwipeInventorySpend(
+    val inventoryType: String,
+    /**
+     * Whether the action keeps the spent `premium_inventory.id`. A Pineapple Like does, because
+     * rewinding it refunds that row; an Intro Note can't be rewound and keeps none.
+     */
+    val storesInventoryId: Boolean,
+) {
+    PINEAPPLE_LIKE("pineapple_like", storesInventoryId = true),
+    INTRO_NOTE("intro_note", storesInventoryId = false),
+}
 
 data class SwipeActionRecord(
     val actionId: UUID,

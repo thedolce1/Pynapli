@@ -1,6 +1,7 @@
 package com.pynapli.server.subscriptions
 
 import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.lockForTransaction
 import com.pynapli.server.db.withConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -75,6 +76,9 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
     ): BoostActivationResult? =
         dataSource.withConnection { connection ->
             connection.inTransaction {
+                // With no Boost running, the FOR UPDATE below has no row to lock, so a double tap
+                // would let both requests spend and start one. Serialise activations per user.
+                lockForTransaction(BOOST_ACTIVATION_LOCK_NAMESPACE, userId.toString())
                 findActiveBoostActivation(userId, now)?.let { active ->
                     return@inTransaction BoostActivationResult(
                         activation = active,
@@ -152,3 +156,5 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
             dataSource.connection.use { connection -> connection.consumePremiumInventoryRecord(userId, inventoryType, now) }
         }
 }
+
+private const val BOOST_ACTIVATION_LOCK_NAMESPACE = "boost-activation"

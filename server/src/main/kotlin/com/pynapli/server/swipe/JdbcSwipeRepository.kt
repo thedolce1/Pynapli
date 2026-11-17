@@ -185,8 +185,8 @@ class JdbcSwipeRepository(
         cardTokenHash: String,
         now: Instant,
         noteText: String?,
-        consumedInventoryId: UUID?,
         travelLocationId: UUID?,
+        spendInventory: SwipeInventorySpend?,
         matchIdFactory: () -> UUID,
     ): SwipeActionResult =
         actionActions.recordSwipeActionAndMarkCard(
@@ -198,8 +198,8 @@ class JdbcSwipeRepository(
             cardTokenHash = cardTokenHash,
             now = now,
             noteText = noteText,
-            consumedInventoryId = consumedInventoryId,
             travelLocationId = travelLocationId,
+            spendInventory = spendInventory,
             matchIdFactory = matchIdFactory,
         )
 

@@ -922,6 +922,37 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "a target liking a partner while that partner's session resolves still makes the match" {
+            runBlocking {
+                // The session's resolve writes the partner's like and checks for the target's like
+                // back; the target's Swipe writes theirs and checks for the partner's. Overlapping,
+                // each must not miss the other.
+                val swipeRepository =
+                    com.pynapli.server.swipe
+                        .JdbcSwipeRepository(dataSource)
+                val iterations = 50
+                var wrong = 0
+                repeat(iterations) {
+                    val (initiator, partner) = seedLinkedPair()
+                    val target = UUID.randomUUID()
+                    val filler = UUID.randomUUID()
+                    dataSource.insertUserWithProfile(target, "Target")
+                    dataSource.insertUserWithProfile(filler, "Filler")
+                    // Two-card deck so acting on the target alone does not auto-complete the session.
+                    val svc = deckService(listOf(target, filler))
+                    val sessionId = svc.activeSessionOver(initiator, partner, target)
+                    svc.actOn(sessionId, initiator, target, "like")
+
+                    com.pynapli.server.testsupport.raceTogether(
+                        { svc.complete(sessionId, initiator) },
+                        { swipeRepository.recordSwipeAction(UUID.randomUUID(), target, initiator, "like") },
+                    )
+                    if (dataSource.countMatchesFor(initiator) != 1) wrong++
+                }
+                assertEquals(0, wrong, "iterations out of $iterations with no match after the overlap")
+            }
+        }
+
         "the deck auto-completes once both partners act on every card" {
             runBlocking {
                 val (initiator, partner) = seedLinkedPair()
